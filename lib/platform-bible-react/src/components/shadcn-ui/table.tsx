@@ -105,7 +105,9 @@ const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      { 'tw-sticky tw-top-[-1px] tw-bg-background tw-drop-shadow-sm': stickyHeader },
+      {
+        'tw-sticky tw-top-[-1px] tw-z-20 tw-bg-background tw-drop-shadow-sm': stickyHeader,
+      },
       '[&_tr]:tw-border-b',
       className,
     )}
@@ -136,8 +138,8 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = 'TableFooter';
 
-// CUSTOM: Add onKeyDown and onSelect props to TableRow
-function useRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) {
+// CUSTOM: Manage keyboard navigation and Enter key behavior for focusable elements in a row
+function useFocusableInRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) {
   React.useEffect(() => {
     const row = rowRef.current;
     if (!row) return;
@@ -163,7 +165,7 @@ function useRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) 
         row.focus();
       }
 
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
       }
     };
@@ -176,11 +178,49 @@ function useRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) 
   }, [rowRef]);
 }
 
+// CUSTOM: Move focus left or right to adjacent focusable items in the same row
+function focusAdjacentFocusableElementInRow(
+  focusablesInRow: HTMLElement[],
+  currentIndexOfFocusables: number,
+  direction: 'ArrowLeft' | 'ArrowRight',
+) {
+  let nextFocusable: HTMLElement | undefined;
+  if (direction === 'ArrowLeft' && currentIndexOfFocusables > 0) {
+    nextFocusable = focusablesInRow[currentIndexOfFocusables - 1];
+  } else if (direction === 'ArrowRight' && currentIndexOfFocusables < focusablesInRow.length - 1) {
+    nextFocusable = focusablesInRow[currentIndexOfFocusables + 1];
+  }
+  if (nextFocusable) {
+    requestAnimationFrame(() => nextFocusable.focus());
+    return true;
+  }
+  return false;
+}
+
+// CUSTOM: Move focus up or down to adjacent rows in the same table
+function focusAdjacentRow(
+  rowsInTable: HTMLTableRowElement[],
+  currentRowIndex: number,
+  direction: 'ArrowDown' | 'ArrowUp',
+) {
+  let nextRow: HTMLTableRowElement | undefined;
+  if (direction === 'ArrowDown' && currentRowIndex < rowsInTable.length - 1) {
+    nextRow = rowsInTable[currentRowIndex + 1];
+  } else if (direction === 'ArrowUp' && currentRowIndex > 0) {
+    nextRow = rowsInTable[currentRowIndex - 1];
+  }
+  if (nextRow) {
+    requestAnimationFrame(() => nextRow.focus());
+    return true;
+  }
+  return false;
+}
+
 /** @inheritdoc Table */
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement> & { setFocusAlsoRunsSelect?: boolean }
->(({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect, ...props }, ref) => {
+>(({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect = false, ...props }, ref) => {
   // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
   // This ref gets passed into the table row ref property which expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -196,48 +236,7 @@ const TableRow = React.forwardRef<
   }, [ref]);
 
   // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
-  useRowKeyboardNavigation(rowRef);
-
-  // CUSTOM: Move focus up or down to adjacent rows in the same table
-  const focusAdjacentRow = (
-    rowsInTable: HTMLTableRowElement[],
-    currentRowIndex: number,
-    direction: 'ArrowDown' | 'ArrowUp',
-  ) => {
-    let nextRow: HTMLTableRowElement | undefined;
-    if (direction === 'ArrowDown' && currentRowIndex < rowsInTable.length - 1) {
-      nextRow = rowsInTable[currentRowIndex + 1];
-    } else if (direction === 'ArrowUp' && currentRowIndex > 0) {
-      nextRow = rowsInTable[currentRowIndex - 1];
-    }
-    if (nextRow) {
-      requestAnimationFrame(() => nextRow.focus());
-      return true;
-    }
-    return false;
-  };
-
-  // CUSTOM: Move focus left or right to adjacent focusable items in the same row
-  const focusAdjacentFocusableElementInRow = (
-    focusablesInRow: HTMLElement[],
-    currentIndexOfFocusables: number,
-    direction: 'ArrowLeft' | 'ArrowRight',
-  ) => {
-    let nextFocusable: HTMLElement | undefined;
-    if (direction === 'ArrowLeft' && currentIndexOfFocusables > 0) {
-      nextFocusable = focusablesInRow[currentIndexOfFocusables - 1];
-    } else if (
-      direction === 'ArrowRight' &&
-      currentIndexOfFocusables < focusablesInRow.length - 1
-    ) {
-      nextFocusable = focusablesInRow[currentIndexOfFocusables + 1];
-    }
-    if (nextFocusable) {
-      requestAnimationFrame(() => nextFocusable.focus());
-      return true;
-    }
-    return false;
-  };
+  useFocusableInRowKeyboardNavigation(rowRef);
 
   // CUSTOM: Get all focusable elements in the current row
   const focusablesInRow = React.useMemo(
@@ -246,45 +245,45 @@ const TableRow = React.forwardRef<
   );
 
   // CUSTOM: Handle keydown events for keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
-    const { current: currentRow } = rowRef;
-    if (!currentRow || !currentRow.parentElement) return;
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+      const { current: currentRow } = rowRef;
+      if (!currentRow || !currentRow.parentElement) return;
 
-    const closestTable = currentRow.closest('table');
-    const rowsInTable = closestTable
-      ? // getFocusableElements returns an HTMLElement[] but we are filtering for HTMLTableRowElements
+      const closestTable = currentRow.closest('table');
+      const rowsInTable = closestTable
+        ? // getFocusableElements returns an HTMLElement[] but we are filtering for HTMLTableRowElements
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (getFocusableElements(closestTable) as HTMLTableRowElement[]).filter(
+            (element) => element.tagName === 'TR',
+          )
+        : [];
+      const currentRowIndex = rowsInTable.indexOf(currentRow);
+      const currentIndexOfFocusables = focusablesInRow.indexOf(
+        // activeElement is generic Element, so we need to cast it to HTMLElement
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (getFocusableElements(closestTable) as HTMLTableRowElement[]).filter(
-          (element) => element.tagName === 'TR',
-        )
-      : [];
-    const currentRowIndex = rowsInTable.indexOf(currentRow);
-    const currentIndexOfFocusables = focusablesInRow.indexOf(
-      // activeElement is generic Element, so we need to cast it to HTMLElement
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      document.activeElement as HTMLElement,
-    );
+        document.activeElement as HTMLElement,
+      );
 
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      focusAdjacentRow(rowsInTable, currentRowIndex, e.key);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      e.preventDefault();
-      focusAdjacentFocusableElementInRow(focusablesInRow, currentIndexOfFocusables, e.key);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      const table = currentRow.closest('table');
-      if (table) {
-        table.focus();
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusAdjacentRow(rowsInTable, currentRowIndex, e.key);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        focusAdjacentFocusableElementInRow(focusablesInRow, currentIndexOfFocusables, e.key);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        const table = currentRow.closest('table');
+        if (table) {
+          table.focus();
+        }
       }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      return;
-    }
 
-    // Call user-defined onKeyDown handler if provided
-    onKeyDown?.(e);
-  };
+      // Call user-defined onKeyDown handler if provided
+      onKeyDown?.(e);
+    },
+    [rowRef, focusablesInRow, onKeyDown],
+  );
 
   const handleFocus = React.useCallback(
     (e: React.FocusEvent<HTMLTableRowElement>) => {
