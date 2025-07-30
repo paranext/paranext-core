@@ -70,10 +70,16 @@ export const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputPro
         {isFocused &&
           hasInputChanged &&
           (hasTopMatch ? (
-            <Check className="tw-absolute tw-right-2 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-text-green-600" />
+            <Check
+              className="tw-absolute tw-right-2 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-text-green-600"
+              aria-label="Green checkmark indicating a match found"
+            />
           ) : (
             hasNoMatches && (
-              <CircleSlash className="tw-absolute tw-right-2 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-text-destructive" />
+              <CircleSlash
+                className="tw-absolute tw-right-2 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-text-destructive"
+                aria-label="Red circle slash indicating no matches found"
+              />
             )
           ))}
       </div>
