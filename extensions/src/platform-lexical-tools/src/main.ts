@@ -98,7 +98,7 @@ export async function activate(context: ExecutionActivationContext) {
     );
 
   const lexicalReferenceService = await lexicalReferenceServicePromise;
-  await lexicalReferenceService.registerLexicalReferenceText(
+  await lexicalReferenceTextManager.registerLexicalReferenceText(
     'papi-extension://platformLexicalTools/assets/lexical-db/lexical.db',
   );
 
