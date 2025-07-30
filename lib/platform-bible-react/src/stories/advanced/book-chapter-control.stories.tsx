@@ -6,7 +6,7 @@ import { ComponentProps, useCallback, useState } from 'react';
 import { defaultScrRef } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button } from '@/components/shadcn-ui/button';
-import { get } from 'http';
+import { Canvas } from 'storybook/internal/csf';
 
 const previousElementText = 'previous Element';
 const nextElementText = 'next Element';
@@ -306,6 +306,14 @@ async function getChapter(bookWithExpandedChapters: HTMLElement, chapterNumber: 
   });
 }
 
+// type is hard to import
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function reset(canvas: Canvas, userEvent: any) {
+  // clear input
+  const input = canvas.getByRole('textbox');
+  await userEvent.clear(input);
+}
+
 /* Interaction tests */
 
 export const TestClickToOpen: Story = {
@@ -460,7 +468,7 @@ export const TestScriptureReferenceInput: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const input = canvas.getByRole('textbox');
 
-    // Click and clear the input
+    // Click the input
     await userEvent.click(input);
 
     // Type a scripture reference
@@ -621,9 +629,7 @@ export const TestKeyboardChapterNavigation: Story = {
       expect(screen.getByText('1 John')).toHaveFocus();
 
       // Test navigation to end of list
-      await userEvent.keyboard('{ArrowDown}');
-      await userEvent.keyboard('{ArrowDown}');
-      await userEvent.keyboard('{ArrowDown}');
+      await userEvent.keyboard('{ArrowDown>3}{/ArrowDown}');
       expect(screen.getByText('3 John')).toHaveFocus(); // Should stay on last item
     });
 
@@ -785,8 +791,61 @@ export const TestCursorPositioning: Story = {
   },
 };
 
+export const TestAdvancedTextSelection: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+
+    await userEvent.click(input);
+
+    // Test SHIFT+click selection
+    // First click to position cursor
+    const startClick = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: input.getBoundingClientRect().left + 10,
+    });
+    input.dispatchEvent(startClick);
+
+    // Then SHIFT+click to select
+    const endClick = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: input.getBoundingClientRect().right - 10,
+      shiftKey: true,
+    });
+    input.dispatchEvent(endClick);
+
+    expect(input.selectionStart ?? 0).toBeLessThan(input.selectionEnd ?? 0);
+    expect(input.selectionEnd ?? 0).toBeGreaterThan(input.selectionStart ?? 0);
+
+    // Test typing replaces selection
+    await userEvent.keyboard('john');
+    expect(input.value.toLowerCase()).toBe('john');
+    expect(input.selectionStart).toBe(4);
+    expect(input.selectionEnd).toBe(4);
+
+    // Test selection is preserved when dropdown opens/closes
+    await userEvent.keyboard('{Control>}a{/Control}');
+    await expectDropdownToBeOpenAndVisible();
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+
+    await userEvent.keyboard('{Escape}');
+    await expectDropdownToBeClosed();
+    // Selection should be maintained after closing
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  },
+};
+
 export const TestNoKeystrokeLoss: Story = {
   args: defaultArgs,
+  async beforeEach({ canvas, userEvent }) {
+    reset(canvas, userEvent);
+    console.warn('');
+  },
   play: async ({ canvas, userEvent, step }) => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
     const input = canvas.getByRole('textbox') as HTMLInputElement;
@@ -806,6 +865,8 @@ export const TestNoKeystrokeLoss: Story = {
     });
 
     await step('Test typing non-matching text', async () => {
+      reset(canvas, userEvent);
+
       await userEvent.keyboard('xyz');
       expect(input.value).toBe('xyz');
       await expectDropdownToBeClosed();
@@ -813,17 +874,29 @@ export const TestNoKeystrokeLoss: Story = {
     });
 
     await step('Test backspace usage', async () => {
+      reset(canvas, userEvent);
+
       await userEvent.keyboard('genesis');
       expect(input.value.toLowerCase()).toBe('genesis');
       await expectCheckmarkIconToExist(input);
 
       // Delete three characters
       await userEvent.keyboard('{Backspace}{Backspace}{Backspace}');
-      expect(input.value.toLowerCase()).toBe('gen');
+      expect(input.value.toLowerCase()).toBe('gene');
       await expectDropdownToBeOpenAndVisible();
     });
 
+    await step('Test backspace with known problem', async () => {
+      reset(canvas, userEvent);
+
+      await userEvent.keyboard('aa');
+      await userEvent.keyboard('{Backspace}{Backspace}');
+      expect(input.value.toLowerCase()).toBe('');
+    });
+
     await step('Test typing with dropdown already open', async () => {
+      reset(canvas, userEvent);
+
       await userEvent.click(input);
       await expectDropdownToBeOpenAndVisible();
       await userEvent.keyboard('john');
@@ -974,6 +1047,59 @@ export const TestChapterNumberDimming: Story = {
       } else {
         expect(chapter).toHaveClass('tw-text-muted-foreground');
       }
+    });
+  },
+};
+
+export const TestProjectTabBookFiltering: Story = {
+  args: {
+    scrRef: defaultArgs.scrRef,
+    handleSubmit: defaultArgs.handleSubmit,
+    // Only include a few books to simulate project filtering
+    getActiveBookIds: () => ['GEN', 'EXO', 'MAT'],
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+
+    await step('Test partially typing non-existing book', async () => {
+      await reset(canvas, userEvent);
+
+      await userEvent.type(input, 'jo');
+      await expectDropdownToBeClosed();
+      await expectNoMatchesIconToExist(input);
+    });
+
+    await step('Test fully typing non-existing book', async () => {
+      await reset(canvas, userEvent);
+
+      await userEvent.type(input, '1 john');
+
+      // Should show a green checkmark, once fully typed-in
+      await expectDropdownToBeClosed();
+      await expectCheckmarkIconToExist(input);
+    });
+
+    await step('Test typing existing book', async () => {
+      await reset(canvas, userEvent);
+
+      await userEvent.type(input, 'mat');
+      await expectCheckmarkIconToExist(input);
+      await expectResultsVisibleAndToBe(['MAT 1:1', 'Matthew']);
+    });
+
+    await step('Test initial state shows only project books', async () => {
+      await reset(canvas, userEvent);
+
+      await userEvent.click(input);
+      const dropdownContent = await expectDropdownToBeOpenAndVisible();
+      const bookSections = await within(dropdownContent).findAllByRole('menuitem');
+
+      // Should only show Genesis, Exodus, and Matthew
+      expect(bookSections).toHaveLength(3);
+      expect(bookSections[0]).toHaveTextContent('Genesis');
+      expect(bookSections[1]).toHaveTextContent('Exodus');
+      expect(bookSections[2]).toHaveTextContent('Matthew');
     });
   },
 };
