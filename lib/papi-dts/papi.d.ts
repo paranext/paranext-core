@@ -2879,6 +2879,22 @@ declare module 'shared/models/docking-framework.model' {
      */
     getTabInfoByElement: (tabElement: Element) => TabInfo | undefined;
     /**
+     * Gets info for the tab with the specified ID
+     *
+     * @param tabId The ID of the tab whose info to get
+     * @returns Info for the tab in question or `undefined` if tab is not found
+     * @throws If the item found in the dock layout with the specified ID is not a tab
+     */
+    getTabInfoById: (tabId: string) => TabInfo | undefined;
+    /**
+     * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
+     * tabs, and sets the document focus in that tab
+     *
+     * @param tabId ID of the tab to set active and focused
+     * @returns `true` if successfully found tab to update, `false` otherwise
+     */
+    focusTab: (tabId: string) => boolean;
+    /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
      * TODO: This should be removed and the `testLayout` imported directly in this file once this
@@ -6792,8 +6808,19 @@ declare module 'shared/services/window.service-model' {
   };
   /** Current item that is the subject of top-level app window focus */
   export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the app window focus */
+  export type SetFocusSpecifier =
+    | SetFocusSubject
+    | 'nextTab'
+    | 'previousTab'
+    | 'nextTabGroup'
+    | 'previousTabGroup'
+    | 'detect'
+    | undefined;
   export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, FocusSubject | 'detect'>;
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -6824,15 +6851,11 @@ declare module 'shared/services/window.service-model' {
     /**
      * Sets the subject of focus in the main app window.
      *
-     * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
-     * not actually provide the ability to set the focus but only provides the ability to detect what
-     * is currently focused. As such, this is relatively useless for extensions right now.
-     *
      * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setFocus(
@@ -6840,10 +6863,6 @@ declare module 'shared/services/window.service-model' {
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
      * Sets the subject of focus in the main app window.
-     *
-     * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
-     * not actually provide the ability to set the focus but only provides the ability to detect what
-     * is currently focused. As such, this is relatively useless for extensions right now.
      *
      * @param selector `undefined`. Does not have to be provided
      * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
@@ -6854,7 +6873,7 @@ declare module 'shared/services/window.service-model' {
      *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
      *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
      *   `'detect'`.
-     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setFocus(
@@ -7127,7 +7146,11 @@ declare module '@papi/core' {
   export type { AppInfo } from 'shared/services/app.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  export type { FocusSubject } from 'shared/services/window.service-model';
+  export type {
+    FocusSubject,
+    SetFocusSubject,
+    SetFocusSpecifier,
+  } from 'shared/services/window.service-model';
   export type {
     GetWebViewOptions,
     OpenWebViewOptions,
