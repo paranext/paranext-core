@@ -24,9 +24,11 @@ import {
   addTabToDock,
   addWebViewToDock,
   getTabInfoByElement,
+  getTabInfoById,
   getWebViewDefinition,
   loadTab,
   saveTab,
+  focusTab,
   updateWebViewDefinition,
 } from '@renderer/components/docking/platform-dock-layout-storage.util';
 import {
@@ -74,6 +76,9 @@ export function PlatformDockLayout() {
         updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
       getTabInfoByElement: (tabElement: Element) =>
         getTabInfoByElement(dockLayoutRef.current, tabElement),
+      getTabInfoById: (tabId: string) =>
+        getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
+      focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
       testLayout,
     });
     return () => {
