@@ -230,6 +230,22 @@ export type PapiDockLayout = {
    */
   getTabInfoByElement: (tabElement: Element) => TabInfo | undefined;
   /**
+   * Gets info for the tab with the specified ID
+   *
+   * @param tabId The ID of the tab whose info to get
+   * @returns Info for the tab in question or `undefined` if tab is not found
+   * @throws If the item found in the dock layout with the specified ID is not a tab
+   */
+  getTabInfoById: (tabId: string) => TabInfo | undefined;
+  /**
+   * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
+   * tabs, and sets the document focus in that tab
+   *
+   * @param tabId ID of the tab to set active and focused
+   * @returns `true` if successfully found tab to update, `false` otherwise
+   */
+  focusTab: (tabId: string) => boolean;
+  /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *
    * TODO: This should be removed and the `testLayout` imported directly in this file once this

@@ -46,10 +46,22 @@ export type FocusSubjectOther = {
 
 /** Current item that is the subject of top-level app window focus */
 export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+/** Specific item that is intended to be focused in the top-level app window */
+export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+
+/** Instructions that indicate how to change the app window focus */
+export type SetFocusSpecifier =
+  | SetFocusSubject
+  | 'nextTab'
+  | 'previousTab'
+  | 'nextTabGroup'
+  | 'previousTabGroup'
+  | 'detect'
+  | undefined;
 
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
-  Focus: DataProviderDataType<undefined, FocusSubject | undefined, FocusSubject | 'detect'>;
+  Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
 };
 
 declare module 'papi-shared-types' {
@@ -78,15 +90,11 @@ export type IWindowService = {
   /**
    * Sets the subject of focus in the main app window.
    *
-   * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
-   * not actually provide the ability to set the focus but only provides the ability to detect what
-   * is currently focused. As such, this is relatively useless for extensions right now.
-   *
    * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
    *   the window to update the current focus based on what is actually focused in the window (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
-   * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+   * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
    * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   setFocus(
@@ -94,10 +102,6 @@ export type IWindowService = {
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
    * Sets the subject of focus in the main app window.
-   *
-   * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
-   * not actually provide the ability to set the focus but only provides the ability to detect what
-   * is currently focused. As such, this is relatively useless for extensions right now.
    *
    * @param selector `undefined`. Does not have to be provided
    * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
@@ -108,7 +112,7 @@ export type IWindowService = {
    *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
    *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
    *   `'detect'`.
-   * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+   * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
    * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   setFocus(
