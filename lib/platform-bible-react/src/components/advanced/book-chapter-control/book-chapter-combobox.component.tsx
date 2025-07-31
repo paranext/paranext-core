@@ -756,14 +756,26 @@ export function BookChapterCombobox({
                       // eslint-disable-next-line no-type-assertion/no-type-assertion
                       <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
                         {books.map((bookId) => (
-                          <CommandItem
+                          <div
                             key={bookId}
-                            value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
-                            onSelect={() => handleBookSelect(bookId)}
-                            ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                            className={cn(
+                              'tw-mx-1 tw-my-1 tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid',
+                              {
+                                'tw-border-s-red-200': type.toLowerCase() === 'ot',
+                                'tw-border-s-purple-200': type.toLowerCase() === 'nt',
+                                'tw-border-s-indigo-200': type.toLowerCase() === 'dc',
+                              },
+                            )}
                           >
-                            {ALL_ENGLISH_BOOK_NAMES[bookId]}
-                          </CommandItem>
+                            <CommandItem
+                              value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
+                              onSelect={() => handleBookSelect(bookId)}
+                              ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                              className="tw-ms-1 tw-px-2"
+                            >
+                              {ALL_ENGLISH_BOOK_NAMES[bookId]}
+                            </CommandItem>
+                          </div>
                         ))}
                       </CommandGroup>
                     );
