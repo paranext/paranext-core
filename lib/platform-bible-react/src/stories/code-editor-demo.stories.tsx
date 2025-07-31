@@ -31,7 +31,7 @@ function LiveCodeDemo() {
 }
 
 const meta = {
-title: 'Demo/Live Code Editor',
+  title: 'Demo/Live Code Editor',
   component: LiveCodeDemo,
   tags: ['!autodocs'],
 } satisfies Meta<typeof LiveCodeDemo>;
