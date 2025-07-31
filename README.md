@@ -102,13 +102,15 @@ your `.zprofile` so you don't have to remember to do it manually.
 
 Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node`. We recommend using [Volta](#javascript-tool-manager).
 
-Install `dotnet` [.NET 8 SDK from here](https://learn.microsoft.com/en-us/dotnet/core/install/).
+Install [`dotnet` .NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
 
-To check if `dotnet` is installed run (ensure you have a v8 SDK):
+To check if `dotnet` is installed run:
 
 ```bash
 dotnet --version
+# 8.0.412 [/usr/local/share/dotnet/sdk] (or some other directory)
 dotnet --list-sdks
+# 8.0.412 (or similar 8.* version)
 ```
 
 ### Cloning and installing dependencies (all platforms)
