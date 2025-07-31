@@ -115,6 +115,8 @@ export function BookChapterCombobox({
   const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandInputRef = useRef<HTMLInputElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const firstChapterItemRef = useRef<HTMLDivElement>(undefined!);
 
   // Get available books (same logic as original)
   const availableBooks = useMemo(() => {
@@ -400,6 +402,47 @@ export function BookChapterCombobox({
         return;
       }
 
+      // Handle letter and digit keypresses in chapter viewmode only (not hybrid)
+      if (viewMode === 'chapters') {
+        const isLetter = /^[a-zA-Z]$/.test(event.key);
+        const isDigit = /^[0-9]$/.test(event.key);
+
+        if (isLetter) {
+          // Letter pressed: go back to book list and start new search with that letter
+          event.preventDefault();
+          event.stopPropagation();
+          setViewMode('books');
+          setSelectedBookForChapters(undefined);
+          setInputValue(event.key);
+
+          // Focus the search input
+          setTimeout(() => {
+            if (commandInputRef.current) {
+              commandInputRef.current.focus();
+            }
+          }, 0);
+          return;
+        }
+
+        if (isDigit && selectedBookForChapters) {
+          // Digit pressed: go back to book list and start search with current book name + digit
+          event.preventDefault();
+          event.stopPropagation();
+          const currentBookName = ALL_ENGLISH_BOOK_NAMES[selectedBookForChapters];
+          setViewMode('books');
+          setSelectedBookForChapters(undefined);
+          setInputValue(`${currentBookName} ${event.key}`);
+
+          // Focus the search input
+          setTimeout(() => {
+            if (commandInputRef.current) {
+              commandInputRef.current.focus();
+            }
+          }, 0);
+          return;
+        }
+      }
+
       // Handle grid navigation for arrow keys in chapter views
       if (
         (viewMode === 'chapters' || shouldShowHybridView) &&
@@ -472,6 +515,7 @@ export function BookChapterCombobox({
       shouldShowHybridView,
       chapterViewData?.endChapter,
       hybridChapterData?.endChapter,
+      selectedBookForChapters,
     ],
   );
 
@@ -506,6 +550,36 @@ export function BookChapterCombobox({
       clearTimeout(scrollTimeout);
     };
   }, [open, viewMode, inputValue, topMatch]);
+
+  // Focus first chapter when entering chapter viewmode
+  useLayoutEffect(() => {
+    if (viewMode === 'chapters') {
+      const focusTimeout = setTimeout(() => {
+        // Use ref to set focus on the first chapter
+        if (firstChapterItemRef.current) {
+          // Remove any existing selections first
+          const currentSelected = document.querySelector('[cmdk-item][aria-selected="true"]');
+          if (currentSelected) {
+            currentSelected.setAttribute('aria-selected', 'false');
+            currentSelected.setAttribute('data-selected', 'false');
+          }
+
+          // Set the first chapter as selected
+          firstChapterItemRef.current.setAttribute('aria-selected', 'true');
+          firstChapterItemRef.current.setAttribute('data-selected', 'true');
+
+          // Scroll into view if needed
+          firstChapterItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      }, 10); // Small delay to ensure DOM is ready
+
+      return () => {
+        clearTimeout(focusTimeout);
+      };
+    }
+
+    return undefined;
+  }, [viewMode]);
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -684,6 +758,7 @@ export function BookChapterCombobox({
                                   chapter === chapterViewData.selectedChapter,
                               },
                             )}
+                            ref={chapter === 1 ? firstChapterItemRef : undefined}
                           >
                             {chapter}
                           </CommandItem>
