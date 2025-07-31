@@ -56,7 +56,24 @@ We use encryption to keep your data safe, allowing access to keychain provides e
 
 ## Developer Install
 
-Set up pre-requisites for building:
+Set up pre-requisites, build, and run:
+
+1. Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node`. We recommend using [Volta](#javascript-tool-manager).
+
+2. Install [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
+
+   To check if `dotnet` is installed run:
+
+   ```bash
+   dotnet --version
+   # 8.0.412 [/usr/local/share/dotnet/sdk] (or some other directory)
+   dotnet --list-sdks
+   # 8.0.412 (or similar 8.* version)
+   ```
+
+3. Prerequisites for macOS or Linux (below).
+
+4. Clone, install, build, and run (below).
 
 ### Linux Development Pre-requisites
 
@@ -97,23 +114,6 @@ export DYLD_FALLBACK_LIBRARY_PATH="$HOME/lib:/usr/local/lib:/usr/lib:/opt/local/
 
 If you need to set environment variables like the above, consider adding them to
 your `.zprofile` so you don't have to remember to do it manually.
-
-### Development Prerequisites for All Platforms
-
-1. Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node`. We recommend using [Volta](#javascript-tool-manager).
-
-2. Install [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
-
-   To check if `dotnet` is installed run:
-
-   ```bash
-   dotnet --version
-   # 8.0.412 [/usr/local/share/dotnet/sdk] (or some other directory)
-   dotnet --list-sdks
-   # 8.0.412 (or similar 8.* version)
-   ```
-
-3. Prerequisites for macOS or Linux (below).
 
 ### Cloning and installing dependencies (all platforms)
 
