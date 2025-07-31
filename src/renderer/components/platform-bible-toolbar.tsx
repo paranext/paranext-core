@@ -176,7 +176,7 @@ export function PlatformBibleToolbar() {
       onOpenChange={(isOpen: boolean) => {
         setUpdateMenuData(isOpen);
       }}
-      commandHandler={handleMenuCommand}
+      onSelectMenuItem={handleMenuCommand}
       className={cn(
         'tw-h-12 tw-bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),

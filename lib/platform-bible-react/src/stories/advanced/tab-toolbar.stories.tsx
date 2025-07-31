@@ -111,13 +111,13 @@ const meta: Meta<TabToolbarProps> = {
   component: TabToolbar,
   tags: ['autodocs'],
   args: {
-    projectMenuCommandHandler: (command) => console.log('Project Menu Run command: ', command),
-    viewInfoMenuCommandHandler: (command) => console.log('View Info Run command: ', command),
+    onSelectProjectMenuItem: (command) => console.log('Project Menu Run command: ', command),
+    onSelectViewInfoMenuItem: (command) => console.log('View Info Run command: ', command),
     projectMenuData,
     tabViewMenuData,
     startAreaChildren: (
       <>
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
+        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
         <ScrollGroupSelector
           availableScrollGroupIds={[0, 1, 2, 3, 4]}
           localizedStrings={myScrollGroupIdLocalizedStrings}
@@ -175,7 +175,7 @@ const meta: Meta<TabToolbarProps> = {
           onChangeScrollGroupId={setScrollGroupId}
           size="sm"
         />
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
+        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
       </>
     ),
   },

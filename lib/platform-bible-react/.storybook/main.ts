@@ -1,3 +1,5 @@
+import remarkGfm from 'remark-gfm';
+
 import type { StorybookConfig } from '@storybook/react-vite';
 import { getCodeEditorStaticDirs } from 'storybook-addon-code-editor/getStaticDirs';
 
@@ -17,19 +19,25 @@ const config: StorybookConfig = {
     '../src/**/*.stories.@(js|jsx|ts|tsx)', // Explicitly list supported extensions
   ],
   addons: [
-    getAbsolutePath('@storybook/addon-docs'),
+    {
+      name: getAbsolutePath('@storybook/addon-docs'),
+      options: {
+        mdxPluginOptions: {
+          mdxCompileOptions: {
+            remarkPlugins: [remarkGfm],
+          },
+        },
+      },
+    },
     getAbsolutePath('@storybook/addon-links'),
     getAbsolutePath('@storybook/addon-a11y'),
     getAbsolutePath('@chromatic-com/storybook'),
+    getAbsolutePath('storybook-addon-code-editor'),
     getAbsolutePath('storybook-addon-rtl'),
-    'storybook-addon-code-editor',
   ],
   framework: {
     name: getAbsolutePath('@storybook/react-vite'),
     options: {},
-  },
-  docs: {
-    autodocs: 'tag',
   },
 };
 export default config;

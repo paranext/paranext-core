@@ -10,11 +10,9 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import { BookSelectorExample } from './advanced/book-selector-example.component';
 import { FilterExample } from './advanced/filter-example';
 import { InventoryExample } from './advanced/inventory-example.component';
 import { MarkdownRendererExample } from './advanced/markdown-renderer-example.component';
-import { MarketplaceButtonExamples } from './advanced/marketplace-buttons.example.component';
 import { MarketplaceExamples } from './advanced/marketplace.example.component';
 import { MultiSelectComboBoxExample } from './advanced/multi-select-combo-box-example';
 import { ScriptureResultsViewerExample } from './advanced/scripture-results-viewer.examples.component';
@@ -25,6 +23,7 @@ import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
+import { ScopeSelectorExample } from './advanced/scope-selector-example.component';
 
 export function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -75,7 +74,6 @@ export function Compositions() {
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
           </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
@@ -89,6 +87,7 @@ export function Compositions() {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Platform Menubar">Platform Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Scope Selector">Scope Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Scroll Group Selector">
             Scroll Group Selector
           </VerticalTabsTrigger>
@@ -105,10 +104,6 @@ export function Compositions() {
 
         <VerticalTabsContent value="Book Chapter Control">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="Book Selector">
-          <BookSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Data Table">
@@ -128,24 +123,7 @@ export function Compositions() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
-          <VerticalTabs>
-            <VerticalTabsList>
-              <VerticalTabsTrigger value="Marketplace Buttons">
-                Marketplace Buttons
-              </VerticalTabsTrigger>
-              <VerticalTabsTrigger value="Marketplace Components">
-                Marketplace Components
-              </VerticalTabsTrigger>
-            </VerticalTabsList>
-
-            <VerticalTabsContent value="Marketplace Buttons">
-              <MarketplaceButtonExamples />
-            </VerticalTabsContent>
-
-            <VerticalTabsContent value="Marketplace Components">
-              <MarketplaceExamples />
-            </VerticalTabsContent>
-          </VerticalTabs>
+          <MarketplaceExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">
@@ -173,6 +151,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Result List">
           <ScriptureResultsViewerExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Scope Selector">
+          <ScopeSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Scroll Group Selector">

@@ -18,7 +18,6 @@ export type ComboBoxOption = string | number | ComboBoxLabelOption;
 export type ComboBoxProps<T> = {
   /** Optional unique identifier */
   id?: string;
-  /** Text label title for combobox */
   /** List of available options for the dropdown menu */
   options?: readonly T[];
   /** @deprecated 3 December 2024. Renamed to `buttonClassName` */
@@ -35,7 +34,7 @@ export type ComboBoxProps<T> = {
   /** Triggers when content of textfield is changed */
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
-  getOptionLabel?: (option: ComboBoxOption) => string;
+  getOptionLabel?: (option: T) => string;
   /** Icon to be displayed on the trigger */
   icon?: ReactNode;
   /** Text displayed on button if `value` is undefined */

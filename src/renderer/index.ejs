@@ -42,6 +42,9 @@
         papi-extension: so extensions can load their bundled asset iframes as
         WEB_VIEW_CONTENT_TYPE.URL on different origin
         https: so extensions can load remote iframes as WEB_VIEW_CONTENT_TYPE.URL on different origin
+        http://localhost:* so extensions can load websites hosted by local web servers in iframes as
+        WEB_VIEW_CONTENT_TYPE.URL on different origin. This helps existing local web server applications
+        to migrate to extensions over time, but it is not recommended as a long-term solution.
           Note: WEB_VIEW_CONTENT_TYPE.HTML and WEB_VIEW_CONTENT_TYPE.React load in as `srcdoc` iframes
           with same origin and our CSP (these `srcdoc` iframes inherit this CSP as well in addition
           to using the CSP defined in `web-view.service.ts`) and iframe sandbox to prevent them from
@@ -97,7 +100,7 @@
         default-src 'none';
         script-src-elem 'self' 'wasm-unsafe-eval' 'unsafe-inline';
         style-src 'self' papi-extension: 'unsafe-inline';
-        frame-src 'self' papi-extension: https:;
+        frame-src 'self' papi-extension: https: http://localhost:*;
         object-src 'none';
         worker-src 'self';
         manifest-src 'self';

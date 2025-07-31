@@ -619,6 +619,71 @@ export declare class SortedNumberMap<T> {
 	private binarySearchLessThanOrEqual;
 	private binarySearchInsertIndex;
 }
+/**
+ * A collection of unique items that are automatically maintained in sorted order, similar to C#'s
+ * SortedSet.
+ *
+ * @template T The type of elements in the set
+ */
+export declare class SortedSet<T> {
+	private readonly compareFn;
+	/** Internal storage for the sorted items */
+	private readonly items;
+	/**
+	 * Creates a new sorted set
+	 *
+	 * @param compareFn - Function used to determine the order of elements. Returns negative when a <
+	 *   b, zero when a = b, positive when a > b
+	 */
+	constructor(compareFn: (a: T, b: T) => number);
+	/** Gets the number of elements in the set */
+	get size(): number;
+	/** Returns whether the set is empty */
+	get isEmpty(): boolean;
+	/**
+	 * Inserts an item into the set if it's not already present
+	 *
+	 * @param item - The item to insert
+	 * @returns True if the item was added; false if an equal item already exists
+	 */
+	insert(item: T): boolean;
+	/**
+	 * Removes an item from the set
+	 *
+	 * @param item - The item to remove
+	 * @returns True if the item was removed; false if it wasn't found
+	 */
+	remove(item: T): boolean;
+	/**
+	 * Checks if an item exists in the set
+	 *
+	 * @param item - The item to check
+	 * @returns True if the item exists; false otherwise
+	 */
+	has(item: T): boolean;
+	/** Returns all items in the set as an array, in sorted order */
+	toArray(): T[];
+	/** Returns the index of an item in the set, or -1 if not found */
+	findIndex(item: T): number;
+	/**
+	 * Returns the element at the specified index in the sorted order
+	 *
+	 * @param index - The zero-based index of the element to get
+	 * @returns The element at the specified index, or undefined if the index is out of range
+	 */
+	at(index: number): T | undefined;
+	/** Iterates through each item in the sorted set */
+	forEach(callback: (item: T, index: number, set: SortedSet<T>) => void): void;
+	/** Returns an iterator for the set's items */
+	[Symbol.iterator](): Iterator<T>;
+	/** Clears all items from the set */
+	clear(): void;
+	/**
+	 * Uses binary search to find the position where an item should be inserted to maintain the sorted
+	 * order
+	 */
+	private findInsertionIndex;
+}
 /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
 export declare class UnsubscriberAsyncList {
 	private name;
@@ -748,7 +813,7 @@ export declare function deepClone<T>(obj: T): T;
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms
  */
-export declare function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
@@ -2064,6 +2129,13 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
  * @returns Time span in words from `to` to `since`
  */
 export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
+/**
+ * Modifier keys that don't constitute typed input
+ *
+ * Sourced from
+ * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
+ */
+export declare const MODIFIER_KEYS: Set<string>;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**

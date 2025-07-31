@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import { Scope } from '@/components/utils/scripture.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { deepEqual, isString, LocalizedStringValue } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
@@ -70,9 +71,6 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
 export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-
-/** Scope of scripture that the inventory can operate on */
-export type Scope = 'book' | 'chapter';
 
 /** Status values that the status filter can select from */
 type StatusFilter = Status | 'all';
@@ -237,6 +235,7 @@ export function Inventory({
   const unknownItemsText = localizeString(localizedStrings, '%webView_inventory_unknown%');
   const scopeBookText = localizeString(localizedStrings, '%webView_inventory_scope_currentBook%');
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
+  const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
   const showAdditionalItemsText = localizeString(
     localizedStrings,
@@ -327,7 +326,7 @@ export function Inventory({
   };
 
   const handleScopeChange = (value: string) => {
-    if (value === 'book' || value === 'chapter') {
+    if (value === 'book' || value === 'chapter' || value === 'verse') {
       onScopeChange(value);
     } else {
       throw new Error(`Invalid scope value: ${value}`);
@@ -379,6 +378,7 @@ export function Inventory({
           <SelectContent>
             <SelectItem value="book">{scopeBookText}</SelectItem>
             <SelectItem value="chapter">{scopeChapterText}</SelectItem>
+            <SelectItem value="verse">{scopeVerseText}</SelectItem>
           </SelectContent>
         </Select>
         <Input

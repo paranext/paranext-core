@@ -11,7 +11,7 @@ export type ChapterSelectProps = {
   /** The highest chapter number in the book (of course equal to number of chapters in the book) */
   endChapter: number;
   /** The chapter number that is currently selected */
-  activeChapter: number;
+  selectedChapter: number;
   /** The chapter number that is currently highlighted using keyboard or mouse navigation */
   highlightedChapter: number;
   /**
@@ -20,14 +20,17 @@ export type ChapterSelectProps = {
    * @param chapterNumber The chapter that is highlighted
    */
   handleHighlightedChapter: (chapterNumber: number) => void;
+  /** Optional chapter query number used to style non-matching chapter numbers accordingly */
+  matchingChapters?: number[];
 };
 
 export function ChapterSelect({
   handleSelectChapter,
   endChapter,
-  activeChapter,
+  selectedChapter,
   highlightedChapter,
   handleHighlightedChapter,
+  matchingChapters,
 }: ChapterSelectProps) {
   const chapters = Array.from({ length: endChapter }, (_, i) => i + 1);
 
@@ -46,8 +49,10 @@ export function ChapterSelect({
           className={cn(
             'tw-box-content tw-flex tw-h-4 tw-w-4 tw-cursor-pointer tw-items-center tw-justify-end tw-rounded-md tw-p-2 tw-text-amber-800',
             {
-              'tw-font-semibold tw-text-amber-900': chapter === activeChapter,
+              'tw-font-semibold tw-text-amber-900': chapter === selectedChapter,
               'tw-bg-amber-200': chapter === highlightedChapter,
+              'tw-pointer-events-none tw-bg-accent tw-opacity-50':
+                matchingChapters && !matchingChapters.includes(chapter),
             },
           )}
           onClick={(event) => {

@@ -1,3 +1,4 @@
+import { Button } from '@/components/shadcn-ui/button';
 import { CircleHelp, Link as LucideLink, User } from 'lucide-react';
 import { NumberFormat } from 'platform-bible-utils';
 
@@ -13,16 +14,31 @@ interface MoreInfoProps {
   languages: string[];
   /** The URL to the more info page of the extension */
   moreInfoUrl: string;
+  /** Handler function triggered when the more info (Website) link is clicked */
+  handleMoreInfoLinkClick: () => void;
+  /** Optional URL to a website link to get support for the extension */
+  supportUrl: string;
+  /** Handler function triggered when the support link is clicked */
+  handleSupportLinkClick: () => void;
 }
 /**
  * This component displays the more info section of the extension which includes the category,
  * number of downloads, languages, and links to the website and support
  *
  * @param MoreInfoProps
- * @returns {JSX.Element} - Returns the more info component that displays the category, number of
- *   downloads, languages, and links to the website and support
+ * @returns The more info component that displays the category, number of downloads, languages, and
+ *   links to the website and support
  */
-export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps) {
+export function MoreInfo({
+  id,
+  category,
+  downloads,
+  languages,
+  moreInfoUrl,
+  handleMoreInfoLinkClick,
+  supportUrl,
+  handleSupportLinkClick,
+}: MoreInfoProps) {
   /**
    * This constant formats the number of downloads into a more readable format.
    *
@@ -45,30 +61,25 @@ export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: Mo
   return (
     <div
       id={id}
-      className="tw-flex tw-flex-wrap tw-items-start tw-space-x-4 tw-border-b tw-border-t tw-bg-white tw-pb-4 tw-pt-4"
+      className="tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center"
     >
-      <div className="tw-flex tw-flex-col tw-items-center">
-        <div className="tw-flex tw-items-center tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1">
-          <span className="tw-text-xs tw-font-semibold tw-text-gray-700">{category}</span>
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
+        <div className="tw-flex">
+          <span className="tw-text-xs tw-font-semibold tw-text-foreground">{category}</span>
         </div>
-        <span className="tw-text-xs tw-text-gray-500">CATEGORY</span>
+        <span className="tw-text-xs tw-text-foreground">CATEGORY</span>
       </div>
-      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
-      <div className="tw-flex tw-flex-col tw-items-center">
-        <div className="tw-flex tw-items-center tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1">
-          <User className="tw-mr-1 tw-h-4 tw-w-4" />
-          <span className="tw-text-xs tw-font-semibold tw-text-gray-700">{numberFormatted}</span>
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
+        <div className="tw-flex tw-gap-1">
+          <User className="tw-h-4 tw-w-4" />
+          <span className="tw-text-xs tw-font-semibold tw-text-foreground">{numberFormatted}</span>
         </div>
-        <span className="tw-text-xs tw-text-gray-500">USERS</span>
+        <span className="tw-text-xs tw-text-foreground">USERS</span>
       </div>
-      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
-      <div className="tw-flex tw-flex-col tw-items-center">
-        <div className="tw-flex tw-items-center">
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
+        <div className="tw-flex tw-gap-2">
           {languages.slice(0, 3).map((locale) => (
-            <span
-              key={locale}
-              className="tw-ml-1 tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1 tw-text-xs tw-font-semibold tw-text-gray-700"
-            >
+            <span key={locale} className="tw-text-xs tw-font-semibold tw-text-foreground">
               {locale.toUpperCase()}
             </span>
           ))}
@@ -77,35 +88,40 @@ export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: Mo
           <button
             type="button"
             onClick={() => handleScrollToBottom()}
-            className="tw-text-xs tw-text-gray-500 tw-underline"
+            className="tw-text-xs tw-text-foreground tw-underline"
           >
             +{languages.length - 3} more languages
           </button>
         )}
       </div>
-      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
-      <div className="tw-ml-auto tw-flex tw-flex-col tw-space-y-2">
-        <a
-          href={moreInfoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="tw-flex tw-items-center tw-text-xs tw-font-semibold tw-text-gray-500 tw-underline"
-        >
-          Website
-          <LucideLink className="tw-ml-1 tw-inline tw-h-4 tw-w-4" />
-        </a>
-        <a
-          href="https://example.com"
-          target="_blank"
-          rel="noreferrer"
-          className="tw-flex tw-items-center tw-text-xs tw-font-semibold tw-text-gray-500 tw-underline"
-        >
-          Support
-          <CircleHelp className="tw-ml-1 tw-inline tw-h-4 tw-w-4" />
-        </a>
-      </div>
+      {(moreInfoUrl || supportUrl) && (
+        <div className="tw-flex tw-flex-col tw-gap-1 tw-ps-4">
+          {moreInfoUrl && (
+            <div className="tw-flex tw-gap-1">
+              <Button
+                onClick={() => handleMoreInfoLinkClick()}
+                variant="link"
+                className="tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground"
+              >
+                Website
+                <LucideLink className="tw-h-4 tw-w-4" />
+              </Button>
+            </div>
+          )}
+          {supportUrl && (
+            <div className="tw-flex tw-gap-1">
+              <Button
+                onClick={() => handleSupportLinkClick()}
+                variant="link"
+                className="tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground"
+              >
+                Support
+                <CircleHelp className="tw-h-4 tw-w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
-export default MoreInfo;

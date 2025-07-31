@@ -41,6 +41,8 @@ const preview: Preview = {
       return Story();
     },
   ],
+  // Enables auto-generated documentation for all stories
+  tags: ['autodocs'],
 };
 
 export default preview;

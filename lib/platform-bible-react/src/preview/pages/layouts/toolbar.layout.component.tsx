@@ -15,33 +15,33 @@ export function ToolbarExamples() {
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-4">
-      <Toolbar menuData={undefined} commandHandler={() => {}}>
+      <Toolbar menuData={undefined} onSelectMenuItem={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuData={undefined} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
+      <Toolbar menuData={undefined} appMenuAreaChildren={<BookIcon />} onSelectMenuItem={() => {}}>
         <Button variant="ghost">
           <HomeIcon />
         </Button>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuData={menuData} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
+      <Toolbar menuData={menuData} appMenuAreaChildren={<BookIcon />} onSelectMenuItem={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuData={menuData} commandHandler={() => {}}>
+      <Toolbar menuData={menuData} onSelectMenuItem={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
         menuData={menuData}
-        commandHandler={() => {}}
+        onSelectMenuItem={() => {}}
         className="tw-h-8 tw-bg-muted tw-text-muted-foreground"
         configAreaChildren={
           <>
-            <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+            <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
             <UserRound />
           </>
         }
       >
-        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       Mac
       <div>
@@ -54,7 +54,7 @@ export function ToolbarExamples() {
         </div>
         <Toolbar
           menuData={menuData}
-          commandHandler={() => {}}
+          onSelectMenuItem={() => {}}
           className={cn('tw-h-8 tw-bg-background', getToolbarOSReservedSpaceClassName('darwin'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
         >
@@ -65,7 +65,7 @@ export function ToolbarExamples() {
       <div className="tw-relative">
         <Toolbar
           menuData={menuData}
-          commandHandler={() => {}}
+          onSelectMenuItem={() => {}}
           className={cn('tw-h-10 tw-bg-background', getToolbarOSReservedSpaceClassName('linux'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
         >
@@ -87,7 +87,7 @@ export function ToolbarExamples() {
       <div className="tw-items-center tw-rounded-md tw-bg-muted/50 tw-py-2">
         <Toolbar
           menuData={menuData}
-          commandHandler={() => {}}
+          onSelectMenuItem={() => {}}
           className="tw-h-8 tw-border-0 tw-bg-transparent"
           menubarVariant="muted"
           configAreaChildren={

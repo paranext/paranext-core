@@ -98,10 +98,13 @@ global.webViewComponent = function InventoryWebView({
           projectId,
           checkInputRange,
         );
+        if (scope === 'verse') {
+          return newInventoryItems.filter((item) => item.verseRef.verseNum === verseRef.verseNum);
+        }
         return newInventoryItems;
       }
       return [];
-    }, [checkAggregator, checkInputRange, projectId, checkId]),
+    }, [checkAggregator, projectId, checkId, checkInputRange, scope, verseRef.verseNum]),
     [],
   );
 

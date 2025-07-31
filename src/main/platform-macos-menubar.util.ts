@@ -161,7 +161,9 @@ function getMenubarColumnContent(
           'command' in item
             ? {
                 label: item.label,
-                click: () => handleMenuCommand({ label: item.label, command: item.command }),
+                // Since the item has a command, we know it is a MenuItemContainingCommand.
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                click: () => handleMenuCommand(item as MenuItemContainingCommand, groupKey),
                 order: item.order,
               }
             : {

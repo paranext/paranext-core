@@ -27,25 +27,12 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
-export type MenuItemInfoBase = {
-  /** Text (displayable in the UI) as the name of the menu item */
-  label: string;
-  /** Text to display when the mouse hovers over the menu item */
-  tooltip?: string;
-};
-
-export type Command = MenuItemInfoBase & {
-  /** Command to execute (string.string) */
-  command: string;
-};
-
 /**
- * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
- * define the shape of a function that can handle commands, but it does not provide an
- * implementation.
+ * Callback function that is invoked when a user selects a menu item. Receives the full
+ * `MenuItemContainingCommand` object as an argument.
  */
-export interface CommandHandler {
-  (command: Command): void;
+export interface SelectMenuItemHandler {
+  (selectedMenuItem: MenuItemContainingCommand): void;
 }
 
 const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
@@ -60,7 +47,7 @@ const getMenubarContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
   columnOrSubMenuKey: string | undefined,
-  commandHandler: CommandHandler,
+  onSelectMenuItem: SelectMenuItemHandler,
 ) => {
   if (!columnOrSubMenuKey) return undefined;
 
@@ -83,7 +70,9 @@ const getMenubarContent = (
                 <MenubarItem
                   key={`menubar-item-${item.label}-${item.command}`}
                   onClick={() => {
-                    commandHandler(item);
+                    // Since the item has a command, we know it is a MenuItemContainingCommand.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    onSelectMenuItem(item as MenuItemContainingCommand);
                   }}
                 >
                   {item.iconPathBefore && (
@@ -102,7 +91,7 @@ const getMenubarContent = (
                       groups,
                       items,
                       getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                      commandHandler,
+                      onSelectMenuItem,
                     )}
                   </MenubarSubContent>
                 </MenubarSub>
@@ -127,7 +116,7 @@ type PlatformMenubarProps = {
   menuData: Localized<MultiColumnMenu>;
 
   /** The handler to use for menu commands. */
-  commandHandler: CommandHandler;
+  onSelectMenuItem: SelectMenuItemHandler;
 
   /**
    * Optional callback function that is executed whenever a menu on the Menubar is opened or closed.
@@ -143,7 +132,7 @@ type PlatformMenubarProps = {
 /** Menubar component tailored to work with Platform.Bible menu data */
 export function PlatformMenubar({
   menuData,
-  commandHandler,
+  onSelectMenuItem,
   onOpenChange,
   variant,
 }: PlatformMenubarProps) {
@@ -252,7 +241,7 @@ export function PlatformMenubar({
               className="tw-z-[250]" // Need to get over the floating web view z-index 200
             >
               <TooltipProvider>
-                {getMenubarContent(menuData.groups, menuData.items, columnKey, commandHandler)}
+                {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
               </TooltipProvider>
             </MenubarContent>
           </MenubarMenu>

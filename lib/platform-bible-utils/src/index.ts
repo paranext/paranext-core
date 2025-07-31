@@ -11,6 +11,7 @@ export { NumberFormat } from './intl-number-format';
 export { PlatformEventEmitter } from './platform-event-emitter.model';
 export { PromiseChainingMap } from './promise-chaining-map';
 export { SortedNumberMap } from './sorted-number-map';
+export { SortedSet } from './sorted-set';
 export { UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
@@ -66,21 +67,21 @@ export {
   includes,
   indexOf,
   isLocalizeKey,
+  isWhiteSpace,
   lastIndexOf,
-  stringLength,
   normalize,
+  ordinalCompare,
   padEnd,
   padStart,
   slice,
   split,
   startsWith,
+  stringLength,
   substring,
   toArray,
   toKebabCase,
-  ordinalCompare,
-  transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
-  isWhiteSpace,
+  transformAndEnsureRegExpRegExpArray,
 } from './string-util';
 export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
@@ -90,6 +91,7 @@ export { default as getCurrentLocale } from './intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
 export { default as formatTimeSpan } from './date-time-format-util';
+export { MODIFIER_KEYS } from './keyboard-util';
 
 // Types
 export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';

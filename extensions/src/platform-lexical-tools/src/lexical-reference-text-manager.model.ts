@@ -16,12 +16,12 @@ import type {
   LexicalEntriesByOccurrence,
   LexicalReferenceSelector,
   LexicalReferenceText,
-  LexicalReferenceTextRegistrar,
   LexicalSensesById,
   LexicalSensesByOccurrence,
   Occurrence,
   Sense,
 } from 'platform-lexical-tools';
+import { LexicalReferenceTextRegistrar } from './lexical-reference-text-registrar.model';
 
 /**
  * Fake occurrence used to put items that don't have occurrences somewhere in the

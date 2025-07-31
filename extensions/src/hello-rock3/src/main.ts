@@ -27,7 +27,7 @@ const allProjectDataStorageKey = 'allHelloRock3ProjectData';
 
 type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
 
-logger.info('Hello Rock3 is importing!');
+logger.debug('Hello Rock3 is importing!');
 
 // #region General Web Views for this extension
 
@@ -92,7 +92,7 @@ const reactWebView2Provider: IWebViewProviderWithType = {
 
 // #endregion
 
-// #region Extension-specific Project Web View, Command, etc.
+// #region Extension-specific Project Web View, commands, etc.
 
 interface HelloRock3ProjectOptions extends OpenWebViewOptions {
   /** The project ID this viewer should focus on */
@@ -135,7 +135,7 @@ class HelloRock3ProjectWebViewFactory extends WebViewFactory<
     return {
       async focusName(name) {
         try {
-          logger.info(
+          logger.debug(
             `Hello Rock3 Project Web View Controller ${webViewDefinition.id} received request to focus ${name}`,
           );
           await papi.webViewProviders.postMessageToWebView(webViewDefinition.id, webViewNonce, {
@@ -257,7 +257,7 @@ function helloRock3Exception(message: string) {
 }
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
-  logger.info('Hello rock3 is activating!');
+  logger.debug('Hello rock3 is activating!');
 
   if (!context.elevatedPrivileges.handleUri) {
     logger.warn(
@@ -285,7 +285,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         }
       }),
     );
-    logger.info(
+    logger.debug(
       `Hello Rock3 is listening to URIs. You can navigate to ${context.elevatedPrivileges.handleUri.redirectUri}/greet?name=your_name to say hello`,
     );
   }
@@ -493,9 +493,18 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // if one already exists. The webview that already exists could have been created by anyone
   // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
   // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.openWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.openWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.openWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(htmlWebViewProvider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
+  papi.webViews.openWebView(reactWebViewProvider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
+  papi.webViews.openWebView(reactWebView2Provider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
 
   try {
     const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
@@ -517,5 +526,5 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     logger.error(`Hello Rock3 error! Could not get people data provider ${e}`);
   }
 
-  logger.info('Hello Rock3 is finished activating!');
+  logger.debug('Hello Rock3 is finished activating!');
 }
