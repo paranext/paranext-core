@@ -31,7 +31,7 @@ function InteractiveDemo() {
 }
 
 const meta: Meta<typeof InteractiveDemo> = {
-  title: 'Demo/Live Edit',
+title: 'Demo/Live Edit/Demo',
   component: InteractiveDemo,
   parameters: {
     docs: {
