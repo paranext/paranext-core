@@ -1,9 +1,6 @@
-/**
- * Work-around until the `@biblionexus-foundation/platform-editor` package fully includes its types.
- * Note there is also a patch that should be removed when this is fixed.
- */
+/** Work-around until the `@eten-tech-foundation/platform-editor` package fully includes its types. */
 
-declare module 'shared-react/annotation/selection.model' {
+declare module 'shared-react/plugins/usj/annotation/selection.model' {
   type UsjLocation = {
     jsonPath: string;
     offset: number;
@@ -20,7 +17,7 @@ declare module 'shared-react/annotation/selection.model' {
   };
 }
 
-declare module 'shared-react/nodes/scripture/usj/ImmutableNoteCallerNode' {
+declare module 'shared-react/nodes/usj/ImmutableNoteCallerNode' {
   export const immutableNoteCallerNodeName = 'ImmutableNoteCallerNode';
 }
 
@@ -32,12 +29,12 @@ declare module 'shared/adaptors/logger-basic.model' {
   };
 }
 
-declare module 'shared-react/plugins/text-direction.model' {
+declare module 'shared-react/plugins/usj/text-direction.model' {
   /** Left-to-right or Right-to-left or Automatically determined from the content. */
   export type TextDirection = 'ltr' | 'rtl' | 'auto';
 }
 
-declare module 'shared-react/nodes/scripture/usj/usj-node-options.model' {
+declare module 'shared-react/nodes/usj/usj-node-options.model' {
   import { SyntheticEvent } from 'react';
 
   /** Option properties to use with each node. */

@@ -5,13 +5,14 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
-} from '@biblionexus-foundation/platform-editor';
+  SelectionRange,
+} from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
   USJ_TYPE,
   USJ_VERSION,
   Usj,
-} from '@biblionexus-foundation/scripture-utilities';
+} from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -39,7 +40,7 @@ import {
   MarkdownRenderer,
 } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
-import { EditorDecorations, EditorWebViewMessage, SelectionRange } from 'platform-scripture-editor';
+import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import {
   convertEditorCommentsToLegacyComments,
