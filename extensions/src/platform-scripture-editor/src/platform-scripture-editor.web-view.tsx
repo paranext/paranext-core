@@ -5,13 +5,13 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
-} from '@biblionexus-foundation/platform-editor';
+} from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
   USJ_TYPE,
   USJ_VERSION,
   Usj,
-} from '@biblionexus-foundation/scripture-utilities';
+} from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';

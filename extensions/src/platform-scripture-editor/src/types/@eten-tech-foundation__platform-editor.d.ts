@@ -1,5 +1,5 @@
 /**
- * Work-around until the `@biblionexus-foundation/platform-editor` package fully includes its types.
+ * Work-around until the `@eten-tech-foundation/platform-editor` package fully includes its types.
  * Note there is also a patch that should be removed when this is fixed.
  */
 

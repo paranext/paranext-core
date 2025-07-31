@@ -4,7 +4,7 @@ import {
   MarkerObject,
   Usj,
   USJ_TYPE,
-} from '@biblionexus-foundation/scripture-utilities';
+} from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
 import { at, isWhiteSpace, slice, split, startsWith } from './string-util';
 import { LocalizeKey } from './menus.model';
