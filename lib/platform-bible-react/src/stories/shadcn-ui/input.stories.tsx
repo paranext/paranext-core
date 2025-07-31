@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Input } from '@/components/shadcn-ui/input';
-import React, { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 // import { ThemeProvider } from '@/preview/preview-components/theme-provider.component'; // Temporarily disabled
 
 const meta: Meta<typeof Input> = {
@@ -78,7 +78,7 @@ export const WithValidation: Story = {
     const [value, setValue] = useState('');
     const [error, setError] = useState('');
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
       setValue(newValue);
 

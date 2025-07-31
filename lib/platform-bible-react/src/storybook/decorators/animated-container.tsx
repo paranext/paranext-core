@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 export function AnimatedContainer({
   children,
@@ -6,7 +6,7 @@ export function AnimatedContainer({
   maxWidth = 'calc(100vw - 4rem)',
   skipAhead = '0%',
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   minWidth?: string;
   maxWidth?: string;
   skipAhead?: string; // Percentage to skip ahead in the animation loop
