@@ -220,11 +220,15 @@ declare module 'papi-shared-types' {
      */
     'platform.language': string;
     /**
-     * Short name of the project (not necessarily unique). This will be displayed directly in the
-     * UI.
+     * The BCP 47 language tag for the writing system of this project.
+     *
+     * @example 'en-GB'
+     */
+    'platform.languageTag': string /**
+     * Short name of the project (not necessarily unique). This will be displayed directly in the UI.
      *
      * @example 'WEB'
-     */
+     */;
     'platform.name': string;
     /**
      * Localized full name of the project. This will be displayed directly in the UI.
