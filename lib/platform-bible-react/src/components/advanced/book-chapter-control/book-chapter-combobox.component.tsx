@@ -589,7 +589,45 @@ export function BookChapterCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
-        <Command onKeyDown={handleChapterKeyDown}>
+        <Command
+          onKeyDown={handleChapterKeyDown}
+          loop
+          filter={(value, search) => {
+            // Custom filter that preserves original order
+            // Return 1 if the item matches, 0 if it doesn't
+            // All matching items get the same rank to maintain original order
+            if (!search) return 1; // Show all items when no search
+
+            const searchLower = search.toLowerCase();
+            const valueLower = value.toLowerCase();
+
+            // If we have a topMatch (smart parsing succeeded), we need special handling
+            if (topMatch) {
+              // For the top match item itself, always show it
+              if (
+                valueLower.includes(topMatch.book.toLowerCase()) &&
+                valueLower.includes(ALL_ENGLISH_BOOK_NAMES[topMatch.book].toLowerCase())
+              ) {
+                return 1;
+              }
+
+              // For chapter items in hybrid view, check if they match the parsed book
+              if (
+                value.includes(topMatch.book) &&
+                value.includes(ALL_ENGLISH_BOOK_NAMES[topMatch.book])
+              ) {
+                return 1;
+              }
+            }
+
+            // Regular filtering: check if search term appears anywhere in the value
+            if (valueLower.includes(searchLower)) {
+              return 1; // All matches get the same rank (no reordering)
+            }
+
+            return 0; // Hide non-matches
+          }}
+        >
           {/* Input for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
             <CommandInput
