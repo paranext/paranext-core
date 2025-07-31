@@ -5,7 +5,7 @@ import { makeLiveEditStory } from 'storybook-addon-code-editor';
 import { useState } from 'react';
 
 // Simple interactive demo component
-function InteractiveDemo() {
+function LiveCodeDemo() {
   const [text, setText] = useState('Hello, World!');
   const [count, setCount] = useState(0);
 
@@ -30,21 +30,14 @@ function InteractiveDemo() {
   );
 }
 
-const meta: Meta<typeof InteractiveDemo> = {
-title: 'Demo/Live Edit/Demo',
-  component: InteractiveDemo,
-  parameters: {
-    docs: {
-      description: {
-        component:
-          'Live editing examples for all components. Start with simple examples, then try the advanced UI components.',
-      },
-    },
-  },
-};
+const meta = {
+title: 'Demo/Live Code Editor',
+  component: LiveCodeDemo,
+  tags: ['!autodocs'],
+} satisfies Meta<typeof LiveCodeDemo>;
 
 export default meta;
-type Story = StoryObj<typeof InteractiveDemo>;
+type Story = StoryObj<typeof LiveCodeDemo>;
 
 // Basic examples first
 export const BasicExample: Story = {};
@@ -98,7 +91,7 @@ makeLiveEditStory(Counter, {
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 
-export default function InteractiveDemo() {
+export default function LiveCodeDemo() {
   const [text, setText] = useState('Hello, World!');
   const [count, setCount] = useState(0);
 

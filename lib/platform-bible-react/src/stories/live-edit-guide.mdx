@@ -1,27 +1,30 @@
 import { Meta } from '@storybook/addon-docs/blocks';
+import * as CodeEditorStories from './code-editor-demo.stories';
 
-<Meta title="Demo/Live Edit/Docs" />
 
-# 📖 Live Code Editing Guide
+<Meta of={CodeEditorStories} name="Docs"  />
 
-This Storybook includes live code editing capabilities powered by `storybook-addon-code-editor`. You can edit React/TypeScript code in real-time and see changes immediately in the preview.
+# Live Code Editing Guide
 
-## 🚀 How to Use
+This Storybook includes live code editing capabilities powered by `storybook-addon-code-editor`. You can edit React TypeScript code in real-time using the Live Code Editor tab in the Storybook Panel and see changes immediately on the canvas.
 
-1. **Navigate to any Live Edit story** in this section
-2. **Look for the code editor** - It will appear as an editor panel or section
-3. **Edit the code** directly in the Monaco editor (VS Code-like experience)
-4. **See changes instantly** reflected in the component preview
 
-## ✨ Features
+## How to Use
 
-- ✅ **Monaco Editor** - VS Code's editor with familiar shortcuts
-- ✅ **TypeScript Support** - Full syntax highlighting and IntelliSense
-- ✅ **Real-time Updates** - Changes appear immediately
+1. **Navigate to any Live Edit enabled story** in this section
+2. **Look for the live code editor** - It will appear as a a tab in the bottom section.
+3. **Edit the code** directly in the editor
+4. **See changes instantly** on the canvas above
+
+## Features
+
+- ✅ **Monaco editor** - VS Code's editor with familiar shortcuts
+- ✅ **TypeScript support** - Full syntax highlighting and IntelliSense
+- ✅ **Real-time updates** - Changes appear immediately
 - ✅ **React Hooks** - useState, useEffect, and other hooks work out of the box
-- ✅ **Component Library** - Your Button, Input, and other components are available
+- ✅ **Component Library** - Tailwind styling and Shadcn/ui Button, Input, and other components are available
 
-## 📚 Examples to Try
+## Examples to Try
 
 ### Basic Examples (Start Here)
 - **BasicExample** - Simple HTML/React editing, perfect for getting started
@@ -31,7 +34,7 @@ This Storybook includes live code editing capabilities powered by `storybook-add
 - **Counter** - Complex example with Button + Input components
 - **InputWithState** - Input validation and state management
 
-## 💡 Quick Tips
+## Quick Tips
 
 ### Editing Code
 - Use **Ctrl/Cmd+Z** to undo changes
@@ -58,12 +61,11 @@ onClick={() => console.log('clicked')}
 - **Input** - Text inputs with full event handling
 - **Standard HTML** - All HTML elements and inline styles
 
-## ✅ Best Practices
+## Best Practices
 
-- ✅ **Start simple** - Begin with BasicExample to get familiar
-- ✅ **Experiment freely** - Changes are temporary and won't affect the actual codebase
-- ✅ **Copy useful code** - When you create something useful, copy it for your projects
-- ✅ **Try different patterns** - Test controlled vs uncontrolled components, different event handlers, etc.
+- **Start simple** - Begin with BasicExample to get familiar
+- **Experiment freely** - Changes are temporary and won't affect the actual codebase
+- **Copy useful code** - When you create something useful, copy it for your projects
 
 <div style={{
   marginTop: '30px',
