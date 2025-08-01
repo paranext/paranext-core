@@ -21,6 +21,11 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       label: '%project_settings_platform_language_label%',
       default: '%project_language_missing%',
     },
+    'platform.languageTag': {
+      label: '%project_settings_platform_languageTag_label%',
+      default: 'en',
+      isHidden: true,
+    },
     'platform.isEditable': {
       label: '%project_settings_platform_isEditable_label%',
       description: '%project_settings_platform_isEditable_description%',
@@ -49,6 +54,12 @@ const languageValidator: ProjectSettingValidator<'platform.language'> = async (
   return typeof newValue === 'string';
 };
 
+const languageTagValidator: ProjectSettingValidator<'platform.languageTag'> = async (
+  newValue: string,
+): Promise<boolean> => {
+  return Intl.getCanonicalLocales(newValue)[0] === newValue;
+};
+
 const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = async (
   newValue: boolean,
 ) => typeof newValue === 'boolean';
@@ -64,6 +75,7 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platform.name': nameValidator,
   'platform.fullName': fullNameValidator,
   'platform.language': languageValidator,
+  'platform.languageTag': languageTagValidator,
   'platform.isEditable': isEditableValidator,
   'platform.textDirection': textDirectionValidator,
 };

@@ -3484,11 +3484,13 @@ declare module 'papi-shared-types' {
      *
      * @example 'en-GB'
      */
-    'platform.languageTag': string /**
-     * Short name of the project (not necessarily unique). This will be displayed directly in the UI.
+    'platform.languageTag': string;
+    /**
+     * Short name of the project (not necessarily unique). This will be displayed directly in the
+     * UI.
      *
      * @example 'WEB'
-     */;
+     */
     'platform.name': string;
     /**
      * Localized full name of the project. This will be displayed directly in the UI.

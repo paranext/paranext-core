@@ -157,6 +157,7 @@
   "%project_settings_platform_isEditable_label%": "Es Editable",
   "%project_settings_platform_isEditable_description%": "Si este proyecto es editable. Un proyecto que no es editable a veces se denomina recurso.",
   "%project_settings_platform_language_label%": "Lenguaje Primario del Proyecto",
+  "%project_settings_platform_languageTag_label%": "Código de Escritura Primario del Proyecto",
   "%project_settings_platform_name_label%": "Nombre Abreviado del Proyecto",
   "%scrollGroup_0%": "A",
   "%scrollGroup_1%": "B",
