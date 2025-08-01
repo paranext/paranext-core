@@ -10,6 +10,7 @@ import {
   Layout,
   OnLayoutChangeRCDock,
   WebViewTabProps,
+  TabInfo,
 } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 
@@ -31,6 +32,7 @@ import {
   saveTab,
   focusTab,
   updateWebViewDefinition,
+  updateTabPartial,
 } from '@renderer/components/docking/platform-dock-layout-storage.util';
 import {
   isTab,
@@ -70,6 +72,11 @@ export function PlatformDockLayout() {
       floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
       getWebViewDefinition: (webViewId: string) =>
         getWebViewDefinition(webViewId, dockLayoutRef.current),
+      updateTabPartial: (
+        tabId: string,
+        partialTabInfo: Partial<TabInfo>,
+        shouldBringToFront = false,
+      ) => updateTabPartial(dockLayoutRef.current, tabId, partialTabInfo, shouldBringToFront),
       updateWebViewDefinition: (
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
