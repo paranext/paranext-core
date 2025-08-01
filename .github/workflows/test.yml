@@ -151,6 +151,9 @@ jobs:
       - name: dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
 
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
       - name: npm unit tests
         run: npm test
 
