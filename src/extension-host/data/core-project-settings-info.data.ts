@@ -21,6 +21,11 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       label: '%project_settings_platform_language_label%',
       default: '%project_language_missing%',
     },
+    'platform.languageTag': {
+      label: '%project_settings_platform_languageTag_label%',
+      default: 'en',
+      isHidden: true,
+    },
     'platform.isEditable': {
       label: '%project_settings_platform_isEditable_label%',
       description: '%project_settings_platform_isEditable_description%',
