@@ -10,7 +10,7 @@ declare module 'platform-scripture' {
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
-  import type { Usj } from '@biblionexus-foundation/scripture-utilities';
+  import type { Usj } from '@eten-tech-foundation/scripture-utilities';
   import { InventoryItem } from 'platform-bible-react';
 
   // #region Project Interface Data Types

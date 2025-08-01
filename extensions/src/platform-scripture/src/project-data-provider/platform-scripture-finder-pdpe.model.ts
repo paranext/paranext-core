@@ -1,4 +1,4 @@
-import { Usj, usxStringToUsj } from '@biblionexus-foundation/scripture-utilities';
+import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { logger, ProjectDataProviderEngine } from '@papi/backend';
 import { IProjectDataProviderEngine } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';

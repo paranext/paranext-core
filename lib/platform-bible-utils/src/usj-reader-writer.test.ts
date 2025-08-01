@@ -1,4 +1,4 @@
-import { Usj, USJ_TYPE, USJ_VERSION } from '@biblionexus-foundation/scripture-utilities';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from './usj-reader-writer';
 
 const usj: Usj = JSON.parse(`{

@@ -1,4 +1,5 @@
 declare module 'platform-scripture-editor' {
+  import { SelectionRange } from '@eten-tech-foundation/platform-editor';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { CheckLocation } from 'platform-scripture';
@@ -7,21 +8,6 @@ declare module 'platform-scripture-editor' {
   import type { LocalizeKey } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
-
-  // #region copied from @biblionexus-foundation/platform-editor because they are not yet properly
-  // exported
-
-  type UsjLocation = {
-    jsonPath: string;
-    offset: number;
-  };
-
-  export type SelectionRange = {
-    start: UsjLocation;
-    end?: UsjLocation;
-  };
-
-  // #endregion
 
   /** Tell the editor to select a specific range */
   export type EditorMessageSelectRange = {
