@@ -70,7 +70,7 @@
     "lint:staged": "lint-staged -q && npm run lint:staged --workspaces --if-present",
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run build:types && npm run lint-fix:scripts && npm run lint-fix:styles && cd lib/papi-dts && npm run lint-fix && cd ../../extensions && npm run lint-fix",
-    "lint-fix:scripts": "npm run format:core && npm run lint:scripts",
+    "lint-fix:scripts": "npm run format:core && npm run lint:scripts -- --fix",
     "lint-fix:styles": "npm run lint:styles -- --fix",
     "ncu:group": "npx npm-check-updates --interactive --format group --workspaces",
     "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never && npm run build:dll",
