@@ -52,10 +52,7 @@ const languageValidator: ProjectSettingValidator<'platform.language'> = async (
 const languageTagValidator: ProjectSettingValidator<'platform.languageTag'> = async (
   newValue: string,
 ) => {
-  // Language tag is pulled from the project's ldml file and cannot be set via Platform.Bible.
-  // If that changes, we may want to validate that the lang tag is canonical:
-  // return newValue === Intl.getCanonicalLocales(newValue)[0];
-  return typeof newValue === 'string';
+  return Intl.getCanonicalLocales(newValue)[0] === newValue;
 };
 
 const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = async (
