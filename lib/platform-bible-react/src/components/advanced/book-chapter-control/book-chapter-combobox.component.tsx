@@ -27,7 +27,9 @@ export type BookChapterComboboxProps = {
 };
 
 // Reuse constants from the original component
-const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
+const ALL_BOOK_IDS = Canon.allBookIds.filter(
+  (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+);
 const ALL_ENGLISH_BOOK_NAMES = Object.fromEntries(
   ALL_BOOK_IDS.map((bookId) => [bookId, Canon.bookIdToEnglishName(bookId)]),
 );
@@ -928,10 +930,8 @@ export function BookChapterCombobox({
                 {/* Chapter Selector - Show when we have a top match */}
                 {topMatch && topMatchChapterData && (
                   <>
-                    <div className="tw-p-4">
-                      <div className="tw-mb-2 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                        {topMatchChapterData.bookName} - Select Chapter
-                      </div>
+                    <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                      {topMatchChapterData.bookName} - Select Chapter
                     </div>
                     <CommandGroup forceMount>
                       <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
