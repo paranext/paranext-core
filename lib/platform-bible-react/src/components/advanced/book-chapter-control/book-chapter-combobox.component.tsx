@@ -107,6 +107,7 @@ export function BookChapterCombobox({
   const [selectedBookForChapters, setSelectedBookForChapters] = useState<string | undefined>(
     undefined,
   );
+  const [commandValue, setCommandValue] = useState('');
 
   // Refs for scrolling to selected book and focusing input
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -115,8 +116,6 @@ export function BookChapterCombobox({
   const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandInputRef = useRef<HTMLInputElement>(undefined!);
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const firstChapterItemRef = useRef<HTMLDivElement>(undefined!);
 
   // Get available books (same logic as original)
   const availableBooks = useMemo(() => {
@@ -289,6 +288,7 @@ export function BookChapterCombobox({
       setViewMode('books');
       setSelectedBookForChapters(undefined);
       setInputValue('');
+      setCommandValue(''); // Reset command value
     },
     [handleSubmit, selectedBookForChapters],
   );
@@ -304,6 +304,7 @@ export function BookChapterCombobox({
       });
       setOpen(false);
       setInputValue('');
+      setCommandValue(''); // Reset command value
     },
     [handleSubmit, hybridBookId],
   );
@@ -311,6 +312,7 @@ export function BookChapterCombobox({
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
     setSelectedBookForChapters(undefined);
+    setCommandValue(''); // Reset command value
 
     // Focus the search input when returning to book view
     setTimeout(() => {
@@ -344,6 +346,7 @@ export function BookChapterCombobox({
         setViewMode('books');
         setSelectedBookForChapters(undefined);
         setInputValue('');
+        setCommandValue(''); // Reset command value
       }
     },
     [viewMode, handleBackToBooks],
@@ -359,6 +362,7 @@ export function BookChapterCombobox({
     });
     setOpen(false);
     setInputValue('');
+    setCommandValue(''); // Reset command value
   }, [handleSubmit, topMatch]);
 
   const currentDisplayValue = formatScrRef(scrRef, 'English');
@@ -391,7 +395,16 @@ export function BookChapterCombobox({
     };
   }, [shouldShowHybridView, hybridBookId, scrRef.book, scrRef.chapterNum]);
 
-  // Grid-aware keyboard navigation that works with Command's focus system
+  // Helper function to generate command values
+  const getChapterValue = useCallback((bookId: string, chapter: number) => {
+    return `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]} ${chapter}`;
+  }, []);
+
+  const getBookValue = useCallback((bookId: string) => {
+    return `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`;
+  }, []);
+
+  // Grid-aware keyboard navigation using Command's controlled value
   const handleChapterKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       // Handle backspace for going back to books
@@ -414,6 +427,7 @@ export function BookChapterCombobox({
           setViewMode('books');
           setSelectedBookForChapters(undefined);
           setInputValue(event.key);
+          setCommandValue(''); // Reset command value
 
           // Focus the search input
           setTimeout(() => {
@@ -432,6 +446,7 @@ export function BookChapterCombobox({
           setViewMode('books');
           setSelectedBookForChapters(undefined);
           setInputValue(`${currentBookName} ${event.key}`);
+          setCommandValue(''); // Reset command value
 
           // Focus the search input
           setTimeout(() => {
@@ -448,64 +463,48 @@ export function BookChapterCombobox({
         (viewMode === 'chapters' || shouldShowHybridView) &&
         ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
       ) {
-        // Since Command doesn't focus individual items, we need to find the currently highlighted item
-        // The Command component uses aria-selected="true" to mark the active item
-        const highlightedItem = document.querySelector('[cmdk-item][aria-selected="true"]');
-        console.log('highlightedItem data-chapter:', highlightedItem?.getAttribute('data-chapter'));
+        // Extract current chapter from commandValue
+        const currentBookId = viewMode === 'chapters' ? selectedBookForChapters : hybridBookId;
+        if (!currentBookId) return;
 
-        if (highlightedItem) {
-          const currentChapter = parseInt(highlightedItem.getAttribute('data-chapter') || '1', 10);
-          const maxChapter =
-            viewMode === 'chapters' ? chapterViewData?.endChapter : hybridChapterData?.endChapter;
+        // Parse chapter from current command value
+        const currentChapter = (() => {
+          if (!commandValue) return 1;
+          const match = commandValue.match(/(\d+)$/);
+          return match ? parseInt(match[1], 10) : 1;
+        })();
 
-          if (!maxChapter) return;
+        const maxChapter =
+          viewMode === 'chapters' ? chapterViewData?.endChapter : hybridChapterData?.endChapter;
 
-          let targetChapter = currentChapter;
-          const GRID_COLS = 6;
+        if (!maxChapter) return;
 
-          switch (event.key) {
-            case 'ArrowLeft':
-              targetChapter = Math.max(1, currentChapter - 1);
-              break;
-            case 'ArrowRight':
-              targetChapter = Math.min(maxChapter, currentChapter + 1);
-              break;
-            case 'ArrowUp':
-              targetChapter = Math.max(1, currentChapter - GRID_COLS);
-              break;
-            case 'ArrowDown':
-              targetChapter = Math.min(maxChapter, currentChapter + GRID_COLS);
-              break;
-            default:
-              return;
-          }
+        let targetChapter = currentChapter;
+        const GRID_COLS = 6;
 
-          if (targetChapter !== currentChapter) {
-            event.preventDefault();
-            event.stopPropagation();
+        switch (event.key) {
+          case 'ArrowLeft':
+            targetChapter = Math.max(1, currentChapter - 1);
+            break;
+          case 'ArrowRight':
+            targetChapter = Math.min(maxChapter, currentChapter + 1);
+            break;
+          case 'ArrowUp':
+            targetChapter = Math.max(1, currentChapter - GRID_COLS);
+            break;
+          case 'ArrowDown':
+            targetChapter = Math.min(maxChapter, currentChapter + GRID_COLS);
+            break;
+          default:
+            return;
+        }
 
-            // Find the target CommandItem and trigger its selection programmatically
-            const targetElement = document.querySelector(
-              `[data-chapter="${targetChapter}"][cmdk-item]`,
-            );
-            console.log('targetElement:', targetElement);
+        if (targetChapter !== currentChapter) {
+          event.preventDefault();
+          event.stopPropagation();
 
-            if (targetElement) {
-              // Remove the current selection first
-              const currentSelected = document.querySelector('[cmdk-item][aria-selected="true"]');
-              if (currentSelected) {
-                currentSelected.setAttribute('aria-selected', 'false');
-                currentSelected.setAttribute('data-selected', 'false');
-              }
-
-              // Set the new selection
-              targetElement.setAttribute('aria-selected', 'true');
-              targetElement.setAttribute('data-selected', 'true');
-
-              // Scroll the target element into view if needed
-              targetElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            }
-          }
+          // Update the command value to the target chapter
+          setCommandValue(getChapterValue(currentBookId, targetChapter));
         }
       }
     },
@@ -516,6 +515,9 @@ export function BookChapterCombobox({
       chapterViewData?.endChapter,
       hybridChapterData?.endChapter,
       selectedBookForChapters,
+      hybridBookId,
+      commandValue,
+      getChapterValue,
     ],
   );
 
@@ -543,48 +545,35 @@ export function BookChapterCombobox({
           top: Math.max(0, scrollPosition),
           behavior: 'smooth',
         });
+
+        // Set the selected book as the active item for keyboard navigation
+        setCommandValue(getBookValue(scrRef.book));
       }
     }, 10); // Small delay to ensure DOM is ready
 
     return () => {
       clearTimeout(scrollTimeout);
     };
-  }, [open, viewMode, inputValue, topMatch]);
+  }, [open, viewMode, inputValue, topMatch, scrRef.book, getBookValue]);
 
   // Focus first chapter when entering chapter viewmode
   useLayoutEffect(() => {
-    if (viewMode === 'chapters') {
-      const focusTimeout = setTimeout(() => {
-        // Use ref to set focus on the first chapter
-        if (firstChapterItemRef.current) {
-          // Remove any existing selections first
-          const currentSelected = document.querySelector('[cmdk-item][aria-selected="true"]');
-          if (currentSelected) {
-            currentSelected.setAttribute('aria-selected', 'false');
-            currentSelected.setAttribute('data-selected', 'false');
-          }
-
-          // Set the first chapter as selected
-          firstChapterItemRef.current.setAttribute('aria-selected', 'true');
-          firstChapterItemRef.current.setAttribute('data-selected', 'true');
-
-          // Scroll into view if needed
-          firstChapterItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        }
-      }, 10); // Small delay to ensure DOM is ready
-
-      return () => {
-        clearTimeout(focusTimeout);
-      };
+    if (viewMode === 'chapters' && selectedBookForChapters) {
+      // Set the first chapter as selected using the controlled value
+      setCommandValue(getChapterValue(selectedBookForChapters, 1));
     }
-
-    return undefined;
-  }, [viewMode]);
+  }, [viewMode, selectedBookForChapters, getChapterValue]);
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className={className}>
+        <Button
+          aria-label="book-chapter-trigger"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn('tw-text-white', className)}
+        >
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
@@ -592,6 +581,8 @@ export function BookChapterCombobox({
         <Command
           onKeyDown={handleChapterKeyDown}
           loop
+          value={commandValue}
+          onValueChange={setCommandValue}
           filter={(value, search) => {
             // Custom filter that preserves original order
             // Return 1 if the item matches, 0 if it doesn't
@@ -808,7 +799,6 @@ export function BookChapterCombobox({
                                   chapter === chapterViewData.selectedChapter,
                               },
                             )}
-                            ref={chapter === 1 ? firstChapterItemRef : undefined}
                           >
                             {chapter}
                           </CommandItem>
