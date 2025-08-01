@@ -49,6 +49,8 @@ export type TabInfo = SavedTabInfo & {
   minWidth?: number;
   /** (optional) Minimum height that the tab can become in CSS `px` units */
   minHeight?: number;
+  /** Last known focused element. Used for restoring focus in the tab */
+  lastFocusedElement?: HTMLElement;
 };
 
 /**
@@ -200,6 +202,25 @@ export type PapiDockLayout = {
    * @returns WebView definition with the specified ID or undefined if not found
    */
   getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
+  /**
+   * Updates the tab with the specified id with the specified properties. No need to have all the
+   * tab info; just specify the properties you want to update.
+   *
+   * WARNING: This does not work well with `tab.data` `WebViewDefinition` information. Use
+   * `updateWebViewDefinition` for that instead
+   *
+   * @param tabId ID of the tab to update
+   * @param partialTabInfo Partial tab info to update. Any unspecified properties will stay the same
+   * @param shouldBringToFront If true, the tab will flash, will be brought to the front, and will
+   *   be unobscured by other tabs. Defaults to `false`
+   * @returns Updated tab info or `undefined` if the tab was not found
+   * @throws If the item found in the dock layout with the specified ID is not a tab
+   */
+  updateTabPartial: (
+    tabId: string,
+    partialTabInfo: Partial<TabInfo>,
+    shouldBringToFront?: boolean,
+  ) => TabInfo | undefined;
   /**
    * Updates the WebView with the specified ID with the specified properties
    *
