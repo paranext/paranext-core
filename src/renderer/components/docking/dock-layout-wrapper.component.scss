@@ -71,16 +71,36 @@
 
 // #region TAB-BAR //////////////////////////////////////////////
 /* tabs take all the space */
+
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   flex-grow: 1;
 }
 
-/* overriding default style for the shadow indicating that not all tabs are shown */
-.dock-nav-more {
-  color: hsl(var(--foreground));
-  margin-right: 10px;
+.dock-nav-operations {
+  align-items: center;
+  gap: vars.$space--s;
+  padding-inline: vars.$space--s;
+  height: 100%;
 }
 
+.dock-nav-more {
+  color: hsl(var(--foreground));
+  height: 24px;
+  width: 32px;
+  border-radius: vars.$space--s;
+}
+
+.dock-nav-more:hover {
+  background-color: hsl(var(--muted-foreground));
+}
+
+.dock-nav-more > svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* overriding default style for the shadow indicating that not all tabs are shown */
 .dock-nav-more::after {
   box-shadow: inset -10px 0 8px -8px vars.$color--shadow;
 }
@@ -102,7 +122,7 @@
    * Remove the handle bar at the top of each dock-tab. Note: Now, the tab
    * group can only be grabbed by grabbing the intersection between two tabs
    */
-  padding-top: 0;
+  padding-top: unset;
   /*
    * For some reason, by default, the tabs are moved down one pixel. That
    * makes them blurry, so this removes that transform
@@ -303,5 +323,9 @@ $tab-bottom-rounding: vars.$space--s;
 }
 
 .dock-panel.dock-style-card .dock-extra-content {
-  height: 0; // absolutely positioned with 0 height, to avoid influencing anything else
+  // long selector needed for specificity
+  height: 30px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
 }
