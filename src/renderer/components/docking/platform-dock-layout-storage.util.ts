@@ -39,6 +39,7 @@ import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import { logger } from '@shared/services/logger.service';
 
 import { RCDockTabInfo, TabType, isPanel, isTab } from './docking-framework-internal.model';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
@@ -298,6 +299,40 @@ export function getWebViewDefinition(
 }
 
 /**
+ * Updates the tab with the specified id with the specified properties. No need to have all the tab
+ * info; just specify the properties you want to update.
+ *
+ * WARNING: This does not work well with `tab.data` `WebViewDefinition` information. Use
+ * `updateWebViewDefinition` for that instead
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId ID of the tab to update
+ * @param partialTabInfo Partial tab info to update. Any unspecified properties will stay the same
+ * @param shouldBringToFront If true, the tab will flash, will be brought to the front, and will be
+ *   unobscured by other tabs. Defaults to `false`
+ * @returns Updated tab info or `undefined` if the tab was not found
+ * @throws If the item found in the dock layout with the specified ID is not a tab
+ */
+export function updateTabPartial(
+  dockLayout: DockLayout,
+  tabId: string,
+  partialTabInfo: Partial<TabInfo>,
+  shouldBringToFront = false,
+) {
+  const targetTabInfo = getTabInfoById(dockLayout, tabId, 'updateTabPartial');
+
+  // If we didn't find the webview, return nothing
+  if (!targetTabInfo) return undefined;
+
+  const updatedTabInfo = loadTab({ ...targetTabInfo, ...partialTabInfo }, shouldBringToFront);
+
+  updateTab(dockLayout, updatedTabInfo, shouldBringToFront, updatedTabInfo.id);
+
+  return updatedTabInfo;
+}
+
+/**
  * Updates the WebView with the specified id with the specified properties
  *
  * @param webViewId The id of the WebView to update
@@ -367,6 +402,69 @@ export function findPreviousTab(dockLayout: DockLayout) {
 }
 
 /**
+ * Sets the focus of this window's `document` to the contents of the specified tab
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId ID of the tab to focus
+ */
+function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
+  // ENHANCEMENT: Track the last selected element in various tabs and restore focus to it. Currently
+  // only WebViews support this
+  const tabInfo = getTabInfoById(dockLayout, tabId, 'setDocumentFocusToTab');
+  if (!tabInfo) return;
+
+  let didFocusWebView = false;
+
+  // Select the WebView iframe if one exists. Must do this then select the last focused element
+  // inside it if available
+  const webViewIframe = document.querySelector(`[data-web-view-id='${tabId}']`);
+  if (webViewIframe) {
+    if (webViewIframe instanceof HTMLIFrameElement) {
+      if (!webViewIframe.contentWindow) {
+        webViewIframe.focus();
+        // Not sure in what contexts it wouldn't have a contentWindow, so just warn for now
+        logger.warn(
+          `setDocumentFocusToTab: WebView with id '${tabId}' does not have a contentWindow for some reason. Focusing the iframe instead. Please investigate`,
+        );
+      } else webViewIframe.contentWindow.focus();
+      didFocusWebView = true;
+    }
+  }
+
+  // Try to select the last focused element in the tab
+  if (tabInfo.lastFocusedElement) {
+    // If the last focused element is a valid HTMLElement, focus it
+    // Checking with 'focus' in because this may be across realms in the iframe
+    if ('focus' in tabInfo.lastFocusedElement) {
+      tabInfo.lastFocusedElement.focus();
+      return;
+    }
+    // If it is not an HTMLElement, just log it
+    logger.warn(
+      `setDocumentFocusToTab: lastFocusedElement for tab '${tabId}' exists but does not have 'focus' for some reason. Cannot focus it. Please investigate`,
+    );
+  }
+
+  // Already dealt with the WebView. Don't want to focus the tab
+  if (didFocusWebView) return;
+
+  // It isn't a WebView and doesn't have a lastFocusedElement, so select the first child of the
+  // platform panel instead
+  const tabPlatformPanel = document.querySelector(`[data-tab-id='${tabId}']`);
+  if (!tabPlatformPanel) return;
+
+  const tabPlatformPanelFirstChild = tabPlatformPanel.children.item(0);
+
+  if (!(tabPlatformPanelFirstChild instanceof HTMLElement)) {
+    if (tabPlatformPanel instanceof HTMLElement) tabPlatformPanel.focus();
+    return;
+  }
+
+  tabPlatformPanelFirstChild.focus();
+}
+
+/**
  * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
  * tabs, and sets the document focus in that tab
  *
@@ -382,7 +480,7 @@ export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
   // eslint-disable-next-line no-null/no-null
   const didFindTab = dockLayout.updateTab(tabId, null, true);
 
-  // TODO: set document focus in that tab or on the iframe if it is a WebView
+  setDocumentFocusToTab(dockLayout, tabId);
 
   return didFindTab;
 }

@@ -760,10 +760,34 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
     minWidth,
     minHeight,
     flashTriggerTime,
+    lastFocusedElement,
     /* eslint-enable @typescript-eslint/no-unused-vars */
     ...savedTabInfo
   } = tabInfo;
   return savedTabInfo;
+}
+
+/**
+ * Updates the tab with the specified id with the specified properties. No need to have all the tab
+ * info; just specify the properties you want to update.
+ *
+ * WARNING: This does not work well with `tab.data` `WebViewDefinition` information. Use
+ * `updateWebViewDefinitionSync` for that instead
+ *
+ * @param tabId ID of the tab to update
+ * @param partialTabInfo Partial tab info to update. Any unspecified properties will stay the same
+ * @param shouldBringToFront If true, the tab will flash, will be brought to the front, and will be
+ *   unobscured by other tabs. Defaults to `false`
+ * @returns Updated tab info or `undefined` if the tab was not found
+ * @throws If the papi dock layout has not been registered or if the item found in the dock layout
+ *   with the specified ID is not a tab
+ */
+export function updateTabPartialSync(
+  tabId: string,
+  partialTabInfo: Partial<TabInfo>,
+  shouldBringToFront = false,
+): TabInfo | undefined {
+  return getDockLayoutSync().updateTabPartial(tabId, partialTabInfo, shouldBringToFront);
 }
 
 // #endregion
