@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef, getChaptersForBook } from 'platform-bible-utils';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Command,
@@ -307,6 +307,75 @@ export function BookChapterCombobox({
     }, 0);
   }, []);
 
+  // Navigation handlers for previous/next chapter/book
+  const handlePreviousChapter = useCallback(() => {
+    if (scrRef.chapterNum > 1) {
+      handleSubmit({
+        book: scrRef.book,
+        chapterNum: scrRef.chapterNum - 1,
+        verseNum: 1,
+      });
+    } else {
+      // Go to previous book's last chapter
+      const currentBookIndex = availableBooks.indexOf(scrRef.book);
+      if (currentBookIndex > 0) {
+        const previousBook = availableBooks[currentBookIndex - 1];
+        const lastChapter = fetchEndChapter(previousBook);
+        handleSubmit({
+          book: previousBook,
+          chapterNum: lastChapter,
+          verseNum: 1,
+        });
+      }
+    }
+  }, [scrRef, availableBooks, handleSubmit]);
+
+  const handleNextChapter = useCallback(() => {
+    const maxChapter = fetchEndChapter(scrRef.book);
+    if (scrRef.chapterNum < maxChapter) {
+      handleSubmit({
+        book: scrRef.book,
+        chapterNum: scrRef.chapterNum + 1,
+        verseNum: 1,
+      });
+    } else {
+      // Go to next book's first chapter
+      const currentBookIndex = availableBooks.indexOf(scrRef.book);
+      if (currentBookIndex < availableBooks.length - 1) {
+        const nextBook = availableBooks[currentBookIndex + 1];
+        handleSubmit({
+          book: nextBook,
+          chapterNum: 1,
+          verseNum: 1,
+        });
+      }
+    }
+  }, [scrRef, availableBooks, handleSubmit]);
+
+  const handlePreviousBook = useCallback(() => {
+    const currentBookIndex = availableBooks.indexOf(scrRef.book);
+    if (currentBookIndex > 0) {
+      const previousBook = availableBooks[currentBookIndex - 1];
+      handleSubmit({
+        book: previousBook,
+        chapterNum: 1,
+        verseNum: 1,
+      });
+    }
+  }, [scrRef, availableBooks, handleSubmit]);
+
+  const handleNextBook = useCallback(() => {
+    const currentBookIndex = availableBooks.indexOf(scrRef.book);
+    if (currentBookIndex < availableBooks.length - 1) {
+      const nextBook = availableBooks[currentBookIndex + 1];
+      handleSubmit({
+        book: nextBook,
+        chapterNum: 1,
+        verseNum: 1,
+      });
+    }
+  }, [scrRef, availableBooks, handleSubmit]);
+
   // Handle keyboard navigation for CommandInput
   const handleInputKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     // Allow Home and End keys to work normally for cursor movement
@@ -610,6 +679,17 @@ export function BookChapterCombobox({
     ],
   );
 
+  // Generic keyboard handler that can work with any element type
+  const handleGenericKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      // Cast to the expected type for our main handler
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const divEvent = event as unknown as KeyboardEvent<HTMLDivElement>;
+      handleChapterKeyDown(divEvent);
+    },
+    [handleChapterKeyDown],
+  );
+
   // Auto-scroll to currently selected book when dropdown opens in book view
   useLayoutEffect(() => {
     const scrollTimeout = setTimeout(() => {
@@ -693,7 +773,7 @@ export function BookChapterCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn('tw-text-white', className)}
+          className={cn('tw-w-64', className)}
         >
           {currentDisplayValue}
         </Button>
@@ -742,19 +822,68 @@ export function BookChapterCombobox({
         >
           {/* Input for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
-            <CommandInput
-              ref={commandInputRef}
-              placeholder={currentDisplayValue}
-              value={inputValue}
-              onValueChange={setInputValue}
-              onKeyDown={handleEnhancedInputKeyDown}
-            />
+            <div className="tw-flex tw-items-end">
+              <CommandInput
+                ref={commandInputRef}
+                placeholder={currentDisplayValue}
+                value={inputValue}
+                onValueChange={setInputValue}
+                onKeyDown={handleEnhancedInputKeyDown}
+              />
+              {/* Navigation buttons for previous/next chapter/book */}
+              <div className="tw-flex tw-items-center tw-gap-1 tw-border-b">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePreviousBook}
+                  disabled={availableBooks.indexOf(scrRef.book) === 0}
+                  className="tw-h-10 tw-w-4 tw-p-0"
+                  title="Previous Book"
+                >
+                  <ChevronsLeft />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePreviousChapter}
+                  disabled={scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0}
+                  className="tw-h-10 tw-w-4 tw-p-0"
+                  title="Previous Chapter"
+                >
+                  <ChevronLeft />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNextChapter}
+                  disabled={
+                    scrRef.chapterNum === fetchEndChapter(scrRef.book) &&
+                    availableBooks.indexOf(scrRef.book) === availableBooks.length - 1
+                  }
+                  className="tw-h-10 tw-w-4 tw-p-0"
+                  title="Next Chapter"
+                >
+                  <ChevronRight />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNextBook}
+                  disabled={availableBooks.indexOf(scrRef.book) === availableBooks.length - 1}
+                  className="tw-h-10 tw-w-4 tw-p-0"
+                  title="Next Book"
+                >
+                  <ChevronsRight />
+                </Button>
+              </div>
+            </div>
           ) : (
             <div className="tw-flex tw-items-center tw-border-b tw-px-3 tw-py-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleBackToBooks}
+                onKeyDown={handleGenericKeyDown}
                 className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
               >
                 <ArrowLeft className="tw-h-4 tw-w-4" />
