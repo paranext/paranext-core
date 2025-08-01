@@ -273,12 +273,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ?? settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
-        // The data containing the language tag is found in the projects ldml file, not Settings.xml
-        if (paratextSettingName == ProjectSettingsNames.PT_LANGUAGE_TAG)
-        {
-            // The Id property of LanguageId is the BCP 47 language tag for the writing system of this project
-            return scrText.Language.LanguageId.Id;
-        }
         // ScrText always prioritizes the folder name over the Name setting as the "name" even when
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
@@ -291,9 +285,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (scrText.IsResourceProject && paratextSettingName == ProjectSettingsNames.PT_IS_EDITABLE)
             return false;
 
-        // Text direction comes from the project's ldml file. It doesn't come from Settings.xml
+        // Text direction comes from the project's ldml file, not from Settings.xml
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
+
+        // The language tag comes from the project's ldml file, not from Settings.xml
+        if (paratextSettingName == ProjectSettingsNames.PT_LANGUAGE_TAG)
+        {
+            // The Id property of LanguageId is the BCP 47 language tag for the project's writing
+            // system of this project
+            return scrText.Language.LanguageId.Id;
+        }
 
         // BooksPresent in Settings.xml isn't always 123 characters, but this way of getting it is always
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)

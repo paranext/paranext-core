@@ -13,6 +13,7 @@ public sealed class ProjectSettingsNames
 
     public const string PB_LANGUAGE = "platform.language";
     public const string PT_LANGUAGE = "Language";
+
     public const string PB_LANGUAGE_TAG = "platform.languageTag";
     public const string PT_LANGUAGE_TAG = "LanguageTag";
 
