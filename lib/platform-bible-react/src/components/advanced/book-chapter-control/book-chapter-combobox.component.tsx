@@ -26,7 +26,6 @@ export type BookChapterComboboxProps = {
   getActiveBookIds?: () => string[];
 };
 
-// Reuse constants from the original component
 const ALL_BOOK_IDS = Canon.allBookIds.filter(
   (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
 );
@@ -42,7 +41,7 @@ const BOOK_TYPE_LABELS: Record<BookType, string> = {
   Extra: 'Extra',
 };
 
-// Smart parsing regex patterns (from original component)
+// Smart parsing regex patterns
 const SCRIPTURE_REGEX_PATTERNS = {
   // Matches book name/id only: "John" or "1 Corinthians"
   BOOK_ONLY: /^([^:\s]+(?:\s+[^:\s]+)*)$/i,

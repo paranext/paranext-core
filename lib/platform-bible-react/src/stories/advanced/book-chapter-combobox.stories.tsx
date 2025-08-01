@@ -83,6 +83,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {
+    className: 'tw-text-white',
     scrRef: defaultScrRef,
   },
 };
