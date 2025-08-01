@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -274,6 +273,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ?? settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
+        // The data containing the language tag is found in the projects ldml file, not Settings.xml
+        if (paratextSettingName == ProjectSettingsNames.PT_LANGUAGE_TAG)
+        {
+            // The Id property of LanguageId is the BCP 47 language tag for the writing system of this project
+            return scrText.Language.LanguageId.Id;
+        }
         // ScrText always prioritizes the folder name over the Name setting as the "name" even when
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
@@ -348,11 +353,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // Text direction comes from the project's ldml file. It doesn't come from Settings.xml
+        // Text direction comes from the project's ldml file, not from Settings.xml
         // We may add an LDML projectInterface one day where you can edit the LDML in the UI
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             throw new Exception(
                 "Cannot set text direction this way. Must edit the language definition ldml file"
+            );
+        // The language tag comes from the project's ldml file, not from Settings.xml
+        if (paratextSettingName == ProjectSettingsNames.PT_LANGUAGE_TAG)
+            throw new Exception(
+                "Cannot set the language tag this way. Must edit the language definition ldml file"
             );
 
         // BooksPresentSet is changed by adding and removing books, not setting the setting value

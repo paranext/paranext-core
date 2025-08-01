@@ -13,6 +13,8 @@ public sealed class ProjectSettingsNames
 
     public const string PB_LANGUAGE = "platform.language";
     public const string PT_LANGUAGE = "Language";
+    public const string PB_LANGUAGE_TAG = "platform.languageTag";
+    public const string PT_LANGUAGE_TAG = "LanguageTag";
 
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
@@ -53,6 +55,7 @@ public sealed class ProjectSettingsNames
             { PB_BOOKS_PRESENT, PT_BOOKS_PRESENT },
             { PB_FULL_NAME, PT_FULL_NAME },
             { PB_LANGUAGE, PT_LANGUAGE },
+            { PB_LANGUAGE_TAG, PT_LANGUAGE_TAG },
             { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
