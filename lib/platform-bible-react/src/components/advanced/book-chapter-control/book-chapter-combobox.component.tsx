@@ -104,12 +104,12 @@ export function BookChapterCombobox({
   getActiveBookIds,
 }: BookChapterComboboxProps) {
   const [open, setOpen] = useState(false);
+  const [commandValue, setCommandValue] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('books');
   const [selectedBookForChapters, setSelectedBookForChapters] = useState<string | undefined>(
     undefined,
   );
-  const [commandValue, setCommandValue] = useState('');
 
   // Refs for scrolling to selected book and focusing input
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -123,10 +123,24 @@ export function BookChapterCombobox({
   const chapterRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   // Get available books (same logic as original)
-  const availableBooks = useMemo(() => {
-    const activeBookIds = getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
-    return activeBookIds;
+  const activeBookIds = useMemo(() => {
+    return getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
   }, [getActiveBookIds]);
+
+  // Group books by type (simplified for now)
+  const availableBooksByType = useMemo(() => {
+    const grouped: Record<BookType, string[]> = {
+      OT: activeBookIds.filter((bookId) => Canon.isBookOT(bookId)),
+      NT: activeBookIds.filter((bookId) => Canon.isBookNT(bookId)),
+      DC: activeBookIds.filter((bookId) => Canon.isBookDC(bookId)),
+      Extra: activeBookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
+    };
+    return grouped;
+  }, [activeBookIds]);
+
+  const availableBooks = useMemo(() => {
+    return Object.values(availableBooksByType).flat();
+  }, [availableBooksByType]);
 
   // Calculate top match based on current search query (smart parsing logic + single book filtering)
   const calculateTopMatch = useCallback(
@@ -222,25 +236,14 @@ export function BookChapterCombobox({
   // Get the current top match
   const topMatch = useMemo(() => calculateTopMatch(inputValue), [calculateTopMatch, inputValue]);
 
-  // Group books by type (simplified for now)
-  const booksByType = useMemo(() => {
-    const grouped: Record<BookType, string[]> = {
-      OT: availableBooks.filter((bookId) => Canon.isBookOT(bookId)),
-      NT: availableBooks.filter((bookId) => Canon.isBookNT(bookId)),
-      DC: availableBooks.filter((bookId) => Canon.isBookDC(bookId)),
-      Extra: availableBooks.filter((bookId) => Canon.extraBooks().includes(bookId)),
-    };
-    return grouped;
-  }, [availableBooks]);
-
   // Filter books based on search input
   const filteredBooks = useMemo(() => {
-    if (!inputValue.trim()) return booksByType;
+    if (!inputValue.trim()) return availableBooksByType;
 
     const searchLower = inputValue.toLowerCase();
     const filtered: Record<BookType, string[]> = { OT: [], NT: [], DC: [], Extra: [] };
 
-    Object.entries(booksByType).forEach(([type, books]) => {
+    Object.entries(availableBooksByType).forEach(([type, books]) => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       filtered[type as BookType] = books.filter((bookId) => {
         const englishName = ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase();
@@ -249,7 +252,7 @@ export function BookChapterCombobox({
     });
 
     return filtered;
-  }, [booksByType, inputValue]);
+  }, [availableBooksByType, inputValue]);
 
   const handleBookSelect = useCallback(
     (bookId: string) => {
@@ -774,7 +777,7 @@ export function BookChapterCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn('tw-w-64', className)}
+          className={cn('tw-min-w-48', className)}
         >
           {currentDisplayValue}
         </Button>
