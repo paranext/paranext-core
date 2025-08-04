@@ -14,6 +14,7 @@ import {
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 const ALL_BOOK_IDS = Canon.allBookIds.filter(
   (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
@@ -89,6 +90,8 @@ export function BookChapterCombobox({
   className,
   getActiveBookIds,
 }: BookChapterComboboxProps) {
+  const dir: Direction = readDirection();
+
   // Indicates if the Command popover is open or not
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   // The value of the Command, mainly needed for reliable keyboard navigation
@@ -420,6 +423,47 @@ export function BookChapterCombobox({
     }
   }, [scrRef, availableBooks, handleSubmit]);
 
+  const quickNavButtons = useMemo(() => {
+    return [
+      {
+        onClick: handlePreviousBook,
+        disabled: availableBooks.indexOf(scrRef.book) === 0,
+        title: 'Previous Book',
+        icon: dir === 'ltr' ? ChevronsLeft : ChevronsRight,
+      },
+      {
+        onClick: handlePreviousChapter,
+        disabled: scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0,
+        title: 'Previous Chapter',
+        icon: dir === 'ltr' ? ChevronLeft : ChevronRight,
+      },
+      {
+        onClick: handleNextChapter,
+        disabled:
+          (scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
+            fetchEndChapter(scrRef.book) === -1) &&
+          availableBooks.indexOf(scrRef.book) === availableBooks.length - 1,
+        title: 'Next Chapter',
+        icon: dir === 'ltr' ? ChevronRight : ChevronLeft,
+      },
+      {
+        onClick: handleNextBook,
+        disabled: availableBooks.indexOf(scrRef.book) === availableBooks.length - 1,
+        title: 'Next Book',
+        icon: dir === 'ltr' ? ChevronsRight : ChevronsLeft,
+      },
+    ];
+  }, [
+    handlePreviousBook,
+    availableBooks,
+    scrRef.book,
+    scrRef.chapterNum,
+    dir,
+    handlePreviousChapter,
+    handleNextChapter,
+    handleNextBook,
+  ]);
+
   // Reset view state when popover opens
   const handleOpenChange = useCallback(
     (shouldCommandBeOpen: boolean) => {
@@ -720,7 +764,7 @@ export function BookChapterCombobox({
           onValueChange={setCommandValue}
           filter={commandFilter}
         >
-          {/* Input (with quick nav buttons) for book view, fixed header for chapter view */}
+          {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
             <div className="tw-flex tw-items-end">
               <CommandInput
@@ -732,50 +776,19 @@ export function BookChapterCombobox({
               />
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw-flex tw-items-center tw-gap-1 tw-border-b">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePreviousBook}
-                  disabled={availableBooks.indexOf(scrRef.book) === 0}
-                  className="tw-h-10 tw-w-4 tw-p-0"
-                  title="Previous Book"
-                >
-                  <ChevronsLeft />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePreviousChapter}
-                  disabled={scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0}
-                  className="tw-h-10 tw-w-4 tw-p-0"
-                  title="Previous Chapter"
-                >
-                  <ChevronLeft />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleNextChapter}
-                  disabled={
-                    (scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
-                      fetchEndChapter(scrRef.book) === -1) &&
-                    availableBooks.indexOf(scrRef.book) === availableBooks.length - 1
-                  }
-                  className="tw-h-10 tw-w-4 tw-p-0"
-                  title="Next Chapter"
-                >
-                  <ChevronRight />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleNextBook}
-                  disabled={availableBooks.indexOf(scrRef.book) === availableBooks.length - 1}
-                  className="tw-h-10 tw-w-4 tw-p-0"
-                  title="Next Book"
-                >
-                  <ChevronsRight />
-                </Button>
+                {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (
+                  <Button
+                    key={title}
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClick}
+                    disabled={disabled}
+                    className="tw-h-10 tw-w-4 tw-p-0"
+                    title={title}
+                  >
+                    <Icon />
+                  </Button>
+                ))}
               </div>
             </div>
           ) : (
@@ -794,67 +807,12 @@ export function BookChapterCombobox({
             </div>
           )}
 
+          {/** Body */}
           <CommandList ref={commandListRef}>
+            {/** Book list mode (also used in case of top matches) */}
             {viewMode === 'books' && (
               <>
                 <CommandEmpty>No books found.</CommandEmpty>
-
-                {/* Unified Scripture Reference - Show parsed reference when available */}
-                {topMatch && (
-                  <>
-                    <CommandGroup heading="Scripture Reference">
-                      <CommandItem
-                        key="unified-match"
-                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
-                          topMatch.chapterNum || ''
-                        }:${topMatch.verseNum || ''})}`}
-                        onSelect={handleTopMatchSelect}
-                        className="tw-font-semibold tw-text-primary"
-                      >
-                        {formatScrRef({
-                          book: topMatch.book,
-                          chapterNum: topMatch.chapterNum ?? 1,
-                          verseNum: topMatch.verseNum ?? 1,
-                        })}
-                      </CommandItem>
-                    </CommandGroup>
-                    <CommandSeparator />
-                  </>
-                )}
-
-                {/* Chapter Selector - Show when we have a top match */}
-                {topMatch && chapterViewData && chapterViewData.endChapter > 1 && (
-                  <>
-                    <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                      {chapterViewData.bookName} - Select Chapter
-                    </div>
-                    <CommandGroup forceMount>
-                      <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
-                        {Array.from({ length: chapterViewData.endChapter }, (_, i) => i + 1).map(
-                          (chapter) => (
-                            <CommandItem
-                              key={chapter}
-                              value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${chapter}`}
-                              onSelect={() => handleChapterSelect(chapter)}
-                              data-chapter={chapter}
-                              ref={setChapterRef(chapter)}
-                              className={cn(
-                                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
-                                {
-                                  'tw-bg-primary tw-text-primary-foreground':
-                                    chapter === chapterViewData.selectedChapter,
-                                },
-                              )}
-                              disabled={isChapterDisabled(chapter)}
-                            >
-                              {chapter}
-                            </CommandItem>
-                          ),
-                        )}
-                      </div>
-                    </CommandGroup>
-                  </>
-                )}
 
                 {/* Book List - Show when we don't have a top match */}
                 {!topMatch &&
@@ -862,6 +820,7 @@ export function BookChapterCombobox({
                     if (books.length === 0) return undefined;
 
                     return (
+                      // We are mapping over filteredBooksByType, which uses BookType as key type
                       // eslint-disable-next-line no-type-assertion/no-type-assertion
                       <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
                         {books.map((bookId) => (
@@ -889,11 +848,67 @@ export function BookChapterCombobox({
                       </CommandGroup>
                     );
                   })}
+
+                {/* Top match scripture reference */}
+                {topMatch && (
+                  <>
+                    <CommandGroup heading="Scripture Reference">
+                      <CommandItem
+                        key="top-match"
+                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
+                          topMatch.chapterNum || ''
+                        }:${topMatch.verseNum || ''})}`}
+                        onSelect={handleTopMatchSelect}
+                        className="tw-font-semibold tw-text-primary"
+                      >
+                        {formatScrRef({
+                          book: topMatch.book,
+                          chapterNum: topMatch.chapterNum ?? 1,
+                          verseNum: topMatch.verseNum ?? 1,
+                        })}
+                      </CommandItem>
+                    </CommandGroup>
+                    <CommandSeparator />
+                  </>
+                )}
+
+                {/* Chapter Selector - Show when we have a top match and chapter data is available */}
+                {topMatch && chapterViewData && chapterViewData.endChapter > 1 && (
+                  <>
+                    <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                      {chapterViewData.bookName} - Select Chapter
+                    </div>
+                    <CommandGroup>
+                      <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
+                        {Array.from({ length: chapterViewData.endChapter }, (_, i) => i + 1).map(
+                          (chapter) => (
+                            <CommandItem
+                              key={chapter}
+                              value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${chapter}`}
+                              onSelect={() => handleChapterSelect(chapter)}
+                              ref={setChapterRef(chapter)}
+                              className={cn(
+                                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                                {
+                                  'tw-bg-primary tw-text-primary-foreground':
+                                    chapter === chapterViewData.selectedChapter,
+                                },
+                              )}
+                              disabled={isChapterDisabled(chapter)}
+                            >
+                              {chapter}
+                            </CommandItem>
+                          ),
+                        )}
+                      </div>
+                    </CommandGroup>
+                  </>
+                )}
               </>
             )}
 
+            {/* Basic chapter view mode */}
             {viewMode === 'chapters' && (
-              /* Regular Chapter View */
               <>
                 <div className="tw-p-4 tw-pb-2">
                   <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
@@ -907,9 +922,8 @@ export function BookChapterCombobox({
                         (chapter) => (
                           <CommandItem
                             key={chapter}
-                            value={`${selectedBookForChaptersView || ''} ${chapterViewData ? ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] || '' : ''} ${chapter}`}
+                            value={`${selectedBookForChaptersView || ''} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] || ''} ${chapter}`}
                             onSelect={() => handleChapterSelect(chapter)}
-                            data-chapter={chapter}
                             ref={setChapterRef(chapter)}
                             className={cn(
                               'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
