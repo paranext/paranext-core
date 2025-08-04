@@ -425,23 +425,6 @@ export function BookChapterCombobox({
     }
   }, [handleSubmit, topMatch]);
 
-  // Enhanced input key handler that includes Ctrl+Enter for unified match
-  const handleEnhancedInputKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      // Handle Ctrl+Enter for unified match selection from input
-      if (event.ctrlKey && event.key === 'Enter' && topMatch) {
-        event.preventDefault();
-        event.stopPropagation();
-        handleUnifiedMatchSelect();
-        return;
-      }
-
-      // Delegate to the original handler for other keys
-      handleInputKeyDown(event);
-    },
-    [topMatch, handleUnifiedMatchSelect, handleInputKeyDown],
-  );
-
   const currentDisplayValue = formatScrRef(scrRef, 'English');
 
   // Calculate chapter-related data when in chapter view
@@ -491,14 +474,6 @@ export function BookChapterCombobox({
   // Grid-aware keyboard navigation using Command's controlled value
   const handleChapterKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      // Handle Ctrl+Enter for unified match selection from anywhere
-      if (event.ctrlKey && event.key === 'Enter' && topMatch) {
-        event.preventDefault();
-        event.stopPropagation();
-        handleUnifiedMatchSelect();
-        return;
-      }
-
       // Handle backspace for going back to books
       if (viewMode === 'chapters' && event.key === 'Backspace') {
         event.preventDefault();
@@ -679,7 +654,6 @@ export function BookChapterCombobox({
       commandValue,
       getChapterValue,
       inputValue,
-      handleUnifiedMatchSelect,
     ],
   );
 
@@ -832,7 +806,7 @@ export function BookChapterCombobox({
                 placeholder={currentDisplayValue}
                 value={inputValue}
                 onValueChange={setInputValue}
-                onKeyDown={handleEnhancedInputKeyDown}
+                onKeyDown={handleInputKeyDown}
               />
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw-flex tw-items-center tw-gap-1 tw-border-b">
@@ -920,9 +894,6 @@ export function BookChapterCombobox({
                           chapterNum: topMatch.chapterNum ?? 1,
                           verseNum: topMatch.verseNum ?? 1,
                         })}
-                        <span className="tw-ml-auto tw-text-xs tw-text-muted-foreground">
-                          Ctrl+Enter
-                        </span>
                       </CommandItem>
                     </CommandGroup>
                     <CommandSeparator />
