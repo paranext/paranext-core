@@ -535,7 +535,7 @@ export function BookChapterControl({
   }, []);
 
   // Grid-aware keyboard navigation using Command's controlled value
-  const handleChapterKeyDown = useCallback(
+  const handleCommandKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       // if (event.ctrlKey) return;
 
@@ -573,6 +573,21 @@ export function BookChapterControl({
           }, 0);
           return;
         }
+      }
+
+      // Handle keypresses in books viewmode
+      if (viewMode === 'books' && (isLetter || isDigit)) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        setInputValue((prevValue) => prevValue + event.key);
+
+        setTimeout(() => {
+          if (commandInputRef.current) {
+            commandInputRef.current.focus();
+          }
+        }, 0);
+        return;
       }
 
       // Handle grid navigation for arrow keys in chapter views
@@ -675,8 +690,6 @@ export function BookChapterControl({
       if (
         isCommandOpen &&
         viewMode === 'books' &&
-        // !inputValue.trim() && // Only auto-scroll when not searching
-        // !topMatch && // Only auto-scroll when not showing top match
         commandListRef.current &&
         selectedBookItemRef.current
       ) {
@@ -709,10 +722,6 @@ export function BookChapterControl({
     if (viewMode === 'chapters' && selectedBookForChaptersView) {
       // Check if we're entering chapter view for the currently selected book
       const isCurrentlySelectedBook = selectedBookForChaptersView === scrRef.book;
-      const startChapter = isCurrentlySelectedBook ? scrRef.chapterNum : 1;
-
-      // Set the appropriate chapter as selected using the controlled value
-      setCommandValue(generateCommandValue(selectedBookForChaptersView, startChapter));
 
       // Reset scroll position to top, except when viewing the currently selected book
       setTimeout(() => {
@@ -749,14 +758,14 @@ export function BookChapterControl({
           variant="outline"
           role="combobox"
           aria-expanded={isCommandOpen}
-          className={cn('tw-min-w-48', className)}
+          className={cn('tw-h-8 tw-min-w-48', className)}
         >
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[280px] tw-p-0" align="start">
+      <PopoverContent className="tw-w-[280px] tw-p-0" align="center">
         <Command
-          onKeyDown={handleChapterKeyDown}
+          onKeyDown={handleCommandKeyDown}
           loop
           value={commandValue}
           onValueChange={setCommandValue}
@@ -826,6 +835,7 @@ export function BookChapterControl({
                                 'tw-border-s-red-200': type.toLowerCase() === 'ot',
                                 'tw-border-s-purple-200': type.toLowerCase() === 'nt',
                                 'tw-border-s-indigo-200': type.toLowerCase() === 'dc',
+                                'tw-border-s-amber-200': type.toLowerCase() === 'extra',
                               },
                             )}
                           >
