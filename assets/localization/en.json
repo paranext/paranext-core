@@ -44,6 +44,8 @@
   "%mainMenu_settings%": "Settings",
   "%mainMenu_tab%": "Tab",
   "%mainMenu_text%": "Text",
+  "%mainMenu_feedbackForm_textArea%": "Submit an idea",
+  "%mainMenu_feedbackForm_screenshot%": "Report a bug / Send feedback",
   "%mainMenu_visitSupportBible%": "Visit Support.Bible",
   "%mainMenu_project%": "Project",
   "%mainMenu_view%": "View",
