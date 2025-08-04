@@ -1,4 +1,4 @@
-import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control.component';
 import { DataTable } from '@/components/advanced/data-table/data-table.component';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { TabNavigationContentSearch } from '@/components/advanced/tab-navigation-content-search.component';

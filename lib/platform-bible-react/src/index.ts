@@ -1,8 +1,8 @@
 import './index.css';
 
 // Components and Types
-export { default as BookChapterControl } from './components/advanced/book-chapter-control/book-chapter-control.component';
-export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.component';
+export { default as BookChapterControl } from './components/advanced/book-chapter-control.component';
+export type { BookChapterControlProps } from './components/advanced/book-chapter-control.component';
 export { default as BookSelector } from './components/advanced/book-selector.component';
 export {
   BOOK_SELECTOR_STRING_KEYS,

@@ -1,16 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
-import { ComponentProps, useCallback, useState } from 'react';
-import { defaultScrRef } from 'platform-bible-utils';
+import { useCallback, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { defaultScrRef } from 'platform-bible-utils';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control.component';
+import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
-type BookChapterControlWrapperProps = Omit<
-  ComponentProps<typeof BookChapterControl>,
-  'scrRef' | 'handleSubmit'
-> & {
+type BookChapterControlWrapperProps = {
   scrRef: SerializedVerseRef;
   handleSubmit: (scrRef: SerializedVerseRef) => void;
+  className?: string;
+  getActiveBookIds?: () => string[];
 };
 
 // Wrapper component to handle state
@@ -33,6 +32,9 @@ function BookChapterControlWrapper({
     <ThemeProvider>
       <div className="tw-p-4">
         <BookChapterControl {...rest} scrRef={scrRef} handleSubmit={handleSubmitWrapper} />
+        <div className="tw-mt-4 tw-text-sm tw-text-gray-600">
+          Current Reference: {JSON.stringify(scrRef, undefined, 2)}
+        </div>
       </div>
     </ThemeProvider>
   );
@@ -42,67 +44,34 @@ const meta: Meta<typeof BookChapterControl> = {
   title: 'Advanced/BookChapterControl',
   component: BookChapterControl,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   args: {
     scrRef: defaultScrRef,
     handleSubmit: (scrRef) => console.log('Scripture reference changed:', scrRef),
   },
-  // Use the wrapper component to render stories
   render: (args) => <BookChapterControlWrapper {...args} />,
-};
+} satisfies Meta<typeof BookChapterControl>;
 
 export default meta;
-
-type Story = StoryObj<typeof BookChapterControl>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'The default BookChapterControl component. Click on the input to open the dropdown menu and select books and chapters. You can also type to search for books or enter scripture references directly.',
-      },
-    },
+  args: {
+    className: 'tw-text-white',
+    scrRef: defaultScrRef,
   },
 };
 
-export const Genesis: Story = {
+export const WithSpecificBook: Story = {
   args: {
     scrRef: {
-      book: 'GEN',
-      chapterNum: 1,
-      verseNum: 1,
-    },
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'BookChapterControl starting with Genesis 1:1. Shows how the component displays different books.',
-      },
+      book: 'ROM',
+      chapterNum: 3,
+      verseNum: 16,
     },
   },
 };
 
-export const NewTestament: Story = {
-  args: {
-    scrRef: {
-      book: 'MAT',
-      chapterNum: 5,
-      verseNum: 3,
-    },
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'BookChapterControl starting with Matthew 5:3 (New Testament). Demonstrates navigation within the New Testament books.',
-      },
-    },
-  },
-};
-
-export const Psalms: Story = {
+export const WithOldTestamentBook: Story = {
   args: {
     scrRef: {
       book: 'PSA',
@@ -110,73 +79,81 @@ export const Psalms: Story = {
       verseNum: 1,
     },
   },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'BookChapterControl starting with Psalm 23:1. Shows how the component handles books with many chapters.',
-      },
-    },
-  },
 };
 
-export const WithCustomBookList: Story = {
+export const WithLimitedBooks: Story = {
   args: {
-    scrRef: {
-      book: 'GEN',
-      chapterNum: 1,
-      verseNum: 1,
-    },
-    getActiveBookIds: () => ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MAT', 'MRK', 'LUK', 'JHN'],
+    scrRef: defaultScrRef,
+    getActiveBookIds: () => ['GEN', 'EXO', 'MAT', 'JHN', 'ROM', 'REV'],
   },
   parameters: {
     docs: {
       description: {
-        story:
-          'BookChapterControl with a custom list of active books. Only the specified books (Genesis through Deuteronomy and the four Gospels) will be available in the dropdown.',
+        story: 'Shows the component with a limited set of available books.',
       },
     },
   },
 };
 
-export const Revelation: Story = {
+export const WithCustomClassName: Story = {
   args: {
-    scrRef: {
-      book: 'REV',
-      chapterNum: 22,
-      verseNum: 21,
-    },
+    scrRef: defaultScrRef,
+    className: 'tw-w-64 tw-bg-blue-50',
   },
   parameters: {
     docs: {
       description: {
-        story:
-          'BookChapterControl starting with Revelation 22:21 (the last verse in the Bible). Demonstrates the component at the end of the scripture.',
+        story: 'Shows the component with custom styling applied.',
       },
     },
   },
 };
 
-export const Playground: Story = {
+export const ChapterSelectionDemo: Story = {
   args: {
     scrRef: {
       book: 'ROM',
       chapterNum: 8,
-      verseNum: 28,
+      verseNum: 1,
     },
-    getActiveBookIds: undefined, // Use all books
   },
   parameters: {
     docs: {
       description: {
-        story:
-          'Interactive BookChapterControl playground starting with Romans 8:28. Try different interactions:\n' +
-          '- Click the input to open the dropdown\n' +
-          '- Type book names or abbreviations to filter (e.g., "gen", "genesis", "matt")\n' +
-          '- Type scripture references directly (e.g., "John 3:16", "Psalm 23", "1 Cor 13:4")\n' +
-          '- Use keyboard navigation (Arrow keys, Enter, Tab, Escape)\n' +
-          '- Select books and chapters from the dropdown menu\n' +
-          'Changes will be logged to the console and the component state will update.',
+        story: `
+**Chapter Selection Demo** - Starting with Romans 8:1 selected.
+
+1. Click to open the component
+2. Search for books like "Psalms", "John", or "Romans"
+3. Click a book with multiple chapters to see the chapter grid
+4. Use the back arrow to return to book selection
+5. Try books with single chapters like "Obadiah" or "Philemon" - they navigate immediately!
+
+The chapter grid shows the current chapter highlighted and allows easy selection.
+        `,
+      },
+    },
+  },
+};
+
+export const SmartParsingDemo: Story = {
+  args: {
+    scrRef: defaultScrRef,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Smart Parsing Demo** - Click to open and try typing these examples:
+
+- \`John 3:16\` - Complete reference with book, chapter, and verse
+- \`Romans 8\` - Book with chapter only
+- \`Psalms 23:1\` - Using full book name
+- \`1CO 13:4\` - Using book ID instead of name
+- \`2 Tim 3\` - Book with number prefix
+
+The component will show a "top match" suggestion that you can select immediately!
+        `,
       },
     },
   },

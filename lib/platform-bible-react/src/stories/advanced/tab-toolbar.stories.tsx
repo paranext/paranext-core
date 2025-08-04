@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
-import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control.component';
 import { TabToolbar, TabToolbarProps } from '@/components/advanced/tab-toolbar.component';
 import { AnimatedContainer } from '@/storybook/decorators/animated-container';
 

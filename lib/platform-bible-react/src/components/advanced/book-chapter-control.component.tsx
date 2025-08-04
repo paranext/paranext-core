@@ -57,7 +57,7 @@ function fetchEndChapter(bookId: string) {
   return getChaptersForBook(Canon.bookIdToNumber(bookId));
 }
 
-export type BookChapterComboboxProps = {
+export type BookChapterControlProps = {
   /** The current scripture reference */
   scrRef: SerializedVerseRef;
   /** Function to handle the submission of selected references */
@@ -82,12 +82,12 @@ export type BookChapterComboboxProps = {
  * @param {string} [props.className] - Optional additional class name for styling.
  * @param {function} [props.getActiveBookIds] - Function to retrieve active book IDs.
  */
-export function BookChapterCombobox({
+export function BookChapterControl({
   scrRef,
   handleSubmit,
   className,
   getActiveBookIds,
-}: BookChapterComboboxProps) {
+}: BookChapterControlProps) {
   const dir: Direction = readDirection();
 
   // Indicates if the Command popover is open or not
@@ -932,4 +932,4 @@ export function BookChapterCombobox({
   );
 }
 
-export default BookChapterCombobox;
+export default BookChapterControl;
