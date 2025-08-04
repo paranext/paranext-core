@@ -238,6 +238,45 @@ export function BookChapterCombobox({
   // Get the current top match
   const topMatch = useMemo(() => calculateTopMatch(inputValue), [calculateTopMatch, inputValue]);
 
+  const commandFilter = useCallback(
+    (value: string, search: string) => {
+      // Custom filter that preserves original order
+      // Return 1 if the item matches, 0 if it doesn't
+      // All matching items get the same rank to maintain original order
+      if (!search) return 1; // Show all items when no search
+
+      const searchLower = search.toLowerCase();
+      const valueLower = value.toLowerCase();
+
+      // If we have a topMatch (smart parsing succeeded), we need special handling
+      if (topMatch) {
+        // For the top match item itself, always show it
+        if (
+          valueLower.includes(topMatch.book.toLowerCase()) &&
+          valueLower.includes(ALL_ENGLISH_BOOK_NAMES[topMatch.book].toLowerCase())
+        ) {
+          return 1;
+        }
+
+        // For chapter items when showing top match chapters, check if they match the parsed book
+        if (
+          value.includes(topMatch.book) &&
+          value.includes(ALL_ENGLISH_BOOK_NAMES[topMatch.book])
+        ) {
+          return 1;
+        }
+      }
+
+      // Regular filtering: check if search term appears anywhere in the value
+      if (valueLower.includes(searchLower)) {
+        return 1; // All matches get the same rank (no reordering)
+      }
+
+      return 0; // Hide non-matches
+    },
+    [topMatch],
+  );
+
   // #endregion
 
   // #region Submitting references
@@ -325,7 +364,7 @@ export function BookChapterCombobox({
       const currentBookIndex = availableBooks.indexOf(scrRef.book);
       if (currentBookIndex > 0) {
         const previousBook = availableBooks[currentBookIndex - 1];
-        const lastChapter = fetchEndChapter(previousBook);
+        const lastChapter = Math.max(fetchEndChapter(previousBook), 1);
         handleSubmit({
           book: previousBook,
           chapterNum: lastChapter,
@@ -408,11 +447,8 @@ export function BookChapterCombobox({
 
   const isChapterDisabled = useCallback(
     (chapter: number) => {
-      return (
-        topMatch &&
-        !!topMatch.chapterNum &&
-        !chapter.toString().includes(topMatch.chapterNum.toString())
-      );
+      if (!topMatch) return false;
+      return !!topMatch.chapterNum && !chapter.toString().includes(topMatch.chapterNum.toString());
     },
     [topMatch],
   );
@@ -459,6 +495,8 @@ export function BookChapterCombobox({
   // Grid-aware keyboard navigation using Command's controlled value
   const handleChapterKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      // if (event.ctrlKey) return;
+
       const isLetter = /^[a-zA-Z]$/.test(event.key);
       const isDigit = /^[0-9]$/.test(event.key);
 
@@ -495,27 +533,6 @@ export function BookChapterCombobox({
         }
       }
 
-      // Handle letter and digit keystrokes when showing top match chapters
-      if (viewMode === 'books' && topMatch) {
-        const isSpace = event.key === ' ';
-
-        if (isLetter || isDigit || isSpace) {
-          // Letter, digit, or space pressed: append to current search and focus input
-          event.preventDefault();
-          event.stopPropagation();
-
-          const newValue = inputValue + event.key;
-          setInputValue(newValue);
-
-          setTimeout(() => {
-            if (commandInputRef.current) {
-              commandInputRef.current.focus();
-            }
-          }, 0);
-          return;
-        }
-      }
-
       // Handle grid navigation for arrow keys in chapter views
       if (
         (viewMode === 'chapters' || (viewMode === 'books' && topMatch)) &&
@@ -539,7 +556,7 @@ export function BookChapterCombobox({
 
         // Helper function to find next valid (non-disabled) chapter in a direction
         const findValidChapter = (startChapter: number, direction: number, maxSteps: number) => {
-          for (let i = startChapter; i <= maxSteps; i++) {
+          for (let i = 1; i <= maxSteps; i++) {
             const chapterNumber = startChapter + direction * i;
             if (chapterNumber < 1 || chapterNumber > maxChapter) break;
             if (!isChapterDisabled(chapterNumber)) {
@@ -599,7 +616,6 @@ export function BookChapterCombobox({
       topMatch,
       handleBackToBooks,
       selectedBookForChaptersView,
-      inputValue,
       chapterViewData?.endChapter,
       commandValue,
       isChapterDisabled,
@@ -702,43 +718,9 @@ export function BookChapterCombobox({
           loop
           value={commandValue}
           onValueChange={setCommandValue}
-          filter={(value, search) => {
-            // Custom filter that preserves original order
-            // Return 1 if the item matches, 0 if it doesn't
-            // All matching items get the same rank to maintain original order
-            if (!search) return 1; // Show all items when no search
-
-            const searchLower = search.toLowerCase();
-            const valueLower = value.toLowerCase();
-
-            // If we have a topMatch (smart parsing succeeded), we need special handling
-            if (topMatch) {
-              // For the top match item itself, always show it
-              if (
-                valueLower.includes(topMatch.book.toLowerCase()) &&
-                valueLower.includes(ALL_ENGLISH_BOOK_NAMES[topMatch.book].toLowerCase())
-              ) {
-                return 1;
-              }
-
-              // For chapter items when showing top match chapters, check if they match the parsed book
-              if (
-                value.includes(topMatch.book) &&
-                value.includes(ALL_ENGLISH_BOOK_NAMES[topMatch.book])
-              ) {
-                return 1;
-              }
-            }
-
-            // Regular filtering: check if search term appears anywhere in the value
-            if (valueLower.includes(searchLower)) {
-              return 1; // All matches get the same rank (no reordering)
-            }
-
-            return 0; // Hide non-matches
-          }}
+          filter={commandFilter}
         >
-          {/* Input for book view, fixed header for chapter view */}
+          {/* Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
             <div className="tw-flex tw-items-end">
               <CommandInput
@@ -775,7 +757,8 @@ export function BookChapterCombobox({
                   size="sm"
                   onClick={handleNextChapter}
                   disabled={
-                    scrRef.chapterNum === fetchEndChapter(scrRef.book) &&
+                    (scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
+                      fetchEndChapter(scrRef.book) === -1) &&
                     availableBooks.indexOf(scrRef.book) === availableBooks.length - 1
                   }
                   className="tw-h-10 tw-w-4 tw-p-0"
@@ -840,7 +823,7 @@ export function BookChapterCombobox({
                 )}
 
                 {/* Chapter Selector - Show when we have a top match */}
-                {topMatch && chapterViewData && (
+                {topMatch && chapterViewData && chapterViewData.endChapter > 1 && (
                   <>
                     <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
                       {chapterViewData.bookName} - Select Chapter
