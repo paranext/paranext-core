@@ -5,12 +5,10 @@ import { ArrowLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } fro
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -756,7 +754,7 @@ export function BookChapterCombobox({
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
+      <PopoverContent className="tw-w-[280px] tw-p-0" align="start">
         <Command
           onKeyDown={handleChapterKeyDown}
           loop
@@ -775,7 +773,7 @@ export function BookChapterCombobox({
                 onKeyDown={handleInputKeyDown}
               />
               {/* Navigation buttons for previous/next chapter/book */}
-              <div className="tw-flex tw-items-center tw-gap-1 tw-border-b">
+              <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-pe-2">
                 {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (
                   <Button
                     key={title}
@@ -801,9 +799,7 @@ export function BookChapterCombobox({
               >
                 <ArrowLeft className="tw-h-4 tw-w-4" />
               </Button>
-              <span className="tw-text-sm tw-font-medium">
-                {chapterViewData?.bookName} - Select Chapter
-              </span>
+              <span className="tw-text-sm tw-font-medium">{chapterViewData?.bookName}</span>
             </div>
           )}
 
@@ -812,8 +808,6 @@ export function BookChapterCombobox({
             {/** Book list mode (also used in case of top matches) */}
             {viewMode === 'books' && (
               <>
-                <CommandEmpty>No books found.</CommandEmpty>
-
                 {/* Book List - Show when we don't have a top match */}
                 {!topMatch &&
                   Object.entries(filteredBooksByType).map(([type, books]) => {
@@ -851,25 +845,22 @@ export function BookChapterCombobox({
 
                 {/* Top match scripture reference */}
                 {topMatch && (
-                  <>
-                    <CommandGroup heading="Scripture Reference">
-                      <CommandItem
-                        key="top-match"
-                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
-                          topMatch.chapterNum || ''
-                        }:${topMatch.verseNum || ''})}`}
-                        onSelect={handleTopMatchSelect}
-                        className="tw-font-semibold tw-text-primary"
-                      >
-                        {formatScrRef({
-                          book: topMatch.book,
-                          chapterNum: topMatch.chapterNum ?? 1,
-                          verseNum: topMatch.verseNum ?? 1,
-                        })}
-                      </CommandItem>
-                    </CommandGroup>
-                    <CommandSeparator />
-                  </>
+                  <CommandGroup>
+                    <CommandItem
+                      key="top-match"
+                      value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
+                        topMatch.chapterNum || ''
+                      }:${topMatch.verseNum || ''})}`}
+                      onSelect={handleTopMatchSelect}
+                      className="tw-font-semibold tw-text-primary"
+                    >
+                      {formatScrRef({
+                        book: topMatch.book,
+                        chapterNum: topMatch.chapterNum ?? 1,
+                        verseNum: topMatch.verseNum ?? 1,
+                      })}
+                    </CommandItem>
+                  </CommandGroup>
                 )}
 
                 {/* Chapter Selector - Show when we have a top match and chapter data is available */}
@@ -909,37 +900,30 @@ export function BookChapterCombobox({
 
             {/* Basic chapter view mode */}
             {viewMode === 'chapters' && (
-              <>
-                <div className="tw-p-4 tw-pb-2">
-                  <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-                    Select Chapter
-                  </div>
+              <CommandGroup>
+                <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-p-4">
+                  {chapterViewData &&
+                    Array.from({ length: chapterViewData.endChapter }, (_, i) => i + 1).map(
+                      (chapter) => (
+                        <CommandItem
+                          key={chapter}
+                          value={`${selectedBookForChaptersView || ''} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] || ''} ${chapter}`}
+                          onSelect={() => handleChapterSelect(chapter)}
+                          ref={setChapterRef(chapter)}
+                          className={cn(
+                            'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                            {
+                              'tw-bg-primary tw-text-primary-foreground':
+                                chapter === chapterViewData.selectedChapter,
+                            },
+                          )}
+                        >
+                          {chapter}
+                        </CommandItem>
+                      ),
+                    )}
                 </div>
-                <CommandGroup>
-                  <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
-                    {chapterViewData &&
-                      Array.from({ length: chapterViewData.endChapter }, (_, i) => i + 1).map(
-                        (chapter) => (
-                          <CommandItem
-                            key={chapter}
-                            value={`${selectedBookForChaptersView || ''} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] || ''} ${chapter}`}
-                            onSelect={() => handleChapterSelect(chapter)}
-                            ref={setChapterRef(chapter)}
-                            className={cn(
-                              'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
-                              {
-                                'tw-bg-primary tw-text-primary-foreground':
-                                  chapter === chapterViewData.selectedChapter,
-                              },
-                            )}
-                          >
-                            {chapter}
-                          </CommandItem>
-                        ),
-                      )}
-                  </div>
-                </CommandGroup>
-              </>
+              </CommandGroup>
             )}
           </CommandList>
         </Command>
