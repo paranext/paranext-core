@@ -573,16 +573,16 @@ export function BookChapterControl({
 
         switch (event.key) {
           case 'ArrowLeft':
-            if (currentChapter !== 0) targetChapter = Math.max(1, currentChapter - 1);
+            if (currentChapter !== 0)
+              targetChapter = currentChapter > 1 ? currentChapter - 1 : maxChapter;
             break;
           case 'ArrowRight':
-            if (currentChapter !== 0) targetChapter = Math.min(maxChapter, currentChapter + 1);
+            if (currentChapter !== 0)
+              targetChapter = currentChapter < maxChapter ? currentChapter + 1 : 1;
             break;
           case 'ArrowUp':
             targetChapter =
-              currentChapter === 0
-                ? fetchEndChapter(currentBookId)
-                : Math.max(1, currentChapter - GRID_COLS);
+              currentChapter === 0 ? maxChapter : Math.max(1, currentChapter - GRID_COLS);
             break;
           case 'ArrowDown':
             targetChapter =
