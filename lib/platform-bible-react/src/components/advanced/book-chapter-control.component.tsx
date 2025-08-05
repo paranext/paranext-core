@@ -212,8 +212,9 @@ export function BookChapterControl({
             }
 
             if (validBookId) {
-              const chapterNum = chapter ? parseInt(chapter, 10) : undefined;
-              if (chapterNum && chapterNum > fetchEndChapter(validBookId)) return undefined;
+              let chapterNum = chapter ? parseInt(chapter, 10) : undefined;
+              if (chapterNum && chapterNum > fetchEndChapter(validBookId))
+                chapterNum = Math.max(fetchEndChapter(validBookId), 1);
               const verseNum = verse ? parseInt(verse, 10) : undefined;
 
               return {
@@ -557,48 +558,32 @@ export function BookChapterControl({
         const currentChapter = (() => {
           if (!commandValue) return 1;
           const match = commandValue.match(/(\d+)$/);
-          return match ? parseInt(match[1], 10) : 1;
+          return match ? parseInt(match[1], 10) : 0;
         })();
 
         const maxChapter = chapterViewData?.endChapter;
 
         if (!maxChapter) return;
 
-        // Helper function to find next valid (non-disabled) chapter in a direction
-        const findValidChapter = (startChapter: number, direction: number, maxSteps: number) => {
-          for (let i = 1; i <= maxSteps; i++) {
-            const chapterNumber = startChapter + direction * i;
-            if (chapterNumber < 1 || chapterNumber > maxChapter) break;
-            if (!isChapterDisabled(chapterNumber)) {
-              return chapterNumber;
-            }
-          }
-          return startChapter; // Return original if no valid chapter found
-        };
-
         let targetChapter = currentChapter;
         const GRID_COLS = 6;
 
         switch (event.key) {
           case 'ArrowLeft':
-            targetChapter = findValidChapter(currentChapter, -1, maxChapter);
+            if (currentChapter !== 0) targetChapter = Math.max(1, currentChapter - 1);
             break;
           case 'ArrowRight':
-            targetChapter = findValidChapter(currentChapter, 1, maxChapter);
+            if (currentChapter !== 0) targetChapter = Math.min(maxChapter, currentChapter + 1);
             break;
           case 'ArrowUp':
-            targetChapter = findValidChapter(
-              currentChapter,
-              -GRID_COLS,
-              Math.ceil(maxChapter / GRID_COLS),
-            );
+            targetChapter =
+              currentChapter === 0
+                ? fetchEndChapter(currentBookId)
+                : Math.max(1, currentChapter - GRID_COLS);
             break;
           case 'ArrowDown':
-            targetChapter = findValidChapter(
-              currentChapter,
-              GRID_COLS,
-              Math.ceil(maxChapter / GRID_COLS),
-            );
+            targetChapter =
+              currentChapter === 0 ? 1 : Math.min(maxChapter, currentChapter + GRID_COLS);
             break;
           default:
             return;
@@ -628,7 +613,6 @@ export function BookChapterControl({
       selectedBookForChaptersView,
       chapterViewData?.endChapter,
       commandValue,
-      isChapterDisabled,
       generateCommandValue,
     ],
   );
@@ -847,8 +831,11 @@ export function BookChapterControl({
                                   'tw-bg-primary tw-text-primary-foreground':
                                     chapter === chapterViewData.selectedChapter,
                                 },
+                                {
+                                  'tw-bg-muted tw-text-muted-foreground':
+                                    isChapterDisabled(chapter),
+                                },
                               )}
-                              disabled={isChapterDisabled(chapter)}
                             >
                               {chapter}
                             </CommandItem>
