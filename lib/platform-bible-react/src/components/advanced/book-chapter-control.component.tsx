@@ -384,18 +384,18 @@ export function BookChapterControl({
         onClick: handlePreviousChapter,
         disabled: scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0,
         title: 'Previous chapter',
-        icon: dir === 'ltr' ? ChevronLeft : ChevronRight,
+        icon: dir === 'ltr' ? ChevronsLeft : ChevronsRight,
       },
       {
         onClick: handlePreviousVerse,
         disabled: scrRef.verseNum === 0,
         title: 'Previous verse',
-        icon: dir === 'ltr' ? ChevronsLeft : ChevronsRight,
+        icon: dir === 'ltr' ? ChevronLeft : ChevronRight,
       },
       {
         onClick: handleNextVerse,
         title: 'Next verse',
-        icon: dir === 'ltr' ? ChevronsRight : ChevronsLeft,
+        icon: dir === 'ltr' ? ChevronRight : ChevronLeft,
       },
       {
         onClick: handleNextChapter,
@@ -404,7 +404,7 @@ export function BookChapterControl({
             fetchEndChapter(scrRef.book) === -1) &&
           availableBooks.indexOf(scrRef.book) === availableBooks.length - 1,
         title: 'Next chapter',
-        icon: dir === 'ltr' ? ChevronRight : ChevronLeft,
+        icon: dir === 'ltr' ? ChevronsRight : ChevronsLeft,
       },
     ];
   }, [
