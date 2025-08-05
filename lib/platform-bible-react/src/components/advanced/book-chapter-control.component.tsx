@@ -832,7 +832,7 @@ export function BookChapterControl({
                                     chapter === chapterViewData.selectedChapter,
                                 },
                                 {
-                                  'tw-bg-muted tw-text-muted-foreground':
+                                  'tw-bg-muted/50 tw-text-muted-foreground/50':
                                     isChapterDisabled(chapter),
                                 },
                               )}
