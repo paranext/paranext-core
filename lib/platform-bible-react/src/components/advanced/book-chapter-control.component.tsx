@@ -103,6 +103,9 @@ export function BookChapterControl({
     string | undefined
   >(undefined);
 
+  // Reference to the Command component
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const commandRef = useRef<HTMLDivElement>(undefined!);
   // Reference to the Input component inside the Command
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandInputRef = useRef<HTMLInputElement>(undefined!);
@@ -276,6 +279,13 @@ export function BookChapterControl({
       // Book has multiple chapters - transition to chapter view
       setSelectedBookForChaptersView(bookId);
       setViewMode('chapters');
+
+      // Focus the Command component to ensure keyboard navigation works
+      setTimeout(() => {
+        if (commandRef.current) {
+          commandRef.current.focus();
+        }
+      }, 0);
     },
     [handleSubmit],
   );
@@ -674,6 +684,11 @@ export function BookChapterControl({
             commandListRef.current.scrollTo({ top: 0 });
           }
         }
+
+        // Ensure Command component has focus for keyboard navigation
+        if (commandRef.current) {
+          commandRef.current.focus();
+        }
       }, 0);
     }
   }, [
@@ -702,6 +717,7 @@ export function BookChapterControl({
       </PopoverTrigger>
       <PopoverContent forceMount className="tw-w-[280px] tw-p-0" align="center">
         <Command
+          ref={commandRef}
           onKeyDown={handleCommandKeyDown}
           loop
           value={commandValue}
@@ -742,10 +758,13 @@ export function BookChapterControl({
                 size="sm"
                 onClick={handleBackToBooks}
                 className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
+                tabIndex={-1}
               >
                 <ArrowLeft className="tw-h-4 tw-w-4" />
               </Button>
-              <span className="tw-text-sm tw-font-medium">{chapterViewData?.bookName}</span>
+              <span tabIndex={-1} className="tw-text-sm tw-font-medium">
+                {chapterViewData?.bookName}
+              </span>
             </div>
           )}
 
