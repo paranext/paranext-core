@@ -30,6 +30,7 @@ export type {
 export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model';
 export type { IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
+export type { DirectionFromTab } from '@shared/models/docking-framework.model';
 export type { NetworkableObject, NetworkObject } from '@shared/models/network-object.model';
 export type { PlatformNotification } from '@shared/models/notification.service-model';
 export type {

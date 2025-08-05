@@ -5,6 +5,7 @@ import {
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import { IDataProvider } from '@shared/models/data-provider.interface';
+import { DirectionFromTab } from '@shared/models/docking-framework.model';
 
 /** JSDOC DESTINATION windowServiceProviderName */
 export const windowServiceProviderName = 'platform.windowServiceDataProvider';
@@ -50,14 +51,7 @@ export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectO
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
 /** Instructions that indicate how to change the app window focus */
-export type SetFocusSpecifier =
-  | SetFocusSubject
-  | 'nextTab'
-  | 'previousTab'
-  | 'nextTabGroup'
-  | 'previousTabGroup'
-  | 'detect'
-  | undefined;
+export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
@@ -98,7 +92,7 @@ export type IWindowService = {
    * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   setFocus(
-    focusSubject: FocusSubject | 'detect',
+    focusSubject: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
    * Sets the subject of focus in the main app window.
@@ -117,7 +111,7 @@ export type IWindowService = {
    */
   setFocus(
     selector: undefined,
-    focusSubject: FocusSubject | 'detect',
+    focusSubject: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
    * Subscribe to run a callback function when the main app window's subject of focus is changed

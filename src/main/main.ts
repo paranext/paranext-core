@@ -464,7 +464,18 @@ async function main() {
         return;
       }
 
+      // keyboard tab navigation - Ctrl+Tab and Ctrl+Shift+Tab
+      if (input.control && input.key === 'Tab') {
+        event.preventDefault();
+        if (input.shift) windowService.setFocus('previousTab');
+        else windowService.setFocus('nextTab');
+        return;
+      }
+
       if (process.platform !== 'darwin') {
+        // Non-Mac shortcuts
+
+        // Zoom shortcuts - Mac's zoom shortcuts already work because of the menu items
         // Zoom in: Ctrl++ or Ctrl+=
         if (input.control && (input.key === '=' || input.key === '+')) {
           event.preventDefault();
@@ -480,6 +491,17 @@ async function main() {
           event.preventDefault();
           resetZoomFactor();
         }
+
+        return;
+      }
+
+      // Mac-only shortcuts follow
+
+      // More keyboard tab navigation - Cmd+Shift+[]
+      if (input.meta && input.shift && (input.key === '[' || input.key === ']')) {
+        event.preventDefault();
+        if (input.key === '[') windowService.setFocus('previousTab');
+        else windowService.setFocus('nextTab');
       }
     });
 
