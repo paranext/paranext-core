@@ -397,43 +397,40 @@ export function BookChapterControl({
     }
   }, [scrRef, availableBooks, handleSubmit]);
 
-  const handlePreviousBook = useCallback(() => {
-    const currentBookIndex = availableBooks.indexOf(scrRef.book);
-    if (currentBookIndex > 0) {
-      const previousBook = availableBooks[currentBookIndex - 1];
-      handleSubmit({
-        book: previousBook,
-        chapterNum: 1,
-        verseNum: 1,
-      });
-    }
-  }, [scrRef, availableBooks, handleSubmit]);
+  const handlePreviousVerse = useCallback(() => {
+    handleSubmit({
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      verseNum: scrRef.verseNum > 1 ? scrRef.verseNum - 1 : 0,
+    });
+  }, [scrRef, handleSubmit]);
 
-  const handleNextBook = useCallback(() => {
-    const currentBookIndex = availableBooks.indexOf(scrRef.book);
-    if (currentBookIndex < availableBooks.length - 1) {
-      const nextBook = availableBooks[currentBookIndex + 1];
-      handleSubmit({
-        book: nextBook,
-        chapterNum: 1,
-        verseNum: 1,
-      });
-    }
-  }, [scrRef, availableBooks, handleSubmit]);
+  const handleNextVerse = useCallback(() => {
+    handleSubmit({
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      verseNum: scrRef.verseNum + 1,
+    });
+  }, [scrRef, handleSubmit]);
 
   const quickNavButtons = useMemo(() => {
     return [
       {
-        onClick: handlePreviousBook,
-        disabled: availableBooks.indexOf(scrRef.book) === 0,
-        title: 'Previous Book',
+        onClick: handlePreviousChapter,
+        disabled: scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0,
+        title: 'Previous chapter',
+        icon: dir === 'ltr' ? ChevronLeft : ChevronRight,
+      },
+      {
+        onClick: handlePreviousVerse,
+        disabled: scrRef.verseNum === 0,
+        title: 'Previous verse',
         icon: dir === 'ltr' ? ChevronsLeft : ChevronsRight,
       },
       {
-        onClick: handlePreviousChapter,
-        disabled: scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0,
-        title: 'Previous Chapter',
-        icon: dir === 'ltr' ? ChevronLeft : ChevronRight,
+        onClick: handleNextVerse,
+        title: 'Next verse',
+        icon: dir === 'ltr' ? ChevronsRight : ChevronsLeft,
       },
       {
         onClick: handleNextChapter,
@@ -441,25 +438,20 @@ export function BookChapterControl({
           (scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
             fetchEndChapter(scrRef.book) === -1) &&
           availableBooks.indexOf(scrRef.book) === availableBooks.length - 1,
-        title: 'Next Chapter',
+        title: 'Next chapter',
         icon: dir === 'ltr' ? ChevronRight : ChevronLeft,
-      },
-      {
-        onClick: handleNextBook,
-        disabled: availableBooks.indexOf(scrRef.book) === availableBooks.length - 1,
-        title: 'Next Book',
-        icon: dir === 'ltr' ? ChevronsRight : ChevronsLeft,
       },
     ];
   }, [
-    handlePreviousBook,
-    availableBooks,
-    scrRef.book,
-    scrRef.chapterNum,
-    dir,
     handlePreviousChapter,
+    scrRef.chapterNum,
+    scrRef.book,
+    scrRef.verseNum,
+    availableBooks,
+    dir,
+    handlePreviousVerse,
+    handleNextVerse,
     handleNextChapter,
-    handleNextBook,
   ]);
 
   // Reset view state when popover opens
@@ -877,7 +869,7 @@ export function BookChapterControl({
                 {topMatch && chapterViewData && chapterViewData.endChapter > 1 && (
                   <>
                     <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                      {chapterViewData.bookName} - Select Chapter
+                      {chapterViewData.bookName}
                     </div>
                     <CommandGroup>
                       <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
