@@ -104,14 +104,15 @@ class WindowDataProviderEngine
 
     // Figure out what we should be focusing
     let newFocusSubject: FocusSubjectWebView | FocusSubjectTab | undefined;
-    let shouldUpdateWindow = true;
 
     // If we should move focus relative to the currently selected tab, do so
     if (
       newSetFocusSpecifier === 'nextTab' ||
       newSetFocusSpecifier === 'previousTab' ||
       newSetFocusSpecifier === 'nextTabGroup' ||
-      newSetFocusSpecifier === 'previousTabGroup'
+      newSetFocusSpecifier === 'previousTabGroup' ||
+      newSetFocusSpecifier === 'nextTabOrGroup' ||
+      newSetFocusSpecifier === 'previousTabOrGroup'
     ) {
       // If we don't have a tab selected, can't move relative to it. Return false
       if (
@@ -120,17 +121,25 @@ class WindowDataProviderEngine
       )
         return false;
 
-      if (newSetFocusSpecifier === 'nextTab' || newSetFocusSpecifier === 'previousTab') {
-        // TODO: Get next tab in group or across groups
-        // newFocusSubject = (await getDockLayout()).getTabInfoByOffset(this.#focusSubject.id);
-      } else {
-        // TODO: Do the tab group move - or set newFocusSubject and let flow continue? Tricky because navigateToPanel doesn't allow just returning the relevant tab
-        // navigateToPanelById (in the storage utils, translate id to element)
-        // getTabInfoByElement(document.activeElement) - this is the newly selected tab
-        // If it is a WebView, select the iframe
+      try {
+        const tabInfo = (await getDockLayout()).getTabInfoByDirectionFromTab(
+          this.#focusSubject.id,
+          newSetFocusSpecifier,
+        );
 
-        // Don't update the dock layout since we already changed it
-        shouldUpdateWindow = false;
+        if (!tabInfo)
+          // We didn't find the tab they're looking for, so forget it
+          return false;
+
+        newFocusSubject = {
+          focusType: 'tab',
+          id: tabInfo.id,
+          tabType: tabInfo.tabType,
+        };
+      } catch (e) {
+        throw new Error(
+          `window.service-host.setFocus threw while getting tab info by direction from tab ${this.#focusSubject.id} in direction ${newSetFocusSpecifier}: ${getErrorMessage(e)}`,
+        );
       }
 
       // If we didn't find the tab to focus next, don't change focus
@@ -160,14 +169,12 @@ class WindowDataProviderEngine
     // Update the window even if didn't change focus as far as the window service knows because
     // there are probably situations where something in the window needs to be re-focused even if
     // the service still has the right focus subject
-    if (shouldUpdateWindow) {
-      // deselect if undefined
-      if (newFocusSubject === undefined) {
-        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-      }
-      // Set the focus in the docking layout to the appropriate tab or WebView
-      else (await getDockLayout()).focusTab(newFocusSubject.id);
+    // deselect if undefined
+    if (newFocusSubject === undefined) {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
+    // Set the focus in the docking layout to the appropriate tab or WebView
+    else (await getDockLayout()).focusTab(newFocusSubject.id);
 
     return didChangeFocus;
   }
