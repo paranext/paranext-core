@@ -279,13 +279,6 @@ export function BookChapterControl({
       // Book has multiple chapters - transition to chapter view
       setSelectedBookForChaptersView(bookId);
       setViewMode('chapters');
-
-      // Focus the Command component to ensure keyboard navigation works
-      setTimeout(() => {
-        if (commandRef.current) {
-          commandRef.current.focus();
-        }
-      }, 0);
     },
     [handleSubmit],
   );
