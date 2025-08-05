@@ -700,7 +700,7 @@ export function BookChapterControl({
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[280px] tw-p-0" align="center">
+      <PopoverContent forceMount className="tw-w-[280px] tw-p-0" align="center">
         <Command
           onKeyDown={handleCommandKeyDown}
           loop
