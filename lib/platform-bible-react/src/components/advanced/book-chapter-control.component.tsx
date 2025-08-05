@@ -722,7 +722,6 @@ export function BookChapterControl({
             <div className="tw-flex tw-items-end">
               <CommandInput
                 ref={commandInputRef}
-                placeholder={currentDisplayValue}
                 value={inputValue}
                 onValueChange={setInputValue}
                 onKeyDown={handleInputKeyDown}
