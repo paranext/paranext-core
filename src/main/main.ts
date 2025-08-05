@@ -631,6 +631,39 @@ async function main() {
   });
 
   commandService.registerCommand(
+    'platform.getLogFileContent',
+    async () => {
+      try {
+        const logFile = logger.transports.file.getFile();
+        const logFilePath = logFile.toString();
+
+        const fs = await import('fs');
+        const logContent = await fs.promises.readFile(logFilePath, 'utf8');
+
+        // Limit the log content to prevent it from being too large
+        const maxLogSize = 500 * 1000; // 500KB
+        if (logContent.length > maxLogSize) {
+          return `(truncated to last ${maxLogSize} characters)\n ${logContent.slice(-maxLogSize)}`;
+        }
+
+        return logContent;
+      } catch (error) {
+        return `Error reading log file: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    },
+    {
+      method: {
+        summary: 'Get the current log file content for debugging purposes',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
     'platform.quit',
     async () => {
       app.quit();

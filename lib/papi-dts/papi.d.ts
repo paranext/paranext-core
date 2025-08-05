@@ -3337,6 +3337,8 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Get the operating system platform */
     'platform.getOSPlatform': () => Promise<string | undefined>;
+    /** Get the current log file content for debugging purposes */
+    'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
     /** Increase the zoom level of the entire UI */
