@@ -490,7 +490,7 @@ export function BookChapterControl({
   // Grid-aware keyboard navigation using Command's controlled value
   const handleCommandKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      // if (event.ctrlKey) return;
+      if (event.ctrlKey) return;
 
       const isLetter = /^[a-zA-Z]$/.test(event.key);
       const isDigit = /^[0-9]$/.test(event.key);
