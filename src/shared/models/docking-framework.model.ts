@@ -71,6 +71,34 @@ export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
  */
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 
+/**
+ * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+ * dock layout.
+ *
+ * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+ * "backward"/"previous" means left in LTR and right in RTL
+ *
+ * - `nextTab` - go forward one tab. If there are no more tabs after this tab in this tab's tab group,
+ *   go to the backward-most tab in the next tab group (useful for cycling through all tabs)
+ * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
+ *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
+ *   tabs)
+ * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+ * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+ *   is in
+ * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
+ *   group, go to the active tab in the next tab group (useful for closing a tab group)
+ * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
+ *   tab's tab group, go to the active tab in the previous tab group
+ */
+export type DirectionFromTab =
+  | 'nextTab'
+  | 'previousTab'
+  | 'nextTabGroup'
+  | 'previousTabGroup'
+  | 'nextTabOrGroup'
+  | 'previousTabOrGroup';
+
 /** Information about a tab in a panel */
 interface TabLayout {
   type: 'tab';
@@ -242,6 +270,20 @@ export type PapiDockLayout = {
     updateInfo: WebViewDefinitionUpdateInfo,
     shouldBringToFront?: boolean,
   ) => boolean;
+  /**
+   * Gets info for a tab in a direction from the source tab.
+   *
+   * @param sourceTabId ID of tab to go from to get to destination tab
+   * @param direction Direction to go from the source tab to get to the destination tab
+   * @returns Info for the destination tab or `undefined` if source tab or destination tab is not
+   *   found
+   * @throws If the item found in the dock layout with the source tab ID is not a tab
+   * @throws If the item found in the dock layout with the destination tab ID is not a tab
+   */
+  getTabInfoByDirectionFromTab: (
+    sourceTabId: string,
+    direction: DirectionFromTab,
+  ) => TabInfo | undefined;
   /**
    * Gets info for the tab that contains the specified DOM element
    *
