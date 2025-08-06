@@ -43,7 +43,7 @@ export function calculateTopMatch(
   query: string,
   availableBooks: string[],
 ): BookWithOptionalChapterAndVerse | undefined {
-  if (!query.trim()) return undefined;
+  if (!query.trim() || availableBooks.length === 0) return undefined;
 
   // First try smart parsing with regex patterns
   const topMatch = SEARCH_QUERY_FORMATS.reduce(

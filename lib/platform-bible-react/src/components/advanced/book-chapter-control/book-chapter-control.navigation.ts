@@ -81,27 +81,31 @@ export function useQuickNavButtons(
     return [
       {
         onClick: handlePreviousChapter,
-        disabled: scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0,
+        disabled:
+          availableBooks.length === 0 ||
+          (scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0),
         title: 'Previous chapter',
         icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
       },
       {
         onClick: handlePreviousVerse,
-        disabled: scrRef.verseNum === 0,
+        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
         title: 'Previous verse',
         icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
       },
       {
         onClick: handleNextVerse,
+        disabled: availableBooks.length === 0,
         title: 'Next verse',
         icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
       },
       {
         onClick: handleNextChapter,
         disabled:
-          (scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
+          availableBooks.length === 0 ||
+          ((scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
             fetchEndChapter(scrRef.book) === -1) &&
-          availableBooks.indexOf(scrRef.book) === availableBooks.length - 1,
+            availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
         title: 'Next chapter',
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
       },

@@ -127,6 +127,20 @@ export const WithCustomTrigger: Story = {
   },
 };
 
+export const EmptyBookList: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getActiveBookIds: () => [],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Shows the component with an empty list of available books.',
+      },
+    },
+  },
+};
+
 export const ChapterSelectionDemo: Story = {
   args: {
     scrRef: {
