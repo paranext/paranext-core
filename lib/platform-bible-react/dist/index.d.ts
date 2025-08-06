@@ -1185,8 +1185,8 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+	variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" | null | undefined;
+	size?: "default" | "sm" | "lg" | "icon" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for Button component
@@ -1369,7 +1369,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "muted" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
@@ -1420,7 +1420,7 @@ export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
 	ref?: React$1.Ref<HTMLDivElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+}, "asChild" | "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
 	label?: string;
 	shouldFilter?: boolean;
 	filter?: (value: string, search: string, keywords?: string[]) => number;
@@ -1436,7 +1436,7 @@ export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<P
 	ref?: React$1.Ref<HTMLInputElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement> | "asChild">, "type" | "value" | "onChange"> & {
+}, "asChild" | "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement>>, "type" | "value" | "onChange"> & {
 	value?: string;
 	onValueChange?: (search: string) => void;
 } & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
@@ -1447,7 +1447,7 @@ export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
 	ref?: React$1.Ref<HTMLDivElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+}, "asChild" | "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
 	label?: string;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Command */
@@ -1457,7 +1457,7 @@ export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
 	ref?: React$1.Ref<HTMLDivElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+}, "asChild" | "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Command */
 export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
@@ -1465,7 +1465,7 @@ export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
 	ref?: React$1.Ref<HTMLDivElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "heading"> & {
+}, "asChild" | "key" | keyof React$1.HTMLAttributes<HTMLDivElement>>, "value" | "heading"> & {
 	heading?: React$1.ReactNode;
 	value?: string;
 	forceMount?: boolean;
@@ -1477,7 +1477,7 @@ export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	ref?: React$1.Ref<HTMLDivElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "disabled" | "onSelect"> & {
+}, "asChild" | "key" | keyof React$1.HTMLAttributes<HTMLDivElement>>, "disabled" | "value" | "onSelect"> & {
 	disabled?: boolean;
 	onSelect?: (value: string) => void;
 	value?: string;
@@ -1702,7 +1702,7 @@ export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimit
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const selectTriggerVariants: (props?: ({
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+	size?: "default" | "sm" | "lg" | "icon" | null | undefined;
 } & ClassProp) | undefined) => string;
 /** @inheritdoc Select */
 export declare const SelectTrigger: React$1.ForwardRefExoticComponent<SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;

@@ -50,6 +50,9 @@
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "test": "vitest",
+    "test:unit": "vitest --project=unit",
+    "test:unit:run": "vitest run --project=unit",
+    "test:storybook": "vitest --project=storybook",
     "typecheck": "tsc -p ./tsconfig.json",
     "storybook": "storybook dev -p 6007"
   },
