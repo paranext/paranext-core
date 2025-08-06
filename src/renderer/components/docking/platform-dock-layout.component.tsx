@@ -133,24 +133,14 @@ export function PlatformDockLayout() {
               if ((currentTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
                 resolveDialogRequest(currentTabId, undefined, false);
 
-              // Focus the next tab over or just some other tab
-              let tabToFocus = getTabInfoByDirectionFromTab(
+              // Focus the next tab or active tab in next group
+              const tabToFocus = getTabInfoByDirectionFromTab(
                 dockLayoutRef.current,
                 currentTabId,
-                // TODO: Replace this with 'nextTabOrGroup' and remove the next code block
-                'nextTab',
+                'nearTabOrNextGroup',
               );
 
-              if (!tabToFocus || tabToFocus.id === currentTabId) {
-                // If no next tab, focus whatever tab we can find first
-                // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                tabToFocus = dockLayoutRef.current.find(
-                  (item) => isTab(item) && item.id !== currentTabId,
-                ) as RCDockTabInfo | undefined;
-              }
-
-              if (tabToFocus?.id) {
+              if (tabToFocus) {
                 // set an immediate timeout to focus the tab because changing the dock layout doesn't
                 // seem to work within this `onLayoutChange` callback
                 focusTabAfterCloseTimeoutRef.current = setTimeout(() => {

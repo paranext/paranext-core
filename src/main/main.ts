@@ -480,16 +480,27 @@ async function main() {
         if (input.control && (input.key === '=' || input.key === '+')) {
           event.preventDefault();
           zoomIn();
+          return;
         }
         // Zoom out: Ctrl+-
-        else if (input.control && input.key === '-') {
+        if (input.control && input.key === '-') {
           event.preventDefault();
           zoomOut();
+          return;
         }
         // Reset zoom: Ctrl+0
-        else if (input.control && input.key === '0') {
+        if (input.control && input.key === '0') {
           event.preventDefault();
           resetZoomFactor();
+          return;
+        }
+
+        // keyboard tab group navigation - Ctrl+PgUp and Ctrl+PgDown
+        if (input.control && (input.key === 'PageUp' || input.key === 'PageDown')) {
+          event.preventDefault();
+          if (input.key === 'PageUp') windowService.setFocus('previousTabGroup');
+          else windowService.setFocus('nextTabGroup');
+          return;
         }
 
         return;
@@ -502,6 +513,15 @@ async function main() {
         event.preventDefault();
         if (input.key === '[') windowService.setFocus('previousTab');
         else windowService.setFocus('nextTab');
+        return;
+      }
+
+      // keyboard tab group navigation - Cmd+Option+Up and Cmd+Option+Down
+      if (input.meta && input.alt && (input.key === 'ArrowUp' || input.key === 'ArrowDown')) {
+        event.preventDefault();
+        if (input.key === 'ArrowUp') windowService.setFocus('previousTabGroup');
+        else windowService.setFocus('nextTabGroup');
+        return;
       }
     });
 
