@@ -112,7 +112,8 @@ class WindowDataProviderEngine
       newSetFocusSpecifier === 'nextTabGroup' ||
       newSetFocusSpecifier === 'previousTabGroup' ||
       newSetFocusSpecifier === 'nextTabOrGroup' ||
-      newSetFocusSpecifier === 'previousTabOrGroup'
+      newSetFocusSpecifier === 'previousTabOrGroup' ||
+      newSetFocusSpecifier === 'nearTabOrNextGroup'
     ) {
       // If we don't have a tab selected, can't move relative to it. Return false
       if (

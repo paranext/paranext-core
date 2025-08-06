@@ -243,6 +243,94 @@ export function getTabInfoByElement(
 }
 
 /**
+ * Gets info for the active tab in the tab group to the left (in LTR) of the source tab group
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabGroup Tab group to go from to get to the destination tab group
+ * @returns Tab info for active tab in the previous tab group or `undefined` if not found
+ */
+function getActiveTabInfoInPreviousTabGroup(
+  dockLayout: DockLayout,
+  sourceTabGroup: PanelData,
+): RCDockTabInfo | undefined {
+  // Iterate through enough tab groups to find the previous one
+  // Keep track of last tab group before the one we're iterating through. This will end up being the
+  // final tab group if the source tab is in the first tab group
+  let previousTabGroup: PanelData | undefined;
+  // Previous tab group is the very last tab group if source is in the first tab group
+  let isSourceTabGroupFirst: boolean | undefined;
+  dockLayout.find((tabGroup) => {
+    // Still have to check isPanel because of a bug https://github.com/ticlo/rc-dock/pull/253
+    if (!isPanel(tabGroup)) return false;
+
+    if (isSourceTabGroupFirst === undefined)
+      isSourceTabGroupFirst = tabGroup.id === sourceTabGroup.id;
+
+    // If we aren't trying to get the last tab group and we hit our tab group, previousTabGroup
+    // should be set properly, so return
+    if (!isSourceTabGroupFirst && tabGroup.id === sourceTabGroup.id) return true;
+
+    // Set this tab as the 'previous' one and keep going
+    previousTabGroup = tabGroup;
+    return false;
+  }, Filter.AnyPanel);
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return previousTabGroup?.tabs.find(
+    (tab) => tab.id === previousTabGroup?.activeId,
+  ) as RCDockTabInfo;
+}
+
+/**
+ * Gets info for the active tab in the tab group to the right (in LTR) of the source tab group
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabGroup Tab group to go from to get to the destination tab group
+ * @returns Tab info for active tab in the next tab group or `undefined` if not found
+ */
+function getActiveTabInfoInNextTabGroup(
+  dockLayout: DockLayout,
+  sourceTabGroup: PanelData,
+): RCDockTabInfo | undefined {
+  // Iterate through all the tab groups to find the next tab group
+  // Next tab group might be the very first tab group if source tab is in last tab group
+  let firstTabGroup: PanelData | undefined;
+  let hasPassedSourceTabGroup = false;
+  // We're filtering for only tab groups (panels), but the rc-dock types aren't sophisticated enough to understand
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const nextTabGroup = dockLayout.find(
+    (tabGroup) => {
+      // Still have to check isPanel because of a bug https://github.com/ticlo/rc-dock/pull/253
+      if (!isPanel(tabGroup)) return false;
+
+      // Record first tab group in the layout
+      if (!firstTabGroup) firstTabGroup = tabGroup;
+
+      // Return the next tab group after the source tab group
+      if (hasPassedSourceTabGroup) return true;
+
+      if (tabGroup.id === sourceTabGroup.id) hasPassedSourceTabGroup = true;
+      // Keep looking through the tab groups
+      return false;
+    },
+    // Iterate over every tab group anywhere in the dock layout
+    Filter.AnyPanel,
+  ) as PanelData | undefined;
+
+  // Return the active tab in the tab group we found or, if there was no next tab group, the
+  // source tab is in the last tab group, so return the active tab of the first tab group
+  const destinationTabGroup = nextTabGroup ?? firstTabGroup;
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return destinationTabGroup?.tabs.find(
+    (tab) => tab.id === destinationTabGroup.activeId,
+  ) as RCDockTabInfo;
+}
+
+/**
  * Gets info for a tab in a direction from the source tab.
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
@@ -263,36 +351,54 @@ export function getTabInfoByDirectionFromTab(
 
   if (!sourceTabGroup) return undefined;
 
-  // One tab over in either direction
+  // Go forward or backward a tab
   if (
     direction === 'nextTab' ||
     direction === 'previousTab' ||
     direction === 'nextTabOrGroup' ||
-    direction === 'previousTabOrGroup'
+    direction === 'previousTabOrGroup' ||
+    direction === 'nearTabOrNextGroup'
   ) {
-    const isForward = direction === 'nextTab' || direction === 'nextTabOrGroup';
+    // If there is another tab in this tab group, we may be able to go to it
+    if (sourceTabGroup.tabs.length > 1) {
+      // Get the index of the current tab
+      const sourceTabIndex = sourceTabGroup.tabs.findIndex((tab) => tab.id === sourceTabId);
 
-    // Get the index of the current tab
-    const sourceTabIndex = sourceTabGroup.tabs.findIndex((tab) => tab.id === sourceTabId);
-
-    if (sourceTabIndex === -1)
       // Sanity check: the tab is not in the tab group we just got for the tab somehow. Please
       // investigate if actually ends up happening
-      throw new Error(
-        `getTabInfoByDirectionFromTab: Tab with ID '${sourceTabId}' is not in the identified parent tab group with id ${sourceTabGroup.id}. This should not happen.`,
-      );
+      if (sourceTabIndex === -1)
+        throw new Error(
+          `getTabInfoByDirectionFromTab: Tab with ID '${sourceTabId}' is not in the identified parent tab group with id ${sourceTabGroup.id}. This should not happen.`,
+        );
 
-    // Simply move forward or backward in the current group if there is a tab there
-    if (
-      (!isForward && sourceTabIndex > 0) ||
-      (isForward && sourceTabIndex < sourceTabGroup.tabs.length - 1)
-    ) {
-      // Get the next or previous tab based on the direction
-      const destinationIndex = isForward ? sourceTabIndex + 1 : sourceTabIndex - 1;
+      // Figure out the index of the tab we want to go to
+      let destinationIndex = -1;
+      if (direction === 'nearTabOrNextGroup') {
+        // One tab over forward or backward in the current tab group or forward a tab group depending on what is available
+        if (sourceTabIndex < sourceTabGroup.tabs.length - 1)
+          // There is a next tab in the current tab group, so go to it
+          destinationIndex = sourceTabIndex + 1;
+        else if (sourceTabIndex > 0)
+          // There is a previous tab in the current tab group, so go to it
+          destinationIndex = sourceTabIndex - 1;
+      } else {
+        // One tab over forward or backward in the current tab group
+        const isForward = direction === 'nextTab' || direction === 'nextTabOrGroup';
 
-      // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return sourceTabGroup.tabs[destinationIndex] as RCDockTabInfo | undefined;
+        // Simply move forward or backward in the current group if there is a tab there
+        if (
+          (!isForward && sourceTabIndex > 0) ||
+          (isForward && sourceTabIndex < sourceTabGroup.tabs.length - 1)
+        ) {
+          // Get the next or previous tab based on the direction
+          destinationIndex = isForward ? sourceTabIndex + 1 : sourceTabIndex - 1;
+        }
+      }
+
+      if (destinationIndex >= 0)
+        // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return sourceTabGroup.tabs[destinationIndex] as RCDockTabInfo | undefined;
     }
 
     // Need to jump tab groups
@@ -357,77 +463,22 @@ export function getTabInfoByDirectionFromTab(
       return previousTab as RCDockTabInfo;
     }
     // Jump to active tab in next tab group
-    if (direction === 'nextTabOrGroup') {
-      // Iterate through all the tab groups to find the next tab group
-      // Next tab group might be the very first tab group if source tab is in last tab group
-      let firstTabGroup: PanelData | undefined;
-      let hasPassedSourceTabGroup = false;
-      // We're filtering for only tab groups (panels), but the rc-dock types aren't sophisticated enough to understand
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const nextTabGroup = dockLayout.find(
-        (tabGroup) => {
-          // Still have to check isPanel because of a bug https://github.com/ticlo/rc-dock/pull/253
-          if (!isPanel(tabGroup)) return false;
-
-          // Record first tab group in the layout
-          if (!firstTabGroup) firstTabGroup = tabGroup;
-
-          // Return the next tab group after the source tab group
-          if (hasPassedSourceTabGroup) return true;
-
-          if (tabGroup.id === sourceTabGroup.id) hasPassedSourceTabGroup = true;
-          // Keep looking through the tab groups
-          return false;
-        },
-        // Iterate over every tab group anywhere in the dock layout
-        Filter.AnyPanel,
-      ) as PanelData | undefined;
-
-      // Return the active tab in the tab group we found or, if there was no next tab group, the
-      // source tab is in the last tab group, so return the active tab of the first tab group
-      const destinationTabGroup = nextTabGroup ?? firstTabGroup;
-      // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return destinationTabGroup?.tabs.find(
-        (tab) => tab.id === destinationTabGroup.activeId,
-      ) as RCDockTabInfo;
+    if (direction === 'nextTabOrGroup' || direction === 'nearTabOrNextGroup') {
+      return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
     }
     // Jump to active tab in previous tab group
-    if (direction === 'previousTabOrGroup') {
-      // Iterate through enough tab groups to find the previous one
-      // Keep track of last tab group before the one we're iterating through. This will end up being the
-      // final tab group if the source tab is in the first tab group
-      let previousTabGroup: PanelData | undefined;
-      // Previous tab group is the very last tab group if source is in the first tab group
-      let isSourceTabGroupFirst: boolean | undefined;
-      dockLayout.find((tabGroup) => {
-        // Still have to check isPanel because of a bug https://github.com/ticlo/rc-dock/pull/253
-        if (!isPanel(tabGroup)) return false;
-
-        if (isSourceTabGroupFirst === undefined)
-          isSourceTabGroupFirst = tabGroup.id === sourceTabGroup.id;
-
-        // If we aren't trying to get the last tab group and we hit our tab group, previousTabGroup
-        // should be set properly, so return
-        if (!isSourceTabGroupFirst && tabGroup.id === sourceTabGroup.id) return true;
-
-        // Set this tab as the 'previous' one and keep going
-        previousTabGroup = tabGroup;
-        return false;
-      }, Filter.AnyPanel);
-
-      // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return previousTabGroup?.tabs.find(
-        (tab) => tab.id === previousTabGroup?.activeId,
-      ) as RCDockTabInfo;
-    }
+    // Don't need to check if (direction === 'previousTabOrGroup') because that's the only option left
+    return getActiveTabInfoInPreviousTabGroup(dockLayout, sourceTabGroup);
   }
 
   // One tab group over in either direction
-  if (direction === 'nextTabGroup' || direction === 'previousTabGroup')
-    // TODO: Find the closest tab group
-    throw new Error(`${direction} is not implemented yet`);
+  // Jump to active tab in next tab group
+  if (direction === 'nextTabGroup') {
+    return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
+  }
+  // Jump to active tab in previous tab group
+  // Don't need to check if (direction === 'previousTabGroup') because that's the only option left
+  return getActiveTabInfoInPreviousTabGroup(dockLayout, sourceTabGroup);
 }
 
 // #endregion
