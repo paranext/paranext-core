@@ -2709,6 +2709,8 @@ declare module 'shared/models/docking-framework.model' {
     minWidth?: number;
     /** (optional) Minimum height that the tab can become in CSS `px` units */
     minHeight?: number;
+    /** Last known focused element. Used for restoring focus in the tab */
+    lastFocusedElement?: HTMLElement;
   };
   /**
    * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
@@ -2726,6 +2728,37 @@ declare module 'shared/models/docking-framework.model' {
    * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+  /**
+   * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+   * dock layout.
+   *
+   * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+   * "backward"/"previous" means left in LTR and right in RTL
+   *
+   * - `nextTab` - go forward one tab. If there are no more tabs after this tab in this tab's tab group,
+   *   go to the backward-most tab in the next tab group (useful for cycling through all tabs)
+   * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
+   *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
+   *   tabs)
+   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+   *   is in
+   * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
+   *   group, go to the active tab in the next tab group
+   * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
+   *   tab's tab group, go to the active tab in the previous tab group
+   * - `nearTabOrNextGroup` - go forward or backward one tab if there is another in the same tab group.
+   *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
+   *   (useful for closing a tab)
+   */
+  export type DirectionFromTab =
+    | 'nextTab'
+    | 'previousTab'
+    | 'nextTabGroup'
+    | 'previousTabGroup'
+    | 'nextTabOrGroup'
+    | 'previousTabOrGroup'
+    | 'nearTabOrNextGroup';
   /** Information about a tab in a panel */
   interface TabLayout {
     type: 'tab';
@@ -2850,6 +2883,25 @@ declare module 'shared/models/docking-framework.model' {
      */
     getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
     /**
+     * Updates the tab with the specified id with the specified properties. No need to have all the
+     * tab info; just specify the properties you want to update.
+     *
+     * WARNING: This does not work well with `tab.data` `WebViewDefinition` information. Use
+     * `updateWebViewDefinition` for that instead
+     *
+     * @param tabId ID of the tab to update
+     * @param partialTabInfo Partial tab info to update. Any unspecified properties will stay the same
+     * @param shouldBringToFront If true, the tab will flash, will be brought to the front, and will
+     *   be unobscured by other tabs. Defaults to `false`
+     * @returns Updated tab info or `undefined` if the tab was not found
+     * @throws If the item found in the dock layout with the specified ID is not a tab
+     */
+    updateTabPartial: (
+      tabId: string,
+      partialTabInfo: Partial<TabInfo>,
+      shouldBringToFront?: boolean,
+    ) => TabInfo | undefined;
+    /**
      * Updates the WebView with the specified ID with the specified properties
      *
      * @param webViewId The ID of the WebView to update
@@ -2864,6 +2916,20 @@ declare module 'shared/models/docking-framework.model' {
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
     ) => boolean;
+    /**
+     * Gets info for a tab in a direction from the source tab.
+     *
+     * @param sourceTabId ID of tab to go from to get to destination tab
+     * @param direction Direction to go from the source tab to get to the destination tab
+     * @returns Info for the destination tab or `undefined` if source tab or destination tab is not
+     *   found
+     * @throws If the item found in the dock layout with the source tab ID is not a tab
+     * @throws If the item found in the dock layout with the destination tab ID is not a tab
+     */
+    getTabInfoByDirectionFromTab: (
+      sourceTabId: string,
+      direction: DirectionFromTab,
+    ) => TabInfo | undefined;
     /**
      * Gets info for the tab that contains the specified DOM element
      *
@@ -6763,6 +6829,7 @@ declare module 'shared/services/window.service-model' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
   /**
    *
    * This name is used to register the window data provider on the papi. You can use this name to
@@ -6805,14 +6872,7 @@ declare module 'shared/services/window.service-model' {
   /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the app window focus */
-  export type SetFocusSpecifier =
-    | SetFocusSubject
-    | 'nextTab'
-    | 'previousTab'
-    | 'nextTabGroup'
-    | 'previousTabGroup'
-    | 'detect'
-    | undefined;
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
   export type WindowDataTypes = {
     Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
   };
@@ -6853,7 +6913,7 @@ declare module 'shared/services/window.service-model' {
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setFocus(
-      focusSubject: FocusSubject | 'detect',
+      focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
      * Sets the subject of focus in the main app window.
@@ -6872,7 +6932,7 @@ declare module 'shared/services/window.service-model' {
      */
     setFocus(
       selector: undefined,
-      focusSubject: FocusSubject | 'detect',
+      focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
      * Subscribe to run a callback function when the main app window's subject of focus is changed
@@ -7107,6 +7167,7 @@ declare module '@papi/core' {
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
   export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type { DirectionFromTab } from 'shared/models/docking-framework.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
   export type { PlatformNotification } from 'shared/models/notification.service-model';
   export type {
