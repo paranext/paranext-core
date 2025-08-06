@@ -321,24 +321,32 @@ export const BookSearchAndNavigation: Story = {
     scrRef: defaultScrRef,
   },
   play: async ({ canvas, userEvent, step, args }) => {
-    await step('Open component and search for Psalms', async () => {
+    await step('Open the component', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      // Wait for the dropdown to appear
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
+    await step('Type search query for Psalms', async () => {
+      const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.type(searchInput, 'Psalms');
+    });
 
-      // Should find Psalms in the filtered results
+    await step('Verify Psalms appears in search results', async () => {
+      const dropdownContent = getDropdown();
       const psalmsItem = await within(dropdownContent).findByText('Psalms');
       await expect(psalmsItem).toBeInTheDocument();
     });
 
-    await step('Navigate the Psalms top match chapter view', async () => {
+    await step('Click Psalms to navigate to chapter view', async () => {
       const dropdownContent = getDropdown();
+      const psalmsItem = within(dropdownContent).getByText('Psalms');
+      await userEvent.click(psalmsItem);
+    });
 
-      // Should have many chapter buttons
+    await step('Verify chapter grid shows many chapters for Psalms', async () => {
+      const dropdownContent = getDropdown();
       const chapterButtons = within(dropdownContent).getAllByRole(CHAPTER_BUTTON_ROLE);
       await expect(chapterButtons.length).toBeGreaterThan(50);
     });
@@ -347,31 +355,43 @@ export const BookSearchAndNavigation: Story = {
       const dropdownContent = getDropdown();
       const chapter23 = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '23' });
       await userEvent.click(chapter23);
+    });
 
+    await step('Verify submission and component closes', async () => {
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'PSA',
         chapterNum: 23,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
 
-    await step('Test back navigation', async () => {
-      // Reopen component to test back navigation
+    await step('Reopen component for back navigation test', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
+    await step('Search for Romans', async () => {
+      const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.type(searchInput, 'Ro');
+    });
 
+    await step('Click Romans to enter chapter view', async () => {
+      const dropdownContent = getDropdown();
       const romansItem = await within(dropdownContent).findByText('Romans');
       await userEvent.click(romansItem);
+    });
 
-      // Click back button
+    await step('Click back button to return to book search', async () => {
+      const dropdownContent = getDropdown();
       const backButton = await within(dropdownContent).findByRole('button');
       await userEvent.click(backButton);
+    });
 
-      // Should be back to book search mode
+    await step('Verify back navigation returns to search mode', async () => {
+      const dropdownContent = getDropdown();
       const searchInputAgain = within(dropdownContent).getByRole(INPUT_ROLE);
       await expect(searchInputAgain).toBeInTheDocument();
       await expect(searchInputAgain).toHaveFocus();
@@ -381,14 +401,21 @@ export const BookSearchAndNavigation: Story = {
     docs: {
       description: {
         story: `
-**Book Search and Navigation** - Tests the book search functionality and navigation.
+**Book Search and Navigation** - Tests book search filtering and chapter navigation workflow.
 
-This test verifies:
-- Book search filtering works correctly
-- Navigation to chapter view for multi-chapter books
-- Chapter selection and submission
-- Back navigation from chapter view to book search
-- Focus management during navigation
+This interactive test demonstrates:
+1. Opening the component dropdown
+2. Typing a search query to filter books
+3. Verifying search results appear correctly
+4. Navigating from book search to chapter view
+5. Verifying chapter grid displays the correct number of chapters
+6. Selecting a specific chapter
+7. Confirming the selection submits and component closes
+8. Reopening component for navigation testing
+9. Searching for another book
+10. Entering chapter view for the new book
+11. Using back navigation to return to search mode
+12. Verifying focus management during navigation
         `,
       },
     },
@@ -400,55 +427,83 @@ export const SingleChapterBookDemo: Story = {
     scrRef: defaultScrRef,
   },
   play: async ({ canvas, userEvent, step, args }) => {
-    await step('Test single chapter book selection (Obadiah)', async () => {
+    await step('Open component for Obadiah test', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
-
+    await step('Verify Obadiah appears in book list', async () => {
+      const dropdownContent = getDropdown();
       const obadiahItem = await within(dropdownContent).findByText('Obadiah');
       await expect(obadiahItem).toBeInTheDocument();
+    });
 
-      // Click Obadiah - should immediately submit since it only has 1 chapter
+    await step('Click Obadiah to select immediately', async () => {
+      const dropdownContent = getDropdown();
+      const obadiahItem = within(dropdownContent).getByText('Obadiah');
       await userEvent.click(obadiahItem);
+    });
 
-      // Should submit immediately without showing chapter grid
+    await step('Verify Obadiah submits immediately without chapter grid', async () => {
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'OBA',
         chapterNum: 1,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
 
-    await step('Test another single chapter book (Odes)', async () => {
+    await step('Open component for Odes test', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
+    await step('Search for Odes', async () => {
+      const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'Ode');
+    });
 
+    await step('Verify Odes smart parsing result appears', async () => {
+      const dropdownContent = getDropdown();
       const odesItem = await within(dropdownContent).findByText('ODA 1:1');
-      await userEvent.click(odesItem);
+      await expect(odesItem).toBeInTheDocument();
+    });
 
+    await step('Click Odes result to submit', async () => {
+      const dropdownContent = getDropdown();
+      const odesItem = within(dropdownContent).getByText('ODA 1:1');
+      await userEvent.click(odesItem);
+    });
+
+    await step('Verify Odes submission', async () => {
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'ODA',
         chapterNum: 1,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
   },
   parameters: {
     docs: {
       description: {
         story: `
-**Single Chapter Book Demo** - Tests immediate selection for books with only one chapter.
+**Single Chapter Book Demo** - Tests immediate selection behavior for books with only one chapter.
 
-This test verifies:
-- Single chapter books (like Obadiah, Philemon) are submitted immediately
-- No chapter grid is shown for single chapter books
-- Proper book IDs are used in submissions
+This interactive test demonstrates:
+1. Opening the component for testing single-chapter books
+2. Verifying single-chapter books appear in the book list
+3. Clicking a single-chapter book (Obadiah)
+4. Confirming immediate submission without showing chapter grid
+5. Reopening component for additional testing
+6. Using search to find another single-chapter book (Odes)
+7. Verifying smart parsing results for single-chapter books
+8. Clicking the smart parsing result
+9. Confirming proper submission with correct book ID and chapter/verse
         `,
       },
     },
@@ -464,39 +519,61 @@ export const KeyboardNavigation: Story = {
     },
   },
   play: async ({ canvas, userEvent, step }) => {
-    await step('Test keyboard navigation in chapter grid', async () => {
+    await step('Open component with Matthew reference', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      // Should show Matthew chapter grid immediately since it's the current book
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
+    await step('Verify Matthew appears in book list', async () => {
+      const dropdownContent = getDropdown();
       const matthewItem = within(dropdownContent).getByText('Matthew');
       await expect(matthewItem).toBeInTheDocument();
-      await userEvent.click(matthewItem);
+    });
 
+    await step('Click Matthew to enter chapter view', async () => {
+      const dropdownContent = getDropdown();
+      const matthewItem = within(dropdownContent).getByText('Matthew');
+      await userEvent.click(matthewItem);
+    });
+
+    await step('Verify chapter 15 button exists in chapter grid', async () => {
+      const dropdownContent = getDropdown();
       const chapter15 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
         name: '15',
       });
       await expect(chapter15).toBeInTheDocument();
     });
 
-    await step('Test arrow key navigation', async () => {
-      // Use arrow keys to navigate around the chapter grid
+    await step('Test right arrow key navigation', async () => {
       await userEvent.keyboard('{ArrowRight}');
-      await userEvent.keyboard('{ArrowDown}');
-      await userEvent.keyboard('{ArrowLeft}');
-      await userEvent.keyboard('{ArrowUp}');
-
-      // Test that keyboard navigation works - dropdown should still be open
       const dropdownContent = getDropdown();
       await expect(dropdownContent).toBeVisible();
     });
 
-    await step('Test Enter key selection', async () => {
-      // Focus should be on a chapter button, press Enter to select
-      await userEvent.keyboard('{Enter}');
+    await step('Test down arrow key navigation', async () => {
+      await userEvent.keyboard('{ArrowDown}');
+      const dropdownContent = getDropdown();
+      await expect(dropdownContent).toBeVisible();
+    });
 
-      // The popover should close after selection
+    await step('Test left arrow key navigation', async () => {
+      await userEvent.keyboard('{ArrowLeft}');
+      const dropdownContent = getDropdown();
+      await expect(dropdownContent).toBeVisible();
+    });
+
+    await step('Test up arrow key navigation', async () => {
+      await userEvent.keyboard('{ArrowUp}');
+      const dropdownContent = getDropdown();
+      await expect(dropdownContent).toBeVisible();
+    });
+
+    await step('Test Enter key to select focused chapter', async () => {
+      await userEvent.keyboard('{Enter}');
+    });
+
+    await step('Verify component closes after Enter key selection', async () => {
       await expectPopoverToBeClosed();
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await expect(trigger).toBeInTheDocument();
@@ -506,12 +583,19 @@ export const KeyboardNavigation: Story = {
     docs: {
       description: {
         story: `
-**Keyboard Navigation** - Tests keyboard interactions within the component.
+**Keyboard Navigation** - Tests keyboard interactions within the chapter grid.
 
-This test verifies:
-- Arrow key navigation works in chapter grids
-- Enter key selects the current chapter
-- Keyboard navigation provides good user experience
+This interactive test demonstrates:
+1. Opening the component with a multi-chapter book (Matthew)
+2. Verifying the book appears in the dropdown
+3. Clicking the book to enter chapter view
+4. Confirming the current chapter button exists in the grid
+5. Testing right arrow key navigation
+6. Testing down arrow key navigation
+7. Testing left arrow key navigation
+8. Testing up arrow key navigation
+9. Using Enter key to select the focused chapter
+10. Verifying the component closes after keyboard selection
         `,
       },
     },
@@ -523,82 +607,107 @@ export const ComprehensiveInteractionTest: Story = {
     scrRef: defaultScrRef,
   },
   play: async ({ canvas, userEvent, step, args }) => {
-    await step('Test filtering and smart parsing combinations', async () => {
+    await step('Open component for filtering test', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      // Test partial book name filtering
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
+    await step('Type partial search term for John books', async () => {
+      const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.type(searchInput, 'joh');
+    });
 
-      // Should show multiple John books
+    await step('Verify multiple John books appear in results', async () => {
+      const dropdownContent = getDropdown();
       const johnItems = within(dropdownContent).getAllByText(/john/i);
       await expect(johnItems.length).toBe(4);
     });
 
-    await step('Test escape key functionality', async () => {
+    await step('Continue typing to select specific John book', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
-
-      // Type something, then escape should clear and close
       await userEvent.type(searchInput, 'n');
+    });
 
+    await step('Click John book to enter chapter view', async () => {
+      const dropdownContent = getDropdown();
       const johnItems = within(dropdownContent).getByText('John');
       await expect(johnItems).toBeInTheDocument();
       await userEvent.click(johnItems);
+    });
 
+    await step('Test first Escape key press in chapter view', async () => {
       await userEvent.keyboard('{Escape}');
-
+      const dropdownContent = getDropdown();
       expect(dropdownContent).toBeVisible();
+    });
 
+    await step('Test second Escape key press to close component', async () => {
       await userEvent.keyboard('{Escape}');
-
       await expectPopoverToBeClosed();
+    });
 
-      // Trigger should return to original value
+    await step('Verify trigger returns to original value', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await expect(trigger).toHaveTextContent('Genesis 1:1');
     });
 
-    await step('Test rapid book switching', async () => {
-      // Open dropdown
+    await step('Open component for rapid switching test', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      const dropdownContent = await expectPopoverToBeOpenAndVisible();
+    await step('Search for first book (Obadiah)', async () => {
+      const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
-
-      // Quick succession of book selections
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'obad');
+    });
 
+    await step('Click Obadiah smart parsing result', async () => {
+      const dropdownContent = getDropdown();
       const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
       await userEvent.click(obadiahItem);
+    });
 
-      // Verify first submission
+    await step('Verify first book submission', async () => {
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'OBA',
         chapterNum: 1,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
+    });
 
-      // Immediately switch to another book
+    await step('Immediately open component for second book', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
-      const dropdownContent2 = await expectPopoverToBeOpenAndVisible();
-      const searchInput2 = within(dropdownContent2).getByRole(INPUT_ROLE);
-      await userEvent.clear(searchInput2);
-      await userEvent.type(searchInput2, 'Rev 22:21');
+      await expectPopoverToBeOpenAndVisible();
+    });
 
-      const revMatch = await within(dropdownContent2).findByText('REV 22:21');
+    await step('Search for second book with specific reference', async () => {
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.clear(searchInput);
+      await userEvent.type(searchInput, 'Rev 22:21');
+    });
+
+    await step('Click Revelation smart parsing result', async () => {
+      const dropdownContent = getDropdown();
+      const revMatch = await within(dropdownContent).findByText('REV 22:21');
       await userEvent.click(revMatch);
+    });
 
-      // Verify second submission
+    await step('Verify second book submission', async () => {
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'REV',
         chapterNum: 22,
         verseNum: 21,
       });
+      await expectPopoverToBeClosed();
     });
   },
   parameters: {
@@ -607,12 +716,23 @@ export const ComprehensiveInteractionTest: Story = {
         story: `
 **Comprehensive Interaction Test** - Tests complex user workflows and edge cases.
 
-This test verifies:
-- Multiple filtering scenarios and smart parsing
-- Escape key behavior and input reset
-- Rapid book switching and state management
-- Edge cases like non-existent books and invalid chapters
-- Error handling and graceful degradation
+This interactive test demonstrates:
+1. Opening the component for filtering tests
+2. Typing partial search terms to filter books
+3. Verifying multiple matching books appear
+4. Continuing to type to refine search results
+5. Clicking a book to enter chapter view
+6. Testing first Escape key press behavior in chapter view
+7. Testing second Escape key press to close component
+8. Verifying trigger text resets to original value
+9. Reopening component for rapid book switching test
+10. Searching for a single-chapter book using smart parsing
+11. Clicking the smart parsing result for immediate selection
+12. Verifying the first book submission
+13. Immediately reopening for rapid switching
+14. Searching for a different book with specific chapter and verse
+15. Clicking the second smart parsing result
+16. Verifying the second book submission and proper state management
         `,
       },
     },
