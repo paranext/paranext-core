@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
+        os: [macos-latest]
         dotnet_version: [8.0.x]
 
     steps:
