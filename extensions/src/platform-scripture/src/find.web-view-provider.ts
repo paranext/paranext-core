@@ -14,6 +14,11 @@ export const findWebViewType = 'platformScripture.find';
 export interface FindWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
+  /**
+   * ID of WebView that called to open this Find WebView. Should be of `webViewType`
+   * `platformScriptureEditor.react`
+   */
+  editorWebViewId?: string;
 }
 
 export class FindWebViewProvider implements IWebViewProvider {
@@ -37,6 +42,7 @@ export class FindWebViewProvider implements IWebViewProvider {
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
+        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
       },
     };
   }

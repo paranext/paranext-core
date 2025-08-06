@@ -161,6 +161,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     editorScrollGroupId,
     existingId: '?',
     bringToFront: true,
+    editorWebViewId,
   };
   const findWebViewId = await papi.webViews.openWebView(
     findWebViewType,
