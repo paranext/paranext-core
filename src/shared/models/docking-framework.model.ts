@@ -87,9 +87,12 @@ export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
  * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
  *   is in
  * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
- *   group, go to the active tab in the next tab group (useful for closing a tab group)
+ *   group, go to the active tab in the next tab group
  * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
  *   tab's tab group, go to the active tab in the previous tab group
+ * - `nearTabOrNextGroup` - go forward or backward one tab if there is another in the same tab group.
+ *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
+ *   (useful for closing a tab)
  */
 export type DirectionFromTab =
   | 'nextTab'
@@ -97,7 +100,8 @@ export type DirectionFromTab =
   | 'nextTabGroup'
   | 'previousTabGroup'
   | 'nextTabOrGroup'
-  | 'previousTabOrGroup';
+  | 'previousTabOrGroup'
+  | 'nearTabOrNextGroup';
 
 /** Information about a tab in a panel */
 interface TabLayout {
