@@ -1,9 +1,10 @@
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
   useProjectDataProvider,
   useProjectSetting,
+  useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { SearchX, SlidersHorizontal } from 'lucide-react';
@@ -98,6 +99,13 @@ global.webViewComponent = function FindWebView({
 
   const [verseRefSetting, setVerseRefSetting, scrollGroupId, setScrollGroupId] =
     useWebViewScrollGroupScrRef();
+
+  const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+
+  const editorWebViewController = useWebViewController(
+    'platformScriptureEditor.react',
+    editorWebViewId,
+  );
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
 
@@ -426,9 +434,21 @@ global.webViewComponent = function FindWebView({
     }
   };
 
-  const handleFocusedResultChange = (verseRef: SerializedVerseRef, index: number) => {
+  const handleFocusedResultChange = (
+    verseRef: SerializedVerseRef,
+    index: number,
+    occurrenceTextPositionStart?: number,
+    occurrenceTextPositionEnd?: number,
+  ) => {
     setFocusedResultIndex(index);
     setVerseRefSetting(verseRef);
+    if (editorWebViewId && editorWebViewController) {
+      papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+      editorWebViewController.selectRange({
+        start: { scrRef: verseRef, offset: occurrenceTextPositionStart },
+        end: { scrRef: verseRef, offset: occurrenceTextPositionEnd },
+      });
+    }
   };
 
   const handleHideResult = (index: number) => {
