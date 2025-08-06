@@ -27,11 +27,11 @@ import { Drawer as DrawerPrimitive } from 'vaul';
 export type BookChapterControlProps = {
 	/** The current scripture reference */
 	scrRef: SerializedVerseRef;
-	/** Function to handle the submission of selected references */
+	/** Callback to handle the submission of a selected reference */
 	handleSubmit: (scrRef: SerializedVerseRef) => void;
 	/** Optional additional class name for styling */
 	className?: string;
-	/** Function to retrieve active book IDs */
+	/** Callback to retrieve book IDs that are available in the current context */
 	getActiveBookIds?: () => string[];
 };
 /**
@@ -1185,7 +1185,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
+	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -1369,7 +1369,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "secondary" | "destructive" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.

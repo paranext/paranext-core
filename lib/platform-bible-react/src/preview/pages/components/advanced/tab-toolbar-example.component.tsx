@@ -1,4 +1,4 @@
-import { BookChapterControl } from '@/components/advanced/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { TabToolbar } from '@/components/advanced/tab-toolbar.component';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';

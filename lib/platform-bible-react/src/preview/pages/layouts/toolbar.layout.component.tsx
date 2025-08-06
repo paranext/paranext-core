@@ -1,4 +1,4 @@
-import { BookChapterControl } from '@/components/advanced/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import {
   getToolbarOSReservedSpaceClassName,
   Toolbar,

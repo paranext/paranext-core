@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useCallback, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef } from 'platform-bible-utils';
-import { BookChapterControl } from '@/components/advanced/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
 type BookChapterControlWrapperProps = {
