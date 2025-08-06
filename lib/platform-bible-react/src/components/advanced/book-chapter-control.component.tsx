@@ -76,11 +76,10 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  *
- * @param {BookChapterControlProps} props
- * @param {SerializedVerseRef} props.scrRef - The current scripture reference.
- * @param {function} props.handleSubmit - Function to handle the submission of selected references.
- * @param {string} [props.className] - Optional additional class name for styling.
- * @param {function} [props.getActiveBookIds] - Function to retrieve active book IDs.
+ * @param scrRef - The current scripture reference
+ * @param handleSubmit - Callback to handle the submission of a selected reference
+ * @param className - Optional additional class name for styling
+ * @param getActiveBookIds - Callback to retrieve book IDs that are available in the current context
  */
 export function BookChapterControl({
   scrRef,
@@ -116,7 +115,6 @@ export function BookChapterControl({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
   // References to the chapters that are shown as CommandItems
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const chapterRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   // #region Available books, filtering and top match logic
