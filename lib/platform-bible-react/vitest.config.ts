@@ -4,26 +4,45 @@ import config from './vite.config';
 
 const workspace = defineConfig({
   ...config,
-  plugins: [
-    ...(config.plugins ?? []),
-    storybookTest({
-      configDir: '.storybook',
-      tags: {
-        include: ['test'],
-        exclude: [],
-        skip: [],
-      },
-    }),
-  ],
   test: {
     ...config.test,
-    name: 'storybook',
-    browser: {
-      enabled: true,
-      provider: 'playwright',
-      instances: [{ browser: 'chromium', headless: true }],
-    },
-    setupFiles: ['.storybook/vitest.setup.ts'],
+    name: 'platform-bible-react tests',
+    projects: [
+      // Unit tests configuration
+      {
+        plugins: [...(config.plugins ?? [])],
+        test: {
+          name: 'unit',
+          include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
+          exclude: ['src/**/*.stories.{js,ts,jsx,tsx}'],
+          globals: true,
+          environment: 'jsdom',
+        },
+      },
+      // Browser tests for Storybook
+      {
+        plugins: [
+          ...(config.plugins ?? []),
+          storybookTest({
+            configDir: '.storybook',
+            tags: {
+              include: ['test'],
+              exclude: [],
+              skip: [],
+            },
+          }),
+        ],
+        test: {
+          name: 'storybook',
+          setupFiles: ['.storybook/vitest.setup.ts'],
+          browser: {
+            enabled: true,
+            provider: 'playwright',
+            instances: [{ browser: 'chromium', headless: true }],
+          },
+        },
+      },
+    ],
   },
 });
 
