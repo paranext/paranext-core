@@ -251,6 +251,7 @@
     "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**", ".erb/dll/**"],
     "logLevel": "quiet"
   },
+  "overrides": { "@vitest/expect": "^3.2.4" },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
     "node": "22.16.0"
