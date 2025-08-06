@@ -26,11 +26,11 @@ import { Toaster, toast as sonner } from 'sonner';
 export type BookChapterControlProps = {
 	/** The current scripture reference */
 	scrRef: SerializedVerseRef;
-	/** Function to handle the submission of selected references */
+	/** Callback to handle the submission of a selected reference */
 	handleSubmit: (scrRef: SerializedVerseRef) => void;
 	/** Optional additional class name for styling */
 	className?: string;
-	/** Function to retrieve active book IDs */
+	/** Callback to retrieve book IDs that are available in the current context */
 	getActiveBookIds?: () => string[];
 };
 /**
@@ -41,11 +41,10 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  *
- * @param {BookChapterControlProps} props
- * @param {SerializedVerseRef} props.scrRef - The current scripture reference.
- * @param {function} props.handleSubmit - Function to handle the submission of selected references.
- * @param {string} [props.className] - Optional additional class name for styling.
- * @param {function} [props.getActiveBookIds] - Function to retrieve active book IDs.
+ * @param scrRef - The current scripture reference
+ * @param handleSubmit - Callback to handle the submission of a selected reference
+ * @param className - Optional additional class name for styling
+ * @param getActiveBookIds - Callback to retrieve book IDs that are available in the current context
  */
 export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 type Unsubscriber = () => boolean;
@@ -1166,7 +1165,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
+	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -1350,7 +1349,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "secondary" | "destructive" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
