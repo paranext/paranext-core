@@ -11,7 +11,7 @@ import {
   USJChapterProjectInterfaceDataTypes,
   USJVerseProjectInterfaceDataTypes,
 } from 'platform-scripture';
-import { Usj, usjToUsxString, usxStringToUsj } from '@biblionexus-foundation/scripture-utilities';
+import { Usj, usjToUsxString, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 
 /** The `projectInterface`s the Scripture Extender PDPF serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
