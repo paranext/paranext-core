@@ -40,10 +40,31 @@ interface SearchResultProps {
   /** The index of this occurrence within the verse (for multiple matches in same verse) */
   occurrenceInVerseIndex: number;
   /** Callback function called when the user clicks on this search result */
-  onResultClick: (verseRef: SerializedVerseRef, index: number) => void;
+  onResultClick: (
+    verseRef: SerializedVerseRef,
+    index: number,
+    /** Start index for the occurrence in the USFM verse text */
+    occurrenceTextPositionStart?: number,
+    /** End index for the occurrence in the USFM verse text */
+    occurrenceTextPositionEnd?: number,
+  ) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
 }
+
+const countWords = (text: string): number => {
+  return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+};
+
+const truncateText = (text: string, maxWords: number, shouldCutFromStart: boolean): string => {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+
+  if (shouldCutFromStart) {
+    return words.slice(-maxWords).join(' ');
+  }
+  return words.slice(0, maxWords).join(' ');
+};
 
 /**
  * SearchResult component displays a single search result item with verse reference, matched text,
@@ -79,32 +100,12 @@ export default function SearchResult({
     return currentProjectVersePossiblyError;
   }, [currentProjectVersePossiblyError]);
 
-  const countWords = (text: string): number => {
-    return text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
-  };
-
-  const truncateText = (text: string, maxWords: number, shouldCutFromStart: boolean): string => {
-    const words = text.trim().split(/\s+/);
-    if (words.length <= maxWords) return text;
-
-    if (shouldCutFromStart) {
-      return words.slice(-maxWords).join(' ');
-    }
-    return words.slice(0, maxWords).join(' ');
-  };
-
-  /**
-   * Highlights the search term within the verse text by wrapping the specified occurrence in a
-   * <strong> tag. If the component is not selected, returns the plain verse text.
-   *
-   * @param resultText - The search term to highlight within the verse
-   * @returns The verse text with the search term highlighted, or plain text if not selected
-   */
-  const getFocusedVerseText = (resultText: string) => {
-    if (!focusedVerseText || !resultText || !isSelected) return undefined;
+  /** Start and end index for the occurrence in the verse */
+  const occurrenceTextPosition = useMemo(() => {
+    if (!focusedVerseText || !searchResult.text) return undefined;
 
     const lowerFocusedVerseText = focusedVerseText.toLowerCase();
-    const lowerResultText = resultText.toLowerCase();
+    const lowerResultText = searchResult.text.toLowerCase();
     const occurrences: number[] = [];
     let searchIndex = 0;
 
@@ -120,14 +121,26 @@ export default function SearchResult({
         ? occurrences[occurrenceInVerseIndex]
         : occurrences[0];
 
-    if (targetOccurrenceIndex === undefined) return focusedVerseText;
+    if (targetOccurrenceIndex === undefined) return undefined;
 
-    let beforeText = focusedVerseText.substring(0, targetOccurrenceIndex);
+    return { start: targetOccurrenceIndex, end: targetOccurrenceIndex + searchResult.text.length };
+  }, [focusedVerseText, occurrenceInVerseIndex, searchResult.text]);
+
+  /**
+   * Highlights the search term within the verse text by wrapping the specified occurrence in a
+   * <strong> tag. If the component is not selected, returns the plain verse text.
+   *
+   * @returns The verse text with the search term highlighted, or plain text if not selected
+   */
+  const getFocusedVerseText = () => {
+    if (!focusedVerseText || !occurrenceTextPosition || !isSelected) return undefined;
+
+    let beforeText = focusedVerseText.substring(0, occurrenceTextPosition.start);
     const matchText = focusedVerseText.substring(
-      targetOccurrenceIndex,
-      targetOccurrenceIndex + resultText.length,
+      occurrenceTextPosition.start,
+      occurrenceTextPosition.end,
     );
-    let afterText = focusedVerseText.substring(targetOccurrenceIndex + resultText.length);
+    let afterText = focusedVerseText.substring(occurrenceTextPosition.end);
 
     if (countWords(beforeText) > 50) {
       beforeText = truncateText(beforeText, 50, true);
@@ -172,7 +185,14 @@ export default function SearchResult({
         searchResult.verseRef.verseNum
       }${searchResult.text}${globalResultsIndex}`}
       className={`tw-cursor-pointer ${isSelected ? 'tw-bg-primary-foreground' : 'tw-bg-primary-foreground/10'}`}
-      onClick={() => onResultClick(searchResult.verseRef, globalResultsIndex)}
+      onClick={() =>
+        onResultClick(
+          searchResult.verseRef,
+          globalResultsIndex,
+          occurrenceTextPosition?.start,
+          occurrenceTextPosition?.end,
+        )
+      }
     >
       <CardContent className="tw-p-4">
         <div className="tw-flex tw-items-start tw-justify-between">
@@ -215,9 +235,7 @@ export default function SearchResult({
         </div>
 
         {isSelected && (
-          <div className="tw-mt-2 tw-text-sm tw-text-muted-foreground">
-            {getFocusedVerseText(searchResult.text)}
-          </div>
+          <div className="tw-mt-2 tw-text-sm tw-text-muted-foreground">{getFocusedVerseText()}</div>
         )}
       </CardContent>
     </Card>
