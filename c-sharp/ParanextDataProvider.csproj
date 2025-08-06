@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
+    <!-- Support for macOS universal binaries -->
+    <RuntimeIdentifiers Condition="$([MSBuild]::IsOsPlatform('OSX'))">osx-x64;osx-arm64</RuntimeIdentifiers>
     <Company>SIL Global and United Bible Societies</Company>
     <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
@@ -52,7 +54,7 @@
     </None>
   </ItemGroup>
 
-  <!-- This dectects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
+  <!-- This detects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
   <PropertyGroup>
     <!-- Check if MacPorts ICU exists -->
     <UseMacPortsICU Condition="Exists('/opt/local/lib/libicuuc.dylib')">true</UseMacPortsICU>

@@ -17,12 +17,16 @@
     notarize: false,
     target: {
       target: 'default',
-      arch: ['arm64', 'x64'],
+      arch: ['universal'],
     },
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net8.0/publish/osx-${arch}/',
-        to: './dotnet/',
+        from: './c-sharp/bin/Release/net8.0/publish/osx-x64/',
+        to: './dotnet/osx-x64/',
+      },
+      {
+        from: './c-sharp/bin/Release/net8.0/publish/osx-arm64/',
+        to: './dotnet/osx-arm64/',
       },
     ],
     type: 'distribution',
