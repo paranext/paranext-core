@@ -201,12 +201,8 @@ export function WebView({
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentWindow) return;
 
-    // TODO: try doing this always. It seems in production the platform panel loads too quickly or
-    // the webviews load too slowly or something, but the focus doesn't get set properly
-
-    // Cross-origin iframes don't have contentDocument, and their focus works just fine without tracking
-    // the active element in the iframe. All we want to do is focus the iframe.contentWindow when it loads
-    // because it for some reason doesn't work in `platform-panel.component.tsx` for cross-origin iframes
+    // Focus this WebView when it is loaded - focusing tab on mount in `platform-panel.component.tsx`
+    // doesn't always work perfectly with WebViews, so we also focus them here
     (async () => {
       try {
         await windowService.setFocus({
@@ -219,9 +215,10 @@ export function WebView({
         );
       }
     })();
-    if (!iframe.contentDocument) {
-      return;
-    }
+
+    // Cross-origin iframes don't have contentDocument, and their focus works just fine without tracking
+    // the active element in the iframe. No need to do more
+    if (!iframe.contentDocument) return;
 
     // In the context of same-origin iframes, focusin seems to be the only event that gives us the
     // information we need. focusin tells us the last focused element other than body.
