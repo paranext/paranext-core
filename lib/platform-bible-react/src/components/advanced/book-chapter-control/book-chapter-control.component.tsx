@@ -32,11 +32,6 @@ import { ChapterGrid } from './chapter-grid.component';
  * interactions such as opening and closing the dropdown menu, filtering book lists based on search
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
- *
- * @param scrRef - The current scripture reference
- * @param handleSubmit - Callback to handle the submission of a selected reference
- * @param className - Optional additional class name for styling
- * @param getActiveBookIds - Callback to retrieve book IDs that are available in the current context
  */
 export function BookChapterControl({
   scrRef,
