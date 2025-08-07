@@ -21,8 +21,9 @@
       "platform.windowGroup": { "column": "platform.window", "order": 1 },
       "platform.layoutGroup": { "column": "platform.layout", "order": 1 },
       "platform.helpRegistration": { "column": "platform.help", "order": 1, "isExtensible": true },
-      "platform.helpFeedback": { "column": "platform.help", "order": 2 },
-      "platform.helpMisc": { "column": "platform.help", "order": 3 }
+      "platform.helpInfo": { "column": "platform.help", "order": 2 },
+      "platform.helpFeedback": { "column": "platform.help", "order": 3 },
+      "platform.helpMisc": { "column": "platform.help", "order": 4 }
     },
     "items": [
       {
@@ -40,6 +41,30 @@
         "command": "platform.quit"
       },
       {
+        "label": "%mainMenu_helpInfo_visitGettingStartedPage%",
+        "localizeNotes": "Application main menu > Help > Visit Getting Started Page",
+        "group": "platform.helpInfo",
+        "order": 1,
+        "command": "platform.visitGettingStartedPage",
+        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
+      },
+      {
+        "label": "%mainMenu_helpInfo_visitFAQsPage%",
+        "localizeNotes": "Application main menu > Help > Visit FAQs Page",
+        "group": "platform.helpInfo",
+        "order": 2,
+        "command": "platform.visitFAQsPage",
+        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
+      },
+      {
+        "label": "%mainMenu_helpInfo_visitFeatureRoadmapPage%",
+        "localizeNotes": "Application main menu > Help > Visit Feature Roadmap Page",
+        "group": "platform.helpInfo",
+        "order": 3,
+        "command": "platform.visitFeatureRoadmapPage",
+        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
+      },
+      {
         "label": "%mainMenu_feedbackForm_textArea%",
         "localizeNotes": "Application main menu > Help > Submit an idea",
         "group": "platform.helpFeedback",
@@ -54,11 +79,11 @@
         "command": "platform.usersnapReportIssue"
       },
       {
-        "label": "%mainMenu_visitSupportBible%",
-        "localizeNotes": "Application main menu > Help > Visit Support.Bible",
-        "group": "platform.helpMisc",
-        "order": 1,
-        "command": "platform.visitSupportPage",
+        "label": "%mainMenu_feedback_emailDevelopers%",
+        "localizeNotes": "Application main menu > Help > Email the team",
+        "group": "platform.helpFeedback",
+        "order": 3,
+        "command": "platform.emailDevelopers",
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
