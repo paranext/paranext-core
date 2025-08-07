@@ -736,6 +736,15 @@ export const closeTab = async (tabId: string): Promise<boolean> => {
 };
 
 /**
+ * Floats a tab in the layout
+ *
+ * @param tabId ID of the tab to float
+ */
+export const floatTab = async (tabId: string): Promise<void> => {
+  return (await getDockLayout()).floatTabById(tabId);
+};
+
+/**
  * Basic `saveTabInfo` that simply strips the properties added by {@link TabInfo} off of the object
  * and returns it as a {@link SavedTabInfo}. Runs as the {@link TabSaver} by default if the tab type
  * does not have a specific `TabSaver`
