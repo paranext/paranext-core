@@ -19,7 +19,7 @@ const config: StorybookConfig = {
    *
    * @see https://storybook.js.org/addons/storybook-addon-code-editor
    */
-  staticDirs: [...getCodeEditorStaticDirs(__filename)],
+  staticDirs: [...getCodeEditorStaticDirs(__filename), '../src'],
   stories: [
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)', // Explicitly list supported extensions
@@ -40,7 +40,13 @@ const config: StorybookConfig = {
     getAbsolutePath('@chromatic-com/storybook'),
     getAbsolutePath('storybook-addon-rtl'),
     getAbsolutePath('@storybook/addon-vitest'),
-    'storybook-addon-code-editor',
+    {
+      name: 'storybook-addon-code-editor',
+      options: {
+        // Inject global CSS into the code editor
+        css: ['/index.css'],
+      },
+    },
   ],
   framework: {
     name: getAbsolutePath('@storybook/react-vite'),
