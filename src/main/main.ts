@@ -153,8 +153,14 @@ process.on('unhandledRejection', (reason) => {
  * https://benjamin-altpeter.de/shell-openexternal-dangers/
  */
 async function openExternal(url: string) {
-  if (!url.startsWith('https://') && !url.startsWith(`${APP_URI_SCHEME}://`))
-    throw new Error(`External URL must start with 'https://' or '${APP_URI_SCHEME}://: ${url}`);
+  if (
+    !url.startsWith('https://') &&
+    !url.startsWith('mailto:') &&
+    !url.startsWith(`${APP_URI_SCHEME}://`)
+  )
+    throw new Error(
+      `External URL must start with 'https://', 'mailto:' or '${APP_URI_SCHEME}://: ${url}`,
+    );
   try {
     await shell.openExternal(url);
   } catch (e) {
