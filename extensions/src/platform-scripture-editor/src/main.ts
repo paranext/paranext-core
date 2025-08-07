@@ -8,6 +8,7 @@ import type {
 } from '@papi/core';
 import {
   formatReplacementString,
+  getErrorMessage,
   isLocalizeKey,
   LanguageStrings,
   LocalizeKey,
@@ -344,7 +345,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${e}`;
+          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -368,7 +369,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${e}`;
+          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }

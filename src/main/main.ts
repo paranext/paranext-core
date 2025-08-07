@@ -486,6 +486,9 @@ async function main() {
 
     // Register zoom keyboard shortcuts. MacOS already supports this natively
     mainWindow.webContents.on('before-input-event', (event, input) => {
+      // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
+      if (input.type === 'keyUp') return;
+
       // F12: Open dev tools in both development and production
       if (input.key === 'F12') {
         event.preventDefault();
@@ -539,7 +542,7 @@ async function main() {
         return;
       }
 
-      // Mac-only shortcuts follow
+      // Mac-only shortcuts
 
       // More keyboard tab navigation - Cmd+Shift+[]
       if (input.meta && input.shift && (input.key === '[' || input.key === ']')) {
@@ -554,7 +557,6 @@ async function main() {
         event.preventDefault();
         if (input.key === 'ArrowUp') windowService.setFocus('previousTabGroup');
         else windowService.setFocus('nextTabGroup');
-        return;
       }
     });
 
