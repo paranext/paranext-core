@@ -75,8 +75,8 @@ makeLiveEditStory(BasicExample, {
       </button>
     </div>
   );
-}`
-// No components used.
+}`,
+  // No components used.
 });
 
 export const InteractiveCounter: Story = {
@@ -107,7 +107,7 @@ export default function StatefulTest() {
     </div>
   );
 }`,
-// No components used. React and hooks are automatically available
+  // No components used. React and hooks are automatically available
 });
 
 export const Counter: Story = {
@@ -121,7 +121,7 @@ export const Counter: Story = {
 };
 
 makeLiveEditStory(Counter, {
-code: `import { useState } from 'react';
+  code: `import { useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 
@@ -170,7 +170,7 @@ export const InputWithState: Story = {
 };
 
 makeLiveEditStory(InputWithState, {
-code: `import { useState } from 'react';
+  code: `import { useState } from 'react';
 import { Input } from '@/components/shadcn-ui/input';
 
 export default function InputDemo() {
