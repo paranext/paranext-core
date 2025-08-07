@@ -72,18 +72,6 @@ export function PlatformTabTitle({
     if (!flashTriggerTime || flashTriggerTime === lastFlashTriggerTimeRef.current) return;
     lastFlashTriggerTimeRef.current = flashTriggerTime;
 
-    // Focus this tab
-    (async () => {
-      try {
-        await windowService.setFocus({
-          focusType: 'tab',
-          id,
-        });
-      } catch (e) {
-        logger.warn(`platform-tab-title failed to set focus on tab ${id}: ${getErrorMessage(e)}`);
-      }
-    })();
-
     // Walk up the DOM to the active tab header
     const activeTabHeader = containerElement.closest('.dock-tab-active');
     // Keep walking up to the common ancestor of the active tab header and content
