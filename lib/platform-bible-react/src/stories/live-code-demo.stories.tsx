@@ -4,6 +4,14 @@ import { Input } from '@/components/shadcn-ui/input';
 import { makeLiveEditStory } from 'storybook-addon-code-editor';
 import { useState } from 'react';
 
+/**
+ * Make UI components available across these live code examples. You'll need to do likewise in each Live Code story you make
+ */
+const sharedImports = {
+  '@/components/shadcn-ui/button': { Button },
+  '@/components/shadcn-ui/input': { Input },
+} as const;
+
 // Simple interactive demo component
 function LiveCodeDemo() {
   const [text, setText] = useState('Hello, World!');
@@ -67,10 +75,7 @@ makeLiveEditStory(BasicExample, {
     </div>
   );
 }`,
-  availableImports: {
-    '@/components/shadcn-ui/button': { Button },
-    '@/components/shadcn-ui/input': { Input },
-  },
+  availableImports: sharedImports,
 });
 
 export const InteractiveCounter: Story = {
@@ -148,10 +153,7 @@ export default function LiveCodeDemo() {
     </div>
   );
 }`,
-  availableImports: {
-    '@/components/shadcn-ui/button': { Button },
-    '@/components/shadcn-ui/input': { Input },
-  },
+  availableImports: sharedImports,
 });
 
 export const InputWithState: Story = {
@@ -185,7 +187,5 @@ export default function InputDemo() {
     </div>
   );
 }`,
-  availableImports: {
-    '@/components/shadcn-ui/input': { Input },
-  },
+  availableImports: sharedImports,
 });
