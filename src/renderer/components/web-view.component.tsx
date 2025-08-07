@@ -48,6 +48,7 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
+import { windowService } from '@shared/services/window.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -198,8 +199,29 @@ export function WebView({
     if (iframeHasLoadedTimes < 1) return;
 
     const iframe = iframeRef.current;
-    // Cross-origin iframes don't have contentDocument, and their focus works just fine without this
-    if (!iframe || !iframe.contentWindow || !iframe.contentDocument) return;
+    if (!iframe || !iframe.contentWindow) return;
+
+    // TODO: try doing this always. It seems in production the platform panel loads too quickly or
+    // the webviews load too slowly or something, but the focus doesn't get set properly
+
+    // Cross-origin iframes don't have contentDocument, and their focus works just fine without tracking
+    // the active element in the iframe. All we want to do is focus the iframe.contentWindow when it loads
+    // because it for some reason doesn't work in `platform-panel.component.tsx` for cross-origin iframes
+    (async () => {
+      try {
+        await windowService.setFocus({
+          focusType: 'tab',
+          id,
+        });
+      } catch (e) {
+        logger.warn(
+          `web-view.component on load failed to set focus on cross-origin webView ${id}: ${getErrorMessage(e)}`,
+        );
+      }
+    })();
+    if (!iframe.contentDocument) {
+      return;
+    }
 
     // In the context of same-origin iframes, focusin seems to be the only event that gives us the
     // information we need. focusin tells us the last focused element other than body.
