@@ -502,15 +502,14 @@ export function Home({
                 )}
               </div>
             )}
-            {filteredAndSortedProjects.length === 1 &&
-              filteredAndSortedProjects[0].name === 'WEB' && (
-                <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
-                  <p className="tw-text-muted-foreground tw-font-normal">
-                    {getStartedDescriptionText}
-                  </p>
-                  <Button onClick={onGetStarted}>{getStartedText}</Button>
-                </div>
-              )}
+            {mergedProjectInfo.length === 1 && mergedProjectInfo[0].name === 'WEB' && (
+              <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
+                <p className="tw-text-muted-foreground tw-font-normal">
+                  {getStartedDescriptionText}
+                </p>
+                <Button onClick={onGetStarted}>{getStartedText}</Button>
+              </div>
+            )}
           </div>
         </CardContent>
       )}
