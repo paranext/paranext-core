@@ -2,6 +2,7 @@
 
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
+import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
@@ -1481,6 +1482,51 @@ export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	keywords?: string[];
 	forceMount?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Context Menu component displays a menu to the user — such as a set of actions or functions,
+ * triggered by a button.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/context-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/context-menu}
+ */
+export declare const ContextMenu: React$1.FC<ContextMenuPrimitive.ContextMenuProps>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuTrigger: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuTriggerProps & React$1.RefAttributes<HTMLSpanElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuGroup: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuPortal: React$1.FC<ContextMenuPrimitive.ContextMenuPortalProps>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSub: React$1.FC<ContextMenuPrimitive.ContextMenuSubProps>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuRadioGroup: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	inset?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSubContent: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuContent: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuItem: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	inset?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuLabel: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	inset?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSeparator: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuShortcut({ className, ...props }: React$1.HTMLAttributes<HTMLSpanElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace ContextMenuShortcut {
+	var displayName: string;
+}
 /**
  * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
  * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
