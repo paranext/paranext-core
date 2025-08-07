@@ -4,6 +4,31 @@ import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, MenuItemContainingCommand } from 'platform-bible-utils';
 
 /**
+ * Helper function to execute a command with error handling
+ *
+ * @param commandName The command to execute
+ * @param commandArg The argument to pass to the command
+ * @param originalCommand The original menu command for error context
+ * @param tabId The tab ID for error context
+ */
+async function executeCommandWithErrorHandling(
+  commandName: CommandNames | string,
+  commandArg: string | undefined,
+  originalCommand: string,
+  tabId?: string,
+) {
+  try {
+    // Assert the more specific type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await commandService.sendCommand(commandName as CommandNames, commandArg);
+  } catch (e) {
+    throw new Error(
+      `handleMenuCommand error: command: ${originalCommand}, tabId: ${tabId}. ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
  * Run a command from a menu
  *
  * @param command Info about the command to run
@@ -24,28 +49,39 @@ export function handleMenuCommand(command: MenuItemContainingCommand, tabId?: st
     case 'platform.openTextCollection':
       logger.info(`TODO: display text collection modal. tabId: ${tabId}`);
       break;
-    case 'platform.visitSupportPage':
-      (async () => {
-        try {
-          await commandService.sendCommand('platform.openWindow', 'https://support.bible');
-        } catch (e) {
-          throw new Error(
-            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${getErrorMessage(e)}`,
-          );
-        }
-      })();
+    case 'platform.visitGettingStartedPage':
+      executeCommandWithErrorHandling(
+        'platform.openWindow',
+        'https://studio.paratext.org/start ',
+        command.command,
+        tabId,
+      );
+      break;
+    case 'platform.visitFAQsPage':
+      executeCommandWithErrorHandling(
+        'platform.openWindow',
+        'https://support.bible/paratext-10-studio',
+        command.command,
+        tabId,
+      );
+      break;
+    case 'platform.visitFeatureRoadmapPage':
+      executeCommandWithErrorHandling(
+        'platform.openWindow',
+        'https://studio.paratext.org/roadmap',
+        command.command,
+        tabId,
+      );
+      break;
+    case 'platform.emailDevelopers':
+      executeCommandWithErrorHandling(
+        'platform.openWindow',
+        'mailto:feedback+studio@paratext.org',
+        command.command,
+        tabId,
+      );
       break;
     default:
-      (async () => {
-        try {
-          // Assert the more specific type.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          await commandService.sendCommand(command.command as CommandNames, tabId);
-        } catch (e) {
-          throw new Error(
-            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${JSON.stringify(e)}`,
-          );
-        }
-      })();
+      executeCommandWithErrorHandling(command.command, tabId, command.command, tabId);
   }
 }
