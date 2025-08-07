@@ -5,7 +5,8 @@ import { makeLiveEditStory } from 'storybook-addon-code-editor';
 import { useState } from 'react';
 
 /**
- * Make UI components available across these live code examples. You'll need to do likewise in each Live Code story you make
+ * Make UI components available across these live code examples. You'll need to do likewise in each
+ * Live Code story you make
  */
 const sharedImports = {
   '@/components/shadcn-ui/button': { Button },
