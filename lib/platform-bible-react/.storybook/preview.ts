@@ -42,7 +42,9 @@ const preview: Preview = {
     },
   ],
   tags: [
-    // Enables auto-generated documentation for all stories
+    /* Auto-generate "Docs" page by default for each Storybook component.
+     * Use `tags: ['!autodocs']` any time you make a custom primary page
+     * for a Storybook component. */
     'autodocs',
     // Enables testing with Storybook's Vitest plugin
     'test',

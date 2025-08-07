@@ -13,6 +13,12 @@ function getAbsolutePath(value: string): any {
   return dirname(require.resolve(join(value, 'package.json')));
 }
 const config: StorybookConfig = {
+  /**
+   * `storybook-addon-code-editor` (which integrates Monaco Editor) needs certain static assets
+   * (such as web workers and language files) at runtime via `staticDirs`
+   *
+   * @see https://storybook.js.org/addons/storybook-addon-code-editor
+   */
   staticDirs: [...getCodeEditorStaticDirs(__filename)],
   stories: [
     '../src/**/*.mdx',

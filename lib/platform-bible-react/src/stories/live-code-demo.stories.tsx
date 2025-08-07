@@ -33,10 +33,11 @@ function LiveCodeDemo() {
 const meta = {
   title: 'Demo/Live Code Editor',
   component: LiveCodeDemo,
+  /* We have Storybook configured to automatically generate a "Docs" page, which is a little description followed by a small canvas for each story. In this case, we turn it off (hence, !) to use an MDX file instead. This is appropriate because the live code editor doesn't display in the little canvases in autodocs. */
   tags: ['!autodocs'],
   parameters: {
-    componentSubtitle: 'Interactive code editing examples'
-  }
+    componentSubtitle: 'Interactive code editing examples',
+  },
 } satisfies Meta<typeof LiveCodeDemo>;
 
 export default meta;
@@ -47,10 +48,10 @@ export const BasicExample: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Simple HTML/React editing, perfect for getting started'
-      }
-    }
-  }
+        story: 'Simple HTML/React editing, perfect for getting started',
+      },
+    },
+  },
 };
 
 // Add live editing functionality
@@ -76,10 +77,10 @@ export const InteractiveCounter: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'React hooks and state management'
-      }
-    }
-  }
+        story: 'React hooks and state management',
+      },
+    },
+  },
 };
 
 makeLiveEditStory(InteractiveCounter, {
@@ -107,10 +108,10 @@ export const Counter: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Complex example with Button + Input components'
-      }
-    }
-  }
+        story: 'Complex example with Button + Input components',
+      },
+    },
+  },
 };
 
 makeLiveEditStory(Counter, {
@@ -157,10 +158,10 @@ export const InputWithState: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Input validation and state management'
-      }
-    }
-  }
+        story: 'Input validation and state management',
+      },
+    },
+  },
 };
 
 makeLiveEditStory(InputWithState, {
