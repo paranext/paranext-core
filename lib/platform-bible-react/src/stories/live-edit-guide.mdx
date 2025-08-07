@@ -1,9 +1,9 @@
-import { Meta } from '@storybook/addon-docs/blocks';
+import { Meta, Description } from '@storybook/addon-docs/blocks';
 import * as CodeEditorStories from './code-editor-demo.stories';
 
 <Meta of={CodeEditorStories} name="Docs" />
 
-# Live Code Editing Guide
+# Live code editing guide
 
 This Storybook includes live code editing capabilities powered by `storybook-addon-code-editor`. You can edit React TypeScript code in real-time using the Live Code Editor tab in the Storybook Panel and see changes immediately on the canvas.
 
@@ -14,69 +14,52 @@ This Storybook includes live code editing capabilities powered by `storybook-add
 3. **Edit the code** directly in the editor
 4. **See changes instantly** on the canvas above
 
-## Features
 
+
+## Examples to try
+* [**BasicExample**](?path=/story/demo-live-code-editor--basic-example)
+  <Description of={CodeEditorStories.BasicExample} />
+* [**InteractiveCounter**](?path=/story/demo-live-code-editor--interactive-counter)
+  <Description of={CodeEditorStories.InteractiveCounter} />
+* [**Counter**](?path=/story/demo-live-code-editor--counter)
+  <Description of={CodeEditorStories.Counter} />
+* [**InputWithState**](?path=/story/demo-live-code-editor--input-with-state)
+  <Description of={CodeEditorStories.InputWithState} />
+
+
+## Editing code
+Changes are temporary and won't affect the actual codebase.
+* Use VS Code shortcuts
+* **Ctrl/Cmd+Z** to undo changes
+* **Ctrl/Cmd+S** to format code
+
+
+### What's available
+
+* ✅ **React Hooks** - useState, useEffect, and other hooks work out of the box (already imported)
+  ```tsx
+   // Add state
+   const [value, setValue] = useState('initial');
+
+   // Add event handlers
+   onClick={() => console.log('clicked')}
+  ```
+* ✅ **Component Library** - Tailwind styling and Shadcn/ui Button, Input, and other components are available
+   ```TypeScript
+   // Use components
+   <Button variant="destructive">Click me</Button>
+   <Input placeholder="Type here..." />
+   ```
 * ✅ **Monaco editor** - VS Code's editor with familiar shortcuts
 * ✅ **TypeScript support** - Full syntax highlighting and IntelliSense
-* ✅ **Real-time updates** - Changes appear immediately
-* ✅ **React Hooks** - useState, useEffect, and other hooks work out of the box
-* ✅ **Component Library** - Tailwind styling and Shadcn/ui Button, Input, and other components are available
 
-## Examples to Try
 
-### Basic Examples (Start Here)
 
-* **BasicExample** - Simple HTML/React editing, perfect for getting started
-* **InteractiveCounter** - React hooks and state management
 
-### Advanced Examples
 
-* **Counter** - Complex example with Button + Input components
-* **InputWithState** - Input validation and state management
 
-## Quick Tips
 
-### Editing Code
 
-* Use **Ctrl/Cmd+Z** to undo changes
-* **Ctrl/Cmd+S** to format code
-* All standard VS Code shortcuts work
 
-### Common Patterns
-
-```tsx
-// Add state
-const [value, setValue] = useState('initial');
-
-// Add event handlers
-onClick={() => console.log('clicked')}
-
-// Use components
-<Button variant="destructive">Click me</Button>
-<Input placeholder="Type here..." />
-```
-
-### What's Available
-
-* **React** - Automatically imported (useState, useEffect, etc.)
-* **Button** - All variants: default, destructive, outline, secondary, ghost, link
-* **Input** - Text inputs with full event handling
-* **Standard HTML** - All HTML elements and inline styles
-
-## Best Practices
-
-* **Start simple** - Begin with BasicExample to get familiar
-* **Experiment freely** - Changes are temporary and won't affect the actual codebase
-* **Copy useful code** - When you create something useful, copy it for your projects
-
-<div
-  style={{
-marginTop: '30px',
-padding: '15px',
-background: '#e8f5e8',
-borderRadius: '8px',
-border: '1px solid #4caf50',
-}}
->
-  **Ready to start?** Head to **BasicExample** to try your first live edit!
-</div>
+## 🚀 Ready to start?
+Head to [**BasicExample**](?path=/story/demo-live-code-editor--basic-example) to try your first live edit!

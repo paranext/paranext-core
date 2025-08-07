@@ -34,13 +34,24 @@ const meta = {
   title: 'Demo/Live Code Editor',
   component: LiveCodeDemo,
   tags: ['!autodocs'],
+  parameters: {
+    componentSubtitle: 'Interactive code editing examples'
+  }
 } satisfies Meta<typeof LiveCodeDemo>;
 
 export default meta;
 type Story = StoryObj<typeof LiveCodeDemo>;
 
 // Basic examples first
-export const BasicExample: Story = {};
+export const BasicExample: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story: 'Simple HTML/React editing, perfect for getting started'
+      }
+    }
+  }
+};
 
 // Add live editing functionality
 makeLiveEditStory(BasicExample, {
@@ -61,7 +72,15 @@ makeLiveEditStory(BasicExample, {
   },
 });
 
-export const InteractiveCounter: Story = {};
+export const InteractiveCounter: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story: 'React hooks and state management'
+      }
+    }
+  }
+};
 
 makeLiveEditStory(InteractiveCounter, {
   code: `import { useState } from 'react';
@@ -84,7 +103,15 @@ export default function StatefulTest() {
   // React and hooks are automatically available
 });
 
-export const Counter: Story = {};
+export const Counter: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story: 'Complex example with Button + Input components'
+      }
+    }
+  }
+};
 
 makeLiveEditStory(Counter, {
   code: `import { useState } from 'react';
@@ -126,7 +153,15 @@ export default function LiveCodeDemo() {
   },
 });
 
-export const InputWithState: Story = {};
+export const InputWithState: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story: 'Input validation and state management'
+      }
+    }
+  }
+};
 
 makeLiveEditStory(InputWithState, {
   code: `import { useState } from 'react';
