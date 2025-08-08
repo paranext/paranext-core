@@ -29,7 +29,10 @@ declare module 'platform-scripture-editor' {
     /** Goes to this Scripture Reference before setting the selection */
     scrRef: SerializedVerseRef;
     /** Endpoints of the selection. Should start at the same place as the scrRef */
-    range: SelectionRange;
+    // Temporarily disabled setting specific range for USFM ranges until we fix the offset
+    // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
+    // so this is temporarily able to be undefined
+    range?: SelectionRange;
   };
 
   /** Tell the editor to merge these decorations into its existing decorations */

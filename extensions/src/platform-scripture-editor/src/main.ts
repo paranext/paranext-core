@@ -228,6 +228,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           let targetScrRef = { book: '', chapterNum: 0, verseNum: 0 };
 
+          // Temporarily disabled setting specific range for USFM ranges until we fix the offset
+          // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
+          let skipRange = false;
+
           // Figure out the book and chapter
           if ('jsonPath' in range.start && 'jsonPath' in range.end) {
             // Use the chapter and verse number from the range
@@ -244,6 +248,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             targetScrRef.chapterNum = range.start.chapterNum;
           } else {
             // At least one range location is USFM specification. Will convert to USJ for jsonPath
+            skipRange = true;
+
             if (
               'scrRef' in range.start &&
               'scrRef' in range.end &&
@@ -280,59 +286,65 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           // Convert the range now - easy conversion if already jsonPath, but need to run conversion
           // if in USFM verse ref
-          let startJsonPath: string;
-          let endJsonPath: string;
+          let startJsonPath = '';
+          let endJsonPath = '';
           // Assume offset is 0 if not provided
           let startOffset = 0;
           let endOffset = 0;
 
-          if ('scrRef' in range.start) {
-            const startContentLocation = usjRW.verseRefToUsjContentLocation(
-              range.start.scrRef,
-              range.start.offset,
-            );
-            startJsonPath = startContentLocation.jsonPath;
-            startOffset = startContentLocation.offset;
-          } else {
-            startJsonPath = range.start.jsonPath;
-            if (range.start.offset !== undefined) startOffset = range.start.offset;
-          }
-
-          if ('scrRef' in range.end) {
-            const endContentLocation = usjRW.verseRefToUsjContentLocation(
-              range.end.scrRef,
-              range.end.offset,
-            );
-            endJsonPath = endContentLocation.jsonPath;
-            endOffset = endContentLocation.offset;
-
-            if (endOffset < (range.end.offset ?? 0) - 50) {
-              logger.warn(
-                `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
+          if (!skipRange) {
+            if ('scrRef' in range.start) {
+              const startContentLocation = usjRW.verseRefToUsjContentLocation(
+                range.start.scrRef,
+                range.start.offset,
               );
-              endJsonPath = startJsonPath;
-              endOffset = startOffset + 1;
+              startJsonPath = startContentLocation.jsonPath;
+              startOffset = startContentLocation.offset;
+            } else {
+              startJsonPath = range.start.jsonPath;
+              if (range.start.offset !== undefined) startOffset = range.start.offset;
             }
-          } else {
-            endJsonPath = range.end.jsonPath;
-            if (range.end.offset !== undefined) endOffset = range.end.offset;
-            else if (range.start.offset !== undefined) endOffset = range.start.offset;
+
+            if ('scrRef' in range.end) {
+              const endContentLocation = usjRW.verseRefToUsjContentLocation(
+                range.end.scrRef,
+                range.end.offset,
+              );
+              endJsonPath = endContentLocation.jsonPath;
+              endOffset = endContentLocation.offset;
+
+              if (endOffset < (range.end.offset ?? 0) - 50) {
+                logger.warn(
+                  `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
+                );
+                endJsonPath = startJsonPath;
+                endOffset = startOffset + 1;
+              }
+            } else {
+              endJsonPath = range.end.jsonPath;
+              if (range.end.offset !== undefined) endOffset = range.end.offset;
+              else if (range.start.offset !== undefined) endOffset = range.start.offset;
+            }
           }
 
-          const convertedRange = {
-            start: { jsonPath: startJsonPath, offset: startOffset },
-            end: { jsonPath: endJsonPath, offset: endOffset },
-          };
+          const convertedRange = skipRange
+            ? undefined
+            : {
+                start: { jsonPath: startJsonPath, offset: startOffset },
+                end: { jsonPath: endJsonPath, offset: endOffset },
+              };
 
-          // Figure out which verse we're on using the jsonPath
-          // Note: we could just use the verse if we receive a scrRef in the range, but our
-          // verseRefToUsjContentLocation doesn't always get the conversion right. So might as well
-          // use whatever verse it ends up on
-          const targetScrRefFromJsonPath = usjRW.jsonPathToVerseRefAndOffset(
-            convertedRange.start.jsonPath,
-            targetScrRef.book,
-          );
-          targetScrRef.verseNum = targetScrRefFromJsonPath.verseRef.verseNum;
+          if (convertedRange) {
+            // Figure out which verse we're on using the jsonPath
+            // Note: we could just use the verse if we receive a scrRef in the range, but our
+            // verseRefToUsjContentLocation doesn't always get the conversion right. So might as well
+            // use whatever verse it ends up on
+            const targetScrRefFromJsonPath = usjRW.jsonPathToVerseRefAndOffset(
+              convertedRange.start.jsonPath,
+              targetScrRef.book,
+            );
+            targetScrRef.verseNum = targetScrRefFromJsonPath.verseRef.verseNum;
+          }
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
