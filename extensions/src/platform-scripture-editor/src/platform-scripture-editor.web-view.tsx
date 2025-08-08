@@ -178,10 +178,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
             setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
+            if (range) nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
+          else if (range) editorRef.current?.setSelection(range);
 
           break;
         }
