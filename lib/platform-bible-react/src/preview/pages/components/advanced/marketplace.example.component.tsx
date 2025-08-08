@@ -28,6 +28,7 @@ export function MarketplaceExamples() {
           '2.1': { date: '2022-05-12', description: 'Enhanced translation support' },
           '2.2': { date: '2022-08-25', description: 'Added offline functionality' },
         }}
+        currentVersion="2.2"
       />
     </div>
   );

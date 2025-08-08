@@ -14,6 +14,8 @@ interface FooterProps {
   locales: string[];
   /** Object containing the version history mapped with their information */
   versionHistory: VersionHistoryType;
+  /** Current version of the extension */
+  currentVersion: string;
 }
 
 /**
@@ -29,6 +31,7 @@ export function Footer({
   fileSize,
   locales,
   versionHistory,
+  currentVersion,
 }: FooterProps) {
   /** Formats the file size into a human-readable format */
   const formattedFileSize = useMemo(() => formatBytes(fileSize), [fileSize]);
@@ -49,7 +52,9 @@ export function Footer({
   return (
     <div id={id} className="tw-border-t tw-py-2">
       <div className="tw-flex tw-flex-col tw-gap-2 tw-divide-y">
-        <VersionHistory versionHistory={versionHistory} />
+        {Object.entries(versionHistory).length > 0 && (
+          <VersionHistory versionHistory={versionHistory} />
+        )}
         <div className="tw-flex tw-flex-col tw-gap-2 tw-py-2">
           <h2 className="tw-text-md tw-font-semibold">Information</h2>
           <div className="tw-flex tw-items-start tw-justify-between tw-text-xs tw-text-foreground">
@@ -61,6 +66,8 @@ export function Footer({
             </p>
             <div className="tw-flex tw-w-3/4 tw-items-center tw-justify-between tw-text-xs tw-text-foreground">
               <p className="tw-flex tw-flex-col tw-justify-start tw-gap-1">
+                <span>Version</span>
+                <span className="tw-font-semibold">{currentVersion}</span>
                 <span>Languages</span>
                 <span className="tw-font-semibold">{languageNames.join(', ')}</span>
               </p>
