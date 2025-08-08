@@ -61,7 +61,7 @@ const VERSE_NUMBER_SCROLL_OFFSET = 80;
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
  * to listen for the editor to finish loading
  */
-const EDITOR_LOAD_DELAY_TIME = 100;
+const EDITOR_LOAD_DELAY_TIME = 200;
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
@@ -178,10 +178,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
             setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
+            if (range) nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
+          else if (range) editorRef.current?.setSelection(range);
 
           break;
         }
@@ -507,13 +507,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
 
-  // On loading the first time, scroll the selected verse into view
+  // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
     if (usjFromPdp && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
-      setTimeout(() => scrollToVerse(scrRef), EDITOR_LOAD_DELAY_TIME);
+      setTimeout(() => {
+        scrollToVerse(scrRef);
+        editorRef.current?.focus();
+      }, EDITOR_LOAD_DELAY_TIME);
     }
   }, [usjFromPdp, scrRef]);
 
