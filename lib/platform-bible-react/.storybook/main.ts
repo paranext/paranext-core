@@ -1,6 +1,7 @@
 import remarkGfm from 'remark-gfm';
 
 import type { StorybookConfig } from '@storybook/react-vite';
+import { getCodeEditorStaticDirs } from 'storybook-addon-code-editor/getStaticDirs';
 
 import { join, dirname } from 'path';
 
@@ -12,6 +13,13 @@ function getAbsolutePath(value: string): any {
   return dirname(require.resolve(join(value, 'package.json')));
 }
 const config: StorybookConfig = {
+  /**
+   * `storybook-addon-code-editor` (which integrates Monaco Editor) needs certain static assets
+   * (such as web workers and language files) at runtime via `staticDirs`
+   *
+   * @see https://storybook.js.org/addons/storybook-addon-code-editor
+   */
+  staticDirs: [...getCodeEditorStaticDirs(__filename), '../src'],
   stories: [
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)', // Explicitly list supported extensions
@@ -32,6 +40,13 @@ const config: StorybookConfig = {
     getAbsolutePath('@chromatic-com/storybook'),
     getAbsolutePath('storybook-addon-rtl'),
     getAbsolutePath('@storybook/addon-vitest'),
+    {
+      name: 'storybook-addon-code-editor',
+      options: {
+        // Inject global CSS into the code editor
+        css: ['/index.css'],
+      },
+    },
   ],
   framework: {
     name: getAbsolutePath('@storybook/react-vite'),
