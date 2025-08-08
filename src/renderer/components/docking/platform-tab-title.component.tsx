@@ -1,11 +1,21 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
+import { floatTab } from '@renderer/services/web-view.service-host';
+import { logger } from '@shared/services/logger.service';
+import { windowService } from '@shared/services/window.service';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { useMemo, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
-import { windowService } from '@shared/services/window.service';
-import { logger } from '@shared/services/logger.service';
 
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
@@ -33,6 +43,14 @@ const cssClassTabHeaderWindowFocus = 'dock-tab-window-focus';
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
 
+const handleFloatTab = async (tabId: string) => {
+  try {
+    await floatTab(tabId);
+  } catch (error) {
+    logger.error(`Failed to float tab ${tabId}: ${getErrorMessage(error)}`);
+  }
+};
+
 /**
  * Custom tab title for all tabs in Platform
  *
@@ -41,6 +59,7 @@ const cssHighlightDurationMilliseconds = 3000;
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  * @param flashTriggerTime Trigger to make the tab flash. Each time this value changes to a truthy
  *   value, it will trigger a new flash animation.
+ * @param id ID of the tab
  */
 export function PlatformTabTitle({
   iconUrl,
@@ -56,11 +75,16 @@ export function PlatformTabTitle({
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
+  const floatTabKey: LocalizeKey = '%tab_contextMenu_floatTab%';
   const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => (isLocalizeKey(text) ? [text, tabAria] : [tabAria]), [text]),
+    useMemo(
+      () => (isLocalizeKey(text) ? [text, tabAria, floatTabKey] : [tabAria, floatTabKey]),
+      [text],
+    ),
   );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
+  const floatTabText = localizedStrings[floatTabKey];
 
   // Handle applying and removing the CSS styles for flashing
   useEffect(() => {
@@ -147,23 +171,30 @@ export function PlatformTabTitle({
   );
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div ref={containerRef} className="title" aria-label={tabLabel}>
-            <span>{icon}</span>
-            <span>{title}</span>
-          </div>
-        </TooltipTrigger>
-        {tooltip &&
-          createPortal(
-            <TooltipContent className="tooltip" side="bottom">
-              <p>{tooltip}</p>
-            </TooltipContent>,
-            document.body,
-          )}
-      </Tooltip>
-    </TooltipProvider>
+    <ContextMenu>
+      <ContextMenuTrigger>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div ref={containerRef} className="title" aria-label={tabLabel}>
+                <span>{icon}</span>
+                <span>{title}</span>
+              </div>
+            </TooltipTrigger>
+            {tooltip &&
+              createPortal(
+                <TooltipContent className="tooltip" side="bottom">
+                  <p>{tooltip}</p>
+                </TooltipContent>,
+                document.body,
+              )}
+          </Tooltip>
+        </TooltipProvider>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

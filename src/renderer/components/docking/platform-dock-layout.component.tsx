@@ -23,6 +23,7 @@ import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrap
 import {
   addTabToDock,
   addWebViewToDock,
+  floatTabById,
   getTabInfoByElement,
   getWebViewDefinition,
   loadTab,
@@ -64,6 +65,7 @@ export function PlatformDockLayout() {
         // Return whether or not we found the tab to remove
         return !!tabToRemove;
       },
+      floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
       getWebViewDefinition: (webViewId: string) =>
         getWebViewDefinition(webViewId, dockLayoutRef.current),
       updateWebViewDefinition: (

@@ -667,4 +667,34 @@ function bringFloatingTabGroupToFront(dockLayout: DockLayout, webViewId: string)
   // eslint-disable-next-line no-null/no-null
   if (!!tabGroupData && tabGroupData.z) dockLayout.dockMove(tabGroupData, null, 'front');
 }
+
+/**
+ * Floats the tab with the specified ID
+ *
+ * @param tabId The ID of the tab to float
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @throws If the tab is not found or is not a tab
+ */
+export function floatTabById(tabId: string, dockLayout: DockLayout): void {
+  const targetTab = getTabInfoById(dockLayout, tabId, 'floatTabById');
+
+  if (!targetTab) {
+    throw new Error(`floatTabById: Tab with id '${tabId}' not found`);
+  }
+
+  // Use a simple centered position with reasonable default size
+  const layoutSize = dockLayout.getLayoutSize();
+  const floatPosition: FloatPosition = {
+    left: layoutSize.width / 2 - 400,
+    top: layoutSize.height / 2 - 300,
+    width: 800,
+    height: 600,
+  };
+
+  // Float the tab using rc-dock's dockMove function
+  // Null required by the external API
+  // eslint-disable-next-line no-null/no-null
+  dockLayout.dockMove(targetTab, null, 'float', floatPosition);
+}
 // #endregion

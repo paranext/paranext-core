@@ -140,6 +140,7 @@
   "%scrollGroup_4%": "E",
   "%some_localization_key%": "This is the English text for %some_localization_key%.",
   "%tab_aria_tab%": "Tab",
+  "%tab_contextMenu_floatTab%": "Float tab",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Unknown",
   "%test_deprecated_string%": "Test Deprecated String",

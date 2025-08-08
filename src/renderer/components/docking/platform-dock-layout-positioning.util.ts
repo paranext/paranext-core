@@ -28,7 +28,7 @@ export const TAB_GROUP = 'card platform-bible';
 export const GROUPS: { [key: string]: TabGroup } = {
   [TAB_GROUP]: {
     maximizable: true, // Allow groups of tabs to be maximized
-    floatable: true, // Allow tabs to be floated
+    floatable: false, // Don't allow tabs to be floated
     animated: false, // Don't animate tab transitions
     // TODO: Currently allowing newWindow crashes since electron doesn't seem to have window.open defined?
     // newWindow: true, // Allow floating windows to show in a native window
