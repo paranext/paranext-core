@@ -91,9 +91,6 @@
         data: so they can load data urls
       form-action 'self' lets the form submit to us
         TODO: not sure if this is needed. If we can attach handlers to forms, we might be able to remove this
-      navigate-to 'none' prevents them from redirecting this iframe somewhere else
-        WARNING: This is experimental and does not work as of July 2023! It is here for future
-        compatibility in case they add support for it
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -109,8 +106,7 @@
         img-src 'self' papi-extension: https: data:;
         media-src 'self' papi-extension: https: data:;
         font-src 'self' papi-extension: https: data:;
-        form-action 'self';
-        navigate-to 'none';"
+        form-action 'self';"
     />
     <title>Platform.Bible</title>
   </head>
