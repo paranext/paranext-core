@@ -72,6 +72,8 @@ export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 
 /**
+ * JSDOC SOURCE DirectionFromTab
+ *
  * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
  * dock layout.
  *
@@ -94,14 +96,32 @@ export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
  *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
  *   (useful for closing a tab)
  */
-export type DirectionFromTab =
-  | 'nextTab'
-  | 'previousTab'
-  | 'nextTabGroup'
-  | 'previousTabGroup'
-  | 'nextTabOrGroup'
-  | 'previousTabOrGroup'
-  | 'nearTabOrNextGroup';
+export const DIRECTION_FROM_TAB = Object.freeze([
+  'nextTab',
+  'previousTab',
+  'nextTabGroup',
+  'previousTabGroup',
+  'nextTabOrGroup',
+  'previousTabOrGroup',
+  'nearTabOrNextGroup',
+] as const);
+/** JSDOC DESTINATION DirectionFromTab */
+export type DirectionFromTab = (typeof DIRECTION_FROM_TAB)[number];
+
+/**
+ * Checks if the specified direction is a valid {@link DirectionFromTab}.
+ *
+ * @param direction The direction to check
+ * @returns True if the direction is a valid {@link DirectionFromTab}, false otherwise
+ */
+export function isDirectionFromTab(direction: unknown): direction is DirectionFromTab {
+  if (!direction) return false;
+
+  // TypeScript's `includes` types are very weird. This code works fine, but TypeScript wants anything
+  // passed to `includes` to be of the type of the array for some reason. But that's the whole point here.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return DIRECTION_FROM_TAB.includes(direction as DirectionFromTab);
+}
 
 /** Information about a tab in a panel */
 interface TabLayout {

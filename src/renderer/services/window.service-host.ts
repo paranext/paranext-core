@@ -20,6 +20,7 @@ import {
   debounce,
 } from 'platform-bible-utils';
 import { getDockLayout } from './web-view.service-host';
+import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
@@ -106,15 +107,7 @@ class WindowDataProviderEngine
     let newFocusSubject: FocusSubjectWebView | FocusSubjectTab | undefined;
 
     // If we should move focus relative to the currently selected tab, do so
-    if (
-      newSetFocusSpecifier === 'nextTab' ||
-      newSetFocusSpecifier === 'previousTab' ||
-      newSetFocusSpecifier === 'nextTabGroup' ||
-      newSetFocusSpecifier === 'previousTabGroup' ||
-      newSetFocusSpecifier === 'nextTabOrGroup' ||
-      newSetFocusSpecifier === 'previousTabOrGroup' ||
-      newSetFocusSpecifier === 'nearTabOrNextGroup'
-    ) {
+    if (isDirectionFromTab(newSetFocusSpecifier)) {
       // If we don't have a tab selected, can't move relative to it. Return false
       if (
         !this.#focusSubject ||

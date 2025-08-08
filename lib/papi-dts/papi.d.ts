@@ -2729,6 +2729,7 @@ declare module 'shared/models/docking-framework.model' {
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
   /**
+   *
    * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
    * dock layout.
    *
@@ -2751,14 +2752,47 @@ declare module 'shared/models/docking-framework.model' {
    *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
    *   (useful for closing a tab)
    */
-  export type DirectionFromTab =
-    | 'nextTab'
-    | 'previousTab'
-    | 'nextTabGroup'
-    | 'previousTabGroup'
-    | 'nextTabOrGroup'
-    | 'previousTabOrGroup'
-    | 'nearTabOrNextGroup';
+  export const DIRECTION_FROM_TAB: readonly [
+    'nextTab',
+    'previousTab',
+    'nextTabGroup',
+    'previousTabGroup',
+    'nextTabOrGroup',
+    'previousTabOrGroup',
+    'nearTabOrNextGroup',
+  ];
+  /**
+   *
+   * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+   * dock layout.
+   *
+   * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+   * "backward"/"previous" means left in LTR and right in RTL
+   *
+   * - `nextTab` - go forward one tab. If there are no more tabs after this tab in this tab's tab group,
+   *   go to the backward-most tab in the next tab group (useful for cycling through all tabs)
+   * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
+   *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
+   *   tabs)
+   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+   *   is in
+   * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
+   *   group, go to the active tab in the next tab group
+   * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
+   *   tab's tab group, go to the active tab in the previous tab group
+   * - `nearTabOrNextGroup` - go forward or backward one tab if there is another in the same tab group.
+   *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
+   *   (useful for closing a tab)
+   */
+  export type DirectionFromTab = (typeof DIRECTION_FROM_TAB)[number];
+  /**
+   * Checks if the specified direction is a valid {@link DirectionFromTab}.
+   *
+   * @param direction The direction to check
+   * @returns True if the direction is a valid {@link DirectionFromTab}, false otherwise
+   */
+  export function isDirectionFromTab(direction: unknown): direction is DirectionFromTab;
   /** Information about a tab in a panel */
   interface TabLayout {
     type: 'tab';
