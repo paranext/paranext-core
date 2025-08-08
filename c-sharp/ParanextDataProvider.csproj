@@ -19,6 +19,8 @@
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
     <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- To support macOS universal binaries, we need to build both architectures -->
+    <RuntimeIdentifiers Condition="$([MSBuild]::IsOsPlatform('OSX'))">osx-x64;osx-arm64</RuntimeIdentifiers>
     <UserSecretsId>1860f020-31dd-4eb4-81c4-323eb0cb3e48</UserSecretsId>
     <!-- Uncomment the following lines to help with debugging into .NET core
     <DebugType>portable</DebugType>
@@ -52,7 +54,7 @@
     </None>
   </ItemGroup>
 
-  <!-- This dectects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
+  <!-- This detects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
   <PropertyGroup>
     <!-- Check if MacPorts ICU exists -->
     <UseMacPortsICU Condition="Exists('/opt/local/lib/libicuuc.dylib')">true</UseMacPortsICU>
