@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '@/components/shadcn-ui/button';
-// import { ThemeProvider } from '@/preview/preview-components/theme-provider.component'; // Temporarily disabled
+import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -21,10 +21,9 @@ const meta: Meta<typeof Button> = {
   },
   decorators: [
     (Story) => (
-      // Temporarily removing ThemeProvider due to known issues
-      // <ThemeProvider>
-      <Story />
-      // </ThemeProvider>
+      <ThemeProvider>
+        <Story />
+      </ThemeProvider>
     ),
   ],
 };
