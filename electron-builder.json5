@@ -133,6 +133,7 @@
       'home',
       'network',
       'opengl',
+      'password-manager-service',
       'pulseaudio',
       'unity7',
       'wayland',
