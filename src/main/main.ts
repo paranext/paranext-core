@@ -39,6 +39,7 @@ import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { readFile } from 'fs/promises';
 import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
@@ -635,6 +636,32 @@ async function main() {
       },
     },
   });
+
+  commandService.registerCommand(
+    'platform.getLogFileContent',
+    async () => {
+      try {
+        const logFile = logger.transports.file.getFile();
+        const logFilePath = logFile.toString();
+
+        const logContent = await readFile(logFilePath, 'utf8');
+
+        return logContent;
+      } catch (error) {
+        return `Error reading log file: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    },
+    {
+      method: {
+        summary: 'Get the current log file content for debugging purposes',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
 
   commandService.registerCommand(
     'platform.quit',
