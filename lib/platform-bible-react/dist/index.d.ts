@@ -368,6 +368,8 @@ interface FooterProps {
 	locales: string[];
 	/** Object containing the version history mapped with their information */
 	versionHistory: VersionHistoryType;
+	/** Current version of the extension */
+	currentVersion: string;
 }
 /**
  * Component to render the footer for the extension details which contains information on the
@@ -376,7 +378,7 @@ interface FooterProps {
  * @param FooterProps
  * @returns The rendered Footer component
  */
-export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, currentVersion, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
