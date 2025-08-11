@@ -148,6 +148,9 @@ internal class PapiClient : IDisposable
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
+        if (_requestTimeout == timeout)
+            return;
+
         Console.WriteLine($"Request timeout set to {timeout.TotalMilliseconds}ms");
         _requestTimeout = timeout;
     }
