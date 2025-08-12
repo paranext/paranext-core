@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
+  So this piece of code adds tw-font-sans everywhere we include preflight. */
+  .pr-twp {
+    @apply tw-font-sans;
+  }
+}
+
+/*
+ * WARNING: These themes are also represented in paranext-core/src/shared/data/themes.data.json!
+ * Please update in both locations
+*/
+/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css */
+
+@layer base {
+  @font-face {
+    font-family: 'Inter';
+    font-display: 'swap';
+    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+  }
+
+  /**
+   * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
+   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
+   *
+   * See the wiki's [Matching Application
+   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * section for more information
+   */
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%; /* black */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%; /* black */
+    --popover: 210 20% 98%; /* popover platform */
+    --popover-foreground: 222.2 84% 4.9%; /* black */
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 50% 95%;
+    --secondary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --muted: 210 50% 95%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 50% 95%;
+    --accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --border: 214.3 31.8% 91.4%; /* slate-200 */
+    --input: 214.3 31.8% 91.4%; /* slate-200 */
+    --ring: 222.2 84% 4.9%; /* black */
+
+    --sidebar-background: 210 20% 98%; /* popover platform */
+    --sidebar-foreground: 222.2 84% 4.9%; /* black */
+    --sidebar-primary: 222.2 47.4% 11.2%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 50% 95%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --sidebar-border: 214.3 31.8% 91.4%; /* slate-200 */
+    --sidebar-ring: 222.2 84% 4.9%; /* black */
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%; /* black */
+    --foreground: 210 40% 98%; /* slate-50 */
+    --card: 222.2 84% 4.9%; /* black */
+    --card-foreground: 210 40% 98%; /* slate-50 */
+    --popover: 222.2 84% 4.9%; /* black */
+    --popover-foreground: 210 40% 98%; /* slate-50 */
+    --primary: 210 40% 98%; /* slate-50 */
+    --primary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%; /* slate-50 */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%; /* slate-50 */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --border: 215.3 19.3% 34.5%; /* slate-600 */
+    --input: 215.3 19.3% 34.5%; /* slate-600 */
+    --ring: 212.7 26.8% 83.9%;
+
+    --sidebar-background: 222.2 84% 4.9%; /* black */
+    --sidebar-foreground: 215 20.2% 65.1%;
+    --sidebar-primary: 210 40% 98%; /* slate-50 */
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 215 20.2% 65.1%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 212.7 26.8% 83.9%;
+  }
+
+  /* using color palette https://supercolorpalette.com/?scp=G0-hsl-99827A-E7DDD0-FEF4E7-FEFAF1-FFFFFF-D8E9E3-719892-07463D-0A433D-083030-041616-000000-85DBB8-F2F52E-CD3737 */
+  .paratext-light {
+    --background: 0 0% 100%; /* white */
+    --foreground: 0 0% 0%; /* black */
+    --muted: 33.9 32.4% 86.1%; /* paratext light brown */
+    --muted-foreground: 15.5 13.2% 53.9%; /*paratext brown */
+    --popover: 40 20% 98%; /* popover paratext */
+    --popover-foreground: 0 0% 0%; /* black */
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 0 0% 0%; /* black */
+    --border: 220 13% 91%; /* border */
+    --input: 161.3 26.7% 88.2%; /* paratext light green */
+    --primary: 173.4 82.1% 15.3%; /* paratext dark green */
+    --primary-foreground: 40 85.7% 97.3%; /* paratext sand */
+    --secondary: 161.3 26.7% 88.2%; /* paratext light green */
+    --secondary-foreground: 173.4 82.1% 15.3%; /* paratext dark green */
+    --accent: 161.3 26.7% 88.2%; /* paratext light green */
+    --accent-foreground: 173.4 82.1% 15.3%; /* paratext dark green */
+    --destructive: 0 60% 51%;
+    --destructive-foreground: 210 20% 98%;
+    --ring: 15.5 13.2% 53.9%; /*paratext brown */
+
+    --sidebar-background: 40 20% 98%; /* popover paratext */
+    --sidebar-foreground: 12 10.95% 26.86%; /* dark brown */
+    --sidebar-primary: 173.4 82.1% 15.3%; /* paratext dark green */
+    --sidebar-primary-foreground: 40 85.7% 97.3%; /* paratext sand */
+    --sidebar-accent: 33.9 32.4% 86.1%; /* paratext light brown */
+    --sidebar-accent-foreground: 0 0% 0%; /* black */
+    --sidebar-border: 220 13% 91%; /* border */
+    --sidebar-ring: 15.5 13.2% 53.9%; /*paratext brown */
+  }
+
+  .paratext-dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --muted: 15.5 13.2% 53.9%;
+    --muted-foreground: 33.9 32.4% 86.1%;
+    --popover: 180 71.4% 5%;
+    --popover-foreground: 0 0% 100%;
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 100%;
+    --border: 220 13% 20%;
+    --input: 220 13% 20%;
+    --primary: 161.3 26.7% 88.2%;
+    --primary-foreground: 173.4 82.1% 15.3%;
+    --secondary: 180 71.4% 11%;
+    --secondary-foreground: 161.3 26.7% 88.2%;
+    --accent: 180 71.4% 11%;
+    --accent-foreground: 161.3 26.7% 88.2%;
+    --destructive: 0 60% 51%;
+    --destructive-foreground: 210 20% 98%;
+    --ring: 13.5 13.2% 53.9%;
+
+    --sidebar-background: 180 71.4% 5%;
+    --sidebar-foreground: 33.9 32.4% 86.1%;
+    --sidebar-primary: 161.3 26.7% 88.2%;
+    --sidebar-primary-foreground: 173.4 82.1% 15.3%;
+    --sidebar-accent: 15.5 13.2% 53.9%;
+    --sidebar-accent-foreground: 33.9 32.4% 86.1%;
+    --sidebar-border: 220 13% 20%;
+    --sidebar-ring: 15.5 13.2% 53.9%;
+  }
+}
+/* #endregion */
+
+/* Note that the following region is from shadcn/ui's styles
+ * https://ui.shadcn.com/docs/installation/manual#configure-styles but is scoped down to .pr-twp
+ * because this is just a component library and should not apply its styles to the entire page.
+ *
+ * There is now a section in this library's README.md that explains how to apply these styles to the
+ * entire page if desired.
+ *
+ * The template has the original shadcn/ui styles because it intentionally applies the styles to the
+ * entire page. The same is true for Platform.Bible - see `app.component.scss`
+ */
+/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
+
+@layer base {
+  .pr-twp,
+  .pr-twp * {
+    @apply tw-border-border tw-outline-ring/50;
+  }
+
+  /**
+    * disabled because tslint does not like it, but it is the selector that's needed
+    */
+  /* stylelint-disable-next-line selector-no-qualifying-type */
+  body.pr-twp {
+    @apply tw-bg-background tw-text-foreground;
+  }
+}

@@ -1,0 +1,7 @@
+.banded-row:hover {
+  cursor: pointer;
+}
+
+.banded-row[data-state='selected']:hover {
+  cursor: default;
+}
