@@ -1,0 +1,23 @@
+diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
+index bac288d..8047e9f 100644
+--- a/node_modules/rc-dock/es/DockLayout.js
++++ b/node_modules/rc-dock/es/DockLayout.js
+@@ -258,7 +258,17 @@ export class DockLayout extends DockPortalManager {
+                 if (!makeActive) {
+                     // restore the previous activeId
+                     panelData.activeId = activeId;
+-                    this.panelToFocus = panelData.id;
++                    /**
++                     * patch-package notes:
++                     *
++                     * Focusing the panel the updated tab belongs to if we were not making the tab
++                     * active led to the panel being focused when not intended. For example, if the
++                     * user performs some action in some tab that causes a tab in another panel to
++                     * change its title, that should not cause that other panel the user is not
++                     * working in to be focused. The user should be able to continue working
++                     * in the tab they were working in previously.
++                     */
++                    // this.panelToFocus = panelData.id;
+                 }
+             }
+             else if (makeActive && panelData.activeId !== id) {

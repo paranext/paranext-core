@@ -19,7 +19,7 @@ import {
   getErrorMessage,
   debounce,
 } from 'platform-bible-utils';
-import { getDockLayout } from './web-view.service-host';
+import { getDockLayout } from '@renderer/services/web-view.service-host';
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
