@@ -1,7 +1,7 @@
 @use '../../styles/vars';
 
 .dock {
-  background-color: hsl(var(--background));
+  // background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   container-type: size;
 }
@@ -26,28 +26,18 @@
   background-color: hsl(var(--accent) / 0.3);
 }
 
-// #region GENERAL //////////////////////////////////////////////
+// #region GENERAL /////////////////////////////////////////////////////
 /* space around app and in between windows */
 .dock-divider {
   flex: 0 0 8px;
 }
 
-.dock-hbox > .dock-divider {
-  transform: scaleX(1);
-}
-
-.dock-vbox > .dock-divider {
-  transform: scaleY(1);
-}
-
 .dock-layout {
   flex-grow: 1;
-  margin: 8px;
-  margin-top: 0;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
-  border: 0;
+  border: unset;
 }
 
 /*
@@ -67,13 +57,48 @@
   box-shadow: inset 0 0 10px #0055d9;
   background: #a6c9ff;
 }
-// #endregion
+// #endregion ///////////////////////////////////////////////////////////
 
-// #region TAB-BAR //////////////////////////////////////////////
+// #region DOCK-PANEL ///////////////////////////////////////////////////
+.dock-panel {
+  padding: vars.$space--s;
+  background-color: #0055d9;
+}
+
+.dock-top {
+  position: unset; // fixes an overflow bug, but it is not clear why it is needed
+  gap: vars.$space--s;
+}
+// #endregion ///////////////////////////////////////////////////////////
+
+// #region TAB-PANE (CONTENTS) //////////////////////////////////////////
+// TODO: UX in progress
+.dock-tabpane {
+  padding: vars.$space--s;
+  padding-block-start: vars.$space--xxs;
+  background-color: salmon;
+  box-sizing: border-box;
+}
+
+.dock-tabpane.dock-tabpane-active {
+  /* Active tabpane styles - placeholder for future implementation */
+}
+
+// TODO: UX in progress
+.dock-tabpane.dock-tabpane-active-highlight {
+  outline: 2px solid vars.$color--focus-ring;
+  outline-offset: -2px;
+}
+// #endregion ///////////////////////////////////////////////////////////
+
+// #region TAB-BAR //////////////////////////////////////////////////////
+// (TAB-HEADERS-ROW)
+
 /* tabs take all the space */
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   flex-grow: 1;
+  position: relative;
 }
 
 .dock-nav-operations {
@@ -117,6 +142,37 @@
   border: 0;
 }
 
+.dock-nav,
+.dock-bar {
+  border-radius: vars.$space--xs;
+}
+
+// DEBUG REGION //////////////////////////////////////////////////////
+.dock-nav {
+  background-color: rosybrown; // Temporary debug
+  outline: sienna solid 1px; // Temporary debug
+  outline-offset: 1px; // Temporary debug
+  overflow: clip;
+}
+
+.dock-nav-wrap {
+  outline: #15c04f solid 1px; // Temporary debug
+  flex-wrap: nowrap;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.dock-tab {
+  background-color: burlywood; // Temporary debug
+}
+
+.bock-tab-btn {
+  background-color: lightcoral; // Temporary debug
+}
+
+// DEBUG END ////////////////////////////////////////////////////////
+
+// Remove default styling
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
   /*
    * Remove the handle bar at the top of each dock-tab. Note: Now, the tab
@@ -127,11 +183,11 @@
    * For some reason, by default, the tabs are moved down one pixel. That
    * makes them blurry, so this removes that transform
    */
-  transform: none;
+  transform: unset;
 }
-// #endregion
+// #endregion TAB-BAR ///////////////////////////////////////////////////
 
-// #region TAB HEADER //////////////////////////////////////////////
+// #region TAB HEADER ///////////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: 0;
   border: 0;
@@ -148,6 +204,12 @@
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
 
   box-shadow: 0 4px 20px 0 vars.$color--shadow; // Box shadow around active tab
+  inset-block-end: -8px; // Move tab down to descend below the tab list
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    box-shadow 0.1s,
+    inset-block-end 0.6s;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
@@ -164,9 +226,9 @@
 .title span {
   padding-inline-start: 2px;
 }
-// #endregion
+// #endregion ///////////////////////////////////////////////////////////
 
-// #region TAB SEPARATOR / DIVIDER //////////////////////////////////////////////
+// #region TAB SEPARATOR (DIVIDER) //////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active)::before {
   content: '';
   width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
@@ -176,7 +238,7 @@
   bottom: 6px;
   left: -2px;
 }
-// #endregion
+// #endregion ///////////////////////////////////////////////////////////
 
 // #region ROUNDED CORNERS //////////////////////////////////////////////
 
@@ -189,20 +251,11 @@ $tab-top-rounding: vars.$space--xs;
   border-radius: $tab-top-rounding;
 }
 
-// TODO: UX should make this better
-.dock-tabpane.dock-tabpane-active-highlight {
-  outline: 2px solid red;
-  outline-offset: -2px;
-}
-
-.dock-nav-wrap,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
+.dock-tab-active {
   border-radius: $tab-top-rounding $tab-top-rounding 0 0;
 }
 
-// Bottom outside corner rounding for active tab
+// Bottom outside corner rounding for active tab (fillets)
 $tab-bottom-rounding: vars.$space--s;
 
 .dock-tab.dock-tab-active::before,
@@ -229,7 +282,7 @@ $tab-bottom-rounding: vars.$space--s;
 
 // TODO: UX should make this better
 .dock-tab.dock-tab-active.dock-tab-active-highlight {
-  outline: 2px solid red;
+  outline: 2px solid vars.$color--focus-ring;
   outline-offset: -2px;
   // This duration must be ≤ "cssHighlightDurationMilliseconds" in platform-tab-title.component.tsx
   animation: tabTitleBarFlash 1s ease-in-out 3;
@@ -269,9 +322,9 @@ $tab-bottom-rounding: vars.$space--s;
   display: none;
 }
 
-// #endregion
+// #endregion ///////////////////////////////////////////////////////////
 
-// #region CONTROLS //////////////////////////////////////////////
+// #region CONTROLS /////////////////////////////////////////////////////
 /* Close buttons */
 .dock-tab-close-btn::before {
   content: '';
