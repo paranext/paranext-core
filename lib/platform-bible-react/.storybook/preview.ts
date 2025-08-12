@@ -1,6 +1,15 @@
 import type { Preview } from '@storybook/react-vite';
+import { setupMonaco } from 'storybook-addon-code-editor';
 import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
 import '../src/index.css';
+
+// Setup Monaco editor
+setupMonaco({
+  onMonacoLoad(monaco) {
+    // Add any Monaco customizations here if needed
+    console.log('Monaco loaded successfully');
+  },
+});
 
 const preview: Preview = {
   parameters: {
@@ -33,7 +42,9 @@ const preview: Preview = {
     },
   ],
   tags: [
-    // Enables auto-generated documentation for all stories
+    /* Auto-generate "Docs" page by default for each Storybook component.
+     * Use `tags: ['!autodocs']` any time you make a custom primary page
+     * for a Storybook component. */
     'autodocs',
     // Enables testing with Storybook's Vitest plugin
     'test',
