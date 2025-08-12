@@ -1,7 +1,6 @@
 @use '../../styles/vars';
 
 .dock {
-  // background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   container-type: size;
 }
@@ -138,8 +137,8 @@
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: vars.$color--inactive-tab;
-  padding: 0;
-  border: 0;
+  padding: unset;
+  border: unset;
 }
 
 .dock-nav,
@@ -189,8 +188,8 @@
 
 // #region TAB HEADER ///////////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
-  margin-right: 0;
-  border: 0;
+  margin-right: unset;
+  border: unset;
   background: vars.$color--inactive-tab;
   color: vars.$color--text;
   flex: 1 0 auto;
@@ -200,7 +199,7 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
   background: vars.$color--active-tab;
   color: vars.$color--text;
-  border-bottom: 0;
+  border-bottom: unset;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
 
   box-shadow: 0 4px 20px 0 vars.$color--shadow; // Box shadow around active tab
