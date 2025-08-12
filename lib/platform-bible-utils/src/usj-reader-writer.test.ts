@@ -978,6 +978,31 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
   expect(result1.jsonPath).toBe('$.content[10].content[19]');
   expect(result1.offset).toBe(16);
 
+  // Match the text right after the verse ref
+  const result5 = usjDoc.findNextLocationOfMatchingText(
+    startingPoint1,
+    'Abraham became the father of Isaac.',
+  );
+  expect(result5).toBeTruthy();
+  expect(typeof result5?.node).toBe('string');
+  if (typeof result5?.node !== 'string') return;
+  expect(result5.node).toBe(
+    'Abraham became the father of Isaac. Isaac became the father of Jacob. Jacob became the father of Judah and his brothers.',
+  );
+  expect(result5.jsonPath).toBe('$.content[10].content[1]');
+  expect(result5.offset).toBe(0);
+
+  // Get the first text you can find after the requested location (in this case, a verse ref)
+  const result6 = usjDoc.findNextLocationOfMatchingText(startingPoint1, '');
+  expect(result6).toBeTruthy();
+  expect(typeof result6?.node).toBe('string');
+  if (typeof result6?.node !== 'string') return;
+  expect(result6.node).toBe(
+    'Abraham became the father of Isaac. Isaac became the father of Jacob. Jacob became the father of Judah and his brothers.',
+  );
+  expect(result6.jsonPath).toBe('$.content[10].content[1]');
+  expect(result6.offset).toBe(0);
+
   // Start from a string
   const startingPoint2 = usjDoc.verseRefToUsjContentLocation(
     { book: 'MAT', chapterNum: 1, verseNum: 6 },
