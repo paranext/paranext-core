@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 import { windowService } from '@shared/services/window.service';
 import { logger } from '@shared/services/logger.service';
+import { updateTabPartialSync } from '@renderer/services/web-view.service-host';
 
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
@@ -85,6 +86,7 @@ export function PlatformTabTitle({
     const timer = setTimeout(() => {
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderHighlight);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentHighlight);
+      updateTabPartialSync(id, { flashTriggerTime: undefined });
     }, cssHighlightDurationMilliseconds);
 
     return () => {
