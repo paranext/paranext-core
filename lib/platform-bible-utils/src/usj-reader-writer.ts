@@ -582,7 +582,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let textScanned = '';
     let lengthScanned = 0;
     let lengthTrimmed = 0;
-    let foundStartingAtOffset = 0;
+    let foundStartingAtOffset = -1;
     UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
       this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
@@ -611,7 +611,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     );
 
     // We never found what we wanted
-    if (foundStartingAtOffset <= 0) return undefined;
+    if (foundStartingAtOffset < 0) return undefined;
 
     // The text might have been split between nodes, so we have to go through it one more time
     lengthScanned = 0;
