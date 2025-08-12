@@ -1,8 +1,32 @@
 @use '../../styles/vars';
 
+:root {
+  // TODO BUG theme colors aren't adjusting to dark mode
+  --tab-selected-blur: hsl(var(--muted));
+  --tab-selected-focus-within: hsl(var(--primary));
+}
+
 .dock {
   color: hsl(var(--foreground));
   container-type: size;
+}
+
+.dock-tab,
+.dock-tabpane {
+  --tab-background: transparent; // new color var within .dock-tab
+}
+
+.dock-tab-active,
+.dock-tabpane-active {
+  --tab-background: var(--tab-selected-blur);
+}
+
+.dock-tab-window-focus,
+.dock-tabpane-active:focus-within {
+  // TODO BUG using :focus-within should trigger but it doesn't
+  // TODO these two properties should get the same level of abstraction
+  --tab-background: var(--tab-selected-focus-within);
+  color: hsl(var(--primary-foreground));
 }
 
 .dock-dropdown,
@@ -74,9 +98,10 @@
 // TODO: UX in progress
 .dock-tabpane {
   padding: vars.$space--s;
-  padding-block-start: vars.$space--xxs;
-  background-color: salmon;
+  padding-block-start: vars.$space--s;
+  background-color: var(--tab-background);
   box-sizing: border-box;
+  border-radius: 0 var(--radius) 0 var(--radius);
 }
 
 .dock-tabpane.dock-tabpane-active {
@@ -88,6 +113,12 @@
   outline: 2px solid vars.$color--focus-ring;
   outline-offset: -2px;
 }
+
+.platform-panel,
+.web-view {
+  border-radius: var(--radius);
+}
+
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region TAB-BAR //////////////////////////////////////////////////////
@@ -137,13 +168,8 @@
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: vars.$color--inactive-tab;
-  padding: unset;
+  padding: vars.$space--s;
   border: unset;
-}
-
-.dock-nav,
-.dock-bar {
-  border-radius: vars.$space--xs;
 }
 
 // DEBUG REGION //////////////////////////////////////////////////////
@@ -151,7 +177,6 @@
   background-color: rosybrown; // Temporary debug
   outline: sienna solid 1px; // Temporary debug
   outline-offset: 1px; // Temporary debug
-  overflow: clip;
 }
 
 .dock-nav-wrap {
@@ -191,14 +216,14 @@
   margin-right: unset;
   border: unset;
   background: vars.$color--inactive-tab;
-  color: vars.$color--text;
+  // color: currentColor;
   flex: 1 0 auto;
   max-width: fit-content;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: vars.$color--active-tab;
-  color: vars.$color--text;
+  background: var(--tab-selected-blur);
+  // color: currentColor;
   border-bottom: unset;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
 
@@ -247,7 +272,7 @@ $tab-top-rounding: vars.$space--xs;
 
 .dock.dock-top,
 .dock-layout .dock-panel.dock-style-platform-bible {
-  border-radius: $tab-top-rounding;
+  border-radius: $tab-top-rounding; // TODO Can I remove this?
 }
 
 .dock-tab-active {
@@ -270,13 +295,13 @@ $tab-bottom-rounding: vars.$space--s;
 .dock-tab.dock-tab-active::before {
   left: -$tab-bottom-rounding;
   border-bottom-right-radius: $tab-bottom-rounding - 2;
-  box-shadow: 2px 2px 0 vars.$color--active-tab;
+  box-shadow: 2px 2px 0 var(--tab-background);
 }
 
 .dock-tab.dock-tab-active::after {
   right: -$tab-bottom-rounding;
   border-bottom-left-radius: $tab-bottom-rounding - 2;
-  box-shadow: -2px 2px 0 vars.$color--active-tab;
+  box-shadow: -2px 2px 0 var(--tab-background);
 }
 
 // TODO: UX should make this better
@@ -308,11 +333,6 @@ $tab-bottom-rounding: vars.$space--s;
   100% {
     background-color: transparent;
   }
-}
-
-// TODO: UX should make this better
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active.dock-tab-window-focus {
-  background-color: #15c04f;
 }
 
 // Hide the bottom corner rounding pseudo-elements when highlight is active
