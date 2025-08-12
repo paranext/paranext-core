@@ -100,7 +100,10 @@ function startDotnetDataProvider() {
   let options: SpawnOptionsWithoutStdio | undefined;
 
   if (globalThis.isPackaged) {
-    const dotnetPath: string = path.join(process.resourcesPath, 'dotnet');
+    let dotnetPath: string = path.join(process.resourcesPath, 'dotnet');
+    if (process.platform === 'darwin')
+      dotnetPath = path.join(dotnetPath, process.arch === 'arm64' ? 'osx-arm64' : 'osx-x64');
+
     if (process.platform === 'win32') {
       command = path.join(dotnetPath, 'ParanextDataProvider.exe');
       args = [];

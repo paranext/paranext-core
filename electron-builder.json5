@@ -17,14 +17,26 @@
     notarize: false,
     target: {
       target: 'default',
-      arch: ['arm64', 'x64'],
+      arch: ['universal'],
     },
+    // Rather than creating a universal .NET build, we create one for each architecture
     extraResources: [
       {
-        from: './c-sharp/bin/Release/net8.0/publish/osx-${arch}/',
-        to: './dotnet/',
+        from: './c-sharp/bin/Release/net8.0/publish/osx-x64/',
+        to: './dotnet/osx-x64/',
+      },
+      {
+        from: './c-sharp/bin/Release/net8.0/publish/osx-arm64/',
+        to: './dotnet/osx-arm64/',
       },
     ],
+    // https://github.com/electron/universal?tab=readme-ov-file#skip-lipo-for-certain-binaries-in-your-universal-app
+    // The documentation for this option didn't seem to match the results when it was used.
+    // To not specify a global pattern match on everything would require listing every single .NET
+    // executable and DLL file in the app bundle. That isn't practical, so a global match is used.
+    // In addition to the .NET files, it also was unhappy about node native modules which were not
+    // stitched together using lipo beforehand. It's rather confusing why this option even exists.
+    x64ArchFiles: '**/*',
     type: 'distribution',
     hardenedRuntime: true,
     entitlements: 'assets/entitlements.mac.plist',
@@ -121,6 +133,7 @@
       'home',
       'network',
       'opengl',
+      'password-manager-service',
       'pulseaudio',
       'unity7',
       'wayland',

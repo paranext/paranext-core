@@ -1297,9 +1297,6 @@ async function openOrReloadWebView(
   // form-action 'self' lets the form submit to us
   //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove
   //    this
-  // navigate-to 'none' prevents them from redirecting this iframe somewhere else
-  //   WARNING: This is experimental and does not work as of July 2023! It is here for future
-  //   compatibility in case they add support for it
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
       default-src 'none';
@@ -1313,7 +1310,6 @@ async function openOrReloadWebView(
       media-src 'self' papi-extension: https: data:;
       font-src 'self' papi-extension: https: data:;
       form-action 'self';
-      navigate-to 'none';
     ">`;
 
   // Add some elements at the start of the head to give access to papi, CSP, styles, etc.

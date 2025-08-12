@@ -1,4 +1,5 @@
 import { appService } from '@shared/services/app.service';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
 
@@ -27,23 +28,36 @@ export async function initializeUsersnapApi() {
     collectGeoLocation: 'none',
     useSystemFonts: true,
     useLocalStorage: true,
-    custom: {
-      platform: 'Electron',
-      app: (await appService.getAppInfo()).name,
-      environment: globalThis.isPackaged ? 'production' : 'development',
-    },
   };
 
   const startTime = performance.now();
   const api = await loadSpace(USERSNAP_SPACE_API_KEY);
   await api.init(defaultInitParams);
-
   const endTime = performance.now();
   logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
 
+  let customData = {};
+
+  const setCustomData = async (shouldIncludeLog: boolean) => {
+    const appName = (await appService.getAppInfo()).name;
+    let logContent: string = '';
+    if (shouldIncludeLog) logContent = await sendCommand('platform.getLogFileContent');
+    customData = {
+      App: appName,
+      Environment: globalThis.isPackaged ? 'Production' : 'Development',
+    };
+    if (logContent) customData = { Log: logContent, ...customData };
+  };
+
   api.on('open', (event) => {
+    const shouldIncludeLog = event.apiKey === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY;
+    setCustomData(shouldIncludeLog);
+
     isUsersnapFormOpen = true;
     apiKeyOfOpenForm = event.apiKey;
+  });
+  api.on('beforeSubmit', async (event) => {
+    event.api.setValue('custom', customData);
   });
   api.on('close', () => {
     isUsersnapFormOpen = false;
