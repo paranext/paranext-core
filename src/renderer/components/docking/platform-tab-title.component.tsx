@@ -1,5 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { floatTab } from '@renderer/services/web-view.service-host';
+import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
 import {
@@ -109,6 +109,7 @@ export function PlatformTabTitle({
     const timer = setTimeout(() => {
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderHighlight);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentHighlight);
+      updateTabPartialSync(id, { flashTriggerTime: undefined });
     }, cssHighlightDurationMilliseconds);
 
     return () => {
