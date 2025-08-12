@@ -66,7 +66,7 @@
 
 .dock-top {
   position: unset; // fixes an overflow bug, but it is not clear why it is needed
-  gap: vars.$space--s;
+  gap: unset; // Make the dock-bar touch the content area
 }
 // #endregion ///////////////////////////////////////////////////////////
 
