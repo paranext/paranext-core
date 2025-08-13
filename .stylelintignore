@@ -1,4 +1,4 @@
-# Please keep this file in sync with .eslintignore and .prettierignore
+# Please keep this file in sync with .eslintignore, .prettierignore and .prettierignorerun
 
 # Logs
 logs
@@ -40,13 +40,18 @@ dist
 !.storybook
 
 # directories that have separate eslint project
+extensions
+lib/browserslist-config-detect-electron
+lib/papi-dts
 lib/platform-bible-react
 lib/platform-bible-utils
-lib/papi-dts
-extensions
 
 # generated files
 package-lock.json
 bin
 obj
 storybook-static
+
+# yalc
+.yalc
+yalc.lock
