@@ -21,6 +21,7 @@ node_modules
 # OSX
 .DS_Store
 
+release/app/buildInfo.json
 release/app/dist
 release/build
 .erb/dll
@@ -62,3 +63,6 @@ yalc.lock
 # (no sync with .eslintignore and .stylelintignore)
 ## MDXv2+ (used by Storybook)
 *.mdx
+
+# format only
+.prettierignorerun
