@@ -29,7 +29,6 @@ import {
   getErrorMessage,
   isPlatformError,
   serialize,
-  Unsubscriber,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -54,9 +53,8 @@ import {
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-
-/** The offset in pixels from the top of the window to scroll to show the verse number */
-const VERSE_NUMBER_SCROLL_OFFSET = 80;
+import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
+import { getJsonPathFromVerse } from './usj.util';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -66,84 +64,6 @@ const VERSE_NUMBER_SCROLL_OFFSET = 80;
  * editor loads, use {@link runOnFirstLoad} instead
  */
 const EDITOR_LOAD_DELAY_TIME = 200;
-
-/**
- * Interval time in ms to wait between polling the document to see if the editor has finished
- * loading. Hope to be obsoleted by a way to listen for the editor to finish loading
- */
-const EDITOR_FIRST_LOAD_POLL_TIME = 100;
-/** Number of times to poll before giving up on the editor loading */
-const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 seconds
-/**
- * Run something on the editor's first load. This is a workaround until we can listen for the editor
- * to finish loading.
- *
- * Note: this is specifically designated for first load because it polls the document for the
- * placeholder text. The placeholder text doesn't show up between editor loads
- *
- * @param callback Callback to run when the editor has loaded
- * @returns Unsubscriber function to cancel running the callback on load
- */
-function runOnFirstLoad(callback: () => void): Unsubscriber {
-  let intervalCount = 0;
-  // Poll the document to see if the editor has loaded by looking for the placeholder element
-  // This is a workaround until we can listen for the editor to finish loading
-  const intervalId = setInterval(() => {
-    const placeholderElement = document.querySelector('.editor-placeholder');
-    if (placeholderElement) {
-      intervalCount += 1;
-      if (intervalCount > EDITOR_MAX_POLL_INTERVALS) {
-        logger.warn(
-          `Editor did not load after ${EDITOR_MAX_POLL_INTERVALS * EDITOR_FIRST_LOAD_POLL_TIME} ms. Giving up on runOnLoad`,
-        );
-        clearInterval(intervalId);
-      }
-      return;
-    }
-
-    // If we found the placeholder, run the callback and clear the interval
-    callback();
-    clearInterval(intervalId);
-  }, EDITOR_FIRST_LOAD_POLL_TIME);
-
-  return () => {
-    // Clear the interval when the unsubscriber is called
-    clearInterval(intervalId);
-
-    return true;
-  };
-}
-
-/**
- * Get the JSON path to the first string after the verse marker in a specific verse in a USJ
- * chapter.
- *
- * Can't just get the verse marker itself because the editor doesn't yet support smartly moving the
- * cursor to the right place when you set selection to the verse marker
- *
- * @param usjChapter USJ content to find the verse in
- * @param verseRef Verse location to find the JSON path for
- * @returns The JSON path to the verse in the USJ chapter
- */
-function getJsonPathFromVerse(usjChapter: Usj, verseRef: SerializedVerseRef): string {
-  const usjRW = new UsjReaderWriter(usjChapter);
-
-  // Get the location of the verse marker
-  const verseLocation = usjRW.verseRefToUsjContentLocation(verseRef);
-
-  // Find the first string after the verse marker
-  const firstStringLocationAfterVerseMarker = usjRW.findNextLocationOfMatchingText(
-    verseLocation,
-    '',
-  );
-  if (!firstStringLocationAfterVerseMarker) {
-    logger.warn(
-      `Could not find next content string after verse location ${serialize(verseLocation.jsonPath)} in USJ chapter`,
-    );
-    return verseLocation.jsonPath;
-  }
-  return firstStringLocationAfterVerseMarker.jsonPath;
-}
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
@@ -165,45 +85,6 @@ const defaultTextDirection = 'ltr';
  */
 function deepEqualAcrossIframes(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefined {
-  const verseElement =
-    verseLocation.verseNum < 1
-      ? undefined
-      : (document.querySelector<HTMLElement>(
-          `.editor-container span[data-marker="v"][data-number*="${verseLocation.verseNum}"]`,
-        ) ?? undefined);
-
-  const scrollContainerElement =
-    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
-
-  // Scroll if we find the verse or we're at the start of the chapter
-  if (scrollContainerElement && (verseElement || verseLocation.verseNum <= 1)) {
-    // Get the scroll position all the way up to the scroll container
-    let offsetElement = verseElement;
-    // If we're at the first verse, scroll to the top so we can see intro material
-    let verseOffsetTop = 0;
-    if (verseLocation.verseNum > 1) {
-      // Find the y offset from the scrolling container
-      while (offsetElement && offsetElement !== scrollContainerElement) {
-        verseOffsetTop += offsetElement.offsetTop;
-        offsetElement =
-          offsetElement.offsetParent instanceof HTMLElement
-            ? offsetElement.offsetParent
-            : undefined;
-      }
-      // Scroll a bit above the verse so you can see a bit of context
-      verseOffsetTop -= VERSE_NUMBER_SCROLL_OFFSET;
-    }
-
-    scrollContainerElement?.scrollTo({
-      behavior: 'smooth',
-      top: verseOffsetTop,
-    });
-  }
-
-  return verseElement;
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({

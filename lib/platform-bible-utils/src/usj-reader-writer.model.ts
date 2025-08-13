@@ -62,7 +62,8 @@ export interface IUsjReaderWriter {
    * Given a starting point, find the next location in this USJ data that matches the given text
    *
    * @param start Point where the search for `text` will start
-   * @param text Text to find
+   * @param text Text to find. Note you can use an empty string to find the closest text in or after
+   *   the `start` point.
    * @param maxTextLengthToSearch Maximum length of text to search before stopping (default is 1000)
    * @returns Object containing the USJ node where `text` begins (it might be split across nodes),
    *   offset within that node that indicates where `text` begins, and a JSONPath string that

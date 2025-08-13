@@ -963,15 +963,14 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
     { book: 'MAT', chapterNum: 1, verseNum: 2 },
     0,
   );
-  expect(typeof startingPoint1.node).toBe('object');
-  if (typeof startingPoint1.node !== 'object') return;
+  if (typeof startingPoint1.node !== 'object')
+    throw new Error('Expected startingPoint1 to be an object');
   expect(startingPoint1.jsonPath).toBe('$.content[10].content[0]');
   expect(startingPoint1.offset).toBe(0);
 
   const result1 = usjDoc.findNextLocationOfMatchingText(startingPoint1, 'the father of Manasseh');
   expect(result1).toBeTruthy();
-  expect(typeof result1?.node).toBe('string');
-  if (typeof result1?.node !== 'string') return;
+  if (typeof result1?.node !== 'string') throw new Error('Expected result1 node to be a string');
   expect(result1.node).toBe(
     'Hezekiah became the father of Manasseh. Manasseh became the father of Amon. Amon became the father of Josiah.',
   );
@@ -984,8 +983,7 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
     'Abraham became the father of Isaac.',
   );
   expect(result5).toBeTruthy();
-  expect(typeof result5?.node).toBe('string');
-  if (typeof result5?.node !== 'string') return;
+  if (typeof result5?.node !== 'string') throw new Error('Expected result5 node to be a string');
   expect(result5.node).toBe(
     'Abraham became the father of Isaac. Isaac became the father of Jacob. Jacob became the father of Judah and his brothers.',
   );
@@ -995,8 +993,7 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
   // Get the first text you can find after the requested location (in this case, a verse ref)
   const result6 = usjDoc.findNextLocationOfMatchingText(startingPoint1, '');
   expect(result6).toBeTruthy();
-  expect(typeof result6?.node).toBe('string');
-  if (typeof result6?.node !== 'string') return;
+  if (typeof result6?.node !== 'string') throw new Error('Expected result6 node to be a string');
   expect(result6.node).toBe(
     'Abraham became the father of Isaac. Isaac became the father of Jacob. Jacob became the father of Judah and his brothers.',
   );
@@ -1008,15 +1005,14 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
     { book: 'MAT', chapterNum: 1, verseNum: 6 },
     3,
   );
-  expect(typeof startingPoint2.node).toBe('string');
-  if (typeof startingPoint2.node !== 'string') return;
+  if (typeof startingPoint2.node !== 'string')
+    throw new Error('Expected startingPoint2 to be a string');
   expect(startingPoint2.jsonPath).toBe('$.content[10].content[9]');
   expect(startingPoint2.offset).toBe(3);
 
   const result2 = usjDoc.findNextLocationOfMatchingText(startingPoint2, 'the father of Manasseh');
   expect(result2).toBeTruthy();
-  expect(typeof result2?.node).toBe('string');
-  if (typeof result2?.node !== 'string') return;
+  if (typeof result2?.node !== 'string') throw new Error('Expected result2 node to be a string');
   expect(result2.node).toBe(
     'Hezekiah became the father of Manasseh. Manasseh became the father of Amon. Amon became the father of Josiah.',
   );
@@ -1029,13 +1025,30 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
 
   const result4 = usjDoc.findNextLocationOfMatchingText(startingPoint2, 'Josiah became');
   expect(result4).toBeTruthy();
-  expect(typeof result4?.node).toBe('string');
-  if (typeof result4?.node !== 'string') return;
+  if (typeof result4?.node !== 'string') throw new Error('Expected result4 node to be a string');
   expect(result4.node).toBe(
     'Josiah became the father of Jechoniah and his brothers at the time of the exile to Babylon.',
   );
   expect(result4.jsonPath).toBe('$.content[10].content[21]');
   expect(result4.offset).toBe(0);
+
+  // the search includes the text in the starting point location, so searching for something that
+  // matches the starting location should just return the same location
+  const result7 = usjDoc.findNextLocationOfMatchingText(startingPoint2, '');
+  expect(result7).toBeTruthy();
+  if (typeof result7?.node !== 'string') throw new Error('Expected result7 node to be a string');
+  expect(result7.node).toBe('Jesse became the father of King David. David the king');
+  expect(result7.jsonPath).toBe('$.content[10].content[9]');
+  expect(result7.offset).toBe(3);
+
+  // Match something that is found before and after the start offset, but the match should be the
+  // occurrence after the offset
+  const result8 = usjDoc.findNextLocationOfMatchingText(startingPoint2, 'e');
+  expect(result8).toBeTruthy();
+  if (typeof result8?.node !== 'string') throw new Error('Expected result8 node to be a string');
+  expect(result8.node).toBe('Jesse became the father of King David. David the king');
+  expect(result8.jsonPath).toBe('$.content[10].content[9]');
+  expect(result8.offset).toBe(4);
 });
 
 test('Correct USJ details are found using search', () => {

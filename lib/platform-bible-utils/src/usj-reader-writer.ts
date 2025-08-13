@@ -279,7 +279,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       else {
         nextNode = undefined;
         while (workingStack.length > 0) {
-          const nextLevel = workingStack.pop();
+          // We know the workingStack is not empty, so we can safely pop the last item
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const nextLevel = { ...(workingStack.pop() as StackItem) };
           // We know that `content` exists due to its presence in this data structure
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           if (nextLevel && nextLevel.index + 1 < nextLevel.parent.content!.length) {
@@ -583,15 +585,30 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let lengthScanned = 0;
     let lengthTrimmed = 0;
     let foundStartingAtOffset = -1;
+    const workingStackForStartingPoint = this.convertJsonPathToWorkingStack(startingPoint.jsonPath);
+    const startingPointStackItem =
+      workingStackForStartingPoint[workingStackForStartingPoint.length - 1];
     UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
-      this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
+      workingStackForStartingPoint,
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
-      (node) => {
+      (node, workingStack) => {
         if (typeof node !== 'string') return false;
 
-        lengthScanned += node.length;
-        textScanned = `${textScanned}${node}`;
+        // If the node is the starting point, then we need to start scanning from the offset.
+        // Otherwise look from the start of the string
+        const nodeTextStartIndex =
+          workingStack[workingStack.length - 1] === startingPointStackItem
+            ? startingPoint.offset
+            : 0;
+        // We're skipping the offset characters in the first node, so we need to adjust the final
+        // foundStartingAtOffset to account for that
+        lengthTrimmed += nodeTextStartIndex;
+
+        const nodeTextToSearch = node.substring(nodeTextStartIndex);
+
+        lengthScanned += nodeTextToSearch.length;
+        textScanned = `${textScanned}${nodeTextToSearch}`;
         const textIndex = textScanned.indexOf(text);
         if (textIndex < 0) {
           // Keep the string we're keeping around from going too large
