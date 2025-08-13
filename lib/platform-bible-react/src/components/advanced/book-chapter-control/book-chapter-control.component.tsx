@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { formatScrRef } from 'platform-bible-utils';
 import { KeyboardEvent, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
@@ -22,6 +22,7 @@ import {
   calculateTopMatch,
   fetchEndChapter,
   generateCommandValue,
+  getKeyCharacterType,
 } from './book-chapter-control.utils';
 import { ChapterGrid } from './chapter-grid.component';
 
@@ -53,6 +54,7 @@ export function BookChapterControl({
   const [selectedBookForChaptersView, setSelectedBookForChaptersView] = useState<
     string | undefined
   >(undefined);
+  const [isCommandListHidden, setIsCommandListHidden] = useState(false);
 
   // Reference to the Command component
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -93,17 +95,14 @@ export function BookChapterControl({
   const filteredBooksByType = useMemo(() => {
     if (!inputValue.trim()) return availableBooksByType;
 
-    const inputValueLowerCase = inputValue.toLowerCase();
+    const query = inputValue.toLowerCase().trim();
     const filteredBooks: Record<BookType, string[]> = { OT: [], NT: [], DC: [], Extra: [] };
 
     const bookTypes: BookType[] = ['OT', 'NT', 'DC', 'Extra'];
     bookTypes.forEach((type) => {
       filteredBooks[type] = availableBooksByType[type].filter((bookId) => {
         const englishName = ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase();
-        return (
-          englishName.includes(inputValueLowerCase) ||
-          bookId.toLowerCase().includes(inputValueLowerCase)
-        );
+        return englishName.includes(query) || bookId.toLowerCase().includes(query);
       });
     });
 
@@ -250,11 +249,10 @@ export function BookChapterControl({
 
   // Grid-aware keyboard navigation using Command's controlled value
   const handleCommandKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
+    (event: KeyboardEvent<HTMLDivElement | HTMLButtonElement>) => {
       if (event.ctrlKey) return;
 
-      const isLetter = /^[a-zA-Z]$/.test(event.key);
-      const isDigit = /^[0-9]$/.test(event.key);
+      const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
       // Handle keypresses in chapter viewmode
       if (viewMode === 'chapters') {
@@ -287,21 +285,6 @@ export function BookChapterControl({
           }, 0);
           return;
         }
-      }
-
-      // Handle keypresses in books viewmode
-      if (viewMode === 'books' && (isLetter || isDigit)) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setInputValue((prevValue) => prevValue + event.key);
-
-        setTimeout(() => {
-          if (commandInputRef.current) {
-            commandInputRef.current.focus();
-          }
-        }, 0);
-        return;
       }
 
       // Handle grid navigation for arrow keys in chapter views
@@ -368,6 +351,21 @@ export function BookChapterControl({
     },
     [viewMode, topMatch, handleBackToBooks, selectedBookForChaptersView, commandValue],
   );
+
+  const handleQuickNavButtonKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.shiftKey || event.key === 'Tab' || event.key === ' ') return;
+
+    const { isLetter, isDigit } = getKeyCharacterType(event.key);
+
+    if (isLetter || isDigit) {
+      event.preventDefault();
+
+      setInputValue((prevValue) => prevValue + event.key);
+      commandInputRef.current.focus();
+
+      setIsCommandListHidden(false);
+    }
+  }, []);
 
   // #endregion
 
@@ -445,12 +443,15 @@ export function BookChapterControl({
           variant="outline"
           role="combobox"
           aria-expanded={isCommandOpen}
-          className={cn('tw-h-8 tw-min-w-48', className)}
+          className={cn(
+            'tw-h-8 tw-w-full tw-min-w-16 tw-max-w-48 tw-overflow-hidden tw-px-1',
+            className,
+          )}
         >
-          {currentDisplayValue}
+          <span className="tw-truncate">{currentDisplayValue}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent forceMount className="tw-w-[280px] tw-p-0" align="center">
+      <PopoverContent forceMount className="tw-z-[250] tw-w-[280px] tw-p-0" align="center">
         <Command
           ref={commandRef}
           onKeyDown={handleCommandKeyDown}
@@ -467,6 +468,7 @@ export function BookChapterControl({
                 value={inputValue}
                 onValueChange={setInputValue}
                 onKeyDown={handleInputKeyDown}
+                onFocus={() => setIsCommandListHidden(false)}
               />
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-pe-2">
@@ -475,10 +477,14 @@ export function BookChapterControl({
                     key={title}
                     variant="ghost"
                     size="sm"
-                    onClick={onClick}
+                    onClick={() => {
+                      setIsCommandListHidden(true);
+                      onClick();
+                    }}
                     disabled={disabled}
                     className="tw-h-10 tw-w-4 tw-p-0"
                     title={title}
+                    onKeyDown={handleQuickNavButtonKeyDown}
                   >
                     <Icon />
                   </Button>
@@ -494,7 +500,11 @@ export function BookChapterControl({
                 className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
                 tabIndex={-1}
               >
-                <ArrowLeft className="tw-h-4 tw-w-4" />
+                {direction === 'ltr' ? (
+                  <ArrowLeft className="tw-h-4 tw-w-4" />
+                ) : (
+                  <ArrowRight className="tw-h-4 tw-w-4" />
+                )}
               </Button>
               <span tabIndex={-1} className="tw-text-sm tw-font-medium">
                 {ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] || ''}
@@ -503,96 +513,98 @@ export function BookChapterControl({
           )}
 
           {/** Body */}
-          <CommandList ref={commandListRef}>
-            {/** Book list mode (also used in case of top matches) */}
-            {viewMode === 'books' && (
-              <>
-                {/* Book List - Show when we don't have a top match */}
-                {!topMatch &&
-                  Object.entries(filteredBooksByType).map(([type, books]) => {
-                    if (books.length === 0) return undefined;
+          {!isCommandListHidden && (
+            <CommandList ref={commandListRef}>
+              {/** Book list mode (also used in case of top matches) */}
+              {viewMode === 'books' && (
+                <>
+                  {/* Book List - Show when we don't have a top match */}
+                  {!topMatch &&
+                    Object.entries(filteredBooksByType).map(([type, books]) => {
+                      if (books.length === 0) return undefined;
 
-                    return (
-                      // We are mapping over filteredBooksByType, which uses BookType as key type
-                      // eslint-disable-next-line no-type-assertion/no-type-assertion
-                      <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
-                        {books.map((bookId) => (
-                          <div
-                            key={bookId}
-                            className={cn(
-                              'tw-mx-1 tw-my-1 tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid',
-                              {
-                                'tw-border-s-red-200': type.toLowerCase() === 'ot',
-                                'tw-border-s-purple-200': type.toLowerCase() === 'nt',
-                                'tw-border-s-indigo-200': type.toLowerCase() === 'dc',
-                                'tw-border-s-amber-200': type.toLowerCase() === 'extra',
-                              },
-                            )}
-                          >
-                            <CommandItem
-                              value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
-                              onSelect={() => handleBookSelect(bookId)}
-                              ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
-                              className="tw-ms-1 tw-px-2"
+                      return (
+                        // We are mapping over filteredBooksByType, which uses BookType as key type
+                        // eslint-disable-next-line no-type-assertion/no-type-assertion
+                        <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
+                          {books.map((bookId) => (
+                            <div
+                              key={bookId}
+                              className={cn(
+                                'tw-mx-1 tw-my-1 tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid',
+                                {
+                                  'tw-border-s-red-200': type.toLowerCase() === 'ot',
+                                  'tw-border-s-purple-200': type.toLowerCase() === 'nt',
+                                  'tw-border-s-indigo-200': type.toLowerCase() === 'dc',
+                                  'tw-border-s-amber-200': type.toLowerCase() === 'extra',
+                                },
+                              )}
                             >
-                              {ALL_ENGLISH_BOOK_NAMES[bookId]}
-                            </CommandItem>
-                          </div>
-                        ))}
-                      </CommandGroup>
-                    );
-                  })}
+                              <CommandItem
+                                value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
+                                onSelect={() => handleBookSelect(bookId)}
+                                ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                                className="tw-ms-1 tw-px-2"
+                              >
+                                {ALL_ENGLISH_BOOK_NAMES[bookId]}
+                              </CommandItem>
+                            </div>
+                          ))}
+                        </CommandGroup>
+                      );
+                    })}
 
-                {/* Top match scripture reference */}
-                {topMatch && (
-                  <CommandGroup>
-                    <CommandItem
-                      key="top-match"
-                      value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
-                        topMatch.chapterNum || ''
-                      }:${topMatch.verseNum || ''})}`}
-                      onSelect={handleTopMatchSelect}
-                      className="tw-font-semibold tw-text-primary"
-                    >
-                      {formatScrRef({
-                        book: topMatch.book,
-                        chapterNum: topMatch.chapterNum ?? 1,
-                        verseNum: topMatch.verseNum ?? 1,
-                      })}
-                    </CommandItem>
-                  </CommandGroup>
-                )}
+                  {/* Top match scripture reference */}
+                  {topMatch && (
+                    <CommandGroup>
+                      <CommandItem
+                        key="top-match"
+                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
+                          topMatch.chapterNum || ''
+                        }:${topMatch.verseNum || ''})}`}
+                        onSelect={handleTopMatchSelect}
+                        className="tw-font-semibold tw-text-primary"
+                      >
+                        {formatScrRef({
+                          book: topMatch.book,
+                          chapterNum: topMatch.chapterNum ?? 1,
+                          verseNum: topMatch.verseNum ?? 1,
+                        })}
+                      </CommandItem>
+                    </CommandGroup>
+                  )}
 
-                {/* Chapter Selector - Show when we have a top match */}
-                {topMatch && fetchEndChapter(topMatch.book) > 1 && (
-                  <>
-                    <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                      {ALL_ENGLISH_BOOK_NAMES[topMatch.book]}
-                    </div>
-                    <ChapterGrid
-                      bookId={topMatch.book}
-                      scrRef={scrRef}
-                      onChapterSelect={handleChapterSelect}
-                      setChapterRef={setChapterRef}
-                      isChapterDimmed={doesChapterMatch}
-                      className="tw-px-4 tw-pb-4"
-                    />
-                  </>
-                )}
-              </>
-            )}
+                  {/* Chapter Selector - Show when we have a top match */}
+                  {topMatch && fetchEndChapter(topMatch.book) > 1 && (
+                    <>
+                      <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                        {ALL_ENGLISH_BOOK_NAMES[topMatch.book]}
+                      </div>
+                      <ChapterGrid
+                        bookId={topMatch.book}
+                        scrRef={scrRef}
+                        onChapterSelect={handleChapterSelect}
+                        setChapterRef={setChapterRef}
+                        isChapterDimmed={doesChapterMatch}
+                        className="tw-px-4 tw-pb-4"
+                      />
+                    </>
+                  )}
+                </>
+              )}
 
-            {/* Basic chapter view mode */}
-            {viewMode === 'chapters' && selectedBookForChaptersView && (
-              <ChapterGrid
-                bookId={selectedBookForChaptersView}
-                scrRef={scrRef}
-                onChapterSelect={handleChapterSelect}
-                setChapterRef={setChapterRef}
-                className="tw-p-4"
-              />
-            )}
-          </CommandList>
+              {/* Basic chapter view mode */}
+              {viewMode === 'chapters' && selectedBookForChaptersView && (
+                <ChapterGrid
+                  bookId={selectedBookForChaptersView}
+                  scrRef={scrRef}
+                  onChapterSelect={handleChapterSelect}
+                  setChapterRef={setChapterRef}
+                  className="tw-p-4"
+                />
+              )}
+            </CommandList>
+          )}
         </Command>
       </PopoverContent>
     </Popover>
