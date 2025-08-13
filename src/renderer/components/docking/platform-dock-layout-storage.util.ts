@@ -173,7 +173,9 @@ export function getTabInfoById(
 
   if (!isTab(targetTab))
     throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a tab`,
+      `platform-dock-layout.component ${methodName} error: target tab with id '${
+        targetTab.id
+      }' is not a tab`,
     );
 
   // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
@@ -271,7 +273,11 @@ function getAdjacentTabInfoInDirectionWithinTabGroup(
   // investigate if actually ends up happening
   if (sourceTabIndex === -1)
     throw new Error(
-      `getTabInfoByDirectionFromTab: Tab with ID '${sourceTabId}' is not in the identified parent tab group with id ${sourceTabGroup.id}. This should not happen.`,
+      `getAdjacentTabInfoInDirectionWithinTabGroup: Tab with ID '${
+        sourceTabId
+      }' is not in the identified parent tab group with id ${
+        sourceTabGroup.id
+      }. This should not happen.`,
     );
 
   // Figure out the index of the tab we want to go to
@@ -579,7 +585,9 @@ function getWebViewTabInfoById(
 
   if (targetTabInfo.tabType !== TAB_TYPE_WEBVIEW)
     throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTabInfo.id}' is not a WebView tab`,
+      `platform-dock-layout.component ${methodName} error: target tab with id '${
+        targetTabInfo.id
+      }' is not a WebView tab`,
     );
 
   // Type assert the webview data in the web view tab
@@ -927,7 +935,9 @@ export function addTabToDock(
         didFocusTab = true;
       else
         throw new LogError(
-          `Replacing tab failed: target tab with id ${updatedLayout.targetTabId} not found when attempting to replace it with tab ${tab.id}`,
+          `Replacing tab failed: target tab with id ${
+            updatedLayout.targetTabId
+          } not found when attempting to replace it with tab ${tab.id}`,
         );
 
       break;
@@ -1095,7 +1105,9 @@ function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
       webViewIframe.focus();
       // Not sure in what contexts it wouldn't have a contentWindow, so just warn for now
       logger.warn(
-        `setDocumentFocusToTab: WebView with id '${tabId}' does not have a contentWindow for some reason. Focusing the iframe instead. Please investigate`,
+        `setDocumentFocusToTab: WebView with id '${
+          tabId
+        }' does not have a contentWindow for some reason. Focusing the iframe instead. Please investigate`,
       );
     } else webViewIframe.contentWindow.focus();
     didFocusWebView = true;
@@ -1132,7 +1144,9 @@ function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
     }
     // If it is not an HTMLElement, just log it
     logger.warn(
-      `setDocumentFocusToTab: lastFocusedElement for tab '${tabId}' exists but does not have 'focus' for some reason. Cannot focus it. Please investigate`,
+      `setDocumentFocusToTab: lastFocusedElement for tab '${
+        tabId
+      }' exists but does not have 'focus' for some reason. Cannot focus it. Please investigate`,
     );
   }
 
