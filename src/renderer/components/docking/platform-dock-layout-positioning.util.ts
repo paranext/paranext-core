@@ -23,6 +23,7 @@ const DEFAULT_PANEL_DIRECTION: PanelDirection = 'right';
 const DOCK_FLOAT_OFFSET = 28;
 // NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
 // Platform.
+// Appears in DOM as `dock-style-platform-bible-card` and `dock-style-platform-bible`.
 export const TAB_GROUP = 'card platform-bible';
 
 export const GROUPS: { [key: string]: TabGroup } = {
