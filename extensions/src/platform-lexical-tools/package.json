@@ -1,7 +1,7 @@
 {
   "name": "platform-lexical-tools",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.5.0-alpha.1",
   "main": "src/main.js",
   "types": "src/types/platform-lexical-tools.d.ts",
   "author": "Paranext",
