@@ -171,7 +171,7 @@ globalThis.webViewComponent = function Dictionary({
         <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
           <DictionaryEntryDisplay
             scriptureReferenceToFilterBy={scrRef}
-            isDrawer={!isWideScreen}
+            isDrawer={false}
             dictionaryEntry={allEntriesByScrRef[0]}
             onSelectOccurrence={onSelectOccurrence}
             onClickScrollToTop={scrollToTop}
