@@ -19,7 +19,6 @@ import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
-  useIsWideScreen,
 } from '../utils/dictionary.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
@@ -40,7 +39,6 @@ globalThis.webViewComponent = function Dictionary({
   const dictionaryEntryRef = useRef<HTMLDivElement>(null);
 
   const lexicalService = useDataProvider('platformLexicalTools.lexicalReferenceService');
-  const isWideScreen = useIsWideScreen();
 
   const scrollToTop = () => {
     dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -171,7 +169,7 @@ globalThis.webViewComponent = function Dictionary({
         <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
           <DictionaryEntryDisplay
             scriptureReferenceToFilterBy={scrRef}
-            isDrawer={!isWideScreen}
+            isDrawer={false}
             dictionaryEntry={allEntriesByScrRef[0]}
             onSelectOccurrence={onSelectOccurrence}
             onClickScrollToTop={scrollToTop}
