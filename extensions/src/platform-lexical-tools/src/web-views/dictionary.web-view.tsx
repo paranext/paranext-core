@@ -40,7 +40,6 @@ globalThis.webViewComponent = function Dictionary({
   const dictionaryEntryRef = useRef<HTMLDivElement>(null);
 
   const lexicalService = useDataProvider('platformLexicalTools.lexicalReferenceService');
-  const isWideScreen = useIsWideScreen();
 
   const scrollToTop = () => {
     dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
