@@ -77,12 +77,16 @@ export function TabToolbar({
           />
         </div>
       )}
-      <div className="tw-flex tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
-        {startAreaChildren}
-      </div>
-      <div className="tw-flex tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
-        {centerAreaChildren}
-      </div>
+      {startAreaChildren && (
+        <div className="tw-flex tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
+          {startAreaChildren}
+        </div>
+      )}
+      {centerAreaChildren && (
+        <div className="tw-flex tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
+          {centerAreaChildren}
+        </div>
+      )}
       <div className="tw-flex tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
         {tabViewMenuData && (
           // div wrapper gets padding instead of the button
