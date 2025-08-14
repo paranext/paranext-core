@@ -6,8 +6,11 @@ import { Mutex as AsyncMutex } from 'async-mutex';
 
 /** This class provides a convenient way for one task to wait on a variable that another task sets. */
 export declare class AsyncVariable<T> {
+	private static verboseLoggingEnabled;
 	private readonly variableName;
 	private readonly promiseToValue;
+	private timeoutId;
+	private timeoutOccurred;
 	private resolver;
 	private rejecter;
 	/**
@@ -32,6 +35,18 @@ export declare class AsyncVariable<T> {
 	 * @returns Whether the variable was already resolved or rejected
 	 */
 	get hasSettled(): boolean;
+	/**
+	 * Can use to determine if a rejection occurred due to a timeout
+	 *
+	 * @returns Whether the variable timed out while waiting for a value to resolve
+	 */
+	get hasTimedOut(): boolean;
+	/**
+	 * Allows enabling more verbose logging when async variables resolve and reject
+	 *
+	 * @param enabled Whether to enable verbose logging
+	 */
+	static setVerboseLogging(enabled: boolean): void;
 	/**
 	 * Resolve this variable's promise to the given value
 	 *

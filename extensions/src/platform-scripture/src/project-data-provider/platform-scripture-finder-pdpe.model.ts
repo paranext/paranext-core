@@ -4,6 +4,7 @@ import { IProjectDataProviderEngine } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import {
+  AsyncVariable,
   escapeStringRegexp,
   getErrorMessage,
   newGuid,
@@ -106,14 +107,21 @@ export class ScriptureFinderProjectDataProviderEngine
     const job = this.#jobs.get(jobId);
     if (!job) throw new Error(`Job with ID ${jobId} not found`);
     job.stopRequested = true;
+    const stopFindAsyncVariable = new AsyncVariable<void>('Stop find', timeoutMs);
+    // Wait for the find job to stop in an IIFE, resolving the async variable when done
+    (async () => {
+      await job.promise;
+      stopFindAsyncVariable.resolveToValue(undefined);
+    })();
+
     try {
-      const timeoutPromise = new Promise((_resolve, reject) => {
-        setTimeout(() => reject(new Error('Timeout')), timeoutMs);
-      });
-      await Promise.race([job.promise, timeoutPromise]);
+      // Wait for the find job to stop or the timeout to be hit, whichever comes first
+      await stopFindAsyncVariable.promise;
       return true;
     } catch (error) {
-      logger.warn(`Find job ${jobId} did not stop gracefully within 1s: ${getErrorMessage(error)}`);
+      logger.warn(
+        `Find job ${jobId} did not stop gracefully within ${timeoutMs}ms: ${getErrorMessage(error)}`,
+      );
       return false;
     }
   }

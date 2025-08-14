@@ -1,7 +1,10 @@
 /** This class provides a convenient way for one task to wait on a variable that another task sets. */
 export class AsyncVariable<T> {
+  private static verboseLoggingEnabled: boolean = false;
   private readonly variableName: string;
   private readonly promiseToValue: Promise<T>;
+  private timeoutId: ReturnType<typeof setTimeout> | undefined;
+  private timeoutOccurred: boolean;
   private resolver: ((value: T) => void) | undefined;
   private rejecter: ((reason: string | undefined) => void) | undefined;
 
@@ -15,14 +18,16 @@ export class AsyncVariable<T> {
    */
   constructor(variableName: string, rejectIfNotSettledWithinMS: number = 10000) {
     this.variableName = variableName;
+    this.timeoutOccurred = false;
     this.promiseToValue = new Promise<T>((resolve, reject) => {
       this.resolver = resolve;
       this.rejecter = reject;
     });
     if (rejectIfNotSettledWithinMS > 0) {
-      setTimeout(() => {
+      this.timeoutId = setTimeout(() => {
         if (this.rejecter) {
           this.rejecter(`Timeout reached when waiting for ${this.variableName} to settle`);
+          this.timeoutOccurred = true;
           this.complete();
         }
       }, rejectIfNotSettledWithinMS);
@@ -50,6 +55,24 @@ export class AsyncVariable<T> {
   }
 
   /**
+   * Can use to determine if a rejection occurred due to a timeout
+   *
+   * @returns Whether the variable timed out while waiting for a value to resolve
+   */
+  get hasTimedOut(): boolean {
+    return this.timeoutOccurred;
+  }
+
+  /**
+   * Allows enabling more verbose logging when async variables resolve and reject
+   *
+   * @param enabled Whether to enable verbose logging
+   */
+  static setVerboseLogging(enabled: boolean): void {
+    this.verboseLoggingEnabled = enabled;
+  }
+
+  /**
    * Resolve this variable's promise to the given value
    *
    * @param value This variable's promise will resolve to this value
@@ -58,7 +81,8 @@ export class AsyncVariable<T> {
    */
   resolveToValue(value: T, throwIfAlreadySettled: boolean = false): void {
     if (this.resolver) {
-      console.debug(`${this.variableName} is being resolved now`);
+      if (AsyncVariable.verboseLoggingEnabled)
+        console.debug(`${this.variableName} is being resolved now`);
       this.resolver(value);
       this.complete();
     } else {
@@ -76,7 +100,8 @@ export class AsyncVariable<T> {
    */
   rejectWithReason(reason: string, throwIfAlreadySettled: boolean = false): void {
     if (this.rejecter) {
-      console.debug(`${this.variableName} is being rejected now`);
+      if (AsyncVariable.verboseLoggingEnabled)
+        console.debug(`${this.variableName} is being rejected now with reason: ${reason}`);
       this.rejecter(reason);
       this.complete();
     } else {
@@ -89,6 +114,10 @@ export class AsyncVariable<T> {
   private complete(): void {
     this.resolver = undefined;
     this.rejecter = undefined;
+    if (this.timeoutId !== undefined) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
+    }
     Object.freeze(this);
   }
 }

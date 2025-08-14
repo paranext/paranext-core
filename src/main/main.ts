@@ -293,8 +293,8 @@ async function main() {
   async function installExtensions() {
     const installer = await import('electron-devtools-installer');
     const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
-    const extensions = [installer.REACT_DEVELOPER_TOOLS];
-    return installer.default(extensions, forceDownload).catch(logger.info);
+    // Not installing React dev tools since they don't work (as of Aug 2025) and may leak memory
+    return installer.default([], forceDownload).catch(logger.info);
   }
 
   function getAssetPath(...paths: string[]): string {
