@@ -145,7 +145,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm exec electron-builder -- --publish never --win
+          npx electron-builder --publish never --win
           mkdir release\\staged
           move release\\build\\*Setup*.exe release\\staged
 
@@ -175,7 +175,7 @@ jobs:
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm exec electron-builder -- --publish never --mac
+          npx electron-builder --publish never --mac
           mkdir release/staged
           mv release/build/*.dmg release/staged
 
@@ -189,7 +189,7 @@ jobs:
           # This is required to upload automatically to the snap store
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
         run: |
-          npm exec electron-builder -- --publish never --linux
+          npx electron-builder --publish never --linux
           snapcraft upload --release=edge ./release/build/*.snap
           mkdir release/staged
           mv release/build/*.snap release/staged
