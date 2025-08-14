@@ -2843,6 +2843,12 @@ declare module 'shared/models/docking-framework.model' {
      */
     removeTabFromDock: (tabId: string) => boolean;
     /**
+     * Float a tab in the layout
+     *
+     * @param tabId ID of the tab to float
+     */
+    floatTabById: (tabId: string) => void;
+    /**
      * Gets the WebView definition for the web view with the specified ID
      *
      * @param webViewId The ID of the WebView whose web view definition to get
