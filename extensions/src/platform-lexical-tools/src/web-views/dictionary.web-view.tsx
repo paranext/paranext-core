@@ -19,7 +19,6 @@ import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
-  useIsWideScreen,
 } from '../utils/dictionary.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
