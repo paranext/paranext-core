@@ -64,7 +64,7 @@ global.webViewComponent = function FindWebView({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useWebViewState<string>('findSearchTerm ', '');
   const [submittedSearchTerm, setSubmittedSearchTerm] = useState<string | undefined>(undefined);
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
   const [submittedScope, setSubmittedScope] = useState<Scope | undefined>();

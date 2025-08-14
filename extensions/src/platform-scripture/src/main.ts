@@ -159,14 +159,32 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
   const options: FindWebViewOptions = {
     projectId,
     editorScrollGroupId,
-    existingId: '?',
     bringToFront: true,
   };
-  const findWebViewId = await papi.webViews.openWebView(
+
+  // First tries to open an existing find web view
+  let findWebViewId = await papi.webViews.openWebView(
     findWebViewType,
     { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-    options,
+    { ...options, existingId: '?', createNewIfNotFound: false },
   );
+
+  // If found an existing web view, then reloads it only if the project definition is different
+  if (findWebViewId) {
+    const existingFindWebViewDefinition =
+      await papi.webViews.getOpenWebViewDefinition(findWebViewId);
+    // If the existing web view has a project id different to the current one, then prompts a reload
+    if (existingFindWebViewDefinition?.projectId !== projectId) {
+      await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
+    }
+  } else {
+    // Otherwise, opens a new web view
+    findWebViewId = await papi.webViews.openWebView(
+      findWebViewType,
+      { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
+      options,
+    );
+  }
 
   return findWebViewId;
 }
