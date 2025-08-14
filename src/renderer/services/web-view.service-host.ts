@@ -1226,10 +1226,30 @@ async function openOrReloadWebView(
 
                 renderRoot();
 
-                window.addEventListener('unload', () => {
-                  root.unmount();
-                  unsubscribeUpdateWebView();
-                });
+                // React warns if you synchronously unmount a root while another render is in
+                // progress. The unload event can fire while React is still in the middle of
+                // processing an update (e.g., due to a late arriving onDidUpdateWebView event).
+                // Defer the unmount to the next macrotask so React can finish in-flight rendering.
+                let didScheduleUnmount = false;
+                function scheduleDeferredUnmount() {
+                  if (didScheduleUnmount) return;
+                  didScheduleUnmount = true;
+                  setTimeout(() => {
+                    try {
+                      root.unmount();
+                    } catch (e) {
+                      // Ignore: iframe is likely already being torn down
+                    }
+                    try {
+                      unsubscribeUpdateWebView();
+                    } catch (e) {
+                      // Ignore: the event listener may have already been removed, or the WebView may
+                      // be in the process of being destroyed, making further cleanup unnecessary.
+                    }
+                  }, 0);
+                }
+
+                window.addEventListener('unload', scheduleDeferredUnmount);
               }
 
               if (document.readyState === 'loading')
