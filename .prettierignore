@@ -1,4 +1,5 @@
 # Please keep this file in sync with .eslintignore and .stylelintignore
+# This file is used when running prettier ad-hoc such as in VS Code FormatOnSave
 
 # Logs
 logs
@@ -20,6 +21,7 @@ node_modules
 # OSX
 .DS_Store
 
+release/app/buildInfo.json
 release/app/dist
 release/build
 .erb/dll
@@ -40,10 +42,12 @@ dist
 !.storybook
 
 # directories that have separate eslint project
-lib/platform-bible-react
-lib/platform-bible-utils
-lib/papi-dts
-extensions
+# (excluded here but not in .eslintignore and .stylelintignore so VS Code FormatOnSave works)
+# extensions
+# lib/browserslist-config-detect-electron
+# lib/papi-dts
+# lib/platform-bible-react
+# lib/platform-bible-utils
 
 # generated files
 package-lock.json
@@ -51,7 +55,14 @@ bin
 obj
 storybook-static
 
+# yalc
+.yalc
+yalc.lock
+
 # Formats not supported by Prettier
 # (no sync with .eslintignore and .stylelintignore)
 ## MDXv2+ (used by Storybook)
 *.mdx
+
+# format only
+.prettierignorerun

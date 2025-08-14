@@ -1,4 +1,4 @@
-# Please keep this file in sync with .prettierignore and .stylelintignore
+# Please keep this file in sync with .prettierignore, .prettierignorerun and .stylelintignore
 
 # Logs
 logs
@@ -20,6 +20,7 @@ node_modules
 # OSX
 .DS_Store
 
+release/app/buildInfo.json
 release/app/dist
 release/build
 .erb/dll
@@ -40,14 +41,18 @@ dist
 !.storybook
 
 # directories that have separate eslint project
+extensions
+lib/browserslist-config-detect-electron
+lib/papi-dts
 lib/platform-bible-react
 lib/platform-bible-utils
-lib/papi-dts
-lib/browserslist-config-detect-electron
-extensions
 
 # generated files
 package-lock.json
 bin
 obj
 storybook-static
+
+# yalc
+.yalc
+yalc.lock
