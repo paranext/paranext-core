@@ -190,21 +190,34 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   const timeoutMs = getTimeoutMsForRequestType(requestType);
   // If the request takes longer than the configured timeout, throw an error
   if (timeoutMs > 0) {
-    await Promise.race([
-      (async () => {
-        try {
-          response = fixupResponse(await jsonRpc.request(requestType, args));
-        } catch (e) {
-          response = newPlatformError(e);
-        }
-      })(),
-      new Promise<void>((resolve) => {
-        setTimeout(() => {
-          timeoutOccurred = true;
-          resolve();
-        }, timeoutMs);
-      }),
-    ]);
+    let timeoutId: NodeJS.Timeout | undefined;
+
+    const promise1 = (async () => {
+      try {
+        response = fixupResponse(await jsonRpc.request(requestType, args));
+      } catch (e) {
+        response = newPlatformError(e);
+      }
+    })();
+
+    const promise2 = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(() => {
+        timeoutOccurred = true;
+        resolve();
+      }, timeoutMs);
+    });
+
+    try {
+      await Promise.race([promise1, promise2]);
+    } finally {
+      // If a timeout occurred, prevent the first promise from leaking memory when it finishes
+      if (timeoutOccurred)
+        promise1.then(() => {
+          response = undefined;
+        });
+      // Clean up the timeout regardless of which promise resolved first
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    }
   }
   // There is no timeout so we can run the request normally
   else {

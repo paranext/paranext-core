@@ -216,6 +216,74 @@ export function WebView({
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WEB_VIEW_CONTENT_TYPE.URL;
 
+  // Clean up iframe content on unmount to prevent memory leaks
+  // When React removes the WebView component from the DOM, the iframe's srcDoc
+  // content can remain in memory. This effect ensures that we explicitly clear
+  // the content when the component unmounts to prevent memory leaks.
+  useEffect(() => {
+    // Capture the current iframe reference to use in cleanup
+    const currentIframe = iframeRef.current;
+
+    return () => {
+      // Clear the iframe content when the component unmounts to prevent memory leaks
+      if (!currentIframe) {
+        logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
+        return;
+      }
+
+      // First, try to cleanly unmount any React root in the iframe
+      try {
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const contentWindowWithCleanup = currentIframe.contentWindow as Window & {
+          webViewCleanup?: {
+            unmountRoot: () => void;
+          };
+        };
+        if (contentWindowWithCleanup && contentWindowWithCleanup.webViewCleanup) {
+          // Use setTimeout to avoid synchronous unmount during React rendering
+          setTimeout(() => {
+            try {
+              contentWindowWithCleanup.webViewCleanup?.unmountRoot();
+              contentWindowWithCleanup.webViewCleanup = undefined;
+            } catch (error) {
+              logger.warn(`Failed WebView ${id} root unmount in iframe: ${getErrorMessage(error)}`);
+            }
+          }, 0);
+        }
+      } catch (error) {
+        logger.warn(`Unable to work with currentIframe.contentWindow: ${getErrorMessage(error)}`);
+      }
+
+      // Aggressively clear iframe content and attempt to force memory cleanup
+      try {
+        // Clear the document content
+        if (currentIframe.contentDocument)
+          currentIframe.contentDocument.documentElement.innerHTML = '';
+
+        // Navigate to about:blank to clear any remaining references
+        if (currentIframe.contentWindow)
+          currentIframe.contentWindow.location.replace('about:blank');
+      } catch (error) {
+        logger.warn(`Unable to clear content from currentIframe: ${getErrorMessage(error)}`);
+      }
+
+      // Clear src/srcDoc as fallback
+      if (!shouldUseSrc) currentIframe.srcdoc = '';
+      else currentIframe.src = 'about:blank';
+
+      // Force removal from DOM tree after a short delay to ensure cleanup completes
+      setTimeout(() => {
+        try {
+          if (currentIframe.parentNode) {
+            currentIframe.parentNode.removeChild(currentIframe);
+          }
+        } catch (error) {
+          // Element might already be removed
+        }
+      }, 10);
+    };
+  }, [id, shouldUseSrc]);
+
   // TODO: We may be catching iframe exceptions moving forward by posting messages from the child
   // iframe to the parent, so it might be good to figure out how it works to add and remove a
   // handler of some sort. Maybe the post message handler can more easily handle this kind of

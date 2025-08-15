@@ -61,6 +61,9 @@ type ReactJsxRuntimeType = typeof ReactJsxRuntime;
 type ReactDOMClientType = typeof ReactDOMClient;
 type SillsdevScriptureType = typeof SillsdevScripture;
 type WebViewRequire = typeof webViewRequire;
+type WebViewCleanup = {
+  unmountRoot: () => void;
+};
 
 /* eslint-disable vars-on-top, no-var */
 declare global {
@@ -77,6 +80,8 @@ declare global {
   var getWebViewStateById: <T>(id: string, stateKey: string, defaultValue: T) => T;
   var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: T) => void;
   var resetWebViewStateById: (id: string, stateKey: string) => void;
+  // Web view cleanup functions for iframe content
+  var webViewCleanup: WebViewCleanup;
 }
 /* eslint-enable */
 
