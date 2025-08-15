@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install and run Apple Silicon (arm64) or Intel (x86_64) app from app-macos*.zip file
+# Script to install and run universal app from app-macos*.zip file
 # Extract, install, codesign, and run the application
 # Supports both Paratext 10 Studio and Platform.Bible apps
 #
@@ -9,9 +9,6 @@
 #   ./run-unsigned-build.macos.sh /path/to/folder    # Search for app-macos*.zip in folder
 #   ./run-unsigned-build.macos.sh /path/to/file.zip  # Use specific zip file
 #
-# Expected pathnames:
-# - For Apple Silicon (arm64) architecture: DMG files should include "arm64" in their names (e.g., app-arm64.dmg).
-# - For Intel (x86_64) architecture: DMG files should exclude "arm64" in their names (e.g., app.dmg).
 
 set -e  # Exit on any error
 
@@ -22,10 +19,6 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "        If directory: searches for most recent app-macos*.zip"
     echo "        If file: uses that specific zip file"
     echo "        If not specified: defaults to ~/Downloads"
-    echo ""
-    echo "Expected pathnames:"
-    echo "  - For Apple Silicon (arm64) architecture: DMG files should include 'arm64' in their names (e.g., app-arm64.dmg)."
-    echo "  - For Intel (x86_64) architecture: DMG files should exclude 'arm64' in their names (e.g., app.dmg)."
     echo ""
     echo "Optional environment variables (set to 0 to disable, default is 1):"
     echo "  SHOW_LOGS_IN_FINDER   Show logs in Finder after install (default: 1)"
@@ -83,47 +76,26 @@ echo "Created temporary directory: $TEMP_DIR"
 echo "Extracting zip file..."
 unzip -q "$ZIP_FILE" -d "$TEMP_DIR"
 
-# Detect system architecture
-ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-  echo "Detected Apple Silicon (arm64). Looking for arm64 DMG..."
-  DMG_FILE=$(find "$TEMP_DIR" -name "*arm64*.dmg" -type f | head -1)
-  if [ -z "$DMG_FILE" ]; then
-    echo "Error: No arm64 DMG file found in the zip!"
+# Detect DMG (universal or arch-specific)
+DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" -type f | head -1)
+
+if [ -z "$DMG_FILE" ]; then
+    echo "Error: No DMG found in $TEMP_DIR"
     rm -rf "$TEMP_DIR"
     exit 1
-  fi
-else
-  echo "Detected Intel (x86_64). Looking for Intel (non-arm64) DMG..."
-  DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" ! -name "*arm64*.dmg" -type f | head -1)
-  if [ -z "$DMG_FILE" ]; then
-    echo "Error: No Intel (non-arm64 DMG) file found in the zip!"
-    rm -rf "$TEMP_DIR"
-    exit 1
-  fi
 fi
 
-echo "Found DMG: $(basename "$DMG_FILE")"
+echo "Using DMG: $DMG_FILE"
 
-# Mount the DMG
-echo "Mounting DMG..."
+# Mount DMG
 MOUNT_OUTPUT=$(hdiutil attach "$DMG_FILE" -nobrowse)
 MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep '/Volumes/' | sed 's/.*\t//')
-if [ -z "$MOUNT_POINT" ]; then
-    echo "Error: Failed to mount DMG file"
-    echo "hdiutil output: $MOUNT_OUTPUT"
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
-
 echo "Mounted at: $MOUNT_POINT"
 
-# Find the .app in the mounted volume
 APP_PATH=$(find "$MOUNT_POINT" -name "*.app" -type d | head -1)
 if [ -z "$APP_PATH" ]; then
-    echo "Error: No .app found in the mounted DMG"
+    echo "Error: No .app found in DMG"
     hdiutil detach "$MOUNT_POINT" -quiet
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
