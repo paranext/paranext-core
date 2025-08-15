@@ -2,7 +2,7 @@
 /.github @lyonsil @tjcouch-sil @irahopkinson
 
 # all of extensions but src folder
-/extensions @tjcouch-sil @lyonsil
+/extensions @tjcouch-sil @lyonsil @irahopkinson
 /extensions/src
 
 # extension apis
@@ -14,7 +14,7 @@
 
 # packages
 /lib/browserslist-config-detect-electron @tjcouch-sil
-/lib/papi-dts @tjcouch-sil @lyonsil
+/lib/papi-dts @tjcouch-sil @lyonsil @irahopkinson
 # not papi.d.ts
 /lib/papi-dts/papi.d.ts
 /lib/platform-bible-react @jolierabideau @rolfheij-sil @tjcouch-sil @lyonsil @irahopkinson
