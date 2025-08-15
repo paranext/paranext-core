@@ -276,7 +276,7 @@ export function PlatformBibleToolbar() {
           )}
         </Tooltip>
       </TooltipProvider>
-      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
+      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-w-96" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
         scrollGroupId={scrollGroupId}

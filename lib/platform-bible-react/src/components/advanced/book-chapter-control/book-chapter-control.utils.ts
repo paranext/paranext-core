@@ -33,6 +33,12 @@ export const SEARCH_QUERY_FORMATS = [
   SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE,
 ];
 
+export function getKeyCharacterType(key: string) {
+  const isLetter = /^[a-zA-Z]$/.test(key);
+  const isDigit = /^[0-9]$/.test(key);
+  return { isLetter, isDigit };
+}
+
 export function fetchEndChapter(bookId: string) {
   // getChaptersForBook returns -1 if not found in scrBookData
   // scrBookData only includes OT and NT, so all DC will return -1
@@ -56,41 +62,46 @@ export function calculateTopMatch(
 
         let validBookId: string | undefined;
 
-        // Match for exact full book name
-        const getBookIdFromEnglishName = (bookName: string): string | undefined => {
-          return Object.keys(ALL_ENGLISH_BOOK_NAMES).find(
-            (bookId) => ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase() === bookName.toLowerCase(),
-          );
-        };
+        // Match for partial book name or id
+        const bookLowerCase = book.toLowerCase();
 
-        const matchingBookIdForFullName = getBookIdFromEnglishName(book);
-        if (matchingBookIdForFullName && availableBooks.includes(matchingBookIdForFullName)) {
-          validBookId = matchingBookIdForFullName;
+        const allPotentialMatches = availableBooks.filter((bookId) => {
+          const bookEnglishName = ALL_ENGLISH_BOOK_NAMES[bookId];
+          return (
+            bookEnglishName.toLowerCase().includes(bookLowerCase) ||
+            bookId.toLowerCase().includes(bookLowerCase)
+          );
+        });
+
+        // Only create a topMatch if exactly one book could match
+        if (allPotentialMatches.length === 1) {
+          [validBookId] = allPotentialMatches;
         }
 
         // Match for exact book id
-        if (!validBookId && Canon.isBookIdValid(book)) {
+        // This is only performed when a chapter number is provided, to prevent edge cases where
+        // a search for e.g. `jud` would generate a top match for 'Jude', even though 'Judges' would
+        // also be a valid match
+        if (!validBookId && chapter && Canon.isBookIdValid(book)) {
           const bookUpperCase = book.toUpperCase();
           if (availableBooks.includes(bookUpperCase)) {
             validBookId = bookUpperCase;
           }
         }
 
-        // Match for partial book name or id
-        if (!validBookId) {
-          const bookLowerCase = book.toLowerCase();
-
-          const allPotentialMatches = availableBooks.filter((bookId) => {
-            const bookEnglishName = ALL_ENGLISH_BOOK_NAMES[bookId];
-            return (
-              bookEnglishName.toLowerCase().includes(bookLowerCase) ||
-              bookId.toLowerCase().includes(bookLowerCase)
+        // Match for exact full book name
+        // This is only performed when a chapter number is provided, to prevent edge cases where
+        // a search for e.g. `john` only matches `John` but not `1 John`, `2 John` and `3 John`
+        if (!validBookId && chapter) {
+          const getBookIdFromEnglishName = (bookName: string): string | undefined => {
+            return Object.keys(ALL_ENGLISH_BOOK_NAMES).find(
+              (bookId) => ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase() === bookName.toLowerCase(),
             );
-          });
+          };
 
-          // Only create a topMatch if exactly one book could match
-          if (allPotentialMatches.length === 1) {
-            [validBookId] = allPotentialMatches;
+          const matchingBookIdForFullName = getBookIdFromEnglishName(book);
+          if (matchingBookIdForFullName && availableBooks.includes(matchingBookIdForFullName)) {
+            validBookId = matchingBookIdForFullName;
           }
         }
 
