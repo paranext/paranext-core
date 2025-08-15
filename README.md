@@ -209,11 +209,31 @@ These steps will walk you through releasing a version on GitHub and bumping the 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
    - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+   - `uploadReleaseAssets`: whether to upload the release assets to [Amazon S3](https://aws.amazon.com/s3/). In order to successfully upload the release assets to S3, you need to [set up some secrets and variables](#configure-uploading-release-assets-to-amazon-s3).
 
 3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
 4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
 5. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
 6. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
+
+### Configure uploading release assets to Amazon S3
+
+If you want to upload your release assets to [Amazon S3](https://aws.amazon.com/s3/) when running the [Publish](#publishing) workflow, you need to set up an [AWS access key](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) and then configure some [repository secrets](https://github.com/paranext/paranext/settings/secrets/actions) and [repository variables](https://github.com/paranext/paranext/settings/variables/actions) in GitHub:
+
+1. Create an [AWS access key](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) for a user with the following permissions:
+
+   - `s3:*` on the S3 bucket where the release assets should be uploaded and the files in the directory in which to put the release assets (see below for more information). There are likely narrower permissions you can set and still successfully upload the release assets.
+
+2. Set up the following [repository secrets and variables](https://github.com/paranext/paranext/settings/secrets/actions)
+
+- Repository secrets:
+  - `AWS_S3_RELEASE_ACCESS_KEY_ID`: The access key ID for authenticating with AWS
+  - `AWS_S3_RELEASE_SECRET_ACCESS_KEY`: The secret access key for authenticating with AWS
+- Repository variables:
+  - `AWS_S3_RELEASE_BUCKET_NAME`: The name of the S3 bucket where the release assets should be uploaded
+  - `AWS_S3_RELEASE_DIRECTORY`: The directory in which to put the release build directories. The builds themselves will be in `$AWS_S3_RELEASE_DIRECTORY/$RELEASE_VERSION/$RUNNER_OS/`
+
+Note: you can very likely use other levels of secrets and variables like organization-level, but this has not been tested.
 
 ## Testing
 
