@@ -62,7 +62,8 @@ export interface IUsjReaderWriter {
    * Given a starting point, find the next location in this USJ data that matches the given text
    *
    * @param start Point where the search for `text` will start
-   * @param text Text to find
+   * @param text Text to find. Note you can use an empty string to find the closest text in or after
+   *   the `start` point.
    * @param maxTextLengthToSearch Maximum length of text to search before stopping (default is 1000)
    * @returns Object containing the USJ node where `text` begins (it might be split across nodes),
    *   offset within that node that indicates where `text` begins, and a JSONPath string that
@@ -143,4 +144,19 @@ export interface IUsjReaderWriter {
     verseRef: SerializedVerseRef,
     verseRefOffset: number,
   ): UsjContentLocation;
+  /**
+   * Get the node + offset and JSONPath query within this USJ data of the first encountered string
+   * after the verse marker for a specific verse in a USJ chapter.
+   *
+   * Note: this may return a node that is in a subsequent verse or even chapter depending on how
+   * much content the USJ data contains. It simply looks through the rest of the USJ data for the
+   * first text node and returns that.
+   *
+   * @param verseRef Indicates the book, chapter, and verse of interest to find the next text for
+   * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
+   *   indicates the location of the of USJ text node within this USJ data.
+   * @throws Error if there is no text after the verse marker for `verseRef`
+   * @throws Error if `verseRef` does not point to a valid verse in this USJ data
+   */
+  verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
 }

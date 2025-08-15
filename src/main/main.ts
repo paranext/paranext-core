@@ -486,6 +486,9 @@ async function main() {
 
     // Register zoom keyboard shortcuts. MacOS already supports this natively
     mainWindow.webContents.on('before-input-event', (event, input) => {
+      // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
+      if (input.type === 'keyUp') return;
+
       // F12: Open dev tools in both development and production
       if (input.key === 'F12') {
         event.preventDefault();
@@ -497,22 +500,63 @@ async function main() {
         return;
       }
 
+      // keyboard tab navigation - Ctrl+Tab and Ctrl+Shift+Tab
+      if (input.control && input.key === 'Tab') {
+        event.preventDefault();
+        if (input.shift) windowService.setFocus('previousTab');
+        else windowService.setFocus('nextTab');
+        return;
+      }
+
       if (process.platform !== 'darwin') {
+        // Non-Mac shortcuts
+
+        // Zoom shortcuts - Mac's zoom shortcuts already work because of the menu items
         // Zoom in: Ctrl++ or Ctrl+=
         if (input.control && (input.key === '=' || input.key === '+')) {
           event.preventDefault();
           zoomIn();
+          return;
         }
         // Zoom out: Ctrl+-
-        else if (input.control && input.key === '-') {
+        if (input.control && input.key === '-') {
           event.preventDefault();
           zoomOut();
+          return;
         }
         // Reset zoom: Ctrl+0
-        else if (input.control && input.key === '0') {
+        if (input.control && input.key === '0') {
           event.preventDefault();
           resetZoomFactor();
+          return;
         }
+
+        // keyboard tab group navigation - Ctrl+PgUp and Ctrl+PgDown
+        if (input.control && (input.key === 'PageUp' || input.key === 'PageDown')) {
+          event.preventDefault();
+          if (input.key === 'PageUp') windowService.setFocus('previousTabGroup');
+          else windowService.setFocus('nextTabGroup');
+          return;
+        }
+
+        return;
+      }
+
+      // Mac-only shortcuts
+
+      // More keyboard tab navigation - Cmd+Shift+[]
+      if (input.meta && input.shift && (input.key === '[' || input.key === ']')) {
+        event.preventDefault();
+        if (input.key === '[') windowService.setFocus('previousTab');
+        else windowService.setFocus('nextTab');
+        return;
+      }
+
+      // keyboard tab group navigation - Cmd+Option+Up and Cmd+Option+Down
+      if (input.meta && input.alt && (input.key === 'ArrowUp' || input.key === 'ArrowDown')) {
+        event.preventDefault();
+        if (input.key === 'ArrowUp') windowService.setFocus('previousTabGroup');
+        else windowService.setFocus('nextTabGroup');
       }
     });
 

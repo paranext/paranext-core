@@ -1,5 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { floatTab } from '@renderer/services/web-view.service-host';
+import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
 import {
@@ -109,6 +109,7 @@ export function PlatformTabTitle({
     const timer = setTimeout(() => {
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderHighlight);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentHighlight);
+      updateTabPartialSync(id, { flashTriggerTime: undefined });
     }, cssHighlightDurationMilliseconds);
 
     return () => {
@@ -116,28 +117,61 @@ export function PlatformTabTitle({
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderHighlight);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentHighlight);
     };
-  }, [flashTriggerTime]);
+  }, [flashTriggerTime, id]);
 
-  const [focusSubjectPossiblyError] = useData(windowService.dataProviderName).Focus(
-    undefined,
-    undefined,
-  );
+  const [focusSubjectPossiblyError, setFocusSubject] = useData(
+    windowService.dataProviderName,
+  ).Focus(undefined, undefined);
 
-  // Handle applying and removing the CSS styles for this tab being the window's focus
-  useEffect(() => {
+  const focusSubject = useMemo(() => {
     if (isPlatformError(focusSubjectPossiblyError)) {
       logger.warn(
         `platform-tab-title window focus came back as error: ${getErrorMessage(focusSubjectPossiblyError)}`,
       );
-      return;
+      return undefined;
     }
+    return focusSubjectPossiblyError;
+  }, [focusSubjectPossiblyError]);
 
+  // Attach a click listener to the tab to focus this tab. Unfortunately rc-dock doesn't expose
+  // rc-tabs onTabClick https://github.com/fis-components/rc-tabs/tree/master?tab=readme-ov-file#props
+  // in its use of Tabs https://github.com/ticlo/rc-dock/blob/master/src/DockTabs.tsx#L347
+  useEffect(() => {
+    // We need to walk the DOM to find the tab button to attach the click listener
+    const containerElement = containerRef.current;
+    if (!containerElement || !setFocusSubject) return;
+
+    // Walk up the DOM to the tab button
+    const tabButton = containerElement.closest('.dock-tab-btn');
+    if (!tabButton) return;
+
+    const handleClick = async () => {
+      try {
+        await setFocusSubject({
+          focusType: 'tab',
+          id,
+        });
+      } catch (e) {
+        logger.warn(
+          `platform-tab-title on tab button click failed to set focus on tab ${id}: ${getErrorMessage(e)}`,
+        );
+      }
+    };
+
+    tabButton.addEventListener('click', handleClick, { passive: true });
+
+    return () => {
+      tabButton.removeEventListener('click', handleClick);
+    };
+  }, [setFocusSubject, id]);
+
+  // Handle applying and removing the CSS styles for this tab being the window's focus
+  useEffect(() => {
     // do nothing if this tab is not focused
     if (
-      !focusSubjectPossiblyError ||
-      (focusSubjectPossiblyError.focusType !== 'tab' &&
-        focusSubjectPossiblyError.focusType !== 'webView') ||
-      id !== focusSubjectPossiblyError.id
+      !focusSubject ||
+      (focusSubject.focusType !== 'tab' && focusSubject.focusType !== 'webView') ||
+      id !== focusSubject.id
     )
       return;
 
@@ -155,7 +189,7 @@ export function PlatformTabTitle({
     return () => {
       activeTabHeader.classList.remove(cssClassTabHeaderWindowFocus);
     };
-  }, [focusSubjectPossiblyError, id]);
+  }, [focusSubject, id]);
 
   const icon = (
     <div

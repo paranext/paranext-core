@@ -140,6 +140,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region Working Stacks
 
+  /**
+   * Checks if two stack items are equal using shallow equivalence, testing the stack item
+   * properties for [strict
+   * equality](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality)
+   *
+   * Note that this requires the parent of the two stack items to have reference equality
+   */
+  private static areStackItemsShallowEqual(a: StackItem, b: StackItem): boolean {
+    return a.index === b.index && a.parent === b.parent;
+  }
+
   /** Return the working stack applicable to the given node */
   private createWorkingStack(node: MarkerObject): WorkingStack {
     // Represents levels in the USJ node tree that are above the current node (i.e., ancestors)
@@ -570,6 +581,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return { node: foundNode ?? verseNode, offset: usjNodeOffset, jsonPath };
   }
 
+  verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation {
+    // Get the location of the verse marker
+    const verseLocation = this.verseRefToUsjContentLocation(verseRef);
+
+    // Find the first string after the verse marker
+    const firstStringLocationAfterVerseMarker = this.findNextLocationOfMatchingText(
+      verseLocation,
+      '',
+    );
+
+    if (!firstStringLocationAfterVerseMarker)
+      throw new Error(
+        `Could not find next text location after verse ${JSON.stringify(verseRef)} at location ${verseLocation.jsonPath}`,
+      );
+
+    return firstStringLocationAfterVerseMarker;
+  }
+
   // #endregion
 
   // #region Search for text from a node + JSONPath + offset
@@ -582,16 +611,34 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let textScanned = '';
     let lengthScanned = 0;
     let lengthTrimmed = 0;
-    let foundStartingAtOffset = 0;
+    let foundStartingAtOffset = -1;
+    const workingStackForStartingPoint = this.convertJsonPathToWorkingStack(startingPoint.jsonPath);
+    // Cloning because the working stack items are modified during search
+    const startingPointStackItem = {
+      ...workingStackForStartingPoint[workingStackForStartingPoint.length - 1],
+    };
     UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
-      this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
+      workingStackForStartingPoint,
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
-      (node) => {
+      (node, workingStack) => {
         if (typeof node !== 'string') return false;
 
-        lengthScanned += node.length;
-        textScanned = `${textScanned}${node}`;
+        let nodeTextToSearch = node;
+
+        const currentStackItem = workingStack[workingStack.length - 1];
+
+        // If the node is the starting point, then we need to start scanning from the offset.
+        // Otherwise look from the start of the string
+        if (UsjReaderWriter.areStackItemsShallowEqual(currentStackItem, startingPointStackItem)) {
+          nodeTextToSearch = node.substring(startingPoint.offset);
+          // We're skipping the offset characters in the first node, so we need to adjust the final
+          // foundStartingAtOffset to account for that
+          lengthTrimmed += startingPoint.offset;
+        }
+
+        lengthScanned += nodeTextToSearch.length;
+        textScanned = `${textScanned}${nodeTextToSearch}`;
         const textIndex = textScanned.indexOf(text);
         if (textIndex < 0) {
           // Keep the string we're keeping around from going too large
@@ -611,7 +658,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     );
 
     // We never found what we wanted
-    if (foundStartingAtOffset <= 0) return undefined;
+    if (foundStartingAtOffset < 0) return undefined;
 
     // The text might have been split between nodes, so we have to go through it one more time
     lengthScanned = 0;
