@@ -54,7 +54,6 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
-import { getJsonPathFromVerse } from './usj.util';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -484,7 +483,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         scrollToVerse(scrRef);
         editorRef.current?.focus();
         editorRef.current?.setSelection({
-          start: { jsonPath: getJsonPathFromVerse(usjFromPdp, scrRef), offset: 0 },
+          start: {
+            jsonPath: new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(scrRef).jsonPath,
+            offset: 0,
+          },
         });
       });
 

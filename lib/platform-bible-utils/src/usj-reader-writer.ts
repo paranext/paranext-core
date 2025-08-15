@@ -140,6 +140,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region Working Stacks
 
+  /**
+   * Checks if two stack items are equal using shallow equivalence, testing the stack item
+   * properties for [strict
+   * equality](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Strict_equality)
+   *
+   * Note that this requires the parent of the two stack items to have reference equality
+   */
+  private static areStackItemsShallowEqual(a: StackItem, b: StackItem): boolean {
+    return a.index === b.index && a.parent === b.parent;
+  }
+
   /** Return the working stack applicable to the given node */
   private createWorkingStack(node: MarkerObject): WorkingStack {
     // Represents levels in the USJ node tree that are above the current node (i.e., ancestors)
@@ -279,9 +290,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       else {
         nextNode = undefined;
         while (workingStack.length > 0) {
-          // We know the workingStack is not empty, so we can safely pop the last item
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          const nextLevel = { ...(workingStack.pop() as StackItem) };
+          const nextLevel = workingStack.pop();
           // We know that `content` exists due to its presence in this data structure
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           if (nextLevel && nextLevel.index + 1 < nextLevel.parent.content!.length) {
@@ -572,6 +581,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return { node: foundNode ?? verseNode, offset: usjNodeOffset, jsonPath };
   }
 
+  verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation {
+    // Get the location of the verse marker
+    const verseLocation = this.verseRefToUsjContentLocation(verseRef);
+
+    // Find the first string after the verse marker
+    const firstStringLocationAfterVerseMarker = this.findNextLocationOfMatchingText(
+      verseLocation,
+      '',
+    );
+
+    if (!firstStringLocationAfterVerseMarker)
+      throw new Error(
+        `Could not find next text location after verse ${JSON.stringify(verseRef)} at location ${verseLocation.jsonPath}`,
+      );
+
+    return firstStringLocationAfterVerseMarker;
+  }
+
   // #endregion
 
   // #region Search for text from a node + JSONPath + offset
@@ -586,8 +613,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let lengthTrimmed = 0;
     let foundStartingAtOffset = -1;
     const workingStackForStartingPoint = this.convertJsonPathToWorkingStack(startingPoint.jsonPath);
-    const startingPointStackItem =
-      workingStackForStartingPoint[workingStackForStartingPoint.length - 1];
+    // Cloning because the working stack items are modified during search
+    const startingPointStackItem = {
+      ...workingStackForStartingPoint[workingStackForStartingPoint.length - 1],
+    };
     UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
       workingStackForStartingPoint,
@@ -595,17 +624,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       (node, workingStack) => {
         if (typeof node !== 'string') return false;
 
+        let nodeTextToSearch = node;
+
+        const currentStackItem = workingStack[workingStack.length - 1];
+
         // If the node is the starting point, then we need to start scanning from the offset.
         // Otherwise look from the start of the string
-        const nodeTextStartIndex =
-          workingStack[workingStack.length - 1] === startingPointStackItem
-            ? startingPoint.offset
-            : 0;
-        // We're skipping the offset characters in the first node, so we need to adjust the final
-        // foundStartingAtOffset to account for that
-        lengthTrimmed += nodeTextStartIndex;
-
-        const nodeTextToSearch = node.substring(nodeTextStartIndex);
+        if (UsjReaderWriter.areStackItemsShallowEqual(currentStackItem, startingPointStackItem)) {
+          nodeTextToSearch = node.substring(startingPoint.offset);
+          // We're skipping the offset characters in the first node, so we need to adjust the final
+          // foundStartingAtOffset to account for that
+          lengthTrimmed += startingPoint.offset;
+        }
 
         lengthScanned += nodeTextToSearch.length;
         textScanned = `${textScanned}${nodeTextToSearch}`;
