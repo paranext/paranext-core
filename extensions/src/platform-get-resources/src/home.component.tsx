@@ -440,23 +440,25 @@ export function Home({
                           onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
                           key={project.projectId}
                         >
-                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4">
-                            {project.isEditable ? (
-                              <ScrollText
-                                className="tw-pr-0"
-                                size={18}
-                                style={{ minWidth: '24px' }}
-                              />
-                            ) : (
-                              <BookOpen
-                                className="tw-pr-0"
-                                size={18}
-                                style={{ minWidth: '24px' }}
-                              />
-                            )}
-                            <div className="tw-py-4 tw-whitespace-nowrap">{project.name}</div>
+                          <TableCell>
+                            <div className="tw-flex tw-flex-row tw-items-center tw-ms-4 tw-gap-4">
+                              {project.isEditable ? (
+                                <ScrollText
+                                  className="tw-pr-0"
+                                  size={18}
+                                  style={{ minWidth: '24px' }}
+                                />
+                              ) : (
+                                <BookOpen
+                                  className="tw-pr-0"
+                                  size={18}
+                                  style={{ minWidth: '24px' }}
+                                />
+                              )}
+                              <div className="tw-whitespace-nowrap">{project.name}</div>
+                            </div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-all">
+                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-words">
                             {project.fullName}
                           </TableCell>
                           <TableCell className="tw-hidden sm:tw-table-cell">
@@ -514,7 +516,7 @@ export function Home({
         </CardContent>
       )}
       <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:24rem)]:!tw-hidden">
-        <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
+        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
       </CardFooter>
     </Card>
   );
