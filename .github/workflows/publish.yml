@@ -21,7 +21,7 @@ on:
         description: 'Git ref to create the new `bump-versions-<version>` branch from. If empty, will use the current branch.'
         required: false
       uploadReleaseAssets:
-        description: 'Upload the release assets to the configured S3 bucket. If false, the release will be created in GitHub, but no assets will be uploaded to S3.'
+        description: 'Upload the release assets to the configured S3 bucket.'
         type: boolean
         required: false
         default: false
@@ -224,7 +224,7 @@ jobs:
       - name: Upload release assets to S3
         id: upload_s3
         if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
-        uses: shallwefootball/s3-upload-action@1.3.3
+        uses: shallwefootball/upload-s3-action@v1.3.3
         with:
           aws_key_id: ${{ secrets.AWS_S3_RELEASE_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.AWS_S3_RELEASE_SECRET_ACCESS_KEY}}
