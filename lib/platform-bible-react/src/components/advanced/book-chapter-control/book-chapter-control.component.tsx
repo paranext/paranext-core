@@ -1,3 +1,4 @@
+import { BookItem } from '@/components/basics/book-item.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Command,
@@ -11,14 +12,20 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { formatScrRef } from 'platform-bible-utils';
+import {
+  formatScrRef,
+  getLocalizedSectionNames,
+  getSectionForBook,
+  getSectionLongName,
+  Section,
+  doesBookMatchQuery,
+} from 'platform-bible-utils';
 import { KeyboardEvent, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
-import { BookChapterControlProps, BookType, ViewMode } from './book-chapter-control.types';
+import { BookChapterControlProps, ViewMode } from './book-chapter-control.types';
 import {
   ALL_BOOK_IDS,
   ALL_ENGLISH_BOOK_NAMES,
-  BOOK_TYPE_LABELS,
   calculateTopMatch,
   fetchEndChapter,
   generateCommandValue,
@@ -39,6 +46,8 @@ export function BookChapterControl({
   handleSubmit,
   className,
   getActiveBookIds,
+  localizedBookNames,
+  localizedStrings,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -78,11 +87,11 @@ export function BookChapterControl({
   }, [getActiveBookIds]);
 
   const availableBooksByType = useMemo(() => {
-    const grouped: Record<BookType, string[]> = {
-      OT: activeBookIds.filter((bookId) => Canon.isBookOT(bookId)),
-      NT: activeBookIds.filter((bookId) => Canon.isBookNT(bookId)),
-      DC: activeBookIds.filter((bookId) => Canon.isBookDC(bookId)),
-      Extra: activeBookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
+    const grouped: Record<Section, string[]> = {
+      [Section.OT]: activeBookIds.filter((bookId) => Canon.isBookOT(bookId)),
+      [Section.NT]: activeBookIds.filter((bookId) => Canon.isBookNT(bookId)),
+      [Section.DC]: activeBookIds.filter((bookId) => Canon.isBookDC(bookId)),
+      [Section.Extra]: activeBookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
     };
     return grouped;
   }, [activeBookIds]);
@@ -95,24 +104,27 @@ export function BookChapterControl({
   const filteredBooksByType = useMemo(() => {
     if (!inputValue.trim()) return availableBooksByType;
 
-    const query = inputValue.toLowerCase().trim();
-    const filteredBooks: Record<BookType, string[]> = { OT: [], NT: [], DC: [], Extra: [] };
+    const filteredBooks: Record<Section, string[]> = {
+      [Section.OT]: [],
+      [Section.NT]: [],
+      [Section.DC]: [],
+      [Section.Extra]: [],
+    };
 
-    const bookTypes: BookType[] = ['OT', 'NT', 'DC', 'Extra'];
+    const bookTypes: Section[] = [Section.OT, Section.NT, Section.DC, Section.Extra];
     bookTypes.forEach((type) => {
       filteredBooks[type] = availableBooksByType[type].filter((bookId) => {
-        const englishName = ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase();
-        return englishName.includes(query) || bookId.toLowerCase().includes(query);
+        return doesBookMatchQuery(bookId, inputValue, localizedBookNames);
       });
     });
 
     return filteredBooks;
-  }, [availableBooksByType, inputValue]);
+  }, [availableBooksByType, inputValue, localizedBookNames]);
 
   // Get the current top match
   const topMatch = useMemo(
-    () => calculateTopMatch(inputValue, availableBooks),
-    [inputValue, availableBooks],
+    () => calculateTopMatch(inputValue, availableBooks, localizedBookNames),
+    [inputValue, availableBooks, localizedBookNames],
   );
 
   // #endregion
@@ -218,6 +230,15 @@ export function BookChapterControl({
 
   // #region Helper functions and variables
 
+  const { otLong, ntLong, dcLong, extraLong } = getLocalizedSectionNames(localizedStrings);
+
+  const getSectionLabel = useCallback(
+    (section: Section): string => {
+      return getSectionLongName(section, otLong, ntLong, dcLong, extraLong);
+    },
+    [otLong, ntLong, dcLong, extraLong],
+  );
+
   const doesChapterMatch = useCallback(
     (chapter: number) => {
       if (!topMatch) return false;
@@ -226,7 +247,14 @@ export function BookChapterControl({
     [topMatch],
   );
 
-  const currentDisplayValue = useMemo(() => formatScrRef(scrRef, 'English'), [scrRef]);
+  const currentDisplayValue = useMemo(
+    () =>
+      formatScrRef(
+        scrRef,
+        (localizedBookNames && localizedBookNames.get(scrRef.book)?.localizedName) || 'English',
+      ),
+    [scrRef, localizedBookNames],
+  );
 
   const setChapterRef = useCallback((chapter: number) => {
     return (element: HTMLDivElement | null) => {
@@ -507,7 +535,10 @@ export function BookChapterControl({
                 )}
               </Button>
               <span tabIndex={-1} className="tw-text-sm tw-font-medium">
-                {ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] || ''}
+                {(localizedBookNames &&
+                  localizedBookNames.get(selectedBookForChaptersView || '')?.localizedName) ||
+                  ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView || ''] ||
+                  ''}
               </span>
             </div>
           )}
@@ -524,31 +555,21 @@ export function BookChapterControl({
                       if (books.length === 0) return undefined;
 
                       return (
-                        // We are mapping over filteredBooksByType, which uses BookType as key type
+                        // We are mapping over filteredBooksByType, which uses Section as key type
                         // eslint-disable-next-line no-type-assertion/no-type-assertion
-                        <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
+                        <CommandGroup key={type} heading={getSectionLabel(type as Section)}>
                           {books.map((bookId) => (
-                            <div
+                            <BookItem
                               key={bookId}
-                              className={cn(
-                                'tw-mx-1 tw-my-1 tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid',
-                                {
-                                  'tw-border-s-red-200': type.toLowerCase() === 'ot',
-                                  'tw-border-s-purple-200': type.toLowerCase() === 'nt',
-                                  'tw-border-s-indigo-200': type.toLowerCase() === 'dc',
-                                  'tw-border-s-amber-200': type.toLowerCase() === 'extra',
-                                },
-                              )}
-                            >
-                              <CommandItem
-                                value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
-                                onSelect={() => handleBookSelect(bookId)}
-                                ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
-                                className="tw-ms-1 tw-px-2"
-                              >
-                                {ALL_ENGLISH_BOOK_NAMES[bookId]}
-                              </CommandItem>
-                            </div>
+                              bookId={bookId}
+                              onSelect={(selectedBookId: string) =>
+                                handleBookSelect(selectedBookId)
+                              }
+                              section={getSectionForBook(bookId)}
+                              commandValue={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
+                              ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                              localizedBookNames={localizedBookNames}
+                            />
                           ))}
                         </CommandGroup>
                       );
@@ -565,11 +586,16 @@ export function BookChapterControl({
                         onSelect={handleTopMatchSelect}
                         className="tw-font-semibold tw-text-primary"
                       >
-                        {formatScrRef({
-                          book: topMatch.book,
-                          chapterNum: topMatch.chapterNum ?? 1,
-                          verseNum: topMatch.verseNum ?? 1,
-                        })}
+                        {formatScrRef(
+                          {
+                            book: topMatch.book,
+                            chapterNum: topMatch.chapterNum ?? 1,
+                            verseNum: topMatch.verseNum ?? 1,
+                          },
+                          (localizedBookNames &&
+                            localizedBookNames.get(topMatch.book)?.localizedId) ||
+                            undefined,
+                        )}
                       </CommandItem>
                     </CommandGroup>
                   )}
@@ -578,7 +604,9 @@ export function BookChapterControl({
                   {topMatch && fetchEndChapter(topMatch.book) > 1 && (
                     <>
                       <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                        {ALL_ENGLISH_BOOK_NAMES[topMatch.book]}
+                        {(localizedBookNames &&
+                          localizedBookNames.get(topMatch.book)?.localizedName) ||
+                          ALL_ENGLISH_BOOK_NAMES[topMatch.book]}
                       </div>
                       <ChapterGrid
                         bookId={topMatch.book}
