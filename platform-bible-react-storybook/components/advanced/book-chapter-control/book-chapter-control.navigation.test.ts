@@ -87,7 +87,7 @@ describe('book-chapter-control.navigation', () => {
 
         expect(mockHandleSubmit).toHaveBeenCalledWith({
           book: 'GEN',
-          chapterNum: lastChapters['GEN'],
+          chapterNum: lastChapters.GEN,
           verseNum: 1,
         });
       });
@@ -144,7 +144,7 @@ describe('book-chapter-control.navigation', () => {
       test('Navigates to next book first chapter when at last chapter', () => {
         const { result } = renderHook(() =>
           useQuickNavButtons(
-            { book: 'GEN', chapterNum: lastChapters['GEN'], verseNum: 1 },
+            { book: 'GEN', chapterNum: lastChapters.GEN, verseNum: 1 },
             availableBooks,
             'ltr',
             mockHandleSubmit,
@@ -165,7 +165,7 @@ describe('book-chapter-control.navigation', () => {
       test('Is disabled when at last chapter of last book', () => {
         const { result } = renderHook(() =>
           useQuickNavButtons(
-            { book: 'REV', chapterNum: lastChapters['REV'], verseNum: 1 },
+            { book: 'REV', chapterNum: lastChapters.REV, verseNum: 1 },
             availableBooks,
             'ltr',
             mockHandleSubmit,
@@ -432,7 +432,7 @@ describe('book-chapter-control.navigation', () => {
       test('Is disabled when at last chapter of last book in RTL', () => {
         const { result } = renderHook(() =>
           useQuickNavButtons(
-            { book: 'REV', chapterNum: lastChapters['REV'], verseNum: 1 },
+            { book: 'REV', chapterNum: lastChapters.REV, verseNum: 1 },
             availableBooks,
             'rtl',
             mockHandleSubmit,
