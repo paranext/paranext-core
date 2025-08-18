@@ -14,7 +14,7 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
 
 (async () => {
   // Make sure there are not working changes so we don't interfere with normal edits
-  if (!shouldAllowWorkingChanges && (await checkForWorkingChanges())) return 1;
+  if (!shouldAllowWorkingChanges && (await checkForWorkingChanges())) process.exit(1);
 
   const bumpVersionCommand = `npm version ${newVersion} --git-tag-version false`;
 
@@ -25,7 +25,15 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
     });
   } catch (e) {
     console.error(`Error on bumping version: ${e}`);
-    return 1;
+    process.exit(1);
+  }
+
+  // Lint fix the changes
+  try {
+    await execCommand(`npm run format`);
+  } catch (e) {
+    console.error(`Error on formatting changes: ${e}`);
+    process.exit(1);
   }
 
   // Run extensions' bump-versions script
@@ -35,14 +43,14 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
     });
   } catch (e) {
     console.error(`Error on bumping version: ${e}`);
-    return 1;
+    process.exit(1);
   }
 
   console.log(
     `Bumped versions to ${newVersion}. Please create a pull request to merge the new branch into main.`,
   );
 
-  return 0;
+  process.exit(0);
 })();
 
 // #endregion
