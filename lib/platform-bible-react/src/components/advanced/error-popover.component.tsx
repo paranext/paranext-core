@@ -34,7 +34,7 @@ export function ErrorPopover({
   return (
     <Popover>
       <PopoverTrigger>{children}</PopoverTrigger>
-      <PopoverContent className={cn('tw-min-w-80 tw-max-w-96', className)}>
+      <PopoverContent className={cn('tw-z-[250] tw-min-w-80 tw-max-w-96', className)}>
         <ErrorDump
           errorDetails={errorDetails}
           handleCopyNotify={handleCopyNotify}

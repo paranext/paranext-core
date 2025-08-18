@@ -286,6 +286,7 @@ export function Setting({
             <Label className="error-label">
               {localizedStrings['%settings_errorMessages_errorOccurred%']}
             </Label>
+            {/* TODO: The below code could potentially be replaced by the ErrorPopover component */}
             <Popover onOpenChange={() => setCopySuccess(false)}>
               <PopoverTrigger asChild>
                 <Label className="error-view-link">

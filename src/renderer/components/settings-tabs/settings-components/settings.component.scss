@@ -39,5 +39,5 @@
 .error-popover-content {
   min-width: 20rem; // (tw-min-w-80)
   max-width: 24rem; // (tw-max-w-96)
-  z-index: 1000;
+  z-index: 250 !important; // This setting got ignored in packaged builds
 }
