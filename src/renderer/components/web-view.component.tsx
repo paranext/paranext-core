@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
@@ -12,6 +12,7 @@ import {
   updateWebViewDefinitionSync,
   isWebViewNonceCorrect,
   reloadWebView,
+  updateTabPartialSync,
 } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -47,6 +48,7 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
+import { windowService } from '@shared/services/window.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -55,6 +57,9 @@ const BOOKS_PRESENT_DEFAULT = '';
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
+
+const CROSS_ORIGIN_REMOVE_EVENT_LISTENER_ERROR_REGEX =
+  /Failed to read a named property 'removeEventListener' from 'Window': Blocked a frame with origin ".+" from accessing a cross-origin frame./;
 
 /**
  * Tell the web view service to load the web view with the provided information. Used to retrieve
@@ -92,6 +97,8 @@ export function WebView({
   // React starts refs as null
   // eslint-disable-next-line no-null/no-null
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Tracks how many times the iframe has loaded
+  const [iframeHasLoadedTimes, setIframeHasLoadedTimes] = useState(0);
 
   const postMessageCallback = useCallback(
     ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
@@ -179,6 +186,72 @@ export function WebView({
       });
     };
   }, [id, postMessageCallback]);
+
+  const handleLoadIframe = useCallback(() => {
+    // Increment the tracker for the number of times the iframe has loaded
+    setIframeHasLoadedTimes((prev) => prev + 1);
+  }, []);
+
+  // Keep track of focus in the iframe
+  useEffect(() => {
+    // The iframe doesn't have contentWindow yet on first render. But we want to attach the focusin
+    // listener every time a new iframe loads after that
+    if (iframeHasLoadedTimes < 1) return;
+
+    const iframe = iframeRef.current;
+    if (!iframe || !iframe.contentWindow) return;
+
+    // Focus this WebView when it is loaded - focusing tab on mount in `platform-panel.component.tsx`
+    // doesn't always work perfectly with WebViews, so we also focus them here
+    (async () => {
+      try {
+        await windowService.setFocus({
+          focusType: 'tab',
+          id,
+        });
+      } catch (e) {
+        logger.warn(
+          `web-view.component on load failed to set focus on cross-origin webView ${id}: ${getErrorMessage(e)}`,
+        );
+      }
+    })();
+
+    // Cross-origin iframes don't have contentDocument, and their focus works just fine without tracking
+    // the active element in the iframe. No need to do more
+    if (!iframe.contentDocument) return;
+
+    // In the context of same-origin iframes, focusin seems to be the only event that gives us the
+    // information we need. focusin tells us the last focused element other than body.
+    // Unfortunately, it does not trigger on body, so we can't tell if the user is actually trying to
+    // focus the body. Clicking the body only triggers focusout, and it looks exactly
+    // the same as when the user clicks outside the iframe, so we can't use that to detect
+    // focusing the body.
+    function handleFocusIn(event: FocusEvent) {
+      // This seems to be the correct type. Not sure why it is just EventTarget without the assertion
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      updateTabPartialSync(id, { lastFocusedElement: (event.target as HTMLElement) ?? undefined });
+    }
+
+    iframe.contentWindow.addEventListener('focusin', handleFocusIn);
+
+    return () => {
+      // It seems React gets rid of contentWindow faster than we can unregister the event listener,
+      // but this doesn't seem to be a problem. Seems it automatically cleans it up
+      if (!iframe.contentWindow) return;
+
+      try {
+        // For some reason, when hot reloading, React doesn't get rid of contentWindow before this
+        // runs, but the iframe get counted as cross-origin all of a sudden but still has all its properties
+        iframe.contentWindow.removeEventListener('focusin', handleFocusIn);
+      } catch (e) {
+        const errorMessage = getErrorMessage(e);
+        if (!CROSS_ORIGIN_REMOVE_EVENT_LISTENER_ERROR_REGEX.test(errorMessage)) throw e;
+        logger.debug(
+          `web-view.component: Tried to remove focusin event listener from iframe with id ${id} but it threw a cross-origin error ${errorMessage}. This is expected when hot reloading but not otherwise. If you see this other than when hot reloading, please investigate.`,
+        );
+      }
+    };
+  }, [iframeHasLoadedTimes, id]);
 
   useEvent(
     getNetworkEvent('platform.onDidReloadExtensions'),
@@ -338,6 +411,7 @@ export function WebView({
         srcDoc={shouldUseSrc ? undefined : content}
         // Allow WebViews to go fullscreen because why not (fullscreen YouTube video of Psalms LBL)
         allow="fullscreen;"
+        onLoad={handleLoadIframe}
       />
     </div>
   );

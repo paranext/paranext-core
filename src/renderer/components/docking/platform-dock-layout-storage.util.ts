@@ -7,6 +7,7 @@ import DockLayout, { BoxData, FloatPosition, PanelData, TabData } from 'rc-dock'
 
 import { LogError } from '@shared/log-error.model';
 import {
+  DirectionFromTab,
   Layout,
   SavedTabInfo,
   TabInfo,
@@ -39,6 +40,8 @@ import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
+import { logger } from '@shared/services/logger.service';
+import { Filter } from 'rc-dock/lib/Algorithm';
 
 import { RCDockTabInfo, TabType, isPanel, isTab } from './docking-framework-internal.model';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
@@ -144,6 +147,10 @@ export function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
   return tabSaver ? tabSaver(tabInfo) : saveTabInfoBase(tabInfo);
 }
 
+// #endregion
+
+// #region tab info retrieval
+
 /**
  * Gets info for the tab with the specified ID
  *
@@ -154,7 +161,7 @@ export function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
  * @returns Info for the tab in question or `undefined` if tab is not found
  * @throws If the item found in the dock layout with the specified ID is not a tab
  */
-function getTabInfoById(
+export function getTabInfoById(
   dockLayout: DockLayout,
   tabId: string,
   methodName: string,
@@ -166,7 +173,9 @@ function getTabInfoById(
 
   if (!isTab(targetTab))
     throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a tab`,
+      `platform-dock-layout.component ${methodName} error: target tab with id '${
+        targetTab.id
+      }' is not a tab`,
     );
 
   // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
@@ -190,7 +199,7 @@ export function getTabInfoByElement(
 ): RCDockTabInfo | undefined {
   // Need to use `null` because it is returned from `element.parentElement`
   let currentElement: Element | null = tabElement;
-  // Look for Tab ID in parents of currently focused element
+  // Look for Tab ID in parents of the element
   // Unfortunately, this is heavily dependent on internal details of rc-dock
   // `dock-layout` class is on the highest div in the rc-dock dock layout component
   while (currentElement && !currentElement.classList.contains('dock-layout')) {
@@ -205,9 +214,9 @@ export function getTabInfoByElement(
     if (!tabId && TAB_HEADER_ID_REGEX.test(currentElement.id))
       [, tabId] = TAB_HEADER_ID_REGEX.exec(currentElement.id) ?? [];
 
-    // If clicked in various misc places in the tab group area that don't get into a specific tab
-    // (like clicking empty space that doesn't capture focus, which goes up to the rc-dock dock-bar),
-    // see which tab is focused in the clicked tab group
+    // If the element is in various misc places in the tab group area that don't get into a specific tab
+    // (like if the user clicks empty space that doesn't capture focus, which goes up to the rc-dock dock-bar),
+    // see which tab is focused in the tab group this element is in
     // `dock-panel` class and data-dockid attribute are on the tab group (rc-dock calls it panel)
     if (
       !tabId &&
@@ -234,6 +243,316 @@ export function getTabInfoByElement(
   // Didn't find a tab
   return undefined;
 }
+
+// #region getTabInfoByDirectionFromTab and its sub-functions
+
+/**
+ * Gets info for the tab in the specified tab group that is adjacent to the source tab in the
+ * specified direction.
+ *
+ * @param sourceTabGroup Tab group in which to get to the adjacent tab
+ * @param sourceTabId ID of the tab in the source tab group to go from to get to the adjacent tab
+ * @param direction Direction to go from the source tab to get to the adjacent tab
+ * @returns Info for adjacent tab in the correct direction or `undefined` if there is not an
+ *   adjacent tab in this tab group that meets the specified criteria
+ */
+function getAdjacentTabInfoInDirectionWithinTabGroup(
+  sourceTabGroup: PanelData,
+  sourceTabId: string,
+  direction:
+    | 'nextTab'
+    | 'previousTab'
+    | 'nextTabOrGroup'
+    | 'previousTabOrGroup'
+    | 'nearTabOrNextGroup',
+): RCDockTabInfo | undefined {
+  // Get the index of the current tab
+  const sourceTabIndex = sourceTabGroup.tabs.findIndex((tab) => tab.id === sourceTabId);
+
+  // Sanity check: the tab is not in the tab group we just got for the tab somehow. Please
+  // investigate if actually ends up happening
+  if (sourceTabIndex === -1)
+    throw new Error(
+      `getAdjacentTabInfoInDirectionWithinTabGroup: Tab with ID '${
+        sourceTabId
+      }' is not in the identified parent tab group with id ${
+        sourceTabGroup.id
+      }. This should not happen.`,
+    );
+
+  // Figure out the index of the tab we want to go to
+  let destinationIndex = -1;
+  if (direction === 'nearTabOrNextGroup') {
+    // One tab over forward or backward in the current tab group or forward a tab group depending on what is available
+    if (sourceTabIndex < sourceTabGroup.tabs.length - 1)
+      // There is a next tab in the current tab group, so go to it
+      destinationIndex = sourceTabIndex + 1;
+    else if (sourceTabIndex > 0)
+      // There is a previous tab in the current tab group, so go to it
+      destinationIndex = sourceTabIndex - 1;
+  } else {
+    // One tab over forward or backward in the current tab group
+    const isForward = direction === 'nextTab' || direction === 'nextTabOrGroup';
+
+    // Simply move forward or backward in the current group if there is a tab there
+    if (
+      (!isForward && sourceTabIndex > 0) ||
+      (isForward && sourceTabIndex < sourceTabGroup.tabs.length - 1)
+    ) {
+      // Get the next or previous tab based on the direction
+      destinationIndex = isForward ? sourceTabIndex + 1 : sourceTabIndex - 1;
+    }
+  }
+
+  if (destinationIndex < 0) return undefined;
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return sourceTabGroup.tabs[destinationIndex] as RCDockTabInfo | undefined;
+}
+
+/**
+ * Gets the starting (leftmost in LTR or rightmost in RTL) tab info in the next tab group from the
+ * source tab.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabId ID of tab to go from to get to destination tab
+ * @returns Starting (leftmost in LTR or rightmost in RTL) tab info in the next tab group or
+ *   `undefined` if not found
+ */
+function getStartTabInfoInNextTabGroup(
+  dockLayout: DockLayout,
+  sourceTabId: string,
+): RCDockTabInfo | undefined {
+  // Iterate through all the tabs to find the next tab
+  // Next tab might be the very first tab if source tab is last
+  let firstTab: TabData | undefined;
+  let hasPassedSourceTab = false;
+  // We're filtering for only tabs, but the rc-dock types aren't sophisticated enough to understand
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const nextTab = dockLayout.find(
+    (tab) => {
+      // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
+      if (!isTab(tab)) return false;
+
+      // Record first tab in the layout
+      if (!firstTab) firstTab = tab;
+
+      // Return the next tab after the source tab
+      if (hasPassedSourceTab) return true;
+
+      if (tab.id === sourceTabId) hasPassedSourceTab = true;
+      // Keep looking through the tabs
+      return false;
+    },
+    // Iterate over every tab anywhere in the dock layout
+    Filter.AnyTab,
+  ) as TabData | undefined;
+
+  // Return the tab we found or, if there was no next tab, the source tab is the last tab,
+  // so return the first one
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (nextTab ?? firstTab) as RCDockTabInfo;
+}
+
+/**
+ * Gets the ending (rightmost in LTR or leftmost in RTL) tab info in the previous tab group from the
+ * source tab.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabId ID of tab to go from to get to destination tab
+ * @returns Ending (rightmost in LTR or leftmost in RTL) tab info in the previous tab group or
+ *   `undefined` if not found
+ */
+function getEndTabInfoInPreviousTabGroup(
+  dockLayout: DockLayout,
+  sourceTabId: string,
+): RCDockTabInfo | undefined {
+  // Iterate through enough tabs to find the previous one
+  // Keep track of last tab before the one we're iterating through. This will end up being the
+  // final tab if the source tab is the first tab
+  let previousTab: TabData | undefined;
+  // Previous tab is the very last tab if source is first
+  let isSourceTabFirst: boolean | undefined;
+  dockLayout.find((tab) => {
+    // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
+    if (!isTab(tab)) return false;
+
+    if (isSourceTabFirst === undefined) isSourceTabFirst = tab.id === sourceTabId;
+
+    // If we aren't trying to get the last tab and we hit our tab, previousTab should be set
+    // properly, so return
+    if (!isSourceTabFirst && tab.id === sourceTabId) return true;
+
+    // Set this tab as the 'previous' one and keep going
+    previousTab = tab;
+    return false;
+  }, Filter.AnyTab);
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return previousTab as RCDockTabInfo;
+}
+
+/**
+ * Gets info for the active tab in the tab group to the left (in LTR) of the source tab group
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabGroup Tab group to go from to get to the destination tab group
+ * @returns Tab info for active tab in the previous tab group or `undefined` if not found
+ */
+function getActiveTabInfoInPreviousTabGroup(
+  dockLayout: DockLayout,
+  sourceTabGroup: PanelData,
+): RCDockTabInfo | undefined {
+  // Iterate through enough tab groups to find the previous one
+  // Keep track of last tab group before the one we're iterating through. This will end up being the
+  // final tab group if the source tab is in the first tab group
+  let previousTabGroup: PanelData | undefined;
+  // Previous tab group is the very last tab group if source is in the first tab group
+  let isSourceTabGroupFirst: boolean | undefined;
+  dockLayout.find((tabGroup) => {
+    // Still have to check isPanel because of a bug https://github.com/ticlo/rc-dock/pull/253
+    if (!isPanel(tabGroup)) return false;
+
+    if (isSourceTabGroupFirst === undefined)
+      isSourceTabGroupFirst = tabGroup.id === sourceTabGroup.id;
+
+    // If we aren't trying to get the last tab group and we hit our tab group, previousTabGroup
+    // should be set properly, so return
+    if (!isSourceTabGroupFirst && tabGroup.id === sourceTabGroup.id) return true;
+
+    // Set this tab as the 'previous' one and keep going
+    previousTabGroup = tabGroup;
+    return false;
+  }, Filter.AnyPanel);
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return previousTabGroup?.tabs.find(
+    (tab) => tab.id === previousTabGroup?.activeId,
+  ) as RCDockTabInfo;
+}
+
+/**
+ * Gets info for the active tab in the tab group to the right (in LTR) of the source tab group
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabGroup Tab group to go from to get to the destination tab group
+ * @returns Tab info for active tab in the next tab group or `undefined` if not found
+ */
+function getActiveTabInfoInNextTabGroup(
+  dockLayout: DockLayout,
+  sourceTabGroup: PanelData,
+): RCDockTabInfo | undefined {
+  // Iterate through all the tab groups to find the next tab group
+  // Next tab group might be the very first tab group if source tab is in last tab group
+  let firstTabGroup: PanelData | undefined;
+  let hasPassedSourceTabGroup = false;
+  // We're filtering for only tab groups (panels), but the rc-dock types aren't sophisticated enough to understand
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const nextTabGroup = dockLayout.find(
+    (tabGroup) => {
+      // Still have to check isPanel because of a bug https://github.com/ticlo/rc-dock/pull/253
+      if (!isPanel(tabGroup)) return false;
+
+      // Record first tab group in the layout
+      if (!firstTabGroup) firstTabGroup = tabGroup;
+
+      // Return the next tab group after the source tab group
+      if (hasPassedSourceTabGroup) return true;
+
+      if (tabGroup.id === sourceTabGroup.id) hasPassedSourceTabGroup = true;
+      // Keep looking through the tab groups
+      return false;
+    },
+    // Iterate over every tab group anywhere in the dock layout
+    Filter.AnyPanel,
+  ) as PanelData | undefined;
+
+  // Return the active tab in the tab group we found or, if there was no next tab group, the
+  // source tab is in the last tab group, so return the active tab of the first tab group
+  const destinationTabGroup = nextTabGroup ?? firstTabGroup;
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return destinationTabGroup?.tabs.find(
+    (tab) => tab.id === destinationTabGroup.activeId,
+  ) as RCDockTabInfo;
+}
+
+/**
+ * Gets info for a tab in a direction from the source tab.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param sourceTabId ID of tab to go from to get to destination tab
+ * @param direction Direction to go from the source tab to get to the destination tab
+ * @returns Info for the destination tab or `undefined` if source tab or destination tab is not
+ *   found
+ * @throws If the item found in the dock layout with the source tab ID is not a tab
+ * @throws If the item found in the dock layout with the destination tab ID is not a tab
+ */
+export function getTabInfoByDirectionFromTab(
+  dockLayout: DockLayout,
+  sourceTabId: string,
+  direction: DirectionFromTab,
+): RCDockTabInfo | undefined {
+  const sourceTabGroup = getTabGroupForTab(dockLayout, sourceTabId);
+
+  if (!sourceTabGroup) return undefined;
+
+  // Go forward or backward a tab
+  if (
+    direction === 'nextTab' ||
+    direction === 'previousTab' ||
+    direction === 'nextTabOrGroup' ||
+    direction === 'previousTabOrGroup' ||
+    direction === 'nearTabOrNextGroup'
+  ) {
+    // If there is another tab in this tab group in the right direction, go to it
+    if (sourceTabGroup.tabs.length > 1) {
+      const adjacentTab = getAdjacentTabInfoInDirectionWithinTabGroup(
+        sourceTabGroup,
+        sourceTabId,
+        direction,
+      );
+      if (adjacentTab) return adjacentTab;
+    }
+
+    // Need to jump tab groups
+    // Jump to left-most tab in next tab group
+    if (direction === 'nextTab') {
+      return getStartTabInfoInNextTabGroup(dockLayout, sourceTabId);
+    }
+    // Jump to right-most tab in last tab group
+    if (direction === 'previousTab') {
+      return getEndTabInfoInPreviousTabGroup(dockLayout, sourceTabId);
+    }
+    // Jump to active tab in next tab group
+    if (direction === 'nextTabOrGroup' || direction === 'nearTabOrNextGroup') {
+      return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
+    }
+    // Jump to active tab in previous tab group
+    // Don't need to check if (direction === 'previousTabOrGroup') because that's the only option left
+    return getActiveTabInfoInPreviousTabGroup(dockLayout, sourceTabGroup);
+  }
+
+  // One tab group over in either direction
+  // Jump to active tab in next tab group
+  if (direction === 'nextTabGroup') {
+    return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
+  }
+  // Jump to active tab in previous tab group
+  // Don't need to check if (direction === 'previousTabGroup') because that's the only option left
+  return getActiveTabInfoInPreviousTabGroup(dockLayout, sourceTabGroup);
+}
+
+// #endregion
 
 // #endregion
 
@@ -266,7 +585,9 @@ function getWebViewTabInfoById(
 
   if (targetTabInfo.tabType !== TAB_TYPE_WEBVIEW)
     throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTabInfo.id}' is not a WebView tab`,
+      `platform-dock-layout.component ${methodName} error: target tab with id '${
+        targetTabInfo.id
+      }' is not a WebView tab`,
     );
 
   // Type assert the webview data in the web view tab
@@ -295,6 +616,40 @@ export function getWebViewDefinition(
   );
 
   return targetTabWebViewData;
+}
+
+/**
+ * Updates the tab with the specified id with the specified properties. No need to have all the tab
+ * info; just specify the properties you want to update.
+ *
+ * WARNING: This does not work well with `tab.data` `WebViewDefinition` information. Use
+ * `updateWebViewDefinition` for that instead
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId ID of the tab to update
+ * @param partialTabInfo Partial tab info to update. Any unspecified properties will stay the same
+ * @param shouldBringToFront If true, the tab will flash, will be brought to the front, and will be
+ *   unobscured by other tabs. Defaults to `false`
+ * @returns Updated tab info or `undefined` if the tab was not found
+ * @throws If the item found in the dock layout with the specified ID is not a tab
+ */
+export function updateTabPartial(
+  dockLayout: DockLayout,
+  tabId: string,
+  partialTabInfo: Partial<TabInfo>,
+  shouldBringToFront = false,
+) {
+  const targetTabInfo = getTabInfoById(dockLayout, tabId, 'updateTabPartial');
+
+  // If we didn't find the webview, return nothing
+  if (!targetTabInfo) return undefined;
+
+  const updatedTabInfo = loadTab({ ...targetTabInfo, ...partialTabInfo }, shouldBringToFront);
+
+  updateTab(dockLayout, updatedTabInfo, shouldBringToFront, updatedTabInfo.id);
+
+  return updatedTabInfo;
 }
 
 /**
@@ -341,7 +696,7 @@ export function updateWebViewDefinition(
   );
 
   // Update existing tab
-  updateTab(updatedTabData, shouldBringToFront, dockLayout);
+  updateTab(dockLayout, updatedTabData, shouldBringToFront);
 
   // Only consider the WebView to have updated if its properties actually changed, not just if it was brought to front
   return !!updatedWebViewData;
@@ -367,32 +722,55 @@ export function findPreviousTab(dockLayout: DockLayout) {
 }
 
 /**
+ * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
+ * tabs, and sets the document focus in that tab
+ *
+ * If the tab is already the active tab in its tab group, it is more efficient to use
+ * {@link revealTabGroupAndSetDocumentFocusToTab} instead
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId ID of the tab to set active and focused
+ * @returns `true` if successfully found tab to update, `false` otherwise
+ */
+export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
+  // Bring the tab to front of its tab group
+  // `rc-dock` requires null here to mean "don't change the tab data"
+  // eslint-disable-next-line no-null/no-null
+  const didFindTab = dockLayout.updateTab(tabId, null, true);
+
+  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+
+  return didFindTab;
+}
+
+/**
  * Updates an existing tab, making sure it gets to the front and is unobscured by other tabs if
  * indicated
  *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
  * @param tabInfo Info for tab to update
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs. Note: you must update the `tabInfo.flashTriggerTime` property before calling this in
  *   order to make the tab flash.
- * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
- *   layout
  * @param tabIdToReplace If specified, the tab with this ID will be replaced with the new tab
+ * @returns `true` if successfully found tab to update, `false` otherwise
  */
 function updateTab(
+  dockLayout: DockLayout,
   tabInfo: RCDockTabInfo,
   shouldBringToFront: boolean,
-  dockLayout: DockLayout,
   tabIdToReplace?: string,
 ): boolean {
   const tabId = tabIdToReplace ?? tabInfo.id;
 
-  // Make sure the tab is unobscured
-  if (shouldBringToFront) {
-    unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
-    bringFloatingTabGroupToFront(dockLayout, tabId);
-  }
+  const didFindTab = dockLayout.updateTab(tabId, tabInfo, shouldBringToFront);
 
-  return dockLayout.updateTab(tabId, tabInfo, shouldBringToFront);
+  // Make sure the tab is unobscured and focus the tab
+  if (shouldBringToFront) revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+
+  return didFindTab;
 }
 
 /**
@@ -450,7 +828,7 @@ export function addTabToDock(
         `addTabToDock: target tab with id '${targetTab.id}' is not a tab. This should not happen.`,
       );
 
-    updateTab(tab, shouldBringToFront, dockLayout);
+    updateTab(dockLayout, tab, shouldBringToFront);
     previousTabId = tab.id;
 
     // We did not add a tab, so return undefined to indicate that
@@ -459,6 +837,8 @@ export function addTabToDock(
 
   // Figure out layout defaults for this tab
   const updatedLayout = layoutDefaults(layout, savedTabInfo);
+  // Keep track of whether we already focused the tab
+  let didFocusTab = false;
 
   // Add new tab
   switch (updatedLayout.type) {
@@ -551,11 +931,15 @@ export function addTabToDock(
       if (!updatedLayout.targetTabId) {
         throw new LogError(`When replacing a tab, targetTabId must be specified`);
       }
-      if (!updateTab(tab, shouldBringToFront, dockLayout, updatedLayout.targetTabId)) {
+      if (updateTab(dockLayout, tab, shouldBringToFront, updatedLayout.targetTabId))
+        didFocusTab = true;
+      else
         throw new LogError(
-          `Replacing tab failed: target tab with id ${updatedLayout.targetTabId} not found when attempting to replace it with tab ${tab.id}`,
+          `Replacing tab failed: target tab with id ${
+            updatedLayout.targetTabId
+          } not found when attempting to replace it with tab ${tab.id}`,
         );
-      }
+
       break;
 
     default:
@@ -565,10 +949,8 @@ export function addTabToDock(
       throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
   }
 
-  if (shouldBringToFront) {
-    unmaximizeAnyMaximizedTabGroup(dockLayout, tab.id);
-    bringFloatingTabGroupToFront(dockLayout, tab.id);
-  }
+  if (shouldBringToFront && !didFocusTab)
+    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id);
 
   // If there was an error loading the tab, we create an error tab. But we also want to throw here
   // so people know there was a problem.
@@ -616,22 +998,40 @@ export function addWebViewToDock(
 }
 
 /**
- * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no tab
+ * Brings a tab group to front, makes sure it is unobscured by other tabs, and sets the document
+ * focus to the specified tab in that tab group.
+ *
+ * WARNING: Does NOT set the tab as active in its tab group. The tab should already be the active
+ * tab in its tab group before running this. Call {@link focusTab} instead if you want to set the tab
+ * as the active tab in its tab group and do all this as well.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId ID of tab in the tab group to reveal
+ */
+function revealTabGroupAndSetDocumentFocusToTab(dockLayout: DockLayout, tabId: string): void {
+  unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
+  bringFloatingTabGroupToFront(dockLayout, tabId);
+  setDocumentFocusToTab(dockLayout, tabId);
+}
+
+/**
+ * Unmaximizes any maximized tab group in the layout unless it contains the given tab. If no tab
  * groups are maximized, this does nothing.
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
- * @param webViewId The ID of the WebView to search for as a child of the maximized panel.
+ * @param tabId The ID of the tab to search for as a child of the maximized panel.
  */
-function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId?: string): void {
+function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, tabId?: string): void {
   // According to the docs, if there is a child of maxbox, then the type is always PanelData
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const maximizedTabGroup = dockLayout.getLayout().maxbox?.children?.[0] as PanelData | undefined;
   if (!maximizedTabGroup) return;
 
-  // Look for the given WebView in the maximized tab group
-  if (webViewId) {
-    let tabData = dockLayout.find(webViewId);
+  // Look for the given tab in the maximized tab group
+  if (tabId) {
+    let tabData = dockLayout.find(tabId);
     while (tabData && tabData.parent !== maximizedTabGroup) {
       tabData = tabData.parent;
     }
@@ -645,27 +1045,136 @@ function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId?: stri
 }
 
 /**
- * Brings the floating tab group with the specified WebView ID to the front of the layout. If there
- * is no floating tab group with the specified ID, this does nothing.
+ * Get the tab group (panel) that contains the tab with the specified ID.
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
- * @param webViewId The ID of the WebView whose floating tab group to bring to the front
+ * @param tabId ID of the tab whose parent tab group to get
+ * @returns Tab group for tab with the specified ID or `undefined` if not found
+ * @throws If the item found in the dock layout with the specified ID is not a tab
  */
-function bringFloatingTabGroupToFront(dockLayout: DockLayout, webViewId: string): void {
-  let tabData = dockLayout.find(webViewId);
+function getTabGroupForTab(dockLayout: DockLayout, tabId: string): PanelData | undefined {
+  let tabData = getTabInfoById(dockLayout, tabId, 'getTabGroupForTab');
   let tabGroupData: PanelData | undefined;
   while (!tabGroupData && tabData) {
-    // If the tab is a floating tab, we want to bring its group to the front
+    // If the tab's parent is a panel, we found the tab group
     if (tabData.parent && isPanel(tabData.parent)) tabGroupData = tabData.parent;
     // Otherwise, keep looking up the parent chain
     else tabData = tabData.parent;
   }
+  return tabGroupData;
+}
+
+/**
+ * Brings the floating tab group containing the tab with the specified tab ID to the front of the
+ * layout. If there is no floating tab group with the specified ID, this does nothing.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId The ID of the WebView whose floating tab group to bring to the front
+ */
+function bringFloatingTabGroupToFront(dockLayout: DockLayout, tabId: string): void {
+  const tabGroupData = getTabGroupForTab(dockLayout, tabId);
 
   // Bring the floating tab group to the front
   // Null is required by the API
   // eslint-disable-next-line no-null/no-null
   if (!!tabGroupData && tabGroupData.z) dockLayout.dockMove(tabGroupData, null, 'front');
+}
+
+/**
+ * Sets the focus of this window's `document` to the contents of the specified tab
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId ID of the tab to focus
+ */
+function setDocumentFocusToTab(dockLayout: DockLayout, tabId: string) {
+  // ENHANCEMENT: Track the last selected element in various tabs and restore focus to it. Currently
+  // only WebViews support this
+  const tabInfo = getTabInfoById(dockLayout, tabId, 'setDocumentFocusToTab');
+  if (!tabInfo) return;
+
+  let didFocusWebView = false;
+
+  // Select the WebView iframe if one exists. Must do this then select the last focused element
+  // inside it if available
+  const webViewIframe = document.querySelector(`[data-web-view-id='${tabId}']`);
+  if (webViewIframe instanceof HTMLIFrameElement) {
+    if (!webViewIframe.contentWindow) {
+      webViewIframe.focus();
+      // Not sure in what contexts it wouldn't have a contentWindow, so just warn for now
+      logger.warn(
+        `setDocumentFocusToTab: WebView with id '${
+          tabId
+        }' does not have a contentWindow for some reason. Focusing the iframe instead. Please investigate`,
+      );
+    } else webViewIframe.contentWindow.focus();
+    didFocusWebView = true;
+  }
+
+  // Try to select the last focused element in the tab
+  if (tabInfo.lastFocusedElement) {
+    // If the last focused element is a valid HTMLElement, focus it
+    // Checking with 'focus' in because this may be across realms in the iframe
+    if ('focus' in tabInfo.lastFocusedElement) {
+      const elementToFocus = tabInfo.lastFocusedElement;
+      // If we're refocusing an element in a WebView, we must wait until the WebView is visible before
+      // focusing the element. Otherwise, the focus will just be on the body
+      // TODO: Make this work for normal tabs if it doesn't already work
+      if (webViewIframe && !webViewIframe.checkVisibility()) {
+        const webViewVisibilityObserver = new IntersectionObserver(
+          () => {
+            elementToFocus.focus();
+            webViewVisibilityObserver.disconnect();
+          },
+          {
+            root: document.documentElement,
+          },
+        );
+        webViewVisibilityObserver.observe(webViewIframe);
+
+        return;
+      }
+
+      // If the tab is already visible, focus the element
+      elementToFocus.focus();
+
+      return;
+    }
+    // If it is not an HTMLElement, just log it
+    logger.warn(
+      `setDocumentFocusToTab: lastFocusedElement for tab '${
+        tabId
+      }' exists but does not have 'focus' for some reason. Cannot focus it. Please investigate`,
+    );
+  }
+
+  // Already dealt with the WebView. Don't want to focus the tab
+  if (didFocusWebView) return;
+
+  // It isn't a WebView and doesn't have a lastFocusedElement, so select the first child of the
+  // platform panel instead
+  const tabPlatformPanel = document.querySelector(`[data-tab-id='${tabId}']`);
+  if (!tabPlatformPanel) return;
+
+  const tabPlatformPanelFirstChild = tabPlatformPanel.children.item(0);
+
+  let elementToFocus: HTMLElement;
+
+  // Get the first child or just the platform panel if we can't find an eligible child
+  if (tabPlatformPanelFirstChild instanceof HTMLElement) {
+    elementToFocus = tabPlatformPanelFirstChild;
+  } else if (tabPlatformPanel instanceof HTMLElement) {
+    elementToFocus = tabPlatformPanel;
+  } else return;
+
+  // If the element is not focusable, set it to be focusable temporarily so the focusin event will fire
+  const elementToFocusTabIndexOriginal = elementToFocus.tabIndex;
+  if (elementToFocusTabIndexOriginal === -1) elementToFocus.tabIndex = 0;
+  elementToFocus.focus();
+  if (elementToFocusTabIndexOriginal === -1)
+    elementToFocus.tabIndex = elementToFocusTabIndexOriginal;
 }
 
 /**
@@ -697,4 +1206,5 @@ export function floatTabById(tabId: string, dockLayout: DockLayout): void {
   // eslint-disable-next-line no-null/no-null
   dockLayout.dockMove(targetTab, null, 'float', floatPosition);
 }
+
 // #endregion

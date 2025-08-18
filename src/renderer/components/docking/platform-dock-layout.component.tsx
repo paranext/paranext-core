@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
-import DockLayout, { PanelBase } from 'rc-dock';
+import DockLayout from 'rc-dock';
+import { Filter } from 'rc-dock/lib/Algorithm';
 
 import {
   WebViewDefinition,
@@ -10,6 +11,8 @@ import {
   Layout,
   OnLayoutChangeRCDock,
   WebViewTabProps,
+  TabInfo,
+  DirectionFromTab,
 } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 
@@ -25,10 +28,14 @@ import {
   addWebViewToDock,
   floatTabById,
   getTabInfoByElement,
+  getTabInfoById,
   getWebViewDefinition,
   loadTab,
   saveTab,
+  focusTab,
   updateWebViewDefinition,
+  updateTabPartial,
+  getTabInfoByDirectionFromTab,
 } from '@renderer/components/docking/platform-dock-layout-storage.util';
 import {
   isTab,
@@ -39,6 +46,11 @@ export function PlatformDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockLayoutRef = useRef<DockLayout>(undefined!);
+  /**
+   * Timeout for focusing another tab after closing the current one. Should be canceled if this
+   * component is unmounted
+   */
+  const focusTabAfterCloseTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   /**
    * OnLayoutChange function from `web-view.service.ts` once this docklayout is registered.
@@ -68,18 +80,32 @@ export function PlatformDockLayout() {
       floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
       getWebViewDefinition: (webViewId: string) =>
         getWebViewDefinition(webViewId, dockLayoutRef.current),
+      updateTabPartial: (
+        tabId: string,
+        partialTabInfo: Partial<TabInfo>,
+        shouldBringToFront = false,
+      ) => updateTabPartial(dockLayoutRef.current, tabId, partialTabInfo, shouldBringToFront),
       updateWebViewDefinition: (
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
         shouldBringToFront = false,
       ) =>
         updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
+      getTabInfoByDirectionFromTab: (sourceTabId: string, direction: DirectionFromTab) =>
+        getTabInfoByDirectionFromTab(dockLayoutRef.current, sourceTabId, direction),
       getTabInfoByElement: (tabElement: Element) =>
         getTabInfoByElement(dockLayoutRef.current, tabElement),
+      getTabInfoById: (tabId: string) =>
+        getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
+      focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
       testLayout,
     });
     return () => {
       unsub();
+      // This is not a component ref but just a timeout. We don't want to save the value from when
+      // this hook first ran
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      clearTimeout(focusTabAfterCloseTimeoutRef.current);
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
   }, []);
@@ -96,21 +122,46 @@ export function PlatformDockLayout() {
         if (currentTabId) {
           const currentDockItem = dockLayoutRef.current.find(currentTabId);
           if (isTab(currentDockItem)) {
-            // Assert the more specific type.
-            /* eslint-disable no-type-assertion/no-type-assertion */
+            // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             const currentTab = currentDockItem as RCDockTabInfo;
 
-            // If a dialog was closed, tell the dialog service
+            // Do things if the tab was closed
             if (direction === 'remove') {
+              // If a dialog was closed, tell the dialog service
+              // We're just checking to see if it is a dialog using a boolean. It will be `undefined`
+              // if it is not a dialog, so this is fine
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
               if ((currentTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
                 resolveDialogRequest(currentTabId, undefined, false);
+
+              // Focus the next tab or active tab in next group
+              const tabToFocus = getTabInfoByDirectionFromTab(
+                dockLayoutRef.current,
+                currentTabId,
+                'nearTabOrNextGroup',
+              );
+
+              if (tabToFocus) {
+                // set an immediate timeout to focus the tab because changing the dock layout doesn't
+                // seem to work within this `onLayoutChange` callback
+                focusTabAfterCloseTimeoutRef.current = setTimeout(() => {
+                  // If we found a tab, focus it. Otherwise, a new tab will be automatically opened and focused below
+                  focusTab(dockLayoutRef.current, tabToFocus.id);
+                });
+              }
             }
 
+            // If there are no more docked tabs, add one
             if (direction === 'float' || direction === 'remove') {
               if (layout.dockbox.children.length === 1) {
-                const panel: PanelBase = layout.dockbox.children[0] as PanelBase;
-                /* eslint-enable */
-                const hasNoTabs = panel.tabs.length === 0;
+                const hasNoTabs = !dockLayoutRef.current.find(
+                  // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
+                  (item) => isTab(item) && item.id !== currentTabId,
+                  // Search through the docked tabs. This is the API for rc-dock, so we must use it
+                  // eslint-disable-next-line no-bitwise
+                  Filter.Docked | Filter.Tab,
+                );
                 if (hasNoTabs) {
                   (async () => {
                     try {

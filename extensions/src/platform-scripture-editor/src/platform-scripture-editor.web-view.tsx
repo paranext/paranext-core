@@ -53,15 +53,16 @@ import {
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-
-/** The offset in pixels from the top of the window to scroll to show the verse number */
-const VERSE_NUMBER_SCROLL_OFFSET = 80;
+import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
  * to listen for the editor to finish loading
+ *
+ * This is best used for when the editor is transitioning between loads. For the first time the
+ * editor loads, use {@link runOnFirstLoad} instead
  */
-const EDITOR_LOAD_DELAY_TIME = 100;
+const EDITOR_LOAD_DELAY_TIME = 200;
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
@@ -83,45 +84,6 @@ const defaultTextDirection = 'ltr';
  */
 function deepEqualAcrossIframes(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefined {
-  const verseElement =
-    verseLocation.verseNum < 1
-      ? undefined
-      : (document.querySelector<HTMLElement>(
-          `.editor-container span[data-marker="v"][data-number*="${verseLocation.verseNum}"]`,
-        ) ?? undefined);
-
-  const scrollContainerElement =
-    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
-
-  // Scroll if we find the verse or we're at the start of the chapter
-  if (scrollContainerElement && (verseElement || verseLocation.verseNum <= 1)) {
-    // Get the scroll position all the way up to the scroll container
-    let offsetElement = verseElement;
-    // If we're at the first verse, scroll to the top so we can see intro material
-    let verseOffsetTop = 0;
-    if (verseLocation.verseNum > 1) {
-      // Find the y offset from the scrolling container
-      while (offsetElement && offsetElement !== scrollContainerElement) {
-        verseOffsetTop += offsetElement.offsetTop;
-        offsetElement =
-          offsetElement.offsetParent instanceof HTMLElement
-            ? offsetElement.offsetParent
-            : undefined;
-      }
-      // Scroll a bit above the verse so you can see a bit of context
-      verseOffsetTop -= VERSE_NUMBER_SCROLL_OFFSET;
-    }
-
-    scrollContainerElement?.scrollTo({
-      behavior: 'smooth',
-      top: verseOffsetTop,
-    });
-  }
-
-  return verseElement;
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
@@ -178,10 +140,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
             setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
+            if (range) nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
+          else if (range) editorRef.current?.setSelection(range);
 
           break;
         }
@@ -507,14 +469,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
 
-  // On loading the first time, scroll the selected verse into view
+  // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
-    if (usjFromPdp && !hasFirstRetrievedScripture.current) {
-      hasFirstRetrievedScripture.current = true;
+    if (
+      usjFromPdp &&
+      (usjFromPdp.content?.length ?? 0) > 0 &&
+      !hasFirstRetrievedScripture.current
+    ) {
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
-      setTimeout(() => scrollToVerse(scrRef), EDITOR_LOAD_DELAY_TIME);
+      const cancelRunOnLoad = runOnFirstLoad(() => {
+        hasFirstRetrievedScripture.current = true;
+        scrollToVerse(scrRef);
+        editorRef.current?.focus();
+        editorRef.current?.setSelection({
+          start: {
+            jsonPath: new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(scrRef).jsonPath,
+            offset: 0,
+          },
+        });
+      });
+
+      return cancelRunOnLoad;
     }
+
+    // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
+    return () => {};
   }, [usjFromPdp, scrRef]);
 
   // Scroll the selected verse and selection range into view
