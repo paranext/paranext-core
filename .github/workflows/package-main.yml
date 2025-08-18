@@ -3,7 +3,7 @@ name: Package
 # Make sure these match with the matrix.os values below
 env:
   OS_WINDOWS: windows-latest
-  OS_MACOS: macos-latest
+  OS_MACOS: macos-14
   # The Ubuntu version must align with the "core" version in electron-builder.json5
   OS_LINUX: ubuntu-22.04
 
@@ -27,16 +27,30 @@ jobs:
     strategy:
       matrix:
         # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
+        os: [windows-latest, macos-14, ubuntu-22.04]
         dotnet_version: [8.0.x]
 
     steps:
       - name: Install MacPorts
         if: ${{ matrix.os == env.OS_MACOS }}
-        uses: melusina-org/setup-macports@v1
+        run: |
+          set -euxo pipefail
+          # Figure out the OS version (e.g., 14 for Sonoma, 13 for Ventura, 15 for Sequoia, etc.)
+          MACOS_VER=$(sw_vers -productVersion | awk -F '.' '{print $1}')
+          case "$MACOS_VER" in
+            "15."*)  PKG_URL="https://github.com/macports/macports-base/releases/download/v2.11.4/MacPorts-2.11.4-15-Sequoia.pkg" ;;
+            "14."*)  PKG_URL="https://github.com/macports/macports-base/releases/download/v2.11.4/MacPorts-2.11.4-14-Sonoma.pkg" ;;
+            "13."*)  PKG_URL="https://github.com/macports/macports-base/releases/download/v2.11.4/MacPorts-2.11.4-13-Ventura.pkg" ;;
+            *) echo "Unsupported macOS version: $MACOS_VER"; exit 1 ;;
+          esac
+          curl -fsSL -o /tmp/macports.pkg "$PKG_URL"
+          sudo installer -pkg /tmp/macports.pkg -target /
+          # Add MacPorts to PATH for this session
+          echo "/opt/local/bin" >> $GITHUB_PATH
+          echo "/opt/local/sbin" >> $GITHUB_PATH
 
       - name: Update MacPorts ports tree
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == 'macos-14' }}
         # Not using `-v` for verbose because it is very slow and does not add much value
         run: |
           sudo port sync
