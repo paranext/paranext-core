@@ -1312,6 +1312,169 @@ export declare const menuDocumentSchema: {
 		};
 	};
 };
+/** Localized string value associated with this key */
+export type LocalizedStringValue = string;
+/**
+ * Date in YYYY-MM-DD format
+ *
+ * Use regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$` to test.
+ *
+ * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
+ */
+export type DateYYYYMMDD = `${number}-${number}-${number}`;
+/** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
+export interface LocalizedStringDataContribution {
+	[k: string]: unknown;
+	metadata?: StringsMetadata;
+	localizedStrings?: {
+		[k: string]: LanguageStrings;
+	};
+}
+/**
+ * Map whose keys are localized string keys and whose values provide additional non-locale-specific
+ * information about the localized string key
+ */
+export interface StringsMetadata {
+	[k: LocalizeKey]: StringMetadata;
+}
+/** Additional non-locale-specific information about a localized string key */
+export interface StringMetadata {
+	[k: string]: unknown;
+	/**
+	 * Localized string key from which to get this value if one does not exist in the specified
+	 * language. If a new key/value pair needs to be made to replace an existing one, this could help
+	 * smooth over the transition if the meanings are close enough
+	 *
+	 * You can use Paratext 9 Localized String Keys here. Be sure to escape any % signs with a
+	 * backslash `\`.
+	 */
+	fallbackKey?: LocalizeKey;
+	/**
+	 * Additional information provided by developers in English to help the translator to know how to
+	 * translate this localized string accurately
+	 */
+	notes?: string;
+	/**
+	 * If this property is filled, the localized string is deprecated. Contains information about the
+	 * deprecation.
+	 */
+	deprecationInfo?: LocalizedStringDeprecationInfo;
+}
+/**
+ * Contains information about the deprecation of a localized string key, including the date of
+ * deprecation and the reason.
+ */
+export interface LocalizedStringDeprecationInfo {
+	[k: string]: unknown;
+	/**
+	 * Date of deprecation. Must be in YYYY-MM-DD format e.g. 2024-11-13.
+	 *
+	 * Tested against regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$`.
+	 *
+	 * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
+	 */
+	date: DateYYYYMMDD;
+	/**
+	 * Should contain the reason for deprecation and what to use instead in what contexts.
+	 *
+	 * @example Reworded to clarify the meaning. Use %my_key_2% instead.
+	 */
+	message: string;
+}
+/**
+ * Map whose keys are localized string keys and whose values provide information about how to
+ * localize strings for the localized string key
+ */
+export interface LanguageStrings {
+	[k: LocalizeKey]: LocalizedStringValue;
+}
+/** JSON schema object that aligns with the LocalizedStringDataContribution type */
+export declare const localizedStringsDocumentSchema: {
+	$schema: string;
+	title: string;
+	description: string;
+	type: string;
+	properties: {
+		metadata: {
+			$ref: string;
+		};
+		localizedStrings: {
+			type: string;
+			additionalProperties: {
+				$ref: string;
+			};
+		};
+	};
+	$defs: {
+		languageStrings: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^%[\\w\\-\\.]+%$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+		localizedStringValue: {
+			description: string;
+			type: string;
+		};
+		stringsMetadata: {
+			description: string;
+			type: string;
+			patternProperties: {
+				"^%[\\w\\-\\.]+%$": {
+					$ref: string;
+				};
+			};
+			additionalProperties: boolean;
+		};
+		stringMetadata: {
+			description: string;
+			type: string;
+			properties: {
+				fallbackKey: {
+					description: string;
+					type: string;
+					pattern: string;
+					tsType: string;
+				};
+				notes: {
+					description: string;
+					type: string;
+				};
+				deprecationInfo: {
+					description: string;
+					$ref: string;
+				};
+			};
+		};
+		localizedStringDeprecationInfo: {
+			description: string;
+			type: string;
+			properties: {
+				date: {
+					description: string;
+					type: string;
+					pattern: string;
+					tsType: string;
+				};
+				message: {
+					description: string;
+					type: string;
+				};
+			};
+			required: string[];
+		};
+		localizeKey: {
+			description: string;
+			type: string;
+			pattern: string;
+			tsType: string;
+		};
+	};
+};
 /** The first book number */
 export declare const FIRST_SCR_BOOK_NUM = 1;
 /** The last book number */
@@ -1437,6 +1600,68 @@ export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (Scroll
  * @returns The formatted reference.
  */
 export declare function formatScrRef(scrRef: SerializedVerseRef, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
+/**
+ * Represents the major sections of the Bible and extra materials. Used for grouping and filtering
+ * books in the book selector.
+ */
+export declare enum Section {
+	/** Old Testament books (Genesis through Malachi) */
+	OT = "OT",
+	/** New Testament books (Matthew through Revelation) */
+	NT = "NT",
+	/** Deuterocanonical books (e.g. Tobit, Judith, 1-2 Maccabees) */
+	DC = "DC",
+	/** Additional materials not part of the biblical canon (e.g. XXA, XXB etc.) */
+	Extra = "Extra"
+}
+/**
+ * Determines which section a book belongs to based on its ID
+ *
+ * @param bookId The ID of the book (e.g., 'GEN', 'MAT')
+ * @returns The section (OT, NT, DC, or Extra) that the book belongs to
+ * @throws Error if the book ID is not recognized or cannot be categorized
+ */
+export declare const getSectionForBook: (bookId: string) => Section;
+/**
+ * Gets the localized section names from a LanguageStrings object
+ *
+ * @param localizedStrings - Optional object containing localized strings
+ * @returns Object containing localized section names with fallbacks to undefined
+ */
+export declare const getLocalizedSectionNames: (localizedStrings?: LanguageStrings) => {
+	otLong: string | undefined;
+	ntLong: string | undefined;
+	dcLong: string | undefined;
+	extraLong: string | undefined;
+	otShort: string | undefined;
+	ntShort: string | undefined;
+	dcShort: string | undefined;
+	extraShort: string | undefined;
+};
+/**
+ * Gets the localized full name of a Bible section from its enum value
+ *
+ * @param section - The section enum value to get the name for
+ * @param otLongName - Optional localized name for Old Testament section
+ * @param ntLongName - Optional localized name for New Testament section
+ * @param dcLongName - Optional localized name for Deuterocanonical section
+ * @param extraLongName - Optional localized name for Extra Materials section
+ * @returns {string} The human-readable localized name of the section. Defaults to English names
+ * @throws {Error} When the section enum value is not recognized
+ */
+export declare const getSectionLongName: (section: Section, otLongName?: string, ntLongName?: string, dcLongName?: string, extraLongName?: string) => string;
+/**
+ * Gets the short name of a Bible section from its enum value
+ *
+ * @param section - The section enum value to get the short name for
+ * @param otShortName - Optional localized short name for Old Testament section
+ * @param ntShortName - Optional localized short name for New Testament section
+ * @param dcShortName - Optional localized short name for Deuterocanonical section
+ * @param extraShortName - Optional localized short name for Extra Materials section
+ * @returns {string} The short name of the section. Defaults to English
+ * @throws {Error} When the section enum value is not recognized
+ */
+export declare const getSectionShortName: (section: Section, otShortName?: string, ntShortName?: string, dcShortName?: string, extraShortName?: string) => string;
 /**
  * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
  * spaces.
@@ -2152,169 +2377,6 @@ export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeF
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
-/** Localized string value associated with this key */
-export type LocalizedStringValue = string;
-/**
- * Date in YYYY-MM-DD format
- *
- * Use regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$` to test.
- *
- * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
- */
-export type DateYYYYMMDD = `${number}-${number}-${number}`;
-/** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
-export interface LocalizedStringDataContribution {
-	[k: string]: unknown;
-	metadata?: StringsMetadata;
-	localizedStrings?: {
-		[k: string]: LanguageStrings;
-	};
-}
-/**
- * Map whose keys are localized string keys and whose values provide additional non-locale-specific
- * information about the localized string key
- */
-export interface StringsMetadata {
-	[k: LocalizeKey]: StringMetadata;
-}
-/** Additional non-locale-specific information about a localized string key */
-export interface StringMetadata {
-	[k: string]: unknown;
-	/**
-	 * Localized string key from which to get this value if one does not exist in the specified
-	 * language. If a new key/value pair needs to be made to replace an existing one, this could help
-	 * smooth over the transition if the meanings are close enough
-	 *
-	 * You can use Paratext 9 Localized String Keys here. Be sure to escape any % signs with a
-	 * backslash `\`.
-	 */
-	fallbackKey?: LocalizeKey;
-	/**
-	 * Additional information provided by developers in English to help the translator to know how to
-	 * translate this localized string accurately
-	 */
-	notes?: string;
-	/**
-	 * If this property is filled, the localized string is deprecated. Contains information about the
-	 * deprecation.
-	 */
-	deprecationInfo?: LocalizedStringDeprecationInfo;
-}
-/**
- * Contains information about the deprecation of a localized string key, including the date of
- * deprecation and the reason.
- */
-export interface LocalizedStringDeprecationInfo {
-	[k: string]: unknown;
-	/**
-	 * Date of deprecation. Must be in YYYY-MM-DD format e.g. 2024-11-13.
-	 *
-	 * Tested against regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$`.
-	 *
-	 * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
-	 */
-	date: DateYYYYMMDD;
-	/**
-	 * Should contain the reason for deprecation and what to use instead in what contexts.
-	 *
-	 * @example Reworded to clarify the meaning. Use %my_key_2% instead.
-	 */
-	message: string;
-}
-/**
- * Map whose keys are localized string keys and whose values provide information about how to
- * localize strings for the localized string key
- */
-export interface LanguageStrings {
-	[k: LocalizeKey]: LocalizedStringValue;
-}
-/** JSON schema object that aligns with the LocalizedStringDataContribution type */
-export declare const localizedStringsDocumentSchema: {
-	$schema: string;
-	title: string;
-	description: string;
-	type: string;
-	properties: {
-		metadata: {
-			$ref: string;
-		};
-		localizedStrings: {
-			type: string;
-			additionalProperties: {
-				$ref: string;
-			};
-		};
-	};
-	$defs: {
-		languageStrings: {
-			description: string;
-			type: string;
-			patternProperties: {
-				"^%[\\w\\-\\.]+%$": {
-					$ref: string;
-				};
-			};
-			additionalProperties: boolean;
-		};
-		localizedStringValue: {
-			description: string;
-			type: string;
-		};
-		stringsMetadata: {
-			description: string;
-			type: string;
-			patternProperties: {
-				"^%[\\w\\-\\.]+%$": {
-					$ref: string;
-				};
-			};
-			additionalProperties: boolean;
-		};
-		stringMetadata: {
-			description: string;
-			type: string;
-			properties: {
-				fallbackKey: {
-					description: string;
-					type: string;
-					pattern: string;
-					tsType: string;
-				};
-				notes: {
-					description: string;
-					type: string;
-				};
-				deprecationInfo: {
-					description: string;
-					$ref: string;
-				};
-			};
-		};
-		localizedStringDeprecationInfo: {
-			description: string;
-			type: string;
-			properties: {
-				date: {
-					description: string;
-					type: string;
-					pattern: string;
-					tsType: string;
-				};
-				message: {
-					description: string;
-					type: string;
-				};
-			};
-			required: string[];
-		};
-		localizeKey: {
-			description: string;
-			type: string;
-			pattern: string;
-			tsType: string;
-		};
-	};
-};
 export type ResourceType = "ScriptureResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;

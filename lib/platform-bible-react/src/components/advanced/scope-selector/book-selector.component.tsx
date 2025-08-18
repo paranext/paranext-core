@@ -1,3 +1,4 @@
+import { BookItem } from '@/components/basics/book-item.component';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import {
@@ -11,16 +12,15 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Canon } from '@sillsdev/scripture';
 import { ChevronsUpDown } from 'lucide-react';
-import { LanguageStrings } from 'platform-bible-utils';
-import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
-import BookItem from './book-item.component';
 import {
-  getBooksForSection,
+  getLocalizedSectionNames,
   getSectionForBook,
   getSectionLongName,
-  isSectionFullySelected,
+  LanguageStrings,
   Section,
-} from './scope-selector-utils';
+} from 'platform-bible-utils';
+import { Fragment, MouseEvent, useCallback, useMemo, useRef, useState } from 'react';
+import { getBooksForSection, isSectionFullySelected } from './scope-selector-utils';
 import SectionButton from './section-button.component';
 
 /** Maximum number of badges to show before collapsing into a "+X more" badge */
@@ -69,10 +69,8 @@ export function BookSelector({
   const clearAllText = localizedStrings['%webView_book_selector_clear_all%'];
   const noBookFoundText = localizedStrings['%webView_book_selector_no_book_found%'];
   const moreText = localizedStrings['%webView_book_selector_more%'];
-  const sectionOtLongText = localizedStrings['%scripture_section_ot_long%'];
-  const sectionNtLongText = localizedStrings['%scripture_section_nt_long%'];
-  const sectionDcLongText = localizedStrings['%scripture_section_dc_long%'];
-  const sectionExtraLongText = localizedStrings['%scripture_section_extra_long%'];
+
+  const { otLong, ntLong, dcLong, extraLong } = getLocalizedSectionNames(localizedStrings);
 
   const [isBooksSelectorOpen, setIsBooksSelectorOpen] = useState(false);
   const lastSelectedBookRef = useRef<string | undefined>(undefined);
@@ -120,6 +118,16 @@ export function BookSelector({
     },
     [selectedBookIds, onChangeSelectedBookIds, availableBooksIds],
   );
+
+  const handleKeyboardSelect = (bookId: string) => {
+    toggleBook(bookId, lastKeyEventShiftKey.current);
+    lastKeyEventShiftKey.current = false;
+  };
+
+  const handleMouseDown = (event: MouseEvent, bookId: string) => {
+    event.preventDefault();
+    toggleBook(bookId, event.shiftKey);
+  };
 
   const toggleSection = useCallback(
     (section: Section) => {
@@ -202,22 +210,20 @@ export function BookSelector({
                 return (
                   <Fragment key={section}>
                     <CommandGroup
-                      heading={getSectionLongName(
-                        section,
-                        sectionOtLongText,
-                        sectionNtLongText,
-                        sectionDcLongText,
-                        sectionExtraLongText,
-                      )}
+                      heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
                     >
                       {sectionBooks.map((bookId) => (
                         <BookItem
                           key={bookId}
                           bookId={bookId}
-                          selectedBookIds={selectedBookIds}
-                          toggleBook={toggleBook}
-                          lastKeyEventShiftKey={lastKeyEventShiftKey}
+                          isSelected={selectedBookIds.includes(bookId)}
+                          onSelect={() => handleKeyboardSelect(bookId)}
+                          onMouseDown={(event) => handleMouseDown(event, bookId)}
+                          section={getSectionForBook(bookId)}
+                          showCheck
                           localizedBookNames={localizedBookNames}
+                          commandValue={bookId}
+                          className="tw-flex tw-items-center"
                         />
                       ))}
                     </CommandGroup>

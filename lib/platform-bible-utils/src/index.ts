@@ -52,9 +52,14 @@ export {
   compareScrRefs,
   formatScrRef,
   getLocalizedIdFromBookNumber,
+  getLocalizedSectionNames,
+  getSectionForBook,
+  getSectionLongName,
+  getSectionShortName,
   normalizeScriptureSpaces,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
+  Section,
 } from './scripture-util';
 export {
   at,
