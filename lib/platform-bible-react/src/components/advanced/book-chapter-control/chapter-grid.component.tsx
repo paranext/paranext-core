@@ -1,6 +1,7 @@
 import { CommandGroup, CommandItem } from '@/components/shadcn-ui/command';
 import { cn } from '@/utils/shadcn-ui.util';
-import { ALL_ENGLISH_BOOK_NAMES, fetchEndChapter } from './book-chapter-control.utils';
+import { ALL_ENGLISH_BOOK_NAMES } from 'platform-bible-utils';
+import { fetchEndChapter } from './book-chapter-control.utils';
 
 export interface ChapterGridProps {
   /** The book ID to render chapters for */
