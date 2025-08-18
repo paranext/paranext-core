@@ -37,19 +37,14 @@ export interface ErrorDumpProps {
   errorDetails: string;
   /** Handler function to notify the frontend when the error is copied */
   handleCopyNotify?: () => void;
-  /** List of localized strings to localize the strings in this component */
+  /**
+   * List of localized strings to localize the strings in this component. Relevant keys can be found
+   * in `ERROR_DUMP_STRING_KEYS`
+   */
   localizedStrings: ErrorDumpLocalizedStrings;
 }
 
-/**
- * Component to render an error dump
- *
- * @param {ErrorDumpProps} props
- * @param props.errorDetails Error details string
- * @param props.handleCopyNotify Handler function to add a notification to the UI to alert that the
- *   error was copied
- * @param props.localizedStrings Localized strings to use in the ErrorDump component
- */
+/** Component to render an error dump */
 export function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps) {
   const headerText = localizeString(localizedStrings, '%webView_error_dump_header%');
   const infoMessage = localizeString(localizedStrings, '%webView_error_dump_info_message%');

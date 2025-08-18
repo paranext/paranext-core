@@ -261,37 +261,38 @@ interface ErrorDumpProps {
 	errorDetails: string;
 	/** Handler function to notify the frontend when the error is copied */
 	handleCopyNotify?: () => void;
-	/** List of localized strings to localize the strings in this component */
+	/**
+	 * List of localized strings to localize the strings in this component. Relevant keys can be found
+	 * in `ERROR_DUMP_STRING_KEYS`
+	 */
 	localizedStrings: ErrorDumpLocalizedStrings;
 }
-/**
- * Component to render an error dump
- *
- * @param {ErrorDumpProps} props
- * @param props.errorDetails Error details string
- * @param props.handleCopyNotify Handler function to add a notification to the UI to alert that the
- *   error was copied
- * @param props.localizedStrings Localized strings to use in the ErrorDump component
- */
+/** Component to render an error dump */
 export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
-type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps & {
+/**
+ * Object containing all keys used for localization in the ErrorPopover component. This extends
+ * ERROR_DUMP_STRING_KEYS with additional keys specific to the ErrorPopover. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const ERROR_POPOVER_STRING_KEYS: readonly [
+	"%webView_error_dump_header%",
+	"%webView_error_dump_info_message%",
+	"%webView_error_dump_copied_message%"
+];
+export type ErrorPopoverLocalizedStrings = {
+	[localizedKey in (typeof ERROR_POPOVER_STRING_KEYS)[number]]?: string;
+};
+type ErrorPopoverProps = React$1.PropsWithChildren & Omit<ErrorDumpProps, "localizedStrings"> & {
+	/**
+	 * List of localized strings to localize the strings in this component. Relevant keys can be
+	 * found in `ERROR_POPOVER_STRING_KEYS`
+	 */
+	localizedStrings: ErrorPopoverLocalizedStrings;
 	/** Optional CSS classes to insert into the `PopoverContent` */
 	className?: string;
 };
-/**
- * A popover component that displays detailed error information using the ErrorDump component.
- *
- * @param {ErrorPopoverProps} props
- * @param props.errorDetails The error details to show in the error popover
- * @param props.handleCopyNotify Optional notification handler function to handle when the error is
- *   copied
- * @param props.localizedStrings List of localized strings to use in the ErrorDump component
- * @param props.className Optional CSS classes to insert into the `PopoverContent`
- *
- *   NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
- *   which contains a list of the localized strings that will need to be set to populate the
- *   `localizedStrings` parameter
- */
+/** A popover component that displays detailed error information using the ErrorDump component. */
 export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children, className, }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
 /** The DropdownMenuItemType enum is used to determine the type of the dropdown item */
 export declare enum DropdownMenuItemType {
