@@ -1,22 +1,8 @@
 import { Canon } from '@sillsdev/scripture';
+import { Section } from 'platform-bible-utils';
 
 /**
- * Represents the major sections of the Bible and extra materials. Used for grouping and filtering
- * books in the book selector.
- */
-export enum Section {
-  /** Old Testament books (Genesis through Malachi) */
-  OT = 'OT',
-  /** New Testament books (Matthew through Revelation) */
-  NT = 'NT',
-  /** Deuterocanonical books (e.g. Tobit, Judith, 1-2 Maccabees) */
-  DC = 'DC',
-  /** Additional materials not part of the biblical canon (e.g. XXA, XXB etc.) */
-  Extra = 'Extra',
-}
-
-/**
- * Gets the localized full name of a Bible section from its enum value
+ * Gets the long name of a Bible section from its enum value
  *
  * @param section - The section enum value to get the name for
  * @param otLongName - Optional localized name for Old Testament section
@@ -80,48 +66,43 @@ export const getSectionShortName = (
 };
 
 /**
- * Determines which section a book belongs to based on its ID
+ * Gets the localized name for a book from the localized book names map, with fallback to English
+ * name
  *
- * @param bookId The ID of the book (e.g., 'GEN', 'MAT')
- * @returns The section (OT, NT, DC, or Extra) that the book belongs to
- * @throws Error if the book ID is not recognized or cannot be categorized
+ * @param bookId - The book ID to get the localized name for
+ * @param localizedBookNames - Optional map of localized book names
+ * @returns The localized name, English name, or fallback value
  */
-export const getSectionForBook = (bookId: string): Section => {
-  if (Canon.isBookOT(bookId)) return Section.OT;
-  if (Canon.isBookNT(bookId)) return Section.NT;
-  if (Canon.isBookDC(bookId)) return Section.DC;
-  if (Canon.isExtraMaterial(bookId)) return Section.Extra;
-
-  throw new Error(`Unknown section for book: ${bookId}`);
-};
-
-/**
- * Filters an array of book IDs to only include books from a specific section
- *
- * @param bookIds Array of book IDs to filter
- * @param section The section to filter by
- * @returns Array of book IDs that belong to the specified section
- */
-export const getBooksForSection = (bookIds: string[], section: Section) => {
-  return bookIds.filter((bookId) => {
-    try {
-      return getSectionForBook(bookId) === section;
-    } catch {
-      return false;
-    }
-  });
-};
+export function getLocalizedBookName(
+  bookId: string,
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>,
+): string {
+  const localizedName = localizedBookNames?.get(bookId)?.localizedName;
+  return localizedName ?? Canon.bookIdToEnglishName(bookId);
+}
 
 /**
- * Checks if all books in a given section are included in the selectedBookIds array
+ * Gets the localized ID for a book from the localized book names map, with fallback to uppercase
+ * book ID
  *
- * @param bookIds Array of all available book IDs
- * @param section The section to check
- * @param selectedBookIds Array of currently selected book IDs
- * @returns True if all books from the specified section are selected, false otherwise
+ * @param bookId - The book ID to get the localized ID for
+ * @param localizedBookNames - Optional map of localized book names
+ * @returns The localized ID, uppercase book ID, or fallback value
  */
-export const isSectionFullySelected = (
-  bookIds: string[],
-  section: Section,
-  selectedBookIds: string[],
-) => getBooksForSection(bookIds, section).every((bookId) => selectedBookIds.includes(bookId));
+export function getLocalizedBookId(
+  bookId: string,
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>,
+): string {
+  const localizedId = localizedBookNames?.get(bookId)?.localizedId;
+  return localizedId ?? bookId.toUpperCase();
+}
+
+/** Book IDs for all books that are not considered obsolete in the SIL Canon library */
+export const ALL_BOOK_IDS = Canon.allBookIds.filter(
+  (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+);
+
+/** English names for all books that are not considered obsolete in the SIL Canon library */
+export const ALL_ENGLISH_BOOK_NAMES = Object.fromEntries(
+  ALL_BOOK_IDS.map((bookId) => [bookId, Canon.bookIdToEnglishName(bookId)]),
+);

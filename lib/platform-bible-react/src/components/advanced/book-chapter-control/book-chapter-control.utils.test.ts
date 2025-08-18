@@ -1,9 +1,7 @@
+import { ALL_BOOK_IDS, ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book-utils';
 import {
   fetchEndChapter,
   calculateTopMatch,
-  generateCommandValue,
-  ALL_BOOK_IDS,
-  ALL_ENGLISH_BOOK_NAMES,
   SCRIPTURE_REGEX_PATTERNS,
 } from './book-chapter-control.utils';
 
@@ -37,28 +35,6 @@ describe('book-chapter-control.utils', () => {
     test('Returns -1 for invalid book ID', () => {
       const chapters = fetchEndChapter('INVALID');
       expect(chapters).toBe(-1);
-    });
-  });
-
-  describe('generateCommandValue', () => {
-    test('Generates command value for book only', () => {
-      const result = generateCommandValue('GEN');
-      expect(result).toBe('GEN Genesis');
-    });
-
-    test('Generates command value for book with chapter', () => {
-      const result = generateCommandValue('GEN', 1);
-      expect(result).toBe('GEN Genesis 1');
-    });
-
-    test('Generates command value for book with chapter 0', () => {
-      const result = generateCommandValue('MAT', 0);
-      expect(result).toBe('MAT Matthew');
-    });
-
-    test('Generates command value for New Testament book', () => {
-      const result = generateCommandValue('REV', 22);
-      expect(result).toBe('REV Revelation 22');
     });
   });
 

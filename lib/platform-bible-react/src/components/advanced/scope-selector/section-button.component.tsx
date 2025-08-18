@@ -1,12 +1,8 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
-import { LanguageStrings } from 'platform-bible-utils';
-import {
-  getBooksForSection,
-  getSectionShortName,
-  isSectionFullySelected,
-  Section,
-} from './scope-selector-utils';
+import { LanguageStrings, Section } from 'platform-bible-utils';
+import { getSectionShortName } from '@/components/shared/book-utils';
+import { getBooksForSection, isSectionFullySelected } from './scope-selector.utils';
 
 /**
  * A button component that represents a scripture section (testament) in the book selector. The
