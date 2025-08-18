@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useCallback, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { defaultScrRef } from 'platform-bible-utils';
+import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
@@ -747,6 +747,178 @@ This interactive test demonstrates:
 14. Searching for a different book with specific chapter and verse
 15. Clicking the second smart parsing result
 16. Verifying the second book submission and proper state management
+        `,
+      },
+    },
+  },
+};
+
+// Sample localized book names for Spanish
+const spanishBookNames = new Map([
+  ['GEN', { localizedId: 'GÉN', localizedName: 'Génesis' }],
+  ['EXO', { localizedId: 'ÉXO', localizedName: 'Éxodo' }],
+  ['LEV', { localizedId: 'LEV', localizedName: 'Levítico' }],
+  ['NUM', { localizedId: 'NÚM', localizedName: 'Números' }],
+  ['DEU', { localizedId: 'DEU', localizedName: 'Deuteronomio' }],
+  ['JOS', { localizedId: 'JOS', localizedName: 'Josué' }],
+  ['JDG', { localizedId: 'JUE', localizedName: 'Jueces' }],
+  ['RUT', { localizedId: 'RUT', localizedName: 'Rut' }],
+  ['1SA', { localizedId: '1SA', localizedName: '1 Samuel' }],
+  ['2SA', { localizedId: '2SA', localizedName: '2 Samuel' }],
+  ['1KI', { localizedId: '1RE', localizedName: '1 Reyes' }],
+  ['2KI', { localizedId: '2RE', localizedName: '2 Reyes' }],
+  ['1CH', { localizedId: '1CR', localizedName: '1 Crónicas' }],
+  ['2CH', { localizedId: '2CR', localizedName: '2 Crónicas' }],
+  ['EZR', { localizedId: 'ESD', localizedName: 'Esdras' }],
+  ['NEH', { localizedId: 'NEH', localizedName: 'Nehemías' }],
+  ['EST', { localizedId: 'EST', localizedName: 'Ester' }],
+  ['JOB', { localizedId: 'JOB', localizedName: 'Job' }],
+  ['PSA', { localizedId: 'SAL', localizedName: 'Salmos' }],
+  ['PRO', { localizedId: 'PRO', localizedName: 'Proverbios' }],
+  ['ECC', { localizedId: 'ECL', localizedName: 'Eclesiastés' }],
+  ['SNG', { localizedId: 'CNT', localizedName: 'Cantares' }],
+  ['ISA', { localizedId: 'ISA', localizedName: 'Isaías' }],
+  ['JER', { localizedId: 'JER', localizedName: 'Jeremías' }],
+  ['LAM', { localizedId: 'LAM', localizedName: 'Lamentaciones' }],
+  ['EZK', { localizedId: 'EZE', localizedName: 'Ezequiel' }],
+  ['DAN', { localizedId: 'DAN', localizedName: 'Daniel' }],
+  ['HOS', { localizedId: 'OSE', localizedName: 'Oseas' }],
+  ['JOL', { localizedId: 'JOE', localizedName: 'Joel' }],
+  ['AMO', { localizedId: 'AMÓ', localizedName: 'Amós' }],
+  ['OBA', { localizedId: 'ABD', localizedName: 'Abdías' }],
+  ['JON', { localizedId: 'JON', localizedName: 'Jonás' }],
+  ['MIC', { localizedId: 'MIQ', localizedName: 'Miqueas' }],
+  ['NAM', { localizedId: 'NAH', localizedName: 'Nahúm' }],
+  ['HAB', { localizedId: 'HAB', localizedName: 'Habacuc' }],
+  ['ZEP', { localizedId: 'SOF', localizedName: 'Sofonías' }],
+  ['HAG', { localizedId: 'HAG', localizedName: 'Hageo' }],
+  ['ZEC', { localizedId: 'ZAC', localizedName: 'Zacarías' }],
+  ['MAL', { localizedId: 'MAL', localizedName: 'Malaquías' }],
+  ['MAT', { localizedId: 'MAT', localizedName: 'Mateo' }],
+  ['MRK', { localizedId: 'MAR', localizedName: 'Marcos' }],
+  ['LUK', { localizedId: 'LUC', localizedName: 'Lucas' }],
+  ['JHN', { localizedId: 'JUA', localizedName: 'Juan' }],
+  ['ACT', { localizedId: 'HEC', localizedName: 'Hechos' }],
+  ['ROM', { localizedId: 'ROM', localizedName: 'Romanos' }],
+  ['1CO', { localizedId: '1CO', localizedName: '1 Corintios' }],
+  ['2CO', { localizedId: '2CO', localizedName: '2 Corintios' }],
+  ['GAL', { localizedId: 'GÁL', localizedName: 'Gálatas' }],
+  ['EPH', { localizedId: 'EFE', localizedName: 'Efesios' }],
+  ['PHP', { localizedId: 'FIL', localizedName: 'Filipenses' }],
+  ['COL', { localizedId: 'COL', localizedName: 'Colosenses' }],
+  ['1TH', { localizedId: '1TE', localizedName: '1 Tesalonicenses' }],
+  ['2TH', { localizedId: '2TE', localizedName: '2 Tesalonicenses' }],
+  ['1TI', { localizedId: '1TI', localizedName: '1 Timoteo' }],
+  ['2TI', { localizedId: '2TI', localizedName: '2 Timoteo' }],
+  ['TIT', { localizedId: 'TIT', localizedName: 'Tito' }],
+  ['PHM', { localizedId: 'FLM', localizedName: 'Filemón' }],
+  ['HEB', { localizedId: 'HEB', localizedName: 'Hebreos' }],
+  ['JAS', { localizedId: 'STG', localizedName: 'Santiago' }],
+  ['1PE', { localizedId: '1PE', localizedName: '1 Pedro' }],
+  ['2PE', { localizedId: '2PE', localizedName: '2 Pedro' }],
+  ['1JN', { localizedId: '1JN', localizedName: '1 Juan' }],
+  ['2JN', { localizedId: '2JN', localizedName: '2 Juan' }],
+  ['3JN', { localizedId: '3JN', localizedName: '3 Juan' }],
+  ['JUD', { localizedId: 'JUD', localizedName: 'Judas' }],
+  ['REV', { localizedId: 'APO', localizedName: 'Apocalipsis' }],
+]);
+
+// Sample localized book names for French
+const frenchBookNames = new Map([
+  ['GEN', { localizedId: 'GEN', localizedName: 'Genèse' }],
+  ['EXO', { localizedId: 'EXO', localizedName: 'Exode' }],
+  ['LEV', { localizedId: 'LÉV', localizedName: 'Lévitique' }],
+  ['NUM', { localizedId: 'NOM', localizedName: 'Nombres' }],
+  ['DEU', { localizedId: 'DEU', localizedName: 'Deutéronome' }],
+  ['MAT', { localizedId: 'MAT', localizedName: 'Matthieu' }],
+  ['MRK', { localizedId: 'MAR', localizedName: 'Marc' }],
+  ['LUK', { localizedId: 'LUC', localizedName: 'Luc' }],
+  ['JHN', { localizedId: 'JEA', localizedName: 'Jean' }],
+  ['ACT', { localizedId: 'ACT', localizedName: 'Actes' }],
+  ['ROM', { localizedId: 'ROM', localizedName: 'Romains' }],
+  ['1CO', { localizedId: '1CO', localizedName: '1 Corinthiens' }],
+  ['2CO', { localizedId: '2CO', localizedName: '2 Corinthiens' }],
+  ['GAL', { localizedId: 'GAL', localizedName: 'Galates' }],
+  ['EPH', { localizedId: 'ÉPH', localizedName: 'Éphésiens' }],
+  ['PHP', { localizedId: 'PHI', localizedName: 'Philippiens' }],
+  ['REV', { localizedId: 'APO', localizedName: 'Apocalypse' }],
+]);
+
+export const WithLocalizedSpanishBookNames: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    handleSubmit: fn(),
+    localizedBookNames: spanishBookNames,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Localized Book Names (Spanish)** - Demonstrates the BookChapterControl with Spanish localized book names.
+
+This example shows how the component displays localized book names in Spanish alongside the localized book IDs. When you open the book selector, you'll see:
+- Spanish book names (e.g., "Génesis" instead of "Genesis")
+- Spanish book IDs (e.g., "GÉN" instead of "GEN")
+- Proper search functionality with both English and Spanish terms
+
+The localization is provided through the \`localizedBookNames\` prop, which maps English book IDs to their localized equivalents.
+        `,
+      },
+    },
+  },
+};
+
+export const WithLocalizedFrenchBookNames: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    handleSubmit: fn(),
+    localizedBookNames: frenchBookNames,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Localized Book Names (French)** - Demonstrates the BookChapterControl with French localized book names.
+
+This example shows how the component displays localized book names in French. Features include:
+- French book names (e.g., "Matthieu" instead of "Matthew")
+- French book IDs where different (e.g., "JEA" for John)
+- Seamless integration with search and navigation
+
+Note: This example includes a subset of books to demonstrate the localization feature. In practice, you would provide localized names for all available books.
+        `,
+      },
+    },
+  },
+};
+
+// Sample localized strings for Spanish (section names and other UI text)
+const spanishLocalizedStrings: LanguageStrings = {
+  '%scripture_section_ot_long%': 'Antiguo Testamento',
+  '%scripture_section_nt_long%': 'Nuevo Testamento',
+  '%scripture_section_dc_long%': 'Deuterocanónicos',
+  '%scripture_section_extra_long%': 'Material Extra',
+};
+
+export const WithLocalizedSectionNames: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    handleSubmit: fn(),
+    localizedBookNames: spanishBookNames,
+    localizedStrings: spanishLocalizedStrings,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Localized Section Names** - Demonstrates the BookChapterControl with localized section names.
+
+This example shows how the component displays localized section headers in Spanish. Features include:
+- Spanish section names ("Antiguo Testamento" instead of "Old Testament")
+- Spanish book names from the previous example
+- Proper integration of both types of localization
+
+This demonstrates the full localization capabilities of the component.
         `,
       },
     },
