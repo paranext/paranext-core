@@ -36,5 +36,8 @@
   },
   "%mainMenu_visitSupportBible%": {
     "fallbackKey": "%mainMenu_helpInfo_visitFAQsPage%"
+  },
+  "%settings_errorMessages_copiedError%": {
+    "fallbackKey": "%webView_error_dump_copied_message%"
   }
 }
