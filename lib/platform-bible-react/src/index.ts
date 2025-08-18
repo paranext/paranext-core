@@ -17,7 +17,11 @@ export type {
   TableContents,
 } from './components/advanced/data-table/data-table.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
-export { ErrorPopover } from './components/advanced/error-popover.component';
+export {
+  ErrorPopover,
+  ERROR_POPOVER_STRING_KEYS,
+} from './components/advanced/error-popover.component';
+export type { ErrorPopoverLocalizedStrings } from './components/advanced/error-popover.component';
 export {
   default as FilterDropdown,
   DropdownMenuItemType,

@@ -158,6 +158,7 @@
   "%webView_edit%": "Edit",
   "%webView_error_dump_header%": "Error Details",
   "%webView_error_dump_info_message%": "Need help? Share this with our tech support team to help resolve your issue.",
+  "%webView_error_dump_copied_message%": "Error message copied to clipboard",
   "%webView_openProjectSettings%": "Open Project Settings...",
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
