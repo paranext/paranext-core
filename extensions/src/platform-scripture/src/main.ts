@@ -160,6 +160,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     projectId,
     editorScrollGroupId,
     bringToFront: true,
+    editorWebViewId,
   };
 
   // First tries to open an existing find web view
