@@ -28,6 +28,10 @@ export {
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
   defaultScrRef,
+  getLocalizedBookName,
+  getLocalizedBookId,
+  ALL_BOOK_IDS,
+  ALL_ENGLISH_BOOK_NAMES,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
@@ -50,11 +54,17 @@ export {
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
+  doesBookMatchQuery,
   formatScrRef,
   getLocalizedIdFromBookNumber,
+  getLocalizedSectionNames,
+  getSectionForBook,
+  getSectionLongName,
+  getSectionShortName,
   normalizeScriptureSpaces,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
+  Section,
 } from './scripture-util';
 export {
   at,
