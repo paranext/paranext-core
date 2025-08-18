@@ -25,25 +25,6 @@ import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildre
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
-export type BookChapterControlProps = {
-	/** The current scripture reference */
-	scrRef: SerializedVerseRef;
-	/** Callback to handle the submission of a selected reference */
-	handleSubmit: (scrRef: SerializedVerseRef) => void;
-	/** Optional additional class name for styling */
-	className?: string;
-	/** Callback to retrieve book IDs that are available in the current context */
-	getActiveBookIds?: () => string[];
-};
-/**
- * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
- * It allows users to input a search query to find specific books and chapters, navigate through
- * options with keyboard interactions, and submit selections. The component handles various
- * interactions such as opening and closing the dropdown menu, filtering book lists based on search
- * input, and managing highlighted selections. It also integrates with external handlers for
- * submitting selected references and retrieving active book IDs.
- */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 type Unsubscriber = () => boolean;
 type UnsubscriberAsync = () => Promise<boolean>;
 type PlatformEventHandler<T> = (event: T) => void;
@@ -138,6 +119,51 @@ type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
+/**
+ * Object containing all keys used for localization in the BookChapterControl component. If you're
+ * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
+	"%scripture_section_ot_long%",
+	"%scripture_section_nt_long%",
+	"%scripture_section_dc_long%",
+	"%scripture_section_extra_long%"
+];
+/** Type definition for the localized strings used in the BookChapterControl component */
+export type BookChapterControlLocalizedStrings = {
+	[localizedKey in (typeof BOOK_CHAPTER_CONTROL_STRING_KEYS)[number]]?: string;
+};
+export type BookChapterControlProps = {
+	/** The current scripture reference */
+	scrRef: SerializedVerseRef;
+	/** Callback to handle the submission of a selected reference */
+	handleSubmit: (scrRef: SerializedVerseRef) => void;
+	/** Optional additional class name for styling */
+	className?: string;
+	/** Callback to retrieve book IDs that are available in the current context */
+	getActiveBookIds?: () => string[];
+	/**
+	 * Optional map of localized book IDs/short names and full names. The key is the standard book ID
+	 * (e.g., "2CH"), the value contains a localized version of the ID and related book name (e.g. {
+	 * localizedId: '2CR', localizedName: '2 Crónicas' })
+	 */
+	localizedBookNames?: Map<string, {
+		localizedId: string;
+		localizedName: string;
+	}>;
+	/** Optional localized strings for the component */
+	localizedStrings?: LanguageStrings;
+};
+/**
+ * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
+ * It allows users to input a search query to find specific books and chapters, navigate through
+ * options with keyboard interactions, and submit selections. The component handles various
+ * interactions such as opening and closing the dropdown menu, filtering book lists based on search
+ * input, and managing highlighted selections. It also integrates with external handlers for
+ * submitting selected references and retrieving active book IDs.
+ */
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -1240,7 +1266,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -1424,7 +1450,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "secondary" | "destructive" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
