@@ -33,21 +33,7 @@ jobs:
     steps:
       - name: Install MacPorts
         if: ${{ matrix.os == env.OS_MACOS }}
-        run: |
-          set -euxo pipefail
-          # Figure out the OS version (e.g., 14 for Sonoma, 13 for Ventura, 15 for Sequoia, etc.)
-          MACOS_VER=$(sw_vers -productVersion | awk -F '.' '{print $1}')
-          case "$MACOS_VER" in
-            "15."*)  PKG_URL="https://github.com/macports/macports-base/releases/download/v2.11.4/MacPorts-2.11.4-15-Sequoia.pkg" ;;
-            "14."*)  PKG_URL="https://github.com/macports/macports-base/releases/download/v2.11.4/MacPorts-2.11.4-14-Sonoma.pkg" ;;
-            "13."*)  PKG_URL="https://github.com/macports/macports-base/releases/download/v2.11.4/MacPorts-2.11.4-13-Ventura.pkg" ;;
-            *) echo "Unsupported macOS version: $MACOS_VER"; exit 1 ;;
-          esac
-          curl -fsSL -o /tmp/macports.pkg "$PKG_URL"
-          sudo installer -pkg /tmp/macports.pkg -target /
-          # Add MacPorts to PATH for this session
-          echo "/opt/local/bin" >> $GITHUB_PATH
-          echo "/opt/local/sbin" >> $GITHUB_PATH
+        uses: melusina-org/setup-macports@v1
 
       - name: Update MacPorts ports tree
         if: ${{ matrix.os == 'macos-14' }}
