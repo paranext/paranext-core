@@ -1,6 +1,6 @@
 import { Canon } from '@sillsdev/scripture';
-import { getChaptersForBook } from 'platform-bible-utils';
-import { BookType, BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
+import { getChaptersForBook, doesBookMatchQuery } from 'platform-bible-utils';
+import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
 
 export const ALL_BOOK_IDS = Canon.allBookIds.filter(
   (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
@@ -9,13 +9,6 @@ export const ALL_BOOK_IDS = Canon.allBookIds.filter(
 export const ALL_ENGLISH_BOOK_NAMES = Object.fromEntries(
   ALL_BOOK_IDS.map((bookId) => [bookId, Canon.bookIdToEnglishName(bookId)]),
 );
-
-export const BOOK_TYPE_LABELS: Record<BookType, string> = {
-  OT: 'Old Testament',
-  NT: 'New Testament',
-  DC: 'Deuterocanon',
-  Extra: 'Extra',
-};
 
 // Smart parsing regex patterns
 export const SCRIPTURE_REGEX_PATTERNS = {
@@ -48,6 +41,7 @@ export function fetchEndChapter(bookId: string) {
 export function calculateTopMatch(
   query: string,
   availableBooks: string[],
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>,
 ): BookWithOptionalChapterAndVerse | undefined {
   if (!query.trim() || availableBooks.length === 0) return undefined;
 
@@ -63,14 +57,9 @@ export function calculateTopMatch(
         let validBookId: string | undefined;
 
         // Match for partial book name or id
-        const bookLowerCase = book.toLowerCase();
 
         const allPotentialMatches = availableBooks.filter((bookId) => {
-          const bookEnglishName = ALL_ENGLISH_BOOK_NAMES[bookId];
-          return (
-            bookEnglishName.toLowerCase().includes(bookLowerCase) ||
-            bookId.toLowerCase().includes(bookLowerCase)
-          );
+          return doesBookMatchQuery(bookId, book, localizedBookNames);
         });
 
         // Only create a topMatch if exactly one book could match
@@ -78,21 +67,35 @@ export function calculateTopMatch(
           [validBookId] = allPotentialMatches;
         }
 
-        // Match for exact book id
+        // Match for exact book id (English or localized)
         // This is only performed when a chapter number is provided, to prevent edge cases where
         // a search for e.g. `jud` would generate a top match for 'Jude', even though 'Judges' would
         // also be a valid match
-        if (!validBookId && chapter && Canon.isBookIdValid(book)) {
-          const bookUpperCase = book.toUpperCase();
-          if (availableBooks.includes(bookUpperCase)) {
-            validBookId = bookUpperCase;
+        if (!validBookId && chapter) {
+          // Check exact English book ID
+          if (Canon.isBookIdValid(book)) {
+            const bookIdUpperCase = book.toUpperCase();
+            if (availableBooks.includes(bookIdUpperCase)) {
+              validBookId = bookIdUpperCase;
+            }
+          }
+
+          // Check exact localized book ID
+          if (!validBookId && localizedBookNames) {
+            const matchingLocalizedBookId = Array.from(localizedBookNames.entries()).find(
+              ([, localizedBook]) => localizedBook.localizedId.toLowerCase() === book.toLowerCase(),
+            );
+            if (matchingLocalizedBookId && availableBooks.includes(matchingLocalizedBookId[0])) {
+              [validBookId] = matchingLocalizedBookId;
+            }
           }
         }
 
-        // Match for exact full book name
+        // Match for exact full book name (English or localized)
         // This is only performed when a chapter number is provided, to prevent edge cases where
         // a search for e.g. `john` only matches `John` but not `1 John`, `2 John` and `3 John`
         if (!validBookId && chapter) {
+          // Check exact English book name
           const getBookIdFromEnglishName = (bookName: string): string | undefined => {
             return Object.keys(ALL_ENGLISH_BOOK_NAMES).find(
               (bookId) => ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase() === bookName.toLowerCase(),
@@ -102,6 +105,20 @@ export function calculateTopMatch(
           const matchingBookIdForFullName = getBookIdFromEnglishName(book);
           if (matchingBookIdForFullName && availableBooks.includes(matchingBookIdForFullName)) {
             validBookId = matchingBookIdForFullName;
+          }
+
+          // Check exact localized book name
+          if (!validBookId && localizedBookNames) {
+            const matchingLocalizedBookName = Array.from(localizedBookNames.entries()).find(
+              ([, localizedBook]) =>
+                localizedBook.localizedName.toLowerCase() === book.toLowerCase(),
+            );
+            if (
+              matchingLocalizedBookName &&
+              availableBooks.includes(matchingLocalizedBookName[0])
+            ) {
+              [validBookId] = matchingLocalizedBookName;
+            }
           }
         }
 
