@@ -2,8 +2,6 @@ name: Bump Versions
 run-name: Bump versions on ${{ github.head_ref || github.ref_name }} to ${{ github.event.inputs.newVersion }}
 
 on:
-  push:
-    branches: ['3107-improve-release-workflow']
   workflow_dispatch:
     inputs:
       newVersion:
