@@ -18,13 +18,13 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
 
 const newMarketingVersionIndex = process.argv.indexOf('--marketing-version');
 const newMarketingVersion =
-  newMarketingVersionIndex >= 0 && newMarketingVersionIndex < process.argv.length
+  newMarketingVersionIndex >= 0 && newMarketingVersionIndex < process.argv.length - 1
     ? process.argv[newMarketingVersionIndex + 1]
     : '';
 
 const newMarketingVersionMonikerIndex = process.argv.indexOf('--marketing-version-moniker');
 const newMarketingVersionMoniker =
-  newMarketingVersionMonikerIndex >= 0 && newMarketingVersionMonikerIndex < process.argv.length
+  newMarketingVersionMonikerIndex >= 0 && newMarketingVersionMonikerIndex < process.argv.length - 1
     ? process.argv[newMarketingVersionMonikerIndex + 1]
     : '';
 
