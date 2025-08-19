@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Input } from '@/components/shadcn-ui/input';
 import { useState, type ChangeEvent } from 'react';
-// import { ThemeProvider } from '@/preview/preview-components/theme-provider.component'; // Temporarily disabled
+// import { ThemeProvider } from '@/storybook/theme-provider.component'; // Temporarily disabled
 
 const meta: Meta<typeof Input> = {
   title: 'Shadcn/Input',
@@ -50,7 +50,12 @@ export const LiveEditable: Story = {
     const [value, setValue] = useState('');
     return (
       <div className="tw-max-w-md tw-space-y-4">
-        <Input {...args} value={value} onChange={(e) => setValue(e.target.value)} />
+        <Input
+          {...args}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Test input"
+        />
         <div className="tw-text-sm tw-text-gray-600">
           <p>
             Current value: <code>{value}</code>
@@ -109,6 +114,52 @@ export const WithValidation: Story = {
     docs: {
       description: {
         story: 'An input with validation logic that you can edit and experiment with in real-time.',
+      },
+    },
+  },
+};
+
+export const CustomStyles: Story = {
+  render: () => (
+    <div className="tw-space-y-4">
+      <div>
+        <label htmlFor="default-input" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          Default Shadcn Input
+        </label>
+        <Input id="default-input" placeholder="Default styling" />
+      </div>
+      <div>
+        <label htmlFor="small-input" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          Small Input (8px height)
+        </label>
+        <Input id="small-input" placeholder="Small input" className="tw-h-8" />
+      </div>
+      <div>
+        <label htmlFor="bvc-input" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          BVC Style Input
+        </label>
+        <Input
+          id="bvc-input"
+          placeholder="Book-chapter-control style"
+          className="tw-box-border tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-border-black tw-bg-white tw-py-2 tw-pl-4 tw-pr-3 tw-font-medium tw-text-slate-900 tw-shadow-none tw-outline-none"
+        />
+      </div>
+      <div>
+        <label htmlFor="ring-input" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          Custom Ring Color
+        </label>
+        <Input
+          id="ring-input"
+          placeholder="Custom focus ring"
+          className="focus-visible:tw-ring-[color:hsl(240,5%,64.9%)]"
+        />
+      </div>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Various input styling examples showing different visual approaches.',
       },
     },
   },
