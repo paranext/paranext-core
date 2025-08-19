@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { useState } from 'react';
 
 const meta: Meta<typeof DataTable> = {
   title: 'Advanced/DataTable',
@@ -214,15 +213,14 @@ const userColumns: ColumnDef<User>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.getValue('status');
+      const status = row.getValue<User['status']>('status');
       let variant: 'default' | 'secondary' | 'outline' = 'outline';
       if (status === 'active') {
         variant = 'default';
       } else if (status === 'inactive') {
         variant = 'secondary';
       }
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return <Badge variant={variant}>{status as string}</Badge>;
+      return <Badge variant={variant}>{status}</Badge>;
     },
   },
 ];
@@ -272,24 +270,22 @@ const advancedUserColumns: ColumnDef<User>[] = [
     accessorKey: 'role',
     header: 'Role',
     cell: ({ row }) => {
-      const role = row.getValue('role');
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return <Badge variant="outline">{role as string}</Badge>;
+      const role = row.getValue<User['role']>('role');
+      return <Badge variant="outline">{role}</Badge>;
     },
   },
   {
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.getValue('status');
+      const status = row.getValue<User['status']>('status');
       let variant: 'default' | 'secondary' | 'outline' = 'outline';
       if (status === 'active') {
         variant = 'default';
       } else if (status === 'inactive') {
         variant = 'secondary';
       }
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return <Badge variant={variant}>{status as string}</Badge>;
+      return <Badge variant={variant}>{status}</Badge>;
     },
   },
   {
@@ -415,56 +411,83 @@ const productColumns: ColumnDef<Product>[] = [
     accessorKey: 'featured',
     header: 'Featured',
     cell: ({ row }) => {
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const featured = row.getValue('featured') as boolean;
+      const featured = row.getValue<Product['featured']>('featured');
       return <Badge variant={featured ? 'default' : 'secondary'}>{featured ? 'Yes' : 'No'}</Badge>;
     },
   },
 ];
 
 export const BasicTable: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
+  render: () => <DataTable<User, unknown> columns={userColumns} data={users} />,
+  parameters: {
+    docs: {
+      description: {
+        story: 'A basic table showing user data with minimal configuration.',
+      },
+    },
   },
 };
 
 export const WithPagination: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
-    enablePagination: true,
+  render: () => (
+    <DataTable<Product, unknown>
+      columns={productColumns}
+      data={[...products, ...products, ...products]}
+      enablePagination
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Table with pagination enabled to handle larger datasets.',
+      },
+    },
   },
 };
 
 export const WithPaginationControls: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
-    enablePagination: true,
-    showPaginationControls: true,
+  render: () => (
+    <DataTable<Product, unknown>
+      columns={productColumns}
+      data={[...products, ...products, ...products]}
+      enablePagination
+      showPaginationControls
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Table with detailed pagination controls for better navigation.',
+      },
+    },
   },
 };
 
 export const WithColumnVisibilityControls: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: advancedUserColumns as any,
-    data: users,
-    showColumnVisibilityControls: true,
+  render: () => (
+    <DataTable<User, unknown>
+      columns={advancedUserColumns}
+      data={users}
+      showColumnVisibilityControls
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Table with column visibility controls allowing users to show/hide columns.',
+      },
+    },
   },
 };
 
 export const StickyHeader: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: productColumns as any,
-    data: [...products, ...products, ...products], // Triple the data to show scrolling
-    stickyHeader: true,
-  },
+  render: () => (
+    <DataTable<Product, unknown>
+      columns={productColumns}
+      data={[...products, ...products, ...products]} // Triple the data to show scrolling
+      stickyHeader
+    />
+  ),
   parameters: {
     docs: {
       description: {
@@ -475,109 +498,32 @@ export const StickyHeader: Story = {
 };
 
 export const FullFeatured: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: advancedUserColumns as any,
-    data: users,
-    enablePagination: true,
-    showPaginationControls: true,
-    showColumnVisibilityControls: true,
-    stickyHeader: true,
-  },
-};
-
-export const EmptyTable: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: [],
-  },
-};
-
-export const InteractiveExample: Story = {
-  render: (args) => {
-    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleRowClick = (row: any) => {
-      const userId = row.original.id;
-      setSelectedUsers((prev) =>
-        prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-      );
-    };
-
-    return (
-      <div className="tw-space-y-4">
-        <div className="tw-flex tw-items-center tw-justify-between">
-          <h3 className="tw-text-lg tw-font-semibold">Interactive User Table</h3>
-          {selectedUsers.length > 0 && (
-            <Badge variant="outline">{selectedUsers.length} user(s) selected</Badge>
-          )}
-        </div>
-
-        <DataTable
-          {...args}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-          columns={userColumns as any}
-          data={users}
-          onRowClickHandler={handleRowClick}
-        />
-
-        {selectedUsers.length > 0 && (
-          <div className="tw-rounded tw-border tw-p-4">
-            <h4 className="tw-mb-2 tw-font-medium">Selected Users:</h4>
-            <ul className="tw-list-inside tw-list-disc tw-space-y-1">
-              {selectedUsers.map((userId) => {
-                const user = users.find((u) => u.id === userId);
-                return user ? (
-                  <li key={userId} className="tw-text-sm">
-                    {user.name} ({user.email})
-                  </li>
-                ) : undefined;
-              })}
-            </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              className="tw-mt-2"
-              onClick={() => setSelectedUsers([])}
-            >
-              Clear Selection
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  },
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
-    enablePagination: true,
-  },
+  render: () => (
+    <DataTable<User, unknown>
+      columns={advancedUserColumns}
+      data={users}
+      enablePagination
+      showPaginationControls
+      showColumnVisibilityControls
+      stickyHeader
+    />
+  ),
   parameters: {
     docs: {
       description: {
-        story: 'Interactive example with custom row click handling and selection tracking.',
+        story:
+          'Full-featured DataTable with built-in column visibility controls, pagination, and all features enabled.',
       },
     },
   },
 };
 
-export const ProductCatalog: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: productColumns as any,
-    data: products,
-    enablePagination: true,
-    showPaginationControls: true,
-    showColumnVisibilityControls: true,
-  },
+export const EmptyTable: Story = {
+  render: () => <DataTable<User, unknown> columns={userColumns} data={[]} />,
   parameters: {
     docs: {
       description: {
-        story:
-          'Example showing a product catalog with formatted currency, stock indicators, and sorting.',
+        story: 'Table with no data to show the empty state.',
       },
     },
   },

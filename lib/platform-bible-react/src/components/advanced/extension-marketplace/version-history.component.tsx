@@ -61,7 +61,7 @@ export function VersionHistory({ id, versionHistory }: VersionHistoryProps) {
   const sortedEntries = Object.entries(versionHistory).sort((a, b) => b[0].localeCompare(a[0]));
 
   return (
-    <div id={id}>
+    <div className="pr-twp" id={id}>
       <h3 className="tw-text-md tw-font-semibold">What`s New</h3>
       <ul className="tw-list-disc tw-pl-5 tw-pr-4 tw-text-xs tw-text-foreground">
         {(showAllVersions ? sortedEntries : sortedEntries.slice(0, 5)).map((entry) => (

@@ -11,7 +11,7 @@ function ThemingGuide() {
         which properties the shadcn components expect (so that they will set their style themselves)
         and use them accordingly.
       </p>
-      <div className="tw-flex tw-items-center tw-gap-2">
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
         Try it: change theme
         <ThemeButton />
       </div>
