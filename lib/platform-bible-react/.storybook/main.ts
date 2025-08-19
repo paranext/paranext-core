@@ -41,7 +41,7 @@ const config: StorybookConfig = {
     getAbsolutePath('storybook-addon-rtl'),
     getAbsolutePath('@storybook/addon-vitest'),
     {
-      name: 'storybook-addon-code-editor',
+      name: getAbsolutePath('storybook-addon-code-editor'),
       options: {
         // Inject global CSS into the code editor
         css: ['/index.css'],
