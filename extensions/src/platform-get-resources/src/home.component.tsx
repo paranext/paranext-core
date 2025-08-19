@@ -131,7 +131,10 @@ export type HomeProps = {
   sharedProjectsInfo?: SharedProjectsInfo;
   /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
-
+  /**
+   * Content for the header, e.g. <><HomeIcon
+   * size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
+   */
   headerContent: React.ReactNode;
 };
 
@@ -154,6 +157,8 @@ export type HomeProps = {
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @param {headerContent} - Content for the header, e.g. <><HomeIcon
+ *   size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
  * @returns
  */
 export function Home({
