@@ -8,58 +8,46 @@ Consistent capitalization improves clarity and usability in our design system. W
 
 ## Why we use sentence case
 
-We choose sentence case because:
+Sentence case is easier to read and scan quickly. It follows standard English conventions and feels more natural, especially for longer text strings. Research shows that sentence case improves comprehension and reduces cognitive load.
 
-* **Clarity:** It’s easier to distinguish proper nouns and special terms from regular words, reducing confusion for users.
-* **Consistency:** Sentence case is simpler to apply across different languages and platforms, making localization and maintenance easier. Rules for title case can also vary widely and contentiously within languages.
-* **Readability:** Studies show sentence case is easier to read, especially for longer phrases or sentences.
-* **Approachability:** It feels more conversational and less overwhelming for the reader than title case.
+### Examples of sentence case:
 
-> “Sentence case respects the difference between proper nouns and the other words.”
+* **Buttons**: "Save changes", "Delete item", "Add new project"
+* **Menu items**: "Project settings", "Export data", "User preferences"
+* **Form labels**: "Email address", "Password confirmation", "Project name"
+* **Headings**: "Getting started", "Advanced features", "Troubleshooting guide"
 
-## Core rules
+## When to use title case
 
-* **Use sentence case** for all headings, labels, buttons, and body text.
-  * Example: “Get started with your project”
-* **Always capitalize specific product names and proper nouns** as listed below.
+Use title case sparingly and only for:
 
-## Product and feature names
+* **Product names**: "Platform.Bible", "Paranext"
+* **Proper nouns**: Names of people, places, organizations
+* **API names**: Specific technical terms that are established as proper nouns
 
-* **Paratext products and features:**
+## Special considerations
 
-  * Paratext
-  * Paratext 10 Studio
-  * Platform.Bible
+### Abbreviations and acronyms
 
-* **Apple products:**
-  * macOS
-  * iOS
-  * iPhone
+* Keep established abbreviations in their standard form: "URL", "API", "JSON"
+* Don't force sentence case on well-known technical terms
 
-## Examples
+### Brands and external services
 
-* Correct:
+* Respect the official capitalization of external brands and services
+* Examples: "GitHub", "YouTube", "macOS"
 
-  * “Sign in to Platform.Bible on your iPhone”
-  * “Install Paratext 10 Studio on macOS”
-  * “Learn more about Paratext features”
+### Code and technical terms
 
-* Incorrect:
-  * “Sign In To Platform.bible On Your Iphone”
-  * “Install paratext 10 studio on MacOS”
-  * “Learn More About paratext Features”
+* Follow the established conventions of the programming language or framework
+* Component names in React follow PascalCase: `Button`, `DialogContent`
+* CSS classes follow kebab-case: `.search-bar`, `.dialog-overlay`
 
-## Summary
+## Implementation guidelines
 
-* Use sentence case everywhere, except for product names and proper nouns, which must always be capitalized correctly.
-* This approach keeps our design system clear, consistent, and user-friendly.
+1. **Review all UI text** for consistent sentence case application
+2. **Update style guides** to reflect these capitalization rules
+3. **Use linting tools** where possible to catch inconsistencies
+4. **Train team members** on these conventions during onboarding
 
-***
-
-## References
-
-[Making the case for sentence case on USAGov’s websites](https://blog.usa.gov/making-the-case-for-sentence-case)
-
-[Capital letters | Content Design London's Readability Guidelines](https://readabilityguidelines.co.uk/grammar-points/capital-letters/)
-
-[Title case vs sentence case in UX writing | by Kateryna Prokhorenko | UX Collective](https://uxdesign.cc/title-case-vs-sentence-case-in-ux-writing-212087192261)
+Remember: Consistency is more important than perfection. When in doubt, choose sentence case and apply it consistently throughout the interface.

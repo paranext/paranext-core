@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatBytes } from 'platform-bible-utils';
+import { formatBytes, getCurrentLocale } from 'platform-bible-utils';
 import { VersionHistory, VersionHistoryType } from './version-history.component';
 
 /** Interface to store the parameters passed to the Footer component */
@@ -43,7 +43,7 @@ export function Footer({
    * @returns The list of language names
    */
   const getLanguageNames = (codes: string[]) => {
-    const displayNames = new Intl.DisplayNames(navigator.language, { type: 'language' });
+    const displayNames = new Intl.DisplayNames(getCurrentLocale(), { type: 'language' });
     return codes.map((code) => displayNames.of(code));
   };
 
