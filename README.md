@@ -244,7 +244,7 @@ For example, to bump branch `my-branch` to version `0.2.0` with optional marketi
 
 ```bash
 git checkout my-branch
-npm run bump-versions 0.2.0 --marketing-version β1 --marketing-version-moniker "Developer Preview"
+npm run bump-versions -- 0.2.0 --marketing-version β1 --marketing-version-moniker "Developer Preview"
 ```
 
 Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
