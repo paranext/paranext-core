@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useState } from 'react';
 import { Home, HomeProps, LocalProjectInfo } from './home.component';
+import { HomeIcon } from 'lucide-react';
+import { CardTitle } from 'platform-bible-react';
 
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
@@ -79,7 +81,7 @@ export default meta;
 
 type Story = StoryObj<typeof Home>;
 
-function DefaultHomeDecorator(Story: (update?: { args: Partial<HomeProps> }) => ReactElement) {
+function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   const [localProjectsAndResources, setLocalProjectsAndResources] = useState<LocalProjectInfo[]>(
     [],
   );
@@ -111,6 +113,12 @@ function DefaultHomeDecorator(Story: (update?: { args: Partial<HomeProps> }) => 
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
         isLoadingRemoteProjects,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home Story</CardTitle>
+          </>
+        ),
       }}
     />
   );
@@ -120,11 +128,11 @@ export const Default: Story = {
   decorators: [DefaultHomeDecorator],
 };
 
-export const NoProjects: Story = {
+export const NoProjectsNoHeader: Story = {
   decorators: [],
 };
 
-function OnlyWebProjectDecorator(Story: (update?: { args: Partial<HomeProps> }) => ReactElement) {
+function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactElement) {
   const onlyWebProjectList: LocalProjectInfo[] = [
     {
       projectId: '0',
@@ -139,6 +147,11 @@ function OnlyWebProjectDecorator(Story: (update?: { args: Partial<HomeProps> }) 
     <Story
       args={{
         localProjectsInfo: onlyWebProjectList,
+        headerContent: (
+          <>
+            <CardTitle>Only the web project</CardTitle>
+          </>
+        ),
       }}
     />
   );
