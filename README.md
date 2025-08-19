@@ -195,16 +195,9 @@ npm run package
 
 These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version.
 
-1. Make sure the versions in this repo are on the version number you want to release. If they are not, run the `bump-versions` npm script to set the versions to what you want to release. This script will create a branch named `bump-versions-<version>` from your current head with the needed changes. Open a PR and merge that new branch into the branch you plan to release from. For example, to bump branch `my-branch` to version 0.2.0, run the following:
+1. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
-   ```bash
-   git checkout my-branch
-   npm run bump-versions 0.2.0
-   ```
-
-   Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
-
-2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
@@ -234,6 +227,27 @@ If you want to upload your release assets to [Amazon S3](https://aws.amazon.com/
   - `AWS_S3_RELEASE_DIRECTORY`: The directory in which to put the release build directories. The builds themselves will be in `$AWS_S3_RELEASE_DIRECTORY/$RELEASE_VERSION/$RUNNER_OS/`
 
 Note: you can very likely use other levels of secrets and variables like organization-level, but this has not been tested.
+
+### Bumping version without publishing a release
+
+Sometimes, it may be useful to change the version without [publishing a release](#publishing).
+
+To bump versions without publishing a release, manually dispatch the Bump Versions workflow in GitHub Actions targeting the branch on which you want to change versions. Alternatively, you can run the `bump-versions` npm script. This workflow will create a branch named `bump-versions-<version>` from the target branch (or, if running the script, your current head) with the needed changes. Open a PR and merge that new branch into the branch on which you want to change versions.
+
+This workflow has the following inputs:
+
+- `newVersion`: enter the version you want to bump to (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version.
+- `newMarketingVersion`: a human-readable "marketing-level" version to call this version. It is best to set this only on the specific commit you intend to release so there is no confusion over which version is running. E.g. β1
+- `newMarketingVersionMoniker`: a human-readable "marketing-level" version moniker to call this version. It is best to set this only on the specific commit you intend to release so there is no confusion over which version is running. E.g. Developer Preview
+
+For example, to bump branch `my-branch` to version `0.2.0` with optional marketing version `β1` and optional marketing version moniker `Developer Preview`, run the following:
+
+```bash
+git checkout my-branch
+npm run bump-versions 0.2.0 --marketing-version β1 --marketing-version-moniker "Developer Preview"
+```
+
+Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
 
 ## Testing
 

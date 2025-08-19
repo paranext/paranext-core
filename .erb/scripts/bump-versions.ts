@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { checkForWorkingChanges, execCommand } from '../../extensions/lib/git.util';
 import webpackPaths from '../configs/webpack.paths';
 
@@ -8,9 +10,23 @@ import webpackPaths from '../configs/webpack.paths';
 // Provide the new version as a command line argument e.g. `node bump-versions.js 1.2.3-alpha.0`
 // Provide `--allow-working-changes` after the version to allow working changes to be part of making
 // the new version (useful if you want to do other things related to versioning before running this)
+// Provide `--marketing-version blah` after the version to set a marketing version
+// Provide `--marketing-version-moniker blah2` after the version to set a marketing version moniker
 
 const newVersion = process.argv[2];
 const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes');
+
+const newMarketingVersionIndex = process.argv.indexOf('--marketing-version');
+const newMarketingVersion =
+  newMarketingVersionIndex >= 0 && newMarketingVersionIndex < process.argv.length
+    ? process.argv[newMarketingVersionIndex + 1]
+    : '';
+
+const newMarketingVersionMonikerIndex = process.argv.indexOf('--marketing-version-moniker');
+const newMarketingVersionMoniker =
+  newMarketingVersionMonikerIndex >= 0 && newMarketingVersionMonikerIndex < process.argv.length
+    ? process.argv[newMarketingVersionMonikerIndex + 1]
+    : '';
 
 (async () => {
   // Make sure there are not working changes so we don't interfere with normal edits
@@ -26,6 +42,31 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
   } catch (e) {
     console.error(`Error on bumping version: ${e}`);
     process.exit(1);
+  }
+
+  // Set marketing version and moniker in release/app/package.json
+  if (newMarketingVersion || newMarketingVersionMoniker) {
+    try {
+      // Read the release/app/package.json
+      const releasePackageJsonPath = path.resolve(webpackPaths.appPath, 'package.json');
+      const releasePackage = JSON.parse(await fs.promises.readFile(releasePackageJsonPath, 'utf8'));
+
+      const updatedReleasePackage = {
+        ...releasePackage,
+        marketingVersion: newMarketingVersion,
+        marketingVersionMoniker: newMarketingVersionMoniker,
+      };
+
+      // Write the updated release/app/package.json
+      await fs.promises.writeFile(
+        releasePackageJsonPath,
+        `${JSON.stringify(updatedReleasePackage, undefined, 2)}\n`,
+        'utf8',
+      );
+    } catch (e) {
+      console.error(`Error while updating marketing version and moniker: ${e}`);
+      process.exit(1);
+    }
   }
 
   // Lint fix the changes

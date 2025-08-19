@@ -5,7 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       newVersion:
-        description: "Version to bump all the repo's versions to on a new branch (called `bump-versions-<version>`), e.g. 0.3.0-alpha.0. If empty, will not bump the versions."
+        description: "Version to bump all the repo's versions to on a new branch (called `bump-versions-<version>`), e.g. 0.3.0-alpha.0."
+        required: true
+      newMarketingVersion:
+        description: 'Marketing Version to to set for the application on a new branch (called `bump-versions-<version>`), e.g. β1.7'
+        required: false
+      newMarketingVersionMoniker:
+        description: 'Marketing Version Moniker to to set for the application on a new branch (called `bump-versions-<version>`), e.g. Developer Preview.'
         required: false
       debug_enabled:
         type: boolean
@@ -54,6 +60,8 @@ jobs:
         uses: ./.github/actions/bump-versions-action
         with:
           newVersion: ${{ inputs.newVersion }}
+          newMarketingVersion: ${{ inputs.newMarketingVersion }}
+          newMarketingVersionMoniker: ${{ inputs.newMarketingVersionMoniker }}
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session
