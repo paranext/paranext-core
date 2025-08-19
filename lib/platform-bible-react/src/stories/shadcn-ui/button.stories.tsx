@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '@/components/shadcn-ui/button';
-import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
+import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -79,6 +79,36 @@ export const VariantsDemo: Story = {
       description: {
         story:
           'All button variants displayed together. Try editing this code to add new variants or modify existing ones.',
+      },
+    },
+  },
+};
+
+export const SizesDemo: Story = {
+  render: () => (
+    <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-4">
+      <div className="tw-flex tw-items-center tw-gap-2">
+        <span className="tw-text-sm">default:</span>
+        <Button size="default">Button</Button>
+      </div>
+      <div className="tw-flex tw-items-center tw-gap-2">
+        <span className="tw-text-sm">sm:</span>
+        <Button size="sm">Button</Button>
+      </div>
+      <div className="tw-flex tw-items-center tw-gap-2">
+        <span className="tw-text-sm">lg:</span>
+        <Button size="lg">Button</Button>
+      </div>
+      <div className="tw-flex tw-items-center tw-gap-2">
+        <span className="tw-text-sm">icon:</span>
+        <Button size="icon">★</Button>
+      </div>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'All button sizes displayed together.',
       },
     },
   },
