@@ -20,6 +20,20 @@ const preview: Preview = {
         date: /Date$/i,
       },
     },
+    options: {
+      storySort: {
+        order: [
+          'Home',
+          'Guidelines',
+          'Guides',
+          'Guidelines',
+          'Shadcn',
+          'Basics',
+          'Advanced',
+          'Demo',
+        ],
+      },
+    },
   },
   initialGlobals: {
     addonRtl: readDirection(),
@@ -36,6 +50,9 @@ const preview: Preview = {
       // Ensure the HTML element has the correct dir attribute
       if (typeof document !== 'undefined') {
         document.documentElement.dir = direction || 'ltr';
+        // Apply Platform.Bible Tailwind preflight wrapper globally so fonts/styles render correctly
+        // See src/index.css for details on the .pr-twp class
+        document.body.classList.add('pr-twp');
       }
 
       return Story();

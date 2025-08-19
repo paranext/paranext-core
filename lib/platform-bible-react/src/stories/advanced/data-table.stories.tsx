@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { useState } from 'react';
 
 const meta: Meta<typeof DataTable> = {
   title: 'Advanced/DataTable',
@@ -433,8 +432,8 @@ export const BasicTable: Story = {
 export const WithPagination: Story = {
   args: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
+    columns: productColumns as any,
+    data: [...products, ...products, ...products],
     enablePagination: true,
   },
 };
@@ -442,8 +441,8 @@ export const WithPagination: Story = {
 export const WithPaginationControls: Story = {
   args: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
+    columns: productColumns as any,
+    data: [...products, ...products, ...products],
     enablePagination: true,
     showPaginationControls: true,
   },
@@ -484,6 +483,14 @@ export const FullFeatured: Story = {
     showColumnVisibilityControls: true,
     stickyHeader: true,
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Full-featured DataTable with built-in column visibility controls, pagination, and all features enabled.',
+      },
+    },
+  },
 };
 
 export const EmptyTable: Story = {
@@ -491,94 +498,5 @@ export const EmptyTable: Story = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
     columns: userColumns as any,
     data: [],
-  },
-};
-
-export const InteractiveExample: Story = {
-  render: (args) => {
-    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleRowClick = (row: any) => {
-      const userId = row.original.id;
-      setSelectedUsers((prev) =>
-        prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
-      );
-    };
-
-    return (
-      <div className="tw-space-y-4">
-        <div className="tw-flex tw-items-center tw-justify-between">
-          <h3 className="tw-text-lg tw-font-semibold">Interactive User Table</h3>
-          {selectedUsers.length > 0 && (
-            <Badge variant="outline">{selectedUsers.length} user(s) selected</Badge>
-          )}
-        </div>
-
-        <DataTable
-          {...args}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-          columns={userColumns as any}
-          data={users}
-          onRowClickHandler={handleRowClick}
-        />
-
-        {selectedUsers.length > 0 && (
-          <div className="tw-rounded tw-border tw-p-4">
-            <h4 className="tw-mb-2 tw-font-medium">Selected Users:</h4>
-            <ul className="tw-list-inside tw-list-disc tw-space-y-1">
-              {selectedUsers.map((userId) => {
-                const user = users.find((u) => u.id === userId);
-                return user ? (
-                  <li key={userId} className="tw-text-sm">
-                    {user.name} ({user.email})
-                  </li>
-                ) : undefined;
-              })}
-            </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              className="tw-mt-2"
-              onClick={() => setSelectedUsers([])}
-            >
-              Clear Selection
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  },
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: userColumns as any,
-    data: users,
-    enablePagination: true,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Interactive example with custom row click handling and selection tracking.',
-      },
-    },
-  },
-};
-
-export const ProductCatalog: Story = {
-  args: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-    columns: productColumns as any,
-    data: products,
-    enablePagination: true,
-    showPaginationControls: true,
-    showColumnVisibilityControls: true,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Example showing a product catalog with formatted currency, stock indicators, and sorting.',
-      },
-    },
   },
 };
