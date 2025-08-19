@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/shadcn-ui/card';
-import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
+import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta = {
   title: 'Demo/RTL Direction',
