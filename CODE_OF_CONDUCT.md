@@ -4,10 +4,7 @@
 
 In the interest of fostering an open and welcoming environment, we as
 contributors and maintainers pledge to making participation in our project and
-our community a harassment-free experience for everyone, regardless of age, body
-size, disability, ethnicity, sex characteristics, gender identity and expression,
-level of experience, education, socio-economic status, nationality, personal
-appearance, race, religion, or sexual identity and orientation.
+our community a harassment-free experience for everyone.
 
 ## Our Standards
 
@@ -28,6 +25,10 @@ Examples of unacceptable behavior by participants include:
 - Public or private harassment
 - Publishing others' private information, such as a physical or electronic
   address, without explicit permission
+- Mistreatment, persecution, or singling out on the basis of age, body
+  size, disability, ethnicity, sex characteristics, gender identity and expression,
+  level of experience, education, socio-economic status, nationality, personal
+  appearance, race, religion, or sexual identity and orientation.
 - Other conduct which could reasonably be considered inappropriate in a
   professional setting
 
