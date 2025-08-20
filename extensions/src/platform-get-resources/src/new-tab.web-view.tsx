@@ -1,11 +1,11 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { Plus } from 'lucide-react';
+import { CardTitle } from 'platform-bible-react';
 import { isPlatformError } from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
-import { Plus } from 'lucide-react';
-import { CardTitle } from 'platform-bible-react';
 
 type LocalProjectInfo = {
   projectId: string;

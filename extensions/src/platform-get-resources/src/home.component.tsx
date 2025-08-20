@@ -29,7 +29,7 @@ import {
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -135,7 +135,7 @@ export type HomeProps = {
    * Content for the header, e.g. <><HomeIcon
    * size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
    */
-  headerContent: React.ReactNode;
+  headerContent: ReactNode;
 };
 
 /**

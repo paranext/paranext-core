@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { HomeIcon } from 'lucide-react';
+import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useState } from 'react';
 import { Home, HomeProps, LocalProjectInfo } from './home.component';
-import { HomeIcon } from 'lucide-react';
-import { CardTitle } from 'platform-bible-react';
 
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
@@ -147,11 +147,7 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
     <Story
       args={{
         localProjectsInfo: onlyWebProjectList,
-        headerContent: (
-          <>
-            <CardTitle>Only the web project</CardTitle>
-          </>
-        ),
+        headerContent: <CardTitle>Only the web project</CardTitle>,
       }}
     />
   );
