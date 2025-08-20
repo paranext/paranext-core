@@ -1,6 +1,7 @@
 import papi, { logger } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import { useEvent } from 'platform-bible-react';
+import { CardTitle, useEvent } from 'platform-bible-react';
+import { Home as HomeIcon } from 'lucide-react';
 
 import {
   getErrorMessage,
@@ -27,7 +28,7 @@ globalThis.webViewComponent = function HomeWebView() {
 
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
-      return Array.from(HOME_STRING_KEYS);
+      return [...Array.from(HOME_STRING_KEYS), '%home_dialog_title%'];
     }, []),
   );
 
@@ -257,6 +258,8 @@ globalThis.webViewComponent = function HomeWebView() {
     return interfaceLanguages;
   }, [interfaceLanguages]);
 
+  const dialogTitleText: string = localizedStrings['%home_dialog_title%'];
+
   return (
     <Home
       localizedStrings={localizedStrings}
@@ -272,6 +275,12 @@ globalThis.webViewComponent = function HomeWebView() {
       localProjectsInfo={localProjectsInfo}
       sharedProjectsInfo={sharedProjectsInfo}
       activeSendReceiveProjects={activeSendReceiveProjects}
+      headerContent={
+        <>
+          <HomeIcon size={36} />
+          <CardTitle>{dialogTitleText}</CardTitle>
+        </>
+      }
     />
   );
 };
