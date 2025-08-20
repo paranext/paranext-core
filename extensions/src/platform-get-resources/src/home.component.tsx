@@ -4,7 +4,6 @@ import {
   ChevronsUpDown,
   ChevronUp,
   Ellipsis,
-  Home as HomeIcon,
   ScrollText,
 } from 'lucide-react';
 import {
@@ -13,7 +12,6 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-  CardTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -31,7 +29,7 @@ import {
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
-import { useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -42,7 +40,6 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_action%',
   '%resources_activity%',
   '%resources_clearSearch%',
-  '%home_dialog_title%',
   '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
@@ -134,6 +131,11 @@ export type HomeProps = {
   sharedProjectsInfo?: SharedProjectsInfo;
   /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
+  /**
+   * Content for the header, e.g. <><HomeIcon
+   * size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
+   */
+  headerContent: ReactNode;
 };
 
 /**
@@ -155,6 +157,8 @@ export type HomeProps = {
  * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
  *   send/receive server.
  * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @param {headerContent} - Content for the header, e.g. <><HomeIcon
+ *   size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
  * @returns
  */
 export function Home({
@@ -171,6 +175,7 @@ export function Home({
   localProjectsInfo = [],
   sharedProjectsInfo = {},
   activeSendReceiveProjects = [],
+  headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
     return localizedStrings[localizeKey] ?? localizeKey;
@@ -178,7 +183,6 @@ export function Home({
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
-  const dialogTitleText: string = getLocalizedString('%home_dialog_title%');
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
@@ -358,8 +362,7 @@ export function Home({
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
             <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:24rem)]:!tw-hidden">
-              <HomeIcon size={36} />
-              <CardTitle>{dialogTitleText}</CardTitle>
+              {headerContent}
             </div>
             <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
@@ -455,17 +458,19 @@ export function Home({
                                   style={{ minWidth: '24px' }}
                                 />
                               )}
-                              <div className="tw-whitespace-nowrap">{project.name}</div>
+                              <div className="tw-whitespace-nowrap tw-cursor-default">
+                                {project.name}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-words">
+                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-words tw-cursor-default">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="tw-hidden sm:tw-table-cell">
+                          <TableCell className="tw-hidden sm:tw-table-cell tw-cursor-default">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:tw-table-cell">
+                            <TableCell className="tw-hidden sm:tw-table-cell tw-cursor-default">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
