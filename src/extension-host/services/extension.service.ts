@@ -31,6 +31,7 @@ import * as papiCore from '@shared/services/papi-core.service';
 import { executionTokenService } from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
+  AsyncVariable,
   debounce,
   deserialize,
   endsWith,
@@ -1143,45 +1144,43 @@ async function callActivateOnExtension(
 ): Promise<void> {
   logger.info(`extension.service: activating ${context.name}`);
 
-  let timeoutOccurred = false;
-  let errorDuringActivation: unknown;
   const deactivationObject = {
     info,
     registrations: context.registrations,
   };
-  await Promise.race([
-    (async () => {
-      try {
-        await extension.activate(context);
-        if (extension.deactivate) context.registrations.add(extension.deactivate);
-        if (timeoutOccurred) await deactivateExtension(deactivationObject);
-      } catch (e) {
-        errorDuringActivation = e;
-        if (timeoutOccurred)
-          logger.error(
-            `Extension '${context.name}' threw after timed out activation: ${getErrorMessage(e)}`,
-          );
-        else {
-          try {
-            // Not adding `extension.deactivate` to registrations since `extension.activate` threw
-            await deactivateExtension(deactivationObject);
-          } catch (deactivationError) {
-            logger.error(
-              `Extension '${context.name}' threw while deactivating after activation threw: ${getErrorMessage(deactivationError)}`,
-            );
-          }
-        }
+  const extensionActivationAsyncVariable = new AsyncVariable<void>(
+    `Activating extension ${context.name}`,
+    getExtensionActivationTimeoutMs(),
+  );
+  // Try activating the extension in an IIFE, resolving the async variable when activation completes
+  (async () => {
+    try {
+      await extension.activate(context);
+      if (extension.deactivate) context.registrations.add(extension.deactivate);
+      // Activation completed within the timeout, so resolve the promise to indicate success
+      if (!extensionActivationAsyncVariable.hasSettled) {
+        extensionActivationAsyncVariable.resolveToValue(undefined);
+        return;
       }
-    })(),
-    new Promise<void>((resolve) => {
-      setTimeout(() => {
-        timeoutOccurred = true;
-        resolve();
-      }, getExtensionActivationTimeoutMs());
-    }),
-  ]);
-  if (timeoutOccurred || errorDuringActivation) {
-    // TODO: Disable extensions that didn't activate once we have a way for users to re-enable them
+
+      // Activation timed out (but eventually succeeded). Clean up the activated extension.
+      try {
+        await deactivateExtension(deactivationObject);
+      } catch (deactivationError) {
+        logger.error(
+          `Extension '${context.name}' threw while deactivating after timed out activation: ${getErrorMessage(deactivationError)}`,
+        );
+      }
+    } catch (e) {
+      extensionActivationAsyncVariable.rejectWithReason(getErrorMessage(e));
+    }
+  })();
+
+  try {
+    // Wait for extension activation to complete or the timeout to be hit, whichever comes first
+    await extensionActivationAsyncVariable.promise;
+  } catch (e) {
+    // Notify the user that the extension failed to start
     notificationService.send({
       severity: 'error',
       message: formatReplacementString(
@@ -1193,9 +1192,27 @@ async function callActivateOnExtension(
         },
       ),
     });
+
+    // TODO: Disable the extension so it doesn't do this again when we restart the application
+
+    // Provide a better timeout error to the caller than the generic async variable timeout message
+    if (extensionActivationAsyncVariable.hasTimedOut)
+      throw new Error(`Activation of ${context.name} timed out`);
+
+    // Activation failed (not timed out). Try to clean up any partial activation in an IIFE.
+    (async () => {
+      try {
+        await deactivateExtension(deactivationObject);
+      } catch (deactivationError) {
+        logger.error(
+          `Extension '${context.name}' threw while deactivating after activation threw: ${getErrorMessage(deactivationError)}`,
+        );
+      }
+    })();
+
+    // Rethrow the activation error back to the caller
+    throw e;
   }
-  if (errorDuringActivation) throw errorDuringActivation;
-  if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
 
   logger.info(`extension.service: finished activating ${context.name}`);
 }

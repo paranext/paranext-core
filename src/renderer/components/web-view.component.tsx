@@ -100,6 +100,46 @@ export function WebView({
   // Tracks how many times the iframe has loaded
   const [iframeHasLoadedTimes, setIframeHasLoadedTimes] = useState(0);
 
+  // Store reference to iframe's cleanup function so we can call it before iframe loses contentWindow
+  const unmountRootFunctionRef = useRef<(() => void) | undefined>(undefined);
+
+  // Extract and store cleanup function when iframe loads
+  useEffect(() => {
+    const currentIframe = iframeRef.current;
+    if (!currentIframe) return;
+
+    const extractCleanupFunction = () => {
+      try {
+        // Align with WebViewCleanup from globalThis
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const contentWindowWithCleanup = currentIframe.contentWindow as Window & {
+          webViewCleanup?: typeof globalThis.webViewCleanup;
+        };
+
+        if (contentWindowWithCleanup?.webViewCleanup?.unmountRoot)
+          unmountRootFunctionRef.current = contentWindowWithCleanup.webViewCleanup.unmountRoot;
+      } catch (error) {
+        logger.warn(
+          `Failed to extract cleanup function for WebView ${id}: ${getErrorMessage(error)}`,
+        );
+      }
+    };
+
+    // Try to extract immediately in case iframe is already loaded
+    extractCleanupFunction();
+
+    // Also try shortly after the iframe loads to give time for the iframe's React app to initialize
+    const handleLoad = () => {
+      setTimeout(extractCleanupFunction, 200);
+    };
+
+    currentIframe.addEventListener('load', handleLoad);
+
+    return () => {
+      currentIframe.removeEventListener('load', handleLoad);
+    };
+  }, [id, content]); // Re-run when content changes
+
   const postMessageCallback = useCallback(
     ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
       if (!isWebViewNonceCorrect(id, webViewNonce))
@@ -288,6 +328,38 @@ export function WebView({
 
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WEB_VIEW_CONTENT_TYPE.URL;
+
+  // Clean up iframe content on unmount to prevent memory leaks
+  // When React removes the WebView component from the DOM, the iframe's srcDoc
+  // content can remain in memory. This effect ensures that we explicitly clear
+  // the content when the component unmounts to prevent memory leaks.
+  useEffect(() => {
+    // Capture the current iframe reference to use in cleanup
+    const currentIframe = iframeRef.current;
+
+    return () => {
+      if (!currentIframe) {
+        logger.warn(`WebView ${id} iframe reference was not available during cleanup`);
+        return;
+      }
+
+      // Cleanly unmount any React root using the stored cleanup function
+      if (!unmountRootFunctionRef.current) {
+        logger.warn(`No cleanup function available for WebView ${id}`);
+      } else {
+        // Use setTimeout to avoid synchronous unmount during React rendering
+        setTimeout(() => {
+          try {
+            unmountRootFunctionRef.current?.();
+            logger.debug(`Successfully unmounted React root for WebView ${id}`);
+          } catch (error) {
+            logger.warn(`Failed unmount React root for WebView ${id}: ${getErrorMessage(error)}`);
+          }
+          unmountRootFunctionRef.current = undefined;
+        }, 0);
+      }
+    };
+  }, [id]);
 
   // TODO: We may be catching iframe exceptions moving forward by posting messages from the child
   // iframe to the parent, so it might be good to figure out how it works to add and remove a
