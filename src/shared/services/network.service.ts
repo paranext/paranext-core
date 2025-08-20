@@ -12,10 +12,13 @@ import {
   InternalRequestHandler,
 } from '@shared/data/rpc.model';
 import {
+  AsyncVariable,
+  getErrorMessage,
   indexOf,
   isPlatformError,
   Mutex,
   newPlatformError,
+  PlatformError,
   PlatformEvent,
   PlatformEventEmitter,
   stringLength,
@@ -185,34 +188,25 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   validateRequestTypeFormatting(requestType);
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
-  let timeoutOccurred = false;
-  let response: unknown;
-  const timeoutMs = getTimeoutMsForRequestType(requestType);
-  // If the request takes longer than the configured timeout, throw an error
-  if (timeoutMs > 0) {
-    await Promise.race([
-      (async () => {
-        try {
-          response = fixupResponse(await jsonRpc.request(requestType, args));
-        } catch (e) {
-          response = newPlatformError(e);
-        }
-      })(),
-      new Promise<void>((resolve) => {
-        setTimeout(() => {
-          timeoutOccurred = true;
-          resolve();
-        }, timeoutMs);
-      }),
-    ]);
-  }
-  // There is no timeout so we can run the request normally
-  else {
+  const responseAsyncVariable = new AsyncVariable<JSONRPCResponse | PlatformError>(
+    `response to ${requestType}`,
+    getTimeoutMsForRequestType(requestType),
+  );
+  // Resolve the async variable to the JSONRPC response in an IIFE
+  (async () => {
     try {
-      response = fixupResponse(await jsonRpc.request(requestType, args));
+      responseAsyncVariable.resolveToValue(fixupResponse(await jsonRpc.request(requestType, args)));
     } catch (e) {
-      response = newPlatformError(e);
+      responseAsyncVariable.resolveToValue(newPlatformError(e));
     }
+  })();
+
+  let response: JSONRPCResponse | PlatformError | string | undefined;
+  try {
+    // Wait for the JSONRPC response to resolve or the timeout to be hit, whichever comes first
+    response = await responseAsyncVariable.promise;
+  } catch (e) {
+    response = getErrorMessage(e);
   }
 
   if (isJsonRpcResponse(response)) {
@@ -222,9 +216,9 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
     logger.debug(response.message);
     throw response;
   } else {
-    response = timeoutOccurred
+    response = responseAsyncVariable.hasTimedOut
       ? `JSON-RPC Request timed out: ${requestType} ${JSON.stringify(args)}`
-      : `Invalid JSON-RPC Response: ${JSON.stringify(response)}`;
+      : `Invalid JSON-RPC Response: ${response}`;
   }
   logger.debug(response);
   throw newPlatformError(response);

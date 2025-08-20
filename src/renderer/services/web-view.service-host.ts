@@ -1248,12 +1248,23 @@ async function openOrReloadWebView(
                   },
                 );
 
+                const unsubscriber = () => {
+                  try {
+                    unsubscribeUpdateWebView();
+                    window.removeEventListener('pagehide', unsubscriber);
+                  } catch (e) {
+                    console.log('Error unsubscribing from WebView updates', e);
+                  }
+                };
+
                 renderRoot();
 
-                window.addEventListener('unload', () => {
-                  root.unmount();
-                  unsubscribeUpdateWebView();
-                });
+                // Store cleanup functions globally so they can be called from parent window
+                globalThis.webViewCleanup = {
+                  unmountRoot: root.unmount.bind(root),
+                };
+
+                window.addEventListener('pagehide', unsubscriber);
               }
 
               if (document.readyState === 'loading')
