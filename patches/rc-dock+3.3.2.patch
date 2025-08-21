@@ -1,5 +1,5 @@
 diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..8047e9f 100644
+index bac288d..6e25d88 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
 +++ b/node_modules/rc-dock/es/DockLayout.js
 @@ -258,7 +258,17 @@ export class DockLayout extends DockPortalManager {
@@ -21,3 +21,26 @@ index bac288d..8047e9f 100644
                  }
              }
              else if (makeActive && panelData.activeId !== id) {
+@@ -316,7 +326,21 @@ export class DockLayout extends DockPortalManager {
+         if (dropRect) {
+             if (direction === 'remove') {
+                 this.setState((oldStates) => {
+-                    if (oldStates.dropRect.source === source) {
++                    /**
++                     * patch-package notes:
++                     *
++                     * Occasionally on a display with non-100% display scale, `DockDropEdge`'s
++                     * `onDragOver` would also fire right before the usual `onDragLeave` when you
++                     * drag a tab between two panels, causing this `setState` function to queue up
++                     * twice in a row, meaning `oldStates.dropRect` would be `null` on the second
++                     * run. As a result, accessing `oldStates.dropRect.source` would throw. I'm not
++                     * sure of the consequences of running `setDropRect` with `remove` twice in a
++                     * row, but it doesn't seem to cause problems right now. As such, quick fix is
++                     * checking if `oldStates.dropRect` exists.
++                     *
++                     * See https://paratextstudio.atlassian.net/browse/PT-3411 for more information.
++                     */
++                    if (oldStates.dropRect && oldStates.dropRect.source === source) {
+                         return { dropRect: null };
+                     }
+                     return {};
