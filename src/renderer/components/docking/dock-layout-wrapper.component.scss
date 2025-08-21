@@ -242,13 +242,10 @@
   padding-block: vars.$space--xs;
 }
 
+// WARN: I can't find anything that this selector applies to. Consider removing it.
 .dock-dropdown-menu-item .title {
   padding-inline-end: 12px;
   pointer-events: none; // disable pointer events on the title so that the menu cannot be clicked in the dropdown
-}
-
-.title span {
-  padding-inline-start: 2px;
 }
 // #endregion ///////////////////////////////////////////////////////////
 
