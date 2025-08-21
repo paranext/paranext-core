@@ -19,6 +19,14 @@
   vertical-align: middle;
 }
 
+/* WARN: This rule seems unnecessary. I can't detect a meaningful improvement in the UI.
+ * Moved from src/renderer/components/docking/dock-layout-wrapper.component.scss. 
+ * Consider removing it. 
+ */
+.title span {
+  padding-inline-start: 2px;
+}
+
 .tooltip {
   white-space: pre-wrap;
   z-index: 250;
