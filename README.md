@@ -195,25 +195,57 @@ npm run package
 
 These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version.
 
-1. Make sure the versions in this repo are on the version number you want to release. If they are not, run the `bump-versions` npm script to set the versions to what you want to release. This script will create a branch named `bump-versions-<version>` from your current head with the needed changes. Open a PR and merge that new branch into the branch you plan to release from. For example, to bump branch `my-branch` to version 0.2.0, run the following:
+1. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
-   ```bash
-   git checkout my-branch
-   npm run bump-versions 0.2.0
-   ```
-
-   Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
-
-2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
    - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+   - `uploadReleaseAssets`: whether to upload the release assets to [Amazon S3](https://aws.amazon.com/s3/). If false, the release will still be created in GitHub, but no assets will be uploaded to S3.
 
 3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
 4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
 5. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
 6. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
+
+### Configure uploading release assets to Amazon S3
+
+Automatically uploading release assets to [Amazon S3](https://aws.amazon.com/s3/) when running the [Publish](#publishing) workflow requires that some GitHub [repository secrets](https://github.com/paranext/paranext/settings/secrets/actions) and [repository variables](https://github.com/paranext/paranext/settings/variables/actions) are configured properly. If uploading to S3 isn't working, make sure the GitHub secrets and variables are set up properly by checking the following:
+
+1. You need an [AWS access key](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) for a user with the following permissions:
+
+   - `s3:*` on the S3 bucket where the release assets should be uploaded and the files in the directory in which to put the release assets (see below for more information). There are likely narrower permissions you can set and still successfully upload the release assets.
+
+2. The following [repository secrets and variables](https://github.com/paranext/paranext/settings/secrets/actions) need to be correct
+
+   - Repository secrets:
+     - `AWS_S3_RELEASE_ACCESS_KEY_ID`: The access key ID for authenticating with AWS
+     - `AWS_S3_RELEASE_SECRET_ACCESS_KEY`: The secret access key for authenticating with AWS
+   - Repository variables:
+     - `AWS_S3_RELEASE_BUCKET_NAME`: The name of the S3 bucket where the release assets should be uploaded
+     - `AWS_S3_RELEASE_DIRECTORY`: The directory in which to put the release build directories. The builds themselves will be in `$AWS_S3_RELEASE_DIRECTORY/$RELEASE_VERSION/$RUNNER_OS/`
+
+### Bumping version without publishing a release
+
+Sometimes, it may be useful to change the version without [publishing a release](#publishing).
+
+To bump versions without publishing a release, manually dispatch the Bump Versions workflow in GitHub Actions targeting the branch on which you want to change versions. Alternatively, you can run the `bump-versions` npm script. This workflow will create a branch named `bump-versions-<version>` from the target branch (or, if running the script, your current head) with the needed changes. Open a PR and merge that new branch into the branch on which you want to change versions.
+
+This workflow has the following inputs:
+
+- `newVersion`: enter the version you want to bump to (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version.
+- `newMarketingVersion`: a human-readable "marketing-level" version to call this version. It is best to set this only on the specific commit you intend to release so there is no confusion over which version is running. E.g. β1
+- `newMarketingVersionMoniker`: a human-readable "marketing-level" version moniker to call this version. It is best to set this only on the specific commit you intend to release so there is no confusion over which version is running. E.g. Developer Preview
+
+For example, to bump branch `my-branch` to version `0.2.0` with optional marketing version `β1` and optional marketing version moniker `Developer Preview`, run the following:
+
+```bash
+git checkout my-branch
+npm run bump-versions -- 0.2.0 --marketing-version β1 --marketing-version-moniker "Developer Preview"
+```
+
+Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
 
 ## Testing
 

@@ -1,0 +1,25 @@
+name: Bump Versions Action
+description: |
+  Runs bump-versions.ts script
+
+inputs:
+  newVersion:
+    description: "Version to bump all the repo's versions to on a new branch (called `bump-versions-<version>`), e.g. 0.3.0-alpha.0."
+    required: true
+  newMarketingVersion:
+    description: 'Marketing Version to to set for the application on a new branch (called `bump-versions-<version>`), e.g. β1.7'
+    required: false
+  newMarketingVersionMoniker:
+    description: 'Marketing Version Moniker to to set for the application on a new branch (called `bump-versions-<version>`), e.g. Developer Preview.'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Bump repo versions
+      # Bump versions using the built-in git token https://github.com/actions/checkout/tree/v4/?tab=readme-ov-file#push-a-commit-using-the-built-in-token
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        npm run bump-versions -- ${{ inputs.newVersion }} ${{ (inputs.newMarketingVersion != '' || inputs.newMarketingVersionMoniker != '') && format('--marketing-version "{0}" --marketing-version-moniker "{1}"', inputs.newMarketingVersion, inputs.newMarketingVersionMoniker) || '' }}
