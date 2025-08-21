@@ -1,9 +1,19 @@
 @use '../../styles/vars';
 
+/* 
+"front" means the tab that's selected in a tab group.
+"back" means any tab that's not "front" in a tab group.
+"focus-within" means the tab that has CSS `:focus-within`, i.e. the tab with a cursor or keyboard focus within it.
+"blur" means the tab that does not have focus, i.e. the tab that is not "focus-within".
+~~"active" means the tab that is selected in a tab group.~~
+~~"inactive" means any tab that is not "active" in a tab group.~~
+
+ */
+
 :root {
   // TODO BUG theme colors aren't adjusting to dark mode
-  --tab-selected-blur: hsl(var(--muted));
-  --tab-selected-focus-within: hsl(var(--primary));
+  --tab-front-blur: hsl(var(--muted));
+  --tab-front-focus-within: hsl(var(--primary));
 }
 
 .dock {
@@ -18,14 +28,14 @@
 
 .dock-tab-active,
 .dock-tabpane-active {
-  --tab-background: var(--tab-selected-blur);
+  --tab-background: var(--tab-front-blur);
 }
 
 .dock-tab-window-focus,
 .dock-tabpane-active:focus-within {
   // TODO BUG using :focus-within should trigger but it doesn't
   // TODO these two properties should get the same level of abstraction
-  --tab-background: var(--tab-selected-focus-within);
+  --tab-background: var(--tab-front-focus-within);
   color: hsl(var(--primary-foreground));
 }
 
@@ -222,7 +232,7 @@
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: var(--tab-selected-blur);
+  background: var(--tab-front-blur);
   // color: currentColor;
   border-bottom: unset;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
