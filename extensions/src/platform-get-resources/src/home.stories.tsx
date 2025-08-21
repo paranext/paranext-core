@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { HomeIcon } from 'lucide-react';
 import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
