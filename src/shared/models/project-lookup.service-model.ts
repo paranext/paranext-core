@@ -17,6 +17,7 @@ import {
   endsWith,
   ensureArray,
   escapeStringRegexp,
+  getErrorMessage,
   slice,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
@@ -185,7 +186,9 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
           timeoutInMS,
         );
       } catch (e) {
-        throw new Error(`getMetadataForProject wait for PDPF with ${projectInterface} threw! ${e}`);
+        throw new Error(
+          `getMetadataForProject wait for PDPF with ${projectInterface} threw! ${getErrorMessage(e)}`,
+        );
       }
     } else {
       try {
