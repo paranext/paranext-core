@@ -20,6 +20,11 @@ on:
       bumpRef:
         description: 'Git ref to create the new `bump-versions-<version>` branch from. If empty, will use the current branch.'
         required: false
+      uploadReleaseAssets:
+        description: 'Upload the release assets to the configured S3 bucket.'
+        type: boolean
+        required: false
+        default: false
       debug_enabled:
         type: boolean
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
@@ -212,9 +217,29 @@ jobs:
           omitPrereleaseDuringUpdate: true
           # make the new release a pre-release
           prerelease: true
+          # tag+commit creates a version tag for this release with the tag name at the commit ref
+          # so the GitHub Release doesn't have to create the tag and assume it is on `main`
           tag: v${{ inputs.version }}
+          commit: ${{ github.head_ref || github.ref_name }}
           # only update if the release is still a draft
           updateOnlyUnreleased: true
+
+      - name: Upload release assets to S3
+        id: upload_s3
+        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
+        uses: shallwefootball/upload-s3-action@v1.3.3
+        with:
+          aws_key_id: ${{ secrets.AWS_S3_RELEASE_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_S3_RELEASE_SECRET_ACCESS_KEY}}
+          aws_bucket: ${{ vars.AWS_S3_RELEASE_BUCKET_NAME }}
+          source_dir: release/staged
+          # runner.os is Windows or macOS
+          destination_dir: ${{ vars.AWS_S3_RELEASE_DIRECTORY }}/${{ inputs.version}}/${{ runner.os }}
+
+      - name: Print S3 upload result
+        if: ${{ inputs.uploadReleaseAssets && matrix.os != env.OS_LINUX }}
+        run: |
+          echo "S3 upload object_key: ${{ steps.upload_s3.outputs.object_key }}; object_locations: ${{ steps.upload_s3.outputs.object_locations }}"
 
       - name: Checkout bump ref
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
@@ -225,11 +250,9 @@ jobs:
 
       - name: Bump repo versions
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
-        # Bump versions using the built-in git token https://github.com/actions/checkout/tree/v4/?tab=readme-ov-file#push-a-commit-using-the-built-in-token
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          npm run bump-versions -- ${{ inputs.newVersionAfterPublishing }}
+        uses: ./.github/actions/bump-versions-action
+        with:
+          newVersion: ${{ inputs.newVersionAfterPublishing }}
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session
