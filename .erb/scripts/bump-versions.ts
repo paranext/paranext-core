@@ -69,7 +69,7 @@ const newMarketingVersionMoniker =
     }
   }
 
-  // Lint fix the changes
+  // Format the changes
   try {
     await execCommand(`npm run format`);
   } catch (e) {
