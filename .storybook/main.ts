@@ -8,13 +8,19 @@ const config: StorybookConfig = {
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)',
     '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from bundled extensions - at lease until https://paratextstudio.atlassian.net/browse/PT-3307 is implemented
+    '../lib/platform-bible-react/src/stories/**/*.stories.@(js|jsx|ts|tsx)', // Include only stories directory from platform-bible-react library
   ],
-  staticDirs: ['../src/stories/assets'], // static asset folder
+  staticDirs: [
+    '../src/stories/assets', // static asset folder
+    '../lib/platform-bible-react/src', // platform-bible-react static assets
+    '../extensions/src/platform-scripture-editor/assets', // Scripture editor assets
+  ],
   addons: [
+    getAbsolutePath('@storybook/addon-docs'),
     getAbsolutePath('@storybook/addon-links'),
-    getAbsolutePath('@storybook/addon-essentials'),
-    getAbsolutePath('@storybook/addon-interactions'),
     getAbsolutePath('@storybook/addon-webpack5-compiler-babel'),
+    getAbsolutePath('@storybook/addon-a11y'),
+    getAbsolutePath('storybook-addon-rtl'),
   ],
   framework: {
     name: getAbsolutePath('@storybook/react-webpack5'),
@@ -48,6 +54,14 @@ const config: StorybookConfig = {
     // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
+
+    // Add path mapping for platform-bible-react's @/ alias
+    if (webpackConfig.resolve) {
+      webpackConfig.resolve.alias = {
+        ...webpackConfig.resolve.alias,
+        '@': join(__dirname, '../lib/platform-bible-react/src'),
+      };
+    }
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({

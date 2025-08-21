@@ -1,66 +1,76 @@
-import type { Meta, StoryObj } from '@storybook/react';
-import { DockMode, LayoutBase } from 'rc-dock';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { DockMode, LayoutData, DockLayout, TabData } from 'rc-dock';
 import { CSSProperties } from 'react';
-
-import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
-
-import '@renderer/components/docking/dock-layout-wrapper.component.scss';
-import { createRCDockTabFromTabInfo } from '@renderer/components/docking/platform-dock-tab.component';
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import 'rc-dock/dist/rc-dock.css';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const defaultLayout: LayoutBase = {
+const defaultLayout: LayoutData = {
   dockbox: {
     mode: 'horizontal' as DockMode,
     children: [
       {
         tabs: [
-          { id: 'tab1', tabTitle: 'tab1', content: <div>Hello World</div> },
-          { id: 'tab2', tabTitle: 'tab2', content: <div>Hello 2</div> },
-          { id: 'tab3', tabTitle: 'tab3', content: <div>Hello 3</div> },
-          { id: 'tab4', tabTitle: 'tab4', content: <div>Hello 4</div> },
           {
-            id: 'tab5',
-            tabTitle: 'Hello012345678901234567890',
-            content: <div>Hello012345678901234567890</div>,
+            id: 'tab1',
+            title: 'Tab 1',
+            content: (
+              <div style={{ padding: '20px' }}>
+                <h3>Tab 1</h3>
+                <p>This is content for Tab 1</p>
+              </div>
+            ),
           },
-        ] as TabInfo[],
+          {
+            id: 'tab2',
+            title: 'Tab 2',
+            content: (
+              <div style={{ padding: '20px' }}>
+                <h3>Tab 2</h3>
+                <p>This is content for Tab 2</p>
+              </div>
+            ),
+          },
+          {
+            id: 'tab3',
+            title: 'Tab 3',
+            content: (
+              <div style={{ padding: '20px' }}>
+                <h3>Tab 3</h3>
+                <p>This is content for Tab 3</p>
+              </div>
+            ),
+          },
+        ] as TabData[],
       },
       {
         mode: 'vertical',
         children: [
           {
             tabs: [
-              { id: 'tab11', tabTitle: 'tab11', content: <div>Hello World</div> },
-              { id: 'tab22', tabTitle: 'tab22', content: <div>Hello 2</div> },
-              { id: 'tab33', tabTitle: 'tab33', content: <div>Hello 3</div> },
-              { id: 'tab44', tabTitle: 'tab44', content: <div>Hello 4</div> },
-            ] as TabInfo[],
-          },
-          {
-            mode: 'horizontal',
-            children: [
               {
-                tabs: [
-                  { id: 'tab111', tabTitle: 'tab111', content: <div>Hello World</div> },
-                  { id: 'tab222', tabTitle: 'tab222', content: <div>Hello 2</div> },
-                  { id: 'tab333', tabTitle: 'tab333', content: <div>Hello 3</div> },
-                ] as TabInfo[],
+                id: 'tab4',
+                title: 'Tab 4',
+                content: (
+                  <div style={{ padding: '20px' }}>
+                    <h3>Tab 4</h3>
+                    <p>This is content for Tab 4</p>
+                  </div>
+                ),
               },
-            ],
+              {
+                id: 'tab5',
+                title: 'Tab 5',
+                content: (
+                  <div style={{ padding: '20px' }}>
+                    <h3>Tab 5</h3>
+                    <p>This is content for Tab 5</p>
+                  </div>
+                ),
+              },
+            ] as TabData[],
           },
         ],
-      },
-    ],
-  },
-  floatbox: {
-    // Seems to only appear on refresh (resize the page)
-    mode: 'window',
-    children: [
-      {
-        tabs: [{ id: 'tab0', tabTitle: 'tab0', content: <div>Hello World</div> }] as TabInfo[],
       },
     ],
   },
@@ -70,20 +80,19 @@ const style: CSSProperties = {
   height: '400px',
 };
 
-function loadTab(tabInfo: SavedTabInfo) {
-  // we will have all of the required fields
-  return createRCDockTabFromTabInfo(tabInfo as TabInfo);
+function SimpleDockLayout() {
+  return <DockLayout defaultLayout={defaultLayout} style={style} dropMode="edge" />;
 }
 
-type Story = StoryObj<typeof DockLayoutWrapper>;
+type Story = StoryObj<typeof SimpleDockLayout>;
 
 export const Default: Story = {
-  args: { defaultLayout, style, loadTab },
+  args: {},
 };
 
-const meta: Meta<typeof DockLayoutWrapper> = {
+const meta: Meta<typeof SimpleDockLayout> = {
   title: 'platform/DockLayout',
-  component: DockLayoutWrapper,
+  component: SimpleDockLayout,
   tags: ['autodocs'],
 };
 export default meta;
