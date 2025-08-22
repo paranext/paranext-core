@@ -151,6 +151,14 @@ internal class PapiClient : IDisposable
         if (_requestTimeout == timeout)
             return;
 
+        if (timeout < TimeSpan.Zero || timeout > TimeSpan.FromDays(1))
+        {
+            Console.WriteLine(
+                $"Timeout must be between 0 and 1 day. Tried to set it to {timeout.TotalMilliseconds}ms"
+            );
+            return;
+        }
+
         Console.WriteLine($"Request timeout set to {timeout.TotalMilliseconds}ms");
         _requestTimeout = timeout;
     }

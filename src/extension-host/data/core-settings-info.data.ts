@@ -100,7 +100,8 @@ const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
 const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = async (
   newValue: number,
 ): Promise<boolean> => {
-  return typeof newValue === 'number' && newValue >= 0;
+  // The request timeout is in seconds. Keep it between 0 (disabled) and 1 day
+  return typeof newValue === 'number' && newValue >= 0 && newValue <= 60 * 60 * 24;
 };
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
