@@ -200,7 +200,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
         ScrTextCollection.RefreshScrTexts();
 
-        if (!ScrTextCollection.IsPresent(installableResource.ExistingScrText))
+        if (!ScrTextCollection.IsPresent(installableResource.InstalledScrText))
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
