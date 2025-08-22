@@ -10,8 +10,8 @@ interface PanelExtraContentProps {
 }
 
 /**
- * Component that renders the extra content in the panel header, including the maximize/minimize
- * button and the new tab button
+ * Component that renders the extra content in the panel header, formerly including the
+ * maximize/minimize button and the new tab button
  */
 export function PanelExtraContent({ panelData }: PanelExtraContentProps) {
   const handleOpenNewTab = async (tabGroupId?: string) => {
