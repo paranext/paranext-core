@@ -295,13 +295,16 @@ $tab-bottom-rounding: vars.$space--s;
 }
 
 @keyframes pulse-bright {
-  0%,
-  100% {
-    filter: brightness(1);
+  0% {
+    filter: brightness(1) hue-rotate(0deg);
   }
 
   50% {
-    filter: brightness(1.7); /* increases brightness */
+    filter: brightness(1.7) hue-rotate(180deg);
+  }
+
+  100% {
+    filter: brightness(1) hue-rotate(360deg);
   }
 }
 
