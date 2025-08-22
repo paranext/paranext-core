@@ -3,7 +3,7 @@
 
 .dock-style-platform-bible {
   // TODO BUG theme colors aren't adjusting to dark mode
-  --tab-front-blur: hsl(var(--muted));
+  --tab-front-blur: hsl(var(--background));
   --tab-front-focus-within: hsl(var(--primary));
   --tab-highlight: hsl(var(--primary) / 0.3);
 }
@@ -15,20 +15,19 @@
 
 .dock-tab,
 .dock-tabpane {
-  --tab-background: transparent; // new color var within .dock-tab
+  --tab-background: transparent; // new color var within
+}
+
+// Reset some unwanted text color from rc-dock
+.dock-tab:hover,
+.dock-tab-active:hover {
+  color: unset; // reset rc-dock blue
+  --tab-background: var(--tab-highlight);
 }
 
 .dock-tab-active,
 .dock-tabpane-active {
   --tab-background: var(--tab-front-blur);
-}
-
-.platform-dock-tab-window-focus,
-.dock-tabpane-active:focus-within {
-  // TODO BUG using :focus-within should trigger but it doesn't
-  // TODO these two properties should get the same level of abstraction
-  --tab-background: var(--tab-front-focus-within);
-  color: hsl(var(--primary-foreground));
 }
 
 .dock-dropdown,
@@ -86,24 +85,33 @@
 
 // #region DOCK-PANEL ///////////////////////////////////////////////////
 .dock-panel {
-  padding: vars.$space--s;
+  padding: vars.$space--sm;
+  padding-block-start: vars.$space--xs;
   background-color: #0055d9;
+  background-color: hsl(var(--muted));
 }
 
 .dock-top {
   position: unset; // fixes an overflow bug, but it is not clear why it is needed
   gap: unset; // Make the dock-bar touch the content area
 }
+
+.dock.dock-top,
+.dock-layout .dock-panel.dock-style-platform-bible {
+  // TODO need Tailwind vars to increase radius
+  border-radius: var(--radius);
+}
+
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region TAB-PANE (CONTENTS) //////////////////////////////////////////
 // TODO: UX in progress
 .dock-tabpane {
-  padding: vars.$space--s;
-  padding-block-start: vars.$space--s;
+  padding: vars.$space--sm;
+  padding-block-start: vars.$space--sm;
   background-color: var(--tab-background);
   box-sizing: border-box;
-  border-radius: 0 var(--radius) 0 var(--radius);
+  border-radius: var(--radius);
 }
 
 .platform-panel,
@@ -121,12 +129,13 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   flex-grow: 1;
   position: relative;
+  gap: vars.$space--xs;
 }
 
 .dock-nav-operations {
   align-items: center;
-  gap: vars.$space--s;
-  padding-inline: vars.$space--s;
+  gap: vars.$space--sm;
+  padding-inline: vars.$space--sm;
   height: 100%;
 }
 
@@ -134,7 +143,7 @@
   color: hsl(var(--foreground));
   height: 24px;
   width: 32px;
-  border-radius: vars.$space--s;
+  border-radius: vars.$space--sm;
 }
 
 .dock-nav-more:hover {
@@ -159,32 +168,13 @@
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
-  background: vars.$color--inactive-tab;
-  padding: vars.$space--s;
+  background: unset;
+  padding-inline: vars.$space--xs;
+  padding-block: vars.$space--sm;
   border: unset;
 }
 
 // DEBUG REGION //////////////////////////////////////////////////////
-.dock-nav {
-  background-color: rosybrown; // Temporary debug
-  outline: sienna solid 1px; // Temporary debug
-  outline-offset: 1px; // Temporary debug
-}
-
-.dock-nav-wrap {
-  outline: #15c04f solid 1px; // Temporary debug
-  flex-wrap: nowrap;
-  overflow-x: clip;
-  overflow-y: visible;
-}
-
-.dock-tab {
-  background-color: burlywood; // Temporary debug
-}
-
-.bock-tab-btn {
-  background-color: lightcoral; // Temporary debug
-}
 
 // DEBUG END ////////////////////////////////////////////////////////
 
@@ -200,6 +190,11 @@
    * makes them blurry, so this removes that transform
    */
   transform: unset;
+
+  padding-inline: vars.$space--sm;
+  flex-wrap: nowrap;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 // #endregion TAB-BAR ///////////////////////////////////////////////////
 
@@ -207,64 +202,73 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: unset;
   border: unset;
-  background: vars.$color--inactive-tab;
+  background-color: var(--tab-background);
   // color: currentColor;
   flex: 1 0 auto;
-  max-width: fit-content;
+  //   max-width: max-content;
+  border-radius: var(--radius);
+
+  &.dock-tab-active {
+    // Remove radius on bottom corners of active tab so it connects with content pane
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+
+    background: var(--tab-background);
+    color: currentColor;
+    border-bottom: unset;
+    inset-block-end: -8px; // Move tab down to descend below the tab list
+    transition:
+      background-color 0.1s,
+      color 0.1s,
+      box-shadow 0.1s,
+      inset-block-end 0.6s;
+  }
+
+  &.platform-dock-tab-window-focus {
+    // TODO these two properties should get the same level of abstraction
+    --tab-background: var(--tab-front-focus-within);
+    color: hsl(var(--primary-foreground));
+  }
 }
 
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: var(--tab-background);
-  // color: currentColor;
-  border-bottom: unset;
-  z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
-
-  box-shadow: 0 4px 20px 0 vars.$color--shadow; // Box shadow around active tab
-  inset-block-end: -8px; // Move tab down to descend below the tab list
-  transition:
-    background-color 0.1s,
-    color 0.1s,
-    box-shadow 0.1s,
-    inset-block-end 0.6s;
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn {
+  padding: unset;
+  box-sizing: border-box;
+  width: 100%;
 }
 
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
-  padding-inline-start: vars.$space--xs;
-  padding-inline-end: clamp(2rem, 3rem, 10cqw);
+// .drag-initiator happens to be the parent of the tab title, icon, and close button
+.dock-tab .drag-initiator {
+  padding-inline: 0.5rem;
   padding-block: vars.$space--xs;
+  display: flex;
+  flex: auto;
+  gap: vars.$space--sm;
 }
 
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region TAB SEPARATOR (DIVIDER) //////////////////////////////////////
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active)::before {
-  content: '';
-  width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
-  height: 20px;
-  background: vars.$color--border;
-  position: absolute;
-  bottom: 6px;
-  left: -2px;
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active) {
+  &::before {
+    content: '';
+    width: 2.2px;
+    height: 100%;
+    background-color: hsl(var(--border));
+    position: absolute;
+    right: 0;
+  }
+
+  &:hover::before {
+    opacity: 0;
+  }
 }
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region ROUNDED CORNERS //////////////////////////////////////////////
 
-// Curved top corners, including on floating window
-// .dock-fbox > .dock-panel - would be for floating windows only
-$tab-top-rounding: vars.$space--xs;
-
-.dock.dock-top,
-.dock-layout .dock-panel.dock-style-platform-bible {
-  border-radius: $tab-top-rounding; // TODO Can I remove this?
-}
-
-.dock-tab-active {
-  border-radius: $tab-top-rounding $tab-top-rounding 0 0;
-}
-
 // Bottom outside corner rounding for active tab (fillets)
-$tab-bottom-rounding: vars.$space--s;
+$tab-bottom-rounding: vars.$space--sm;
 
 .dock-tab.dock-tab-active::before,
 .dock-tab.dock-tab-active::after {
@@ -329,13 +333,14 @@ $tab-bottom-rounding: vars.$space--s;
 
 .dock-panel.dock-style-card .dock-tab-close-btn,
 .dock-tab-close-btn {
-  border-radius: vars.$space--l;
+  border-radius: vars.$space--lg;
   height: 16px;
   padding: 2px;
   top: 5px;
   right: 5px;
   color: hsl(var(--muted-foreground));
   visibility: hidden;
+  position: static;
 }
 
 .dock-tab.dock-tab-active .dock-tab-close-btn,
