@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import TabDropdownMenu from '../menus/tab-dropdown-menu.component';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
-import TabToolbarContainer from './tab-toolbar-container.component';
+import { TabToolbarContainer } from './tab-toolbar-container.component';
 
 export type TabFloatingMenuButtonProps = {
   /**

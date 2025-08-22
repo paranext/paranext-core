@@ -1,18 +1,58 @@
-import { PropsWithChildren, ReactNode } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { ReactNode } from 'react';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { Menu, EllipsisVertical } from 'lucide-react';
 import { SelectMenuItemHandler } from './menus/platform-menubar.component';
+import { TabToolbarContainer } from './tab-toolbar/tab-toolbar-container.component';
 import TabDropdownMenu from './menus/tab-dropdown-menu.component';
 
-export type TabToolbarProps = PropsWithChildren<{
-  /** The handler to use for toolbar item commands */
+export type TabToolbarProps = {
+  /**
+   * The handler to use for toolbar item commands related to the project menu. Here is a basic
+   * example of how to create this from the hello-rock3 extension:
+   *
+   *     const projectMenuCommandHandler: CommandHandler = async (command) => {
+   *       // Assert the more specific type.
+   *       // eslint-disable-next-line no-type-assertion/no-type-assertion
+   *       const commandName = (command as MenuItemContainingCommand).command;
+   *       try {
+   *         // Assert the more specific type.
+   *         // eslint-disable-next-line no-type-assertion/no-type-assertion
+   *         await papi.commands.sendCommand(commandName as CommandNames);
+   *       } catch (e) {
+   *         throw new Error(
+   *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+   *         );
+   *       }
+   *     };
+   */
   onSelectProjectMenuItem: SelectMenuItemHandler;
 
-  /** The handler to use for toolbar item commands */
+  /**
+   * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
+   * example of how to create this from the hello-rock3 extension:
+   *
+   *     const onSelectProjectMenuItem: CommandHandler = async (command) => {
+   *       // Assert the more specific type.
+   *       // eslint-disable-next-line no-type-assertion/no-type-assertion
+   *       const commandName = (command as MenuItemContainingCommand).command;
+   *       try {
+   *         // Assert the more specific type.
+   *         // eslint-disable-next-line no-type-assertion/no-type-assertion
+   *         await papi.commands.sendCommand(commandName as CommandNames);
+   *       } catch (e) {
+   *         throw new Error(
+   *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+   *         );
+   *       }
+   *     };
+   */
   onSelectViewInfoMenuItem: SelectMenuItemHandler;
 
-  /** Menu data that is used to populate the Menubar component for the project menu. */
+  /**
+   * Menu data that is used to populate the Menubar component for the project menu. In an extension,
+   * the menu data comes from menus.json in the contributions folder. To access that info, use
+   * useMemo to get the WebViewMenu.
+   */
   projectMenuData?: Localized<MultiColumnMenu>;
 
   /** Menu data that is used to populate the Menubar component for the view info menu */
@@ -39,74 +79,13 @@ export type TabToolbarProps = PropsWithChildren<{
    */
   endAreaChildren?: ReactNode;
 
-  /**
-   * Variant of the tab toolbar. The menuButton option displays just the project menu as a floating
-   * action button that scrolls with the screen.
-   */
-  tabToolbarVariant?: 'default' | 'menuButton';
-
   /** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
   menuButtonIcon?: ReactNode;
-}>;
+};
 
- * Conditionally render children in start and middle areas of the toolbar based on whether the whole
- * toolbar should be showing or whether just the project menu button should be showing.
- *
- * @param tabToolbarVariant Variant of the tab toolbar. The menuButton option displays just the
- *   project menu as a floating action button that scrolls with the screen.
- * @param className Tailwind CSS classes that should be applied to the container of the children.
- * @param areaChildren Toolbar children to be put in this area of the the toolbar.
- * @returns Nothing for the menuButton variant, otherwise a styled toolbar container with children.
- */
-function ToolbarChildren(
-  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
-  className: string,
-  areaChildren: ReactNode,
-) {
-  if (tabToolbarVariant === 'menuButton') return;
-  return <div className={className}>{areaChildren}</div>;
-}
-
-/**
- * Conditionally render view menu (if it has menu item(s)) and end area children at the end of the
- * toolbar based on whether the whole toolbar should be showing or whether just the project menu
- * button should be showing.
- *
- * @param tabToolbarVariant
- * @param className
- * @param endAreaChildren
- * @param tabViewMenuData
- * @param viewInfoMenuCommandHandler
- * @returns
- */
-function ToolbarEnd(
-  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
-  endAreaChildren: ReactNode,
-  tabViewMenuData: Localized<MultiColumnMenu> | undefined,
-  viewInfoMenuCommandHandler: CommandHandler,
-) {
-  if (tabToolbarVariant === 'menuButton') return;
-  return (
-    <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
-      {tabViewMenuData && (
-        <TabDropdownMenu
-          commandHandler={viewInfoMenuCommandHandler}
-          menuData={tabViewMenuData}
-          tabLabel="View Info"
-          icon={<EllipsisVertical />}
-          className="tw-h-full"
-        />
-      )}
-      {endAreaChildren}
-    </div>
-  );
-}
-
-/**
- * Component for rendering a customizable tab toolbar.
- *
- * The toolbar includes three main areas to place children components: start, center, and end. It
- * optionally displays dropdown menus for project and view info, populated by the given menu data.
+ * Toolbar that holds the project menu icon on one side followed by three different areas/categories
+ * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
+ * component for a menu component that takes up less screen real estate yet is always visible.
  */
 export function TabToolbar({
   onSelectProjectMenuItem,
@@ -118,24 +97,17 @@ export function TabToolbar({
   startAreaChildren,
   centerAreaChildren,
   endAreaChildren,
-  tabToolbarVariant,
   menuButtonIcon,
 }: TabToolbarProps) {
   return (
-    <div
-      className={cn(
-        'tw-box-border tw-flex tw-h-12 tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar',
-        className,
-      )}
-      id={id}
-    >
+    <TabToolbarContainer className={`tw-w-full tw-border tw-bg-background ${className}`} id={id}>
       {projectMenuData && (
         <TabDropdownMenu
-          commandHandler={projectMenuCommandHandler}
+          onSelectMenuItem={onSelectProjectMenuItem}
           menuData={projectMenuData}
           tabLabel="Project"
-          icon={<Menu />}
-          className="tw-h-full tw-w-8"
+          icon={menuButtonIcon ?? <Menu />}
+          buttonVariant="ghost"
         />
       )}
       <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
@@ -147,7 +119,7 @@ export function TabToolbar({
       <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
         {tabViewMenuData && (
           <TabDropdownMenu
-            commandHandler={viewInfoMenuCommandHandler}
+            onSelectMenuItem={onSelectViewInfoMenuItem}
             menuData={tabViewMenuData}
             tabLabel="View Info"
             icon={<EllipsisVertical />}
@@ -156,7 +128,7 @@ export function TabToolbar({
         )}
         {endAreaChildren}
       </div>
-    </div>
+    </TabToolbarContainer>
   );
 }
 

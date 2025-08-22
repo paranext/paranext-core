@@ -24,6 +24,7 @@ import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.com
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
 import { ScopeSelectorExample } from './advanced/scope-selector-example.component';
+import { TabFloatingMenuButtonExample } from './advanced/tab-floating-menu-button-example.component';
 
 export function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -96,6 +97,9 @@ export function Compositions() {
             Settings Sidebar Content Search
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tab Dropdown Menu">Tab Dropdown Menu</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Tab Floating Menu Button">
+            Tab Floating Menu Button
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tab Toolbar">Tab Toolbar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="UI Language Selector">
             UI Language Selector
@@ -108,6 +112,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Tab Floating Menu Button">
+          <TabFloatingMenuButtonExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Tab Toolbar">
@@ -123,7 +131,20 @@ export function Compositions() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
-          <MarketplaceExamples />
+          <VerticalTabs>
+            <VerticalTabsList>
+              <VerticalTabsTrigger value="Marketplace Buttons">
+                Marketplace Buttons
+              </VerticalTabsTrigger>
+              <VerticalTabsTrigger value="Marketplace Components">
+                Marketplace Components
+              </VerticalTabsTrigger>
+            </VerticalTabsList>
+
+            <VerticalTabsContent value="Marketplace Components">
+              <MarketplaceExamples />
+            </VerticalTabsContent>
+          </VerticalTabs>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">

@@ -1,6 +1,6 @@
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
-import TabToolbar from '@/components/advanced/tab-toolbar/tab-toolbar.component';
+import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
@@ -255,10 +255,9 @@ export function TabToolbarExample() {
 export function MenuButtonTabToolbarExample() {
   return (
     <TabToolbar
-      projectMenuCommandHandler={(command) => console.log('Project Menu Run command: ', command)}
-      viewInfoMenuCommandHandler={(command) => console.log('View Info Run command: ', command)}
+      onSelectProjectMenuItem={(command) => console.log('Project Menu Run command: ', command)}
+      onSelectViewInfoMenuItem={(command) => console.log('View Info Run command: ', command)}
       projectMenuData={projectMenuData}
-      tabToolbarVariant="menuButton"
     />
   );
 }
