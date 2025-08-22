@@ -1,12 +1,15 @@
 @use '../../styles/vars';
 
 /* 
-"front" means the tab that's selected in a tab group.
+"front" means the tab that's selected in a tab group. In rc-dock, this is `dock-tab-active`
 "back" means any tab that's not "front" in a tab group.
 "focus-within" means the tab that has CSS `:focus-within`, i.e. the tab with a cursor or keyboard focus within it.
 "blur" means the tab that does not have focus, i.e. the tab that is not "focus-within".
-~~"active" means the tab that is selected in a tab group.~~
-~~"inactive" means any tab that is not "active" in a tab group.~~
+
+In rc-dock
+"active" means the tab that is selected in a tab group.
+"inactive" means any tab that is not "active" in a tab group.
+"window-focus" means the tab that has a window focus, i.e. the tab that is not "floating" and has a cursor or keyboard focus within it.
 
  */
 
@@ -31,7 +34,7 @@
   --tab-background: var(--tab-front-blur);
 }
 
-.dock-tab-window-focus,
+.platform-dock-tab-window-focus,
 .dock-tabpane-active:focus-within {
   // TODO BUG using :focus-within should trigger but it doesn't
   // TODO these two properties should get the same level of abstraction
@@ -119,7 +122,7 @@
 }
 
 // TODO: UX in progress
-.dock-tabpane.dock-tabpane-active-highlight {
+.dock-tabpane.platform-dock-tabpane-active-highlight {
   outline: 2px solid vars.$color--focus-ring;
   outline-offset: -2px;
 }
@@ -312,7 +315,7 @@ $tab-bottom-rounding: vars.$space--s;
 }
 
 // TODO: UX should make this better
-.dock-tab.dock-tab-active.dock-tab-active-highlight {
+.dock-tab.dock-tab-active.platform-dock-tab-active-highlight {
   outline: 2px solid vars.$color--focus-ring;
   outline-offset: -2px;
   // This duration must be ≤ "cssHighlightDurationMilliseconds" in platform-tab-title.component.tsx
@@ -343,8 +346,8 @@ $tab-bottom-rounding: vars.$space--s;
 }
 
 // Hide the bottom corner rounding pseudo-elements when highlight is active
-.dock-tab.dock-tab-active.dock-tab-active-highlight::before,
-.dock-tab.dock-tab-active.dock-tab-active-highlight::after {
+.dock-tab.dock-tab-active.platform-dock-tab-active-highlight::before,
+.dock-tab.dock-tab-active.platform-dock-tab-active-highlight::after {
   display: none;
 }
 
