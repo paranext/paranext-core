@@ -34,11 +34,11 @@ type PlatformTabTitleProps = {
 };
 
 // CSS classes for highlighting the active tab header and content
-const cssClassTabHeaderHighlight = 'dock-tab-active-highlight';
-const cssClassTabContentHighlight = 'dock-tabpane-active-highlight';
+const cssClassTabHeaderHighlight = 'platform-dock-tab-active-highlight';
+const cssClassTabContentHighlight = 'platform-dock-tabpane-active-highlight';
 
 /** CSS class for highlighting the focused tab header */
-const cssClassTabHeaderWindowFocus = 'dock-tab-window-focus';
+const cssClassTabHeaderWindowFocus = 'platform-dock-tab-window-focus';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
