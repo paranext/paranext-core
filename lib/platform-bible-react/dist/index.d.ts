@@ -2,6 +2,7 @@
 
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
+import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
@@ -22,6 +23,7 @@ import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
 import { Toaster, toast as sonner } from 'sonner';
+import { Drawer as DrawerPrimitive } from 'vaul';
 
 export type BookChapterControlProps = {
 	/** The current scripture reference */
@@ -155,6 +157,8 @@ export type ChapterRangeSelectorProps = {
  * consists of two combo boxes for selecting the start and end chapters. The component ensures that
  * the selected start chapter is always less than or equal to the end chapter, and vice versa.
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param {ChapterRangeSelectorProps} props - The props for the component.
  */
 export declare function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
@@ -189,6 +193,8 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  * will display the range of chapters in the selected book, and in the latter case it will display a
  * list of the selected books.
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param {BookSelectorProps} props
  * @param {function} props.handleBookSelectionModeChange - Callback function to handle changes in
  *   book selection mode.
@@ -255,32 +261,38 @@ interface ErrorDumpProps {
 	errorDetails: string;
 	/** Handler function to notify the frontend when the error is copied */
 	handleCopyNotify?: () => void;
-	/** List of localized strings to localize the strings in this component */
+	/**
+	 * List of localized strings to localize the strings in this component. Relevant keys can be found
+	 * in `ERROR_DUMP_STRING_KEYS`
+	 */
 	localizedStrings: ErrorDumpLocalizedStrings;
 }
-/**
- * Component to render an error dump
- *
- * @param errorDetails Error details string
- * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
- *   was copied
- * @param localizedStrings Localized strings to use in the ErrorDump component
- */
+/** Component to render an error dump */
 export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
-type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps & {
+/**
+ * Object containing all keys used for localization in the ErrorPopover component. This extends
+ * ERROR_DUMP_STRING_KEYS with additional keys specific to the ErrorPopover. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const ERROR_POPOVER_STRING_KEYS: readonly [
+	"%webView_error_dump_header%",
+	"%webView_error_dump_info_message%",
+	"%webView_error_dump_copied_message%"
+];
+export type ErrorPopoverLocalizedStrings = {
+	[localizedKey in (typeof ERROR_POPOVER_STRING_KEYS)[number]]?: string;
+};
+type ErrorPopoverProps = React$1.PropsWithChildren & Omit<ErrorDumpProps, "localizedStrings"> & {
+	/**
+	 * List of localized strings to localize the strings in this component. Relevant keys can be
+	 * found in `ERROR_POPOVER_STRING_KEYS`
+	 */
+	localizedStrings: ErrorPopoverLocalizedStrings;
 	/** Optional CSS classes to insert into the `PopoverContent` */
 	className?: string;
 };
-/**
- * @param errorDetails The error details to show in the error popover
- * @param handleCopyNotify Optional notification handler function to handle when the error is copied
- * @param localizedStrings List of localized strings to use in the ErrorDump component
- * @param className Optional CSS classes to insert into the `PopoverContent`
- *
- *   NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
- *   which contains a list of the localized strings that will need to be set to populate the
- *   `localizedStrings` parameter
- */
+/** A popover component that displays detailed error information using the ErrorDump component. */
 export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children, className, }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
 /** The DropdownMenuItemType enum is used to determine the type of the dropdown item */
 export declare enum DropdownMenuItemType {
@@ -595,23 +607,12 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
-type MenuItemInfoBase = {
-	/** Text (displayable in the UI) as the name of the menu item */
-	label: string;
-	/** Text to display when the mouse hovers over the menu item */
-	tooltip?: string;
-};
-export type Command = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	command: string;
-};
 /**
- * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
- * define the shape of a function that can handle commands, but it does not provide an
- * implementation.
+ * Callback function that is invoked when a user selects a menu item. Receives the full
+ * `MenuItemContainingCommand` object as an argument.
  */
-export interface CommandHandler {
-	(command: Command): void;
+export interface SelectMenuItemHandler {
+	(selectedMenuItem: MenuItemContainingCommand): void;
 }
 export type SelectedSettingsSidebarItem = {
 	label: string;
@@ -643,7 +644,8 @@ export type SettingsSidebarProps = {
 };
 /**
  * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages.
+ * settings. It can be used to navigate to different settings pages. Must be wrapped in a
+ * SidebarProvider component otherwise produces errors.
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
@@ -765,7 +767,15 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 	"%webView_book_selector_select_all%",
 	"%webView_book_selector_clear_all%",
 	"%webView_book_selector_no_book_found%",
-	"%webView_book_selector_more%"
+	"%webView_book_selector_more%",
+	"%scripture_section_ot_long%",
+	"%scripture_section_ot_short%",
+	"%scripture_section_nt_long%",
+	"%scripture_section_nt_short%",
+	"%scripture_section_dc_long%",
+	"%scripture_section_dc_short%",
+	"%scripture_section_extra_long%",
+	"%scripture_section_extra_short%"
 ];
 /** Type definition for the localized strings used in this component */
 export type ScopeSelectorLocalizedStrings = {
@@ -797,13 +807,21 @@ interface ScopeSelectorProps {
 	 * and pass the localized keys that are returned by the hook into this prop.
 	 */
 	localizedStrings: ScopeSelectorLocalizedStrings;
+	/**
+	 * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+	 * value contains localized versions of the ID and full book name
+	 */
+	localizedBookNames?: Map<string, {
+		localizedId: string;
+		localizedName: string;
+	}>;
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
  * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
  * component is displayed to allow users to choose specific books.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -865,6 +883,8 @@ type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param children To populate the list with
  * @returns Formatted div encompassing the children
  */
@@ -882,6 +902,8 @@ type SettingsListItemProps = React$1.PropsWithChildren & {
 /**
  * SettingsListItem component is a common list item. Rendered with a formatted div
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param SettingsListItemProps
  * @returns Formatted div encompassing the list item content
  */
@@ -897,13 +919,15 @@ type SettingsListHeaderProps = {
 /**
  * SettingsListHeader component displays text above the list
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param SettingsListHeaderProps
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 type TabDropdownMenuProps = {
 	/** The handler to use for menu commands */
-	commandHandler: CommandHandler;
+	onSelectMenuItem: SelectMenuItemHandler;
 	/** The menu data to show on the dropdown menu */
 	menuData: Localized<MultiColumnMenu>;
 	/** Defines a string value that labels the current element */
@@ -925,13 +949,53 @@ type TabDropdownMenuProps = {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
-export type TabToolbarProps = React$1.PropsWithChildren<{
-	/** The handler to use for toolbar item commands */
-	projectMenuCommandHandler: CommandHandler;
-	/** The handler to use for toolbar item commands */
-	viewInfoMenuCommandHandler: CommandHandler;
-	/** Menu data that is used to populate the Menubar component for the project menu. */
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export type TabToolbarProps = {
+	/**
+	 * The handler to use for toolbar item commands related to the project menu. Here is a basic
+	 * example of how to create this from the hello-rock3 extension:
+	 *
+	 *     const projectMenuCommandHandler: CommandHandler = async (command) => {
+	 *       // Assert the more specific type.
+	 *       // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *       const commandName = (command as MenuItemContainingCommand).command;
+	 *       try {
+	 *         // Assert the more specific type.
+	 *         // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *         await papi.commands.sendCommand(commandName as CommandNames);
+	 *       } catch (e) {
+	 *         throw new Error(
+	 *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+	 *         );
+	 *       }
+	 *     };
+	 */
+	onSelectProjectMenuItem: SelectMenuItemHandler;
+	/**
+	 * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
+	 * example of how to create this from the hello-rock3 extension:
+	 *
+	 *     const onSelectProjectMenuItem: CommandHandler = async (command) => {
+	 *       // Assert the more specific type.
+	 *       // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *       const commandName = (command as MenuItemContainingCommand).command;
+	 *       try {
+	 *         // Assert the more specific type.
+	 *         // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *         await papi.commands.sendCommand(commandName as CommandNames);
+	 *       } catch (e) {
+	 *         throw new Error(
+	 *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+	 *         );
+	 *       }
+	 *     };
+	 */
+	onSelectViewInfoMenuItem: SelectMenuItemHandler;
+	/**
+	 * Menu data that is used to populate the Menubar component for the project menu. In an extension,
+	 * the menu data comes from menus.json in the contributions folder. To access that info, use
+	 * useMemo to get the WebViewMenu.
+	 */
 	projectMenuData?: Localized<MultiColumnMenu>;
 	/** Menu data that is used to populate the Menubar component for the view info menu */
 	tabViewMenuData?: Localized<MultiColumnMenu>;
@@ -951,15 +1015,55 @@ export type TabToolbarProps = React$1.PropsWithChildren<{
 	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
 	 */
 	endAreaChildren?: React$1.ReactNode;
-	/**
-	 * Variant of the tab toolbar. The menuButton option displays just the project menu as a floating
-	 * action button that scrolls with the screen.
-	 */
-	tabToolbarVariant?: "default" | "menuButton";
 	/** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
 	menuButtonIcon?: React$1.ReactNode;
-}>;
-export declare function TabToolbar({ projectMenuCommandHandler, viewInfoMenuCommandHandler, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, tabToolbarVariant, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+};
+/**
+ * Toolbar that holds the project menu icon on one side followed by three different areas/categories
+ * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
+ * component for a menu component that takes up less screen real estate yet is always visible.
+ */
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export type TabFloatingMenuButtonProps = {
+	/**
+	 * The handler to use for toolbar item commands. Here is a basic example of how to create this
+	 * from the hello-rock3 extension:
+	 *
+	 *     const onSelectProjectMenuItem: CommandHandler = async (command) => {
+	 *       // Assert the more specific type.
+	 *       // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *       const commandName = (command as MenuItemContainingCommand).command;
+	 *       try {
+	 *         // Assert the more specific type.
+	 *         // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *         await papi.commands.sendCommand(commandName as CommandNames);
+	 *       } catch (e) {
+	 *         throw new Error(
+	 *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+	 *         );
+	 *       }
+	 *     };
+	 */
+	onSelectProjectMenuItem: SelectMenuItemHandler;
+	/**
+	 * Menu data that is used to populate the Menubar component for the project menu. In an extension,
+	 * the menu data comes from menus.json in the contributions folder. To access that info, use
+	 * useMemo to get the WebViewMenu.
+	 */
+	projectMenuData?: Localized<MultiColumnMenu>;
+	/** Optional unique identifier */
+	id?: string;
+	/** Additional css classes to help with unique styling of the extensible toolbar */
+	className?: string;
+	/** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
+	menuButtonIcon?: React$1.ReactNode;
+};
+/**
+ * Renders a button that looks like the menuButtonIcon or like the default of three stacked
+ * horizontal lines (aka the hamburger). The button "floats" over the content so it is always
+ * visible. When clicked, it displays a dropdown menu with the projectMenuData.
+ */
+export declare function TabFloatingMenuButton({ onSelectProjectMenuItem, projectMenuData, id, className, menuButtonIcon, }: TabFloatingMenuButtonProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -998,7 +1102,7 @@ type TabNavigationContentSearchProps = {
 declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
-	commandHandler: CommandHandler;
+	onSelectMenuItem: SelectMenuItemHandler;
 	/**
 	 * Menu data that is used to populate the Menubar component. If empty object, no menus will be
 	 * shown on the App Menubar
@@ -1048,7 +1152,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
@@ -1260,7 +1364,7 @@ export type SearchBarProps = {
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  */
-export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, isDisabled, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export declare const SearchBar: import("react").ForwardRefExoticComponent<SearchBarProps & import("react").RefAttributes<HTMLInputElement>>;
 export type SpinnerProps = LucideProps;
 /**
  * A spinner component that uses the LoaderCircle icon from lucide-react to indicate loading states.
@@ -1386,6 +1490,163 @@ export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLA
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
  */
 export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPrimitive.CheckboxProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * Command menu for React. These components are built on cmdk and styled with Shadcn UI. See Shadcn
+ * UI documentation: https://ui.shadcn.com/docs/components/command See cmdk documentation:
+ * https://cmdk.paco.me/
+ */
+export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+	label?: string;
+	shouldFilter?: boolean;
+	filter?: (value: string, search: string, keywords?: string[]) => number;
+	defaultValue?: string;
+	value?: string;
+	onValueChange?: (value: string) => void;
+	loop?: boolean;
+	disablePointerSelection?: boolean;
+	vimBindings?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
+export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement>> & {
+	ref?: React$1.Ref<HTMLInputElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement> | "asChild">, "type" | "value" | "onChange"> & {
+	value?: string;
+	onValueChange?: (search: string) => void;
+} & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
+/** @inheritdoc Command */
+export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+	label?: string;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
+export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
+export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "heading"> & {
+	heading?: React$1.ReactNode;
+	value?: string;
+	forceMount?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
+export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "disabled" | "onSelect"> & {
+	disabled?: boolean;
+	onSelect?: (value: string) => void;
+	value?: string;
+	keywords?: string[];
+	forceMount?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Context Menu component displays a menu to the user — such as a set of actions or functions,
+ * triggered by a button.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/context-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/context-menu}
+ */
+export declare const ContextMenu: React$1.FC<ContextMenuPrimitive.ContextMenuProps>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuTrigger: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuTriggerProps & React$1.RefAttributes<HTMLSpanElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuGroup: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuPortal: React$1.FC<ContextMenuPrimitive.ContextMenuPortalProps>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSub: React$1.FC<ContextMenuPrimitive.ContextMenuSubProps>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuRadioGroup: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	inset?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSubContent: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuContent: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuItem: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	inset?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuLabel: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	inset?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare const ContextMenuSeparator: React$1.ForwardRefExoticComponent<Omit<ContextMenuPrimitive.ContextMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuShortcut({ className, ...props }: React$1.HTMLAttributes<HTMLSpanElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace ContextMenuShortcut {
+	var displayName: string;
+}
+/**
+ * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
+ * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
+ * https://vaul.emilkowal.ski/getting-started
+ */
+export declare function Drawer({ shouldScaleBackground, direction, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+export declare namespace Drawer {
+	var displayName: string;
+}
+/** @inheritdoc Drawer */
+export declare const DrawerTrigger: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Drawer */
+export declare const DrawerPortal: typeof import("vaul").Portal;
+/** @inheritdoc Drawer */
+export declare const DrawerClose: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Drawer */
+export declare const DrawerOverlay: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+interface DrawerContentProps extends React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
+	/** Optionally hide the drawer handle */
+	hideDrawerHandle?: boolean;
+}
+/** @inheritdoc Drawer */
+export declare const DrawerContent: React$1.ForwardRefExoticComponent<DrawerContentProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Drawer */
+export declare function DrawerHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace DrawerHeader {
+	var displayName: string;
+}
+/** @inheritdoc Drawer */
+export declare function DrawerFooter({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace DrawerFooter {
+	var displayName: string;
+}
+/** @inheritdoc Drawer */
+export declare const DrawerTitle: React$1.ForwardRefExoticComponent<Omit<import("@radix-ui/react-dialog").DialogTitleProps & React$1.RefAttributes<HTMLHeadingElement>, "ref"> & React$1.RefAttributes<HTMLHeadingElement>>;
+/** @inheritdoc Drawer */
+export declare const DrawerDescription: React$1.ForwardRefExoticComponent<Omit<import("@radix-ui/react-dialog").DialogDescriptionProps & React$1.RefAttributes<HTMLParagraphElement>, "ref"> & React$1.RefAttributes<HTMLParagraphElement>>;
 type MenuContextProps = {
 	variant?: "default" | "muted";
 };
@@ -1523,6 +1784,12 @@ export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
 export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Popover */
 export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Displays an indicator showing the completion progress of a task, typically displayed as a
+ * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI. See
+ * Shadcn UI documentation: https://ui.shadcn.com/docs/components/progress See Radix UI
+ * documentation: https://www.radix-ui.com/primitives/docs/components/progress#api-reference
+ */
 export declare const Progress: React$1.ForwardRefExoticComponent<Omit<ProgressPrimitive.ProgressProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
@@ -1696,6 +1963,10 @@ type SonnerProps = React$1.ComponentProps<typeof Toaster>;
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
 export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn
+ * UI documentation: https://ui.shadcn.com/docs/components/skeleton
+ */
 export declare function Skeleton({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 /**
  * The Slider component is an input where the user selects a value from within a given range. This
@@ -1783,6 +2054,10 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
+ * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
+ */
 export declare const Textarea: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.TextareaHTMLAttributes<HTMLTextAreaElement>, HTMLTextAreaElement>, "ref"> & React$1.RefAttributes<HTMLTextAreaElement>>;
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
@@ -1871,6 +2146,43 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+/** Properties of one option contained in a listbox */
+export interface ListboxOption {
+	/** Unique identifier for the option */
+	id: string;
+}
+/** Props for the useListbox hook */
+export interface UseListboxProps {
+	/** Array of options for the listbox */
+	options: ListboxOption[];
+	/** Callback when the focus changes to a different option */
+	onFocusChange?: (option: ListboxOption) => void;
+	/** Callback to toggle the selection of an option */
+	onOptionSelect?: (option: ListboxOption) => void;
+	/** Callback when a character key is pressed */
+	onCharacterPress?: (char: string) => void;
+}
+/**
+ * Hook for handling keyboard navigation of a listbox.
+ *
+ * @param UseListboxProps - The properties for configuring the listbox behavior.
+ * @returns An object containing:
+ *
+ *   - `listboxRef`: A ref to be attached to the listbox container element (e.g., `<ul>`), used for
+ *       focus management.
+ *   - `activeId`: The id of the currently focused (active) option, or `undefined` if none is focused.
+ *   - `selectedId`: The id of the currently selected option, or `undefined` if none is selected.
+ *   - `handleKeyDown`: A keyboard event handler to be attached to the listbox container for handling
+ *       navigation and selection.
+ *   - `focusOption`: A function to programmatically focus a specific option by id.
+ */
+export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCharacterPress, }: UseListboxProps) => {
+	listboxRef: React$1.RefObject<HTMLElement>;
+	activeId: string | undefined;
+	selectedId: string | undefined;
+	handleKeyDown: (evt: React$1.KeyboardEvent<HTMLElement>) => void;
+	focusOption: (id: string) => void;
+};
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

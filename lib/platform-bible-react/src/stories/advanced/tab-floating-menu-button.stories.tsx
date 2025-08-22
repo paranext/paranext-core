@@ -1,9 +1,9 @@
-import type { Meta, StoryObj } from '@storybook/react';
 import { Plus } from 'lucide-react';
 import {
   TabFloatingMenuButton,
   TabFloatingMenuButtonProps,
 } from '@/components/advanced/tab-toolbar/tab-floating-menu-button.component';
+import { Meta, StoryObj } from '@storybook/react-vite';
 
 const projectMenuData = {
   columns: {

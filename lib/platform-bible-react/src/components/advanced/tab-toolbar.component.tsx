@@ -83,6 +83,7 @@ export type TabToolbarProps = {
   menuButtonIcon?: ReactNode;
 };
 
+/*
  * Toolbar that holds the project menu icon on one side followed by three different areas/categories
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.

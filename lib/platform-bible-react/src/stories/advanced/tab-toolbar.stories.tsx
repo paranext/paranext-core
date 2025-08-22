@@ -1,4 +1,3 @@
-import type { Meta, StoryObj } from '@storybook/react';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
@@ -7,6 +6,7 @@ import {
   TabToolbarProps,
 } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { AnimatedContainer } from '@/storybook/decorators/animated-container';
+import { Meta, StoryObj } from '@storybook/react-vite';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
   console.log('New Scroll Group Id: ', newScrollGroupId);
