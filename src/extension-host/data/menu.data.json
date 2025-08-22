@@ -79,14 +79,6 @@
         "command": "platform.usersnapReportIssue"
       },
       {
-        "label": "%mainMenu_feedback_emailDevelopers%",
-        "localizeNotes": "Application main menu > Help > Email the team",
-        "group": "platform.helpFeedback",
-        "order": 3,
-        "command": "platform.emailDevelopers",
-        "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
-      },
-      {
         "label": "%mainMenu_openDeveloperDocumentation%",
         "localizeNotes": "Application main menu > Help > Open Developer Documentation",
         "group": "platform.helpMisc",
