@@ -1,22 +1,11 @@
 @use '../../styles/vars';
+@use './dock-layout-additions.component';
 
-/* 
-"front" means the tab that's selected in a tab group. In rc-dock, this is `dock-tab-active`
-"back" means any tab that's not "front" in a tab group.
-"focus-within" means the tab that has CSS `:focus-within`, i.e. the tab with a cursor or keyboard focus within it.
-"blur" means the tab that does not have focus, i.e. the tab that is not "focus-within".
-
-In rc-dock
-"active" means the tab that is selected in a tab group.
-"inactive" means any tab that is not "active" in a tab group.
-"window-focus" means the tab that has a window focus, i.e. the tab that is not "floating" and has a cursor or keyboard focus within it.
-
- */
-
-:root {
+.dock-style-platform-bible {
   // TODO BUG theme colors aren't adjusting to dark mode
   --tab-front-blur: hsl(var(--muted));
   --tab-front-focus-within: hsl(var(--primary));
+  --tab-highlight: hsl(var(--primary) / 0.3);
 }
 
 .dock {
@@ -115,16 +104,6 @@ In rc-dock
   background-color: var(--tab-background);
   box-sizing: border-box;
   border-radius: 0 var(--radius) 0 var(--radius);
-}
-
-.dock-tabpane.dock-tabpane-active {
-  /* Active tabpane styles - placeholder for future implementation */
-}
-
-// TODO: UX in progress
-.dock-tabpane.platform-dock-tabpane-active-highlight {
-  outline: 2px solid vars.$color--focus-ring;
-  outline-offset: -2px;
 }
 
 .platform-panel,
@@ -235,7 +214,7 @@ In rc-dock
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: var(--tab-front-blur);
+  background: var(--tab-background);
   // color: currentColor;
   border-bottom: unset;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
@@ -255,11 +234,6 @@ In rc-dock
   padding-block: vars.$space--xs;
 }
 
-// WARN: I can't find anything that this selector applies to. Consider removing it.
-.dock-dropdown-menu-item .title {
-  padding-inline-end: 12px;
-  pointer-events: none; // disable pointer events on the title so that the menu cannot be clicked in the dropdown
-}
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region TAB SEPARATOR (DIVIDER) //////////////////////////////////////
@@ -314,41 +288,21 @@ $tab-bottom-rounding: vars.$space--s;
   box-shadow: -2px 2px 0 var(--tab-background);
 }
 
-// TODO: UX should make this better
-.dock-tab.dock-tab-active.platform-dock-tab-active-highlight {
-  outline: 2px solid vars.$color--focus-ring;
-  outline-offset: -2px;
+.dock-tab.dock-tab-active.platform-dock-tab-active-highlight,
+.dock-tabpane.dock-tabpane-active.platform-dock-tabpane-active-highlight {
   // This duration must be ≤ "cssHighlightDurationMilliseconds" in platform-tab-title.component.tsx
-  animation: tabTitleBarFlash 1s ease-in-out 3;
+  animation: pulse-bright 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-// TODO: UX should make this better
-@keyframes tabTitleBarFlash {
-  0% {
-    background-color: transparent;
-  }
-
-  25% {
-    background-color: rgba(59, 130, 246, 0.3); // Blue flash with transparency
+@keyframes pulse-bright {
+  0%,
+  100% {
+    filter: brightness(1);
   }
 
   50% {
-    background-color: rgba(59, 130, 246, 0.5);
+    filter: brightness(1.7); /* increases brightness */
   }
-
-  75% {
-    background-color: rgba(59, 130, 246, 0.3);
-  }
-
-  100% {
-    background-color: transparent;
-  }
-}
-
-// Hide the bottom corner rounding pseudo-elements when highlight is active
-.dock-tab.dock-tab-active.platform-dock-tab-active-highlight::before,
-.dock-tab.dock-tab-active.platform-dock-tab-active-highlight::after {
-  display: none;
 }
 
 // #endregion ///////////////////////////////////////////////////////////
