@@ -39,6 +39,7 @@ const cssClassTabContentHighlight = 'platform-dock-tabpane-active-highlight';
 
 /** CSS class for highlighting the focused tab header */
 const cssClassTabHeaderWindowFocus = 'platform-dock-tab-window-focus';
+const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
@@ -181,13 +182,17 @@ export function PlatformTabTitle({
 
     // Walk up the DOM to the active tab header
     const activeTabHeader = containerElement.closest('.dock-tab-active');
+    // Keep walking up to the common ancestor of the active tab header and content
+    const rcDockPanel = (activeTabHeader ?? containerElement).closest('.dock-panel');
+    // Walk back down to find the active tab content
+    const activeTabContent = rcDockPanel?.querySelector('.dock-tabpane-active');
 
-    if (!activeTabHeader) return;
-
-    activeTabHeader.classList.add(cssClassTabHeaderWindowFocus);
+    if (activeTabHeader) activeTabHeader.classList.add(cssClassTabHeaderWindowFocus);
+    if (activeTabContent) activeTabContent.classList.add(cssClassTabContentWindowFocus);
 
     return () => {
-      activeTabHeader.classList.remove(cssClassTabHeaderWindowFocus);
+      if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderWindowFocus);
+      if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentWindowFocus);
     };
   }, [focusSubject, id]);
 
@@ -210,14 +215,14 @@ export function PlatformTabTitle({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div ref={containerRef} className="title" aria-label={tabLabel}>
+              <div ref={containerRef} className="platform-tab-title" aria-label={tabLabel}>
                 <span>{icon}</span>
                 <span>{title}</span>
               </div>
             </TooltipTrigger>
             {tooltip &&
               createPortal(
-                <TooltipContent className="tooltip" side="bottom">
+                <TooltipContent className="platform-tab-tooltip" side="bottom">
                   <p>{tooltip}</p>
                 </TooltipContent>,
                 document.body,
