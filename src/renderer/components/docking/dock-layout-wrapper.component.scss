@@ -126,8 +126,26 @@
 
 /* tabs take all the space */
 
+.dock-nav {
+  //   Visually reorder children to have the New Tab (+) button immediately after the tabs
+  display: flex;
+  //   align-items: center;
+  > .dock-nav-wrap {
+    order: 1;
+    flex-grow: 0;
+  }
+
+  > .dock-extra-content {
+    order: 2;
+  }
+
+  > .dock-nav-operations {
+    order: 3;
+    flex-grow: 1;
+  }
+}
+
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
-  flex-grow: 1;
   position: relative;
   gap: vars.$space--xs;
 }
@@ -137,6 +155,10 @@
   gap: vars.$space--sm;
   padding-inline: vars.$space--sm;
   height: 100%;
+
+  &.dock-nav-operations-hidden {
+    display: none;
+  }
 }
 
 .dock-nav-more {
@@ -203,9 +225,8 @@
   margin-right: unset;
   border: unset;
   background-color: var(--tab-background);
-  // color: currentColor;
   flex: 1 0 auto;
-  //   max-width: max-content;
+  max-width: max-content;
   border-radius: var(--radius);
 
   &.dock-tab-active {
