@@ -1,6 +1,6 @@
 @use '../../styles/vars';
 
-.title {
+.platform-tab-title {
   display: flex;
   align-items: center;
   gap: 0.25rem; // tw-gap-1
@@ -23,11 +23,17 @@
  * Moved from src/renderer/components/docking/dock-layout-wrapper.component.scss. 
  * Consider removing it. 
  */
-.title span {
+.platform-tab-title span {
   padding-inline-start: 2px;
 }
 
-.tooltip {
+.platform-tab-tooltip {
   white-space: pre-wrap;
   z-index: 250;
+}
+
+// Users can only see this dropdown menu when there are too many tabs to fit in the tab bar.
+.dock-dropdown-menu-item .platform-tab-title {
+  padding-inline-end: 12px;
+  pointer-events: none; // disable pointer events on the title so that the menu cannot be clicked in the dropdown
 }
