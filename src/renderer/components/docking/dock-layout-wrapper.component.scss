@@ -68,6 +68,7 @@
 
 .dock-layout {
   flex-grow: 1;
+  overflow: unset;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
@@ -249,6 +250,7 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn {
   padding: unset;
   box-sizing: border-box;
+  outline-color: unset; // reset rc-dock blue
 }
 
 // .drag-initiator happens to be the parent of the tab title, icon, and close button
@@ -273,8 +275,10 @@
     right: 0;
   }
 
-  &:hover::before {
-    opacity: 0;
+  &:hover::before,
+  &:focus-within::before {
+    // Hide the separator so it doesn't interfere with hover and focus styles
+    background: transparent;
   }
 }
 // #endregion ///////////////////////////////////////////////////////////
