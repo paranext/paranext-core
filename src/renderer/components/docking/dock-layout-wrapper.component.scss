@@ -136,14 +136,13 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
   background: unset;
   padding-inline: vars.$space--xs;
-  padding-block-start: vars.$space--sm;
   border: unset;
 }
 
 .dock-nav {
   //   Visually reorder children to have the New Tab (+) button immediately after the tabs
   display: flex;
-  //   align-items: center;
+
   > .dock-nav-wrap {
     order: 1;
     flex-grow: 0;
@@ -170,26 +169,25 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   position: relative;
   gap: vars.$space--xs;
-  padding-block-end: var(--tab-header-to-content-gap);
+  padding-block: var(--tab-header-to-content-gap);
   padding-inline: vars.$space--xs;
-}
-
-.dock-nav-operations {
-  //   padding-inline: vars.$space--sm;
-  height: 100%;
-
-  &.dock-nav-operations-hidden {
-    display: none;
-  }
 }
 
 .dock-panel.dock-style-platform-bible .dock-nav-operations,
 .dock-panel.dock-style-platform-bible .dock-extra-content {
   gap: vars.$space--sm;
-  padding-bottom: var(--tab-header-to-content-gap);
+  padding-block: var(--tab-header-to-content-gap);
   height: 30px;
   display: flex;
   align-items: center;
+}
+
+.dock-nav-operations {
+  height: 100%;
+
+  &.dock-nav-operations-hidden {
+    display: none;
+  }
 }
 
 .dock-nav-more {
@@ -224,6 +222,11 @@
   background-color: var(--tab-background);
   border-radius: var(--radius);
 
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    inset-block-end 0.6s;
+
   &.dock-tab-active {
     // Remove radius on bottom corners of active tab so it connects with content pane
     border-end-start-radius: 0;
@@ -233,17 +236,28 @@
     color: currentColor;
     border-bottom: unset;
     inset-block-end: calc(-1 * var(--tab-header-to-content-gap)); // Move tab up to overlap the tab list
-    transition:
-      background-color 0.1s,
-      color 0.1s,
-      box-shadow 0.1s,
-      inset-block-end 0.6s;
   }
 
   &.platform-dock-tab-window-focus {
     // TODO these two properties should get the same level of abstraction
     --tab-background: var(--tab-front-focus-within);
     color: hsl(var(--primary-foreground));
+
+    outline: none;
+
+    .dock-tab-btn:focus-visible {
+      outline: none; // This outline interferes with concave corner styling if we don't disable it
+    }
+
+    .dock-tab-btn:focus-visible::before {
+      content: '';
+      position: absolute;
+      inset: -4px 0 auto;
+      width: 100%;
+      height: 2px;
+      border-radius: var(--radius);
+      background-color: hsl(var(--ring));
+    }
   }
 }
 
@@ -288,26 +302,37 @@
 // Bottom outside corner rounding for active tab (fillets)
 $tab-bottom-rounding: vars.$space--sm;
 
-.dock-tab.dock-tab-active::before,
-.dock-tab.dock-tab-active::after {
+.dock-tab::before,
+.dock-tab::after {
   content: ' ';
   height: $tab-bottom-rounding;
   width: $tab-bottom-rounding;
   position: absolute;
-  bottom: 0;
-  border-width: 0 vars.$border-width vars.$border-width 0;
+  transition:
+    box-shadow 0 0.6s,
+    right 0.6s ease-in 0.3s,
+    left 0.6s ease-in 0.3s;
 }
 
-.dock-tab.dock-tab-active::before {
-  left: -$tab-bottom-rounding;
-  border-bottom-right-radius: $tab-bottom-rounding - 2;
-  box-shadow: 2px 2px 0 var(--tab-background);
-}
+.dock-tab.dock-tab-active {
+  &::before,
+  &::after {
+    bottom: -0.2px; // slight overlap to hide hairline gap
+    // flare shape
+    background-image: radial-gradient(circle at 100% 100%,
+      transparent $tab-bottom-rounding,
+      var(--tab-background) $tab-bottom-rounding);
+  }
 
-.dock-tab.dock-tab-active::after {
-  right: -$tab-bottom-rounding;
-  border-bottom-left-radius: $tab-bottom-rounding - 2;
-  box-shadow: -2px 2px 0 var(--tab-background);
+  &::before {
+    left: -$tab-bottom-rounding;
+    rotate: 180deg;
+  }
+
+  &::after {
+    right: -$tab-bottom-rounding;
+    rotate: 270deg;
+  }
 }
 
 .dock-tab.dock-tab-active.platform-dock-tab-active-highlight,
