@@ -27,7 +27,7 @@ means any tab that's not "front" in a tab group.
 
 # Spacing
 
-Add a bit of spacing around the whole tab group (ideally the whole layout)
+✅ Add a bit of spacing around the whole tab group (ideally the whole layout)
 
 ✅ Border radius of content pane
 
