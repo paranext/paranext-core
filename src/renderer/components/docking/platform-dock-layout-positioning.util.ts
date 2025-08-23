@@ -8,7 +8,7 @@ import {
 } from '@shared/models/docking-framework.model';
 import cloneDeep from 'lodash/cloneDeep';
 import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
-import { ChevronDown } from 'lucide-react';
+import { ChevronsUpDown } from 'lucide-react';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
 
@@ -28,12 +28,12 @@ export const TAB_GROUP = 'card platform-bible';
 
 export const GROUPS: { [key: string]: TabGroup } = {
   [TAB_GROUP]: {
-    maximizable: true, // Allow groups of tabs to be maximized
+    maximizable: false, // Don't allow groups of tabs to be maximized
     floatable: false, // Don't allow tabs to be floated
     animated: false, // Don't animate tab transitions
     // TODO: Currently allowing newWindow crashes since electron doesn't seem to have window.open defined?
     // newWindow: true, // Allow floating windows to show in a native window
-    moreIcon: createElement(ChevronDown),
+    moreIcon: createElement(ChevronsUpDown),
     panelExtra: (panelData) => {
       return createElement(PanelExtraContent, { panelData });
     },
