@@ -1,5 +1,4 @@
 @use '../../styles/vars';
-@use './dock-layout-additions.component';
 @use './panel-extra-content.component';
 
 .dock-style-platform-bible {
@@ -29,6 +28,10 @@
 .dock-tab-active,
 .dock-tabpane-active {
   --tab-background: var(--tab-front-blur);
+
+  &.platform-dock-tabpane-window-focus {
+    --tab-background: hsl(var(--primary));
+  }
 }
 
 // Users can only see this dropdown menu when there are too many tabs to fit in the tab bar.
