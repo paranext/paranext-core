@@ -31,6 +31,7 @@
   --tab-background: var(--tab-front-blur);
 }
 
+// Users can only see this dropdown menu when there are too many tabs to fit in the tab bar.
 .dock-dropdown,
 .dock-dropdown-menu,
 .dock-dropdown-menu-item {
@@ -49,6 +50,11 @@
 // reduce background color when hovering over the close button
 .dock-dropdown-menu-item:hover:has(.dock-tab-close-btn:hover) {
   background-color: hsl(var(--accent) / 0.3);
+}
+
+.dock-dropdown-menu-item .drag-initiator {
+  display: flex;
+  align-items: center;
 }
 
 // #region GENERAL /////////////////////////////////////////////////////
@@ -361,8 +367,6 @@ $tab-bottom-rounding: vars.$space--sm;
 }
 
 .dock-dropdown-menu-item .dock-tab-close-btn {
-  right: 2px;
-  top: 6px;
   visibility: hidden;
 }
 
