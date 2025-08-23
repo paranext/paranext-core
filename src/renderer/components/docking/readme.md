@@ -48,3 +48,5 @@ means any tab that's not "front" in a tab group.
 ✅ remove overflow shadow
 
 ✅ fix styling of overflow (more) menu items
+
+re-apply a decoration to indicate where tab headers are overflowing
