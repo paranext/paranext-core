@@ -33,8 +33,18 @@ Add a bit of spacing around the whole tab group (ideally the whole layout)
 
 Fix overflow of tabs
 
-tab separators and ✅ need more gap so tabs don't visually run into each other
+✅ tab separators and ✅ need more gap so tabs don't visually run into each other
 
 ✅ Fix a problem where the grab area of a tab is significantly smaller than the tab
 
 ✅ Mitigate a problem where the right-click area of the tab is significantly smaller than the tab
+
+✅ Fix contrast problem on tab close button
+
+✅ better More Tabs icon
+
+✅ more solid spacing and alignment relationship on tab header row
+
+✅ remove overflow shadow
+
+fix styling of overflow (more) menu items

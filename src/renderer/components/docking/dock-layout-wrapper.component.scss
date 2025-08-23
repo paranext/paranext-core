@@ -1,11 +1,12 @@
 @use '../../styles/vars';
 @use './dock-layout-additions.component';
+@use './panel-extra-content.component';
 
 .dock-style-platform-bible {
-  // TODO BUG theme colors aren't adjusting to dark mode
   --tab-front-blur: hsl(var(--background));
   --tab-front-focus-within: hsl(var(--primary));
   --tab-highlight: hsl(var(--primary) / 0.3);
+  --tab-header-to-content-gap: 6px;
 }
 
 .dock {
@@ -85,8 +86,8 @@
 
 // #region DOCK-PANEL ///////////////////////////////////////////////////
 .dock-panel {
-  padding: vars.$space--sm;
-  padding-block-start: vars.$space--xs;
+  padding: 6px;
+  padding-block-start: 0;
   background-color: #0055d9;
   background-color: hsl(var(--muted));
 }
@@ -105,10 +106,8 @@
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region TAB-PANE (CONTENTS) //////////////////////////////////////////
-// TODO: UX in progress
 .dock-tabpane {
-  padding: vars.$space--sm;
-  padding-block-start: vars.$space--sm;
+  padding: vars.$space--xs;
   background-color: var(--tab-background);
   box-sizing: border-box;
   border-radius: var(--radius);
@@ -124,7 +123,12 @@
 // #region TAB-BAR //////////////////////////////////////////////////////
 // (TAB-HEADERS-ROW)
 
-/* tabs take all the space */
+.dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
+  background: unset;
+  padding-inline: vars.$space--xs;
+  padding-block-start: vars.$space--sm;
+  border: unset;
+}
 
 .dock-nav {
   //   Visually reorder children to have the New Tab (+) button immediately after the tabs
@@ -145,15 +149,22 @@
   }
 }
 
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
+  padding-top: unset;
+  transform: unset;
+  padding-inline: vars.$space--sm;
+  flex-wrap: nowrap;
+  overflow-x: clip;
+}
+
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   position: relative;
   gap: vars.$space--xs;
+  padding-block-end: var(--tab-header-to-content-gap);
 }
 
 .dock-nav-operations {
-  align-items: center;
-  gap: vars.$space--sm;
-  padding-inline: vars.$space--sm;
+  //   padding-inline: vars.$space--sm;
   height: 100%;
 
   &.dock-nav-operations-hidden {
@@ -161,26 +172,25 @@
   }
 }
 
+.dock-panel.dock-style-platform-bible .dock-nav-operations,
+.dock-panel.dock-style-platform-bible .dock-extra-content {
+  gap: vars.$space--sm;
+  padding-bottom: var(--tab-header-to-content-gap);
+  height: 30px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+}
+
 .dock-nav-more {
-  color: hsl(var(--foreground));
-  height: 24px;
-  width: 32px;
-  border-radius: vars.$space--sm;
-}
+  @extend %panel-button-base !optional;
+  align-self: unset;
+  content: '';
 
-.dock-nav-more:hover {
-  background-color: hsl(var(--muted-foreground));
-}
-
-.dock-nav-more > svg {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-}
-
-/* overriding default style for the shadow indicating that not all tabs are shown */
-.dock-nav-more::after {
-  box-shadow: inset -10px 0 8px -8px vars.$color--shadow;
+  /* override default style for the shadow indicating that not all tabs are shown */
+  &::after {
+    box-shadow: unset;
+  }
 }
 
 /* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
@@ -189,44 +199,19 @@
   right: -1px;
 }
 
-.dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
-  background: unset;
-  padding-inline: vars.$space--xs;
-  padding-block: vars.$space--sm;
-  border: unset;
-}
-
-// DEBUG REGION //////////////////////////////////////////////////////
-
-// DEBUG END ////////////////////////////////////////////////////////
-
-// Remove default styling
-.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
-  /*
-   * Remove the handle bar at the top of each dock-tab. Note: Now, the tab
-   * group can only be grabbed by grabbing the intersection between two tabs
-   */
-  padding-top: unset;
-  /*
-   * For some reason, by default, the tabs are moved down one pixel. That
-   * makes them blurry, so this removes that transform
-   */
-  transform: unset;
-
-  padding-inline: vars.$space--sm;
-  flex-wrap: nowrap;
-  overflow-x: clip;
-  overflow-y: visible;
-}
 // #endregion TAB-BAR ///////////////////////////////////////////////////
 
 // #region TAB HEADER ///////////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: unset;
   border: unset;
-  background-color: var(--tab-background);
+  height: unset;
+
+  display: flex;
+  align-items: center;
   flex: 1 0 auto;
   max-width: max-content;
+  background-color: var(--tab-background);
   border-radius: var(--radius);
 
   &.dock-tab-active {
@@ -237,7 +222,7 @@
     background: var(--tab-background);
     color: currentColor;
     border-bottom: unset;
-    inset-block-end: -8px; // Move tab down to descend below the tab list
+    inset-block-end: calc(-1 * var(--tab-header-to-content-gap)); // Move tab up to overlap the tab list
     transition:
       background-color 0.1s,
       color 0.1s,
@@ -255,7 +240,6 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn {
   padding: unset;
   box-sizing: border-box;
-  width: 100%;
 }
 
 // .drag-initiator happens to be the parent of the tab title, icon, and close button
@@ -267,7 +251,7 @@
   gap: vars.$space--sm;
 }
 
-// #endregion ///////////////////////////////////////////////////////////
+// #endregion TAB HEADER ///////////////////////////////////////////////////////////
 
 // #region TAB SEPARATOR (DIVIDER) //////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab:not(.dock-tab-active) {
@@ -354,12 +338,12 @@ $tab-bottom-rounding: vars.$space--sm;
 
 .dock-panel.dock-style-card .dock-tab-close-btn,
 .dock-tab-close-btn {
+  color: unset;
   border-radius: vars.$space--lg;
   height: 16px;
   padding: 2px;
   top: 5px;
   right: 5px;
-  color: hsl(var(--muted-foreground));
   visibility: hidden;
   position: static;
 }
@@ -385,12 +369,4 @@ $tab-bottom-rounding: vars.$space--sm;
 
 .dock-dropdown-menu-item:hover .dock-tab-close-btn {
   visibility: visible;
-}
-
-.dock-panel.dock-style-card .dock-extra-content {
-  // long selector needed for specificity
-  height: 30px;
-  min-width: 36px;
-  display: flex;
-  align-items: center;
 }
