@@ -19,21 +19,7 @@
   vertical-align: middle;
 }
 
-/* WARN: This rule seems unnecessary. I can't detect a meaningful improvement in the UI.
- * Moved from src/renderer/components/docking/dock-layout-wrapper.component.scss. 
- * Consider removing it. 
- */
-.platform-tab-title span {
-  padding-inline-start: 2px;
-}
-
 .platform-tab-tooltip {
   white-space: pre-wrap;
   z-index: 250;
-}
-
-// Users can only see this dropdown menu when there are too many tabs to fit in the tab bar.
-.dock-dropdown-menu-item .platform-tab-title {
-  padding-inline-end: 12px;
-  pointer-events: none; // disable pointer events on the title so that the menu cannot be clicked in the dropdown
 }
