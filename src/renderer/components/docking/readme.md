@@ -31,7 +31,7 @@ means any tab that's not "front" in a tab group.
 
 ✅ Border radius of content pane
 
-Fix overflow of tabs
+🚫 Fix overflow of tabs — cannot fix without JS .: treat as a separate work item
 
 ✅ tab separators and ✅ need more gap so tabs don't visually run into each other
 
@@ -47,4 +47,4 @@ Fix overflow of tabs
 
 ✅ remove overflow shadow
 
-fix styling of overflow (more) menu items
+✅ fix styling of overflow (more) menu items
