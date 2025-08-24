@@ -106,6 +106,15 @@
   padding-block-start: 0;
   background-color: #0055d9;
   background-color: hsl(var(--muted));
+
+  //   Copied shadows from Tailwind shadow-sm
+  --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow),
+    inset 0 0 10px hsl(var(--border) / 0.1); // Added inset shadow to distinguish dock panel from background
 }
 
 .dock-top {
