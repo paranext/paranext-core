@@ -31,7 +31,7 @@ means any tab that's not "front" in a tab group.
 
 ✅ Border radius of content pane
 
-🚫 Fix overflow of tabs — cannot fix without JS .: treat as a separate work item
+⏳ Fix overflow of tabs — cannot fix without JS .: treat as a separate work item
 
 ✅ tab separators and ✅ need more gap so tabs don't visually run into each other
 
@@ -49,24 +49,23 @@ means any tab that's not "front" in a tab group.
 
 ✅ fix styling of overflow (more) menu items
 
-re-apply a decoration to indicate where tab headers are overflowing
+TODO re-apply a decoration to indicate where tab headers are overflowing
 
 # Cleanup
 
-Remove unused styles in \_vars.scss
+TODO Remove unused styles in \_vars.scss
 
-Check that regions close
-Check that regions only include appropriate rules
+TODO Check that regions close
+TODO Check that regions only include appropriate rules
 
 ✅ Fix overlapping opacity artifact in concave corners
-~~Fix clipping on tab header focus rings~~
+✅ Fix clipping on tab header focus rings
 
-- move focusable element down one layer
-  - currently .dock-tab-btn
+- ~~move focusable element down one layer~~(currently .dock-tab-btn) not needed
 - ~~remove gap between tab headers~~ not needed
-- ~~add padding to tab headers on the inline-end so divider~~ make divider transparent when focused
-  bug: - ~~add padding to tab headers list~~ doesn't work — it's a JS problem setting the wrong transform-x amount on .dock-nav-list
+- ~~add padding to tab headers on the inline-end so divider~~ ✅ make divider transparent when focused
+  ⏳ bug: - ~~add padding to tab headers list~~ doesn't work — it's a JS problem setting the wrong transform-x amount on .dock-nav-list
 
 🚫 Focus classes are slow to apply — Javascript problem, but CSS `:focus-within` might hold a solution
 
-[partly done] bug: transition mismatch when keyboard focusing a front tab
+TODO bug: transition mismatch when keyboard focusing a front tab [improved but not done]
