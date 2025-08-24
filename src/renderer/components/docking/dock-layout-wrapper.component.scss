@@ -66,6 +66,12 @@
   flex: 0 0 8px;
 }
 
+// Reset rc-dock's default scaling of dividers so their grab area matches their visual size. Without this, the dividers are 3x larger—easier to grab, but get in the way of grabbing tab groups.
+.dock-hbox > .dock-divider,
+.dock-vbox > .dock-divider {
+  transform: unset;
+}
+
 .dock-layout {
   flex-grow: 1;
   overflow: unset;
