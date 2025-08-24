@@ -250,7 +250,9 @@
     background: var(--tab-background);
     color: currentColor;
     border-bottom: unset;
-    inset-block-end: calc(-1 * var(--tab-header-to-content-gap)); // Move tab up to overlap the tab list
+    inset-block-end: calc(
+      -1 * var(--tab-header-to-content-gap)
+    ); // Move tab up to overlap the tab list
   }
 
   &.platform-dock-tab-window-focus {
@@ -334,9 +336,11 @@ $tab-bottom-rounding: vars.$space--sm;
   &::after {
     bottom: -0.2px; // slight overlap to hide hairline gap
     // flare shape
-    background-image: radial-gradient(circle at 100% 100%,
+    background-image: radial-gradient(
+      circle at 100% 100%,
       transparent $tab-bottom-rounding,
-      var(--tab-background) $tab-bottom-rounding);
+      var(--tab-background) $tab-bottom-rounding
+    );
   }
 
   &::before {

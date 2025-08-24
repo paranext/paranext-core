@@ -15,6 +15,8 @@ module.exports = {
   rules: {
     // Disable Stylelint's indentation control
     '@stylistic/indentation': null,
+    // Disable Stylelint's function parentheses control for Prettier compatibility
+    '@stylistic/function-parentheses-space-inside': 'never-single-line',
     // Let Prettier handle selector list formatting
     '@stylistic/selector-list-comma-newline-after': null,
     'color-named': null,
