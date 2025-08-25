@@ -1,3 +1,5 @@
+<!-- Attention template README maintainers: The content in the portion of this README following the Template Info section roughly parallels that of the paranext-multi-extension-template. When editing one, please consider whether similar changes should also be made in the other.-->
+
 # quick-verse
 
 Simple quick verse extension for Platform.Bible
@@ -6,9 +8,11 @@ Simple quick verse extension for Platform.Bible
 
 ## Template Info
 
-This is a Webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
+This is a Webpack project template pre-configured to build a Platform.Bible extension. It includes only the bare essentials required for an extension to work.
 
-There is also a [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
+Note that the `*.web-view.*` files and the `assets` folder mentioned in [Summary](#summary) are **not** included in this template. For examples of what these might look like, refer to any extension that is based on either this template or the [paranext-multi-extension-template](https://github.com/paranext/paranext-multi-extension-template) — for instance, the [Text Collection extension](https://github.com/paranext/paratext-bible-extensions/tree/main/src/paratext-bible-text-collection).
+
+**Important:** Before proceding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the latter, it would be better to use the [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template) instead of this template.
 
 ### Customize extension details
 
@@ -27,7 +31,7 @@ To make the process of customizing from the template as smooth as possible, we r
 
 For your extension name, we recommend that you use [lowerCamelCase](https://developer.mozilla.org/en-US/docs/Glossary/Camel_case) in some contexts and [kebab-case](https://developer.mozilla.org/en-US/docs/Glossary/Kebab_case) in other contexts. We generally recommend lowerCamelCase when using the name in code (like making a new command on the PAPI, for example), and we recommend kebab-case when using the name in relation to the file system, the repository, `npm`, and the extension's `.d.ts` types module. The following instructions are written accordingly.
 
-- At the top of this `README.md`:
+- In this `README.md`:
 
   - Replace the first line `# paranext-extension-template` with `# your-extension-name` (kebab-case)
   - Below the first line, replace the extension description with your own description
@@ -84,7 +88,7 @@ Note: if you [update this extension from the template](#to-update-this-extension
 
 ## Summary
 
-The general file structure is as follows:
+The general file structure for an extension is as follows:
 
 - `package.json` contains information about this extension's npm package. It is required for Platform.Bible to use the extension properly. It is copied into the build folder
 - `manifest.json` is the manifest file that defines the extension and important properties for Platform.Bible. It is copied into the build folder
@@ -104,6 +108,8 @@ The general file structure is as follows:
   - `.github/assets/release-body.md` combined with a generated changelog becomes the body of [releases published using GitHub Actions](#publishing)
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing a zip of the built extension files
+
+> See the [Extension Anatomy wiki page](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy) for more information about the various files that comprise an extension and their relationships to each other.
 
 ## To install
 
@@ -157,9 +163,9 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
 2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
-   - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
-   - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
-   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+   - `version`: Enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
+   - `newVersionAfterPublishing`: Enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump.
+   - `bumpRef`: Enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
 
     <details>
         <summary>[Optional] Create a new pre-release and bump versions branch manually </summary>
@@ -187,7 +193,7 @@ These steps will walk you through releasing a version on GitHub and bumping the 
    ```bash
    git checkout -b bump-versions-<next_version>
    npm version <next_version> --git-tag-version false
-   # Change version in each extension's `manifest.json`
+   # Change version in the extension's `manifest.json`
    git commit -a -m "Bumped versions to <next_version>"; git push -u origin HEAD
    ```
 
@@ -209,7 +215,7 @@ Module build failed (from ./node_modules/swc-loader/src/index.js):
 Error: Failed to load native binding
 ```
 
-You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core <version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
+You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core@<version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
 
 ## To update this extension from the template
 
@@ -234,4 +240,4 @@ For more information, read [the instructions on the wiki](https://github.com/par
 
 ## Special features in this project
 
-This project has special features and specific configuration to make building an extension for Platform.Bible easier. See [Special features of `paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template#special-features-of-the-template) for information on these special features.
+This project has special features and specific configuration to make building an extension for Platform.Bible easier. Rather than duplicating the full explanation here, please refer to the [`Special Features in this project` section of the multi-extension template README](https://github.com/paranext/paranext-multi-extension-template?tab=readme-ov-file#special-features-in-this-project) for details on these features.
