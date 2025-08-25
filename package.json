@@ -21,7 +21,7 @@
     "start:production": "cross-env MAIN_ARGS=\"--extensionDirs $INIT_CWD/dist\" concurrently \"npm:watch:production\" \"npm:start:core\"",
     "lint": "npm run lint:scripts && npm run lint:styles",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
-    "lint:styles": "stylelint **/*.{css,scss}",
+    "lint:styles": "stylelint **/*.{css,scss} --allow-empty-input",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
     "postinstall": "tsx ./lib/add-remotes.ts",
@@ -39,7 +39,7 @@
     "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@swc/core": "^1.10.18",
+    "@swc/core": "1.10.18",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^20.16.11",
     "@types/react": "^18.3.18",

@@ -1,6 +1,7 @@
 import { exec, ExecException, ExecOptions } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import fs from 'fs/promises';
 import replaceInFile from 'replace-in-file';
 
 const execAsync = promisify(exec);
@@ -131,6 +132,8 @@ export async function checkForWorkingChanges(quiet = false) {
   return false;
 }
 
+// #endregion
+
 /**
  * Fetch latest from SINGLE_TEMPLATE_REMOTE_NAME
  *
@@ -154,6 +157,37 @@ export async function fetchFromSingleTemplate() {
 }
 
 /**
+ * Converts kebab-case into camelCase. Assumes that the input is a valid kebab-case string
+ *
+ * Current implementation supports only UTF-16.
+ */
+function toCamelCaseFromKebab(input: string): string {
+  if (!input) return '';
+
+  // Split on common delimiters: hyphens, underscores, spaces, and dots
+  const parts = input.split('-');
+
+  // If there's only one part, return it as-is (already camelCase or single word)
+  if (parts.length <= 1) {
+    return input.charAt(0).toLocaleLowerCase() + input.slice(1);
+  }
+
+  // Convert first part to lowercase, then capitalize first letter of subsequent parts
+  const camelCased = parts
+    .map((part, index) => {
+      if (!part) return '';
+
+      if (index === 0) {
+        return part.charAt(0).toLocaleLowerCase() + part.slice(1);
+      }
+      return part.charAt(0).toLocaleUpperCase() + part.slice(1);
+    })
+    .join('');
+
+  return camelCased;
+}
+
+/**
  * Format an extension folder to make the extension template folder work as a subfolder of this repo
  *
  * This function may be called many times for one extension folder, so make sure all operations work
@@ -162,6 +196,10 @@ export async function fetchFromSingleTemplate() {
  * @param extensionFolderPath Path to the extension to format relative to root
  */
 export async function formatExtensionFolder(extensionFolderPath: string) {
+  // Get the basename of the extension folder for use in replacements
+  const extensionName = path.basename(extensionFolderPath);
+  const extensionNameCamelCase = toCamelCaseFromKebab(extensionName);
+
   // Replace ../paranext-core with ../../../paranext-core to fix ts-config and package.json and such
   const results = await replaceInFile({
     files: `${extensionFolderPath}/**/*`,
@@ -182,6 +220,7 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
     countMatches: true,
     allowEmptyPaths: true,
   });
+
   const replaceStats = results.reduce(
     (replacements, replaceResult) => ({
       totalReplacements: replacements.totalReplacements + (replaceResult.numReplacements ?? 0),
@@ -194,6 +233,7 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     { totalReplacements: 0, filesChanged: [] as string[] },
   );
+
   if (replaceStats.totalReplacements > 0)
     console.log(
       `Formatting ${extensionFolderPath}: Successfully updated relative path to paranext-core ${
@@ -202,4 +242,136 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
         '\n\t',
       )}\n`,
     );
+
+  // Rename types file
+  const oldTypesFilePath = path.join(
+    extensionFolderPath,
+    'src',
+    'types',
+    'paranext-extension-template.d.ts',
+  );
+  const newTypesFilePath = path.join(extensionFolderPath, 'src', 'types', `${extensionName}.d.ts`);
+
+  try {
+    // Check if the old file exists before attempting to rename it
+    await fs.access(oldTypesFilePath);
+
+    // Check if the new file already exists to avoid errors
+    try {
+      await fs.access(newTypesFilePath);
+      console.log(`Types file already renamed to ${extensionName}.d.ts, skipping rename operation`);
+    } catch {
+      // New file doesn't exist, proceed with rename
+      await fs.rename(oldTypesFilePath, newTypesFilePath);
+      console.log(`Renamed types file to ${extensionName}.d.ts`);
+    }
+  } catch (error) {
+    // Old file doesn't exist, so no need to rename
+    console.log(`Types file paranext-extension-template.d.ts not found, skipping rename operation`);
+  }
+
+  // Replace occurrences of 'paranext-extension-template' in the renamed types file
+  try {
+    await fs.access(newTypesFilePath);
+
+    // Read the types file content
+    let typesFileContent = await fs.readFile(newTypesFilePath, 'utf8');
+
+    // Replace all occurrences of the template name
+    typesFileContent = typesFileContent.replace(/paranext-extension-template/g, extensionName);
+
+    // Write the updated content back to the file
+    await fs.writeFile(newTypesFilePath, typesFileContent, 'utf8');
+
+    console.log(`Updated module declaration and references in types file`);
+  } catch (error) {
+    console.error(`Could not update types file: ${error.message}`);
+  }
+
+  // Update README.md
+  const readmePath = path.join(extensionFolderPath, 'README.md');
+  try {
+    // Check if README.md exists
+    await fs.access(readmePath);
+
+    const readmeContent = await fs.readFile(readmePath, 'utf8');
+    const lines = readmeContent.split('\n');
+
+    // Identify section boundaries
+    const endOfTitle = lines.findIndex((line) => line.indexOf('## Template Info') >= 0);
+    const summary = lines.findIndex((line, n) => n > endOfTitle && line.indexOf('# Summary') >= 0);
+    const endOfSummary = lines.findIndex((line, n) => n > summary && line.startsWith('##'));
+
+    if (endOfTitle < 0 || summary < 0 || endOfSummary < 0 || endOfTitle > summary) {
+      console.error(
+        `Error identifying Template Info in README.md, formatExtensionFolder outdated?`,
+      );
+      return;
+    }
+
+    // Split the README into sections to change, and sections to leave alone
+    const titleSection = lines.slice(0, endOfTitle);
+    const betweenTitleAndSummary = lines.slice(endOfTitle, summary);
+    const summarySection = lines.slice(summary, endOfSummary);
+    const after = lines.slice(endOfSummary);
+
+    // Modify only the `titleSection` and `summarySection`
+    const modifiedTitle = titleSection.map((line) =>
+      line.replace(/paranext-extension-template/g, extensionName),
+    );
+    const modifiedSummary = summarySection.map((line) => {
+      if (line.includes('https://github.com/paranext/paranext-extension-template/wiki'))
+        return line;
+
+      return line.replace(/paranext-extension-template/g, extensionName);
+    });
+
+    // Reconstruct the README
+    const finalLines = [...modifiedTitle, ...betweenTitleAndSummary, ...modifiedSummary, ...after];
+
+    await fs.writeFile(readmePath, finalLines.join('\n'), 'utf8');
+    console.log(`Updated README.md: modified title and summary sections only`);
+  } catch (error) {
+    console.error(`Could not update README.md: ${error.message}`);
+  }
+
+  // Update manifest.json
+  const manifestPath = path.join(extensionFolderPath, 'manifest.json');
+  try {
+    // Check if manifest.json exists
+    await fs.access(manifestPath);
+
+    let manifestContent = await fs.readFile(manifestPath, 'utf8');
+
+    // Replace "paranextExtensionTemplate" with lowerCamelCase version of extension name
+    manifestContent = manifestContent.replace(/paranextExtensionTemplate/g, extensionNameCamelCase);
+
+    // Replace the type reference
+    manifestContent = manifestContent.replace(
+      /src\/types\/paranext-extension-template\.d\.ts/g,
+      `src/types/${extensionName}.d.ts`,
+    );
+
+    await fs.writeFile(manifestPath, manifestContent, 'utf8');
+    console.log(`Updated manifest.json with ${extensionName} information`);
+  } catch (error) {
+    console.error(`Could not update manifest.json: ${error.message}`);
+  }
+
+  // Update package.json
+  const packagePath = path.join(extensionFolderPath, 'package.json');
+  try {
+    // Check if package.json exists
+    await fs.access(packagePath);
+
+    let packageContent = await fs.readFile(packagePath, 'utf8');
+
+    // Replace all occurrences of "paranext-extension-template" with extensionName
+    packageContent = packageContent.replace(/paranext-extension-template/g, extensionName);
+
+    await fs.writeFile(packagePath, packageContent, 'utf8');
+    console.log(`Updated package.json with ${extensionName} information`);
+  } catch (error) {
+    console.error(`Could not update package.json: ${error.message}`);
+  }
 }

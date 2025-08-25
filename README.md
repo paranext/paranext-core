@@ -1,3 +1,5 @@
+<!-- Attention template README maintainers: The content in the portion of this README following the Template Info section roughly parallels that of the paranext-extension-template. When editing one, please consider whether similar changes should also be made in the other.-->
+
 # paranext-multi-extension-template
 
 Template for creating multiple Platform.Bible extensions in one repo
@@ -6,9 +8,11 @@ Template for creating multiple Platform.Bible extensions in one repo
 
 ## Template Info
 
-This Webpack project template is pre-configured to build an arbitrary number of Platform.Bible extensions. It contains only the essential components needed for a multi-extension repository. Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For inspiration on what extensions in a multi-extension repo could look like, refer to any repo forked from this template. A good example is [platform-bible-sample-extensions](https://github.com/paranext/platform-bible-sample-extensions).
+This is a Webpack project template pre-configured to build an arbitrary number of Platform.Bible extensions. It includes only the bare essentials required for a multi-extension repository to work.
 
-There is also a simple [template pre-configured to build a single Platform.Bible extension](https://github.com/paranext/paranext-extension-template).
+Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For examples of what extensions in a multi-extension repo might look like, refer to any repo based on this template — for instance, the [platform-bible-sample-extensions](https://github.com/paranext/platform-bible-sample-extensions).
+
+**Important:** Before proceding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the former, it would be better to use the simple [template pre-configured to build a single Platform.Bible extension](https://github.com/paranext/paranext-extension-template).
 
 ### Customize repo details
 
@@ -79,9 +83,11 @@ This is a Webpack project configured to build Platform.Bible extensions. The gen
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing zips of the built extension files
 
+> See the [Extension Anatomy wiki page](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy) for more information about the various files that comprise extensions and their relationships to each other.
+
 ## To install
 
-### Install dependencies:
+### Install dependencies
 
 1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to [reconfigure paths](#configure-paths-to-paranext-core-repo) to `paranext-core`.
 2. In this repo, run `npm install` to install local and published dependencies
@@ -148,9 +154,9 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
 2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
-   - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
-   - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
-   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+   - `version`: Enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
+   - `newVersionAfterPublishing`: Enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump.
+   - `bumpRef`: Enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
 
     <details>
         <summary>[Optional] Create a new pre-release and bump versions branch manually </summary>
@@ -202,7 +208,7 @@ Module build failed (from ./node_modules/swc-loader/src/index.js):
 Error: Failed to load native binding
 ```
 
-You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core <version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
+You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core@<version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
 
 ## To create a new extension in this repo
 
@@ -214,15 +220,16 @@ npm run create-extension -- <extension-name>
 
 Then follow [the instructions for customizing the new extension](https://github.com/paranext/paranext-extension-template#customize-extension-details) with a few modifications:
 
-- Follow the instructions for replacing placeholders inside the `src/<extension-name>` folder, not at this repo root, except in specific situations:
-  - Instead of editing the `.github/assets/release-body.md` inside the extension, add information about the new extension in `.github/assets/release-body.md` at this repo root.
+- All of the places where it says to replace the extension name in [Replace Placeholders](https://github.com/paranext/paranext-extension-template#replace-placeholders) have been automated,
+  the other instructions there should apply inside the `src/<extension-name>` folder, not at this repo root.
+- Instead of editing the `.github/assets/release-body.md` inside the extension, add information about the new extension in `.github/assets/release-body.md` at this repo root.
 
 **Note:** The merge/squash commits created when creating a new extension are important; Git uses them to compare the files for future updates. If you edit this repo's Git history, please preserve these commits (do not squash them, for example) to avoid duplicated merge conflicts in the future.
 
 <details>
     <summary>[Optional] Creating a new extension manually</summary>
 
-#### Manually create a new extension
+### Manually create a new extension
 
 Alternatively, you can create a new extension manually:
 
@@ -238,10 +245,35 @@ the file paths pointing to `paranext-core`:
 - Find: `([^/])\.\.\/paranext-core`
 - Replace with: `$1../../../paranext-core`
 
-You can ignore occurrences from many files. Please see [`./lib/git.util.ts`](./lib/git.util.ts) -> `formatExtensionFolder` for more
-information.
+You can ignore occurrences from many files. Please see [`./lib/git.util.ts`](./lib/git.util.ts) -> `formatExtensionFolder` for more information.
+
+Because these steps are not automated you need to follow all the instructions in [Replace Placeholders](https://github.com/paranext/paranext-extension-template#replace-placeholders)
 
 </details>
+
+### Renaming an extension
+
+Renaming an extension involves more than just changing its folder name. Tools that track extension updates rely on the folder name to detect changes, so renaming must be done carefully to avoid duplicated diffs or future merge conflicts.
+
+**Note:** Unfortunately, this process effectively erases the history on all the files in this extension since they are being deleted and created anew from the perspective of the Git history.
+
+To safely rename an extension:
+
+1. [Update from the template](#to-update-this-repo-and-extensions-from-the-templates) to ensure the extension to be renamed has all latest changes (makes sure you don't revert any updates the template has received since you last updated the extension when you are copying the contents of the extension)
+
+2. Run the [`create-extension` script](#to-create-a-new-extension-in-this-repo) with the new name to create a new folder:
+   ```bash
+   npm run create-extension -- <new-extension-name>
+   ```
+3. Move the contents of the old extension into the new folder and delete the old folder. (If it's not already under source control, it would probably be wise to make a backup until you have confirmed that the rename was successful.)
+
+4. Update internal identifiers and references to match the new name (e.g., folder names, class names, package names, strings inside files).
+
+5. Test and commit the changes.
+
+This process ensures that template update comparisons continue to work correctly.
+
+**Note:** The merge/squash commits created when renaming an extension are important; Git uses them to compare the files for future updates. If you edit this repo's Git history, please preserve these commits (do not squash them, for example) to avoid duplicated merge conflicts in the future.
 
 ## To update this repo and extensions from the templates
 
@@ -254,6 +286,8 @@ npm run update-from-templates
 ```
 
 If you encounter errors from merge conflicts, please resolve the merge conflicts, finish the commit, and run the script above again.
+
+For more information, read [the instructions on the Paranext Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki/Merging-Template-Changes-into-Your-Extension).
 
 **Note:** The merge/squash commits created when updating this repo and its extensions from the templates are important; Git uses them to compare the files for future updates. If you edit this repo's Git history, please preserve these commits (do not squash them, for example) to avoid duplicated merge conflicts in the future.
 
@@ -315,7 +349,7 @@ Adding this import to your WebView's styles enables Tailwind CSS in the WebView.
 - [Tailwind's preflight](https://tailwindcss.com/docs/preflight) is enabled by default, meaning some default HTML tag styles are significantly modified. You can [disable it](https://tailwindcss.com/docs/preflight#disabling-preflight) or [restrict its scope](https://www.npmjs.com/package/tailwindcss-scoped-preflight) if desired. However, the preferred approach is generally to use [`@tailwindcss/typography`](https://github.com/tailwindlabs/tailwindcss-typography), included in this project's Tailwind configuration by default, when displaying flowing content.
 - You can apply theme colors using Tailwind classes corresponding to the CSS property and theme color variable name like `tw-bg-primary`.
 
-Please see the wiki's [Tailwind CSS in Web Views](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#web-view-component) page for more information about using Tailwind in your web view.
+Please see the wiki's [Tailwind CSS in WebViews](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#webview-component) page for more information about using Tailwind in your WebView.
 
 ### Special imports
 

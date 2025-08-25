@@ -3,7 +3,7 @@ import path from 'path';
 import { getExtensions } from '../webpack/webpack.util';
 import { checkForWorkingChanges, execCommand } from './git.util';
 
-// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-versions.ts and https://github.com/paranext/paranext/blob/main/lib/bump-versions.ts
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-versions.ts
 
 // This script checks out a new branch, bumps the versions of all extensions in the repo,
 // and then commits the changes. It is generally expected that you will be on `main` when you run
@@ -16,9 +16,13 @@ import { checkForWorkingChanges, execCommand } from './git.util';
 const newVersion = process.argv[2];
 const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes');
 
+// #endregion
+
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-versions.ts and https://github.com/paranext/paranext/blob/main/lib/bump-versions.ts
+
 (async () => {
   // Make sure there are not working changes so we don't interfere with normal edits
-  if (!shouldAllowWorkingChanges && (await checkForWorkingChanges())) return 1;
+  if (!shouldAllowWorkingChanges && (await checkForWorkingChanges())) process.exit(1);
 
   const branchName = `bump-versions-${newVersion}`;
 
@@ -27,7 +31,7 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
     await execCommand(`git checkout -b ${branchName}`);
   } catch (e) {
     console.error(`Error on git checkout: ${e}`);
-    return 1;
+    process.exit(1);
   }
 
   const bumpVersionCommand = `npm version ${newVersion} --git-tag-version false`;
@@ -37,7 +41,7 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
     await execCommand(bumpVersionCommand);
   } catch (e) {
     console.error(`Error on bumping version: ${e}`);
-    return 1;
+    process.exit(1);
   }
 
   // #endregion
@@ -68,7 +72,7 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
         });
       } catch (e) {
         console.error(`Error on bumping package version for extension ${ext.name}: ${e}`);
-        return 1;
+        process.exit(1);
       }
     }
 
@@ -83,32 +87,40 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
       );
     } catch (e) {
       console.error(`Error on bumping manifest version for extension ${ext.name}: ${e}`);
-      return 1;
+      process.exit(1);
     }
   }
   /* eslint-enable no-restricted-syntax, no-await-in-loop */
 
   // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-versions.ts and https://github.com/paranext/paranext/blob/main/lib/bump-versions.ts
 
+  // Format the changes
+  try {
+    await execCommand(`npm run format`);
+  } catch (e) {
+    console.error(`Error on formatting changes: ${e}`);
+    process.exit(1);
+  }
+
   // Commit the changes
   try {
     await execCommand(`git commit -a -m "Bump versions to ${newVersion}"`);
   } catch (e) {
     console.error(`Error on committing changes: ${e}`);
-    return 1;
+    process.exit(1);
   }
   // Publish the branch and push the changes
   try {
     await execCommand(`git push -u origin HEAD`);
   } catch (e) {
     console.error(`Error on publishing branch and pushing changes: ${e}`);
-    return 1;
+    process.exit(1);
   }
   console.log(
     `Bumped versions to ${newVersion} and pushed to branch ${branchName}. Please create a pull request to merge this branch into main.`,
   );
 
-  return 0;
+  process.exit(0);
 })();
 
 // #endregion

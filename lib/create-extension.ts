@@ -11,6 +11,12 @@ import { getExtensionPath } from '../webpack/webpack.util';
 const newExtensionName = process.argv[2];
 
 (async () => {
+  // verify that an extension name was provided
+  if (!newExtensionName) {
+    console.error(`No extension name provided.`);
+    return 1;
+  }
+
   // Make sure there are not working changes as this will not work with working changes
   if (await checkForWorkingChanges()) return 1;
 
@@ -43,7 +49,7 @@ const newExtensionName = process.argv[2];
   // Don't commit for them so they know what is going on
   if (await checkForWorkingChanges(true))
     console.log(
-      `After creating the extension at ${extensionPathOSIndependent} from ${SINGLE_TEMPLATE_NAME} and formatting it, there are working changes.\nThis is likely expected. Please commit the result.`,
+      `After creating the extension at ${extensionPathOSIndependent} from ${SINGLE_TEMPLATE_NAME} and formatting it, there are working changes.\nThis is expected. Please commit the result.`,
     );
 
   return 0;
