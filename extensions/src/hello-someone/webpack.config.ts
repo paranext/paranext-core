@@ -7,7 +7,7 @@ import configMain from './webpack/webpack.config.main';
 // Note: Using a .ts file as the webpack config requires not having "type": "module" in package.json
 // https://stackoverflow.com/a/76005614
 
-// We want to build web views and then build main
+// We want to build WebViews and then build main
 const config: webpack.Configuration[] = [configWebView, configMain];
 
 export default config;
