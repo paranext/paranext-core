@@ -28,9 +28,14 @@ export {
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
   defaultScrRef,
+  ALL_BOOK_IDS,
+  ALL_ENGLISH_BOOK_NAMES,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
+
+// Enums
+export { Section } from './scripture-util';
 
 // Functions
 export {
@@ -50,8 +55,14 @@ export {
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
+  doesBookMatchQuery,
   formatScrRef,
+  getLocalizedBookName,
+  getLocalizedBookId,
   getLocalizedIdFromBookNumber,
+  getSectionForBook,
+  getSectionLongName,
+  getSectionShortName,
   normalizeScriptureSpaces,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
