@@ -44,7 +44,7 @@
       "runtimeArgs": ["run", "start"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
-        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
+        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223 --remote-allow-origins=http://localhost:9223",
         "IN_VSCODE": "true"
       },
       "presentation": {
