@@ -33,6 +33,13 @@ async function initialize(): Promise<void> {
                 );
                 return;
               }
+              // The request timeout is in seconds. Keep it between 0 (disabled) and 1 day
+              if (typeof newTimeout !== 'number' || newTimeout < 0 || newTimeout > 60 * 60 * 24) {
+                logger.warn(
+                  `Attempt to set an invalid value for platform.requestTimeout: ${newTimeout}.`,
+                );
+                return;
+              }
               networkService.setRequestTimeout(newTimeout);
             },
           );
