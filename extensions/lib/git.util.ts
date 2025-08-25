@@ -275,12 +275,17 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
 
   // Rename types file
   const oldTypesFilePath = path.join(
-    extensionFolderPath,
+    extensionFolderPathFromExtensions,
     'src',
     'types',
     'paranext-extension-template.d.ts',
   );
-  const newTypesFilePath = path.join(extensionFolderPath, 'src', 'types', `${extensionName}.d.ts`);
+  const newTypesFilePath = path.join(
+    extensionFolderPathFromExtensions,
+    'src',
+    'types',
+    `${extensionName}.d.ts`,
+  );
 
   try {
     // Check if the old file exists before attempting to rename it
@@ -319,7 +324,7 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
   }
 
   // Update README.md
-  const readmePath = path.join(extensionFolderPath, 'README.md');
+  const readmePath = path.join(extensionFolderPathFromExtensions, 'README.md');
   try {
     // Check if README.md exists
     await fs.access(readmePath);
@@ -366,7 +371,7 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
   }
 
   // Update manifest.json
-  const manifestPath = path.join(extensionFolderPath, 'manifest.json');
+  const manifestPath = path.join(extensionFolderPathFromExtensions, 'manifest.json');
   try {
     // Check if manifest.json exists
     await fs.access(manifestPath);
@@ -389,7 +394,7 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
   }
 
   // Update package.json
-  const packagePath = path.join(extensionFolderPath, 'package.json');
+  const packagePath = path.join(extensionFolderPathFromExtensions, 'package.json');
   try {
     // Check if package.json exists
     await fs.access(packagePath);
