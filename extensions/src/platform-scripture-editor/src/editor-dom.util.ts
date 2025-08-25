@@ -42,8 +42,11 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
     }
 
     // If we found the placeholder, run the callback and clear the interval
-    callback();
-    clearInterval(intervalId);
+    try {
+      callback();
+    } finally {
+      clearInterval(intervalId);
+    }
   }, EDITOR_FIRST_LOAD_POLL_TIME);
 
   return () => {

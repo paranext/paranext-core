@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { Button } from 'platform-bible-react';
 import { PanelData } from 'rc-dock';
 import './panel-extra-content.component.scss';
+import { getErrorMessage } from 'platform-bible-utils';
 
 interface PanelExtraContentProps {
   panelData: PanelData;
@@ -18,7 +19,7 @@ export function PanelExtraContent({ panelData }: PanelExtraContentProps) {
     try {
       await sendCommand('platformGetResources.openNewTab', tabGroupId);
     } catch (error) {
-      logger.error('Error sending command to open new tab:', error);
+      logger.error(`Error sending command to open new tab: ${getErrorMessage(error)}`);
     }
   };
 
