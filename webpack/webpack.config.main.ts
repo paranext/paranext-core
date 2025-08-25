@@ -21,11 +21,11 @@ const configMain: webpack.Configuration = merge(configBase, {
   target: 'web',
   // configuration name
   name: 'main',
-  // wait until webView bundling finishes - webpack.config.web-view.ts
+  // Wait until WebView bundling finishes - webpack.config.web-view.ts
   dependencies: ['webView'],
   // Instructions on what output to create
   output: {
-    // extension output directory
+    // Extension output directory
     path: path.resolve(rootDir, outputFolder),
     // Exporting the library https://webpack.js.org/guides/author-libraries/#expose-the-library
     library: {
@@ -39,7 +39,7 @@ const configMain: webpack.Configuration = merge(configBase, {
   },
   resolve: {
     plugins: [
-      // Get web view files from the temp dir where they are built
+      // Get WebView files from the temp dir where they are built
       new WebViewResolveWebpackPlugin(),
     ],
   },
