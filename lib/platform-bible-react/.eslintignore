@@ -8,6 +8,9 @@ dist
 storybook-static
 docs
 
+# Types file copied from `extensions/src/platform-scripture-editor/src/types` that isn't linting right
+src/types/@biblionexus-foundation__platform-editor.d.ts
+
 # Formats not supported by Prettier
 ## MDXv2+ (used by Storybook)
 *.mdx
