@@ -1,191 +1,152 @@
-# paranext-core
+<!-- Attention template README maintainers: The content in the portion of this README following the Template Info section roughly parallels that of the paranext-multi-extension-template. When editing one, please consider whether similar changes should also be made in the other.-->
 
-Extensible Bible translation software
+# paranext-extension-template
 
-<div align="center">
-  <img src="./assets/icon.svg" width="256" alt="Platform icon" />
-</div>
+Basic extension template for Platform.Bible
 
-<div align="center">
+<!-- <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info). -->
 
-[![Build Status][github-actions-status]][github-actions-url]
-[![CodeQL][gitghub-codeql-status]][gitghub-codeql-url]
-[![Github Tag][github-tag-image]][github-tag-url]
+## Template Info
 
-</div>
+This is a Webpack project template pre-configured to build a Platform.Bible extension. It includes only the bare essentials required for an extension to work.
+
+Note that the `*.web-view.*` files and the `assets` folder mentioned in [Summary](#summary) are **not** included in this template. For examples of what these might look like, refer to any extension that is based on either this template or the [paranext-multi-extension-template](https://github.com/paranext/paranext-multi-extension-template) — for instance, the [Text Collection extension](https://github.com/paranext/paratext-bible-extensions/tree/main/src/paratext-bible-text-collection).
+
+**Important:** Before proceding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the latter, it would be better to use the [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template) instead of this template.
+
+### Customize extension details
+
+Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more generalized version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension), which contains step-by-step instructions to build a "Hello World" extension.
+
+#### Install and hook up to the template
+
+Note: please skip this section and continue with [Replace placeholders](#replace-placeholders) if you are following these instructions as part of [creating an extension within `paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template#to-create-a-new-extension-in-this-repo).
+
+To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
+
+- [Install and set up this repo](#to-install)
+- [Update this extension from the template](#to-update-this-extension-from-the-template) to hook everything up for smooth updates in the future.
+
+#### Replace placeholders
+
+For your extension name, we recommend that you use [lowerCamelCase](https://developer.mozilla.org/en-US/docs/Glossary/Camel_case) in some contexts and [kebab-case](https://developer.mozilla.org/en-US/docs/Glossary/Kebab_case) in other contexts. We generally recommend lowerCamelCase when using the name in code (like making a new command on the PAPI, for example), and we recommend kebab-case when using the name in relation to the file system, the repository, `npm`, and the extension's `.d.ts` types module. The following instructions are written accordingly.
+
+- In this `README.md`:
+
+  - Replace the first line `# paranext-extension-template` with `# your-extension-name` (kebab-case)
+  - Below the first line, replace the extension description with your own description
+  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/your-extension-name.d.ts` (kebab-case)
+
+- In `manifest.json`:
+
+  - Replace `paranextExtensionTemplate` with `yourExtensionName` (lowerCamelCase)
+  - Replace `src/types/paranext-extension-template.d.ts` with `src/types/your-extension-name.d.ts` (kebab-case)
+  - Update ownership information and other relevant fields as desired
+
+- In `package.json`:
+
+  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences - kebab-case)
+  - Update ownership information and other relevant fields as desired
+
+- In `assets/displayData.json`:
+
+  - If your extension has an icon, update the `icon` value to point towards the icon file (for example: `assets/icon.svg`)
+  - Update the `moreInfoUrl` field to web URL to a page where users can find out more information about you / your organization / your extension.
+  - Update the `supportUrl` field to web URL to a support page where users can request help and report issues with your extension.
+  - Update the `en` entry of `localizedDisplayInfo` so that:
+
+    - `displayName` contains a human-readable name for your extension (i.e. `Your Extension Name`).
+    - `shortSummary` contains a short, few sentence summary of what your extension does.
+    - `description` points to a Markdown (`.md`) file containing the full description of your extension (similar to what you would put in a `README`).
+
+  - If your extension supports multiple languages, add another entry to `localizedDisplayInfo` by copying and pasting the `en` entry, changing `en` to the [BCP 47 language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the language you want to support, and translating the `displayName`, `shortSummary`, and `description` fields appropriately. We recommend naming your description files `description-<language tag>.md`.
+
+- In `LICENSE`:
+
+  - Adjust as desired (feel free to choose a different license)
+  - If you choose to stay with the current license, update the copyright statement
+
+- Rename `src/types/paranext-extension-template.d.ts` to `src/types/your-extension-name.d.ts` (kebab-case)
+
+  - In this renamed file, replace `paranext-extension-template` with `your-extension-name`
+
+- In `src/main.ts`, replace `Extension template` with `Your Extension Name` (2 occurrences)
+
+- In `.github/assets/release-body.md`, replace `Extension template` with `Your Extension Name`, and make other adjustments as desired.
+
+#### Customize the extension manifest and package information
+
+The `manifest.json` and `package.json` files contain information specific to your extension. Add your extension's details in these two files as needed. See more information on the `manifest.json` and `package.json` files in [Extension Anatomy](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#extension-manifest).
+
+#### Hide Template Info
+
+Once finished customizing this template to be your own, you can uncomment the [HTML comment tag](https://www.w3schools.com/html/html_comments.asp) above the [Template Info](#template-info) section to hide this template-related info in this readme. You can do this by clicking on the line and doing CTRL + / in VS Code. You can also do this manually by removing the first opening '&lt;!--' and the only closing '--&gt;' on the line. Leaving this info commented in your readme will hide it in your readme while avoiding merge conflicts if you decide to [update this extension from the template](#to-update-this-extension-from-the-template) in the future. If you never want to update this extension from the template, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+
+Note: if you [update this extension from the template](#to-update-this-extension-from-the-template), there may be important changes in this section like additional customizations you must make to this extension. Please keep an eye out for readme changes when updating from the template.
+
+<!-- Closing comment tag for Template Info Section -->
 
 ## Summary
 
-Platform.Bible is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
+The general file structure for an extension is as follows:
 
-This repository contains the core Platform.Bible software (Electron client, extension host including the Platform API (PAPI), and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
+- `package.json` contains information about this extension's npm package. It is required for Platform.Bible to use the extension properly. It is copied into the build folder
+- `manifest.json` is the manifest file that defines the extension and important properties for Platform.Bible. It is copied into the build folder
+- `src/` contains the source code for the extension
+  - `src/main.ts` is the main entry file for the extension
+  - `src/types/paranext-extension-template.d.ts` is this extension's types file that defines how other extensions can use this extension through the `papi`. It is copied into the build folder
+  - `*.web-view.tsx` files will be treated as React WebViews
+  - `*.web-view.html` files are a conventional way to provide HTML WebViews (no special functionality)
+- `assets/` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol, as well as textual descriptions in various languages. It is copied into the build folder
+  - `assets/displayData.json` contains (optionally) a path to the extension's icon file as well as text for the extension's display name, short summary, and path to the full description file
+  - `assets/descriptions/` contains textual descriptions of the extension in various languages
+    - `assets/descriptions/description-<locale>.md` contains a brief description of the extension in the language specified by `<locale>`
+- `contributions/` contains JSON files the platform uses to extend data structures for things like menus and settings. The JSON files are referenced from the manifest
+- `public/` contains other static files that are copied into the build folder
+- `.github/` contains files to facilitate integration with GitHub
+  - `.github/workflows` contains [GitHub Actions](https://github.com/features/actions) workflows for automating various processes in this repo
+  - `.github/assets/release-body.md` combined with a generated changelog becomes the body of [releases published using GitHub Actions](#publishing)
+- `dist/` is a generated folder containing the built extension files
+- `release/` is a generated folder containing a zip of the built extension files
 
-## Users
+> See the [Extension Anatomy wiki page](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy) for more information about the various files that comprise an extension and their relationships to each other.
 
-This software is not yet ready for users. We'll update here with where you can install it when it is ready.
+## To install
 
-If you would still like to try it, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
+### Install dependencies:
 
-### Linux Users
+1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to [reconfigure paths](#configure-paths-to-paranext-core-repo) to `paranext-core`.
+2. In this repo, run `npm install` to install local and published dependencies
 
-We produce [`snap` packages](<https://en.wikipedia.org/wiki/Snap_(software)>) available [on the snap store](https://snapcraft.io/platform-bible) for users to run our
-software on Linux. Once you have all the `snap` tools installed for your flavor of Linux, run `sudo snap install platform-bible` for our most recent stable build (none yet) or `sudo snap install platform-bible --channel=edge` for our most recent, pre-release build that has passed our limited, automated testing suite.
+### Configure paths to `paranext-core` repo
 
-To install a locally created `snap` package, run the following commands:
+If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
 
-```sh
-sudo snap install <path to snap file> --dangerous
-sudo snap connect platform-bible:dot-platform-bible
-```
+## To run
 
-Some users may find that not everything works properly in Linux without some additional setup. Please see [How to set up Platform.Bible on Linux](https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux) for more information.
+### Running Platform.Bible with this extension
 
-### Mac Users
+To run Platform.Bible with this extension:
 
-If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is an app downloaded from the Internet. Are you sure you want to open it?":
+`npm start`
 
-![mac-arm-downloaded-internet-warning](doc-meta/mac-arm-downloaded-internet-warning.png)
+Note: The built extension will be in the `dist` folder. In order for Platform.Bible to run this extension, you must provide the directory to this built extension to Platform.Bible via a command-line argument. This command-line argument is already provided in this `package.json`'s `start` script. If you want to start Platform.Bible and use this extension any other way, you must provide this command-line argument or put the `dist` folder into Platform.Bible's `extensions` folder.
 
-Don't be alarmed! This is a typical warning, seen when downloading most apps from the Internet. It also says "Apple checked it for malicious software and none was detected." If you trust Platform.Bible and would like to run it select "Open."
+### Building this extension independently
 
-Once the app is opened, you may see a dialog that says "Platform.Bible wants to use your confidential information stored in 'Platform.Bible Safe Storage' in your keychain."
+To watch extension files (in `src`) for changes:
 
-![mac-arm-keychain-access-warning](doc-meta/mac-arm-keychain-access-warning.png)
+`npm run watch`
 
-We use encryption to keep your data safe, allowing access to keychain provides encryption services with `papi.dataProtection` so extensions can store user data securely. If you approve of this, please allow keychain access.
+To build the extension once:
 
-## Developer Install
+`npm run build`
 
-Set up pre-requisites for building:
+## To package for distribution
 
-### Linux Development Pre-requisites
+To package this extension into a zip file for distribution:
 
-Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
-
-If you are developing on Ubuntu 24.04 with AppArmor, you will need to modify `package.json` locally to add the `--no-sandbox` flag to `electronmon`. For example:
-
-```json
-{
-  "scripts": {
-    "start:main": "concurrently -k -P \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon --no-sandbox . {@}\" --"
-  }
-}
-```
-
-This should be a temporary workaround until we update to newer versions of `electron` and `electron-builder`.
-
-### macOS Development Pre-requisites
-
-macOS doesn't come preinstalled with all the
-[icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries. They must be
-installed separately to provide Unicode support to our .NET code. Platform.Bible is
-configured to expect those libraries to be installed using
-[MacPorts](https://www.macports.org/). The
-[icu package on MacPorts](https://ports.macports.org/port/icu/) has the icu4c
-libraries needed for icu.net to run properly.
-
-The build processes are configured to automatically download and package icu4c
-libraries with the application, but for development this has to be done manually.
-
-The .NET data provider is configured to automatically copy the icu4c `dylib`s into
-its build output directory. If for some reason you need to disable that, you will
-need to set an environment variable for the OS to find them. For example:
-
-```bash
-export DYLD_FALLBACK_LIBRARY_PATH="$HOME/lib:/usr/local/lib:/usr/lib:/opt/local/lib"
-```
-
-If you need to set environment variables like the above, consider adding them to
-your `.zprofile` so you don't have to remember to do it manually.
-
-### All Platforms Development Pre-requisites
-
-Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node`. We recommend using [Volta](#javascript-tool-manager).
-
-Install `dotnet` [.NET 8 SDK from here](https://learn.microsoft.com/en-us/dotnet/core/install/).
-
-To check if `dotnet` is installed run (ensure you have a v8 SDK):
-
-```bash
-dotnet --version
-dotnet --list-sdks
-```
-
-### Cloning and installing dependencies (all platforms)
-
-Clone the repo:
-
-```bash
-git clone https://github.com/paranext/paranext-core.git
-cd paranext-core
-```
-
-If you want to develop an extension for Platform.Bible, check out the Git reference (usually a [tag](https://github.com/paranext/paranext-core/tags)) corresponding to the version for which you want to develop your extension. We recommend you develop for the latest released version, _not_ `main`. Consult [the version table](https://github.com/paranext/paranext/wiki/Software-Version-Info) for more information. For example, if you want to develop your extension for version 0.3.0, run the following:
-
-```bash
-git checkout v0.3.0
-```
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-To build, run the following:
-
-```bash
-npm run build
-```
-
-## Starting Development
-
-Start the app in the `dev` environment:
-
-```bash
-npm start
-```
-
-After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
-
-### Developing Extensions
-
-Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
-[extensions/README.md](extensions/README.md) to develop core extensions.
-
-Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core. Once you have packaged an extension, it can be distributed for Platform.Bible users to install. See [Running your extension in an app](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app) for installation information.
-
-## GitHub Pages
-
-**[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
-
-- Explore the declarations of types available on the PAPI.
-
-**[Platform.Bible React Components and Hooks Documentation](https://paranext.github.io/paranext-core/platform-bible-react)**
-
-- Check out the React components and hooks available to use.
-
-**[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
-
-- Check out the utility functions, types, and classes available to use.
-
-**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
-
-- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
-
-## JavaScript Tool Manager
-
-You can use [Volta](https://volta.sh/) with this repo to use the right version of tools such as **node** and **npm**.
-
-If you don't use Volta just look at the `volta` property in [package.json](https://github.com/paranext/paranext-core/blob/main/package.json) to see the right tool versions to install in your preferred way.
-
-## Packaging for Production
-
-To package apps for the local platform:
-
-```bash
-npm run package
-```
+`npm run package`
 
 ## Publishing
 
@@ -202,149 +163,81 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
 2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
-   - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
-   - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
-   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+   - `version`: Enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
+   - `newVersionAfterPublishing`: Enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump.
+   - `bumpRef`: Enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+
+    <details>
+        <summary>[Optional] Create a new pre-release and bump versions branch manually </summary>
+
+   #### Manually create a new pre-release and bump versions branch
+
+   Alternatively, you can create a new pre-release manually:
+
+   ```bash
+   npm run package
+   # Create a new pre-release in GitHub on tag `v<version>`
+   # Copy `.github/assets/release-body.md` into the release body
+   # Press the "Generate release notes" button in the release creation page to generate a changelog
+   # Attach contents of `release` folder to the release
+   ```
+
+   Then bump versions by running the following:
+
+   ```bash
+   npm run bump-versions <next_version>
+   ```
+
+   Or bump versions manually:
+
+   ```bash
+   git checkout -b bump-versions-<next_version>
+   npm version <next_version> --git-tag-version false
+   # Change version in the extension's `manifest.json`
+   git commit -a -m "Bumped versions to <next_version>"; git push -u origin HEAD
+   ```
+
+    </details>
 
 3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
 4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
-5. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
-6. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
 
-## Testing
+### Publishing problems
 
-The following tests run automatically on each GitHub PR (see [test.yml](https://github.com/paranext/paranext-core/blob/main/.github/workflows/test.yml)).
+Following are some problems you may encounter while publishing and steps to solve them.
 
-To run C# unit tests:
+#### `@swc/core` Failed to load native binding
+
+If you see the following error in the GitHub Actions workflow logs while packaging:
+
+```
+Module build failed (from ./node_modules/swc-loader/src/index.js):
+Error: Failed to load native binding
+```
+
+You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core@<version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
+
+## To update this extension from the template
+
+This extension project is forked from [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template), which is updated periodically and will sometimes receive updates that help with breaking changes on [`paranext-core`](https://github.com/paranext/paranext-core). We recommend you periodically update your extension by merging the latest template updates into your extension.
+
+To set up this extension to be updated from the template, run the following command once after cloning this repo:
 
 ```bash
-cd c-sharp-tests
-dotnet test
+git remote add template https://github.com/paranext/paranext-extension-template
 ```
 
-To run C# unit tests watching for file changes:
+To update this extension from the template, make sure your repo has no working changes. Then run the following commands:
 
 ```bash
-cd c-sharp-tests
-dotnet watch test
+git fetch template
+git merge template/main --allow-unrelated-histories
 ```
 
-To run all TS unit tests:
+For more information, read [the instructions on the wiki](https://github.com/paranext/paranext-extension-template/wiki/Merging-Template-Changes-into-Your-Extension).
 
-```bash
-npm test
-```
+**Note:** The merge/squash commits created when updating this repo from the template are important; Git uses them to compare the files for future updates. If you edit this repo's Git history, please preserve these commits (do not squash them, for example) to avoid duplicated merge conflicts in the future.
 
-To run an individual TS unit test watching for file changes:
+## Special features in this project
 
-```bash
-npm test -- <path/to/test-file.test.ts> --watch
-```
-
-You can also use the [recommended VS Code extensions](#vs-code-extension-options) to run tests there.
-
-## Storybook
-
-To run Storybook locally:
-
-```bash
-npm run storybook
-```
-
-To build Storybook:
-
-```bash
-npm run storybook:build
-```
-
-To run Storybook as a web app, after it was built successfully:
-
-```bash
-npx http-server ./storybook-static
-```
-
-## Windows Development with WSL2
-
-On Windows, you can install [WSL](https://learn.microsoft.com/en-us/windows/wsl/) (Windows Subsystem for Linux) so you can test cross-platform compatibility on Linux (as well as Windows). You'll need to use a Linux distribution with WSL2 (rather than WSL1) so the X-Server windows can be opened for Electron.
-
-1. Here is how to [install Linux on Windows with WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
-2. You'll want to follow that by setting up to use **VS Code**, **Git** and **NodeJS** with WSL. See the various [tutorials](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
-3. In the WSL distribution, add system libraries needed for Electron, see [Linux Development Pre-requisites](#linux-development-pre-requisites) above.
-4. In the WSL distribution, clone the repo as described above under [Developer Install](#developer-install).
-
-You'll be running a copy of the repo in both Windows and WSL so make sure they are both up-to-date.
-
-You can use VS Code from your host to access code in your WSL repo clone using the Microsoft [Remote Development](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack) VS Code extension.
-
-## VS Code Extension Options
-
-Extensions highly recommended for this repo are already displayed in VS Code through the [Extensions Recommendations settings](https://github.com/paranext/paranext-core/blob/main/.vscode/extensions.json). These are optional extensions that our developers enjoy using:
-
-- [TODO Highlight](https://marketplace.visualstudio.com/items?itemName=wayou.vscode-todo-highlight)
-- [Version Lens](https://marketplace.visualstudio.com/items?itemName=pflannery.vscode-versionlens)
-
-## Formatting and Linting
-
-Formatting happens automatically when you commit. If you use VS Code with this repo's recommended extensions it will format when you save.
-
-To check TypeScript for readability, maintainability, and functionality errors, and to check a few other files for proper formatting, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
-
-```bash
-npm run format
-npm run lint
-```
-
-To check C# for readability, maintainability, and functionality errors, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
-
-```bash
-cd c-sharp
-dotnet tool restore
-dotnet csharpier .
-```
-
-## Documentation in `papi.d.ts`
-
-VSCode renders JSDoc comments in the UI to make it easier for developers to use functions and properties as intended. However, those comments do not always propagate from modules to the `d.ts` type definition file when those modules are re-exported. To help with this problem in `papi.d.ts` that we export for extensions to reference, we added some custom functionality.
-
-If you want comments to be copied from one location in `papi.d.ts` to another, do the following:
-
-- In the JSDoc comments that you want copied elsewhere, add "JSDOC SOURCE myServiceName" (must have a blank line after) in the JSDoc comments like this:
-
-```typescript
-/**
- * JSDOC SOURCE myService
- *
- * myService is amazing. Here are more details about it.
- * ...
- */
-const myService = {
-  ...
-}
-```
-
-- In the location where you want the docs copied, add "JSDOC DESTINATION myServiceName" like this:
-
-```typescript
-const papi = {
-  ...
-  /** JSDOC DESTINATION myService */
-  myService,
-```
-
-## Thanks
-
-Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!
-
-## License
-
-This project is licensed under the [MIT License](./LICENSE).
-Copyright © 2017-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
-
-<!-- define variables used above -->
-
-[github-actions-status]: https://github.com/paranext/paranext-core/workflows/Test/badge.svg
-[github-actions-url]: https://github.com/paranext/paranext-core/actions
-[gitghub-codeql-status]: https://github.com/paranext/paranext-core/actions/workflows/codeql-analysis.yml/badge.svg
-[gitghub-codeql-url]: https://github.com/paranext/paranext-core/actions/workflows/codeql-analysis.yml
-[github-tag-image]: https://img.shields.io/github/tag/paranext/paranext-core.svg?label=version
-[github-tag-url]: https://github.com/paranext/paranext-core/releases/latest
+This project has special features and specific configuration to make building an extension for Platform.Bible easier. Rather than duplicating the full explanation here, please refer to the [`Special Features in this project` section of the multi-extension template README](https://github.com/paranext/paranext-multi-extension-template?tab=readme-ov-file#special-features-in-this-project) for details on these features.

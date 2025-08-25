@@ -1,3 +1,5 @@
+# #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.prettierignore
+
 # Please keep this file in sync with .eslintignore and .stylelintignore
 
 # Logs
@@ -9,10 +11,6 @@ pids
 *.pid
 *.seed
 
-# Coverage directory used by tools like istanbul
-coverage
-.eslintcache
-
 # Dependency directory
 # https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
 node_modules
@@ -20,35 +18,18 @@ node_modules
 # OSX
 .DS_Store
 
-release/app/dist
-release/build
-.erb/dll
-dev-appdata
-
 .idea
 npm-debug.log.*
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
 
-# Packager output
+# Built files
 dist
-
-# eslint ignores hidden directories by default:
-# https://github.com/eslint/eslint/issues/8429
-!.erb
-!.storybook
-
-storybook-static
-
-# directories that have separate eslint project
-lib/platform-bible-react
-lib/platform-bible-utils
-lib/papi-dts
-extensions
+release
+temp-build
 
 # generated files
 package-lock.json
-bin
-obj
 
+# #endregion

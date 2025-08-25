@@ -1,13 +1,6 @@
 name: Publish
 run-name: Publish release v${{ github.event.inputs.version }} on ${{ github.head_ref || github.ref_name }}
 
-# Make sure these match with the matrix.os values below
-env:
-  OS_WINDOWS: windows-latest
-  OS_MACOS: macos-latest
-  # The Ubuntu version must align with the "core" version in electron-builder.json5
-  OS_LINUX: ubuntu-22.04
-
 on:
   workflow_dispatch:
     inputs:
@@ -28,181 +21,78 @@ on:
 
 jobs:
   publish:
-    name: Release on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+    name: Release on ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: ./extension-repo
 
     permissions:
       contents: write
 
     strategy:
       matrix:
-        # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
-        dotnet_version: [8.0.x]
+        os: [ubuntu-latest]
 
     steps:
       - name: Output Workflow Dispatch Inputs
+        working-directory: ./
         run: echo "${{ toJSON(github.event.inputs) }}"
-
-      - name: Install MacPorts
-        if: ${{ matrix.os == env.OS_MACOS }}
-        uses: melusina-org/setup-macports@v1
-
-      - name: Update MacPorts ports tree
-        if: ${{ matrix.os == env.OS_MACOS }}
-        # Not using `-v` for verbose because it is very slow and does not add much value
-        run: |
-          sudo port sync
-
-      - name: Install loader tools on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
-        run: |
-          sudo port -v install ld64
-
-      - name: Install icu4c on macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
-        run: |
-          sudo port -v install icu @76.1_0 +universal
-
-      - name: Fixup loader paths for icu4c
-        if: ${{ matrix.os == env.OS_MACOS }}
-        # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
-        # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
-        # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
-        run: |
-          ICU_VERSION=76
-          LIB_DEPENDENCIES="
-          i18n data
-          i18n uc
-          io data
-          io i18n
-          io uc
-          uc data
-          "
-          LIB_DEPENDENCIES=$(echo "$LIB_DEPENDENCIES" | sed '/^$/d')
-          while IFS= read -r line; do
-            set -- $line
-            sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
-          done <<< "$LIB_DEPENDENCIES"
-
-      - name: Install snap tools on Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
-        run: |
-          sudo apt update
-          sudo apt install -y snapd
-          sudo snap install snapcraft --classic
-          sudo snap install lxd
-          sudo snap refresh lxd
-          sudo lxd init --auto
-          # Add the current user to the lxd group
-          getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
-          newgrp lxd
-          # Force the socket to be usable by the current user
-          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
-          # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
-          sudo iptables -P FORWARD ACCEPT
 
       - name: Checkout git repo
         uses: actions/checkout@v4
-
-      - name: Install .NET
-        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet_version }}
+          path: extension-repo
+
+      - name: Checkout paranext-core repo to use its sub-packages
+        uses: actions/checkout@v4
+        with:
+          path: paranext-core
+          repository: paranext/paranext-core
 
       - name: Read package.json
         id: package_json
         uses: zoexx/github-action-json-file-properties@1.0.6
         with:
-          file_path: 'package.json'
-
-      - name: Read release/app/package.json
-        id: release_package_json
-        uses: zoexx/github-action-json-file-properties@1.0.6
-        with:
-          file_path: 'release/app/package.json'
+          file_path: 'extension-repo/package.json'
 
       - name: Verify version (skips if versions match)
-        if: '${{ inputs.version != steps.release_package_json.outputs.version }}'
+        if: '${{ inputs.version != steps.package_json.outputs.version }}'
         run: |
-          echo "Version mismatch! Expected ${{ inputs.version }} but found ${{ steps.release_package_json.outputs.version }}"
+          echo "Version mismatch! Expected ${{ inputs.version }} but found ${{ steps.package_json.outputs.version }}"
           exit 1
 
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
+          cache-dependency-path: |
+            extension-repo/package-lock.json
+            paranext-core/package-lock.json
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
 
-      - name: Install packages and build
+      - name: Install packages
         run: |
           npm ci
-          npm run build
 
-      - name: Prepare release - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install core packages
+        working-directory: paranext-core
         run: |
-          npm exec electron-builder -- --publish never --win
-          mkdir release\\staged
-          move release\\build\\*Setup*.exe release\\staged
+          npm ci --ignore-scripts
 
-      - name: Code signing - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS }}
-        # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
-        env:
-          CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
-          CERTIFICATE_HOST_API_KEY: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST_API_KEY }}
-          CERTIFICATE_SHA1_HASH: ${{ secrets.WIN_CERTIFICATE_SHA1_HASH }}
-          CLIENT_CERTIFICATE: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT }}
-          CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT_PASSWORD }}
-          KEYPAIR_ALIAS: ${{ secrets.WIN_CODE_SIGNING_KEYPAIR_ALIAS }}
-        uses: cognitedata/code-sign-action/@v3
-        with:
-          path-to-binary: 'release\\staged'
-
-      - name: Prepare release - macOS
-        if: ${{ matrix.os == env.OS_MACOS }}
-        env:
-          # The APPLE_* values are used for auto updates signing
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # This is used for uploading release assets to github
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package for distribution
         run: |
-          npm exec electron-builder -- --publish never --mac
-          mkdir release/staged
-          mv release/build/*.dmg release/staged
-
-      - name: Prepare release and publish to the snap store - Linux
-        if: ${{ matrix.os == env.OS_LINUX }}
-        env:
-          # no hardlinks so dependencies are copied
-          USE_HARD_LINKS: false
-          # This is used by electron-builder to prepare the release
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # This is required to upload automatically to the snap store
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
-        run: |
-          npm exec electron-builder -- --publish never --linux
-          snapcraft upload --release=edge ./release/build/*.snap
-          mkdir release/staged
-          mv release/build/*.snap release/staged
+          npm run package
 
       - name: Publish draft release
         uses: ncipollo/release-action@v1
         with:
-          # Need to allow updates in order to upload artifacts from each OS
-          allowUpdates: true
           artifactErrorsFailBuild: true
           artifacts: |
-            release/staged/*
-          bodyFile: .github/assets/release-body.md
+            extension-repo/release/*
+          bodyFile: extension-repo/.github/assets/release-body.md
           # make the new release a draft instead of automatically publishing
           draft: true
           generateReleaseNotes: true
@@ -212,24 +102,26 @@ jobs:
           omitPrereleaseDuringUpdate: true
           # make the new release a pre-release
           prerelease: true
+          # tag+commit creates a version tag for this release with the tag name at the commit ref
+          # so the GitHub Release doesn't have to create the tag and assume it is on `main`
           tag: v${{ inputs.version }}
+          commit: ${{ github.head_ref || github.ref_name }}
           # only update if the release is still a draft
           updateOnlyUnreleased: true
 
       - name: Checkout bump ref
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
+        if: ${{ inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
         uses: actions/checkout@v4
         with:
           clean: false
+          path: extension-repo
           ref: ${{ inputs.bumpRef }}
 
       - name: Bump repo versions
-        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
-        # Bump versions using the built-in git token https://github.com/actions/checkout/tree/v4/?tab=readme-ov-file#push-a-commit-using-the-built-in-token
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          npm run bump-versions -- ${{ inputs.newVersionAfterPublishing }}
+        if: ${{ inputs.newVersionAfterPublishing != '' }}
+        uses: ./.github/actions/bump-versions-action
+        with:
+          newVersion: ${{ inputs.newVersionAfterPublishing }}
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

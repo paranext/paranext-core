@@ -1,11 +1,10 @@
-Extensible Bible translation software
+Includes:
 
-https://platform.bible/
+- Extension template
 
-Install Instructions:
+Tested on Platform.Bible vX.Y.Z. Expected to be compatible with at least vX.Y.\*.
 
-- Windows: Download the `.exe` file and open to install
-- macOS: Download the `.dmg` file that matches your CPU architecture and open to install
-- Linux: Install from the Snap Store:
+Install instructions:
 
-[![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/platform-bible)
+1. Download the `.zip` file of the extension.
+2. Follow the [install instructions on the Wiki](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app).

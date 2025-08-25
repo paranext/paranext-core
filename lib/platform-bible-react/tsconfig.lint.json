@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig",
-  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", "src"]
-}
