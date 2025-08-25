@@ -4,15 +4,17 @@ $color--shadow: var(--divider, rgba(0, 0, 0, 0.5));
 
 $color--active-tab: hsl(var(--background));
 $color--inactive-tab: hsl(var(--muted));
+$color--focus-ring: hsl(var(--ring));
+$color--accent: hsl(var(--accent));
 
 $color--border: var(--divider, rgba(0, 0, 0, 0.12));
 
 /* SPACING */
 $space--xxs: 2px;
 $space--xs: 4px;
-$space--s: 8px;
-$space--m: 16px;
-$space--l: 36px;
+$space--sm: 8px;
+$space--md: 16px;
+$space--lg: 36px;
 
 /* OTHER */
 $border-width: 1px;
