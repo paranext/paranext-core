@@ -87,7 +87,7 @@ export default class WebViewResolveWebpackPlugin {
             }
           }
 
-          // If it isn't calling for a webView, continue resolving without changing anything here
+          // If it isn't calling for a WebView, continue resolving without changing anything here
           if (!webViewTsxRegex.test(requestPath)) return callback();
 
           // Get the path to the relevant file in the temp dir
