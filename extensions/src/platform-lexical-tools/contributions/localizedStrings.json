@@ -1,5 +1,9 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%platformLexicalTools_mainMenu_openHebGrkDictionary%": {
+      "fallbackKey": "%platformLexicalTools_mainMenu_openDictionary%"
+    }
+  },
   "localizedStrings": {
     "en": {
       "%platformLexicalTools_dictionary_allOccurrencesLabel%": "Occurrences",
@@ -20,7 +24,8 @@
       "%platformLexicalTools_dictionary_title%": "HEBGRK Dictionary",
       "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Track Biblical Terms",
       "%platformLexicalTools_mainMenu_openDictionary%": "Open Dictionary",
-      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary"
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary",
+      "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Open HEBGRK Dictionary"
     }
   }
 }

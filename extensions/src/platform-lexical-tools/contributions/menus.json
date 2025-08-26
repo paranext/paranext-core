@@ -4,8 +4,8 @@
     "groups": {},
     "items": [
       {
-        "label": "%platformLexicalTools_mainMenu_openDictionary%",
-        "localizeNotes": "Scripture Editor top menu > Project > Dictionary",
+        "label": "%platformLexicalTools_mainMenu_openHebGrkDictionary%",
+        "localizeNotes": "Scripture Editor top menu > Project > HEBGRK Dictionary",
         "group": "platform.projectResources",
         "order": 100,
         "command": "platformLexicalTools.openDictionary"
