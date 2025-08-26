@@ -4,7 +4,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
+import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 type BookChapterControlWrapperProps = {
   scrRef: SerializedVerseRef;

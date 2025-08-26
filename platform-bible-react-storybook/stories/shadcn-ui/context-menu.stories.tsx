@@ -16,7 +16,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuRadioGroup,
 } from '@/components/shadcn-ui/context-menu';
-import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
+import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof ContextMenu> = {
   title: 'Shadcn/ContextMenu',
