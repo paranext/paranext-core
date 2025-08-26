@@ -21,6 +21,108 @@ let globalUsersnapApi: SpaceApi | undefined;
 let isUsersnapFormOpen = false;
 let apiKeyOfOpenForm: string | undefined;
 
+/**
+ * MutationObserver to detect when Usersnap elements are added to the DOM This will attempt to find
+ * and style Usersnap shadow DOMs
+ */
+let usersnapDomObserver: MutationObserver | undefined;
+
+/** Searches for Usersnap shadow DOM elements and applies custom styles */
+function findAndStyleUsersnapShadowRoots(): void {
+  try {
+    const allElements = document.querySelectorAll('*');
+    allElements.forEach((element) => {
+      if (element.shadowRoot) {
+        const closeButton = element.shadowRoot.querySelector<HTMLButtonElement>(
+          'button[title="Close annotation"]',
+        );
+
+        if (!closeButton) return;
+
+        if (apiKeyOfOpenForm === USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY) {
+          closeButton.style.top = 'unset';
+          closeButton.style.right = '22ch';
+          closeButton.style.height = '54px';
+          closeButton.style.bottom = '0';
+        } else if (apiKeyOfOpenForm === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY) {
+          closeButton.remove();
+
+          const collapseButton = element.shadowRoot.querySelector<HTMLButtonElement>(
+            'button[aria-label="Collapse form"]',
+          );
+
+          if (!(collapseButton instanceof HTMLButtonElement)) return;
+
+          const newCloseButton = collapseButton.cloneNode(true);
+
+          if (!(newCloseButton instanceof HTMLButtonElement)) return;
+
+          collapseButton.style.right = '36px';
+
+          newCloseButton.setAttribute('aria-label', 'Close feedback form');
+          newCloseButton.innerHTML = '✕';
+          newCloseButton.style.display = 'flex';
+          newCloseButton.style.alignItems = 'center';
+          newCloseButton.style.justifyContent = 'center';
+          newCloseButton.style.color = '#FFFFFF99';
+          newCloseButton.style.fontSize = '.8rem';
+          newCloseButton.addEventListener('click', async () => {
+            await closeOpenUsersnapForm();
+          });
+
+          collapseButton.parentNode?.insertBefore(newCloseButton, collapseButton.nextSibling);
+        }
+      }
+    });
+  } catch (error) {
+    logger.debug('Failed to find Usersnap close button in shadow roots:', error);
+  }
+}
+
+/** Sets up the Usersnap DOM observer, but doesn't start it yet */
+function initializeUsersnapDomObserver(): void {
+  if (usersnapDomObserver) return;
+
+  usersnapDomObserver = new MutationObserver((mutations) => {
+    if (!isUsersnapFormOpen) return;
+
+    const shouldSearchForShadowRoots = mutations.some((mutation) => {
+      if (mutation.type !== 'childList') return false;
+      return Array.from(mutation.addedNodes).some((node) => {
+        if (node instanceof Element && node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
+          return true;
+        }
+        return false;
+      });
+    });
+
+    if (shouldSearchForShadowRoots) {
+      setTimeout(() => {
+        findAndStyleUsersnapShadowRoots();
+      }, 500);
+    }
+  });
+
+  logger.info('Usersnap DOM observer initialized');
+}
+
+/** Starts the Usersnap DOM observer */
+function startUsersnapObserver(): void {
+  if (usersnapDomObserver) {
+    usersnapDomObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+}
+
+/** Disconnects the Usersnap DOM observer */
+function stopUsersnapObserver(): void {
+  if (usersnapDomObserver) {
+    usersnapDomObserver.disconnect();
+  }
+}
+
 /** Initializes the global UserSnap API instance */
 export async function initializeUsersnapApi() {
   const defaultInitParams: InitOptions = {
@@ -55,6 +157,8 @@ export async function initializeUsersnapApi() {
 
     isUsersnapFormOpen = true;
     apiKeyOfOpenForm = event.apiKey;
+
+    startUsersnapObserver();
   });
   api.on('beforeSubmit', async (event) => {
     event.api.setValue('custom', customData);
@@ -62,9 +166,13 @@ export async function initializeUsersnapApi() {
   api.on('close', () => {
     isUsersnapFormOpen = false;
     apiKeyOfOpenForm = undefined;
+
+    stopUsersnapObserver();
   });
 
   globalUsersnapApi = api;
+
+  initializeUsersnapDomObserver();
 }
 
 /**
