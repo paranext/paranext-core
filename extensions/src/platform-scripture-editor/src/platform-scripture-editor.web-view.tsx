@@ -481,10 +481,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
         scrollToVerse(scrRef);
+
+        let nextTextLocationJsonPath = '';
+        try {
+          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(
+            scrRef,
+          ).jsonPath;
+        } catch (e) {
+          logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
+        }
+
         editorRef.current?.focus();
+
+        if (!nextTextLocationJsonPath) return;
+
         editorRef.current?.setSelection({
           start: {
-            jsonPath: new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(scrRef).jsonPath,
+            jsonPath: nextTextLocationJsonPath,
             offset: 0,
           },
         });
