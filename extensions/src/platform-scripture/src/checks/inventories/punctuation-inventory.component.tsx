@@ -59,11 +59,7 @@ const createColumns = (
       //  Q: How to style the <td> and <th> directly?
       cell: ({ row }) => (
         <div className="tw-font-mono tw-flex tw-justify-center">
-          {(row.getValue('item') as string)
-            .charCodeAt(0)
-            .toString(16)
-            .toUpperCase()
-            .padStart(4, '0')}
+          {String(row.getValue('item')).charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}
         </div>
       ),
     },
