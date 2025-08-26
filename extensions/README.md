@@ -251,12 +251,6 @@ Because these steps are not automated you need to follow all the instructions in
 
 </details>
 
-<<<<<<< HEAD
-
-## To update this folder and extensions from the templates
-
-=======
-
 ### Renaming an extension
 
 Renaming an extension involves more than just changing its folder name. Tools that track extension updates rely on the folder name to detect changes, so renaming must be done carefully to avoid duplicated diffs or future merge conflicts.
@@ -281,9 +275,7 @@ This process ensures that template update comparisons continue to work correctly
 
 **Note:** The merge/squash commits created when renaming an extension are important; Git uses them to compare the files for future updates. If you edit this repo's Git history, please preserve these commits (do not squash them, for example) to avoid duplicated merge conflicts in the future.
 
-## To update this repo and extensions from the templates
-
-> > > > > > > 7da7bfe3f74dfd66265438aac103abae6a01487d
+## To update this folder and extensions from the templates
 
 This folder is forked from [`paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template), and its extensions are derived from [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template). Both are updated periodically and will sometimes receive updates that help with breaking changes on [`paranext-core`](https://github.com/paranext/paranext-core). This folder and its extensions should be periodically updated by merging the latest template updates into them.
 
