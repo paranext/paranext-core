@@ -143,7 +143,7 @@
     "@storybook/addon-webpack5-compiler-babel": "^3.0.5",
     "@storybook/react-webpack5": "9.0.17",
     "@svgr/webpack": "^8.1.0",
-    "@swc/core": "1.10.18",
+    "@swc/core": "1.13.3",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -248,7 +248,9 @@
     "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**", ".erb/dll/**"],
     "logLevel": "quiet"
   },
-  "overrides": { "@vitest/expect": "^3.2.4" },
+  "overrides": {
+    "@vitest/expect": "^3.2.4"
+  },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
     "node": "22.16.0"
