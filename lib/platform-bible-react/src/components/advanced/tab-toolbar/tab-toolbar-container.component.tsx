@@ -51,7 +51,7 @@ export type TabToolbarContainerProps = PropsWithChildren<{
   className?: string;
 }>;
 
-/** Wrapper that allows consistent styling for both TabToolbar and TabFloatingMenuButton. */
+/** Wrapper that allows consistent styling for both TabToolbar and TabFloatingMenu. */
 export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarContainerProps>(
   ({ id, className, children }, ref) => (
     <div

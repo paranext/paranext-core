@@ -58,7 +58,7 @@ const projectMenuData = {
 };
 
 const meta: Meta<TabToolbarCommonProps> = {
-  title: 'Advanced/TabFloatingMenuButton',
+  title: 'Advanced/TabFloatingMenu',
   component: TabFloatingMenu,
   tags: ['autodocs'],
   args: {
@@ -81,7 +81,7 @@ export const WithCustomIcon: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'TabFloatingMenuButton with a custom icon as the menu button.',
+        story: 'TabFloatingMenu with a custom icon as the menu button.',
       },
     },
   },
@@ -94,7 +94,7 @@ export const WithCustomClassName: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'TabFloatingMenuButton with custom background and border color.',
+        story: 'TabFloatingMenu with custom background and border color.',
       },
     },
   },
