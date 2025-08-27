@@ -408,32 +408,6 @@ async function main() {
       }
     });
 
-    let isClosing = false;
-    mainWindow.on('close', async (event) => {
-      if (isClosing || process.platform === 'darwin') {
-        isClosing = false;
-        return;
-      }
-
-      // On Windows and Linux, we need to check if a Usersnap form is open before we close the window.
-      // On those platforms, the Usersnap close button directly overlaps the OS close button, so we
-      // must prevent the application from closing when a user is trying to close the Usersnap form.
-      event.preventDefault();
-
-      try {
-        const isFormOpen = await commandService.sendCommand('platform.isUsersnapFormCurrentlyOpen');
-        if (isFormOpen) {
-          await commandService.sendCommand('platform.closeOpenUsersnapForm');
-          return;
-        }
-      } catch (error) {
-        logger.warn(`Failed to check if usersnap form is open: ${getErrorMessage(error)}`);
-      }
-
-      isClosing = true;
-      mainWindow?.close();
-    });
-
     mainWindow.on('closed', () => {
       mainWindow = undefined;
     });
