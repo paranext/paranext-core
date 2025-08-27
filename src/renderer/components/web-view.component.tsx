@@ -119,9 +119,8 @@ export function WebView({
         if (contentWindowWithCleanup?.webViewCleanup?.unmountRoot)
           unmountRootFunctionRef.current = contentWindowWithCleanup.webViewCleanup.unmountRoot;
       } catch (error) {
-        logger.warn(
-          `Failed to extract cleanup function for WebView ${id}: ${getErrorMessage(error)}`,
-        );
+        // While closing the WebView, we log a warning if the cleanup function is missing
+        // If we log these errors when capturing, it causes noise during startup that isn't important since we try capturing multiple times
       }
     };
 
@@ -350,8 +349,12 @@ export function WebView({
         // Use setTimeout to avoid synchronous unmount during React rendering
         setTimeout(() => {
           try {
-            unmountRootFunctionRef.current?.();
-            logger.debug(`Successfully unmounted React root for WebView ${id}`);
+            if (!unmountRootFunctionRef.current) {
+              logger.warn(`No cleanup function available for WebView ${id}`);
+            } else {
+              unmountRootFunctionRef.current();
+              logger.debug(`Successfully unmounted React root for WebView ${id}`);
+            }
           } catch (error) {
             logger.warn(`Failed unmount React root for WebView ${id}: ${getErrorMessage(error)}`);
           }
