@@ -181,6 +181,20 @@ export function DictionaryEntryDisplay({
             ))}
           </ul>
         </div>
+        {dictionaryEntry.lexicalReferenceTextId === 'SDBH' && (
+          <div className="tw-max-w-xs tw-pt-3">
+            <p className="tw-text-xs tw-text-muted-foreground">
+              {localizedStrings['%platformLexicalTools_dictionary_sdbhCopyright%']}
+            </p>
+          </div>
+        )}
+        {dictionaryEntry.lexicalReferenceTextId === 'SDBG' && (
+          <div className="tw-max-w-xs tw-pt-3">
+            <p className="tw-text-xs tw-text-muted-foreground">
+              {localizedStrings['%platformLexicalTools_dictionary_sdbgCopyright%']}
+            </p>
+          </div>
+        )}
       </div>
 
       <Separator className="tw-my-3" />

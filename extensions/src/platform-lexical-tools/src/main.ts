@@ -36,7 +36,7 @@ const dictionaryWebViewProvider: IWebViewProvider = {
 
     return {
       ...savedWebView,
-      title: '%platformLexicalTools_dictionary_title%',
+      title: '%platformLexicalTools_dictionary_title_sdbhSdbg%',
       content: dictionaryWebViewReact,
       styles: tailwindCssStyles,
       shouldShowToolbar: true,
