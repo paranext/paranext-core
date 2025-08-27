@@ -19,16 +19,11 @@ import {
   SelectMenuItemHandler,
   Slider,
   Switch,
-  TabFloatingMenuButton,
+  TabFloatingMenu,
   TextField,
   useEvent,
 } from 'platform-bible-react';
-import {
-  debounce,
-  getErrorMessage,
-  isPlatformError,
-  MenuItemContainingCommand,
-} from 'platform-bible-utils';
+import { debounce, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandNames } from 'papi-shared-types';
 import { HELLO_ROCK_3_REACT_WEBVIEW_TYPE } from '../util';
@@ -353,12 +348,11 @@ globalThis.webViewComponent = function HelloRock3({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
-  const projectMenuCommandHandler: SelectMenuItemHandler = async (command) => {
-    // Assert the more specific type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const commandName = (command as MenuItemContainingCommand).command;
+  const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
+    const commandName = selectedMenuItem.command;
     try {
-      // Assert the more specific type.
+      // Assert the more specific type. The menu data should specify a valid command name here. If
+      // not, the error will be caught.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       await papi.commands.sendCommand(commandName as CommandNames);
     } catch (e) {
@@ -429,10 +423,11 @@ globalThis.webViewComponent = function HelloRock3({
         : '',
     [scrRef, scrRefBookIdLocalized, scrRefBookNameLocalized],
   );
+  // #endregion
 
   return (
     <div>
-      <TabFloatingMenuButton
+      <TabFloatingMenu
         onSelectProjectMenuItem={projectMenuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
       />
