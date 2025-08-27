@@ -434,7 +434,7 @@ export function WebView({
   const [webViewMenu, , isLoading] = menuInfo;
 
   return (
-    <div className="web-view-parent">
+    <div className="web-view-parent tw-bg-background tw-rounded-md">
       {shouldShowToolbar && !isLoading && !isPlatformError(webViewMenu) && (
         <TabToolbar
           onSelectProjectMenuItem={projectMenuCommandHandler}
