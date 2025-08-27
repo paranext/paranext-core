@@ -1,16 +1,16 @@
 import { ReactNode } from 'react';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { Menu, EllipsisVertical } from 'lucide-react';
-import { SelectMenuItemHandler } from './menus/platform-menubar.component';
-import { TabToolbarContainer } from './tab-toolbar/tab-toolbar-container.component';
-import TabDropdownMenu from './menus/tab-dropdown-menu.component';
+import TabDropdownMenu from '../menus/tab-dropdown-menu.component';
+import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
+import { TabToolbarContainer } from './tab-toolbar-container.component';
 
 export type TabToolbarProps = {
   /**
    * The handler to use for toolbar item commands related to the project menu. Here is a basic
    * example of how to create this from the hello-rock3 extension:
    *
-   *     const projectMenuCommandHandler: CommandHandler = async (command) => {
+   *     const projectMenuCommandHandler: SelectMenuItemHandler = async (command) => {
    *       // Assert the more specific type.
    *       // eslint-disable-next-line no-type-assertion/no-type-assertion
    *       const commandName = (command as MenuItemContainingCommand).command;
@@ -31,7 +31,7 @@ export type TabToolbarProps = {
    * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
    * example of how to create this from the hello-rock3 extension:
    *
-   *     const onSelectProjectMenuItem: CommandHandler = async (command) => {
+   *     const onSelectProjectMenuItem: SelectMenuItemHandler = async (command) => {
    *       // Assert the more specific type.
    *       // eslint-disable-next-line no-type-assertion/no-type-assertion
    *       const commandName = (command as MenuItemContainingCommand).command;
@@ -83,7 +83,7 @@ export type TabToolbarProps = {
   menuButtonIcon?: ReactNode;
 };
 
-/*
+/**
  * Toolbar that holds the project menu icon on one side followed by three different areas/categories
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.

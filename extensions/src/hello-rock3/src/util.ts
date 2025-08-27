@@ -1,3 +1,5 @@
+export const HELLO_ROCK_3_REACT_WEBVIEW_TYPE = 'helloRock3.react';
+export const HELLO_ROCK3_PROJECT_WEB_VIEW_TYPE = 'helloRock3.projectWebView';
 /**
  * Supposedly the top 25 most popular girl and top 25 most popular boy baby names in 1900. No
  * mention of in what part of the world
