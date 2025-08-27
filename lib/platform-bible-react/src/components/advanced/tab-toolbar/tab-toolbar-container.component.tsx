@@ -1,4 +1,48 @@
-import React, { PropsWithChildren } from 'react';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
+import React, { PropsWithChildren, ReactNode } from 'react';
+import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
+
+export type TabToolbarCommonProps = {
+  /**
+   * The handler to use for toolbar item commands related to the project menu. Here is a basic
+   * example of how to create this:
+   *
+   * @example
+   *
+   * ```tsx
+   * const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
+   *   const commandName = selectedMenuItem.command;
+   *   try {
+   *     // Assert the more specific type. Assert the more specific type. The menu data should
+   *     // specify a valid command name here. If not, the error will be caught.
+   *     // eslint-disable-next-line no-type-assertion/no-type-assertion
+   *     await papi.commands.sendCommand(commandName as CommandNames);
+   *   } catch (e) {
+   *     throw new Error(
+   *       `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+   *     );
+   *   }
+   * };
+   * ```
+   */
+  onSelectProjectMenuItem: SelectMenuItemHandler;
+
+  /**
+   * Menu data that is used to populate the Menubar component for the project menu. In an extension,
+   * the menu data comes from menus.json in the contributions folder. To access that info, use
+   * useMemo to get the WebViewMenu.
+   */
+  projectMenuData?: Localized<MultiColumnMenu>;
+
+  /** Optional unique identifier */
+  id?: string;
+
+  /** Additional css classes to help with unique styling of the extensible toolbar */
+  className?: string;
+
+  /** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
+  menuButtonIcon?: ReactNode;
+};
 
 export type TabToolbarContainerProps = PropsWithChildren<{
   /** Optional unique identifier */

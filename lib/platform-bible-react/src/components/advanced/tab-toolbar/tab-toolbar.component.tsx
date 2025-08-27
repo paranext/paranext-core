@@ -3,66 +3,35 @@ import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { Menu, EllipsisVertical } from 'lucide-react';
 import TabDropdownMenu from '../menus/tab-dropdown-menu.component';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
-import { TabToolbarContainer } from './tab-toolbar-container.component';
+import { TabToolbarCommonProps, TabToolbarContainer } from './tab-toolbar-container.component';
 
-export type TabToolbarProps = {
-  /**
-   * The handler to use for toolbar item commands related to the project menu. Here is a basic
-   * example of how to create this from the hello-rock3 extension:
-   *
-   *     const projectMenuCommandHandler: SelectMenuItemHandler = async (command) => {
-   *       // Assert the more specific type.
-   *       // eslint-disable-next-line no-type-assertion/no-type-assertion
-   *       const commandName = (command as MenuItemContainingCommand).command;
-   *       try {
-   *         // Assert the more specific type.
-   *         // eslint-disable-next-line no-type-assertion/no-type-assertion
-   *         await papi.commands.sendCommand(commandName as CommandNames);
-   *       } catch (e) {
-   *         throw new Error(
-   *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
-   *         );
-   *       }
-   *     };
-   */
-  onSelectProjectMenuItem: SelectMenuItemHandler;
-
+export type TabToolbarProps = TabToolbarCommonProps & {
   /**
    * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
    * example of how to create this from the hello-rock3 extension:
    *
-   *     const onSelectProjectMenuItem: SelectMenuItemHandler = async (command) => {
-   *       // Assert the more specific type.
-   *       // eslint-disable-next-line no-type-assertion/no-type-assertion
-   *       const commandName = (command as MenuItemContainingCommand).command;
-   *       try {
-   *         // Assert the more specific type.
-   *         // eslint-disable-next-line no-type-assertion/no-type-assertion
-   *         await papi.commands.sendCommand(commandName as CommandNames);
-   *       } catch (e) {
-   *         throw new Error(
-   *           `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
-   *         );
-   *       }
-   *     };
+   * @example
+   *
+   * ```tsx
+   * const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
+   *   const commandName = selectedMenuItem.command;
+   *   try {
+   *     // Assert the more specific type. Assert the more specific type. The menu data should
+   *     // specify a valid command name here. If not, the error will be caught.
+   *     // eslint-disable-next-line no-type-assertion/no-type-assertion
+   *     await papi.commands.sendCommand(commandName as CommandNames);
+   *   } catch (e) {
+   *     throw new Error(
+   *       `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+   *     );
+   *   }
+   * };
+   * ```
    */
   onSelectViewInfoMenuItem: SelectMenuItemHandler;
 
-  /**
-   * Menu data that is used to populate the Menubar component for the project menu. In an extension,
-   * the menu data comes from menus.json in the contributions folder. To access that info, use
-   * useMemo to get the WebViewMenu.
-   */
-  projectMenuData?: Localized<MultiColumnMenu>;
-
   /** Menu data that is used to populate the Menubar component for the view info menu */
   tabViewMenuData?: Localized<MultiColumnMenu>;
-
-  /** Optional unique identifier */
-  id?: string;
-
-  /** Additional css classes to help with unique styling of the extensible toolbar */
-  className?: string;
 
   /**
    * Toolbar children to be put at the start of the the toolbar after the project menu icon (left
@@ -78,9 +47,6 @@ export type TabToolbarProps = {
    * side in ltr, left side in rtl). Recommended for secondary tools and view options.
    */
   endAreaChildren?: ReactNode;
-
-  /** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
-  menuButtonIcon?: ReactNode;
 };
 
 /**
@@ -111,12 +77,16 @@ export function TabToolbar({
           buttonVariant="ghost"
         />
       )}
-      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
-        {startAreaChildren}
-      </div>
-      <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
-        {centerAreaChildren}
-      </div>
+      {startAreaChildren && (
+        <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
+          {startAreaChildren}
+        </div>
+      )}
+      {centerAreaChildren && (
+        <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
+          {centerAreaChildren}
+        </div>
+      )}
       <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
         {tabViewMenuData && (
           <TabDropdownMenu

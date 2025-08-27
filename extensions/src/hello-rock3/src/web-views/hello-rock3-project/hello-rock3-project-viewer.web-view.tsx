@@ -5,6 +5,7 @@ import { Button } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CSSProperties, useMemo } from 'react';
 import { useHelloRock3ProjectSettings } from './use-hello-rock3-project-settings.hook';
+import { HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE } from 'src/util';
 
 const namesDefault: string[] = [];
 
@@ -15,7 +16,7 @@ globalThis.webViewComponent = function HelloRock3ProjectViewer({
   const [callerWebViewId] = useWebViewState<string | undefined>('callerWebViewId', undefined);
 
   const callerWebViewController = useWebViewController(
-    'helloRock3.projectWebView',
+    HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE,
     callerWebViewId,
   );
 

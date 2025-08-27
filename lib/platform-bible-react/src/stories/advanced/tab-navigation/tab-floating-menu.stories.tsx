@@ -1,9 +1,7 @@
 import { Meta, StoryObj } from '@storybook/react-vite';
 import { Plus } from 'lucide-react';
-import {
-  TabFloatingMenuButton,
-  TabFloatingMenuButtonProps,
-} from '@/components/advanced/tab-toolbar/tab-floating-menu-button.component';
+import { TabFloatingMenu } from '@/components/advanced/tab-toolbar/tab-floating-menu.component';
+import { TabToolbarCommonProps } from '@/components/advanced/tab-toolbar/tab-toolbar-container.component';
 
 const projectMenuData = {
   columns: {
@@ -59,19 +57,20 @@ const projectMenuData = {
   ],
 };
 
-const meta: Meta<TabFloatingMenuButtonProps> = {
+const meta: Meta<TabToolbarCommonProps> = {
   title: 'Advanced/TabFloatingMenuButton',
-  component: TabFloatingMenuButton,
+  component: TabFloatingMenu,
   tags: ['autodocs'],
   args: {
-    onSelectProjectMenuItem: (command) => console.log('Project Menu Run command: ', command),
+    onSelectProjectMenuItem: (selectedMenuItem) =>
+      console.log('Project Menu Run command: ', selectedMenuItem),
     projectMenuData,
   },
 };
 
 export default meta;
 
-type Story = StoryObj<TabFloatingMenuButtonProps>;
+type Story = StoryObj<TabToolbarCommonProps>;
 
 export const Default: Story = {};
 
