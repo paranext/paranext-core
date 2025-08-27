@@ -45,14 +45,23 @@ const createColumns = (
   onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData>[] => {
   return [
-    inventoryItemColumn(itemLabel),
+    {
+      ...inventoryItemColumn(itemLabel),
+      cell: ({ row }) => (
+        <div className="tw-text-lg tw-font-bold tw-font-mono tw-flex tw-justify-center">
+          {row.getValue('item')}
+        </div>
+      ),
+    },
     {
       accessorKey: 'unicodeValue',
       header: () => <Button variant="ghost">{unicodeValueLabel}</Button>,
-      cell: ({ row }) => {
-        const item: string = row.getValue('item');
-        return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
-      },
+      //  Q: How to style the <td> and <th> directly?
+      cell: ({ row }) => (
+        <div className="tw-font-mono tw-flex tw-justify-center">
+          {String(row.getValue('item')).charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}
+        </div>
+      ),
     },
     inventoryCountColumn(countLabel),
     inventoryStatusColumn(
