@@ -22,6 +22,8 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_scopeSelector_section%',
   '%platformLexicalTools_dictionary_scopeSelector_verse%',
   '%platformLexicalTools_dictionary_strongsCodeLabel%',
+  '%platformLexicalTools_dictionary_sdbgCopyright%',
+  '%platformLexicalTools_dictionary_sdbhCopyright%',
   '%platformLexicalTools_dictionary_trackProjectDropdownLabel%',
 ];
 

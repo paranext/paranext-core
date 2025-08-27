@@ -23,8 +23,9 @@ type DomainsDisplayProps = {
 export function DomainsDisplay({ domains, domainText }: DomainsDisplayProps) {
   // Helper to choose icon based on taxonomy. Icons picked by UX. Only works with SDBH lexical reference text.
   const getDomainIcon = (taxonomy: string) => {
-    if (taxonomy === 'SDBH-Lexical') return <BookA className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
-    if (taxonomy === 'SDBH-Contextual')
+    if (taxonomy === 'SDBH-Lexical' || taxonomy === 'SDBG-Lexical')
+      return <BookA className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
+    if (taxonomy === 'SDBH-Contextual' || taxonomy === 'SDBG-Contextual')
       return <LandPlot className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
     return <Box className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
   };

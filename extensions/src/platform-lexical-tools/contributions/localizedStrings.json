@@ -2,6 +2,9 @@
   "metadata": {
     "%platformLexicalTools_mainMenu_openHebGrkDictionary%": {
       "fallbackKey": "%platformLexicalTools_mainMenu_openDictionary%"
+    },
+    "%platformLexicalTools_dictionary_title_SDBHSDBG%": {
+      "fallbackKey": "%platformLexicalTools_dictionary_title%"
     }
   },
   "localizedStrings": {
@@ -21,11 +24,15 @@
       "%platformLexicalTools_dictionary_scopeSelector_section%": "Current Section",
       "%platformLexicalTools_dictionary_scopeSelector_verse%": "Current Verse",
       "%platformLexicalTools_dictionary_strongsCodeLabel%": "Strong's code",
+      "%platformLexicalTools_dictionary_sdbgCopyright%": "Semantic Dictionary of the Greek New Testament, based on Louw & Nida's Greek-English Lexicon of the New Testament, ©1988-2021 United Bible Societies.",
+      "%platformLexicalTools_dictionary_sdbhCopyright%": "Semantic Dictionary of Biblical Hebrew, edited by Reinier de Blois, with the assistance of Enio R. Mueller, ©2000-2025 United Bible Societies.",
       "%platformLexicalTools_dictionary_title%": "HEBGRK Dictionary",
+      "%platformLexicalTools_dictionary_title_sdbhSdbg%": "Dictionary: SDBH/SDBG",
       "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Track Biblical Terms",
       "%platformLexicalTools_mainMenu_openDictionary%": "Open Dictionary",
-      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary",
-      "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Open HEBGRK Dictionary"
+      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Open Dictionary: SDBH/SDBG",
+      "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Open HEBGRK Dictionary",
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary"
     }
   }
 }
