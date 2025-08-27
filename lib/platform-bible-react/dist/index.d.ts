@@ -938,6 +938,7 @@ type TabDropdownMenuProps = {
 	className?: string;
 	/** Style variant for the app menubar component. */
 	variant?: "default" | "muted";
+	buttonVariant?: "default" | "ghost" | "outline" | "secondary";
 	/** Optional unique identifier */
 	id?: string;
 };
@@ -948,20 +949,70 @@ type TabDropdownMenuProps = {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
-export type TabToolbarProps = React$1.PropsWithChildren<{
-	/** The handler to use for toolbar item commands */
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, buttonVariant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+type TabToolbarCommonProps = {
+	/**
+	 * The handler to use for toolbar item commands related to the project menu. Here is a basic
+	 * example of how to create this:
+	 *
+	 * @example
+	 *
+	 * ```tsx
+	 * const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
+	 *   const commandName = selectedMenuItem.command;
+	 *   try {
+	 *     // Assert the more specific type. Assert the more specific type. The menu data should
+	 *     // specify a valid command name here. If not, the error will be caught.
+	 *     // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *     await papi.commands.sendCommand(commandName as CommandNames);
+	 *   } catch (e) {
+	 *     throw new Error(
+	 *       `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+	 *     );
+	 *   }
+	 * };
+	 * ```
+	 */
 	onSelectProjectMenuItem: SelectMenuItemHandler;
-	/** The handler to use for toolbar item commands */
-	onSelectViewInfoMenuItem: SelectMenuItemHandler;
-	/** Menu data that is used to populate the Menubar component for the project menu. */
+	/**
+	 * Menu data that is used to populate the Menubar component for the project menu. In an extension,
+	 * the menu data comes from menus.json in the contributions folder. To access that info, use
+	 * useMemo to get the WebViewMenu.
+	 */
 	projectMenuData?: Localized<MultiColumnMenu>;
-	/** Menu data that is used to populate the Menubar component for the view info menu */
-	tabViewMenuData?: Localized<MultiColumnMenu>;
 	/** Optional unique identifier */
 	id?: string;
 	/** Additional css classes to help with unique styling of the extensible toolbar */
 	className?: string;
+	/** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
+	menuButtonIcon?: React$1.ReactNode;
+};
+export type TabToolbarProps = TabToolbarCommonProps & {
+	/**
+	 * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
+	 * example of how to create this from the hello-rock3 extension:
+	 *
+	 * @example
+	 *
+	 * ```tsx
+	 * const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
+	 *   const commandName = selectedMenuItem.command;
+	 *   try {
+	 *     // Assert the more specific type. Assert the more specific type. The menu data should
+	 *     // specify a valid command name here. If not, the error will be caught.
+	 *     // eslint-disable-next-line no-type-assertion/no-type-assertion
+	 *     await papi.commands.sendCommand(commandName as CommandNames);
+	 *   } catch (e) {
+	 *     throw new Error(
+	 *       `handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`,
+	 *     );
+	 *   }
+	 * };
+	 * ```
+	 */
+	onSelectViewInfoMenuItem: SelectMenuItemHandler;
+	/** Menu data that is used to populate the Menubar component for the view info menu */
+	tabViewMenuData?: Localized<MultiColumnMenu>;
 	/**
 	 * Toolbar children to be put at the start of the the toolbar after the project menu icon (left
 	 * side in ltr, right side in rtl). Recommended for inner navigation.
@@ -974,14 +1025,19 @@ export type TabToolbarProps = React$1.PropsWithChildren<{
 	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
 	 */
 	endAreaChildren?: React$1.ReactNode;
-}>;
+};
 /**
- * Component for rendering a customizable tab toolbar.
- *
- * The toolbar includes three main areas to place children components: start, center, and end. It
- * optionally displays dropdown menus for project and view info, populated by the given menu data.
+ * Toolbar that holds the project menu icon on one side followed by three different areas/categories
+ * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
+ * component for a menu component that takes up less screen real estate yet is always visible.
  */
-export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Renders a TabDropdownMenu with a trigger button that looks like the menuButtonIcon or like the
+ * default of three stacked horizontal lines (aka the hamburger). The menu "floats" over the content
+ * so it is always visible. When clicked, it displays a dropdown menu with the projectMenuData.
+ */
+export declare function TabFloatingMenu({ onSelectProjectMenuItem, projectMenuData, id, className, menuButtonIcon, }: TabToolbarCommonProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;

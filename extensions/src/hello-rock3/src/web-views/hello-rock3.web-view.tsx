@@ -16,13 +16,17 @@ import {
   Checkbox,
   ComboBox,
   Input,
+  SelectMenuItemHandler,
   Slider,
   Switch,
+  TabFloatingMenu,
   TextField,
   useEvent,
 } from 'platform-bible-react';
 import { debounce, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CommandNames } from 'papi-shared-types';
+import { HELLO_ROCK_3_REACT_WEBVIEW_TYPE } from '../util';
 import Logo from '../../assets/offline.svg';
 import { Clock } from './components/clock.component';
 import { ProjectSettingsEditor } from './hello-rock3-project/project-settings-editor.component';
@@ -31,6 +35,11 @@ import { useHelloRock3ProjectSettings } from './hello-rock3-project/use-hello-ro
 const NAME = 'Hello Rock3 React WebView';
 
 const defaultExcludePdpFactoryIds: string[] = [];
+const defaultWebViewMenu = {
+  topMenu: undefined,
+  includeDefaults: true,
+  contextMenu: undefined,
+};
 
 // Test fetching
 papi
@@ -323,6 +332,34 @@ globalThis.webViewComponent = function HelloRock3({
     projectWebViewId,
   );
 
+  const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
+    HELLO_ROCK_3_REACT_WEBVIEW_TYPE,
+    defaultWebViewMenu,
+  );
+
+  const webViewMenu = useMemo(() => {
+    if (isPlatformError(webViewMenuPossiblyError)) {
+      logger.warn(
+        `Failed to load web view menu for ${HELLO_ROCK_3_REACT_WEBVIEW_TYPE}`,
+        webViewMenuPossiblyError,
+      );
+      return defaultWebViewMenu;
+    }
+    return webViewMenuPossiblyError;
+  }, [webViewMenuPossiblyError]);
+
+  const projectMenuCommandHandler: SelectMenuItemHandler = async (selectedMenuItem) => {
+    const commandName = selectedMenuItem.command;
+    try {
+      // Assert the more specific type. The menu data should specify a valid command name here. If
+      // not, the error will be caught.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      await papi.commands.sendCommand(commandName as CommandNames);
+    } catch (e) {
+      throw new Error(`handleMenuCommand error: command: ${commandName}. ${JSON.stringify(e)}`);
+    }
+  };
+
   const editorDecorations = useMemo(
     () => ({
       containers: {
@@ -386,11 +423,14 @@ globalThis.webViewComponent = function HelloRock3({
         : '',
     [scrRef, scrRefBookIdLocalized, scrRefBookNameLocalized],
   );
-
   // #endregion
 
   return (
     <div>
+      <TabFloatingMenu
+        onSelectProjectMenuItem={projectMenuCommandHandler}
+        projectMenuData={webViewMenu.topMenu}
+      />
       <div className="title">
         {localizedHelloRock3} <span className="framework">{localizedReact}</span>
         {/**
@@ -516,7 +556,6 @@ globalThis.webViewComponent = function HelloRock3({
         <div>{localizedSubmit}</div>
         <div>{localizedTestDeprecatedString}</div>
       </div>
-      <Button onClick={() => updateWebViewDefinition({}, true)}>Make this WebView flash</Button>
     </div>
   );
 };

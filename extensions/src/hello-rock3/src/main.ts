@@ -12,7 +12,11 @@ import { checkDetails, createHelloCheck } from './checks';
 import { HelloRock3ProjectDataProviderEngineFactory } from './models/hello-rock3-project-data-provider-engine-factory.model';
 import { HELLO_ROCK3_PROJECT_INTERFACES } from './models/hello-rock3-project-data-provider-engine.model';
 import tailwindStyles from './tailwind.css?inline';
-import { HTML_COLOR_NAMES } from './util';
+import {
+  HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE,
+  HELLO_ROCK_3_REACT_WEBVIEW_TYPE,
+  HTML_COLOR_NAMES,
+} from './util';
 import helloRock3ReactWebView2Styles from './web-views/hello-rock3-2.web-view.scss?inline';
 import helloRock3ReactWebView2 from './web-views/hello-rock3-2.web-view?inline';
 import helloRock3ProjectViewerWebView from './web-views/hello-rock3-project/hello-rock3-project-viewer.web-view?inline';
@@ -50,7 +54,7 @@ const htmlWebViewProvider: IWebViewProviderWithType = {
 
 /** Simple web view provider that provides React web views when the PAPI requests them */
 const reactWebViewProvider: IWebViewProviderWithType = {
-  webViewType: 'helloRock3.react',
+  webViewType: HELLO_ROCK_3_REACT_WEBVIEW_TYPE,
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== this.webViewType)
       throw new Error(
@@ -99,13 +103,12 @@ interface HelloRock3ProjectOptions extends OpenWebViewOptions {
   projectId?: string;
 }
 
-const HELLO_ROCK3_PROJECT_WEB_VIEW_TYPE = 'helloRock3.projectWebView';
 /** Simple web view provider that provides helloRock3 project web views when the PAPI request them */
 class HelloRock3ProjectWebViewFactory extends WebViewFactory<
-  typeof HELLO_ROCK3_PROJECT_WEB_VIEW_TYPE
+  typeof HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE
 > {
   constructor() {
-    super(HELLO_ROCK3_PROJECT_WEB_VIEW_TYPE);
+    super(HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE);
   }
 
   override async getWebViewDefinition(

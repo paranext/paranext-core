@@ -2,8 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { TabToolbar, TabToolbarProps } from '@/components/advanced/tab-toolbar.component';
 import { AnimatedContainer } from '@/storybook/decorators/animated-container';
+import {
+  TabToolbar,
+  TabToolbarProps,
+} from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
   console.log('New Scroll Group Id: ', newScrollGroupId);
@@ -111,8 +114,10 @@ const meta: Meta<TabToolbarProps> = {
   component: TabToolbar,
   tags: ['autodocs'],
   args: {
-    onSelectProjectMenuItem: (command) => console.log('Project Menu Run command: ', command),
-    onSelectViewInfoMenuItem: (command) => console.log('View Info Run command: ', command),
+    onSelectProjectMenuItem: (selectedMenuItem) =>
+      console.log('Project Menu Run command: ', selectedMenuItem),
+    onSelectViewInfoMenuItem: (selectedMenuItem) =>
+      console.log('View Info Run command: ', selectedMenuItem),
     projectMenuData,
     tabViewMenuData,
     startAreaChildren: (
@@ -207,6 +212,19 @@ export const AnimatedWidth: Story = {
       description: {
         story:
           'Uses CSS animations to smoothly animate the TabToolbar container width from 300px to the full viewport width and back, allowing you to observe its responsive behavior.',
+      },
+    },
+  },
+};
+
+export const WithCustomClassName: Story = {
+  args: {
+    className: 'tw-bg-red-100 tw-border-red-400',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'TabToolbar with custom background and border color using the className prop.',
       },
     },
   },
