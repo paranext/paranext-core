@@ -5,7 +5,7 @@ import { Button } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CSSProperties, useMemo } from 'react';
 import { useHelloRock3ProjectSettings } from './use-hello-rock3-project-settings.hook';
-import { HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE } from 'src/util';
+import { HELLO_ROCK_3_PROJECT_WEB_VIEW_TYPE } from '../../util';
 
 const namesDefault: string[] = [];
 
