@@ -115,6 +115,8 @@ export type TabDropdownMenuProps = {
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
 
+  buttonVariant?: 'default' | 'ghost' | 'outline' | 'secondary';
+
   /** Optional unique identifier */
   id?: string;
 };
@@ -133,12 +135,13 @@ export default function TabDropdownMenu({
   icon,
   className,
   variant,
+  buttonVariant = 'ghost',
   id,
 }: TabDropdownMenuProps) {
   return (
     <DropdownMenu variant={variant}>
       <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
-        <Button variant="ghost" size="icon">
+        <Button variant={buttonVariant} size="icon">
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>
