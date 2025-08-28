@@ -166,7 +166,8 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [localizedStrings] = useLocalizedStrings(GET_RESOURCES_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
-  const anyText: string = localizedStrings['%resources_any%'];
+  const anyLanguage: string = localizedStrings['%resources_any_language%'];
+  const anyType: string = localizedStrings['%resources_any_type%'];
   const dialogSubtitleText: string = localizedStrings['%resources_dialog_subtitle%'];
   const dialogTitleText: string = localizedStrings['%resources_dialog_title%'];
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
@@ -393,7 +394,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 onChange={setSelectedTypes}
                 placeholder={typesText}
                 icon={<Shapes />}
-                badgesPlaceholder={anyText}
+                badgesPlaceholder={anyType}
                 isDisabled={isLoadingResources}
               />
 
@@ -408,7 +409,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 placeholder={languagesText}
                 sortSelected
                 icon={<Globe />}
-                badgesPlaceholder={anyText}
+                badgesPlaceholder={anyLanguage}
                 isDisabled={isLoadingResources}
               />
             </div>
