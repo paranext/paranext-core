@@ -22,7 +22,6 @@
         "border": "214.3 31.8% 91.4%",
         "input": "214.3 31.8% 91.4%",
         "ring": "222.2 84% 4.9%",
-
         "sidebar-background": "210 20% 98%",
         "sidebar-foreground": "222.2 84% 4.9%",
         "sidebar-primary": "222.2 47.4% 11.2%",
@@ -31,7 +30,6 @@
         "sidebar-accent-foreground": "222.2 47.4% 11.2%",
         "sidebar-border": "214.3 31.8% 91.4%",
         "sidebar-ring": "222.2 84% 4.9%",
-
         "radius": "0.5rem"
       }
     },
@@ -57,7 +55,6 @@
         "border": "215.3 19.3% 34.5%",
         "input": "215.3 19.3% 34.5%",
         "ring": "212.7 26.8% 83.9%",
-
         "sidebar-background": "222.2 84% 4.9%",
         "sidebar-foreground": "215 20.2% 65.1%",
         "sidebar-primary": "210 40% 98%",
@@ -92,12 +89,11 @@
         "destructive": "10.1639 77.8723% 53.9216%",
         "destructive-foreground": "0 0% 100%",
         "ring": "16.6667 21.9512% 32.1569%",
-
         "sidebar-background": "0 0% 98.4314%",
         "sidebar-foreground": "0 0% 14.5098%",
         "sidebar-primary": "0 0% 20.3922%",
         "sidebar-primary-foreground": "0 0% 98.4314%",
-        "sidebar-accent": "0 0% 96.8627%",
+        "sidebar-accent": "0 0% 93.7255%",
         "sidebar-accent-foreground": "0 0% 20.3922%",
         "sidebar-border": "0 0% 92.1569%",
         "sidebar-ring": "0 0% 70.9804%"
@@ -125,7 +121,6 @@
         "destructive": "10.1639 77.8723% 53.9216%",
         "destructive-foreground": "0 0% 100%",
         "ring": "29.5082 100% 88.0392%",
-
         "sidebar-background": "240 5.8824% 10%",
         "sidebar-foreground": "240 4.7619% 95.8824%",
         "sidebar-primary": "224.2781 76.3265% 48.0392%",
@@ -160,7 +155,6 @@
         "destructive": "0 60% 51%",
         "destructive-foreground": "210 20% 98%",
         "ring": "15.5 13.2% 53.9%",
-
         "sidebar-background": "40 20% 98%",
         "sidebar-foreground": "12 10.95% 26.86%",
         "sidebar-primary": "173.4 82.1% 15.3%",
