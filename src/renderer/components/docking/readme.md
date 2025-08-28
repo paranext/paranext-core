@@ -7,59 +7,57 @@ _ tab content
 
 ## States
 
-✅ "front"
+"front"
 means the tab that's selected in a tab group. In rc-dock, this is `dock-tab-active`
 = "active" in rc-dock means the tab that is selected in a tab group.
 
-✅ "back"
+"back"
 means any tab that's not "front" in a tab group.
 = "inactive" in rc-dock means any tab that is not "active" in a tab
 
-✅ "focus-within" means the tab that has CSS `:focus-within`, i.e. the tab with a cursor or keyboard focus within it. A tab with focus-within is always a "front" tab. Probably don't depend on `:focus-within` unless you specifically want that different behavior.
+"focus-within" means the tab that has CSS `:focus-within`, i.e. the tab with a cursor or keyboard focus within it. A tab with focus-within is always a "front" tab. Probably don't depend on `:focus-within` unless you specifically want that different behavior.
 = "platform-dock-tab-window-focus" means the tab that has a window focus, i.e. the tab that is not "floating" and has a cursor or keyboard focus within it. Note that this include focus on the tab header—not only the content.
 
-✅ "blur" means the tab that does not have focus, i.e. the tab that is not "focus-within".
+"blur" means the tab that does not have focus, i.e. the tab that is not "focus-within".
 
-✅ "highlight" means that a tab was recently made or has has a significant change. This is a temporary state that lasts a few seconds after the tab is activated or its content changes.
+"highlight" means that a tab was recently made or has has a significant change. This is a temporary state that lasts a few seconds after the tab is activated or its content changes.
 
 - 'platform-dock-tab-active-highlight'
 - 'platform-dock-tabpane-active-highlight';
 
 # Spacing
 
-✅ Add a bit of spacing around the whole tab group (ideally the whole layout)
+- There is intentional spacing around the whole tab group (and ideally the whole layout).
+- The content pane uses a border radius for a softer appearance.
+- Tab separators and gaps have been adjusted so tabs do not visually run into each other.
+- The grab area of a tab has been expanded to match the visual tab, improving usability.
+- The right-click area of the tab has been expanded to match the visual tab.
+- Tab close button contrast has been improved for accessibility.
+- The "More Tabs" icon has been redesigned for clarity.
+- The tab header row uses more consistent spacing and alignment.
+- Overflow shadows have been removed for a cleaner look.
+- Overflow (more) menu items have improved styling.
 
-✅ Border radius of content pane
+# Overflow
 
-⏳ Fix overflow of tabs — cannot fix without JS .: treat as a separate work item
-
-✅ tab separators and ✅ need more gap so tabs don't visually run into each other
-
-✅ Fix a problem where the grab area of a tab is significantly smaller than the tab
-
-✅ Mitigate a problem where the right-click area of the tab is significantly smaller than the tab
-
-✅ Fix contrast problem on tab close button
-
-✅ better More Tabs icon
-
-✅ more solid spacing and alignment relationship on tab header row
-
-✅ remove overflow shadow
-
-✅ fix styling of overflow (more) menu items
-
-TODO re-apply a decoration to indicate where tab headers are overflowing
+- Overflowing tab headers are visually indicated, and the overflow (more) menu is styled to match the rest of the UI.
 
 # Cleanup
 
-TODO Remove unused styles in \_vars.scss
+- Unused styles in `_vars.scss` should be removed (pending).
+- Regions should only include appropriate rules (pending).
 
-TODO Check that regions close
-TODO Check that regions only include appropriate rules
+- Overlapping opacity artifacts in concave corners have been fixed.
+- Clipping on tab header focus rings has been fixed.
+- The divider between tab headers becomes transparent when focused, improving focus visibility.
 
-✅ Fix overlapping opacity artifact in concave corners
-✅ Fix clipping on tab header focus rings
+# Known Issues
+
+- Overflow of tabs cannot be fully fixed without JavaScript; this is tracked as a separate work item.
+- Padding to tab headers list does not work due to a JavaScript issue with the transform-x amount on `.dock-nav-list`.
+- Focus classes are slow to apply due to JavaScript; CSS `:focus-within` may help in the future.
+- There is a transition mismatch when keyboard focusing a front tab; this has been improved but is not fully resolved.
+  ✅ Fix clipping on tab header focus rings
 
 - ~~move focusable element down one layer~~(currently .dock-tab-btn) not needed
 - ~~remove gap between tab headers~~ not needed
