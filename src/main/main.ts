@@ -48,7 +48,13 @@ import { initialize as initializeSharedStoreService } from '@shared/services/sha
 import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
-import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  serialize,
+  UnsubscriberAsyncList,
+  wait,
+} from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
 import { themeService } from '@shared/services/theme.service';
 
@@ -133,6 +139,12 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
+
+/** Height of the custom title bar buttons on Windows */
+const TITLE_BAR_BUTTON_HEIGHT = 47;
+/** Background color of the window buttons in the custom title bar on Windows */
+const TITLE_BAR_BUTTON_BACKGROUND_COLOR = 'hsla(0, 0%, 100%, 0)'; // transparent button background until hovered
+
 /**
  * If this is `true`, we will restart soon. Not just using `isAppQuitting` because we need to make
  * sure we only run `relaunch` once which has a slightly different use case than `isAppQuitting`
@@ -329,8 +341,8 @@ async function main() {
       ...(process.platform !== 'darwin' && process.platform !== 'linux'
         ? {
             titleBarOverlay: {
-              height: 47,
-              color: 'hsla(0, 0%, 100%, 0)', // transparent button background until hovered
+              height: TITLE_BAR_BUTTON_HEIGHT,
+              color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
             },
           }
         : {}),
@@ -340,33 +352,6 @@ async function main() {
           : path.join(__dirname, '../../.erb/dll/preload.js'),
       },
     });
-
-    mainWindow?.setTitleBarOverlay({
-      color: 'hsla(0, 0%, 39.2157%, 1)',
-      symbolColor: 'white',
-      height: 40,
-    });
-
-    /* // Subscribe to updates to the current theme
-    await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
-      if (isPlatformError(newTheme)) {
-        logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
-        return;
-      }
-      if (newTheme.type === 'dark') {
-        mainWindow?.setTitleBarOverlay({
-          color: 'hsla(0, 0%, 13.3333%, 1)',
-          symbolColor: 'white',
-          height: 40,
-        });
-      } else {
-        mainWindow?.setTitleBarOverlay({
-          color: 'hsla(0, 0%, 100%, 0)', // transparent button background until hovered
-          symbolColor: 'black',
-          height: 47,
-        });
-      }
-    }); */
 
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
@@ -426,7 +411,13 @@ async function main() {
       }
     });
 
-    mainWindow.on('ready-to-show', () => {
+    /**
+     * Unsubscribers to run when the window closes. The app doesn't shut down when the window closes
+     * on Mac, so we need to unsubscribe some things
+     */
+    const windowCloseUnsubscribers = new UnsubscriberAsyncList('Window close unsubscribers');
+
+    mainWindow.on('ready-to-show', async () => {
       logger.info('mainWindow is ready to show');
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
       if (process.env.START_MINIMIZED) {
@@ -434,21 +425,66 @@ async function main() {
       } else {
         mainWindow.show();
       }
-    });
 
-    mainWindow.on('closed', () => {
-      mainWindow = undefined;
+      // Adjust the Window button colors based on the current theme
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+        try {
+          windowCloseUnsubscribers.add(
+            await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
+              if (isPlatformError(newTheme)) {
+                logger.warn(
+                  `Failed to set title bar window button colors: Failed to get new current theme: ${getErrorMessage(
+                    newTheme,
+                  )}`,
+                );
+                return;
+              }
+              if (!newTheme.cssVariables.primary) {
+                logger.warn(
+                  `Failed to set title bar window button colors: New theme primary color is falsy!`,
+                );
+                return;
+              }
+
+              // Need to put commas between the numbers for it to work here
+              const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
+
+              mainWindow?.setTitleBarOverlay({
+                color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
+                symbolColor: `hsl(${newThemePrimaryString})`,
+                height: TITLE_BAR_BUTTON_HEIGHT,
+              });
+            }),
+          );
+        } catch (e) {
+          logger.warn(
+            `Failed to subscribe to current theme to adjust window button colors: ${getErrorMessage(
+              e,
+            )}`,
+          );
+        }
+      }
     });
 
     if (process.platform === 'darwin') {
       (async () => {
         try {
-          await subscribeCurrentMacosMenubar();
+          windowCloseUnsubscribers.add(await subscribeCurrentMacosMenubar());
         } catch (error) {
           logger.info(`Failed to build the macOS menubar ${error}`);
         }
       })();
     }
+
+    mainWindow.on('closed', async () => {
+      mainWindow = undefined;
+      try {
+        await windowCloseUnsubscribers.runAllUnsubscribers();
+      } catch (e) {
+        logger.warn(`Window close unsubscribers failed: ${getErrorMessage(e)}`);
+      }
+    });
 
     // This sets the menu on Windows and Linux
     // 'null' to interact with external API
