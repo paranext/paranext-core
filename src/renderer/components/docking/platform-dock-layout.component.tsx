@@ -115,6 +115,8 @@ export function PlatformDockLayout() {
       ref={dockLayoutRef}
       loadTab={loadTab}
       saveTab={saveTab}
+      /* Put a visual space around all tab-groups.
+       * I tried using CSS padding and margin for this, but both causes overflows. */
       style={{
         position: 'absolute',
         top: 48,

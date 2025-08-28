@@ -1,6 +1,11 @@
 @use '../../styles/vars';
 @use './panel-extra-content.component';
 
+/* 
+This file styles with SCSS because rc-dock doesn't give us good ways to render with Tailwind.  I also comes with a lot of opinionated styling that we need to undo, so you'll see a lot of rules that use `unset`. We use `unset` instead of the literal initial values to connote their intention: undoing rc-dock's styling.
+ */
+
+/* I tried assigning these custom properties at :root, but I wasn't able to use them. I chose to put them in `.dock-style-platform-bible` even though it isn't at the topmost level of the rc-dock components. It's more like the tab-group level. It is like a theme that we created and own (in contrast to .dock-style-card). */
 .dock-style-platform-bible {
   --tab-front-blur: hsl(var(--background));
   --tab-front-focus-within: hsl(var(--primary));
@@ -13,27 +18,33 @@
   container-type: size;
 }
 
+/* These selectors might feel a little out-of-place up here in the file (not with their friends). I put them up here to see many --tab-background differences side-by-side. `--tab-background` is one color to use for the whole tab: Tab Header and the Tab Content. */
 .dock-tab,
 .dock-tabpane {
-  --tab-background: transparent; // new color var within
+  // New color variable to control the background of both tab header and tab content
+  // Most Tabs have transparent backgrounds, but they become colored in certain states.
+  --tab-background: transparent;
 }
 
-// Reset some unwanted text color from rc-dock
+// Hovering over a tab makes it slightly highlighted to indicate interactivity
 .dock-tab:hover,
 .dock-tab-active:hover {
-  color: unset; // reset rc-dock blue
+  color: unset; // reset unwanted rc-dock color (blue)
   --tab-background: var(--tab-highlight);
 }
 
+// When a tab is the most recent with focus in its Tab Group, it gets a color and looks like it is in front of other tabs.
 .dock-tab-active,
 .dock-tabpane-active {
   --tab-background: var(--tab-front-blur);
 
+  // When a tab is the has focus within it, it gets a prominent color.
   &.platform-dock-tabpane-window-focus {
     --tab-background: hsl(var(--primary));
   }
 }
 
+// #region DOCK-MENU /////////////////////////////////////////////////////
 // Users can only see this dropdown menu when there are too many tabs to fit in the tab bar.
 .dock-dropdown,
 .dock-dropdown-menu,
@@ -55,10 +66,12 @@
   background-color: hsl(var(--accent) / 0.3);
 }
 
+// Ensure the close button and title button are on the same row
 .dock-dropdown-menu-item .drag-initiator {
   display: flex;
   align-items: center;
 }
+// #endregion DOCK-MENU ////////////////////////////////////////////////
 
 // #region GENERAL /////////////////////////////////////////////////////
 /* space around app and in between windows */
@@ -101,10 +114,10 @@
 // #endregion ///////////////////////////////////////////////////////////
 
 // #region DOCK-PANEL ///////////////////////////////////////////////////
+// A Tab Group's outermost box in rc-dock is `.dock-panel`, so this region styles the Tab Group.
 .dock-panel {
   padding: 6px;
   padding-block-start: 0;
-  background-color: #0055d9;
   background-color: hsl(var(--muted));
 
   //   Copied shadows from Tailwind shadow-sm
@@ -132,7 +145,7 @@
 
 // #region TAB-PANE (CONTENTS) //////////////////////////////////////////
 .dock-tabpane {
-  padding: vars.$space--xs;
+  padding: vars.$space--xxs;
   background-color: var(--tab-background);
   box-sizing: border-box;
   border-radius: var(--radius);
@@ -154,19 +167,26 @@
   border: unset;
 }
 
+/*   Visually reorder children to have the New Tab (+) button immediately after the tabs.
+  Without this rule, the New Tab (+) button would be on the far end (right) of the Tab Header Row, which many users mistook for a close button in usability evaluations.
+  * Without rule: Tab headers list, maybe overflow dropdown, empty space, new tab button
+  * With rule: Tab headers list, new tab button, empty space or overflow dropdown.
+*/
 .dock-nav {
-  //   Visually reorder children to have the New Tab (+) button immediately after the tabs
   display: flex;
 
+  // Contains Tab Headers list
   > .dock-nav-wrap {
     order: 1;
     flex-grow: 0;
   }
 
+  // Contains New Tab (+) button
   > .dock-extra-content {
     order: 2;
   }
 
+  // Contains Overflow Dropdown and other operations
   > .dock-nav-operations {
     order: 3;
     flex-grow: 1;
@@ -186,6 +206,7 @@
   gap: vars.$space--xs;
   padding-block: var(--tab-header-to-content-gap);
   padding-inline: vars.$space--xs;
+  height: var(--dock-tab-height);
 }
 
 .dock-panel.dock-style-platform-bible .dock-nav-operations,
@@ -228,7 +249,9 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: unset;
   border: unset;
-  height: unset;
+
+  --dock-tab-height: 30px; // also from rc-dock
+  height: var(--dock-tab-height);
 
   display: flex;
   align-items: center;
@@ -253,6 +276,9 @@
     inset-block-end: calc(
       -1 * var(--tab-header-to-content-gap)
     ); // Move tab up to overlap the tab list
+    height: calc(
+      var(--dock-tab-height) + 2 * var(--tab-header-to-content-gap)
+    ); // Increase height to cover gap created by moving tab down
   }
 
   &.platform-dock-tab-window-focus {
