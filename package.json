@@ -39,7 +39,7 @@
     "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@swc/core": "1.10.18",
+    "@swc/core": "1.13.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^20.16.11",
     "@types/react": "^18.3.18",
@@ -95,6 +95,6 @@
   },
   "workspaces": ["src/*"],
   "volta": {
-    "node": "20.18.0"
+    "node": "22.16.0"
   }
 }
