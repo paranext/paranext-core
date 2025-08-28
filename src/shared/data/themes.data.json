@@ -161,7 +161,7 @@
         "destructive-foreground": "210 20% 98%",
         "ring": "15.5 13.2% 53.9%",
 
-        "-background": "40 20% 98%",
+        "sidebar-background": "40 20% 98%",
         "sidebar-foreground": "12 10.95% 26.86%",
         "sidebar-primary": "173.4 82.1% 15.3%",
         "sidebar-primary-foreground": "40 85.7% 97.3%",
