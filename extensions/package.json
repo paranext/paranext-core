@@ -47,7 +47,7 @@
     "platform-bible-utils": "file:../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@swc/core": "1.10.18",
+    "@swc/core": "1.13.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.18",

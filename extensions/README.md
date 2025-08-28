@@ -12,7 +12,7 @@ This is a Webpack project template pre-configured to build an arbitrary number o
 
 Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For examples of what extensions in a multi-extension repo might look like, refer to any repo based on this template — for instance, the [platform-bible-sample-extensions](https://github.com/paranext/platform-bible-sample-extensions).
 
-**Important:** Before proceding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the former, it would be better to use the simple [template pre-configured to build a single Platform.Bible extension](https://github.com/paranext/paranext-extension-template).
+**Important:** Before proceeding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the former, it would be better to use the simple [template pre-configured to build a single Platform.Bible extension](https://github.com/paranext/paranext-extension-template).
 
 ### Customize repo details
 
