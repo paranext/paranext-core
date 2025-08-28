@@ -8,6 +8,7 @@ import {
   useProjectData,
   useSetting,
   useWebViewController,
+  useRecentScriptureRefs,
 } from '@papi/frontend/react';
 import type { HelloRock3Event } from 'hello-rock3';
 import {
@@ -55,6 +56,8 @@ globalThis.webViewComponent = function HelloRock3({
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
   const deleteKey = '%helloRock3_delete%';
   const frenchLocalizationSubmit = '%helloRock3_frenchLocalizationSubmit%';
@@ -549,7 +552,12 @@ globalThis.webViewComponent = function HelloRock3({
         <Switch /> {/* no label available */}
         <ComboBox buttonPlaceholder={localizedTestMe} options={genericComboBoxOptions} />
         <Slider /> {/* no label available */}
-        <BookChapterControl scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
+        <BookChapterControl
+          scrRef={scrRef}
+          handleSubmit={(newScrRef) => setScrRef(newScrRef)}
+          recentSearches={recentScriptureRefs}
+          onAddRecentSearch={addRecentScriptureRef}
+        />
       </div>
       <div>
         <h3>{localizedFrenchLocalizationSubmit}:</h3>

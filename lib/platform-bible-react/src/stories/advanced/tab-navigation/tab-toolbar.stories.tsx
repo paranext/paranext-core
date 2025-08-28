@@ -12,6 +12,17 @@ const setScrollGroupId = (newScrollGroupId: number | undefined) => {
   console.log('New Scroll Group Id: ', newScrollGroupId);
 };
 
+// Mock recent scripture references for the story
+const mockRecentScriptureRefs = [
+  { book: 'GEN', chapterNum: 1, verseNum: 1 },
+  { book: 'PSA', chapterNum: 23, verseNum: 1 },
+  { book: 'MAT', chapterNum: 5, verseNum: 3 },
+];
+
+const mockAddRecentSearch = (scrRef: typeof defaultScrRef) => {
+  console.log('Adding recent search: ', scrRef);
+};
+
 const projectMenuData = {
   columns: {
     tools: { label: 'Tools', order: 1 },
@@ -122,7 +133,12 @@ const meta: Meta<TabToolbarProps> = {
     tabViewMenuData,
     startAreaChildren: (
       <>
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
+        <BookChapterControl
+          scrRef={defaultScrRef}
+          handleSubmit={() => {}}
+          recentSearches={mockRecentScriptureRefs}
+          onAddRecentSearch={mockAddRecentSearch}
+        />
         <ScrollGroupSelector
           availableScrollGroupIds={[0, 1, 2, 3, 4]}
           localizedStrings={myScrollGroupIdLocalizedStrings}
@@ -180,7 +196,12 @@ const meta: Meta<TabToolbarProps> = {
           onChangeScrollGroupId={setScrollGroupId}
           size="sm"
         />
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
+        <BookChapterControl
+          scrRef={defaultScrRef}
+          handleSubmit={() => {}}
+          recentSearches={mockRecentScriptureRefs}
+          onAddRecentSearch={mockAddRecentSearch}
+        />
       </>
     ),
   },
