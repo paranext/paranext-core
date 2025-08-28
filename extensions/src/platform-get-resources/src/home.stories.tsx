@@ -121,28 +121,25 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   }, 2000);
 
   return (
-    <>
-      <style>{styles}</style>
-      <Story
-        args={{
-          localizedStrings: {
-            '%resources_open%': 'Open',
-            '%resources_sync%': 'Sync',
-            '%resources_get%': 'Get',
-          },
-          localProjectsInfo: localProjectsAndResources,
-          isLoadingLocalProjects,
-          sharedProjectsInfo: sharedProjectsAndResources,
-          isLoadingRemoteProjects,
-          headerContent: (
-            <>
-              <HomeIcon size="36" />
-              <CardTitle>Home Story</CardTitle>
-            </>
-          ),
-        }}
-      />
-    </>
+    <Story
+      args={{
+        localizedStrings: {
+          '%resources_open%': 'Open',
+          '%resources_sync%': 'Sync',
+          '%resources_get%': 'Get',
+        },
+        localProjectsInfo: localProjectsAndResources,
+        isLoadingLocalProjects,
+        sharedProjectsInfo: sharedProjectsAndResources,
+        isLoadingRemoteProjects,
+        headerContent: (
+          <>
+            <HomeIcon size="36" />
+            <CardTitle>Home Story</CardTitle>
+          </>
+        ),
+      }}
+    />
   );
 }
 
