@@ -16,6 +16,7 @@ import {
   Input,
   Label,
   Progress,
+  RecentSearches,
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
@@ -26,6 +27,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useRecentSearches,
 } from 'platform-bible-react';
 import {
   formatReplacementString,
@@ -35,7 +37,6 @@ import {
 } from 'platform-bible-utils';
 import { FindJobStatus, FindResult, FindScope } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import RecentSearches, { useRecentSearches } from './find/recent-searches.component';
 import SearchResult from './find/search-result.component';
 
 type HidableFindResult = FindResult & { isHidden?: boolean };
@@ -50,6 +51,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_matchCase%',
   '%webView_find_maxResultsExceeded%',
   '%webView_find_noResultsFound%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_recent%',
   '%webView_find_scopeUndetermined%',
   '%webView_find_scrollGroup%',
   '%webView_find_searchPlaceholder%',
@@ -74,7 +77,9 @@ global.webViewComponent = function FindWebView({
     undefined,
   );
 
-  const { recentSearches, addRecentSearchTerm } = useRecentSearches(useWebViewState);
+  const [recentSearches, setRecentSearches] = useWebViewState<string[]>('findRecentSearches', []);
+
+  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
 
   const [areFiltersShown, setAreFiltersShown] = useState(false);
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
@@ -189,7 +194,7 @@ global.webViewComponent = function FindWebView({
   const handleStartSearch = async () => {
     if (!isSearchQueryValid || !findPdp) return;
 
-    addRecentSearchTerm(searchTerm);
+    addRecentSearchItem(searchTerm);
 
     const findScope = (): FindScope[] => {
       switch (scope) {
@@ -506,7 +511,12 @@ global.webViewComponent = function FindWebView({
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
                 className={`tw-text-ellipsis tw-w-full ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
               />
-              <RecentSearches recentSearches={recentSearches} onSearchTermSelect={setSearchTerm} />
+              <RecentSearches
+                recentSearches={recentSearches}
+                onSearchItemSelect={setSearchTerm}
+                ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
+                groupHeading={localizedStrings['%webView_find_recent%']}
+              />
             </div>
             <Button
               variant="outline"

@@ -16,4 +16,8 @@ export type BookChapterControlProps = {
   className?: string;
   /** Callback to retrieve book IDs that are available in the current context */
   getActiveBookIds?: () => string[];
+  /** Array of recent scripture references for quick access */
+  recentSearches?: SerializedVerseRef[];
+  /** Callback to add a new recent scripture reference */
+  onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
 };

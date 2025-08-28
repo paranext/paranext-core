@@ -28,6 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   usePromise,
+  useRecentSearches,
 } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -38,6 +39,8 @@ import {
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { recentScriptureRefsUtil } from '@shared/utils/recent-scripture-refs.util';
+import { useRecentScriptureRefs } from '@shared/hooks/use-recent-scripture-refs.hook';
 
 const TOOLTIP_DELAY = 300;
 
@@ -90,6 +93,14 @@ export function PlatformBibleToolbar() {
   );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const { recentScriptureRefs, setRecentScriptureRefs } = useRecentScriptureRefs();
+
+  const addRecentSearchItem = useRecentSearches(
+    recentScriptureRefs,
+    setRecentScriptureRefs,
+    recentScriptureRefsUtil.areScriptureRefsEqual,
+  );
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
@@ -276,7 +287,13 @@ export function PlatformBibleToolbar() {
           )}
         </Tooltip>
       </TooltipProvider>
-      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-w-96" />
+      <BookChapterControl
+        scrRef={scrRef}
+        handleSubmit={setScrRef}
+        className="tw-w-96"
+        recentSearches={recentScriptureRefs}
+        onAddRecentSearch={addRecentSearchItem}
+      />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
         scrollGroupId={scrollGroupId}

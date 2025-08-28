@@ -31,6 +31,7 @@ import {
   ScrollGroupSelector,
   TabToolbar,
   useEvent,
+  useRecentSearches,
 } from 'platform-bible-react';
 import './web-view.component.css';
 import {
@@ -49,6 +50,8 @@ import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import { recentScriptureRefsUtil } from '@shared/utils/recent-scripture-refs.util';
+import { useRecentScriptureRefs } from '@shared/hooks/use-recent-scripture-refs.hook';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -381,6 +384,14 @@ export function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const { recentScriptureRefs, setRecentScriptureRefs } = useRecentScriptureRefs();
+
+  const addRecentSearchItem = useRecentSearches(
+    recentScriptureRefs,
+    setRecentScriptureRefs,
+    recentScriptureRefsUtil.areScriptureRefsEqual,
+  );
+
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
@@ -446,6 +457,8 @@ export function WebView({
               scrRef={scrRef}
               handleSubmit={setScrRef}
               getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+              recentSearches={recentScriptureRefs}
+              onAddRecentSearch={addRecentSearchItem}
             />
           }
           endAreaChildren={

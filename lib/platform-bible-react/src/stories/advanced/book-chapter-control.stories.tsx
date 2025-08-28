@@ -4,6 +4,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { useRecentSearches } from '@/components/advanced/recent-searches.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 type BookChapterControlWrapperProps = {
@@ -748,6 +749,79 @@ This interactive test demonstrates:
 15. Clicking the second smart parsing result
 16. Verifying the second book submission and proper state management
         `,
+      },
+    },
+  },
+};
+
+// Wrapper component with recent searches functionality
+function BookChapterControlWithRecentSearches({
+  scrRef: initialScrRef,
+  handleSubmit,
+  ...rest
+}: BookChapterControlWrapperProps) {
+  const [scrRef, setScrRef] = useState<SerializedVerseRef>(initialScrRef);
+  const [recentSearches, setRecentSearches] = useState<SerializedVerseRef[]>([
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    { book: 'MAT', chapterNum: 5, verseNum: 3 },
+    { book: 'JHN', chapterNum: 3, verseNum: 16 },
+    { book: 'ROM', chapterNum: 8, verseNum: 28 },
+  ]);
+
+  const addRecentSearchItem = useRecentSearches(
+    recentSearches,
+    setRecentSearches,
+    (a: SerializedVerseRef, b: SerializedVerseRef) =>
+      a.book === b.book && a.chapterNum === b.chapterNum && a.verseNum === b.verseNum,
+  );
+
+  const handleScrRef = useCallback(
+    (newScrRef: SerializedVerseRef) => {
+      setScrRef(newScrRef);
+      handleSubmit(newScrRef);
+    },
+    [handleSubmit],
+  );
+
+  const handleAddRecentSearch = useCallback(
+    (newRef: SerializedVerseRef) => {
+      addRecentSearchItem(newRef);
+    },
+    [addRecentSearchItem],
+  );
+
+  return (
+    <ThemeProvider>
+      <div className="tw-p-4">
+        <BookChapterControl
+          {...rest}
+          scrRef={scrRef}
+          handleSubmit={handleScrRef}
+          recentSearches={recentSearches}
+          onAddRecentSearch={handleAddRecentSearch}
+        />
+        <div className="tw-mt-4 tw-text-sm tw-text-gray-600">
+          Current Reference: {JSON.stringify(scrRef, undefined, 2)}
+        </div>
+        <div className="tw-mt-2 tw-text-sm tw-text-gray-500">
+          Recent Searches:{' '}
+          {recentSearches.map((ref) => `${ref.book} ${ref.chapterNum}:${ref.verseNum}`).join(', ')}
+        </div>
+      </div>
+    </ThemeProvider>
+  );
+}
+
+export const WithRecentSearches: Story = {
+  args: {
+    scrRef: defaultScrRef,
+  },
+  render: (args) => <BookChapterControlWithRecentSearches {...args} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'BookChapterControl with recent searches functionality. Click the clock icon in the search input to see recent scripture references.',
       },
     },
   },

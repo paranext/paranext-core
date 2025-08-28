@@ -8,6 +8,11 @@ export {
   BOOK_SELECTOR_STRING_KEYS,
   BookSelectionMode,
 } from './components/advanced/book-selector.component';
+export {
+  default as RecentSearches,
+  useRecentSearches,
+} from './components/advanced/recent-searches.component';
+export type { RecentSearchesProps } from './components/advanced/recent-searches.component';
 export type { BookSelectorLocalizedStrings } from './components/advanced/book-selector.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
