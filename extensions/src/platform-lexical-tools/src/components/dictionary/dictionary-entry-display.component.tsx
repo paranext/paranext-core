@@ -225,7 +225,7 @@ export function DictionaryEntryDisplay({
               <ToggleGroupItem
                 key={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
                 value={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
-                className="tw-flex tw-w-full tw-h-fit tw-flex-col tw-items-start tw-border tw-rounded-lg tw-shadow-sm tw-p-4 tw-bg-white tw-cursor-pointer data-[state=on]:tw-border-accent data-[state=on]:tw-shadow-md tw-transition-colors"
+                className="tw-flex tw-w-full tw-h-fit tw-flex-col tw-items-start tw-border tw-rounded-lg tw-shadow-sm tw-p-4 tw-cursor-pointer data-[state=on]:tw-border-accent data-[state=on]:tw-shadow-md tw-transition-colors"
               >
                 <div className="tw-flex tw-items-baseline tw-gap-2">
                   <span className="tw-font-bold tw-text-accent-foreground">{senseIndex + 1}</span>
