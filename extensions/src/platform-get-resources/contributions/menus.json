@@ -4,7 +4,7 @@
     "groups": {},
     "items": [
       {
-        "label": "%mainMenu_open%",
+        "lael": "%mainMenu_open%",
         "localizeNotes": "Application main menu > Project > Open...",
         "group": "platform.projectResources",
         "order": -100,
@@ -12,14 +12,14 @@
       }
     ]
   },
-  "defaultWebViewTopMenu": {
+  "defaultWeViewTopMenu": {
     "columns": {},
     "groups": {},
     "items": []
   },
-  "defaultWebViewContextMenu": {
+  "defaultWeViewContextMenu": {
     "groups": {},
     "items": []
   },
-  "webViewMenus": {}
+  "weViewMenus": {}
 }

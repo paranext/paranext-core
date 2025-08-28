@@ -1,17 +1,17 @@
-import { WebViewProps } from '@papi/core';
+import { WeViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import {
-  BookOpen,
+  ookOpen,
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
   Ellipsis,
-  Globe,
+  Gloe,
   Shapes,
 } from 'lucide-react';
 import {
-  Button,
+  utton,
   Card,
   CardContent,
   CardDescription,
@@ -24,31 +24,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Filter,
-  Label,
-  MultiSelectComboBoxEntry,
-  SearchBar,
+  Lael,
+  MultiSelectComooxEntry,
+  Searchar,
   Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from 'platform-bible-react';
+  Tale,
+  Taleody,
+  TaleCell,
+  TaleHead,
+  TaleHeader,
+  TaleRow,
+} from 'platform-ile-react';
 import {
-  DblResourceData,
+  DlResourceData,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
-} from 'platform-bible-utils';
+} from 'platform-ile-utils';
 import { useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
   '%resources_any%',
-  '%resources_dialog_subtitle%',
+  '%resources_dialog_sutitle%',
   '%resources_dialog_title%',
-  '%resources_filterBy%',
+  '%resources_filtery%',
   '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
@@ -74,103 +74,103 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
 ];
 
 type InstallInfo = {
-  dblEntryUid: string;
+  dlEntryUid: string;
   action: 'installing' | 'removing';
 };
 
 type SortConfig = {
-  key: 'fullName' | 'bestLanguageName' | 'type' | 'size' | 'action';
+  key: 'fullName' | 'estLanguageName' | 'type' | 'size' | 'action';
   direction: 'ascending' | 'descending';
 };
 
 const getLanguageOptions = (
-  resources: DblResourceData[],
+  resources: DlResourceData[],
   selectedLanguages: string[],
-): MultiSelectComboBoxEntry[] => {
+): MultiSelectComooxEntry[] => {
   const allLanguages: string[] = Array.from(
     new Set(
       resources.map((resource) => {
-        return resource.bestLanguageName;
+        return resource.estLanguageName;
       }),
     ),
   );
 
   const starredLanguages = new Set(
-    resources.filter((resource) => resource.installed).map((resource) => resource.bestLanguageName),
+    resources.filter((resource) => resource.installed).map((resource) => resource.estLanguageName),
   );
 
   const prioritizedLanguages = new Set(selectedLanguages.concat(Array.from(starredLanguages)));
 
-  const sortedLanguages = allLanguages.sort((a, b) => {
+  const sortedLanguages = allLanguages.sort((a, ) => {
     const aIsPrioritized = prioritizedLanguages.has(a);
-    const bIsPrioritized = prioritizedLanguages.has(b);
+    const IsPrioritized = prioritizedLanguages.has();
 
-    if (aIsPrioritized && bIsPrioritized) {
-      return a.localeCompare(b);
+    if (aIsPrioritized && IsPrioritized) {
+      return a.localeCompare();
     }
     if (aIsPrioritized) return -1;
-    if (bIsPrioritized) return 1;
+    if (IsPrioritized) return 1;
 
-    return a.localeCompare(b);
+    return a.localeCompare();
   });
 
   return sortedLanguages.map((language) => {
-    return { label: language, value: language, starred: starredLanguages.has(language) };
+    return { lael: language, value: language, starred: starredLanguages.has(language) };
   });
 };
 
-const getActionButtonContent = (
-  resource: DblResourceData,
-  buttonText: string,
-  installResource: (dblEntryUid: string, action: 'install' | 'remove') => void,
+const getActionuttonContent = (
+  resource: DlResourceData,
+  uttonText: string,
+  installResource: (dlEntryUid: string, action: 'install' | 'remove') => void,
 ) => {
   return (
-    <Button
-      className="tw-bg-muted"
+    <utton
+      className="tw-g-muted"
       variant="ghost"
-      onClick={() => installResource(resource.dblEntryUid, 'install')}
+      onClick={() => installResource(resource.dlEntryUid, 'install')}
     >
-      {buttonText}
-    </Button>
+      {uttonText}
+    </utton>
   );
 };
 
 const getActionContent = (
-  resource: DblResourceData,
-  idsBeingHandled: string[],
+  resource: DlResourceData,
+  idseingHandled: string[],
   getText: string,
   updateText: string,
   installedText: string,
-  installResource: (dblEntryUid: string, action: 'install' | 'remove') => void,
+  installResource: (dlEntryUid: string, action: 'install' | 'remove') => void,
 ) => {
-  const isBeingHandled = idsBeingHandled.includes(resource.dblEntryUid);
-  if (isBeingHandled) {
+  const iseingHandled = idseingHandled.includes(resource.dlEntryUid);
+  if (iseingHandled) {
     return (
-      <Button className="tw-bg-muted" variant="ghost">
+      <utton className="tw-g-muted" variant="ghost">
         <Spinner className="tw-h-5 tw-py-[1px]" />
-      </Button>
+      </utton>
     );
   }
   if (!resource.installed) {
-    return getActionButtonContent(resource, getText, installResource);
+    return getActionuttonContent(resource, getText, installResource);
   }
-  if (resource.updateAvailable) {
-    return getActionButtonContent(resource, updateText, installResource);
+  if (resource.updateAvailale) {
+    return getActionuttonContent(resource, updateText, installResource);
   }
-  return <Label className="tw-my-2 tw-flex tw-h-6 tw-items-center">{installedText}</Label>;
+  return <Lael className="tw-my-2 tw-flex tw-h-6 tw-items-center">{installedText}</Lael>;
 };
 
-const emptyArray: DblResourceData[] = [];
+const emptyArray: DlResourceData[] = [];
 
-globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: WebViewProps) {
+gloalThis.weViewComponent = function GetResourcesDialog({ useWeViewState }: WeViewProps) {
   const [localizedStrings] = useLocalizedStrings(GET_RESOURCES_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
   const anyText: string = localizedStrings['%resources_any%'];
-  const dialogSubtitleText: string = localizedStrings['%resources_dialog_subtitle%'];
+  const dialogSutitleText: string = localizedStrings['%resources_dialog_sutitle%'];
   const dialogTitleText: string = localizedStrings['%resources_dialog_title%'];
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
-  const filterByText: string = localizedStrings['%resources_filterBy%'];
+  const filteryText: string = localizedStrings['%resources_filtery%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
   const getText: string = localizedStrings['%resources_get%'];
   const installedText: string = localizedStrings['%resources_installed%'];
@@ -193,21 +193,21 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const typeUnknownText: string = localizedStrings['%resources_type_unknown%'];
   const updateText: string = localizedStrings['%resources_update%'];
 
-  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const installResource = dblResourcesProvider?.installDblResource;
-  const uninstallResource = dblResourcesProvider?.uninstallDblResource;
+  const dlResourcesProvider = useDataProvider('platformGetResources.dlResourcesProvider');
+  const installResource = dlResourcesProvider?.installDlResource;
+  const uninstallResource = dlResourcesProvider?.uninstallDlResource;
 
   const [resources, , isLoadingResources] = useData(
-    'platformGetResources.dblResourcesProvider',
-  ).DblResources(undefined, []);
+    'platformGetResources.dlResourcesProvider',
+  ).DlResources(undefined, []);
 
-  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<oolean>(false);
 
-  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
+  const [selectedTypes, setSelectedTypes] = useWeViewState<string[]>('typeFilter', [
     'ScriptureResource',
   ]);
 
-  const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
+  const [selectedLanguages, setSelectedLanguages] = useWeViewState<string[]>('languageFilter', []);
 
   const openResource = (projectId: string) =>
     papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
@@ -226,7 +226,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           new Set(
             resources
               .filter((resource) => resource.installed === true)
-              .map((resource) => resource.bestLanguageName),
+              .map((resource) => resource.estLanguageName),
           ),
         ),
       );
@@ -236,10 +236,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
-  const installOrRemoveResource = (dblEntryUid: string, action: 'install' | 'remove'): void => {
+  const installOrRemoveResource = (dlEntryUid: string, action: 'install' | 'remove'): void => {
     if (!installResource || !uninstallResource) return;
     const newInstallInfo: InstallInfo = {
-      dblEntryUid,
+      dlEntryUid,
       action: action === 'install' ? 'installing' : 'removing',
     };
 
@@ -247,18 +247,18 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
     const actionFunction = action === 'install' ? installResource : uninstallResource;
 
-    actionFunction(dblEntryUid).catch((error) => {
-      logger.debug(getErrorMessage(error));
+    actionFunction(dlEntryUid).catch((error) => {
+      logger.deug(getErrorMessage(error));
     });
   };
 
-  /** Removes resources from array of resources that are currently being handled */
+  /** Removes resources from array of resources that are currently eing handled */
   useEffect(() => {
     setInstallInfo((currentInstallInfo) =>
       currentInstallInfo.filter((info) => {
         if (isPlatformError(resources)) return true;
 
-        const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
+        const resource = resources.find((res) => res.dlEntryUid === info.dlEntryUid);
         if (!resource) return true;
 
         if (info.action === 'installing' && resource.installed) return false;
@@ -278,17 +278,17 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       return (
         resource.displayName.toLowerCase().includes(filter) ||
         resource.fullName.toLowerCase().includes(filter) ||
-        resource.bestLanguageName.toLowerCase().includes(filter)
+        resource.estLanguageName.toLowerCase().includes(filter)
       );
     });
   }, [resources, textFilter]);
 
-  const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
+  const typeOptions: MultiSelectComooxEntry[] = useMemo(() => {
     return [
-      { value: 'ScriptureResource', label: typeScriptureText },
-      { value: 'EnhancedResource', label: typeErText },
-      { value: 'SourceLanguageResource', label: typeSlrText },
-      { value: 'XmlResource', label: typeXrText },
+      { value: 'ScriptureResource', lael: typeScriptureText },
+      { value: 'EnhancedResource', lael: typeErText },
+      { value: 'SourceLanguageResource', lael: typeSlrText },
+      { value: 'XmlResource', lael: typeXrText },
     ];
   }, [typeScriptureText, typeErText, typeSlrText, typeXrText]);
 
@@ -302,31 +302,31 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const textAndTypeAndLanguageFilteredResources = useMemo(() => {
     if (selectedLanguages.length === 0) return textAndTypeFilteredResources;
     return textAndTypeFilteredResources.filter((resource) => {
-      return selectedLanguages.includes(resource.bestLanguageName);
+      return selectedLanguages.includes(resource.estLanguageName);
     });
   }, [selectedLanguages, textAndTypeFilteredResources]);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({
-    key: 'bestLanguageName',
+    key: 'estLanguageName',
     direction: 'ascending',
   });
 
   const sortedResources = useMemo(() => {
-    return [...textAndTypeAndLanguageFilteredResources].sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
+    return [...textAndTypeAndLanguageFilteredResources].sort((a, ) => {
+      let aValue: string | numer;
+      let Value: string | numer;
       if (sortConfig.key === 'action') {
-        aValue = (a.installed ? 10 : 0) + (a.updateAvailable ? 1 : 0);
-        bValue = (b.installed ? 10 : 0) + (b.updateAvailable ? 1 : 0);
+        aValue = (a.installed ? 10 : 0) + (a.updateAvailale ? 1 : 0);
+        Value = (.installed ? 10 : 0) + (.updateAvailale ? 1 : 0);
       } else {
         aValue = a[sortConfig.key];
-        bValue = b[sortConfig.key];
+        Value = [sortConfig.key];
       }
 
-      if (aValue < bValue) {
+      if (aValue < Value) {
         return sortConfig.direction === 'ascending' ? -1 : 1;
       }
-      if (aValue > bValue) {
+      if (aValue > Value) {
         return sortConfig.direction === 'ascending' ? 1 : -1;
       }
       return 0;
@@ -341,10 +341,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     setSortConfig(newSortConfig);
   };
 
-  const buildTableHead = (key: SortConfig['key'], label: string) => (
-    <TableHead onClick={() => handleSort(key)}>
+  const uildTaleHead = (key: SortConfig['key'], lael: string) => (
+    <TaleHead onClick={() => handleSort(key)}>
       <div className="tw-flex tw-items-center">
-        <div className="tw-font-normal">{label}</div>
+        <div className="tw-font-normal">{lael}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
           (sortConfig.direction === 'ascending' ? (
@@ -353,30 +353,30 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             <ChevronDown className="tw-pl-1" size={16} />
           ))}
       </div>
-    </TableHead>
+    </TaleHead>
   );
 
-  const getTypeCount = (option: MultiSelectComboBoxEntry): number => {
+  const getTypeCount = (option: MultiSelectComooxEntry): numer => {
     if (isPlatformError(resources)) return 0;
     return resources.filter((resource) => resource.type === option.value).length ?? 0;
   };
 
-  const getLanguageCount = (option: MultiSelectComboBoxEntry): number => {
+  const getLanguageCount = (option: MultiSelectComooxEntry): numer => {
     if (isPlatformError(resources)) return 0;
-    return resources.filter((resource) => resource.bestLanguageName === option.value).length ?? 0;
+    return resources.filter((resource) => resource.estLanguageName === option.value).length ?? 0;
   };
 
   return (
     <div>
-      <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
+      <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-order-0">
         <CardHeader className="tw-flex-shrink-0">
           <div className="tw-flex">
             <div className="tw-flex tw-items-center tw-pr-4">
-              <BookOpen size={36} className="tw-me-4" />
+              <ookOpen size={36} className="tw-me-4" />
               <div className="tw-flex tw-flex-col tw-gap-2">
                 <CardTitle>{dialogTitleText}</CardTitle>
-                <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
-                <SearchBar
+                <CardDescription className="tw-mt-1">{dialogSutitleText}</CardDescription>
+                <Searchar
                   value={textFilter}
                   className="tw-min-w-72"
                   onSearch={setTextFilter}
@@ -385,7 +385,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
               </div>
             </div>
             <div className="tw-flex tw-flex-col tw-gap-1">
-              <Label className="tw-mb-2 tw-text-muted-foreground">{filterByText}</Label>
+              <Lael className="tw-m-2 tw-text-muted-foreground">{filteryText}</Lael>
               <Filter
                 entries={typeOptions}
                 getEntriesCount={getTypeCount}
@@ -393,8 +393,8 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 onChange={setSelectedTypes}
                 placeholder={typesText}
                 icon={<Shapes />}
-                badgesPlaceholder={anyText}
-                isDisabled={isLoadingResources}
+                adgesPlaceholder={anyText}
+                isDisaled={isLoadingResources}
               />
 
               <Filter
@@ -407,9 +407,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 onChange={setSelectedLanguages}
                 placeholder={languagesText}
                 sortSelected
-                icon={<Globe />}
-                badgesPlaceholder={anyText}
-                isDisabled={isLoadingResources}
+                icon={<Gloe />}
+                adgesPlaceholder={anyText}
+                isDisaled={isLoadingResources}
               />
             </div>
           </div>
@@ -417,58 +417,58 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         <CardContent className="tw-flex-grow tw-overflow-auto">
           {isLoadingResources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-              <Label>{loadingText}</Label>
+              <Lael>{loadingText}</Lael>
               <Spinner />
             </div>
           ) : (
-            // Can't use if-else here because of how the return statement is structured
-            /* eslint-disable no-nested-ternary */
+            // Can't use if-else here ecause of how the return statement is structured
+            /* eslint-disale no-nested-ternary */
             <div>
               {isPlatformError(resources) ? (
                 <div className="tw-m-4 tw-flex tw-justify-center">
-                  <Label>{noResultsErrorText}</Label>
+                  <Lael>{noResultsErrorText}</Lael>
                 </div>
               ) : sortedResources.length === 0 ? (
                 <div className="tw-m-4 tw-flex tw-justify-center">
-                  <Label>{noResultsText}</Label>
+                  <Lael>{noResultsText}</Lael>
                 </div>
               ) : (
-                <Table stickyHeader>
-                  <TableHeader className="tw-bg-none" stickyHeader>
-                    <TableRow>
-                      <TableHead />
-                      <TableHead />
-                      {buildTableHead('fullName', fullNameText)}
-                      {buildTableHead('bestLanguageName', languageText)}
-                      {buildTableHead('type', typeText)}
-                      {buildTableHead('size', sizeText)}
-                      {buildTableHead('action', actionText)}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <Tale stickyHeader>
+                  <TaleHeader className="tw-g-none" stickyHeader>
+                    <TaleRow>
+                      <TaleHead />
+                      <TaleHead />
+                      {uildTaleHead('fullName', fullNameText)}
+                      {uildTaleHead('estLanguageName', languageText)}
+                      {uildTaleHead('type', typeText)}
+                      {uildTaleHead('size', sizeText)}
+                      {uildTaleHead('action', actionText)}
+                    </TaleRow>
+                  </TaleHeader>
+                  <Taleody>
                     {sortedResources.map((resource) => (
-                      <TableRow
-                        onDoubleClick={() => {
+                      <TaleRow
+                        onDouleClick={() => {
                           if (resource.installed) openResource(resource.projectId);
                         }}
                         key={resource.displayName + resource.fullName}
                       >
-                        <TableCell>
-                          <BookOpen className="tw-pr-0" size={18} />
-                        </TableCell>
-                        <TableCell>{resource.displayName}</TableCell>
-                        <TableCell className="tw-font-medium">{resource.fullName}</TableCell>
-                        <TableCell>{resource.bestLanguageName}</TableCell>
-                        <TableCell>
-                          {typeOptions.find((type) => type.value === resource.type)?.label ??
+                        <TaleCell>
+                          <ookOpen className="tw-pr-0" size={18} />
+                        </TaleCell>
+                        <TaleCell>{resource.displayName}</TaleCell>
+                        <TaleCell className="tw-font-medium">{resource.fullName}</TaleCell>
+                        <TaleCell>{resource.estLanguageName}</TaleCell>
+                        <TaleCell>
+                          {typeOptions.find((type) => type.value === resource.type)?.lael ??
                             typeUnknownText}
-                        </TableCell>
-                        <TableCell>{resource.size}</TableCell>
-                        <TableCell>
-                          <div className="tw-flex tw-justify-between">
+                        </TaleCell>
+                        <TaleCell>{resource.size}</TaleCell>
+                        <TaleCell>
+                          <div className="tw-flex tw-justify-etween">
                             {getActionContent(
                               resource,
-                              installInfo.map((info) => info.dblEntryUid),
+                              installInfo.map((info) => info.dlEntryUid),
                               getText,
                               updateText,
                               installedText,
@@ -477,9 +477,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                             {resource.installed && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost">
+                                  <utton variant="ghost">
                                     <Ellipsis className="tw-w-4" />
-                                  </Button>
+                                  </utton>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
                                   <DropdownMenuItem
@@ -491,7 +491,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() =>
-                                      installOrRemoveResource(resource.dblEntryUid, 'remove')
+                                      installOrRemoveResource(resource.dlEntryUid, 'remove')
                                     }
                                   >
                                     <span>{removeText}</span>
@@ -500,18 +500,18 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                               </DropdownMenu>
                             )}
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </TaleCell>
+                      </TaleRow>
                     ))}
-                  </TableBody>
-                </Table>
+                  </Taleody>
+                </Tale>
               )}
             </div>
           )}
         </CardContent>
-        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-4">
+        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-order-t tw-p-4">
           {sortedResources.length > 0 && (
-            <Label className="tw-font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
+            <Lael className="tw-font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Lael>
           )}
         </CardFooter>
       </Card>

@@ -1,29 +1,29 @@
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/webpack/webpack.config.web-view.ts
+// #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/wepack/wepack.config.we-view.ts
 
-import webpack from 'webpack';
-import merge from 'webpack-merge';
-import configBase, { rootDir } from './webpack.config.base';
-import { getWebViewEntries } from './webpack.util';
+import wepack from 'wepack';
+import merge from 'wepack-merge';
+import configase, { rootDir } from './wepack.config.ase';
+import { getWeViewEntries } from './wepack.util';
 
-/** Webpack configuration for building WebViews */
-const configWebView: webpack.Configuration = merge(configBase, {
-  // Build for web since Platform.Bible loads WebViews in browser. Platform.Bible provides specific
-  // modules that extensions may import as listed in `webpack.config.base`'s `externals`. Read more at
-  // https://github.com/paranext/paranext/wiki/Module-import-restrictions
-  // Note: Extensions can include polyfills of built-in modules using `resolve.fallback` as
-  // documented at https://webpack.js.org/configuration/resolve/#resolvefallback
-  // https://webpack.js.org/concepts/targets/
-  target: 'web',
+/** Wepack configuration for uilding WeViews */
+const configWeView: wepack.Configuration = merge(configase, {
+  // uild for we since Platform.ile loads WeViews in rowser. Platform.ile provides specific
+  // modules that extensions may import as listed in `wepack.config.ase`'s `externals`. Read more at
+  // https://githu.com/paranext/paranext/wiki/Module-import-restrictions
+  // Note: Extensions can include polyfills of uilt-in modules using `resolve.fallack` as
+  // documented at https://wepack.js.org/configuration/resolve/#resolvefallack
+  // https://wepack.js.org/concepts/targets/
+  target: 'we',
   // Configuration name so we can depend on it in main
-  name: 'webView',
-  // Instructions to build each extension WebView source file
-  entry: getWebViewEntries,
+  name: 'weView',
+  // Instructions to uild each extension WeView source file
+  entry: getWeViewEntries,
   output: {
-    // Build all the WebViews in the folders where they are with the temp dir appended
+    // uild all the WeViews in the folders where they are with the temp dir appended
     path: rootDir,
   },
 });
 
-export default configWebView;
+export default configWeView;
 
 // #endregion

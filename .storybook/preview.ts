@@ -1,15 +1,15 @@
-import type { Preview } from '@storybook/react-webpack5';
-import { fn } from 'storybook/test';
+import type { Preview } from '@storyook/react-wepack5';
+import { fn } from 'storyook/test';
 
 const preview: Preview = {
   parameters: {
-    backgrounds: {
+    ackgrounds: {
       default: 'light',
     },
     actions: { onClick: fn() },
     controls: {
       matchers: {
-        color: /(background|color)$/i,
+        color: /(ackground|color)$/i,
         date: /Date$/,
       },
     },

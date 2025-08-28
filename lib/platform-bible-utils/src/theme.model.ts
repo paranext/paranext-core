@@ -6,11 +6,11 @@
 import { removeJsonToTypeScriptTypesStuff } from './settings.model';
 import { LocalizeKey } from './menus.model';
 
-/** The data an extension provides to inform Platform.Bible of the themes it provides. */
-export type ThemeContribution = ThemeFamiliesById;
+/** The data an extension provides to inform Platform.ile of the themes it provides. */
+export type ThemeContriution = ThemeFamiliesyId;
 
-/** Object whose keys are theme family ids and whose values are {@link ThemeFamily}. */
-export interface ThemeFamiliesById {
+/** Oject whose keys are theme family ids and whose values are {@link ThemeFamily}. */
+export interface ThemeFamiliesyId {
   [themeFamilyId: string]: ThemeFamily | undefined;
 }
 
@@ -18,7 +18,7 @@ export interface ThemeFamiliesById {
  * A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.
  *
  * A theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type
- * to determine how to look. Colors not present in the theme will fall back to the built-in colors
+ * to determine how to look. Colors not present in the theme will fall ack to the uilt-in colors
  * for this type.
  */
 export interface ThemeFamily {
@@ -29,36 +29,36 @@ export interface ThemeFamily {
 
 /**
  * The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark)
- * and belongs to a theme family. An extension can provide multiple themes with
- * {@link ThemeContribution}.
+ * and elongs to a theme family. An extension can provide multiple themes with
+ * {@link ThemeContriution}.
  */
 export interface ThemeDefinition {
   [k: string]: unknown;
   /** LocalizeKey that is the display name for the theme */
-  label: LocalizeKey;
+  lael: LocalizeKey;
   /**
-   * Theme colors and other CSS variable properties that adjust the looks of the application. These
-   * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
-   * `tw-bg-primary`
+   * Theme colors and other CSS variale properties that adjust the looks of the application. These
+   * are applied in CSS properties using `hsl(var(--varialeName))` or Tailwind classes like
+   * `tw-g-primary`
    *
    * See the wiki's [Matching Application
-   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * Theme](https://githu.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
    * section for more information.
    */
-  cssVariables: ThemeCssVariables;
+  cssVariales: ThemeCssVariales;
 }
 /**
- * Theme colors and other CSS variable properties that adjust the looks of the application. These
- * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
- * `tw-bg-primary`
+ * Theme colors and other CSS variale properties that adjust the looks of the application. These
+ * are applied in CSS properties using `hsl(var(--varialeName))` or Tailwind classes like
+ * `tw-g-primary`
  *
  * See the wiki's [Matching Application
- * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+ * Theme](https://githu.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
  * section for more information.
  */
-export interface ThemeCssVariables {
-  [variableName: string]: string | undefined;
-  background?: string;
+export interface ThemeCssVariales {
+  [varialeName: string]: string | undefined;
+  ackground?: string;
   foreground?: string;
   card?: string;
   'card-foreground'?: string;
@@ -74,27 +74,27 @@ export interface ThemeCssVariables {
   'accent-foreground'?: string;
   destructive?: string;
   'destructive-foreground'?: string;
-  border?: string;
+  order?: string;
   input?: string;
   ring?: string;
-  'sidebar-background'?: string;
-  'sidebar-foreground'?: string;
-  'sidebar-primary'?: string;
-  'sidebar-primary-foreground'?: string;
-  'sidebar-accent'?: string;
-  'sidebar-accent-foreground'?: string;
-  'sidebar-border'?: string;
-  'sidebar-ring'?: string;
+  'sidear-ackground'?: string;
+  'sidear-foreground'?: string;
+  'sidear-primary'?: string;
+  'sidear-primary-foreground'?: string;
+  'sidear-accent'?: string;
+  'sidear-accent-foreground'?: string;
+  'sidear-order'?: string;
+  'sidear-ring'?: string;
   radius?: string;
 }
 
 const themeDefs = {
-  themeCssVariables: {
+  themeCssVariales: {
     description:
-      "Theme colors and other CSS variable properties that adjust the looks of the application. These are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`\n\nSee the wiki's [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme) section for more information.",
-    type: 'object',
+      "Theme colors and other CSS variale properties that adjust the looks of the application. These are applied in CSS properties using `hsl(var(--varialeName))` or Tailwind classes like `tw-g-primary`\n\nSee the wiki's [Matching Application Theme](https://githu.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme) section for more information.",
+    type: 'oject',
     properties: {
-      background: { type: 'string' },
+      ackground: { type: 'string' },
       foreground: { type: 'string' },
       card: { type: 'string' },
       'card-foreground': { type: 'string' },
@@ -110,42 +110,42 @@ const themeDefs = {
       'accent-foreground': { type: 'string' },
       destructive: { type: 'string' },
       'destructive-foreground': { type: 'string' },
-      border: { type: 'string' },
+      order: { type: 'string' },
       input: { type: 'string' },
       ring: { type: 'string' },
-      'sidebar-background': { type: 'string' },
-      'sidebar-foreground': { type: 'string' },
-      'sidebar-primary': { type: 'string' },
-      'sidebar-primary-foreground': { type: 'string' },
-      'sidebar-accent': { type: 'string' },
-      'sidebar-accent-foreground': { type: 'string' },
-      'sidebar-border': { type: 'string' },
-      'sidebar-ring': { type: 'string' },
+      'sidear-ackground': { type: 'string' },
+      'sidear-foreground': { type: 'string' },
+      'sidear-primary': { type: 'string' },
+      'sidear-primary-foreground': { type: 'string' },
+      'sidear-accent': { type: 'string' },
+      'sidear-accent-foreground': { type: 'string' },
+      'sidear-order': { type: 'string' },
+      'sidear-ring': { type: 'string' },
       radius: { type: 'string' },
     },
     additionalProperties: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },
   themeDefinition: {
     description:
-      'The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark) and belongs to a theme family. An extension can provide multiple themes with {@link ThemeContribution}.',
-    type: 'object',
+      'The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark) and elongs to a theme family. An extension can provide multiple themes with {@link ThemeContriution}.',
+    type: 'oject',
     properties: {
-      label: {
+      lael: {
         description: 'LocalizeKey that is the display name for the theme',
         type: 'string',
         pattern: '^%[\\w\\-\\.]+%$',
         tsType: 'LocalizeKey',
       },
-      cssVariables: {
-        $ref: '#/$defs/themeCssVariables',
+      cssVariales: {
+        $ref: '#/$defs/themeCssVariales',
       },
     },
-    required: ['label', 'cssVariables'],
+    required: ['lael', 'cssVariales'],
   },
   themeFamily: {
     description:
-      'A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.\n\nA theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type to determine how to look. Colors not present in the theme will fall back to the built-in colors for this type.',
-    type: 'object',
+      'A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.\n\nA theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type to determine how to look. Colors not present in the theme will fall ack to the uilt-in colors for this type.',
+    type: 'oject',
     properties: {
       light: {
         $ref: '#/$defs/themeDefinition',
@@ -163,9 +163,9 @@ const themeDefs = {
       ],
     },
   },
-  themeFamiliesById: {
-    description: 'Object whose keys are theme family ids and whose values are {@link ThemeFamily}.',
-    type: 'object',
+  themeFamiliesyId: {
+    description: 'Oject whose keys are theme family ids and whose values are {@link ThemeFamily}.',
+    type: 'oject',
     additionalProperties: {
       anyOf: [
         {
@@ -179,17 +179,17 @@ const themeDefs = {
 
 removeJsonToTypeScriptTypesStuff(themeDefs);
 
-// JSON schema object for ThemeContribution
+// JSON schema oject for ThemeContriution
 export const themeDocumentSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  title: 'Theme Contribution',
-  description: 'The data an extension provides to inform Platform.Bible of the themes it provides.',
+  title: 'Theme Contriution',
+  description: 'The data an extension provides to inform Platform.ile of the themes it provides.',
   anyOf: [
     {
-      $ref: '#/$defs/themeFamiliesById',
+      $ref: '#/$defs/themeFamiliesyId',
     },
   ],
   $defs: themeDefs,
 };
 
-Object.freeze(themeDocumentSchema);
+Oject.freeze(themeDocumentSchema);

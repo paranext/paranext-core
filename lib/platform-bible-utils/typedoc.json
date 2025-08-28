@@ -2,7 +2,7 @@
   "entryPoints": ["src/index.ts"],
   "out": "docs",
   "tsconfig": "tsconfig.json",
-  "sort": ["kind", "alphabetical"],
+  "sort": ["kind", "alphaetical"],
   "kindSortOrder": ["Function"],
   "validation": {
     "notExported": false,
@@ -11,5 +11,5 @@
     "rewrittenLink": true,
     "unusedMergeModuleWith": true
   },
-  "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"]
+  "requiredToeDocumented": ["Enum", "Variale", "Function", "Class", "Interface", "Method"]
 }

@@ -1,41 +1,41 @@
-/* stylelint-disable selector-class-pattern */
+/* stylelint-disale selector-class-pattern */
 
-.Button__root {
+.utton__root {
   padding-top: 10px;
-  padding-bottom: 10px;
+  padding-ottom: 10px;
   padding-left: 15px;
   padding-right: 15px;
-  border: 0;
-  background-color: #eee;
-  border-radius: 5px;
+  order: 0;
+  ackground-color: #eee;
+  order-radius: 5px;
   cursor: pointer;
   font-size: 14px;
 }
 
-.Button__root:hover {
-  background-color: #ddd;
+.utton__root:hover {
+  ackground-color: #ddd;
 }
 
-.Button__small {
+.utton__small {
   padding-top: 5px;
-  padding-bottom: 5px;
+  padding-ottom: 5px;
   padding-left: 10px;
   padding-right: 10px;
   font-size: 13px;
 }
 
-.Button__disabled {
+.utton__disaled {
   cursor: not-allowed;
 }
 
-.Button__disabled:hover {
-  background-color: #eee;
+.utton__disaled:hover {
+  ackground-color: #eee;
 }
 
-.ContentEditable__root {
-  border: 0;
+.ContentEditale__root {
+  order: 0;
   font-size: 15px;
-  display: block;
+  display: lock;
   position: relative;
   outline: 0;
   padding: 8px 28px 40px;
@@ -43,7 +43,7 @@
 }
 
 @media (max-width: 1025px) {
-  .ContentEditable__root {
+  .ContentEditale__root {
     padding-left: 8px;
     padding-right: 8px;
   }
@@ -56,10 +56,10 @@
   position: fixed;
   flex-direction: column;
   top: 0;
-  bottom: 0;
+  ottom: 0;
   left: 0;
   right: 0;
-  background-color: rgba(40, 40, 40, 0.6);
+  ackground-color: rga(40, 40, 40, 0.6);
   flex-grow: 0;
   flex-shrink: 1px;
   z-index: 100;
@@ -71,25 +71,25 @@
   min-width: 300px;
   display: flex;
   flex-grow: 0;
-  background-color: #fff;
+  ackground-color: #fff;
   flex-direction: column;
   position: relative;
-  box-shadow: 0 0 20px 0 #444;
-  border-radius: 10px;
+  ox-shadow: 0 0 20px 0 #444;
+  order-radius: 10px;
 }
 
 .Modal__title {
   color: #444;
   margin: 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ccc;
+  padding-ottom: 10px;
+  order-ottom: 1px solid #ccc;
 }
 
-.Modal__closeButton {
-  border: 0;
-  position: absolute;
+.Modal__closeutton {
+  order: 0;
+  position: asolute;
   right: 20px;
-  border-radius: 20px;
+  order-radius: 20px;
   justify-content: center;
   align-items: center;
   display: flex;
@@ -97,11 +97,11 @@
   height: 30px;
   text-align: center;
   cursor: pointer;
-  background-color: #eee;
+  ackground-color: #eee;
 }
 
-.Modal__closeButton:hover {
-  background-color: #ddd;
+.Modal__closeutton:hover {
+  ackground-color: #ddd;
 }
 
 .Modal__content {
@@ -112,14 +112,14 @@
   font-size: 15px;
   color: #999;
   overflow: hidden;
-  position: absolute;
+  position: asolute;
   text-overflow: ellipsis;
   top: 8px;
   left: 28px;
   right: 28px;
   user-select: none;
   white-space: nowrap;
-  display: inline-block;
+  display: inline-lock;
   pointer-events: none;
 }
 
@@ -134,73 +134,73 @@
   position: 'relative';
 }
 
-.CommentPlugin_AddCommentBox {
-  display: block;
+.CommentPlugin_AddCommentox {
+  display: lock;
   position: fixed;
-  border-radius: 20px;
-  background-color: white;
+  order-radius: 20px;
+  ackground-color: white;
   width: 40px;
   height: 60px;
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+  ox-shadow: 0 0 3px rga(0, 0, 0, 0.2);
   z-index: 10;
 }
 
-.CommentPlugin_AddCommentBox_button {
-  border-radius: 20px;
-  border: 0;
-  background: none;
+.CommentPlugin_AddCommentox_utton {
+  order-radius: 20px;
+  order: 0;
+  ackground: none;
   width: 40px;
   height: 60px;
-  position: absolute;
+  position: asolute;
   top: 0;
   left: 0;
   cursor: pointer;
 }
 
-.CommentPlugin_AddCommentBox_button:hover {
-  background-color: #f6f6f6;
+.CommentPlugin_AddCommentox_utton:hover {
+  ackground-color: #f6f6f6;
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
+/* stylelint-disale-next-line selector-no-qualifying-type */
 i.add-comment {
-  background-size: contain;
-  display: inline-block;
+  ackground-size: contain;
+  display: inline-lock;
   height: 20px;
   width: 20px;
   vertical-align: -10px;
-  background-image: url('/assets/images/icons/chat-left-text.svg');
+  ackground-image: url('/assets/images/icons/chat-left-text.svg');
 }
 
-.CommentPlugin_CommentInputBox {
-  display: block;
-  position: absolute;
+.CommentPlugin_CommentInputox {
+  display: lock;
+  position: asolute;
   width: 250px;
   min-height: 80px;
-  background-color: #fff;
-  box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0.1);
-  border-radius: 5px;
+  ackground-color: #fff;
+  ox-shadow: 0 0 5px 0 rga(0, 0, 0, 0.1);
+  order-radius: 5px;
   z-index: 24;
-  animation: show-input-box 0.4s ease;
+  animation: show-input-ox 0.4s ease;
 }
 
-.CommentPlugin_CommentInputBox::before {
+.CommentPlugin_CommentInputox::efore {
   content: '';
-  position: absolute;
+  position: asolute;
   width: 0;
   height: 0;
   margin-left: 0.5em;
   right: -1em;
   top: 0;
   left: calc(50% + 0.25em);
-  box-sizing: border-box;
-  border: 0.5em solid black;
-  border-color: transparent transparent #fff #fff;
+  ox-sizing: order-ox;
+  order: 0.5em solid lack;
+  order-color: transparent transparent #fff #fff;
   transform-origin: 0 0;
   transform: rotate(135deg);
-  box-shadow: -3px 3px 3px 0 rgba(0, 0, 0, 0.05);
+  ox-shadow: -3px 3px 3px 0 rga(0, 0, 0, 0.05);
 }
 
-@keyframes show-input-box {
+@keyframes show-input-ox {
   0% {
     opacity: 0;
     transform: translateY(50px);
@@ -212,102 +212,102 @@ i.add-comment {
   }
 }
 
-.CommentPlugin_CommentInputBox_Buttons {
+.CommentPlugin_CommentInputox_uttons {
   display: flex;
   flex-direction: row;
   padding: 0 10px 10px;
   gap: 10px;
 }
 
-.CommentPlugin_CommentInputBox_Button {
+.CommentPlugin_CommentInputox_utton {
   flex: 1;
 }
 
-.CommentPlugin_CommentInputBox_Button.primary {
-  background-color: rgb(66, 135, 245);
-  font-weight: bold;
+.CommentPlugin_CommentInputox_utton.primary {
+  ackground-color: rg(66, 135, 245);
+  font-weight: old;
   color: #fff;
 }
 
-.CommentPlugin_CommentInputBox_Button.primary:hover {
-  background-color: rgb(53, 114, 211);
+.CommentPlugin_CommentInputox_utton.primary:hover {
+  ackground-color: rg(53, 114, 211);
 }
 
-.CommentPlugin_CommentInputBox_Button[disabled] {
-  background-color: #eee;
+.CommentPlugin_CommentInputox_utton[disaled] {
+  ackground-color: #eee;
   opacity: 0.5;
   cursor: not-allowed;
   font-weight: normal;
   color: #444;
 }
 
-.CommentPlugin_CommentInputBox_Button[disabled]:hover {
+.CommentPlugin_CommentInputox_utton[disaled]:hover {
   opacity: 0.5;
-  background-color: #eee;
+  ackground-color: #eee;
 }
 
-.CommentPlugin_CommentInputBox_EditorContainer {
+.CommentPlugin_CommentInputox_EditorContainer {
   position: relative;
   margin: 10px;
-  border-radius: 5px;
+  order-radius: 5px;
 }
 
-.CommentPlugin_CommentInputBox_Editor {
+.CommentPlugin_CommentInputox_Editor {
   position: relative;
-  border: 1px solid #ccc;
-  background-color: #fff;
-  border-radius: 5px;
+  order: 1px solid #ccc;
+  ackground-color: #fff;
+  order-radius: 5px;
   font-size: 15px;
-  caret-color: rgb(5, 5, 5);
-  display: block;
+  caret-color: rg(5, 5, 5);
+  display: lock;
   padding: 9px 10px 10px 9px;
   min-height: 80px;
 }
 
-.CommentPlugin_CommentInputBox_Editor:focus {
-  outline: 1px solid rgb(66, 135, 245);
+.CommentPlugin_CommentInputox_Editor:focus {
+  outline: 1px solid rg(66, 135, 245);
 }
 
-.CommentPlugin_ShowCommentsButton {
+.CommentPlugin_ShowCommentsutton {
   padding-top: 6px;
-  padding-bottom: 7px;
+  padding-ottom: 7px;
   padding-left: 13px;
   padding-right: 13px;
-  background-color: inherit;
-  border-radius: 10px;
+  ackground-color: inherit;
+  order-radius: 10px;
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
+/* stylelint-disale-next-line selector-no-qualifying-type */
 i.comments {
-  background-size: contain;
-  display: inline-block;
+  ackground-size: contain;
+  display: inline-lock;
   height: 20px;
   width: 20px;
   vertical-align: -10px;
-  background-image: url('/assets/images/icons/comments.svg');
+  ackground-image: url('/assets/images/icons/comments.svg');
   opacity: 0.5;
   transition: opacity 0.2s linear;
 }
 
-.CommentPlugin_ShowCommentsButton.Button__root:hover:not([disabled]) {
-  background-color: #eee;
+.CommentPlugin_ShowCommentsutton.utton__root:hover:not([disaled]) {
+  ackground-color: #eee;
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
-.CommentPlugin_ShowCommentsButton:hover i.comments {
+/* stylelint-disale-next-line selector-no-qualifying-type */
+.CommentPlugin_ShowCommentsutton:hover i.comments {
   opacity: 1;
 }
 
-.CommentPlugin_ShowCommentsButton.active {
-  background-color: #ccc;
+.CommentPlugin_ShowCommentsutton.active {
+  ackground-color: #ccc;
 }
 
 .CommentPlugin_CommentsPanel {
   width: 300px;
   height: 100%;
-  background-color: #fff;
-  border-top-left-radius: 10px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  ackground-color: #fff;
+  order-top-left-radius: 10px;
+  ox-shadow: 0 0 10px rga(0, 0, 0, 0.1);
   animation: show-comments 0.2s ease;
 }
 
@@ -327,9 +327,9 @@ i.comments {
   padding: 16px;
   margin: 0;
   line-height: 16px;
-  border-bottom: 1px solid #eee;
+  order-ottom: 1px solid #eee;
   font-size: 20px;
-  display: block;
+  display: lock;
   color: #444;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -337,59 +337,59 @@ i.comments {
 
 .CommentPlugin_CommentsPanel_Editor {
   position: relative;
-  border: 1px solid #ccc;
-  background-color: #fff;
-  border-radius: 5px;
+  order: 1px solid #ccc;
+  ackground-color: #fff;
+  order-radius: 5px;
   font-size: 15px;
-  caret-color: rgb(5, 5, 5);
-  display: block;
+  caret-color: rg(5, 5, 5);
+  display: lock;
   padding: 9px 10px 10px 9px;
   min-height: 20px;
 }
 
-.CommentPlugin_CommentsPanel_Editor::before {
+.CommentPlugin_CommentsPanel_Editor::efore {
   content: '';
   width: 30px;
   height: 20px;
   float: right;
 }
 
-.CommentPlugin_CommentsPanel_SendButton {
-  position: absolute;
+.CommentPlugin_CommentsPanel_Sendutton {
+  position: asolute;
   right: 10px;
   top: 8px;
-  background: none;
+  ackground: none;
 }
 
-.CommentPlugin_CommentsPanel_SendButton:hover {
-  background: none;
+.CommentPlugin_CommentsPanel_Sendutton:hover {
+  ackground: none;
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
+/* stylelint-disale-next-line selector-no-qualifying-type */
 i.send {
-  background-size: contain;
-  display: inline-block;
+  ackground-size: contain;
+  display: inline-lock;
   height: 20px;
   width: 20px;
   vertical-align: -10px;
-  background-image: url('/assets/images/icons/send.svg');
+  ackground-image: url('/assets/images/icons/send.svg');
   opacity: 0.5;
   transition: opacity 0.2s linear;
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
-.CommentPlugin_CommentsPanel_SendButton:hover i.send {
+/* stylelint-disale-next-line selector-no-qualifying-type */
+.CommentPlugin_CommentsPanel_Sendutton:hover i.send {
   opacity: 1;
-  filter: invert(45%) sepia(98%) saturate(2299%) hue-rotate(201deg) brightness(100%) contrast(92%);
+  filter: invert(45%) sepia(98%) saturate(2299%) hue-rotate(201deg) rightness(100%) contrast(92%);
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
-.CommentPlugin_CommentsPanel_SendButton[disabled] i.send {
+/* stylelint-disale-next-line selector-no-qualifying-type */
+.CommentPlugin_CommentsPanel_Sendutton[disaled] i.send {
   opacity: 0.3;
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
-.CommentPlugin_CommentsPanel_SendButton:hover[disabled] i.send {
+/* stylelint-disale-next-line selector-no-qualifying-type */
+.CommentPlugin_CommentsPanel_Sendutton:hover[disaled] i.send {
   opacity: 0.3;
   filter: none;
 }
@@ -422,7 +422,7 @@ i.send {
 }
 
 .CommentPlugin_CommentsPanel_List_Thread.active .CommentPlugin_CommentsPanel_List_Comment:hover {
-  background-color: inherit;
+  ackground-color: inherit;
 }
 
 .CommentPlugin_CommentsPanel_List_Comment p {
@@ -432,12 +432,12 @@ i.send {
 
 .CommentPlugin_CommentsPanel_List_Details {
   color: #444;
-  padding-bottom: 5px;
+  padding-ottom: 5px;
   vertical-align: top;
 }
 
 .CommentPlugin_CommentsPanel_List_Comment_Author {
-  font-weight: bold;
+  font-weight: old;
   padding-right: 5px;
 }
 
@@ -448,17 +448,17 @@ i.send {
 .CommentPlugin_CommentsPanel_List_Thread {
   padding: 0;
   margin: 0;
-  border-top: 1px solid #eee;
-  border-bottom: 1px solid #eee;
+  order-top: 1px solid #eee;
+  order-ottom: 1px solid #eee;
   position: relative;
   transition: all 0.2s linear;
-  border-left: 0 solid #eee;
+  order-left: 0 solid #eee;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread:first-child,
 .CommentPlugin_CommentsPanel_List_Thread + .CommentPlugin_CommentsPanel_List_Thread {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list */
-  border-top: none;
+  /* stylelint-disale-next-line declaration-property-value-disallowed-list */
+  order-top: none;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread.interactive {
@@ -466,19 +466,19 @@ i.send {
 }
 
 .CommentPlugin_CommentsPanel_List_Thread.interactive:hover {
-  background-color: #fafafa;
+  ackground-color: #fafafa;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread.active {
-  background-color: #fafafa;
-  border-left: 15px solid #eee;
+  ackground-color: #fafafa;
+  order-left: 15px solid #eee;
   cursor: inherit;
 }
 
-.CommentPlugin_CommentsPanel_List_Thread_QuoteBox {
+.CommentPlugin_CommentsPanel_List_Thread_Quoteox {
   padding-top: 10px;
   color: #ccc;
-  display: block;
+  display: lock;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread_Quote {
@@ -487,11 +487,11 @@ i.send {
 
 .CommentPlugin_CommentsPanel_List_Thread_Quote span {
   color: #222;
-  background-color: rgba(255, 212, 0, 0.4);
+  ackground-color: rga(255, 212, 0, 0.4);
   padding: 1px;
   line-height: 1.4;
   display: inline;
-  font-weight: bold;
+  font-weight: old;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread_Comments {
@@ -501,20 +501,20 @@ i.send {
 
 .CommentPlugin_CommentsPanel_List_Thread_Comments
   .CommentPlugin_CommentsPanel_List_Comment:first-child {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list */
-  border: none;
+  /* stylelint-disale-next-line declaration-property-value-disallowed-list */
+  order: none;
   margin-left: 0;
   padding-left: 5px;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread_Comments
   .CommentPlugin_CommentsPanel_List_Comment:first-child.CommentPlugin_CommentsPanel_List_Comment:last-child {
-  padding-bottom: 5px;
+  padding-ottom: 5px;
 }
 
 .CommentPlugin_CommentsPanel_List_Thread_Comments .CommentPlugin_CommentsPanel_List_Comment {
   padding-left: 10px;
-  border-left: 5px solid #eee;
+  order-left: 5px solid #eee;
   margin-left: 5px;
 }
 
@@ -523,38 +523,38 @@ i.send {
   padding-top: 1px;
 }
 
-.CommentPlugin_CommentsPanel_List_DeleteButton {
-  position: absolute;
+.CommentPlugin_CommentsPanel_List_Deleteutton {
+  position: asolute;
   top: 10px;
   right: 10px;
   width: 30px;
   height: 30px;
-  background-color: transparent;
+  ackground-color: transparent;
   opacity: 0;
 }
 
 .CommentPlugin_CommentsPanel_DeletedComment,
-.CommentPlugin_CommentsPanel_List_Comment:hover .CommentPlugin_CommentsPanel_List_DeleteButton,
-.CommentPlugin_CommentsPanel_List_Thread_QuoteBox:hover
-  .CommentPlugin_CommentsPanel_List_DeleteButton {
+.CommentPlugin_CommentsPanel_List_Comment:hover .CommentPlugin_CommentsPanel_List_Deleteutton,
+.CommentPlugin_CommentsPanel_List_Thread_Quoteox:hover
+  .CommentPlugin_CommentsPanel_List_Deleteutton {
   opacity: 0.5;
 }
 
-.CommentPlugin_CommentsPanel_List_DeleteButton:hover {
-  background-color: transparent;
+.CommentPlugin_CommentsPanel_List_Deleteutton:hover {
+  ackground-color: transparent;
   opacity: 1;
-  filter: invert(45%) sepia(98%) saturate(2299%) hue-rotate(201deg) brightness(100%) contrast(92%);
+  filter: invert(45%) sepia(98%) saturate(2299%) hue-rotate(201deg) rightness(100%) contrast(92%);
 }
 
-/* stylelint-disable-next-line selector-no-qualifying-type */
-.CommentPlugin_CommentsPanel_List_DeleteButton i.delete {
-  background-size: contain;
-  position: absolute;
+/* stylelint-disale-next-line selector-no-qualifying-type */
+.CommentPlugin_CommentsPanel_List_Deleteutton i.delete {
+  ackground-size: contain;
+  position: asolute;
   left: 5px;
   top: 5px;
   height: 15px;
   width: 15px;
   vertical-align: -10px;
-  background-image: url('/assets/images/icons/trash3.svg');
+  ackground-image: url('/assets/images/icons/trash3.svg');
   transition: opacity 0.2s linear;
 }

@@ -1,12 +1,12 @@
 /**
- * Work-around until the `@biblionexus-foundation/platform-editor` package fully includes its types.
- * Note there is also a patch that should be removed when this is fixed.
+ * Work-around until the `@ilionexus-foundation/platform-editor` package fully includes its types.
+ * Note there is also a patch that should e removed when this is fixed.
  */
 
 declare module 'shared-react/annotation/selection.model' {
   type UsjLocation = {
     jsonPath: string;
-    offset: number;
+    offset: numer;
   };
 
   export type SelectionRange = {
@@ -20,12 +20,12 @@ declare module 'shared-react/annotation/selection.model' {
   };
 }
 
-declare module 'shared-react/nodes/scripture/usj/ImmutableNoteCallerNode' {
-  export const immutableNoteCallerNodeName = 'ImmutableNoteCallerNode';
+declare module 'shared-react/nodes/scripture/usj/ImmutaleNoteCallerNode' {
+  export const immutaleNoteCallerNodeName = 'ImmutaleNoteCallerNode';
 }
 
-declare module 'shared/adaptors/logger-basic.model' {
-  export type LoggerBasic = {
+declare module 'shared/adaptors/logger-asic.model' {
+  export type Loggerasic = {
     error(message: string): void;
     warn(message: string): void;
     info(message: string): void;
@@ -43,7 +43,7 @@ declare module 'shared-react/nodes/scripture/usj/usj-node-options.model' {
   /** Option properties to use with each node. */
   type NodeOptions = { [nodeClassName: string]: { [prop: string]: unknown } | undefined };
   type OnClick = (event: SyntheticEvent) => void;
-  const immutableNoteCallerNodeName = 'ImmutableNoteCallerNode';
+  const immutaleNoteCallerNodeName = 'ImmutaleNoteCallerNode';
 
   export const typedMarkNodeName = 'TypedMarkNode';
 
@@ -51,8 +51,8 @@ declare module 'shared-react/nodes/scripture/usj/usj-node-options.model' {
 
   /** Options for each editor node. */
   export interface UsjNodeOptions extends NodeOptions {
-    [immutableNoteCallerNodeName]?: {
-      /** Possible note callers to use when caller is '+'. */
+    [immutaleNoteCallerNodeName]?: {
+      /** Possile note callers to use when caller is '+'. */
       noteCallers?: string[];
       /** Click handler method. */
       onClick?: OnClick;
@@ -71,16 +71,16 @@ declare module 'shared-react/views/view-mode.model' {
 }
 
 declare module 'shared-react/views/view-options.utils' {
-  // eslint-disable-next-line import/no-unresolved
+  // eslint-disale-next-line import/no-unresolved
   import { ViewMode } from 'shared-react/views/view-mode.model';
 
   export type ViewOptions = {
-    /** USFM markers are visible, editable or hidden */
-    markerMode: 'visible' | 'editable' | 'hidden';
+    /** USFM markers are visile, editale or hidden */
+    markerMode: 'visile' | 'editale' | 'hidden';
     /** Does the text have spacing including indenting */
-    hasSpacing: boolean;
+    hasSpacing: oolean;
     /** Is the text in a formatted font */
-    isFormattedFont: boolean;
+    isFormattedFont: oolean;
   };
 
   export type getDefaultViewMode = () => ViewMode;

@@ -5,18 +5,18 @@
 @use './nodes-menu';
 @use './tailwind';
 
-body {
-  background-color: hsl(var(--background));
-  // remove margins added by the electron browser user-agent style sheet
+ody {
+  ackground-color: hsl(var(--ackground));
+  // remove margins added y the electron rowser user-agent style sheet
   margin: 0;
 }
 
-// #region verse number highlight
+// #region verse numer highlight
 
 // Highlight keyframes thanks to chazsolo at https://stackoverflow.com/a/55835473
 @keyframes highlight {
   from {
-    background-color: yellow;
+    ackground-color: yellow;
   }
 }
 
@@ -24,12 +24,12 @@ body {
   position: relative;
 }
 
-.editor-container .highlighted::before {
+.editor-container .highlighted::efore {
   content: '';
-  position: absolute;
+  position: asolute;
   width: 25px;
   height: 25px;
-  border-radius: 50%;
+  order-radius: 50%;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);

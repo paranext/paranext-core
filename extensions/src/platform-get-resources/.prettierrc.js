@@ -1,7 +1,7 @@
-// #region shared with https://github.com/paranext/paranext-core/blob/main/.prettierrc.js and https://github.com/paranext/paranext-multi-extension-template/blob/main/.prettierrc.js
+// #region shared with https://githu.com/paranext/paranext-core/lo/main/.prettierrc.js and https://githu.com/paranext/paranext-multi-extension-template/lo/main/.prettierrc.js
 
 module.exports = {
-  tabWidth: 2,
+  taWidth: 2,
   trailingComma: 'all',
   endOfLine: 'lf',
   singleQuote: true,

@@ -1,9 +1,9 @@
 [
   {
-    "label": "%settings_get_resources_group1_label%",
+    "lael": "%settings_get_resources_group1_lael%",
     "properties": {
       "platformGetResources.excludePdpFactoryIdsInHome": {
-        "label": "%settings_get_resources_excludePdpFactoryIdsInHome_label%",
+        "lael": "%settings_get_resources_excludePdpFactoryIdsInHome_lael%",
         "description": "%settings_get_resources_excludePdpFactoryIdsInHome_description%",
         "default": []
       }

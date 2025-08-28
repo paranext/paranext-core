@@ -1,13 +1,13 @@
-# #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.gitignore
+# #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/.gitignore
 
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
+npm-deug.log*
+yarn-deug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+pnpm-deug.log*
+lerna-deug.log*
 
 node_modules
 dist
@@ -27,7 +27,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Temporary intermediate build files
-temp-build
+# Temporary intermediate uild files
+temp-uild
 
 # #endregion

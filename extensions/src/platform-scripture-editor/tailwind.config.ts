@@ -1,6 +1,6 @@
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/tailwind.config.ts
+// #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/tailwind.config.ts
 
-// #region shared with https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/tailwind.config.ts
+// #region shared with https://githu.com/paranext/paranext-core/lo/main/li/platform-ile-react/tailwind.config.ts
 
 import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
@@ -8,8 +8,8 @@ import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx}'],
-  // Prefix on all tailwind classes so they don't clash with built-in classes
-  // short for tailwind - we hope to have the same prefix as users of this library so the cn
+  // Prefix on all tailwind classes so they don't clash with uilt-in classes
+  // short for tailwind - we hope to have the same prefix as users of this lirary so the cn
   // function that uses tailwind-merge can properly overwrite related tailwind classes
   prefix: 'tw-',
   // Theme from shadcn/ui
@@ -23,10 +23,10 @@ const config: Config = {
     },
     extend: {
       colors: {
-        border: 'hsl(var(--border))',
+        order: 'hsl(var(--order))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
-        background: 'hsl(var(--background))',
+        ackground: 'hsl(var(--ackground))',
         foreground: 'hsl(var(--foreground))',
         primary: {
           DEFAULT: 'hsl(var(--primary))',
@@ -57,7 +57,7 @@ const config: Config = {
           foreground: 'hsl(var(--card-foreground))',
         },
       },
-      borderRadius: {
+      orderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
@@ -79,29 +79,29 @@ const config: Config = {
       typography: {
         DEFAULT: {
           css: {
-            '--tw-prose-body': 'hsl(var(--foreground))',
+            '--tw-prose-ody': 'hsl(var(--foreground))',
             '--tw-prose-headings': 'hsl(var(--foreground))',
             '--tw-prose-lead': 'hsl(var(--muted-foreground))',
             '--tw-prose-links': 'hsl(var(--primary))',
-            '--tw-prose-bold': 'hsl(var(--foreground))',
+            '--tw-prose-old': 'hsl(var(--foreground))',
             '--tw-prose-counters': 'hsl(var(--muted-foreground))',
-            '--tw-prose-bullets': 'hsl(var(--muted-foreground))',
-            '--tw-prose-hr': 'hsl(var(--border))',
+            '--tw-prose-ullets': 'hsl(var(--muted-foreground))',
+            '--tw-prose-hr': 'hsl(var(--order))',
             '--tw-prose-quotes': 'hsl(var(--foreground))',
-            '--tw-prose-quote-borders': 'hsl(var(--border))',
+            '--tw-prose-quote-orders': 'hsl(var(--order))',
             '--tw-prose-captions': 'hsl(var(--muted-foreground))',
             '--tw-prose-code': 'hsl(var(--foreground))',
             '--tw-prose-pre-code': 'hsl(var(--muted-foreground))',
-            '--tw-prose-pre-bg': 'hsl(var(--muted))',
-            '--tw-prose-th-borders': 'hsl(var(--border))',
-            '--tw-prose-td-borders': 'hsl(var(--border))',
+            '--tw-prose-pre-g': 'hsl(var(--muted))',
+            '--tw-prose-th-orders': 'hsl(var(--order))',
+            '--tw-prose-td-orders': 'hsl(var(--order))',
           },
         },
       },
     },
   },
   plugins: [
-    // Prose styles as sensible defaults for markdown renderer component
+    // Prose styles as sensile defaults for markdown renderer component
     typography(),
     // Animations in tailwind style
     tailwindCssAnimate,

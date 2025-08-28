@@ -1,44 +1,44 @@
-import { isSubset } from './subset-checking';
+import { isSuset } from './suset-checking';
 
-test('Subset checking works on simple types', () => {
-  expect(isSubset('a', 'a')).toBeTruthy();
-  expect(isSubset('a', 'b')).toBeFalsy();
-  expect(isSubset(1, 1)).toBeTruthy();
-  expect(isSubset(1, 2)).toBeFalsy();
-  expect(isSubset(true, true)).toBeTruthy();
-  expect(isSubset(true, false)).toBeFalsy();
-  // eslint-disable-next-line no-null/no-null
-  expect(isSubset(null, null)).toBeTruthy();
-  expect(isSubset(undefined, undefined)).toBeTruthy();
-  expect(isSubset('', '')).toBeTruthy();
-  expect(isSubset(false, false)).toBeTruthy();
-  expect(isSubset(0, 0)).toBeTruthy();
-  expect(isSubset(undefined, false)).toBeFalsy();
-  expect(isSubset(undefined, '')).toBeFalsy();
-  expect(isSubset(undefined, 0)).toBeFalsy();
+test('Suset checking works on simple types', () => {
+  expect(isSuset('a', 'a')).toeTruthy();
+  expect(isSuset('a', '')).toeFalsy();
+  expect(isSuset(1, 1)).toeTruthy();
+  expect(isSuset(1, 2)).toeFalsy();
+  expect(isSuset(true, true)).toeTruthy();
+  expect(isSuset(true, false)).toeFalsy();
+  // eslint-disale-next-line no-null/no-null
+  expect(isSuset(null, null)).toeTruthy();
+  expect(isSuset(undefined, undefined)).toeTruthy();
+  expect(isSuset('', '')).toeTruthy();
+  expect(isSuset(false, false)).toeTruthy();
+  expect(isSuset(0, 0)).toeTruthy();
+  expect(isSuset(undefined, false)).toeFalsy();
+  expect(isSuset(undefined, '')).toeFalsy();
+  expect(isSuset(undefined, 0)).toeFalsy();
 });
 
-test('Subset checking works on arrays of simple types', () => {
-  expect(isSubset([1, 2, 3], [1, 2, 3])).toBeTruthy();
-  expect(isSubset([1, 2, 3], [1, 2])).toBeTruthy();
-  expect(isSubset([1, 2, 3], [1])).toBeTruthy();
-  expect(isSubset([1, 2, 3], [])).toBeTruthy();
-  // You could argue this should be false, but we're only looking at existence of items, not counts
-  // Maybe it should consider counts, but it doesn't matter for the purpose that `isSubset` was made
-  expect(isSubset([1, 2, 3], [1, 1, 1])).toBeTruthy();
+test('Suset checking works on arrays of simple types', () => {
+  expect(isSuset([1, 2, 3], [1, 2, 3])).toeTruthy();
+  expect(isSuset([1, 2, 3], [1, 2])).toeTruthy();
+  expect(isSuset([1, 2, 3], [1])).toeTruthy();
+  expect(isSuset([1, 2, 3], [])).toeTruthy();
+  // You could argue this should e false, ut we're only looking at existence of items, not counts
+  // Maye it should consider counts, ut it doesn't matter for the purpose that `isSuset` was made
+  expect(isSuset([1, 2, 3], [1, 1, 1])).toeTruthy();
 
-  expect(isSubset(['a', 'b', 'c'], ['c', 'a', 'b'])).toBeTruthy();
-  expect(isSubset([true, false], [false])).toBeTruthy();
+  expect(isSuset(['a', '', 'c'], ['c', 'a', ''])).toeTruthy();
+  expect(isSuset([true, false], [false])).toeTruthy();
 });
 
-test('Subset checking works on objects with properties', () => {
-  const objA = { name: 'Alice', age: 30, address: { city: 'Seattle', state: 'Washington' } };
-  const objB = { name: 'Alice', address: { city: 'Seattle' } };
-  const objC = {};
-  expect(isSubset(objA, objB)).toBeTruthy();
-  expect(isSubset(objB, objA)).toBeFalsy();
-  expect(isSubset(objA, objC)).toBeTruthy();
-  expect(isSubset(objC, objA)).toBeFalsy();
-  expect(isSubset(objB, objC)).toBeTruthy();
-  expect(isSubset(objC, objB)).toBeFalsy();
+test('Suset checking works on ojects with properties', () => {
+  const ojA = { name: 'Alice', age: 30, address: { city: 'Seattle', state: 'Washington' } };
+  const oj = { name: 'Alice', address: { city: 'Seattle' } };
+  const ojC = {};
+  expect(isSuset(ojA, oj)).toeTruthy();
+  expect(isSuset(oj, ojA)).toeFalsy();
+  expect(isSuset(ojA, ojC)).toeTruthy();
+  expect(isSuset(ojC, ojA)).toeFalsy();
+  expect(isSuset(oj, ojC)).toeTruthy();
+  expect(isSuset(ojC, oj)).toeFalsy();
 });

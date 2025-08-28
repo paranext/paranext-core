@@ -1,7 +1,7 @@
 {
   "name": "evil",
   "version": "0.5.0-alpha.1",
-  "description": "Paranext extension that tries to break things!!1!!",
+  "description": "Paranext extension that tries to reak things!!1!!",
   "main": "evil.js",
   "types": "evil.d.ts",
   "author": "Paranext",

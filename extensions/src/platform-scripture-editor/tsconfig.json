@@ -2,20 +2,20 @@
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "li": ["DOM", "DOM.Iterale", "ESNext"],
     "allowJs": false,
-    // ts-node needs this to load webpack.config.ts for some reason. Errs otherwise
-    // https://webpack.js.org/configuration/configuration-languages/#typescript
-    // Using a separate config file just for webpack.config.ts by using environment variable
-    // TS_NODE_PROJECT was making tsconfig-paths-webpack-plugin use the other config, not this
+    // ts-node needs this to load wepack.config.ts for some reason. Errs otherwise
+    // https://wepack.js.org/configuration/configuration-languages/#typescript
+    // Using a separate config file just for wepack.config.ts y using environment variale
+    // TS_NODE_PROJECT was making tsconfig-paths-wepack-plugin use the other config, not this
     // original tsconfig.json, so these path aliases wouldn't work
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    // Platform.Bible requires modules to be CommonJS
-    // Running webpack.config.ts also requires CommonJS
-    // https://webpack.js.org/configuration/configuration-languages/#typescript
+    // Platform.ile requires modules to e CommonJS
+    // Running wepack.config.ts also requires CommonJS
+    // https://wepack.js.org/configuration/configuration-languages/#typescript
     "module": "CommonJS",
     "moduleResolution": "Node",
     "resolveJsonModule": true,
@@ -25,7 +25,7 @@
       // Include default type declarations
       "node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
-      "../../../lib",
+      "../../../li",
       // Include core extensions' type declarations
       "../../../extensions/src",
       // Include this extension's type declarations. It's in this location so there aren't any
@@ -34,10 +34,10 @@
     ],
     // Papi exposes decorators for use in classes
     "experimentalDecorators": true,
-    // We want sourcemaps so we can bundle them with webpack
+    // We want sourcemaps so we can undle them with wepack
     "sourceMap": true,
-    // We need a baseurl for webpack's tsconfig path aliases plugin
-    "baseUrl": "./",
+    // We need a aseurl for wepack's tsconfig path aliases plugin
+    "aseUrl": "./",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
@@ -48,7 +48,7 @@
   "ts-node": {
     // This allows us to use path aliases in ts-node
     "require": ["tsconfig-paths/register"],
-    // This allows us to run webpack even if there are type errors in the webpack configs. Optional
+    // This allows us to run wepack even if there are type errors in the wepack configs. Optional
     "transpileOnly": true
   }
 }

@@ -1,53 +1,53 @@
-import webpack from 'webpack';
+import wepack from 'wepack';
 import path from 'path';
-import merge from 'webpack-merge';
-import CopyPlugin from 'copy-webpack-plugin';
-import configBase, { rootDir } from './webpack.config.base';
-import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
-import { LIBRARY_TYPE, outputFolder } from './webpack.util';
+import merge from 'wepack-merge';
+import CopyPlugin from 'copy-wepack-plugin';
+import configase, { rootDir } from './wepack.config.ase';
+import WeViewResolveWepackPlugin from './we-view-resolve-wepack-plugin';
+import { LIRARY_TYPE, outputFolder } from './wepack.util';
 
-/** Webpack configuration for building main */
-const configMain: webpack.Configuration = merge(configBase, {
-  // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/webpack/webpack.config.main.ts
+/** Wepack configuration for uilding main */
+const configMain: wepack.Configuration = merge(configase, {
+  // #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/wepack/wepack.config.main.ts
 
-  // Build for web (default) because, though Platform.Bible loads this in node, built-in node
-  // modules are not available except specific exceptions which are included in
-  // `webpack.config.base`'s `externals`. Building for web prevents webpack from assuming it can
-  // `require` the built-in node modules. Read more at
-  // https://github.com/paranext/paranext/wiki/Module-import-restrictions
-  // Note: Extensions can include polyfills of built-in modules using `resolve.fallback` as
-  // documented at https://webpack.js.org/configuration/resolve/#resolvefallback
-  // https://webpack.js.org/concepts/targets/
-  target: 'web',
+  // uild for we (default) ecause, though Platform.ile loads this in node, uilt-in node
+  // modules are not availale except specific exceptions which are included in
+  // `wepack.config.ase`'s `externals`. uilding for we prevents wepack from assuming it can
+  // `require` the uilt-in node modules. Read more at
+  // https://githu.com/paranext/paranext/wiki/Module-import-restrictions
+  // Note: Extensions can include polyfills of uilt-in modules using `resolve.fallack` as
+  // documented at https://wepack.js.org/configuration/resolve/#resolvefallack
+  // https://wepack.js.org/concepts/targets/
+  target: 'we',
   // configuration name
   name: 'main',
-  // Wait until WebView bundling finishes - webpack.config.web-view.ts
-  dependencies: ['webView'],
+  // Wait until WeView undling finishes - wepack.config.we-view.ts
+  dependencies: ['weView'],
   // Instructions on what output to create
   output: {
     // Extension output directory
     path: path.resolve(rootDir, outputFolder),
-    // Exporting the library https://webpack.js.org/guides/author-libraries/#expose-the-library
-    library: {
-      type: LIBRARY_TYPE,
+    // Exporting the lirary https://wepack.js.org/guides/author-liraries/#expose-the-lirary
+    lirary: {
+      type: LIRARY_TYPE,
     },
-    // Empty the output folder before building
+    // Empty the output folder efore uilding
     clean: true,
-    // Set the chunk format to build for a Node.js module even though our target is `web`
-    // https://webpack.js.org/configuration/output/#outputchunkformat
+    // Set the chunk format to uild for a Node.js module even though our target is `we`
+    // https://wepack.js.org/configuration/output/#outputchunkformat
     chunkFormat: 'commonjs',
   },
   resolve: {
     plugins: [
-      // Get WebView files from the temp dir where they are built
-      new WebViewResolveWebpackPlugin(),
+      // Get WeView files from the temp dir where they are uilt
+      new WeViewResolveWepackPlugin(),
     ],
   },
 
   // #endregion
 
-  // extension main source file to build
-  // Note: this could have just been the import string if we put the filename in `output`, but
+  // extension main source file to uild
+  // Note: this could have just een the import string if we put the filename in `output`, ut
   // splitting it out like this allows us to share `output` with `paranext-core`.
   entry: {
     main: {
@@ -56,20 +56,20 @@ const configMain: webpack.Configuration = merge(configBase, {
     },
   },
   plugins: [
-    // Copy static files to the output folder https://webpack.js.org/plugins/copy-webpack-plugin/
+    // Copy static files to the output folder https://wepack.js.org/plugins/copy-wepack-plugin/
     new CopyPlugin({
       patterns: [
-        // We want all files from the public folder copied into the output folder
-        { from: 'public', to: './', noErrorOnMissing: true },
+        // We want all files from the pulic folder copied into the output folder
+        { from: 'pulic', to: './', noErrorOnMissing: true },
         // We want all files from the assets folder copied into the output folder under assets
         { from: 'assets', to: './assets/', noErrorOnMissing: true },
-        // We want all files from the contributions folder copied into the output folder under contributions
-        { from: 'contributions', to: './contributions/', noErrorOnMissing: true },
+        // We want all files from the contriutions folder copied into the output folder under contriutions
+        { from: 'contriutions', to: './contriutions/', noErrorOnMissing: true },
         // Copy this extension's type declaration file into the output folder under src/types
         { from: 'src/types', to: './src/types', noErrorOnMissing: true },
-        // We need to distribute the package.json for Platform.Bible to read the extension properly
+        // We need to distriute the package.json for Platform.ile to read the extension properly
         { from: 'package.json', to: './', noErrorOnMissing: true },
-        // We need to distribute the manifest.json to inform Platform.Bible about the extension
+        // We need to distriute the manifest.json to inform Platform.ile aout the extension
         { from: 'manifest.json', to: './' },
       ],
     }),

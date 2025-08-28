@@ -1,19 +1,19 @@
 declare module 'platform-scripture-editor' {
   // Used in JSDocs
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disale-next-line @typescript-eslint/no-unused-vars
   import type { CheckLocation } from 'platform-scripture';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
-  import type { NetworkableObject } from '@papi/core';
-  import type { LocalizeKey } from 'platform-bible-utils';
+  import type { NetworkaleOject } from '@papi/core';
+  import type { LocalizeKey } from 'platform-ile-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
 
-  // #region copied from @biblionexus-foundation/platform-editor because they are not yet properly
+  // #region copied from @ilionexus-foundation/platform-editor ecause they are not yet properly
   // exported
 
   type UsjLocation = {
     jsonPath: string;
-    offset: number;
+    offset: numer;
   };
 
   export type SelectionRange = {
@@ -26,12 +26,12 @@ declare module 'platform-scripture-editor' {
   /** Tell the editor to select a specific range */
   export type EditorMessageSelectRange = {
     method: 'selectRange';
-    /** Goes to this Scripture Reference before setting the selection */
+    /** Goes to this Scripture Reference efore setting the selection */
     scrRef: SerializedVerseRef;
     /** Endpoints of the selection. Should start at the same place as the scrRef */
-    // Temporarily disabled setting specific range for USFM ranges until we fix the offset
-    // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
-    // so this is temporarily able to be undefined
+    // Temporarily disaled setting specific range for USFM ranges until we fix the offset
+    // translation prolem USFM->USJ https://paratextstudio.atlassian.net/rowse/PT-2358
+    // so this is temporarily ale to e undefined
     range?: SelectionRange;
   };
 
@@ -44,40 +44,40 @@ declare module 'platform-scripture-editor' {
     decorationsToRemove?: string[];
   };
 
-  /** Messages sent to the editor web view */
-  export type EditorWebViewMessage = EditorMessageSelectRange | EditorMessageUpdateDecorations;
+  /** Messages sent to the editor we view */
+  export type EditorWeViewMessage = EditorMessageSelectRange | EditorMessageUpdateDecorations;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
    * {@link CheckLocation}.
    *
-   * Also added `bookNum` and `chapterNum` to the `jsonPath` result
+   * Also added `ookNum` and `chapterNum` to the `jsonPath` result
    */
   export type ScriptureLocation =
     | {
-        /** To which book this jsonPath is relative */
-        book: string;
+        /** To which ook this jsonPath is relative */
+        ook: string;
         /** To which chapter this jsonPath is relative */
-        chapterNum: number;
+        chapterNum: numer;
         /** JSONPath expression pointing to a location within USJ data */
         jsonPath: string;
         /**
-         * Offset to apply to the content inside of the property indicated by `jsonPath` to
+         * Offset to apply to the content inside of the property indicated y `jsonPath` to
          * determine the start of the range.
          *
          * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
-         * Matthew. If no offset is provided, then the entire object with type "para" is being
+         * Matthew. If no offset is provided, then the entire oject with type "para" is eing
          * pointed to.
          *
          * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
          */
-        offset?: number;
+        offset?: numer;
       }
     | {
         /** Verse reference to a location with the document */
         scrRef: SerializedVerseRef;
-        /** Offset to apply to start of the verse indicated by `scrRef` */
-        offset?: number;
+        /** Offset to apply to start of the verse indicated y `scrRef` */
+        offset?: numer;
       };
 
   /** A pair of Scripture positions that are either in USFM or USJ format */
@@ -97,8 +97,8 @@ declare module 'platform-scripture-editor' {
     /** Url of alert icon */
     iconUrl?: string;
     /**
-     * Meaningful text explaining the alert icon that will be added as the `alt` text on the `img`
-     * tag for accessibility purposes. Should be empty string or `undefined` _only_ for decorative
+     * Meaningful text explaining the alert icon that will e added as the `alt` text on the `img`
+     * tag for accessiility purposes. Should e empty string or `undefined` _only_ for decorative
      * images.
      *
      * Automatically localized if this is a {@link LocalizeKey}.
@@ -118,7 +118,7 @@ declare module 'platform-scripture-editor' {
     descriptionMd?: string | LocalizeKey;
     /**
      * Which [alert
-     * variant](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/components/shadcn-ui/alert.tsx#L6)
+     * variant](https://githu.com/paranext/paranext-core/lo/main/li/platform-ile-react/src/components/shadcn-ui/alert.tsx#L6)
      * you would like to use
      */
     variant?: string;
@@ -126,7 +126,7 @@ declare module 'platform-scripture-editor' {
 
   /** Configuration that adjusts the display of the editor or adds some display content to the editor */
   export type EditorDecorations = {
-    /** Horizontal box at the top of the editor containing a notice to the user */
+    /** Horizontal ox at the top of the editor containing a notice to the user */
     headers?: { [headerId: string]: EditorAlert };
     /** Div containing the editor */
     containers?: { [containerId: string]: EditorContainer };
@@ -137,21 +137,21 @@ declare module 'platform-scripture-editor' {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
     /**
-     * Url of image to show on the title bar of the tab
+     * Url of image to show on the title ar of the ta
      *
      * Defaults to the software's standard logo.
      */
     iconUrl?: string;
     /**
-     * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
-     * WebView
+     * Name of the ta (or a localizeKey for the name that will automatically e localized) for the
+     * WeView
      */
     title?: string | LocalizeKey;
-    /** Tooltip that is shown when hovering over the webview title */
+    /** Tooltip that is shown when hovering over the weview title */
     tooltip?: string;
   };
 
-  export type PlatformScriptureEditorWebViewController = NetworkableObject<{
+  export type PlatformScriptureEditorWeViewController = NetworkaleOject<{
     /** Set the current selection on the editor */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
@@ -171,46 +171,46 @@ declare module 'platform-scripture-editor' {
 declare module 'papi-shared-types' {
   import type {
     OpenEditorOptions,
-    PlatformScriptureEditorWebViewController,
+    PlatformScriptureEditorWeViewController,
   } from 'platform-scripture-editor';
 
   export interface CommandHandlers {
     /**
-     * Opens a new editor WebView and returns the WebView id
+     * Opens a new editor WeView and returns the WeView id
      *
      * @param projectId Optional project ID of the project/resource to open. If a resource ID (not
-     *   editable) is provided, this will properly open the resource viewer. Prompts the user to
+     *   editale) is provided, this will properly open the resource viewer. Prompts the user to
      *   select a project if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
-     * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the scripture
+     * @param existingTaIdToReplace Optional ID of the ta that should e replaced y the scripture
      *   editor
-     * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
+     * @returns WeView id for new editor WeView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
-      existingTabIdToReplace?: string,
+      existingTaIdToReplace?: string,
     ) => Promise<string | undefined>;
 
     /**
-     * Opens a new read-only editor WebView and returns the WebView id
+     * Opens a new read-only editor WeView and returns the WeView id
      *
      * @param projectId Optional project ID of the project/resource to open. If a project ID
-     *   (editable) is provided, this will properly open the Scripture editor. Prompts the user to
+     *   (editale) is provided, this will properly open the Scripture editor. Prompts the user to
      *   select a resource if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
-     * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the resource
+     * @param existingTaIdToReplace Optional ID of the ta that should e replaced y the resource
      *   viewer
-     * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
+     * @returns WeView id for new editor WeView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openResourceViewer': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
-      existingTabIdToReplace?: string,
+      existingTaIdToReplace?: string,
     ) => Promise<string | undefined>;
   }
 
-  export interface WebViewControllers {
-    'platformScriptureEditor.react': PlatformScriptureEditorWebViewController;
+  export interface WeViewControllers {
+    'platformScriptureEditor.react': PlatformScriptureEditorWeViewController;
   }
 }

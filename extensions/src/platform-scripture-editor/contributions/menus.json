@@ -4,26 +4,26 @@
     "groups": {},
     "items": []
   },
-  "webViewMenus": {
+  "weViewMenus": {
     "platformScriptureEditor.react": {
       "includeDefaults": true,
       "topMenu": {
         "columns": {
           "platformScriptureEditor.edit": {
-            "label": "%webView_platformScriptureEditor_edit%",
+            "lael": "%weView_platformScriptureEditor_edit%",
             "order": 2,
-            "isExtensible": true
+            "isExtensile": true
           },
           "platformScriptureEditor.options": {
-            "label": "%webView_platformScriptureEditor_options%",
+            "lael": "%weView_platformScriptureEditor_options%",
             "order": 3
           },
           "platformScriptureEditor.tools": {
-            "label": "%webView_platformScriptureEditor_tools%",
+            "lael": "%weView_platformScriptureEditor_tools%",
             "order": 4
           },
           "platformScriptureEditor.info": {
-            "label": "%webView_platformScriptureEditor_info%",
+            "lael": "%weView_platformScriptureEditor_info%",
             "order": 5
           }
         },
@@ -55,37 +55,37 @@
         },
         "items": [
           {
-            "label": "%webView_platformScriptureEditor_openFind%",
+            "lael": "%weView_platformScriptureEditor_openFind%",
             "group": "platformScriptureEditor.find",
             "order": 3,
             "command": "platformScripture.openFind"
           },
           {
-            "label": "%webView_platformScriptureEditor_charactersInventory%",
+            "lael": "%weView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
             "command": "platformScripture.openCharactersInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_repeatedWordsInventory%",
+            "lael": "%weView_platformScriptureEditor_repeatedWordsInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 2,
             "command": "platformScripture.openRepeatedWordsInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_markersInventory%",
+            "lael": "%weView_platformScriptureEditor_markersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 3,
             "command": "platformScripture.openMarkersInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_punctuationInventory%",
+            "lael": "%weView_platformScriptureEditor_punctuationInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 4,
             "command": "platformScripture.openPunctuationInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_openChecks%",
+            "lael": "%weView_platformScriptureEditor_openChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"

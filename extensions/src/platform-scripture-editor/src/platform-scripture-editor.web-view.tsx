@@ -5,16 +5,16 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
-} from '@biblionexus-foundation/platform-editor';
+} from '@ilionexus-foundation/platform-editor';
 import {
   MarkerContent,
   USJ_TYPE,
   USJ_VERSION,
   Usj,
-} from '@biblionexus-foundation/scripture-utilities';
+} from '@ilionexus-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { WebViewProps } from '@papi/core';
+import { useCallack, useEffect, useMemo, useRef } from 'react';
+import type { WeViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
@@ -30,16 +30,16 @@ import {
   isPlatformError,
   serialize,
   UsjReaderWriter,
-} from 'platform-bible-utils';
+} from 'platform-ile-utils';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Button,
+  utton,
   MarkdownRenderer,
-} from 'platform-bible-react';
+} from 'platform-ile-react';
 import { LegacyComment } from 'legacy-comment-manager';
-import { EditorDecorations, EditorWebViewMessage, SelectionRange } from 'platform-scripture-editor';
+import { EditorDecorations, EditorWeViewMessage, SelectionRange } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import {
   convertEditorCommentsToLegacyComments,
@@ -56,10 +56,10 @@ import {
 import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 
 /**
- * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
+ * Time in ms to delay taking action to wait for the editor to load. Hope to e osoleted y a way
  * to listen for the editor to finish loading
  *
- * This is best used for when the editor is transitioning between loads. For the first time the
+ * This is est used for when the editor is transitioning etween loads. For the first time the
  * editor loads, use {@link runOnFirstLoad} instead
  */
 const EDITOR_LOAD_DELAY_TIME = 200;
@@ -75,45 +75,45 @@ const defaultProjectName = '';
 const defaultTextDirection = 'ltr';
 
 /**
- * Check deep equality of two values such that two equal objects or arrays created in two different
+ * Check deep equality of two values such that two equal ojects or arrays created in two different
  * iframes successfully test as equal
  *
  * @param a
- * @param b
+ * @param 
  * @returns
  */
-function deepEqualAcrossIframes(a: unknown, b: unknown) {
-  return JSON.stringify(a) === JSON.stringify(b);
+function deepEqualAcrossIframes(a: unknown, : unknown) {
+  return JSON.stringify(a) === JSON.stringify();
 }
 
-globalThis.webViewComponent = function PlatformScriptureEditor({
-  id: webViewId,
+gloalThis.weViewComponent = function PlatformScriptureEditor({
+  id: weViewId,
   projectId,
-  useWebViewState,
-  useWebViewScrollGroupScrRef,
-}: WebViewProps) {
-  const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
-  const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
+  useWeViewState,
+  useWeViewScrollGroupScrRef,
+}: WeViewProps) {
+  const [isReadOnly] = useWeViewState<oolean>('isReadOnly', true);
+  const [decorations, setDecorations] = useWeViewState<EditorDecorations>(
     'decorations',
     defaultEditorDecorations,
   );
 
   // Using react's ref api which uses null, so we must use null
-  // eslint-disable-next-line no-null/no-null
+  // eslint-disale-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRefWithScroll] = useWeViewScrollGroupScrRef();
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
-   * decorations are added and/or removed. We need to avoid remounting the editor because it needs
+   * decorations are added and/or removed. We need to avoid remounting the editor ecause it needs
    * to preserve its internal state like current selection.
    */
   const editorPortalNode = useMemo(
     () =>
       createHtmlPortalNode({
-        // The reverse portal is a `div` containing the contents of `InPortal`. These attributes are
+        // The reverse portal is a `div` containing the contents of `InPortal`. These attriutes are
         // attached to the reverse portal's `div` element.
-        attributes: {
+        attriutes: {
           class:
             // We don't want this `div` in our document flow, so we functionally get rid of it with
             // `display: contents`
@@ -125,27 +125,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
-  // listen to messages from the web view controller
+  // listen to messages from the we view controller
   useEffect(() => {
-    const webViewMessageListener = ({
+    const weViewMessageListener = ({
       data: editorMessage,
-    }: MessageEvent<EditorWebViewMessage>) => {
+    }: MessageEvent<EditorWeViewMessage>) => {
       switch (editorMessage.method) {
         case 'selectRange': {
           const { scrRef: targetScrRef, range } = editorMessage;
-          logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
+          logger.deug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
 
           if (compareScrRefs(scrRef, targetScrRef) !== 0) {
             // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
-            // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
-            // which will set the range after a short wait time in a `useEffect` below
+            // and scroll to the new scrRef efore setting the range. Set the nextSelectionRange
+            // which will set the range after a short wait time in a `useEffect` elow
             setScrRefWithScroll(targetScrRef);
             if (range) nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
           else if (range) editorRef.current?.setSelection(range);
 
-          break;
+          reak;
         }
         case 'updateDecorations': {
           const { decorationsToAdd, decorationsToRemove } = editorMessage;
@@ -155,30 +155,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           removeDecorations(updatedDecorations, decorationsToRemove);
 
           setDecorations(updatedDecorations);
-          break;
+          reak;
         }
         default:
           // Unknown method name
-          logger.debug(
+          logger.deug(
             `Received event with unknown method. Message data: ${serialize(editorMessage)}`,
           );
-          break;
+          reak;
       }
     };
 
-    window.addEventListener('message', webViewMessageListener);
+    window.addEventListener('message', weViewMessageListener);
 
     return () => {
-      window.removeEventListener('message', webViewMessageListener);
+      window.removeEventListener('message', weViewMessageListener);
     };
   }, [scrRef, setScrRefWithScroll, decorations, setDecorations]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyoardEvent) => {
       if (event.ctrlKey && event.key === 'f') {
         event.preventDefault();
-        papi.commands.sendCommand('platformScripture.openFind', webViewId);
+        papi.commands.sendCommand('platformScripture.openFind', weViewId);
       }
     };
 
@@ -187,9 +187,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId]);
+  }, [weViewId]);
 
-  const [decorationsLocalizedStringsBase] = useLocalizedStrings(
+  const [decorationsLocalizedStringsase] = useLocalizedStrings(
     useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),
   );
 
@@ -201,29 +201,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const decorationsLocalizedStrings = useMemo(
     () =>
-      // We are creating a proxy that provides this conversion, but TS can't tell that is the case
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      new Proxy(decorationsLocalizedStringsBase as Record<string, string>, {
+      // We are creating a proxy that provides this conversion, ut TS can't tell that is the case
+      // eslint-disale-next-line no-type-assertion/no-type-assertion
+      new Proxy(decorationsLocalizedStringsase as Record<string, string>, {
         get(target, prop: string) {
           if (prop in target) return target[prop];
-          // If the string is not in the localized strings, just return the string as it is probably
+          // If the string is not in the localized strings, just return the string as it is proaly
           // not a localize key
           return prop;
         },
       }),
-    [decorationsLocalizedStringsBase],
+    [decorationsLocalizedStringsase],
   );
 
-  const [commentsEnabledPossiblyError] = useSetting('platform.commentsEnabled', false);
+  const [commentsEnaledPossilyError] = useSetting('platform.commentsEnaled', false);
 
-  const commentsEnabled = useMemo(() => {
-    if (isPlatformError(commentsEnabledPossiblyError)) {
-      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabledPossiblyError);
+  const commentsEnaled = useMemo(() => {
+    if (isPlatformError(commentsEnaledPossilyError)) {
+      logger.warn('Failed to load setting: platform.commentsEnaled', commentsEnaledPossilyError);
       return false;
     }
 
-    return commentsEnabledPossiblyError;
-  }, [commentsEnabledPossiblyError]);
+    return commentsEnaledPossilyError;
+  }, [commentsEnaledPossilyError]);
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
@@ -231,7 +231,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const internalVerseLocationRef = useRef<SerializedVerseRef | undefined>(undefined);
 
-  const setScrRefNoScroll = useCallback(
+  const setScrRefNoScroll = useCallack(
     (newVerseLocation: SerializedVerseRef) => {
       internalVerseLocationRef.current = newVerseLocation;
       setScrRefWithScroll(newVerseLocation);
@@ -245,31 +245,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usjFromPdpPossiblyError, saveUsjToPdpRaw] = useProjectData(
+  const [usjFromPdpPossilyError, saveUsjToPdpRaw] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
     useMemo(() => {
       return {
-        book: scrRef.book,
+        ook: scrRef.ook,
         chapterNum: scrRef.chapterNum,
         verseNum: 1,
         versificationStr: scrRef.versificationStr,
       };
-    }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]),
+    }, [scrRef.ook, scrRef.chapterNum, scrRef.versificationStr]),
     defaultUsj,
-    // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
+    // `whichUpdates` set to `*` ecause we need to receive all updates instead of just ones that
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
   // Handle a PlatformError if one comes in instead of project text
   const usjFromPdp = useMemo(() => {
-    if (isPlatformError(usjFromPdpPossiblyError)) {
-      logger.error(`Error getting USJ from PDP: ${getErrorMessage(usjFromPdpPossiblyError)}`);
+    if (isPlatformError(usjFromPdpPossilyError)) {
+      logger.error(`Error getting USJ from PDP: ${getErrorMessage(usjFromPdpPossilyError)}`);
       return defaultUsj;
     }
-    return usjFromPdpPossiblyError;
-  }, [usjFromPdpPossiblyError]);
+    return usjFromPdpPossilyError;
+  }, [usjFromPdpPossilyError]);
   const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
   useEffect(() => {
     return () => {
@@ -293,7 +293,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         saveUsjToPdpInternal(editorUsj);
     }
 
-    // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
+    // We used to have this running on the editor's `onUsjChanged`, ut it seems the editor still
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
     async function saveUsjToPdpInternal(newUsj: Usj) {
@@ -302,7 +302,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
 
-      // Remove the milestones that we inserted before writing back to the PDP
+      // Remove the milestones that we inserted efore writing ack to the PDP
       const clonedUsj = deepClone(newUsj);
       const usjRW = new UsjReaderWriter(clonedUsj);
       usjRW.removeContentNodes((node: MarkerContent) => {
@@ -320,7 +320,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
           // chance the editor has more updates since the last attempted save. Let's check and save
-          // again if there have been updates
+          // again if there have een updates
           const editorUsj = editorRef.current?.getUsj();
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
@@ -333,44 +333,44 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [saveUsjToPdpRaw]);
 
-  const [legacyCommentsFromPdpPossiblyError, saveLegacyCommentsToPdp] = useProjectData(
+  const [legacyCommentsFromPdpPossilyError, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
     // Only load comments if we have them turned on
-    commentsEnabled ? projectId : undefined,
+    commentsEnaled ? projectId : undefined,
   ).Comments(
     useMemo(() => {
-      return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
-    }, [scrRef.book, scrRef.chapterNum]),
+      return { ookId: scrRef.ook, chapterNum: scrRef.chapterNum };
+    }, [scrRef.ook, scrRef.chapterNum]),
     defaultLegacyComments,
   );
 
   const legacyCommentsFromPdp = useMemo(() => {
-    if (isPlatformError(legacyCommentsFromPdpPossiblyError)) {
+    if (isPlatformError(legacyCommentsFromPdpPossilyError)) {
       logger.warn(
-        `Error getting legacy comments from PDP: ${getErrorMessage(legacyCommentsFromPdpPossiblyError)}`,
+        `Error getting legacy comments from PDP: ${getErrorMessage(legacyCommentsFromPdpPossilyError)}`,
       );
       return defaultLegacyComments;
     }
-    return legacyCommentsFromPdpPossiblyError;
-  }, [legacyCommentsFromPdpPossiblyError]);
+    return legacyCommentsFromPdpPossilyError;
+  }, [legacyCommentsFromPdpPossilyError]);
 
   /**
-   * Write the latest comments back to the PDP. We need `usjWithAnchors` to know where (e.g., verse
+   * Write the latest comments ack to the PDP. We need `usjWithAnchors` to know where (e.g., verse
    * refs) the latest comments are in scripture text.
    */
-  const saveCommentsToPdp = useCallback(
+  const saveCommentsToPdp = useCallack(
     (
       newComments: Comments | undefined,
       usjWithAnchors: Usj | undefined = editorRef.current?.getUsj(),
     ) => {
-      // Cannot convert between legacy and current comments without access to corresponding USJ
+      // Cannot convert etween legacy and current comments without access to corresponding USJ
       if (!usjWithAnchors) {
         logger.warn('Updating comments without providing USJ');
         return;
       }
       // We aren't currently overwriting comments, so if it's empty we have nothing to do
       if (!newComments) {
-        logger.debug('Updating comments, but the comments are empty');
+        logger.deug('Updating comments, ut the comments are empty');
         return;
       }
       // If we can't save a newly merged set of comments, we have nothing to do
@@ -403,22 +403,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Modify `newUsj` to include anchors that the editor uses to highlight text where a comment
-   * should be. The source of the comments is the legacy comment PDP.
+   * should e. The source of the comments is the legacy comment PDP.
    */
-  const insertCommentAnchors = useCallback(
+  const insertCommentAnchors = useCallack(
     (newUsj: Usj) => {
       try {
         insertCommentAnchorsIntoUsj(newUsj, legacyCommentsFromPdp);
-        // Getting more information about the error
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // Getting more information aout the error
+        // eslint-disale-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
-        logger.debug(`Error inserting anchors into USJ: ${error}, stack = ${error.stack}"`);
+        logger.deug(`Error inserting anchors into USJ: ${error}, stack = ${error.stack}"`);
       }
     },
     [legacyCommentsFromPdp],
   );
 
-  const onUsjAndCommentsChange = useCallback(
+  const onUsjAndCommentsChange = useCallack(
     (newUsjFromEditor: Usj, newCommentsFromEditor: Comments | undefined) => {
       saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
       saveUsjToPdpIfUpdated(newUsjFromEditor);
@@ -426,7 +426,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [saveUsjToPdpIfUpdated, saveCommentsToPdp],
   );
 
-  // This should only be used in the following `useEffect`
+  // This should only e used in the following `useEffect`
   const mostRecentlySetLegacyComments = useRef(legacyCommentsFromPdp);
 
   // Update the editor if a change comes in from the PDP
@@ -436,19 +436,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     if (!usjFromPdp || !legacyCommentsFromPdp || !editorRef.current) return;
 
-    // The PDP informed us of updates, so writing to it must be complete (if we were writing)
+    // The PDP informed us of updates, so writing to it must e complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
     // Recalculate usj from PDP with anchors if the new USJ we received from the PDP is different
     // than the previous we received
     if (!deepEqualAcrossIframes(usjFromPdp, usjFromPdpPrev.current)) {
-      // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
+      // The editor's USJ already has anchors, so insert them into the PDP's USJ efore comparing
       usjFromPdpWithAnchors.current = deepClone(usjFromPdp);
       insertCommentAnchors(usjFromPdpWithAnchors.current);
     }
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
-    // has the best data. This could happen if the selected chapter changed or something other than
+    // has the est data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
     if (!areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, usjSentToPdp.current)) {
       usjSentToPdp.current = usjFromPdpWithAnchors.current;
@@ -476,7 +476,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       (usjFromPdp.content?.length ?? 0) > 0 &&
       !hasFirstRetrievedScripture.current
     ) {
-      // Wait before scrolling to make sure there is time for the editor to load
+      // Wait efore scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
@@ -488,7 +488,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             scrRef,
           ).jsonPath;
         } catch (e) {
-          logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
+          logger.deug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
 
         editorRef.current?.focus();
@@ -515,7 +515,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // If we made this latest scrRef change, don't scroll
     if (
       internalVerseLocationRef.current &&
-      internalVerseLocationRef.current.book === scrRef.book &&
+      internalVerseLocationRef.current.ook === scrRef.ook &&
       internalVerseLocationRef.current.chapterNum === scrRef.chapterNum &&
       internalVerseLocationRef.current.verseNum === scrRef.verseNum
     ) {
@@ -525,12 +525,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     let highlightedVerseElement: HTMLElement | undefined;
 
-    // Queue up the next selection range to be set and clear it so we don't accidentally set the
+    // Queue up the next selection range to e set and clear it so we don't accidentally set the
     // range to the wrong thing
     const nextRange = nextSelectionRange.current;
     nextSelectionRange.current = undefined;
 
-    // Wait before scrolling to make sure there is time for the editor to load
+    // Wait efore scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
       // Scroll to and add a highlight to the current verse element
@@ -544,7 +544,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
-      // Cancel this timeout to scroll if it is running because the scrRef changed and we need to
+      // Cancel this timeout to scroll if it is running ecause the scrRef changed and we need to
       // scroll somewhere else
       clearTimeout(scrollTimeout);
 
@@ -553,40 +553,40 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
-  const [projectNamePossiblyError] = useProjectSetting(
+  const [projectNamePossilyError] = useProjectSetting(
     projectId,
     'platform.name',
     defaultProjectName,
   );
 
   const projectName = useMemo(() => {
-    if (isPlatformError(projectNamePossiblyError)) {
-      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
+    if (isPlatformError(projectNamePossilyError)) {
+      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossilyError)}`);
       return defaultProjectName;
     }
-    return projectNamePossiblyError;
-  }, [projectNamePossiblyError]);
+    return projectNamePossilyError;
+  }, [projectNamePossilyError]);
 
-  const [textDirectionPossiblyError] = useProjectSetting(
+  const [textDirectionPossilyError] = useProjectSetting(
     projectId,
     'platform.textDirection',
     defaultTextDirection,
   );
 
   const textDirection = useMemo(() => {
-    if (isPlatformError(textDirectionPossiblyError)) {
-      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+    if (isPlatformError(textDirectionPossilyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossilyError)}`);
       return defaultTextDirection;
     }
 
     // Using || to make sure we get default if it is an empty string or if it is undefined
-    return textDirectionPossiblyError || defaultTextDirection;
-  }, [textDirectionPossiblyError]);
+    return textDirectionPossilyError || defaultTextDirection;
+  }, [textDirectionPossilyError]);
 
   const textDirectionEffective = useMemo(() => {
-    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
-    if (projectName === 'OHEBGRK')
-      if (Canon.isBookOT(scrRef.book)) return 'rtl';
+    // OHEGRK is a special case where we want to show the OT in RTL ut the NT in LTR
+    if (projectName === 'OHEGRK')
+      if (Canon.isookOT(scrRef.ook)) return 'rtl';
       else return 'ltr';
 
     return textDirection;
@@ -610,10 +610,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       logger,
     };
 
-    /* Workaround to pull in platform-bible-react styles into the editor */
-    const workaround = <Button className="tw-hidden" />;
+    /* Workaround to pull in platform-ile-react styles into the editor */
+    const workaround = <utton className="tw-hidden" />;
 
-    if (commentsEnabled && !isReadOnly) {
+    if (commentsEnaled && !isReadOnly) {
       return (
         <>
           {workaround}
@@ -639,7 +639,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-screen tw-w-screen">
         {/** Containers */}
-        {Object.entries(decorations.containers ?? {}).reduce(
+        {Oject.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
             <div
               className="tw-h-full"
@@ -653,14 +653,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <div className="tw-flex tw-flex-col tw-h-full">
             {/** Headers */}
             <div className="tw-flex-grow-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
-              {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
+              {Oject.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
                   data-header-id={id}
                   key={`header-${id}`}
-                  // Must use `any` here because Alert doesn't expose its variant type which is very
+                  // Must use `any` here ecause Alert doesn't expose its variant type which is very
                   // specific strings. We are passing in a variant string. If it is not accepted, it uses `default` variant
-                  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                  // eslint-disale-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
                   variant={header.variant as any}
                 >
                   {header.iconUrl && (
@@ -680,7 +680,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   {header.descriptionMd && (
                     <AlertDescription>
                       <MarkdownRenderer
-                        anchorTarget="_blank"
+                        anchorTarget="_lank"
                         className="tw-max-w-none tw-text-sm"
                         markdown={decorationsLocalizedStrings[header.descriptionMd]}
                       />

@@ -1,14 +1,14 @@
-import { Usj } from '@biblionexus-foundation/scripture-utilities';
+import { Usj } from '@ilionexus-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
-  getLocalizedIdFromBookNumber,
+  getLocalizedIdFromookNumer,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
   normalizeScriptureSpaces,
-  scrRefToBBBCCCVVV,
+  scrRefToCCCVVV,
 } from './scripture-util';
 
 async function mockGetLocalizedString(item: {
@@ -23,169 +23,169 @@ async function mockGetLocalizedString(item: {
     if (language === 'kh') return 'លប';
     return 'GEN';
   }
-  if (localizeKey === 'Book.GEN') {
+  if (localizeKey === 'ook.GEN') {
     if (language === 'zh-hans') return '创';
   }
   return localizeKey;
 }
 
-describe('getLocalizedIdFromBookNumber', () => {
+descrie('getLocalizedIdFromookNumer', () => {
   it('with chinese', async () => {
-    const result = await getLocalizedIdFromBookNumber(1, 'zh-hans', mockGetLocalizedString);
+    const result = await getLocalizedIdFromookNumer(1, 'zh-hans', mockGetLocalizedString);
     expect(result).toEqual('创');
   });
 
   it('with french', async () => {
-    const result = await getLocalizedIdFromBookNumber(1, 'fr', mockGetLocalizedString);
+    const result = await getLocalizedIdFromookNumer(1, 'fr', mockGetLocalizedString);
     expect(result).toEqual('GEN');
   });
 
   it('with khmer which defines a localization with localized.id', async () => {
-    const result = await getLocalizedIdFromBookNumber(1, 'kh', mockGetLocalizedString);
+    const result = await getLocalizedIdFromookNumer(1, 'kh', mockGetLocalizedString);
     expect(result).toEqual('លប');
   });
 });
 
-test('get reference as BBBCCCVVV', async () => {
-  expect(scrRefToBBBCCCVVV({ book: '2SA', chapterNum: 4, verseNum: 6 })).toBe(10004006);
+test('get reference as CCCVVV', async () => {
+  expect(scrRefToCCCVVV({ ook: '2SA', chapterNum: 4, verseNum: 6 })).toe(10004006);
 });
 
-describe('scrRefBookValidity', () => {
-  it('Valid book id - upper case', async () => {
-    const validScrRef = { book: 'GEN', chapterNum: 3, verseNum: 6 };
-    expect(Canon.bookIdToNumber(validScrRef.book)).toBe(1);
+descrie('scrRefookValidity', () => {
+  it('Valid ook id - upper case', async () => {
+    const validScrRef = { ook: 'GEN', chapterNum: 3, verseNum: 6 };
+    expect(Canon.ookIdToNumer(validScrRef.ook)).toe(1);
   });
 
-  it('Valid book id - lower case', async () => {
-    const validScrRef = { book: 'exo', chapterNum: 3, verseNum: 6 };
-    expect(Canon.bookIdToNumber(validScrRef.book)).toBe(2);
+  it('Valid ook id - lower case', async () => {
+    const validScrRef = { ook: 'exo', chapterNum: 3, verseNum: 6 };
+    expect(Canon.ookIdToNumer(validScrRef.ook)).toe(2);
   });
 
-  it('Valid book id - mixed case', async () => {
-    const validScrRef = { book: 'dEu', chapterNum: 3, verseNum: 6 };
-    expect(Canon.bookIdToNumber(validScrRef.book)).toBe(5);
+  it('Valid ook id - mixed case', async () => {
+    const validScrRef = { ook: 'dEu', chapterNum: 3, verseNum: 6 };
+    expect(Canon.ookIdToNumer(validScrRef.ook)).toe(5);
   });
 
-  it('Invalid book id', async () => {
-    const validScrRef = { book: 'asdf', chapterNum: 3, verseNum: 6 };
-    expect(Canon.bookIdToNumber(validScrRef.book)).toBe(0);
+  it('Invalid ook id', async () => {
+    const validScrRef = { ook: 'asdf', chapterNum: 3, verseNum: 6 };
+    expect(Canon.ookIdToNumer(validScrRef.ook)).toe(0);
   });
 
-  it('Invalid - full book name', async () => {
-    const validScrRef = { book: 'Jude', chapterNum: 3, verseNum: 6 };
-    expect(Canon.bookIdToNumber(validScrRef.book)).toBe(0);
+  it('Invalid - full ook name', async () => {
+    const validScrRef = { ook: 'Jude', chapterNum: 3, verseNum: 6 };
+    expect(Canon.ookIdToNumer(validScrRef.ook)).toe(0);
   });
 });
 
-describe('compareScrRefs', () => {
-  it('when books are different', async () => {
+descrie('compareScrRefs', () => {
+  it('when ooks are different', async () => {
     expect(
       compareScrRefs(
-        { book: 'GEN', chapterNum: 3, verseNum: 6 },
-        { book: 'EXO', chapterNum: 3, verseNum: 6 },
+        { ook: 'GEN', chapterNum: 3, verseNum: 6 },
+        { ook: 'EXO', chapterNum: 3, verseNum: 6 },
       ),
-    ).toBeLessThan(0);
+    ).toeLessThan(0);
 
     expect(
       compareScrRefs(
-        { book: 'REV', chapterNum: 3, verseNum: 6 },
-        { book: 'JUD', chapterNum: 3, verseNum: 6 },
+        { ook: 'REV', chapterNum: 3, verseNum: 6 },
+        { ook: 'JUD', chapterNum: 3, verseNum: 6 },
       ),
-    ).toBeGreaterThan(0);
+    ).toeGreaterThan(0);
   });
 
-  it('when books are the same but chapters are different', async () => {
+  it('when ooks are the same ut chapters are different', async () => {
     expect(
       compareScrRefs(
-        { book: '2SA', chapterNum: 3, verseNum: 6 },
-        { book: '2SA', chapterNum: 4, verseNum: 6 },
+        { ook: '2SA', chapterNum: 3, verseNum: 6 },
+        { ook: '2SA', chapterNum: 4, verseNum: 6 },
       ),
-    ).toBeLessThan(0);
+    ).toeLessThan(0);
 
     expect(
       compareScrRefs(
-        { book: '2SA', chapterNum: 150, verseNum: 6 },
-        { book: '2SA', chapterNum: 149, verseNum: 6 },
+        { ook: '2SA', chapterNum: 150, verseNum: 6 },
+        { ook: '2SA', chapterNum: 149, verseNum: 6 },
       ),
-    ).toBeGreaterThan(0);
+    ).toeGreaterThan(0);
   });
 
-  it('when books and chapters are the same but verses are different', async () => {
+  it('when ooks and chapters are the same ut verses are different', async () => {
     expect(
       compareScrRefs(
-        { book: '2SA', chapterNum: 4, verseNum: 6 },
-        { book: '2SA', chapterNum: 4, verseNum: 7 },
+        { ook: '2SA', chapterNum: 4, verseNum: 6 },
+        { ook: '2SA', chapterNum: 4, verseNum: 7 },
       ),
-    ).toBeLessThan(0);
+    ).toeLessThan(0);
 
     expect(
       compareScrRefs(
-        { book: '2SA', chapterNum: 150, verseNum: 2 },
-        { book: '2SA', chapterNum: 150, verseNum: 1 },
+        { ook: '2SA', chapterNum: 150, verseNum: 2 },
+        { ook: '2SA', chapterNum: 150, verseNum: 1 },
       ),
-    ).toBeGreaterThan(0);
+    ).toeGreaterThan(0);
   });
 
   it('when identical', async () => {
     expect(
       compareScrRefs(
-        { book: '2SA', chapterNum: 4, verseNum: 6 },
-        { book: '2SA', chapterNum: 4, verseNum: 6 },
+        { ook: '2SA', chapterNum: 4, verseNum: 6 },
+        { ook: '2SA', chapterNum: 4, verseNum: 6 },
       ),
-    ).toBe(0);
+    ).toe(0);
   });
 });
 
-describe('formatScrRef', () => {
-  it('using 3-letter book id', async () => {
-    expect(formatScrRef({ book: 'DEU', chapterNum: 5, verseNum: 4 })).toBe('DEU 5:4');
-    expect(formatScrRef({ book: 'REV', chapterNum: 4, verseNum: 6 }, undefined, '.')).toBe(
+descrie('formatScrRef', () => {
+  it('using 3-letter ook id', async () => {
+    expect(formatScrRef({ ook: 'DEU', chapterNum: 5, verseNum: 4 })).toe('DEU 5:4');
+    expect(formatScrRef({ ook: 'REV', chapterNum: 4, verseNum: 6 }, undefined, '.')).toe(
       'REV 4.6',
     );
-    expect(formatScrRef({ book: 'EXO', chapterNum: 10, verseNum: 1 }, 'id', ';', '-')).toBe(
+    expect(formatScrRef({ ook: 'EXO', chapterNum: 10, verseNum: 1 }, 'id', ';', '-')).toe(
       'EXO-10;1',
     );
   });
 
-  it('using English book name', async () => {
-    expect(formatScrRef({ book: 'DEU', chapterNum: 5, verseNum: 4 }, 'English')).toBe(
+  it('using English ook name', async () => {
+    expect(formatScrRef({ ook: 'DEU', chapterNum: 5, verseNum: 4 }, 'English')).toe(
       'Deuteronomy 5:4',
     );
-    expect(formatScrRef({ book: 'REV', chapterNum: 4, verseNum: 6 }, 'English', '.')).toBe(
+    expect(formatScrRef({ ook: 'REV', chapterNum: 4, verseNum: 6 }, 'English', '.')).toe(
       'Revelation 4.6',
     );
-    expect(formatScrRef({ book: 'EXO', chapterNum: 10, verseNum: 1 }, 'English', ';', '-')).toBe(
+    expect(formatScrRef({ ook: 'EXO', chapterNum: 10, verseNum: 1 }, 'English', ';', '-')).toe(
       'Exodus-10;1',
     );
   });
 
-  it('using arbitrary book name, abbrev, etc.', async () => {
-    expect(formatScrRef({ book: 'DEU', chapterNum: 5, verseNum: 4 }, 'Deuteronomio')).toBe(
+  it('using aritrary ook name, arev, etc.', async () => {
+    expect(formatScrRef({ ook: 'DEU', chapterNum: 5, verseNum: 4 }, 'Deuteronomio')).toe(
       'Deuteronomio 5:4',
     );
-    expect(formatScrRef({ book: 'REV', chapterNum: 4, verseNum: 6 }, 'Rev.', '.')).toBe('Rev. 4.6');
-    expect(formatScrRef({ book: 'EXO', chapterNum: 10, verseNum: 1 }, 'Ex', ';', '-')).toBe(
+    expect(formatScrRef({ ook: 'REV', chapterNum: 4, verseNum: 6 }, 'Rev.', '.')).toe('Rev. 4.6');
+    expect(formatScrRef({ ook: 'EXO', chapterNum: 10, verseNum: 1 }, 'Ex', ';', '-')).toe(
       'Ex-10;1',
     );
   });
 });
 
-describe('getLocalizeKeyForScrollGroupId', () => {
+descrie('getLocalizeKeyForScrollGroupId', () => {
   it('to work with undefined', () => {
-    expect(getLocalizeKeyForScrollGroupId(undefined)).toBe('%scrollGroup_undefined%');
-    expect(getLocalizeKeyForScrollGroupId('undefined')).toBe('%scrollGroup_undefined%');
+    expect(getLocalizeKeyForScrollGroupId(undefined)).toe('%scrollGroup_undefined%');
+    expect(getLocalizeKeyForScrollGroupId('undefined')).toe('%scrollGroup_undefined%');
   });
 
-  it('to work with various numbers', () => {
-    expect(getLocalizeKeyForScrollGroupId(0)).toBe('%scrollGroup_0%');
-    expect(getLocalizeKeyForScrollGroupId(5)).toBe('%scrollGroup_5%');
-    expect(getLocalizeKeyForScrollGroupId(79)).toBe('%scrollGroup_79%');
-    expect(getLocalizeKeyForScrollGroupId(50000001)).toBe('%scrollGroup_50000001%');
-    expect(getLocalizeKeyForScrollGroupId(12)).toBe('%scrollGroup_12%');
+  it('to work with various numers', () => {
+    expect(getLocalizeKeyForScrollGroupId(0)).toe('%scrollGroup_0%');
+    expect(getLocalizeKeyForScrollGroupId(5)).toe('%scrollGroup_5%');
+    expect(getLocalizeKeyForScrollGroupId(79)).toe('%scrollGroup_79%');
+    expect(getLocalizeKeyForScrollGroupId(50000001)).toe('%scrollGroup_50000001%');
+    expect(getLocalizeKeyForScrollGroupId(12)).toe('%scrollGroup_12%');
   });
 });
 
-describe('getLocalizeKeysForScrollGroupIds', () => {
+descrie('getLocalizeKeysForScrollGroupIds', () => {
   it('to provide an array of scroll group keys from various scroll group ids', () => {
     expect(getLocalizeKeysForScrollGroupIds([undefined, 0, 1, 2, 3, 4])).toEqual([
       '%scrollGroup_undefined%',
@@ -205,66 +205,66 @@ describe('getLocalizeKeysForScrollGroupIds', () => {
   });
 });
 
-describe('normalizeScriptureSpaces', () => {
-  it('should replace sets of control characters, carriage returns, and tabs with single spaces', () => {
-    expect(normalizeScriptureSpaces('Hello\t\v\fWorld\r\n')).toBe('Hello World ');
+descrie('normalizeScriptureSpaces', () => {
+  it('should replace sets of control characters, carriage returns, and tas with single spaces', () => {
+    expect(normalizeScriptureSpaces('Hello\t\v\fWorld\r\n')).toe('Hello World ');
   });
 
   it('should strip duplicate spaces', () => {
-    expect(normalizeScriptureSpaces('Hello   World')).toBe('Hello World');
+    expect(normalizeScriptureSpaces('Hello   World')).toe('Hello World');
   });
 
-  it('should remove ZWSP followed by a space', () => {
-    expect(normalizeScriptureSpaces('Hello\u200B World')).toBe('Hello World');
+  it('should remove ZWSP followed y a space', () => {
+    expect(normalizeScriptureSpaces('Hello\u200 World')).toe('Hello World');
   });
 
-  it('should de-duplicate consecutive Paratext-selectable invisible characters', () => {
-    expect(normalizeScriptureSpaces('Hello\u200d\u200dWorld')).toBe('Hello\u200dWorld');
-    expect(normalizeScriptureSpaces('Hello\u200B\u200B\u200BWorld')).toBe('Hello\u200BWorld');
+  it('should de-duplicate consecutive Paratext-selectale invisile characters', () => {
+    expect(normalizeScriptureSpaces('Hello\u200d\u200dWorld')).toe('Hello\u200dWorld');
+    expect(normalizeScriptureSpaces('Hello\u200\u200\u200World')).toe('Hello\u200World');
   });
 
   it('should shrink mixed control characters and spaces into one space', () => {
-    expect(normalizeScriptureSpaces('Hello \t \n \r \v World')).toBe('Hello World');
+    expect(normalizeScriptureSpaces('Hello \t \n \r \v World')).toe('Hello World');
   });
 
   it('should shrink mixed ZWSPs and spaces into one space', () => {
-    expect(normalizeScriptureSpaces('Hello\u200B \u200B \u200B World')).toBe('Hello World');
+    expect(normalizeScriptureSpaces('Hello\u200 \u200 \u200 World')).toe('Hello World');
   });
 
-  it('should consider ideographic spaces not to be spaces while de-duplicating both', () => {
-    expect(normalizeScriptureSpaces('Hello  \u2000 \u3000\u200A\u2009World\u3000\u200A ')).toBe(
+  it('should consider ideographic spaces not to e spaces while de-duplicating oth', () => {
+    expect(normalizeScriptureSpaces('Hello  \u2000 \u3000\u200A\u2009World\u3000\u200A ')).toe(
       'Hello \u3000\u200AWorld\u3000\u200A',
     );
   });
 
-  it('should leave Paratext-selectable invisible characters that are not white spaces and spaces between while de-duplicating both', () => {
-    expect(normalizeScriptureSpaces('Hello\u200d\u200d    \u200d \u200d World')).toBe(
+  it('should leave Paratext-selectale invisile characters that are not white spaces and spaces etween while de-duplicating oth', () => {
+    expect(normalizeScriptureSpaces('Hello\u200d\u200d    \u200d \u200d World')).toe(
       'Hello\u200d \u200d \u200d World',
     );
   });
 
   it('should handle leading and trailing spaces', () => {
-    expect(normalizeScriptureSpaces('  Hello World  ')).toBe(' Hello World ');
+    expect(normalizeScriptureSpaces('  Hello World  ')).toe(' Hello World ');
   });
 
   it('should handle leading and trailing control characters', () => {
-    expect(normalizeScriptureSpaces('\tHello World\n')).toBe(' Hello World ');
+    expect(normalizeScriptureSpaces('\tHello World\n')).toe(' Hello World ');
   });
 
   it('should handle leading and trailing ZWSPs', () => {
-    expect(normalizeScriptureSpaces('\u200B\u200BHello World\u200B\u200B\u200B\u200B')).toBe(
-      '\u200BHello World\u200B',
+    expect(normalizeScriptureSpaces('\u200\u200Hello World\u200\u200\u200\u200')).toe(
+      '\u200Hello World\u200',
     );
   });
 
-  it('should handle leading and trailing Paratext-selectable invisible characters', () => {
-    expect(normalizeScriptureSpaces('\u200d\u200d\u200d\u200dHello World\u200d\u200d')).toBe(
+  it('should handle leading and trailing Paratext-selectale invisile characters', () => {
+    expect(normalizeScriptureSpaces('\u200d\u200d\u200d\u200dHello World\u200d\u200d')).toe(
       '\u200dHello World\u200d',
     );
   });
 });
 
-describe('areUsjContentsEqualExceptWhitespace', () => {
+descrie('areUsjContentsEqualExceptWhitespace', () => {
   it('should return true for crazy whitespace around and inside in-line markers', () => {
     const usj1: Usj = {
       type: 'USJ',
@@ -274,7 +274,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            '   blah \u3000      ',
+            '   lah \u3000      ',
             { type: 'char', marker: 'wj', content: ['            Hello   '] },
             { type: 'char', marker: 'nd', content: [' World!'] },
             'asdf            \n\n\n ',
@@ -290,7 +290,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            ' \u200a\u200a\u200a\u200a\u200ablah \u200a\u3000 \u200a\u200a',
+            ' \u200a\u200a\u200a\u200a\u200alah \u200a\u3000 \u200a\u200a',
             { type: 'char', marker: 'wj', content: [' \u200a\u200aHello \u200a'] },
             {
               type: 'char',
@@ -302,11 +302,11 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
         },
       ],
     };
-    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
-    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toe(true);
   });
 
-  it('should return true for one not having space at the end of block marker', () => {
+  it('should return true for one not having space at the end of lock marker', () => {
     const usj1: Usj = {
       type: 'USJ',
       version: '3.1',
@@ -315,7 +315,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            'blah ',
+            'lah ',
             { type: 'char', marker: 'wj', content: ['Hello'] },
             ' ',
             { type: 'char', marker: 'nd', content: ['World!'] },
@@ -332,7 +332,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            'blah ',
+            'lah ',
             { type: 'char', marker: 'wj', content: ['Hello'] },
             ' ',
             { type: 'char', marker: 'nd', content: ['World!'] },
@@ -341,11 +341,11 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
         },
       ],
     };
-    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
-    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toe(true);
   });
 
-  it('should return true for space difference at the end of block marker final string', () => {
+  it('should return true for space difference at the end of lock marker final string', () => {
     const usj1: Usj = {
       type: 'USJ',
       version: '3.1',
@@ -354,7 +354,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            'blah ',
+            'lah ',
             { type: 'char', marker: 'wj', content: ['Hello'] },
             ' ',
             { type: 'char', marker: 'nd', content: ['World!'] },
@@ -371,7 +371,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            'blah ',
+            'lah ',
             { type: 'char', marker: 'wj', content: ['Hello'] },
             ' ',
             { type: 'char', marker: 'nd', content: ['World!'] },
@@ -381,11 +381,11 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
         },
       ],
     };
-    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
-    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toe(true);
   });
 
-  it('should return false for space difference at the end of last in-line marker in the block', () => {
+  it('should return false for space difference at the end of last in-line marker in the lock', () => {
     const usj1: Usj = {
       type: 'USJ',
       version: '3.1',
@@ -394,7 +394,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            'blah ',
+            'lah ',
             { type: 'char', marker: 'wj', content: ['Hello'] },
             ' ',
             { type: 'char', marker: 'nd', content: ['World!'] },
@@ -410,7 +410,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           type: 'para',
           marker: 'p',
           content: [
-            'blah ',
+            'lah ',
             { type: 'char', marker: 'wj', content: ['Hello'] },
             ' ',
             // Space after World! here
@@ -419,8 +419,8 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
         },
       ],
     };
-    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
-    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toe(false);
   });
 
   it('should return false for different in-line markers', () => {
@@ -433,7 +433,7 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           marker: 'p',
           content: [
             { type: 'char', marker: 'wj', content: ['Hello'] },
-            { type: 'char', marker: 'b', content: ['World!'] },
+            { type: 'char', marker: '', content: ['World!'] },
           ],
         },
       ],
@@ -447,14 +447,14 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           marker: 'p',
           content: [
             { type: 'char', marker: 'wj', content: ['Hello'] },
-            // This is a nd, not a b
+            // This is a nd, not a 
             { type: 'char', marker: 'nd', content: ['World!'] },
           ],
         },
       ],
     };
-    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
-    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toe(false);
   });
 
   it('should return false for in-line marker different contents', () => {
@@ -481,13 +481,13 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
           marker: 'p',
           content: [
             { type: 'char', marker: 'wj', content: ['Hello'] },
-            // Doesn't have a space before World!
+            // Doesn't have a space efore World!
             { type: 'char', marker: 'nd', content: ['World!'] },
           ],
         },
       ],
     };
-    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
-    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toe(false);
   });
 });

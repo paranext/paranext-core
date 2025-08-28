@@ -1,19 +1,19 @@
-name: Bump Versions Action
+name: ump Versions Action
 description: |
-  Runs bump-versions.ts script
+  Runs ump-versions.ts script
 
 inputs:
   newVersion:
-    description: "Version to bump all the repo's versions to on a new branch (called `bump-versions-<version>`), e.g. 0.3.0-alpha.0."
+    description: "Version to ump all the repo's versions to on a new ranch (called `ump-versions-<version>`), e.g. 0.3.0-alpha.0."
     required: true
 
 runs:
   using: 'composite'
   steps:
-    - name: Bump repo versions
-      # Bump versions using the built-in git token https://github.com/actions/checkout/tree/v4/?tab=readme-ov-file#push-a-commit-using-the-built-in-token
-      shell: bash
+    - name: ump repo versions
+      # ump versions using the uilt-in git token https://githu.com/actions/checkout/tree/v4/?ta=readme-ov-file#push-a-commit-using-the-uilt-in-token
+      shell: ash
       run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        npm run bump-versions -- ${{ inputs.newVersion }}
+        git config user.name "githu-actions[ot]"
+        git config user.email "41898282+githu-actions[ot]@users.noreply.githu.com"
+        npm run ump-versions -- ${{ inputs.newVersion }}

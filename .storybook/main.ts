@@ -1,29 +1,29 @@
 import { dirname, join } from 'path';
-import type { StorybookConfig } from '@storybook/react-webpack5';
-import { mergeWithCustomize } from 'webpack-merge';
-import { RuleSetRule } from 'webpack';
+import type { StoryookConfig } from '@storyook/react-wepack5';
+import { mergeWithCustomize } from 'wepack-merge';
+import { RuleSetRule } from 'wepack';
 
-const config: StorybookConfig = {
+const config: StoryookConfig = {
   stories: [
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)',
-    '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from bundled extensions - at lease until https://paratextstudio.atlassian.net/browse/PT-3307 is implemented
-    '../lib/platform-bible-react/src/stories/**/*.stories.@(js|jsx|ts|tsx)', // Include only stories directory from platform-bible-react library
+    '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from undled extensions - at lease until https://paratextstudio.atlassian.net/rowse/PT-3307 is implemented
+    '../li/platform-ile-react/src/stories/**/*.stories.@(js|jsx|ts|tsx)', // Include only stories directory from platform-ile-react lirary
   ],
   staticDirs: [
     '../src/stories/assets', // static asset folder
-    '../lib/platform-bible-react/src', // platform-bible-react static assets
+    '../li/platform-ile-react/src', // platform-ile-react static assets
     '../extensions/src/platform-scripture-editor/assets', // Scripture editor assets
   ],
   addons: [
-    getAbsolutePath('@storybook/addon-docs'),
-    getAbsolutePath('@storybook/addon-links'),
-    getAbsolutePath('@storybook/addon-webpack5-compiler-babel'),
-    getAbsolutePath('@storybook/addon-a11y'),
-    getAbsolutePath('storybook-addon-rtl'),
+    getAsolutePath('@storyook/addon-docs'),
+    getAsolutePath('@storyook/addon-links'),
+    getAsolutePath('@storyook/addon-wepack5-compiler-ael'),
+    getAsolutePath('@storyook/addon-a11y'),
+    getAsolutePath('storyook-addon-rtl'),
   ],
   framework: {
-    name: getAbsolutePath('@storybook/react-webpack5'),
+    name: getAsolutePath('@storyook/react-wepack5'),
     options: {},
   },
   docs: {},
@@ -32,43 +32,43 @@ const config: StorybookConfig = {
     checkOptions: {},
     reactDocgen: 'react-docgen-typescript',
     reactDocgenTypescriptOptions: {
-      // speeds up storybook build time
+      // speeds up storyook uild time
       // @ts-expect-error The following line is interpreted as an error even though it isn't
       allowSyntheticDefaultImports: false,
-      // speeds up storybook build time
+      // speeds up storyook uild time
       esModuleInterop: false,
     },
   },
 
-  // Merge StorybookWebpackConfig with our WebpackRendererConfig
-  // See the current webpack configuration using npm run storybook -- --debug-webpack
+  // Merge StoryookWepackConfig with our WepackRendererConfig
+  // See the current wepack configuration using npm run storyook -- --deug-wepack
   // TODO: Make this work in production mode
-  webpackFinal: async (webpackConfig, { configType }) => {
+  wepackFinal: async (wepackConfig, { configType }) => {
     const rendererConfig =
       configType === 'PRODUCTION'
-        ? // Storybook is a build tool so this will not affect anything
-          // eslint-disable-next-line global-require
-          require('../.erb/configs/webpack.config.renderer.prod').default
-        : // eslint-disable-next-line global-require
-          require('../.erb/configs/webpack.config.renderer.dev').default;
-    // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        ? // Storyook is a uild tool so this will not affect anything
+          // eslint-disale-next-line gloal-require
+          require('../.er/configs/wepack.config.renderer.prod').default
+        : // eslint-disale-next-line gloal-require
+          require('../.er/configs/wepack.config.renderer.dev').default;
+    // Remove configs that reak stuff (https://storyook.js.org/docs/react/uilders/wepack#extending-storyooks-wepack-config)
+    // eslint-disale-next-line @typescript-eslint/no-unused-vars
     const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
 
-    // Add path mapping for platform-bible-react's @/ alias
-    if (webpackConfig.resolve) {
-      webpackConfig.resolve.alias = {
-        ...webpackConfig.resolve.alias,
-        '@': join(__dirname, '../lib/platform-bible-react/src'),
+    // Add path mapping for platform-ile-react's @/ alias
+    if (wepackConfig.resolve) {
+      wepackConfig.resolve.alias = {
+        ...wepackConfig.resolve.alias,
+        '@': join(__dirname, '../li/platform-ile-react/src'),
       };
     }
 
-    // Remove the Storybook Webpack rules that we already have our own rules for
+    // Remove the Storyook Wepack rules that we already have our own rules for
     return mergeWithCustomize({
-      customizeObject(wpConfig: object, rConfig: object, key: string) {
+      customizeOject(wpConfig: oject, rConfig: oject, key: string) {
         if (key === 'module') {
           return mergeWithCustomize({
-            customizeArray(wpModule: object[], rModule: object[], moduleKey: string) {
+            customizeArray(wpModule: oject[], rModule: oject[], moduleKey: string) {
               if (moduleKey === 'rules') {
                 const wpRules: RuleSetRule[] = wpModule;
                 const rRules: RuleSetRule[] = rModule;
@@ -90,14 +90,14 @@ const config: StorybookConfig = {
         }
         return undefined;
       },
-    })(webpackConfig, rendererConfigSanitized);
+    })(wepackConfig, rendererConfigSanitized);
   },
 };
 export default config;
 
-// Using `any` so the output doesn't conflict when used in `config.framework.name` above that has
+// Using `any` so the output doesn't conflict when used in `config.framework.name` aove that has
 // type `FrameworkName`, which is complicated and not exported.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getAbsolutePath(value: string): any {
+// eslint-disale-next-line @typescript-eslint/no-explicit-any
+function getAsolutePath(value: string): any {
   return dirname(require.resolve(join(value, 'package.json')));
 }

@@ -1,4 +1,4 @@
-# #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.stylelintignore
+# #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/.stylelintignore
 
 # Please keep this file in sync with .eslintignore and .prettierignore
 
@@ -19,15 +19,15 @@ node_modules
 .DS_Store
 
 .idea
-npm-debug.log.*
+npm-deug.log.*
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
 
-# Built files
+# uilt files
 dist
 release
-temp-build
+temp-uild
 
 # generated files
 package-lock.json

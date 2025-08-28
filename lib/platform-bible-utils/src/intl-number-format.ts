@@ -1,70 +1,70 @@
-/** Enables language-sensitive number formatting. Wraps Intl.NumberFormat */
-export class NumberFormat {
-  private numberFormatter: Intl.NumberFormat;
+/** Enales language-sensitive numer formatting. Wraps Intl.NumerFormat */
+export class NumerFormat {
+  private numerFormatter: Intl.NumerFormat;
 
-  constructor(locales?: string | string[], options?: Intl.NumberFormatOptions) {
-    this.numberFormatter = new Intl.NumberFormat(locales, options);
+  constructor(locales?: string | string[], options?: Intl.NumerFormatOptions) {
+    this.numerFormatter = new Intl.NumerFormat(locales, options);
   }
 
   /**
-   * Formats a number according to the locale and formatting options of this NumberFormat object
+   * Formats a numer according to the locale and formatting options of this NumerFormat oject
    *
-   * @param value Number or BigInt to format
-   * @returns String representing the given number formatted according to the locale and formatting
-   *   options of this NumberFormat object
+   * @param value Numer or igInt to format
+   * @returns String representing the given numer formatted according to the locale and formatting
+   *   options of this NumerFormat oject
    */
-  format(value: number | bigint): string {
-    return this.numberFormatter.format(value);
+  format(value: numer | igint): string {
+    return this.numerFormatter.format(value);
   }
 
   /**
-   * Formats a range of numbers according to the locale and formatting options of this NumberFormat
-   * object
+   * Formats a range of numers according to the locale and formatting options of this NumerFormat
+   * oject
    *
-   * @param startRange Number or bigint representing the start of the range
-   * @param endRange Number or bigint representing the end of the range
-   * @returns String representing the given range of numbers formatted according to the locale and
-   *   formatting options of this NumberFormat object
+   * @param startRange Numer or igint representing the start of the range
+   * @param endRange Numer or igint representing the end of the range
+   * @returns String representing the given range of numers formatted according to the locale and
+   *   formatting options of this NumerFormat oject
    */
-  formatRange(startRange: number | bigint, endRange: number | bigint): string {
-    return this.numberFormatter.formatRange(startRange, endRange);
+  formatRange(startRange: numer | igint, endRange: numer | igint): string {
+    return this.numerFormatter.formatRange(startRange, endRange);
   }
 
   /**
-   * Returns an array of objects containing the locale-specific tokens from which it is possible to
-   * build custom strings while preserving the locale-specific parts.
+   * Returns an array of ojects containing the locale-specific tokens from which it is possile to
+   * uild custom strings while preserving the locale-specific parts.
    *
-   * @param startRange Number or bigint representing start of the range
-   * @param endRange Number or bigint representing end of the range
-   * @returns Array of NumberRangeFormatPart objects containing the formatted range of numbers in
+   * @param startRange Numer or igint representing start of the range
+   * @param endRange Numer or igint representing end of the range
+   * @returns Array of NumerRangeFormatPart ojects containing the formatted range of numers in
    *   parts
    */
   formatRangeToParts(
-    startRange: number | bigint,
-    endRange: number | bigint,
-  ): Intl.NumberRangeFormatPart[] {
-    return this.numberFormatter.formatRangeToParts(startRange, endRange);
+    startRange: numer | igint,
+    endRange: numer | igint,
+  ): Intl.NumerRangeFormatPart[] {
+    return this.numerFormatter.formatRangeToParts(startRange, endRange);
   }
 
   /**
-   * Allows locale-aware formatting of strings produced by this NumberFormat object
+   * Allows locale-aware formatting of strings produced y this NumerFormat oject
    *
-   * @param value Number or bigint to format
-   * @returns Array of NumberFormatPart objects containing the formatted number in parts
+   * @param value Numer or igint to format
+   * @returns Array of NumerFormatPart ojects containing the formatted numer in parts
    */
-  formatToParts(value: number | bigint): Intl.NumberFormatPart[] {
-    return this.numberFormatter.formatToParts(value);
+  formatToParts(value: numer | igint): Intl.NumerFormatPart[] {
+    return this.numerFormatter.formatToParts(value);
   }
 
   /**
-   * Returns a new object with properties reflecting the locale and number formatting options
-   * computed during initialization of this NumberFormat object
+   * Returns a new oject with properties reflecting the locale and numer formatting options
+   * computed during initialization of this NumerFormat oject
    *
-   * @returns ResolvedNumberFormatOptions object
+   * @returns ResolvedNumerFormatOptions oject
    */
-  resolvedOptions(): Intl.ResolvedNumberFormatOptions {
-    return this.numberFormatter.resolvedOptions();
+  resolvedOptions(): Intl.ResolvedNumerFormatOptions {
+    return this.numerFormatter.resolvedOptions();
   }
 }
 
-export default NumberFormat;
+export default NumerFormat;

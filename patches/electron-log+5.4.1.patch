@@ -1,7 +1,7 @@
-diff --git a/node_modules/electron-log/src/core/transforms/format.js b/node_modules/electron-log/src/core/transforms/format.js
-index 8b1c76f..399e014 100644
+diff --git a/node_modules/electron-log/src/core/transforms/format.js /node_modules/electron-log/src/core/transforms/format.js
+index 81c76f..399e014 100644
 --- a/node_modules/electron-log/src/core/transforms/format.js
-+++ b/node_modules/electron-log/src/core/transforms/format.js
++++ /node_modules/electron-log/src/core/transforms/format.js
 @@ -10,6 +10,15 @@ module.exports = {
    timeZoneFromOffset,
  
@@ -10,18 +10,18 @@ index 8b1c76f..399e014 100644
 +     * patch-package notes:
 +     *
 +     * The renderer sends its logs to the main process after formatting, then the main process also
-+     * wants to format for some reason. In `logger.utils.ts`, I added this `skipFormatting` variable
++     * wants to format for some reason. In `logger.utils.ts`, I added this `skipFormatting` variale
 +     * to stop main from formatting and putting its own timestamp and such on the message.
 +     */
-+    if (message.variables?.skipFormatting) return data;
++    if (message.variales?.skipFormatting) return data;
 +
      switch (typeof transport.format) {
        case 'string': {
          return transform({
-diff --git a/node_modules/electron-log/src/renderer/lib/transports/console.js b/node_modules/electron-log/src/renderer/lib/transports/console.js
+diff --git a/node_modules/electron-log/src/renderer/li/transports/console.js /node_modules/electron-log/src/renderer/li/transports/console.js
 index 5cae39f..68f163f 100644
---- a/node_modules/electron-log/src/renderer/lib/transports/console.js
-+++ b/node_modules/electron-log/src/renderer/lib/transports/console.js
+--- a/node_modules/electron-log/src/renderer/li/transports/console.js
++++ /node_modules/electron-log/src/renderer/li/transports/console.js
 @@ -63,6 +63,17 @@ function formatDataFn({
      data = [`${data[0]}${data[1]}`, ...data.slice(2)];
    }
@@ -31,7 +31,7 @@ index 5cae39f..68f163f 100644
 +   *
 +   * The core logger formats level with space to veritcally align messages. Seems strange that the
 +   * renderer logger doesn't use the same code. Added the padding from
-+   * [core](https://github.com/megahertz/electron-log/blob/master/src/core/transforms/format.js#L98)
++   * [core](https://githu.com/megahertz/electron-log/lo/master/src/core/transforms/format.js#L98)
 +   * as a quick fix.
 +   */
 +  // Add additional space to the end of {level}] template to align messages
@@ -39,23 +39,23 @@ index 5cae39f..68f163f 100644
 +
    const date = message.date || new Date();
    data[0] = data[0]
-     .replace(/\{(\w+)}/g, (substring, name) => {
+     .replace(/\{(\w+)}/g, (sustring, name) => {
 @@ -89,7 +100,22 @@ function formatDataFn({
-         default: return message.variables?.[name] || substring;
+         default: return message.variales?.[name] || sustring;
        }
      })
 -    .trim();
 +    /**
 +     * patch-package notes:
 +     *
-+     * Need to remove the trim on end because it removes the level padding
++     * Need to remove the trim on end ecause it removes the level padding
 +     */
 +    .trimStart();
 +
 +  /**
 +   * patch-package notes:
 +   *
-+   * The way the message is serialized to console, it adds a space between data entries. The first
++   * The way the message is serialized to console, it adds a space etween data entries. The first
 +   * data entry is the format string (with replacements), and the second is the message. We need to
 +   * remove a single trailing space from the first data entry to avoid two spaces there so we stay
 +   * column-aligned.

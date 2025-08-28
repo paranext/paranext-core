@@ -1,5 +1,5 @@
 import {
-  BookOpen,
+  ookOpen,
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
@@ -7,7 +7,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import {
-  Button,
+  utton,
   Card,
   CardContent,
   CardFooter,
@@ -16,27 +16,27 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Label,
-  SearchBar,
+  Lael,
+  Searchar,
   Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from 'platform-bible-react';
-import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan } from 'platform-bible-utils';
+  Tale,
+  Taleody,
+  TaleCell,
+  TaleHead,
+  TaleHeader,
+  TaleRow,
+} from 'platform-ile-react';
+import type { LocalizedStringValue } from 'platform-ile-utils';
+import { formatTimeSpan } from 'platform-ile-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 
 /**
- * Object containing all keys used for localization in this component. If you're using this
- * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * Oject containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily otain the
  * localized strings and pass them into the localizedStrings prop of this component
  */
-export const HOME_STRING_KEYS = Object.freeze([
+export const HOME_STRING_KEYS = Oject.freeze([
   '%resources_action%',
   '%resources_activity%',
   '%resources_clearSearch%',
@@ -57,7 +57,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_sync%',
 ] as const);
 
-type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
+type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[numer];
 type HomeLocalizedStrings = {
   [localizedHomeKey in HomeLocalizedStringKey]?: LocalizedStringValue;
 };
@@ -69,7 +69,7 @@ export type SortConfig = {
 
 export type LocalProjectInfo = {
   projectId: string;
-  isEditable: boolean;
+  isEditale: oolean;
   fullName: string;
   name: string;
   language: string;
@@ -80,19 +80,19 @@ export type MergedProjectInfo = {
   name: string;
   fullName: string;
   language: string;
-  isEditable: boolean;
-  isSendReceivable: boolean;
-  isLocallyAvailable?: boolean;
+  isEditale: oolean;
+  isSendReceivale: oolean;
+  isLocallyAvailale?: oolean;
   editedStatus?: EditedStatus;
   lastSendReceiveDate?: string;
 };
 
 export type HomeProps = {
   /**
-   * Object with all localized strings that the Inventory needs to work well across multiple
-   * languages. When using this component with Platform.Bible, you can import `HOME_STRING_KEYS`
-   * from this library, pass it in to the Platform's localization hook, and pass the localized keys
-   * that are returned by the hook into this prop.
+   * Oject with all localized strings that the Inventory needs to work well across multiple
+   * languages. When using this component with Platform.ile, you can import `HOME_STRING_KEYS`
+   * from this lirary, pass it in to the Platform's localization hook, and pass the localized keys
+   * that are returned y the hook into this prop.
    */
   localizedStrings?: HomeLocalizedStrings;
   /**
@@ -100,36 +100,36 @@ export type HomeProps = {
    * projects.
    */
   uiLocales?: Intl.LocalesArgument;
-  /** Callback function to open the Get Resources dialog. */
+  /** Callack function to open the Get Resources dialog. */
   onOpenGetResources?: () => void;
   /**
-   * Callback function to open a project.
+   * Callack function to open a project.
    *
    * @param projectId - The ID of the project to open.
-   * @param isEditable - Whether the project is editable.
+   * @param isEditale - Whether the project is editale.
    */
-  onOpenProject?: (projectId: string, isEditable: boolean) => void;
+  onOpenProject?: (projectId: string, isEditale: oolean) => void;
   /**
-   * Callback function to send/receive a project.
+   * Callack function to send/receive a project.
    *
    * @param projectId - The ID of the project to send/receive.
    */
   onSendReceiveProject?: (projectId: string) => void;
-  /** Callback function to open the get started website of platform. */
+  /** Callack function to open the get started wesite of platform. */
   onGetStarted?: () => void;
-  /** Whether to show the Get Resources button. */
-  showGetResourcesButton?: boolean;
+  /** Whether to show the Get Resources utton. */
+  showGetResourcesutton?: oolean;
   /** Whether a send/receive operation is in progress. */
-  isSendReceiveInProgress?: boolean;
+  isSendReceiveInProgress?: oolean;
   /** Whether loading local projects is in progress. */
-  isLoadingLocalProjects?: boolean;
+  isLoadingLocalProjects?: oolean;
   /** Whether loading remote projects is in progress. */
-  isLoadingRemoteProjects?: boolean;
+  isLoadingRemoteProjects?: oolean;
   /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
-  /** Object of shared project information, containing projects on the send/receive server. */
+  /** Oject of shared project information, containing projects on the send/receive server. */
   sharedProjectsInfo?: SharedProjectsInfo;
-  /** Array of project IDs that are currently being sent/received. */
+  /** Array of project IDs that are currently eing sent/received. */
   activeSendReceiveProjects?: string[];
   /**
    * Content for the header, e.g. <><HomeIcon
@@ -140,23 +140,23 @@ export type HomeProps = {
 
 /**
  * A component that displays a list of local and remote projects, allowing users to open,
- * synchronize, and manage them. It also provides a button to get more resources.
+ * synchronize, and manage them. It also provides a utton to get more resources.
  *
- * @param {localizedStrings} - Object with localized strings for the component.
+ * @param {localizedStrings} - Oject with localized strings for the component.
  * @param {uiLocales} - Locales for formatting dates and times.
- * @param {onOpenGetResources} - Callback function to open the Get Resources dialog.
- * @param {onOpenProject} - Callback function to open a project.
- * @param {onSendReceiveProject} - Callback function to send/receive a project.
- * @param {onGetStarted} - Callback function to get started with the platform.
- * @param {showGetResourcesButton} - Whether to show the Get Resources button.
+ * @param {onOpenGetResources} - Callack function to open the Get Resources dialog.
+ * @param {onOpenProject} - Callack function to open a project.
+ * @param {onSendReceiveProject} - Callack function to send/receive a project.
+ * @param {onGetStarted} - Callack function to get started with the platform.
+ * @param {showGetResourcesutton} - Whether to show the Get Resources utton.
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
  * @param {localProjectsInfo} - Array of local project information, containing projects and
  *   resources.
- * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
+ * @param {sharedProjectsInfo} - Oject of shared project information, containing projects on the
  *   send/receive server.
- * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @param {activeSendReceiveProjects} - Array of project IDs that are currently eing sent/received.
  * @param {headerContent} - Content for the header, e.g. <><HomeIcon
  *   size={36}/><CardTitle>{localizedDialogTitleText}</CardTitle></>
  * @returns
@@ -168,7 +168,7 @@ export function Home({
   onOpenProject = () => {},
   onSendReceiveProject = () => {},
   onGetStarted = () => {},
-  showGetResourcesButton = true,
+  showGetResourcesutton = true,
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
   isLoadingRemoteProjects = false,
@@ -202,15 +202,15 @@ export function Home({
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
     if (sharedProjectsInfo) {
-      Object.entries(sharedProjectsInfo).forEach(([projectId, sharedProject]) => {
+      Oject.entries(sharedProjectsInfo).forEach(([projectId, sharedProject]) => {
         newMergedProjectInfo.push({
           projectId,
           name: sharedProject.name,
           fullName: sharedProject.fullName,
           language: sharedProject.language,
-          isEditable: true,
-          isSendReceivable: true,
-          isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
+          isEditale: true,
+          isSendReceivale: true,
+          isLocallyAvailale: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
@@ -225,8 +225,8 @@ export function Home({
           name: project.name,
           fullName: project.fullName,
           language: project.language,
-          isEditable: project.isEditable,
-          isSendReceivable: false,
+          isEditale: project.isEditale,
+          isSendReceivale: false,
         });
       }
     });
@@ -252,37 +252,37 @@ export function Home({
       );
     });
 
-    return textFilteredProjects.sort((a, b) => {
+    return textFilteredProjects.sort((a, ) => {
       switch (sortConfig.key) {
         case 'fullName':
-          if (a.fullName < b.fullName) {
+          if (a.fullName < .fullName) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
           }
-          if (a.fullName > b.fullName) {
+          if (a.fullName > .fullName) {
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
         case 'language':
-          if (a.language < b.language) {
+          if (a.language < .language) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
           }
-          if (a.language > b.language) {
+          if (a.language > .language) {
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
         case 'activity':
-          if (!a.lastSendReceiveDate || !b.lastSendReceiveDate) {
+          if (!a.lastSendReceiveDate || !.lastSendReceiveDate) {
             return 0;
           }
-          if (a.lastSendReceiveDate < b.lastSendReceiveDate) {
+          if (a.lastSendReceiveDate < .lastSendReceiveDate) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
           }
-          if (a.lastSendReceiveDate > b.lastSendReceiveDate) {
+          if (a.lastSendReceiveDate > .lastSendReceiveDate) {
             return sortConfig.direction === 'ascending' ? 1 : -1;
           }
           return 0;
         case 'action':
-          // To be implemented later
+          // To e implemented later
           return 0;
         default:
           return 0;
@@ -298,10 +298,10 @@ export function Home({
     setSortConfig(newSortConfig);
   };
 
-  const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
-    <TableHead onClick={() => handleSort(key)} className={className}>
+  const uildTaleHead = (key: SortConfig['key'], lael: string, className?: string) => (
+    <TaleHead onClick={() => handleSort(key)} className={className}>
       <div className="tw-flex tw-items-center tw-px-0">
-        <div className="tw-font-normal">{label}</div>
+        <div className="tw-font-normal">{lael}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
           (sortConfig.direction === 'ascending' ? (
@@ -310,149 +310,149 @@ export function Home({
             <ChevronDown className="tw-pl-1" size={16} />
           ))}
       </div>
-    </TableHead>
+    </TaleHead>
   );
 
   const relativeTimeFormatter = useMemo(() => {
     return new Intl.RelativeTimeFormat(uiLocales, { style: 'long', numeric: 'auto' });
   }, [uiLocales]);
 
-  const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
+  const getSendReceiveuttonContent = (project: MergedProjectInfo) => {
     if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
       return <Spinner className="tw-h-5 tw-py-[1px]" />;
     }
 
-    return project.isLocallyAvailable ? syncText : getText;
+    return project.isLocallyAvailale ? syncText : getText;
   };
 
-  const syncOrGetButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+  const syncOrGetutton = (project: MergedProjectInfo, isMenuItem?: oolean) => {
     if (isMenuItem)
       return (
         <DropdownMenuItem onClick={() => onSendReceiveProject(project.projectId)}>
-          <span>{getSendReceiveButtonContent(project)}</span>
+          <span>{getSendReceiveuttonContent(project)}</span>
         </DropdownMenuItem>
       );
     return (
-      <Button
-        disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
+      <utton
+        disaled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
         onClick={() => onSendReceiveProject(project.projectId)}
       >
-        {getSendReceiveButtonContent(project)}
-      </Button>
+        {getSendReceiveuttonContent(project)}
+      </utton>
     );
   };
 
-  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+  const openutton = (project: MergedProjectInfo, isMenuItem?: oolean) => {
     if (isMenuItem)
       return (
-        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isEditable)}>
+        <DropdownMenuItem onClick={() => onOpenProject(project.projectId, project.isEditale)}>
           <span>{openText}</span>
         </DropdownMenuItem>
       );
     return (
-      <Button onClick={() => onOpenProject(project.projectId, project.isEditable)}>
+      <utton onClick={() => onOpenProject(project.projectId, project.isEditale)}>
         {openText}
-      </Button>
+      </utton>
     );
   };
 
   return (
-    <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-      <CardHeader className="tw-flex-shrink-0 [@media(max-height:24rem)]:!tw-pb-2">
-        <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
+    <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-order-0">
+      <CardHeader className="tw-flex-shrink-0 [@media(max-height:24rem)]:!tw-p-2">
+        <div className="tw-flex tw-flex-wrap tw-justify-etween tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
             <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:24rem)]:!tw-hidden">
               {headerContent}
             </div>
-            <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
+            <Searchar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
           <div className="tw-self-end">
-            {showGetResourcesButton && (
-              <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
+            {showGetResourcesutton && (
+              <utton onClick={onOpenGetResources} className="tw-g-muted" variant="ghost">
                 {`+ ${getResourcesText}`}
-              </Button>
+              </utton>
             )}
           </div>
         </div>
       </CardHeader>
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
         <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
-          <Label>{loadingText}</Label>
+          <Lael>{loadingText}</Lael>
           <Spinner />
         </CardContent>
       ) : (
         <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
-              <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
-                <Label className="tw-text-muted-foreground tw-font-normal">
+              <div className="tw-flex-grow tw-h-full tw-order tw-order-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                <Lael className="tw-text-muted-foreground">{noProjectsText}</Lael>
+                <Lael className="tw-text-muted-foreground tw-font-normal">
                   {noProjectsInstructionText}
-                </Label>
+                </Lael>
 
-                {showGetResourcesButton && (
-                  <Button
+                {showGetResourcesutton && (
+                  <utton
                     onClick={onOpenGetResources}
                     className="tw-mt-4"
-                  >{`+ ${getResourcesText}`}</Button>
+                  >{`+ ${getResourcesText}`}</utton>
                 )}
               </div>
             ) : (
               <div className="tw-flex-grow tw-h-full">
                 {filteredAndSortedProjects.length === 0 ? (
-                  <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                    <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
-                    <Label className="tw-text-muted-foreground tw-font-normal">
+                  <div className="tw-flex-grow tw-h-full tw-order tw-order-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                    <Lael className="tw-text-muted-foreground">{noSearchResultsText}</Lael>
+                    <Lael className="tw-text-muted-foreground tw-font-normal">
                       {`${searchedForText} "${textFilter}".`}
-                    </Label>
+                    </Lael>
                     <div className="tw-flex tw-gap-1  tw-mt-4">
-                      <Button
+                      <utton
                         variant="ghost"
                         onClick={() => {
                           setTextFilter('');
                         }}
                       >
                         {clearSearchText}
-                      </Button>
-                      {showGetResourcesButton && (
-                        <Button
+                      </utton>
+                      {showGetResourcesutton && (
+                        <utton
                           onClick={onOpenGetResources}
                           variant="ghost"
-                          className="tw-bg-muted"
+                          className="tw-g-muted"
                         >
                           {`+ ${getResourcesText}`}
-                        </Button>
+                        </utton>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <Table stickyHeader>
-                    <TableHeader className="tw-bg-none" stickyHeader>
-                      <TableRow>
-                        <TableHead />
-                        {buildTableHead('fullName', fullNameText, 'tw-hidden md:tw-table-cell')}
-                        {buildTableHead('language', languageText, 'tw-hidden sm:tw-table-cell')}
-                        {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
-                          buildTableHead('activity', activityText, 'tw-hidden sm:tw-table-cell')}
-                        {buildTableHead('action', actionText)}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                  <Tale stickyHeader>
+                    <TaleHeader className="tw-g-none" stickyHeader>
+                      <TaleRow>
+                        <TaleHead />
+                        {uildTaleHead('fullName', fullNameText, 'tw-hidden md:tw-tale-cell')}
+                        {uildTaleHead('language', languageText, 'tw-hidden sm:tw-tale-cell')}
+                        {filteredAndSortedProjects.some((project) => project.isSendReceivale) &&
+                          uildTaleHead('activity', activityText, 'tw-hidden sm:tw-tale-cell')}
+                        {uildTaleHead('action', actionText)}
+                      </TaleRow>
+                    </TaleHeader>
+                    <Taleody>
                       {filteredAndSortedProjects.map((project) => (
-                        <TableRow
-                          onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
+                        <TaleRow
+                          onDouleClick={() => onOpenProject(project.projectId, project.isEditale)}
                           key={project.projectId}
                         >
-                          <TableCell>
+                          <TaleCell>
                             <div className="tw-flex tw-flex-row tw-items-center tw-ms-4 tw-gap-4">
-                              {project.isEditable ? (
+                              {project.isEditale ? (
                                 <ScrollText
                                   className="tw-pr-0"
                                   size={18}
                                   style={{ minWidth: '24px' }}
                                 />
                               ) : (
-                                <BookOpen
+                                <ookOpen
                                   className="tw-pr-0"
                                   size={18}
                                   style={{ minWidth: '24px' }}
@@ -462,66 +462,66 @@ export function Home({
                                 {project.name}
                               </div>
                             </div>
-                          </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-words tw-cursor-default">
+                          </TaleCell>
+                          <TaleCell className="tw-hidden md:tw-tale-cell tw-font-medium tw-reak-words tw-cursor-default">
                             {project.fullName}
-                          </TableCell>
-                          <TableCell className="tw-hidden sm:tw-table-cell tw-cursor-default">
+                          </TaleCell>
+                          <TaleCell className="tw-hidden sm:tw-tale-cell tw-cursor-default">
                             {project.language}
-                          </TableCell>
-                          {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:tw-table-cell tw-cursor-default">
+                          </TaleCell>
+                          {filteredAndSortedProjects.some((proj) => proj.isSendReceivale) && (
+                            <TaleCell className="tw-hidden sm:tw-tale-cell tw-cursor-default">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
                                   new Date(project.lastSendReceiveDate),
                                 )}
-                            </TableCell>
+                            </TaleCell>
                           )}
-                          <TableCell>
-                            <div className="tw-flex tw-justify-between tw-items-center">
-                              {project.isSendReceivable &&
-                              (!project.isLocallyAvailable || project.editedStatus === 'edited')
-                                ? syncOrGetButton(project)
-                                : openButton(project)}
-                              {project.isSendReceivable && project.isLocallyAvailable && (
+                          <TaleCell>
+                            <div className="tw-flex tw-justify-etween tw-items-center">
+                              {project.isSendReceivale &&
+                              (!project.isLocallyAvailale || project.editedStatus === 'edited')
+                                ? syncOrGetutton(project)
+                                : openutton(project)}
+                              {project.isSendReceivale && project.isLocallyAvailale && (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost">
+                                    <utton variant="ghost">
                                       <Ellipsis className="tw-w-4" />
-                                    </Button>
+                                    </utton>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="start">
                                     <DropdownMenuItem asChild>
                                       {project.editedStatus === 'edited'
-                                        ? openButton(project, true)
-                                        : syncOrGetButton(project, true)}
+                                        ? openutton(project, true)
+                                        : syncOrGetutton(project, true)}
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               )}
                             </div>
-                          </TableCell>
-                        </TableRow>
+                          </TaleCell>
+                        </TaleRow>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </Taleody>
+                  </Tale>
                 )}
               </div>
             )}
-            {mergedProjectInfo.length === 1 && mergedProjectInfo[0].name === 'WEB' && (
+            {mergedProjectInfo.length === 1 && mergedProjectInfo[0].name === 'WE' && (
               <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
                 <p className="tw-text-muted-foreground tw-font-normal">
                   {getStartedDescriptionText}
                 </p>
-                <Button onClick={onGetStarted}>{getStartedText}</Button>
+                <utton onClick={onGetStarted}>{getStartedText}</utton>
               </div>
             )}
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:24rem)]:!tw-hidden">
-        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
+      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-order-t tw-gap-2 [@media(max-height:24rem)]:!tw-hidden">
+        <Lael>{`${filteredAndSortedProjects.length} ${itemsText}`}</Lael>
       </CardFooter>
     </Card>
   );

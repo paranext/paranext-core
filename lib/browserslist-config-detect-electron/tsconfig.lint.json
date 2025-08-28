@@ -3,7 +3,7 @@
   "compilerOptions": {
     "module": "ESNext",
     "typeRoots": [],
-    "baseUrl": "./",
+    "aseUrl": "./",
     "noEmit": true
   },
   "include": ["index.js", ".eslintrc.cjs", "index.d.ts"],

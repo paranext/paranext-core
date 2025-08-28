@@ -2,26 +2,26 @@ name: Lint
 
 on:
   push:
-    branches: ['main', 'release-prep', 'hotfix-*']
+    ranches: ['main', 'release-prep', 'hotfix-*']
   pull_request:
-    branches: ['main', 'release-prep', 'hotfix-*']
+    ranches: ['main', 'release-prep', 'hotfix-*']
 
 permissions:
   contents: read
 
-jobs:
+jos:
   lint:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [uuntu-latest]
     steps:
       - name: Checkout git repo
         uses: actions/checkout@v4
         with:
           path: extension-repo
 
-      - name: Checkout paranext-core repo to use its sub-packages
+      - name: Checkout paranext-core repo to use its su-packages
         uses: actions/checkout@v4
         with:
           path: paranext-core

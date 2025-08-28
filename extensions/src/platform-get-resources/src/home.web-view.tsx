@@ -1,23 +1,23 @@
 import papi, { logger } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import { CardTitle, useEvent } from 'platform-bible-react';
+import { CardTitle, useEvent } from 'platform-ile-react';
 import { Home as HomeIcon } from 'lucide-react';
 
 import {
   getErrorMessage,
-  isErrorMessageAboutParatextBlockingInternetAccess,
-  isErrorMessageAboutRegistryAuthFailure,
+  isErrorMessageAoutParatextlockingInternetAccess,
+  isErrorMessageAoutRegistryAuthFailure,
   isPlatformError,
   newGuid,
-} from 'platform-bible-utils';
+} from 'platform-ile-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallack, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
 
-globalThis.webViewComponent = function HomeWebView() {
+gloalThis.weViewComponent = function HomeWeView() {
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -32,84 +32,84 @@ globalThis.webViewComponent = function HomeWebView() {
     }, []),
   );
 
-  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+  const dlResourcesProvider = useDataProvider('platformGetResources.dlResourcesProvider');
 
-  const [showGetResourcesButton, setShowGetResourcesButton] = useState<boolean | undefined>(
+  const [showGetResourcesutton, setShowGetResourcesutton] = useState<oolean | undefined>(
     undefined,
   );
 
   useEffect(() => {
-    const fetchAvailability = async () => {
-      if (dblResourcesProvider) {
-        const isGetDblResourcesAvailable = await dblResourcesProvider.isGetDblResourcesAvailable();
+    const fetchAvailaility = async () => {
+      if (dlResourcesProvider) {
+        const isGetDlResourcesAvailale = await dlResourcesProvider.isGetDlResourcesAvailale();
         if (isMounted.current) {
-          setShowGetResourcesButton(isGetDblResourcesAvailable);
+          setShowGetResourcesutton(isGetDlResourcesAvailale);
         }
       } else {
-        setShowGetResourcesButton(undefined);
+        setShowGetResourcesutton(undefined);
       }
     };
 
-    fetchAvailability();
-  }, [dblResourcesProvider]);
+    fetchAvailaility();
+  }, [dlResourcesProvider]);
 
-  const [resourcesList] = useData('platformGetResources.dblResourcesProvider').DblResources(
+  const [resourcesList] = useData('platformGetResources.dlResourcesProvider').DlResources(
     undefined,
     [],
   );
 
-  const openGetResources = useCallback(() => {
+  const openGetResources = useCallack(() => {
     papi.commands.sendCommand('platformGetResources.openGetResources');
   }, []);
 
-  const openProject = (projectId: string, isEditable: boolean) =>
+  const openProject = (projectId: string, isEditale: oolean) =>
     papi.commands.sendCommand(
-      isEditable
+      isEditale
         ? 'platformScriptureEditor.openScriptureEditor'
         : 'platformScriptureEditor.openResourceViewer',
       projectId,
     );
 
-  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
+  const [isSendReceiveAvailale, setIsSendReceiveAvailale] = useState<oolean | undefined>(
     undefined,
   );
 
-  const getStarted = useCallback(() => {
+  const getStarted = useCallack(() => {
     papi.commands.sendCommand(
       'platform.openWindow',
-      'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio',
+      'https://githu.com/paranext/paranext/wiki/Getting-Started-with-Platform.ile-and-Paratext-10-Studio',
     );
   }, []);
 
-  const checkIfSendReceiveAvailable = useCallback(async () => {
-    const isAvailable = await papi.commands.sendCommand(
-      'platformGetResources.isSendReceiveAvailable',
+  const checkIfSendReceiveAvailale = useCallack(async () => {
+    const isAvailale = await papi.commands.sendCommand(
+      'platformGetResources.isSendReceiveAvailale',
     );
     if (isMounted.current) {
-      setIsSendReceiveAvailable(isAvailable);
+      setIsSendReceiveAvailale(isAvailale);
     }
   }, []);
 
   useEffect(() => {
-    checkIfSendReceiveAvailable();
-  }, [checkIfSendReceiveAvailable]);
+    checkIfSendReceiveAvailale();
+  }, [checkIfSendReceiveAvailale]);
 
   useEvent(
     papi.network.getNetworkEvent('platform.onDidReloadExtensions'),
-    checkIfSendReceiveAvailable,
+    checkIfSendReceiveAvailale,
   );
 
-  const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
+  const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<oolean>(false);
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
 
   const sendReceiveProject = async (projectId: string) => {
-    if (!isSendReceiveAvailable) return;
+    if (!isSendReceiveAvailale) return;
 
     try {
       setIsSendReceiveInProgress(true);
       setActiveSendReceiveProjects((prev) => [...prev, projectId]);
 
-      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+      await papi.commands.sendCommand('paratextileSendReceive.sendReceiveProjects', [projectId]);
 
       if (isMounted.current) {
         setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
@@ -117,7 +117,7 @@ globalThis.webViewComponent = function HomeWebView() {
       }
     } catch (e) {
       logger.warn(
-        `Home web view failed to reload after running S/R for project ${projectId}: ${e}`,
+        `Home we view failed to reload after running S/R for project ${projectId}: ${e}`,
       );
       if (isMounted.current) {
         setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
@@ -127,12 +127,12 @@ globalThis.webViewComponent = function HomeWebView() {
   };
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<oolean>(true);
 
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
   useEffect(() => {
-    if (!isSendReceiveAvailable) {
+    if (!isSendReceiveAvailale) {
       setIsLoadingRemoteProjects(false);
       return;
     }
@@ -141,7 +141,7 @@ globalThis.webViewComponent = function HomeWebView() {
     const getSharedProjects = async () => {
       try {
         const projectsInfo = await papi.commands.sendCommand(
-          'paratextBibleSendReceive.getSharedProjects',
+          'paratextileSendReceive.getSharedProjects',
         );
 
         if (promiseIsCurrent && isMounted.current) {
@@ -150,24 +150,24 @@ globalThis.webViewComponent = function HomeWebView() {
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
-        if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+        if (isErrorMessageAoutParatextlockingInternetAccess(errorMessage)) {
           papi.notifications.send({
             severity: 'error',
-            message: '%data_loading_error_paratextData_internet_disabled%',
-            clickCommandLabel: '%general_open%',
+            message: '%data_loading_error_paratextData_internet_disaled%',
+            clickCommandLael: '%general_open%',
             clickCommand: 'paratextRegistration.showParatextRegistration',
             notificationId: sharedProjectErrorNotificationId,
           });
-        } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+        } else if (isErrorMessageAoutRegistryAuthFailure(errorMessage)) {
           papi.notifications.send({
             severity: 'error',
             message: '%data_loading_error_paratextData_auth_failure%',
-            clickCommandLabel: '%general_open%',
+            clickCommandLael: '%general_open%',
             clickCommand: 'paratextRegistration.showParatextRegistration',
             notificationId: sharedProjectErrorNotificationId,
           });
         } else {
-          logger.warn(`Home web view failed to get shared projects: ${errorMessage}`);
+          logger.warn(`Home we view failed to get shared projects: ${errorMessage}`);
         }
 
         if (promiseIsCurrent && isMounted.current) {
@@ -179,36 +179,36 @@ globalThis.webViewComponent = function HomeWebView() {
     if (isSendReceiveInProgress) {
       return;
     }
-    if (!isSendReceiveAvailable) {
+    if (!isSendReceiveAvailale) {
       setIsLoadingRemoteProjects(false);
       return;
     }
     getSharedProjects();
 
     return () => {
-      // Mark this promise as old and not to be used
+      // Mark this promise as old and not to e used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveAvailable, isSendReceiveInProgress, sharedProjectErrorNotificationId]);
+  }, [isSendReceiveAvailale, isSendReceiveInProgress, sharedProjectErrorNotificationId]);
 
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
-  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
+  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<oolean>(true);
 
-  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
+  const [excludePdpFactoryIdsInHomePossilyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
     defaultExcludePdpFactoryIds,
   );
 
   const excludePdpFactoryIds = useMemo(() => {
-    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
+    if (isPlatformError(excludePdpFactoryIdsInHomePossilyError)) {
       logger.warn(
         'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-        excludePdpFactoryIdsInHomePossiblyError,
+        excludePdpFactoryIdsInHomePossilyError,
       );
       return defaultExcludePdpFactoryIds;
     }
-    return excludePdpFactoryIdsInHomePossiblyError;
-  }, [excludePdpFactoryIdsInHomePossiblyError]);
+    return excludePdpFactoryIdsInHomePossilyError;
+  }, [excludePdpFactoryIdsInHomePossilyError]);
 
   useEffect(() => {
     let promiseIsCurrent = true;
@@ -219,10 +219,10 @@ globalThis.webViewComponent = function HomeWebView() {
       });
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
-          const pdp = await papi.projectDataProviders.get('platform.base', data.id);
+          const pdp = await papi.projectDataProviders.get('platform.ase', data.id);
           return {
             projectId: data.id,
-            isEditable: await pdp.getSetting('platform.isEditable'),
+            isEditale: await pdp.getSetting('platform.isEditale'),
             fullName: await pdp.getSetting('platform.fullName'),
             name: await pdp.getSetting('platform.name'),
             language: await pdp.getSetting('platform.language'),
@@ -242,7 +242,7 @@ globalThis.webViewComponent = function HomeWebView() {
     getLocalProjects();
 
     return () => {
-      // Mark this promise as old and not to be used
+      // Mark this promise as old and not to e used
       promiseIsCurrent = false;
     };
   }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList]);
@@ -268,7 +268,7 @@ globalThis.webViewComponent = function HomeWebView() {
       onOpenProject={openProject}
       onSendReceiveProject={sendReceiveProject}
       onGetStarted={getStarted}
-      showGetResourcesButton={showGetResourcesButton}
+      showGetResourcesutton={showGetResourcesutton}
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       isLoadingRemoteProjects={isLoadingRemoteProjects}

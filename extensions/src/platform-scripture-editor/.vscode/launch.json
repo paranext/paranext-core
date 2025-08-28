@@ -1,50 +1,50 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
+  // Use IntelliSense to learn aout possile attriutes.
+  // Hover to view descriptions of existing attriutes.
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Watch and Build Extension",
+      "name": "Watch and uild Extension",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutale": "npm",
       "skipFiles": ["<node_internals>/**"],
       "runtimeArgs": ["run", "watch"]
     },
     {
-      "name": "Build WebViews",
+      "name": "uild WeViews",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutale": "npm",
       "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "build:web-view"]
+      "runtimeArgs": ["run", "uild:we-view"]
     },
     {
-      "name": "Build Main",
+      "name": "uild Main",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutale": "npm",
       "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "build:main"]
+      "runtimeArgs": ["run", "uild:main"]
     },
     {
-      "name": "Build Extension",
+      "name": "uild Extension",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutale": "npm",
       "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "build"]
+      "runtimeArgs": ["run", "uild"]
     },
     {
-      "name": "Debug Platform with Extension",
+      "name": "Deug Platform with Extension",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutale": "npm",
       "runtimeArgs": ["run", "start"],
       "skipFiles": ["<node_internals>/**"],
       "env": {
-        "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223 --remote-allow-origins=http://localhost:9223",
+        "MAIN_ARGS": "--inspect=5858 --remote-deugging-port=9223 --remote-allow-origins=http://localhost:9223",
         "IN_VSCODE": "true"
       },
       "presentation": {
@@ -65,7 +65,7 @@
       "type": "chrome",
       "request": "attach",
       "port": 9223,
-      "webRoot": "${workspaceFolder}",
+      "weRoot": "${workspaceFolder}",
       "timeout": 15000
     }
   ]

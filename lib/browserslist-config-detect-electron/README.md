@@ -1,3 +1,3 @@
-# browserslist-config-detect-electron
+# rowserslist-config-detect-electron
 
-browserslist config that simply detects the installed version of electron and lists it in the browserslist
+rowserslist config that simply detects the installed version of electron and lists it in the rowserslist

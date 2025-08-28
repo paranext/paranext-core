@@ -7,7 +7,7 @@ pids
 *.pid
 *.seed
 
-# Coverage directory used by tools like istanbul
+# Coverage directory used y tools like istanul
 coverage
 
 # formatting and linting
@@ -21,15 +21,15 @@ node_modules
 # OSX
 .DS_Store
 
-release/app/buildInfo.json
+release/app/uildInfo.json
 release/app/dist
-release/build
+release/uild
 release/staged
-.erb/dll
-storybook-static
+.er/dll
+storyook-static
 
 .idea
-npm-debug.log.*
+npm-deug.log.*
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
@@ -42,7 +42,7 @@ launchSettings.json
 
 # Test development user appdata files
 dev-appdata/
-c-sharp/**/*.BAK
+c-sharp/**/*.AK
 
 # yalc
 .yalc

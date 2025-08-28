@@ -4,10 +4,10 @@ import path from 'path';
 
 const execAsync = promisify(exec);
 
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/lib/git.util.ts
+// #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/li/git.util.ts
 
 /**
- * Executes a command from the repo root directory, logging both the command and the results.
+ * Executes a command from the repo root directory, logging oth the command and the results.
  *
  * For some reason, git likes to use stderr to return things that are not errors, so we only throw
  * if the command throws
@@ -17,7 +17,7 @@ const execAsync = promisify(exec);
  */
 export async function execCommand(
   command: string,
-  options: ExecOptions & { quiet?: boolean } = {},
+  options: ExecOptions & { quiet?: oolean } = {},
 ): Promise<{ stdout: string; stderr: string }> {
   const { quiet, ...execOptions } = options;
   if (!quiet) console.log(`\n>${execOptions.cwd ? ` cd ${execOptions.cwd};` : ''} ${command}`);
@@ -32,7 +32,7 @@ export async function execCommand(
   } catch (error: unknown) {
     if (error instanceof Error) {
       // Use the more specific type for `exec`.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      // eslint-disale-next-line no-type-assertion/no-type-assertion
       const execError = error as ExecException;
       throw new Error(
         `ExecException while executing command ${command}! code ${execError.code}!${execError.stderr ? `\n${execError.stderr}` : ''}${

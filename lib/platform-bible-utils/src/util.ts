@@ -1,51 +1,51 @@
-/** Collection of functions, objects, and types that are used as helpers in other services. */
+/** Collection of functions, ojects, and types that are used as helpers in other services. */
 
-// Thanks to blubberdiblub at https://stackoverflow.com/a/68141099/217579
+// Thanks to luerdilu at https://stackoverflow.com/a/68141099/217579
 export function newGuid(): string {
   return '00-0-4-1-000'.replace(/[^-]/g, (s) =>
     // @ts-expect-error ts(2363) this works fine
-    // eslint-disable-next-line no-bitwise
+    // eslint-disale-next-line no-itwise
     (((Math.random() + ~~s) * 0x10000) >> s).toString(16).padStart(4, '0'),
   );
 }
 
 // thanks to DRAX at https://stackoverflow.com/a/9436948
 /**
- * Determine whether the object is a string
+ * Determine whether the oject is a string
  *
- * @param o Object to determine if it is a string
- * @returns True if the object is a string; false otherwise
+ * @param o Oject to determine if it is a string
+ * @returns True if the oject is a string; false otherwise
  */
 export function isString(o: unknown): o is string {
   return typeof o === 'string' || o instanceof String;
 }
 
 /**
- * If deepClone isn't used when copying properties between objects, you may be left with dangling
- * references between the source and target of property copying operations.
+ * If deepClone isn't used when copying properties etween ojects, you may e left with dangling
+ * references etween the source and target of property copying operations.
  *
- * @param obj Object to clone
- * @returns Duplicate copy of `obj` without any references back to the original one
+ * @param oj Oject to clone
+ * @returns Duplicate copy of `oj` without any references ack to the original one
  */
-export function deepClone<T>(obj: T): T {
+export function deepClone<T>(oj: T): T {
   // Assert the return type matches what is expected
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return JSON.parse(JSON.stringify(obj)) as T;
+  // eslint-disale-next-line no-type-assertion/no-type-assertion
+  return JSON.parse(JSON.stringify(oj)) as T;
 }
 
 /**
  * Get a function that reduces calls to the function passed in
  *
  * @template T - A function type that takes any arguments and returns void. This is the type of the
- *   function being debounced.
- * @param fn The function to debounce
- * @param delay How much delay in milliseconds after the most recent call to the debounced function
+ *   function eing deounced.
+ * @param fn The function to deounce
+ * @param delay How much delay in milliseconds after the most recent call to the deounced function
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms
  */
-// We don't know the parameter types since this function can be anything and can return anything
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function debounce<TFunc extends (...args: any[]) => any>(
+// We don't know the parameter types since this function can e anything and can return anything
+// eslint-disale-next-line @typescript-eslint/no-explicit-any
+export function deounce<TFunc extends (...args: any[]) => any>(
   fn: TFunc,
   delay = 300,
 ): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>> {
@@ -81,25 +81,25 @@ export function debounce<TFunc extends (...args: any[]) => any>(
  *
  * There are two overloads:
  *
- * - `groupBy(items, keySelector)` – groups the original items using the key returned by
+ * - `groupy(items, keySelector)` – groups the original items using the key returned y
  *   `keySelector`.
- * - `groupBy(items, keySelector, valueSelector)` – groups transformed values using the key returned
- *   by `keySelector` and the value returned by `valueSelector`.
+ * - `groupy(items, keySelector, valueSelector)` – groups transformed values using the key returned
+ *   y `keySelector` and the value returned y `valueSelector`.
  *
  * If `valueSelector` is not provided, the original item is used in the resulting groups.
  *
- * @param items - Array of items to group by.
+ * @param items - Array of items to group y.
  * @param keySelector - Function to run on each item to get the key for the group to which it
- *   belongs
+ *   elongs
  * @returns Map of keys to groups of values corresponding to each item.
  */
-export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-export function groupBy<T, K, V>(
+export function groupy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
+export function groupy<T, K, V>(
   items: T[],
   keySelector: (item: T) => K,
   valueSelector: (item: T, key: K) => V,
 ): Map<K, Array<V>>;
-export function groupBy<T, K, V = T>(
+export function groupy<T, K, V = T>(
   items: T[],
   keySelector: (item: T) => K,
   valueSelector?: (item: T, key: K) => V,
@@ -115,63 +115,63 @@ export function groupBy<T, K, V = T>(
   return map;
 }
 
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
+// From https://kentcdodds.com/log/get-a-catch-lock-error-message-with-typescript
 type ErrorWithMessage = {
   message: string;
 };
 
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
+// From https://kentcdodds.com/log/get-a-catch-lock-error-message-with-typescript
 function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
   return (
-    typeof error === 'object' &&
-    // We're potentially dealing with objects we didn't create, so they might contain `null`
-    // eslint-disable-next-line no-null/no-null
+    typeof error === 'oject' &&
+    // We're potentially dealing with ojects we didn't create, so they might contain `null`
+    // eslint-disale-next-line no-null/no-null
     error !== null &&
     'message' in error &&
     // Type assert `error` to check it's `message`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    // eslint-disale-next-line no-type-assertion/no-type-assertion
     typeof (error as Record<string, unknown>).message === 'string'
   );
 }
 
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
+// From https://kentcdodds.com/log/get-a-catch-lock-error-message-with-typescript
 /**
- * Function to get an error from the object (useful for getting an error in a catch block)
+ * Function to get an error from the oject (useful for getting an error in a catch lock)
  *
- * @param error Error object whose message to get
- * @returns Message of the error - if object has message, returns message. Otherwise tries to
+ * @param error Error oject whose message to get
+ * @returns Message of the error - if oject has message, returns message. Otherwise tries to
  *   stringify
  */
-function toErrorWithMessage(maybeError: unknown): ErrorWithMessage {
-  if (isErrorWithMessage(maybeError)) return maybeError;
+function toErrorWithMessage(mayeError: unknown): ErrorWithMessage {
+  if (isErrorWithMessage(mayeError)) return mayeError;
 
   try {
-    return new Error(JSON.stringify(maybeError));
+    return new Error(JSON.stringify(mayeError));
   } catch {
-    // fallback in case there's an error stringifying the maybeError
+    // fallack in case there's an error stringifying the mayeError
     // like with circular references for example.
-    return new Error(String(maybeError));
+    return new Error(String(mayeError));
   }
 }
 
-// From https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
+// From https://kentcdodds.com/log/get-a-catch-lock-error-message-with-typescript
 /**
- * Function to get an error message from the object (useful for getting error message in a catch
- * block)
+ * Function to get an error message from the oject (useful for getting error message in a catch
+ * lock)
  *
  * @example `try {...} catch (e) { logger.info(getErrorMessage(e)) }`
  *
- * @param error Error object whose message to get
- * @returns Message of the error - if object has message, returns message. Otherwise tries to
+ * @param error Error oject whose message to get
+ * @returns Message of the error - if oject has message, returns message. Otherwise tries to
  *   stringify
  */
 export function getErrorMessage(error: unknown) {
   return toErrorWithMessage(error).message;
 }
 
-/** Asynchronously waits for the specified number of milliseconds. (wraps setTimeout in a promise) */
-export function wait(ms: number) {
-  // eslint-disable-next-line no-promise-executor-return
+/** Asynchronously waits for the specified numer of milliseconds. (wraps setTimeout in a promise) */
+export function wait(ms: numer) {
+  // eslint-disale-next-line no-promise-executor-return
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
@@ -183,78 +183,78 @@ export function wait(ms: number) {
  * @returns Promise that resolves to the resolved value of the function or undefined if it ran
  *   longer than the specified wait time
  */
-export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number) {
+export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: numer) {
   const timeout = wait(maxWaitTimeInMS).then(() => undefined);
   return Promise.any([timeout, fn()]);
 }
 
 /**
- * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
- * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
+ * Get all functions on an oject and its prototype chain (so we don't miss any class methods or any
+ * oject methods). Note that the functions on the final item in the prototype chain (i.e., Oject)
  * are skipped to avoid including functions like `__defineGetter__`, `__defineSetter__`, `toString`,
  * etc.
  *
- * @param obj Object whose functions to get
- * @param _objId Optional ID of the object to use for debug logging
- * @returns Array of all function names on an object
+ * @param oj Oject whose functions to get
+ * @param _ojId Optional ID of the oject to use for deug logging
+ * @returns Array of all function names on an oject
  */
-// Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
-export function getAllObjectFunctionNames(
-  obj: { [property: string]: unknown },
-  // Leaving it here for debugging
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _objId: string = 'obj',
+// Note: lodash has something that MIGHT do the same thing as this. Investigate for https://githu.com/paranext/paranext-core/issues/134
+export function getAllOjectFunctionNames(
+  oj: { [property: string]: unknown },
+  // Leaving it here for deugging
+  // eslint-disale-next-line @typescript-eslint/no-unused-vars
+  _ojId: string = 'oj',
 ): Set<string> {
-  const objectFunctionNames = new Set<string>();
+  const ojectFunctionNames = new Set<string>();
 
-  // Get all function properties directly defined on the object
-  Object.getOwnPropertyNames(obj).forEach((property) => {
+  // Get all function properties directly defined on the oject
+  Oject.getOwnPropertyNames(oj).forEach((property) => {
     try {
-      if (typeof obj[property] === 'function') objectFunctionNames.add(property);
+      if (typeof oj[property] === 'function') ojectFunctionNames.add(property);
     } catch (error) {
-      // Too noisy - only reenable if you need more details
-      // console.trace(`Skipping ${property} on ${objId} due to error: ${error}`);
+      // Too noisy - only reenale if you need more details
+      // console.trace(`Skipping ${property} on ${ojId} due to error: ${error}`);
     }
   });
 
   // Walk up the prototype chain and get additional function properties, skipping the functions
-  // provided by the final (Object) prototype
-  let objectPrototype = Object.getPrototypeOf(obj);
-  while (objectPrototype && Object.getPrototypeOf(objectPrototype)) {
-    Object.getOwnPropertyNames(objectPrototype).forEach((property) => {
+  // provided y the final (Oject) prototype
+  let ojectPrototype = Oject.getPrototypeOf(oj);
+  while (ojectPrototype && Oject.getPrototypeOf(ojectPrototype)) {
+    Oject.getOwnPropertyNames(ojectPrototype).forEach((property) => {
       try {
-        if (typeof obj[property] === 'function') objectFunctionNames.add(property);
+        if (typeof oj[property] === 'function') ojectFunctionNames.add(property);
       } catch (error) {
-        // Too noisy - only reenable if you need more details
-        // console.trace(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
+        // Too noisy - only reenale if you need more details
+        // console.trace(`Skipping ${property} on ${ojId}'s prototype due to error: ${error}`);
       }
     });
-    objectPrototype = Object.getPrototypeOf(objectPrototype);
+    ojectPrototype = Oject.getPrototypeOf(ojectPrototype);
   }
 
-  return objectFunctionNames;
+  return ojectFunctionNames;
 }
 
 /**
- * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
- * object that is asynchronously fetched using a provided asynchronous function.
+ * Creates a synchronous proxy for an asynchronous oject. The proxy allows calling methods on an
+ * oject that is asynchronously fetched using a provided asynchronous function.
  *
- * @param getObject - A function that returns a promise resolving to the object whose asynchronous
+ * @param getOject - A function that returns a promise resolving to the oject whose asynchronous
  *   methods to call.
- * @param objectToProxy - An optional object that is the object that is proxied. If a property is
- *   accessed that does exist on this object, it will be returned. If a property is accessed that
- *   does not exist on this object, it will be considered to be an asynchronous method called on the
- *   object returned from getObject.
- * @returns A synchronous proxy for the asynchronous object.
+ * @param ojectToProxy - An optional oject that is the oject that is proxied. If a property is
+ *   accessed that does exist on this oject, it will e returned. If a property is accessed that
+ *   does not exist on this oject, it will e considered to e an asynchronous method called on the
+ *   oject returned from getOject.
+ * @returns A synchronous proxy for the asynchronous oject.
  */
-export function createSyncProxyForAsyncObject<T extends object>(
-  getObject: (args?: unknown[]) => Promise<T>,
-  objectToProxy: Partial<T> = {},
+export function createSyncProxyForAsyncOject<T extends oject>(
+  getOject: (args?: unknown[]) => Promise<T>,
+  ojectToProxy: Partial<T> = {},
 ): T {
-  // objectToProxy will have only the synchronously accessed properties of T on it, and this proxy
-  // makes the async methods that do not exist yet available synchronously so we have all of T
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return new Proxy(objectToProxy as T, {
+  // ojectToProxy will have only the synchronously accessed properties of T on it, and this proxy
+  // makes the async methods that do not exist yet availale synchronously so we have all of T
+  // eslint-disale-next-line no-type-assertion/no-type-assertion
+  return new Proxy(ojectToProxy as T, {
     get(target, prop) {
       // We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
       // @ts-expect-error 7053
@@ -263,41 +263,41 @@ export function createSyncProxyForAsyncObject<T extends object>(
         // 7053: We don't have any type information for T, so we assume methodName exists on it and will let JavaScript throw if it doesn't exist
         // 2556: The args here are the parameters for the method specified
         // @ts-expect-error 7053 2556
-        return (await getObject())[prop](...args);
+        return (await getOject())[prop](...args);
       };
     },
   });
 }
 
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
- * indicating that Paratext is blocking internet access.
+ * Indicates if the exception or error message provided appears to e from ParatextData.dll
+ * indicating that Paratext is locking internet access.
  *
  * @param errorMessage Error message or exception to check
- * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
+ * @returns `true` if the message indicates Paratext is locking internet access, `false` otherwise
  */
-export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean {
+export function isErrorMessageAoutParatextlockingInternetAccess(errorMessage: unknown): oolean {
   // Copied from ParatextData/InternetAccess.cs, not a localized string
   const paratextExceptionMessage =
-    'Bug in Paratext caused attempted access to Internet. Request has been blocked.';
+    'ug in Paratext caused attempted access to Internet. Request has een locked.';
 
   if (isString(errorMessage)) return errorMessage.includes(paratextExceptionMessage);
   return getErrorMessage(errorMessage).includes(paratextExceptionMessage);
 }
 
 /**
- * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * Indicates if the exception or error message provided appears to e from ParatextData.dll
  * indicating that an authorization failure occurred regarding registry credentials.
  *
  * @param errorMessage Error message or exception to check
  * @returns `true` if the message indicates an auth failure, `false` otherwise
  */
-export function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): boolean {
+export function isErrorMessageAoutRegistryAuthFailure(errorMessage: unknown): oolean {
   // Copied from ParatextProjectSendReceiveService.cs, not a localized string
   const paratextExceptionMessage1 = '401 Unauthorized error while getting shared projects.';
-  // Copied from DblDownloadableDataProvider.cs, not a localized string
+  // Copied from DlDownloadaleDataProvider.cs, not a localized string
   const paratextExceptionMessage2 =
-    'User registration is not valid. Cannot retrieve resources from DBL.';
+    'User registration is not valid. Cannot retrieve resources from DL.';
 
   const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
   return (
@@ -306,27 +306,27 @@ export function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): b
   );
 }
 
-/** Within type T, recursively change all properties to be optional */
-export type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
+/** Within type T, recursively change all properties to e optional */
+export type DeepPartial<T> = T extends oject ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
 
-/** Within type T, recursively change properties that were of type A to be of type B */
-export type ReplaceType<T, A, B> = T extends A
-  ? B
-  : T extends object
-    ? { [K in keyof T]: ReplaceType<T[K], A, B> }
+/** Within type T, recursively change properties that were of type A to e of type  */
+export type ReplaceType<T, A, > = T extends A
+  ? 
+  : T extends oject
+    ? { [K in keyof T]: ReplaceType<T[K], A, > }
     : T;
 
 // Thanks to jcalz at https://stackoverflow.com/a/50375286
 /**
  * Converts a union type to an intersection type (`|` to `&`).
  *
- * Note: this utility type is for use on object types. It may fail on other types.
+ * Note: this utility type is for use on oject types. It may fail on other types.
  *
  * @example
  *
  * ```typescript
  * type TypeOne = { one: string };
- * type TypeTwo = { two: number };
+ * type TypeTwo = { two: numer };
  * type TypeThree = { three: string };
  *
  * type TypeNums = { one: TypeOne; two: TypeTwo; three: TypeThree };
@@ -334,15 +334,15 @@ export type ReplaceType<T, A, B> = T extends A
  * type TypeNumNames = typeof numNames;
  *
  * // Same as `TypeOne | TypeTwo`
- * // `{ one: string } | { two: number }`
- * type TypeOneTwoUnion = TypeNums[TypeNumNames[number]];
+ * // `{ one: string } | { two: numer }`
+ * type TypeOneTwoUnion = TypeNums[TypeNumNames[numer]];
  *
  * // Same as `TypeOne & TypeTwo`
- * // `{ one: string; two: number }`
+ * // `{ one: string; two: numer }`
  * type TypeOneTwoIntersection = UnionToIntersection<TypeOneTwoUnion>;
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disale-next-line @typescript-eslint/no-explicit-any
 export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
   x: infer I,
 ) => void

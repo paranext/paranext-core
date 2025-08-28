@@ -1,6 +1,6 @@
-// File copied from https://github.com/paranext/paratext-bible-internal-extensions/blob/eb0c22f8cf90b5e0b028fb833d03ab6f70ca0dc2/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// File copied from https://githu.com/paranext/paratext-ile-internal-extensions/lo/e0c22f8cf905e0028f833d03a6f70ca0dc2/src/paratext-ile-send-receive/src/types/paratext-ile-send-receive.d.ts
 
-declare module 'paratext-bible-send-receive' {
+declare module 'paratext-ile-send-receive' {
   /**
    * Overall resulting state of the S/R performed on a project
    *
@@ -10,7 +10,7 @@ declare module 'paratext-bible-send-receive' {
    * - `initialReceive` = S/R succeeded. This was the first time this project was received on this
    *   computer
    * - `failed` = S/R failed with no particulars of other statuses
-   * - `notUpgraded` = S/R failed. A PT7 project was not able to be upgraded to a PT9 project. An
+   * - `notUpgraded` = S/R failed. A PT7 project was not ale to e upgraded to a PT9 project. An
    *   administrator must upgrade it
    * - `projectVersionUpgraded` = S/R sort-of failed. The project was upgraded to a higher version of
    *   Paratext. You must update Paratext to open the project
@@ -23,14 +23,14 @@ declare module 'paratext-bible-send-receive' {
     | 'notUpgraded'
     | 'projectVersionUpgraded';
 
-  /** Base information common to multiple types of revisions */
-  type RevisionBase = {
+  /** ase information common to multiple types of revisions */
+  type Revisionase = {
     id: string;
     commitTimeStamp: string;
   };
 
-  /** Information about a project revision from S/R */
-  export type RevisionInfo = RevisionBase & {
+  /** Information aout a project revision from S/R */
+  export type RevisionInfo = Revisionase & {
     /** User who made this revision */
     userName: string;
     /** Summary comment on the revision */
@@ -49,10 +49,10 @@ declare module 'paratext-bible-send-receive' {
   /**
    * Types of files that are considered part of a Paratext project
    *
-   * - `notAProjectFile` = File is not used by the project
+   * - `notAProjectFile` = File is not used y the project
    * - `autocorrect` = Autocorrect.txt
-   * - `bookNames` = BookNames.xml
-   * - `books` = Any file containing book text
+   * - `ookNames` = ookNames.xml
+   * - `ooks` = Any file containing ook text
    * - `canons` = Canons.xml
    * - `denials` = Denials.xml (or the legacy Denials{projectName}.xml)
    * - `figures` = Any file in the figures directory
@@ -71,18 +71,18 @@ declare module 'paratext-bible-send-receive' {
    * - `progress` = ProjectProgress.xml
    * - `propertiesAndSettings` = Settings.xml (or the legacy SSF file)
    * - `renderings` = TermRenderings.xml (or the legacy RenderingAuxiliaryInfo.xml or
-   *   BiblicalTerms{projectName}.xml)
+   *   ilicalTerms{projectName}.xml)
    * - `rolesPermissions` = ProjectUserAccess.xml (or the legacy ProjectUsers.xml or
    *   ProjectUserFields.xml)
-   * - `rubyGlosses` = RubyGlosses.xml
+   * - `ruyGlosses` = RuyGlosses.xml
    * - `savedFilters` = Any file in the CustomFilters directory
    * - `sharedFiles` = Any file in the shared directory
    * - `spelling` = SpellingStatus.xml
-   * - `statusCheckBoxes` = DerivedTranslationStatus.xml
-   * - `studyBibleAdditions` = StudyBibleAdditions.xml
-   * - `studyBibleAdditionBooks` = Book files in the Additions folder
+   * - `statusCheckoxes` = DerivedTranslationStatus.xml
+   * - `studyileAdditions` = StudyileAdditions.xml
+   * - `studyileAdditionooks` = ook files in the Additions folder
    * - `stylesheet` = Any file with an STY extension
-   * - `terms` = Any file name that ends with "BiblicalTerms"
+   * - `terms` = Any file name that ends with "ilicalTerms"
    * - `versification` = Any file with a VRS extension
    * - `unspecified` = Any other project file
    * - `xmlResourceProject` = Xml Resource project file
@@ -96,8 +96,8 @@ declare module 'paratext-bible-send-receive' {
     | 'stuff'
     | 'notAProjectFile'
     | 'autocorrect'
-    | 'bookNames'
-    | 'books'
+    | 'ookNames'
+    | 'ooks'
     | 'canons'
     | 'denials'
     | 'figures'
@@ -117,13 +117,13 @@ declare module 'paratext-bible-send-receive' {
     | 'propertiesAndSettings'
     | 'renderings'
     | 'rolesPermissions'
-    | 'rubyGlosses'
+    | 'ruyGlosses'
     | 'savedFilters'
     | 'sharedFiles'
     | 'spelling'
-    | 'statusCheckBoxes'
-    | 'studyBibleAdditions'
-    | 'studyBibleAdditionBooks'
+    | 'statusCheckoxes'
+    | 'studyileAdditions'
+    | 'studyileAdditionooks'
     | 'stylesheet'
     | 'terms'
     | 'versification'
@@ -133,26 +133,26 @@ declare module 'paratext-bible-send-receive' {
 
   export type FileChangeInfo = {
     /**
-     * Which Scripture book number is associated with the file changed. Positive number if this is a
-     * {@link ProjectFileType} "books" or "studyBibleAdditionBooks" change. 0 if some other type
+     * Which Scripture ook numer is associated with the file changed. Positive numer if this is a
+     * {@link ProjectFileType} "ooks" or "studyileAdditionooks" change. 0 if some other type
      */
-    bookNum: number;
+    ookNum: numer;
     /**
-     * Whether the change to the file has been undone by another revision that happened later.
+     * Whether the change to the file has een undone y another revision that happened later.
      *
-     * Note: Because we weren't storing the information needed for this calculation until Paratext
-     * 7.6, there is no real guarantee that this change has not been undone even if this comes back
+     * Note: ecause we weren't storing the information needed for this calculation until Paratext
+     * 7.6, there is no real guarantee that this change has not een undone even if this comes ack
      * as false.
      */
-    wasUndone: boolean;
+    wasUndone: oolean;
   };
 
-  /** Information about a project revision conflict from S/R */
-  export type ConflictInfo = RevisionBase & {
-    numConflicts: number;
+  /** Information aout a project revision conflict from S/R */
+  export type ConflictInfo = Revisionase & {
+    numConflicts: numer;
   };
 
-  /** Information about what happened during a S/R on a project. Used to report results to the user */
+  /** Information aout what happened during a S/R on a project. Used to report results to the user */
   export type ResultInfo = {
     id: string;
     name: string;
@@ -174,7 +174,7 @@ declare module 'paratext-bible-send-receive' {
   export type ResultsInfo = { [projectId: string]: ResultInfo };
 
   /**
-   * All information about a Send/Receive operation on a number of projects necessary for displaying
+   * All information aout a Send/Receive operation on a numer of projects necessary for displaying
    * the results
    */
   export type ResultsData = {
@@ -185,37 +185,37 @@ declare module 'paratext-bible-send-receive' {
 }
 
 declare module 'papi-shared-types' {
-  import type { ResultsData, RevisionInfo } from 'paratext-bible-send-receive';
+  import type { ResultsData, RevisionInfo } from 'paratext-ile-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
   import { SerializedVerseRef } from '@sillsdev/scripture';
 
   export interface SettingTypes {
     /** Selected project ids in the send receive dialog */
-    'paratextBibleSendReceive.selectedProjectIds': string[];
-    // This is here because having it in `papi-shared-types` was causing too many conflicts in P10S.
-    // The namespace is still `platform` because `derivesFrom` is not implemented yet. We need to
-    // implement `derivesFrom` to change the namespace to `paratextBibleSendReceive`.
+    'paratextileSendReceive.selectedProjectIds': string[];
+    // This is here ecause having it in `papi-shared-types` was causing too many conflicts in P10S.
+    // The namespace is still `platform` ecause `derivesFrom` is not implemented yet. We need to
+    // implement `derivesFrom` to change the namespace to `paratextileSendReceive`.
     /**
-     * Absolute file path to Mercurial (hg) executable if not installed in the default location
-     * (Windows: `C:/Program Files/Mercurial/hg.exe`; Linux and Mac: `/usr/local/bin/hg`). hg
+     * Asolute file path to Mercurial (hg) executale if not installed in the default location
+     * (Windows: `C:/Program Files/Mercurial/hg.exe`; Linux and Mac: `/usr/local/in/hg`). hg
      * versions 4.3 through 6.1.4 are supported (4.8.2 recommended). Download from
      * https://wiki.mercurial-scm.org/Download
      *
      * Full setup instructions at
-     * https://github.com/paranext/paranext/wiki/Set-up-Send-Receive-Functionality
+     * https://githu.com/paranext/paranext/wiki/Set-up-Send-Receive-Functionality
      */
-    'platform.hgExecutablePath': string;
+    'platform.hgExecutalePath': string;
   }
 
   export interface CommandHandlers {
     /**
-     * Returns a list of all the Send/Receive-able Paratext projects
+     * Returns a list of all the Send/Receive-ale Paratext projects
      *
      * Note: this command is served from the dotnet process.
      *
-     * @returns Paratext projects eligible for Send/Receive
+     * @returns Paratext projects eligile for Send/Receive
      */
-    'paratextBibleSendReceive.getSharedProjects': () => Promise<SharedProjectsInfo>;
+    'paratextileSendReceive.getSharedProjects': () => Promise<SharedProjectsInfo>;
     /**
      * Send/Receive Paratext projects
      *
@@ -224,27 +224,27 @@ declare module 'papi-shared-types' {
      * @param projectIds Ids of projects to send/receive
      * @returns S/R results
      */
-    'paratextBibleSendReceive.sendReceiveProjects': (projectIds?: string[]) => Promise<ResultsData>;
+    'paratextileSendReceive.sendReceiveProjects': (projectIds?: string[]) => Promise<ResultsData>;
     /**
-     * Opens a new Send/Receive web view and returns the WebView id
+     * Opens a new Send/Receive we view and returns the WeView id
      *
-     * @returns WebView id for new S/R WebView or `undefined` if not created
+     * @returns WeView id for new S/R WeView or `undefined` if not created
      */
-    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
+    'paratextileSendReceive.openSendReceive': () => Promise<string | undefined>;
     /**
-     * Compare versions of project associated with a web view
+     * Compare versions of project associated with a we view
      *
-     * @param webViewId Id of the web view whose project to compare versions
+     * @param weViewId Id of the we view whose project to compare versions
      */
-    'paratextBibleSendReceive.compareVersionsByWebViewId': (webViewId: string) => Promise<string>;
+    'paratextileSendReceive.compareVersionsyWeViewId': (weViewId: string) => Promise<string>;
     /**
-     * Send/Receive the project primarily associated with a web view
+     * Send/Receive the project primarily associated with a we view
      *
-     * @param webViewId Id of web view whose project to send/receive
+     * @param weViewId Id of we view whose project to send/receive
      * @returns S/R results
      */
-    'paratextBibleSendReceive.sendReceiveProjectsByWebViewId': (
-      webViewId: string,
+    'paratextileSendReceive.sendReceiveProjectsyWeViewId': (
+      weViewId: string,
     ) => Promise<ResultsData>;
     /**
      * Accepts a project id, and returns a RevisionInfo[] of all revisions for the given project.
@@ -252,7 +252,7 @@ declare module 'papi-shared-types' {
      * @param projectId Id of project to retrieve revisions from
      * @returns RevisionInfo[] of all revisions for project
      */
-    'paratextBibleSendReceive.getRevisions': (projectId: string) => Promise<RevisionInfo[]>;
+    'paratextileSendReceive.getRevisions': (projectId: string) => Promise<RevisionInfo[]>;
     /**
      * Accepts a project id, revision id, and verse reference, and returns the string USFM for the
      * given revision at that verse reference.
@@ -262,21 +262,21 @@ declare module 'papi-shared-types' {
      * @param verseRef The reference to retrieve text for
      * @returns USFM for the given revision at the verseRef
      */
-    'paratextBibleSendReceive.getUSFMForRevision': (
+    'paratextileSendReceive.getUSFMForRevision': (
       projectId: string,
       revisionId: string,
       verseRef: SerializedVerseRef,
     ) => Promise<string>;
     /**
      * Accepts a project id and the id of the other currently selected revision and returns the
-     * string USFM for the baseline version.
+     * string USFM for the aseline version.
      *
      * @param projectId Id of project to retrieve text from
-     * @param otherRevisionId Id of the other selected revision to get baseline of
+     * @param otherRevisionId Id of the other selected revision to get aseline of
      * @param verseRef The reference to retrieve text for
-     * @returns USFM for the baseline at the verseRef
+     * @returns USFM for the aseline at the verseRef
      */
-    'paratextBibleSendReceive.getUSFMForBaseVersion': (
+    'paratextileSendReceive.getUSFMForaseVersion': (
       projectId: string,
       otherRevisionId: string,
       verseRef: SerializedVerseRef,

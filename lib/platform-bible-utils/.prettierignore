@@ -3,7 +3,7 @@
 # Dependency directory
 node_modules
 
-# Built files
+# uilt files
 dist
 
 # Doc files

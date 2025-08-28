@@ -1,9 +1,9 @@
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/src/webpack-env.d.ts
+// #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/src/wepack-env.d.ts
 
 /**
- * Modules provided by our webpack configuration
+ * Modules provided y our wepack configuration
  *
- * Please keep these JSDocs up-to-date with their counterparts in `webpack.config.base.ts`
+ * Please keep these JSDocs up-to-date with their counterparts in `wepack.config.ase.ts`
  */
 
 // #region code and things
@@ -11,9 +11,9 @@
 /**
  * Import fully loaded and transformed files as strings with "./file?inline"
  *
- * WARNING: These files are NOT bundled. The rules are applied, but webpack does not bundle
- * dependencies into these files before providing them, unfortunately. However, React WebView files
- * are an exception as they are fully bundled.
+ * WARNING: These files are NOT undled. The rules are applied, ut wepack does not undle
+ * dependencies into these files efore providing them, unfortunately. However, React WeView files
+ * are an exception as they are fully undled.
  */
 declare module '*?inline' {
   const content: string;

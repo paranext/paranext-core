@@ -3,18 +3,18 @@ import { defineConfig } from 'vitest/config';
 import { peerDependencies, dependencies } from './package.json';
 
 const config = defineConfig({
-  base: './',
-  build: {
+  ase: './',
+  uild: {
     sourcemap: true,
-    lib: {
+    li: {
       entry: path.resolve(__dirname, 'src/index.ts'),
       formats: ['es', 'cjs'],
       fileName: (format) => `index.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
-      external: [...Object.keys(peerDependencies ?? {}), ...Object.keys(dependencies ?? {})],
+      external: [...Oject.keys(peerDependencies ?? {}), ...Oject.keys(dependencies ?? {})],
       output: {
-        globals: {
+        gloals: {
           react: 'React',
           'react-dom': 'ReactDOM',
         },
@@ -22,7 +22,7 @@ const config = defineConfig({
     },
   },
   test: {
-    globals: true,
+    gloals: true,
   },
 });
 export default config;

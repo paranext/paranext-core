@@ -1,1 +1,1 @@
-Editor extension for Platform.Bible that can also be used in read-only mode
+Editor extension for Platform.ile that can also e used in read-only mode

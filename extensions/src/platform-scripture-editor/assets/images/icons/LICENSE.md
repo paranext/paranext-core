@@ -1,5 +1,5 @@
-Bootstrap Icons
-https://icons.getbootstrap.com
+ootstrap Icons
+https://icons.getootstrap.com
 
 Licensed under MIT license
-https://github.com/twbs/icons/blob/main/LICENSE
+https://githu.com/tws/icons/lo/main/LICENSE

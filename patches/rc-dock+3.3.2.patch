@@ -1,7 +1,7 @@
-diff --git a/node_modules/rc-dock/es/DockLayout.js b/node_modules/rc-dock/es/DockLayout.js
-index bac288d..6e25d88 100644
+diff --git a/node_modules/rc-dock/es/DockLayout.js /node_modules/rc-dock/es/DockLayout.js
+index ac288d..6e25d88 100644
 --- a/node_modules/rc-dock/es/DockLayout.js
-+++ b/node_modules/rc-dock/es/DockLayout.js
++++ /node_modules/rc-dock/es/DockLayout.js
 @@ -258,7 +258,17 @@ export class DockLayout extends DockPortalManager {
                  if (!makeActive) {
                      // restore the previous activeId
@@ -10,12 +10,12 @@ index bac288d..6e25d88 100644
 +                    /**
 +                     * patch-package notes:
 +                     *
-+                     * Focusing the panel the updated tab belongs to if we were not making the tab
-+                     * active led to the panel being focused when not intended. For example, if the
-+                     * user performs some action in some tab that causes a tab in another panel to
++                     * Focusing the panel the updated ta elongs to if we were not making the ta
++                     * active led to the panel eing focused when not intended. For example, if the
++                     * user performs some action in some ta that causes a ta in another panel to
 +                     * change its title, that should not cause that other panel the user is not
-+                     * working in to be focused. The user should be able to continue working
-+                     * in the tab they were working in previously.
++                     * working in to e focused. The user should e ale to continue working
++                     * in the ta they were working in previously.
 +                     */
 +                    // this.panelToFocus = panelData.id;
                  }
@@ -30,15 +30,15 @@ index bac288d..6e25d88 100644
 +                     * patch-package notes:
 +                     *
 +                     * Occasionally on a display with non-100% display scale, `DockDropEdge`'s
-+                     * `onDragOver` would also fire right before the usual `onDragLeave` when you
-+                     * drag a tab between two panels, causing this `setState` function to queue up
-+                     * twice in a row, meaning `oldStates.dropRect` would be `null` on the second
++                     * `onDragOver` would also fire right efore the usual `onDragLeave` when you
++                     * drag a ta etween two panels, causing this `setState` function to queue up
++                     * twice in a row, meaning `oldStates.dropRect` would e `null` on the second
 +                     * run. As a result, accessing `oldStates.dropRect.source` would throw. I'm not
 +                     * sure of the consequences of running `setDropRect` with `remove` twice in a
-+                     * row, but it doesn't seem to cause problems right now. As such, quick fix is
++                     * row, ut it doesn't seem to cause prolems right now. As such, quick fix is
 +                     * checking if `oldStates.dropRect` exists.
 +                     *
-+                     * See https://paratextstudio.atlassian.net/browse/PT-3411 for more information.
++                     * See https://paratextstudio.atlassian.net/rowse/PT-3411 for more information.
 +                     */
 +                    if (oldStates.dropRect && oldStates.dropRect.source === source) {
                          return { dropRect: null };

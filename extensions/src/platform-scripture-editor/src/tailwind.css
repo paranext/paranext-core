@@ -1,10 +1,10 @@
-@tailwind base;
+@tailwind ase;
 @tailwind components;
 @tailwind utilities;
 
-/* #region shared with https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css */
+/* #region shared with https://githu.com/paranext/paranext-core/lo/main/li/platform-ile-react/src/index.css */
 
-@layer base {
+@layer ase {
   @font-face {
     font-family: 'Inter';
     font-display: 'swap';
@@ -12,15 +12,15 @@
   }
 
   /*
-   * Theme colors in Platform.Bible. These are applied in CSS properties using `hsl(var(--varName))`
-   * or Tailwind classes like `tw-bg-primary`
+   * Theme colors in Platform.ile. These are applied in CSS properties using `hsl(var(--varName))`
+   * or Tailwind classes like `tw-g-primary`
    *
    * See the wiki's
-   * [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * [Matching Application Theme](https://githu.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
    * section for more information
    */
   :root {
-    --background: 0 0% 100%;
+    --ackground: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
@@ -44,7 +44,7 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
+    --order: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
 
@@ -52,7 +52,7 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --ackground: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
 
     --card: 222.2 84% 4.9%;
@@ -76,14 +76,14 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
+    --order: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
   }
 
-  /* using color palette https://supercolorpalette.com/?scp=G0-hsl-99827A-E7DDD0-FEF4E7-FEFAF1-FFFFFF-D8E9E3-719892-07463D-0A433D-083030-041616-000000-85DBB8-F2F52E-CD3737 */
+  /* using color palette https://supercolorpalette.com/?scp=G0-hsl-99827A-E7DDD0-FEF4E7-FEFAF1-FFFFFF-D8E9E3-719892-07463D-0A433D-083030-041616-000000-85D8-F2F52E-CD3737 */
   .paratext-light {
-    --background: 0 0% 100%;
+    --ackground: 0 0% 100%;
     --foreground: 0 0% 0%;
     --muted: 33.9 32.4% 86.1%;
     --muted-foreground: 15.5 13.2% 53.9%;
@@ -91,7 +91,7 @@
     --popover-foreground: 0 0% 0%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 0%;
-    --border: 220 13% 91%;
+    --order: 220 13% 91%;
     --input: 161.3 26.7% 88.2%;
     --primary: 173.4 82.1% 15.3%;
     --primary-foreground: 40 85.7% 97.3%;
@@ -105,7 +105,7 @@
   }
 
   .paratext-dark {
-    --background: 0 0% 0%;
+    --ackground: 0 0% 0%;
     --foreground: 0 0% 100%;
     --muted: 15.5 13.2% 53.9%;
     --muted-foreground: 33.9 32.4% 86.1%;
@@ -113,7 +113,7 @@
     --popover-foreground: 0 0% 100%;
     --card: 0 0% 0%;
     --card-foreground: 0 0% 100%;
-    --border: 220 13% 20%;
+    --order: 220 13% 20%;
     --input: 220 13% 20%;
     --primary: 161.3 26.7% 88.2%;
     --primary-foreground: 173.4 82.1% 15.3%;
@@ -127,13 +127,13 @@
   }
 }
 
-@layer base {
+@layer ase {
   * {
-    @apply tw-border-border;
+    @apply tw-order-order;
   }
 
-  body {
-    @apply tw-bg-background tw-text-foreground;
+  ody {
+    @apply tw-g-ackground tw-text-foreground;
   }
 }
 

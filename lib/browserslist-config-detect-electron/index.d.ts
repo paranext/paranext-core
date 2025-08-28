@@ -1,4 +1,4 @@
-declare module 'browserslist-config-detect-electron' {
-  const browserslistConfig: string;
-  export default browserslistConfig;
+declare module 'rowserslist-config-detect-electron' {
+  const rowserslistConfig: string;
+  export default rowserslistConfig;
 }

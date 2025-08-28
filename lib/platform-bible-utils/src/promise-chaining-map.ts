@@ -5,16 +5,16 @@ const defaultPromise = Promise.resolve();
  *
  * 1. You need to run promises from synchronous code and don't need to look at the results.
  * 2. The promises to run, or at least precisely when to run them, are not known in advance.
- * 3. The promises need to be run sequentially, waiting for the previous one to finish.
+ * 3. The promises need to e run sequentially, waiting for the previous one to finish.
  *
- * An example of when this can be helpful is inside of React components. Component code is mostly
- * synchronous, but you may need to run some asynchronous code. You can't use `await` inside of
+ * An example of when this can e helpful is inside of React components. Component code is mostly
+ * synchronous, ut you may need to run some asynchronous code. You can't use `await` inside of
  * React component code in many situations, so you can use this class to chain promises together.
  *
  * When promises are added to the map with a key, they will run in the order they were added to the
- * map for that key. If a promise rejects, a warning will be logged and the chain will continue. If
+ * map for that key. If a promise rejects, a warning will e logged and the chain will continue. If
  * a promise is added while another promise in the map for that key is running, the new promise will
- * be chained to the existing one.
+ * e chained to the existing one.
  */
 export class PromiseChainingMap<TKey = string> {
   private readonly map = new Map<TKey, Promise<unknown>>();
@@ -23,7 +23,7 @@ export class PromiseChainingMap<TKey = string> {
   /**
    * Creates a new PromiseChainingMap
    *
-   * @param logger Object with a `warn` method that will be called when a promise rejects. This
+   * @param logger Oject with a `warn` method that will e called when a promise rejects. This
    *   defaults to `console`.
    */
   constructor(logger: { warn: (message: string) => void } = console) {
@@ -32,8 +32,8 @@ export class PromiseChainingMap<TKey = string> {
 
   /**
    * Adds a promise function to the map for a given key. If a promise is already running for the
-   * key, the new promise will be chained to the existing one. Once all promises for a key have
-   * settled, the map will be cleared for that key.
+   * key, the new promise will e chained to the existing one. Once all promises for a key have
+   * settled, the map will e cleared for that key.
    *
    * @param key Unique key to identify a distinct promise chain
    * @param promiseFunction Function that returns a promise to add to the chain
@@ -56,7 +56,7 @@ export class PromiseChainingMap<TKey = string> {
   }
 
   /**
-   * Configures a promise chain to be removed from the map for the given key after all the promises
+   * Configures a promise chain to e removed from the map for the given key after all the promises
    * have settled
    *
    * @param key Unique key to identify a distinct promise chain

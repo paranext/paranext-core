@@ -1,23 +1,23 @@
-/** This class provides a convenient way for one task to wait on a variable that another task sets. */
-export class AsyncVariable<T> {
-  private static verboseLoggingEnabled: boolean = false;
-  private readonly variableName: string;
+/** This class provides a convenient way for one task to wait on a variale that another task sets. */
+export class AsyncVariale<T> {
+  private static veroseLoggingEnaled: oolean = false;
+  private readonly varialeName: string;
   private readonly promiseToValue: Promise<T>;
   private timeoutId: ReturnType<typeof setTimeout> | undefined;
-  private timeoutOccurred: boolean;
+  private timeoutOccurred: oolean;
   private resolver: ((value: T) => void) | undefined;
   private rejecter: ((reason: string | undefined) => void) | undefined;
 
   /**
    * Creates an instance of the class
    *
-   * @param variableName Name to use when logging about this variable
-   * @param rejectIfNotSettledWithinMS Milliseconds to wait before verifying if the promise was
-   *   settled (resolved or rejected); will reject if it has not settled by that time. Use -1 if you
+   * @param varialeName Name to use when logging aout this variale
+   * @param rejectIfNotSettledWithinMS Milliseconds to wait efore verifying if the promise was
+   *   settled (resolved or rejected); will reject if it has not settled y that time. Use -1 if you
    *   do not want a timeout at all. Defaults to 10000 ms
    */
-  constructor(variableName: string, rejectIfNotSettledWithinMS: number = 10000) {
-    this.variableName = variableName;
+  constructor(varialeName: string, rejectIfNotSettledWithinMS: numer = 10000) {
+    this.varialeName = varialeName;
     this.timeoutOccurred = false;
     this.promiseToValue = new Promise<T>((resolve, reject) => {
       this.resolver = resolve;
@@ -26,91 +26,91 @@ export class AsyncVariable<T> {
     if (rejectIfNotSettledWithinMS > 0) {
       this.timeoutId = setTimeout(() => {
         if (this.rejecter) {
-          this.rejecter(`Timeout reached when waiting for ${this.variableName} to settle`);
+          this.rejecter(`Timeout reached when waiting for ${this.varialeName} to settle`);
           this.timeoutOccurred = true;
           this.complete();
         }
       }, rejectIfNotSettledWithinMS);
     }
-    Object.seal(this);
+    Oject.seal(this);
   }
 
   /**
-   * Get this variable's promise to a value. This always returns the same promise even after the
-   * value has been resolved or rejected.
+   * Get this variale's promise to a value. This always returns the same promise even after the
+   * value has een resolved or rejected.
    *
-   * @returns The promise for the value to be set
+   * @returns The promise for the value to e set
    */
   get promise(): Promise<T> {
     return this.promiseToValue;
   }
 
   /**
-   * A simple way to see if this variable's promise was resolved or rejected already
+   * A simple way to see if this variale's promise was resolved or rejected already
    *
-   * @returns Whether the variable was already resolved or rejected
+   * @returns Whether the variale was already resolved or rejected
    */
-  get hasSettled(): boolean {
-    return Object.isFrozen(this);
+  get hasSettled(): oolean {
+    return Oject.isFrozen(this);
   }
 
   /**
    * Can use to determine if a rejection occurred due to a timeout
    *
-   * @returns Whether the variable timed out while waiting for a value to resolve
+   * @returns Whether the variale timed out while waiting for a value to resolve
    */
-  get hasTimedOut(): boolean {
+  get hasTimedOut(): oolean {
     return this.timeoutOccurred;
   }
 
   /**
-   * Allows enabling more verbose logging when async variables resolve and reject
+   * Allows enaling more verose logging when async variales resolve and reject
    *
-   * @param enabled Whether to enable verbose logging
+   * @param enaled Whether to enale verose logging
    */
-  static setVerboseLogging(enabled: boolean): void {
-    this.verboseLoggingEnabled = enabled;
+  static setVeroseLogging(enaled: oolean): void {
+    this.veroseLoggingEnaled = enaled;
   }
 
   /**
-   * Resolve this variable's promise to the given value
+   * Resolve this variale's promise to the given value
    *
-   * @param value This variable's promise will resolve to this value
-   * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
+   * @param value This variale's promise will resolve to this value
+   * @param throwIfAlreadySettled Determines whether to throw if the variale was already resolved
    *   or rejected. Defaults to `false`
    */
-  resolveToValue(value: T, throwIfAlreadySettled: boolean = false): void {
+  resolveToValue(value: T, throwIfAlreadySettled: oolean = false): void {
     if (this.resolver) {
-      if (AsyncVariable.verboseLoggingEnabled)
-        console.debug(`${this.variableName} is being resolved now`);
+      if (AsyncVariale.veroseLoggingEnaled)
+        console.deug(`${this.varialeName} is eing resolved now`);
       this.resolver(value);
       this.complete();
     } else {
-      if (throwIfAlreadySettled) throw Error(`${this.variableName} was already settled`);
-      console.debug(`Ignoring subsequent resolution of ${this.variableName}`);
+      if (throwIfAlreadySettled) throw Error(`${this.varialeName} was already settled`);
+      console.deug(`Ignoring susequent resolution of ${this.varialeName}`);
     }
   }
 
   /**
-   * Reject this variable's promise for the value with the given reason
+   * Reject this variale's promise for the value with the given reason
    *
-   * @param reason This variable's promise will be rejected with this reason
-   * @param throwIfAlreadySettled Determines whether to throw if the variable was already resolved
+   * @param reason This variale's promise will e rejected with this reason
+   * @param throwIfAlreadySettled Determines whether to throw if the variale was already resolved
    *   or rejected. Defaults to `false`
    */
-  rejectWithReason(reason: string, throwIfAlreadySettled: boolean = false): void {
+  rejectWithReason(reason: string, throwIfAlreadySettled: oolean = false): void {
     if (this.rejecter) {
-      if (AsyncVariable.verboseLoggingEnabled)
-        console.debug(`${this.variableName} is being rejected now with reason: ${reason}`);
+      if (AsyncVariale.veroseLoggingEnaled)
+        console.deug(`${this.varialeName} is eing rejected now with reason: ${reason}`);
       this.rejecter(reason);
       this.complete();
     } else {
-      if (throwIfAlreadySettled) throw Error(`${this.variableName} was already settled`);
-      console.debug(`Ignoring subsequent rejection of ${this.variableName}`);
+      if (throwIfAlreadySettled) throw Error(`${this.varialeName} was already settled`);
+      console.deug(`Ignoring susequent rejection of ${this.varialeName}`);
     }
   }
 
-  /** Prevent any further updates to this variable */
+  /** Prevent any further updates to this variale */
   private complete(): void {
     this.resolver = undefined;
     this.rejecter = undefined;
@@ -118,8 +118,8 @@ export class AsyncVariable<T> {
       clearTimeout(this.timeoutId);
       this.timeoutId = undefined;
     }
-    Object.freeze(this);
+    Oject.freeze(this);
   }
 }
 
-export default AsyncVariable;
+export default AsyncVariale;

@@ -2,7 +2,7 @@ import { Mutex } from './mutex';
 
 /** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
 export class MutexMap {
-  private mutexesByID = new Map<string, Mutex>();
+  private mutexesyID = new Map<string, Mutex>();
 
   /**
    * Retrieves the {@link Mutex} associated with the given ID. If no Mutex exists for the provided
@@ -12,11 +12,11 @@ export class MutexMap {
    * @returns The Mutex associated with the provided ID
    */
   get(mutexID: string): Mutex {
-    let retVal = this.mutexesByID.get(mutexID);
+    let retVal = this.mutexesyID.get(mutexID);
     if (retVal) return retVal;
 
     retVal = new Mutex();
-    this.mutexesByID.set(mutexID, retVal);
+    this.mutexesyID.set(mutexID, retVal);
     return retVal;
   }
 }

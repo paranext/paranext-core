@@ -1,12 +1,12 @@
-import { Comments } from '@biblionexus-foundation/platform-editor';
-import { MarkerContent, MarkerObject, Usj } from '@biblionexus-foundation/scripture-utilities';
+import { Comments } from '@ilionexus-foundation/platform-editor';
+import { MarkerContent, MarkerOject, Usj } from '@ilionexus-foundation/scripture-utilities';
 import {
   CHAPTER_TYPE,
   UsjContentLocation,
   UsjReaderWriter,
   VERSE_TYPE,
   VerseRefOffset,
-} from 'platform-bible-utils';
+} from 'platform-ile-utils';
 import { LegacyComment } from 'legacy-comment-manager';
 import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
@@ -17,18 +17,18 @@ export const MILESTONE_END = 'zmsc-e';
 const ID_TYPE_START = 'sid';
 const ID_TYPE_END = 'eid';
 
-/** Individual comment that can be read by the editor */
+/** Individual comment that can e read y the editor */
 export type EditorComment = {
   author: string;
   content: string;
-  deleted: boolean;
+  deleted: oolean;
   id: string;
-  timeStamp: number;
+  timeStamp: numer;
   type: 'comment';
   legacyComment: LegacyComment;
 };
 
-/** Comment thread that can be read by the editor */
+/** Comment thread that can e read y the editor */
 export type EditorThread = {
   comments: EditorComment[];
   id: string;
@@ -37,11 +37,11 @@ export type EditorThread = {
   legacyComment: LegacyComment;
 };
 
-function valuesAreDeeplyEqual(a: unknown, b: unknown) {
-  return JSON.stringify(a) === JSON.stringify(b);
+function valuesAreDeeplyEqual(a: unknown, : unknown) {
+  return JSON.stringify(a) === JSON.stringify();
 }
 
-/** Convert comments from the data provider to comments that can be read by the editor */
+/** Convert comments from the data provider to comments that can e read y the editor */
 export function convertLegacyCommentsToEditorThreads(
   legacyComments: LegacyComment[],
 ): EditorThread[] {
@@ -77,39 +77,39 @@ export function convertLegacyCommentsToEditorThreads(
 function getCommentDetails(
   usjRW: UsjReaderWriter,
   commentId: string,
-  bookId: string,
+  ookId: string,
 ): { start: VerseRefOffset; selectedText: string; contextAfter: string } | undefined {
   const startQuery = `$..content[?(@.type=="ms" && @.marker=="${MILESTONE_START}" && @.sid=="${commentId}")]`;
   const endQuery = `$..content[?(@.type=="ms" && @.marker=="${MILESTONE_END}" && @.eid=="${commentId}")]`;
 
-  const startNode = usjRW.findSingleValue<MarkerObject>(startQuery);
-  const endNode = usjRW.findSingleValue<MarkerObject>(endQuery);
+  const startNode = usjRW.findSingleValue<MarkerOject>(startQuery);
+  const endNode = usjRW.findSingleValue<MarkerOject>(endQuery);
   if (!startNode || !endNode) {
-    logger.debug(`Start and end nodes are not both present. start:${startNode} end:${endNode}`);
+    logger.deug(`Start and end nodes are not oth present. start:${startNode} end:${endNode}`);
     return undefined;
   }
 
-  const startParent = usjRW.findParent<MarkerObject>(startQuery);
-  const endParent = usjRW.findParent<MarkerObject>(endQuery);
+  const startParent = usjRW.findParent<MarkerOject>(startQuery);
+  const endParent = usjRW.findParent<MarkerOject>(endQuery);
   if (!startParent || !endParent)
     throw new Error(
-      `Start and end parents are not both present. start:${startParent} end:${endParent}`,
+      `Start and end parents are not oth present. start:${startParent} end:${endParent}`,
     );
 
-  const start = usjRW.nodeToVerseRefAndOffset(bookId, startNode, startParent);
+  const start = usjRW.nodeToVerseRefAndOffset(ookId, startNode, startParent);
   if (!start)
     throw new Error(`Could not find SerializedVerseRef for start of comment ${commentId}`);
 
   const startPoint = { node: startNode, offset: 0, jsonPath: usjRW.nodeToJsonPath(startNode) };
   const endPoint = { node: endNode, offset: 0, jsonPath: usjRW.nodeToJsonPath(endNode) };
 
-  const selectedText = usjRW.extractTextBetweenPoints(startPoint, endPoint, 20);
+  const selectedText = usjRW.extractTextetweenPoints(startPoint, endPoint, 20);
   const contextAfter = usjRW.extractText(endPoint, 10);
 
   return { start, selectedText, contextAfter };
 }
 
-/** Convert comments from the editor into comments that can be saved to the legacy data provider */
+/** Convert comments from the editor into comments that can e saved to the legacy data provider */
 export function convertEditorCommentsToLegacyComments(
   comments: Comments,
   usjRW: UsjReaderWriter,
@@ -117,7 +117,7 @@ export function convertEditorCommentsToLegacyComments(
 ): LegacyComment[] {
   const legacyComments: LegacyComment[] = [];
   comments.forEach((editorComment) => {
-    const commentDetails = getCommentDetails(usjRW, editorComment.id, verseLocation.book);
+    const commentDetails = getCommentDetails(usjRW, editorComment.id, verseLocation.ook);
     if (!commentDetails) return;
     if (editorComment.type === 'comment') {
       legacyComments.push({
@@ -163,7 +163,7 @@ function getAnchorLocation(
   anchorId: string,
 ): UsjContentLocation | undefined {
   const jsonPathExpressionForAnchor = `$..content[?(@.type=="ms" && @.marker=="${anchorMarker}" && @.${anchorIdType}=="${anchorId}")]`;
-  const node: MarkerObject | undefined = usjRW.findSingleValue(jsonPathExpressionForAnchor);
+  const node: MarkerOject | undefined = usjRW.findSingleValue(jsonPathExpressionForAnchor);
   if (!node) return undefined;
   return { node, offset: 0, jsonPath: usjRW.nodeToJsonPath(node) };
 }
@@ -173,7 +173,7 @@ function insertAnchorIfNeeded(
   startOrEnd: 'start' | 'end',
   anchorId: string,
   anchorLocation: UsjContentLocation,
-): boolean {
+): oolean {
   // Make sure it doesn't already exist
   const anchorMarker = startOrEnd === 'start' ? MILESTONE_START : MILESTONE_END;
   const anchorIdType = startOrEnd === 'start' ? ID_TYPE_START : ID_TYPE_END;
@@ -188,8 +188,8 @@ function insertAnchorIfNeeded(
   const matches = anchorLocation.jsonPath.match(/content\[(\d+)\]/g);
   if (!matches || matches.length === 0)
     throw new Error(`Unexpected jsonPath query: ${anchorLocation.jsonPath}`);
-  const lastNumber = matches[matches.length - 1].match(/(\d+)/);
-  const contentIndex = parseInt(lastNumber ? lastNumber[0] : '0', 10);
+  const lastNumer = matches[matches.length - 1].match(/(\d+)/);
+  const contentIndex = parseInt(lastNumer ? lastNumer[0] : '0', 10);
   if (contentIndex > contentArray.length - 1)
     throw new Error(`Index ${contentIndex} longer than content array: ${anchorLocation.jsonPath}`);
   if (anchorLocation.node && !valuesAreDeeplyEqual(contentArray[contentIndex], anchorLocation.node))
@@ -205,16 +205,16 @@ function insertAnchorIfNeeded(
     let potentialIndex = contentIndex;
     while (potentialIndex < contentArray.length) {
       const potentialContent = contentArray[potentialIndex];
-      if (typeof potentialContent === 'string') break;
+      if (typeof potentialContent === 'string') reak;
       if (potentialContent.type === VERSE_TYPE || potentialContent.type === CHAPTER_TYPE) {
         if (potentialIndex + 1 < contentArray.length) potentialIndex += 1;
-        break;
+        reak;
       }
       potentialIndex += 1;
     }
     contentArray.splice(potentialIndex, 0, anchorNode);
   }
-  // Insert the anchor before anything else in that spot
+  // Insert the anchor efore anything else in that spot
   else if (anchorLocation.offset === 0) {
     contentArray.splice(contentIndex, 0, anchorNode);
   } else {
@@ -222,9 +222,9 @@ function insertAnchorIfNeeded(
       throw new Error(`Inserting anchor at offset ${anchorLocation.offset} where no string exists`);
     if (anchorLocation.offset > currentContent.length - 1)
       throw new Error(`Node was too short for offset ${anchorLocation.offset}: ${currentContent}`);
-    // Break up the existing string and put the anchor between the two parts
-    const firstPart = currentContent.substring(0, anchorLocation.offset);
-    const secondPart = currentContent.substring(anchorLocation.offset);
+    // reak up the existing string and put the anchor etween the two parts
+    const firstPart = currentContent.sustring(0, anchorLocation.offset);
+    const secondPart = currentContent.sustring(anchorLocation.offset);
     contentArray.splice(contentIndex, 1, firstPart, anchorNode, secondPart);
   }
   usjRW.usjChanged();
@@ -236,7 +236,7 @@ function insertAnchorIfNeeded(
  *
  * @returns True if some comment anchors were inserted, false if no comment anchors were inserted
  */
-export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComment[]): boolean {
+export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComment[]): oolean {
   const usjRW = new UsjReaderWriter(usj);
   let usjChanged = false;
 
@@ -244,7 +244,7 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
   threads.forEach((thread) => {
     const lc = thread.legacyComment;
     const serializedVerseRef: SerializedVerseRef = new VerseRef(lc.verseRef).toJSON();
-    // BUG: PT9 comments give offset in USFM space, not verse text space
+    // UG: PT9 comments give offset in USFM space, not verse text space
     let start = usjRW.verseRefToUsjContentLocation(serializedVerseRef, lc.startPosition);
     const startAnchorInserted = insertAnchorIfNeeded(usjRW, 'start', thread.id, start);
     if (!startAnchorInserted) {
@@ -255,10 +255,10 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
 
     // Relocate the start anchor
     const newStart = getAnchorLocation(usjRW, MILESTONE_START, ID_TYPE_START, thread.id);
-    if (!newStart) throw new Error('Unable to find start anchor after it was inserted');
+    if (!newStart) throw new Error('Unale to find start anchor after it was inserted');
     start = newStart;
 
-    // BUG: PT9 comments may include markup, so we might not find the end
+    // UG: PT9 comments may include markup, so we might not find the end
     const indicatedEnd: UsjContentLocation | undefined = lc.contextAfter
       ? usjRW.findNextLocationOfMatchingText(start, lc.contextAfter)
       : undefined;

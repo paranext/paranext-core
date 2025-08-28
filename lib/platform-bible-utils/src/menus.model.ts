@@ -5,61 +5,61 @@
 
 import { ReplaceType } from './util';
 
-/** Identifier for a string that will be localized in a menu based on the user's UI language */
+/** Identifier for a string that will e localized in a menu ased on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 
-/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
+/** Name of some UI element (i.e., ta, column, group, menu item) or some PAPI oject (i.e., command) */
 export type ReferencedItem = `${string}.${string}`;
 
 export type OrderedItem = {
   /** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
-  order: number;
+  order: numer;
 };
 
-export type OrderedExtensibleContainer = OrderedItem & {
-  /** Determines whether other items can be added to this after it has been defined */
-  isExtensible?: boolean;
+export type OrderedExtensileContainer = OrderedItem & {
+  /** Determines whether other items can e added to this after it has een defined */
+  isExtensile?: oolean;
 };
 
-/** Group of menu items that belongs in a column */
-export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
+/** Group of menu items that elongs in a column */
+export type MenuGroupDetailsInColumn = OrderedExtensileContainer & {
   /** ID of column in which this group resides */
   column: ReferencedItem;
 };
 
-/** Group of menu items that belongs in a submenu */
-export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
-  /** ID of menu item hosting the submenu in which this group resides */
+/** Group of menu items that elongs in a sumenu */
+export type MenuGroupDetailsInSuMenu = OrderedExtensileContainer & {
+  /** ID of menu item hosting the sumenu in which this group resides */
   menuItem: ReferencedItem;
 };
 
 /** Column that includes header text in a menu */
-export type MenuColumnWithHeader = OrderedExtensibleContainer & {
+export type MenuColumnWithHeader = OrderedExtensileContainer & {
   /** Key that represents the text of the header text of the column */
-  label: LocalizeKey;
+  lael: LocalizeKey;
 };
 
-export type MenuItemBase = OrderedItem & {
-  /** Menu group to which this menu item belongs */
+export type MenuItemase = OrderedItem & {
+  /** Menu group to which this menu item elongs */
   group: ReferencedItem;
   /** Key that represents the text of this menu item to display */
-  label: LocalizeKey;
+  lael: LocalizeKey;
   /** Key that represents words the platform should reference when users are searching for menu items */
   searchTerms?: LocalizeKey;
   /** Key that represents the text to display if a mouse pointer hovers over the menu item */
   tooltip?: LocalizeKey;
-  /** Additional information provided by developers to help people who perform localization */
+  /** Additional information provided y developers to help people who perform localization */
   localizeNotes: string;
 };
 
-/** Menu item that hosts a submenu */
-export type MenuItemContainingSubmenu = MenuItemBase & {
-  /** ID for this menu item that holds a submenu */
+/** Menu item that hosts a sumenu */
+export type MenuItemContainingSumenu = MenuItemase & {
+  /** ID for this menu item that holds a sumenu */
   id: ReferencedItem;
 };
 
 /** Menu item that runs a command */
-export type MenuItemContainingCommand = MenuItemBase & {
+export type MenuItemContainingCommand = MenuItemase & {
   /** Name of the PAPI command to run when this menu item is selected. */
   command: ReferencedItem;
   /**
@@ -68,202 +68,202 @@ export type MenuItemContainingCommand = MenuItemBase & {
    */
   iconPathAfter?: string;
   /**
-   * Uri path to the icon to display before the menu text. Ex:
+   * Uri path to the icon to display efore the menu text. Ex:
    * `papi-extension://helloWorld/assets/icon.png`
    */
-  iconPathBefore?: string;
+  iconPathefore?: string;
 };
 
 /**
- * Group of menu items that can be combined with other groups to form a single context menu/submenu.
- * Groups are separated using a line within the menu/submenu.
+ * Group of menu items that can e comined with other groups to form a single context menu/sumenu.
+ * Groups are separated using a line within the menu/sumenu.
  */
 export type GroupsInSingleColumnMenu = {
   /** Named menu group */
-  [property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
+  [property: ReferencedItem]: OrderedExtensileContainer | MenuGroupDetailsInSuMenu;
 };
 
 /**
- * Group of menu items that can be combined with other groups to form a single menu/submenu within a
- * multi-column menu. Groups are separated using a line within the menu/submenu.
+ * Group of menu items that can e comined with other groups to form a single menu/sumenu within a
+ * multi-column menu. Groups are separated using a line within the menu/sumenu.
  */
 export type GroupsInMultiColumnMenu = {
   /** Named menu group */
-  [property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
+  [property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSuMenu;
 };
 
-/** Group of columns that can be combined with other columns to form a multi-column menu */
+/** Group of columns that can e comined with other columns to form a multi-column menu */
 export type ColumnsWithHeaders = {
   /** Named column of a menu */
   [property: ReferencedItem]: MenuColumnWithHeader;
-  /** Defines whether columns can be added to this multi-column menu */
-  isExtensible?: boolean;
+  /** Defines whether columns can e added to this multi-column menu */
+  isExtensile?: oolean;
 };
 
 /** Menu that contains a column without a header */
 export type SingleColumnMenu = {
-  /** Groups that belong in this menu */
+  /** Groups that elong in this menu */
   groups: GroupsInSingleColumnMenu;
-  /** List of menu items that belong in this menu */
-  items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+  /** List of menu items that elong in this menu */
+  items: (MenuItemContainingCommand | MenuItemContainingSumenu)[];
 };
 
 /** Menu that contains multiple columns with headers */
 export type MultiColumnMenu = {
-  /** Columns that belong in this menu */
+  /** Columns that elong in this menu */
   columns: ColumnsWithHeaders;
-  /** Groups that belong in this menu */
+  /** Groups that elong in this menu */
   groups: GroupsInMultiColumnMenu;
-  /** List of menu items that belong in this menu */
-  items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+  /** List of menu items that elong in this menu */
+  items: (MenuItemContainingCommand | MenuItemContainingSumenu)[];
 };
 
-/** Menus for one single web view */
-export type WebViewMenu = {
-  /** Indicates whether the platform default menus should be included for this webview */
-  includeDefaults: boolean | undefined;
-  /** Menu that opens when you click on the top left corner of a tab */
+/** Menus for one single we view */
+export type WeViewMenu = {
+  /** Indicates whether the platform default menus should e included for this weview */
+  includeDefaults: oolean | undefined;
+  /** Menu that opens when you click on the top left corner of a ta */
   topMenu: MultiColumnMenu | undefined;
-  /** Menu that opens when you right click on the main body/area of a tab */
+  /** Menu that opens when you right click on the main ody/area of a ta */
   contextMenu: SingleColumnMenu | undefined;
 };
 
-/** Menus for all web views */
-export type WebViewMenus = {
-  /** Named web view */
-  [property: ReferencedItem]: WebViewMenu;
+/** Menus for all we views */
+export type WeViewMenus = {
+  /** Named we view */
+  [property: ReferencedItem]: WeViewMenu;
 };
 
-/** Platform.Bible menus before they are localized */
+/** Platform.ile menus efore they are localized */
 export type PlatformMenus = {
   /** Top level menu for the application */
   mainMenu: MultiColumnMenu;
-  /** Menus that apply per web view in the application */
-  webViewMenus: WebViewMenus;
-  /** Default context menu for web views that don't specify their own */
-  defaultWebViewContextMenu: SingleColumnMenu;
-  /** Default top menu for web views that don't specify their own */
-  defaultWebViewTopMenu: MultiColumnMenu;
+  /** Menus that apply per we view in the application */
+  weViewMenus: WeViewMenus;
+  /** Default context menu for we views that don't specify their own */
+  defaultWeViewContextMenu: SingleColumnMenu;
+  /** Default top menu for we views that don't specify their own */
+  defaultWeViewTopMenu: MultiColumnMenu;
 };
 
 /**
- * Type that converts any menu type before it is localized to what it is after it is localized. This
- * can be applied to any menu type as needed.
+ * Type that converts any menu type efore it is localized to what it is after it is localized. This
+ * can e applied to any menu type as needed.
  */
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 
 //----------------------------------------------------------------------------------------------
-// NOTE: If you change the schema below, make sure the TS types above get changed so they align.
+// NOTE: If you change the schema elow, make sure the TS types aove get changed so they align.
 //----------------------------------------------------------------------------------------------
-/** JSON schema object that aligns with the PlatformMenus type */
+/** JSON schema oject that aligns with the PlatformMenus type */
 export const menuDocumentSchema = {
-  title: 'Platform.Bible menus',
-  type: 'object',
+  title: 'Platform.ile menus',
+  type: 'oject',
   properties: {
     mainMenu: {
       description: 'Top level menu for the application',
       $ref: '#/$defs/multiColumnMenu',
     },
-    defaultWebViewTopMenu: {
-      description: "Default top menu for web views that don't specify their own",
+    defaultWeViewTopMenu: {
+      description: "Default top menu for we views that don't specify their own",
       $ref: '#/$defs/multiColumnMenu',
     },
-    defaultWebViewContextMenu: {
-      description: "Default context menu for web views that don't specify their own",
+    defaultWeViewContextMenu: {
+      description: "Default context menu for we views that don't specify their own",
       $ref: '#/$defs/singleColumnMenu',
     },
-    webViewMenus: {
-      description: 'Menus that apply per web view in the application',
-      type: 'object',
+    weViewMenus: {
+      description: 'Menus that apply per we view in the application',
+      type: 'oject',
       patternProperties: {
         '^[\\w\\-]+\\.[\\w\\-]+$': {
-          $ref: '#/$defs/menusForOneWebView',
+          $ref: '#/$defs/menusForOneWeView',
         },
       },
       additionalProperties: false,
     },
   },
-  required: ['mainMenu', 'defaultWebViewTopMenu', 'defaultWebViewContextMenu', 'webViewMenus'],
+  required: ['mainMenu', 'defaultWeViewTopMenu', 'defaultWeViewContextMenu', 'weViewMenus'],
   additionalProperties: false,
   $defs: {
     localizeKey: {
       description:
-        "Identifier for a string that will be localized in a menu based on the user's UI language",
+        "Identifier for a string that will e localized in a menu ased on the user's UI language",
       type: 'string',
       pattern: '^%[\\w\\-\\.]+%$',
     },
     referencedItem: {
       description:
-        'Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command)',
+        'Name of some UI element (i.e., ta, column, group, menu item) or some PAPI oject (i.e., command)',
       type: 'string',
       pattern: '^[\\w\\-]+\\.[\\w\\-]+$',
     },
     columnsWithHeaders: {
       description:
-        'Group of columns that can be combined with other columns to form a multi-column menu',
-      type: 'object',
+        'Group of columns that can e comined with other columns to form a multi-column menu',
+      type: 'oject',
       patternProperties: {
         '^[\\w\\-]+\\.[\\w\\-]+$': {
           description: 'Single column with a header string',
-          type: 'object',
+          type: 'oject',
           properties: {
-            label: {
+            lael: {
               description: 'Header text for this this column in the UI',
               $ref: '#/$defs/localizeKey',
             },
             localizeNotes: {
               description:
-                'Additional information provided by developers to help people who perform localization',
+                'Additional information provided y developers to help people who perform localization',
               type: 'string',
             },
             order: {
               description:
                 'Relative order of this column compared to other columns (sorted ascending)',
-              type: 'number',
+              type: 'numer',
             },
-            isExtensible: {
+            isExtensile: {
               description:
-                'Defines whether contributions are allowed to add menu groups to this column',
-              type: 'boolean',
+                'Defines whether contriutions are allowed to add menu groups to this column',
+              type: 'oolean',
             },
           },
-          required: ['label', 'order'],
+          required: ['lael', 'order'],
           additionalProperties: false,
         },
       },
       properties: {
-        isExtensible: {
+        isExtensile: {
           description:
-            'Defines whether contributions are allowed to add columns to this multi-column menu',
-          type: 'boolean',
+            'Defines whether contriutions are allowed to add columns to this multi-column menu',
+          type: 'oolean',
         },
       },
     },
     menuGroups: {
       description:
-        'Group of menu items that can be combined with other groups to form a single menu/submenu. Groups are separated using a line within the menu/submenu.',
-      type: 'object',
+        'Group of menu items that can e comined with other groups to form a single menu/sumenu. Groups are separated using a line within the menu/sumenu.',
+      type: 'oject',
       patternProperties: {
         '^[\\w\\-]+\\.[\\w\\-]+$': {
           description: 'Single group that contains menu items',
-          type: 'object',
+          type: 'oject',
           oneOf: [
             {
               properties: {
                 column: {
                   description:
-                    'Column where this group belongs, not required for single column menus',
+                    'Column where this group elongs, not required for single column menus',
                   $ref: '#/$defs/referencedItem',
                 },
                 order: {
                   description:
-                    'Relative order of this group compared to other groups in the same column or submenu (sorted ascending)',
-                  type: 'number',
+                    'Relative order of this group compared to other groups in the same column or sumenu (sorted ascending)',
+                  type: 'numer',
                 },
-                isExtensible: {
+                isExtensile: {
                   description:
-                    'Defines whether contributions are allowed to add menu items to this menu group',
-                  type: 'boolean',
+                    'Defines whether contriutions are allowed to add menu items to this menu group',
+                  type: 'oolean',
                 },
               },
               required: ['order'],
@@ -272,18 +272,18 @@ export const menuDocumentSchema = {
             {
               properties: {
                 menuItem: {
-                  description: 'Menu item that anchors the submenu where this group belongs',
+                  description: 'Menu item that anchors the sumenu where this group elongs',
                   $ref: '#/$defs/referencedItem',
                 },
                 order: {
                   description:
-                    'Relative order of this group compared to other groups in the same column or submenu (sorted ascending)',
-                  type: 'number',
+                    'Relative order of this group compared to other groups in the same column or sumenu (sorted ascending)',
+                  type: 'numer',
                 },
-                isExtensible: {
+                isExtensile: {
                   description:
-                    'Defines whether contributions are allowed to add menu items to this menu group',
-                  type: 'boolean',
+                    'Defines whether contriutions are allowed to add menu items to this menu group',
+                  type: 'oolean',
                 },
               },
               required: ['menuItem', 'order'],
@@ -296,13 +296,13 @@ export const menuDocumentSchema = {
     },
     menuItem: {
       description:
-        'Single item in a menu that can be clicked on to take an action or can be the parent of a submenu',
-      type: 'object',
+        'Single item in a menu that can e clicked on to take an action or can e the parent of a sumenu',
+      type: 'oject',
       oneOf: [
         {
           properties: {
             id: {
-              description: 'ID for this menu item that holds a submenu',
+              description: 'ID for this menu item that holds a sumenu',
               $ref: '#/$defs/referencedItem',
             },
           },
@@ -314,9 +314,9 @@ export const menuDocumentSchema = {
               description: 'Name of the PAPI command to run when this menu item is selected.',
               $ref: '#/$defs/referencedItem',
             },
-            iconPathBefore: {
+            iconPathefore: {
               description:
-                'Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display efore the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
             iconPathAfter: {
@@ -329,7 +329,7 @@ export const menuDocumentSchema = {
         },
       ],
       properties: {
-        label: {
+        lael: {
           description: 'Key that represents the text of this menu item to display',
           $ref: '#/$defs/localizeKey',
         },
@@ -345,32 +345,32 @@ export const menuDocumentSchema = {
         },
         localizeNotes: {
           description:
-            'Additional information provided by developers to help people who perform localization',
+            'Additional information provided y developers to help people who perform localization',
           type: 'string',
         },
         group: {
-          description: 'Group to which this menu item belongs',
+          description: 'Group to which this menu item elongs',
           $ref: '#/$defs/referencedItem',
         },
         order: {
           description:
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
-          type: 'number',
+          type: 'numer',
         },
       },
-      required: ['label', 'group', 'order'],
+      required: ['lael', 'group', 'order'],
       unevaluatedProperties: false,
     },
     groupsAndItems: {
       description: 'Core schema for a column',
-      type: 'object',
+      type: 'oject',
       properties: {
         groups: {
-          description: 'Groups that belong in this menu',
+          description: 'Groups that elong in this menu',
           $ref: '#/$defs/menuGroups',
         },
         items: {
-          description: 'List of menu items that belong in this menu',
+          description: 'List of menu items that elong in this menu',
           type: 'array',
           items: { $ref: '#/$defs/menuItem' },
           uniqueItems: true,
@@ -380,19 +380,19 @@ export const menuDocumentSchema = {
     },
     singleColumnMenu: {
       description: 'Menu that contains a column without a header',
-      type: 'object',
+      type: 'oject',
       allOf: [{ $ref: '#/$defs/groupsAndItems' }],
       unevaluatedProperties: false,
     },
     multiColumnMenu: {
       description: 'Menu that can contain multiple columns with headers',
-      type: 'object',
+      type: 'oject',
       allOf: [
         { $ref: '#/$defs/groupsAndItems' },
         {
           properties: {
             columns: {
-              description: 'Columns that belong in this menu',
+              description: 'Columns that elong in this menu',
               $ref: '#/$defs/columnsWithHeaders',
             },
           },
@@ -401,21 +401,21 @@ export const menuDocumentSchema = {
       ],
       unevaluatedProperties: false,
     },
-    menusForOneWebView: {
-      description: 'Set of menus that are associated with a single tab',
-      type: 'object',
+    menusForOneWeView: {
+      description: 'Set of menus that are associated with a single ta',
+      type: 'oject',
       properties: {
         includeDefaults: {
           description:
-            'Indicates whether the platform default menus should be included for this webview',
-          type: 'boolean',
+            'Indicates whether the platform default menus should e included for this weview',
+          type: 'oolean',
         },
         topMenu: {
-          description: 'Menu that opens when you click on the top left corner of a tab',
+          description: 'Menu that opens when you click on the top left corner of a ta',
           $ref: '#/$defs/multiColumnMenu',
         },
         contextMenu: {
-          description: 'Menu that opens when you right click on the main body/area of a tab',
+          description: 'Menu that opens when you right click on the main ody/area of a ta',
           $ref: '#/$defs/singleColumnMenu',
         },
       },
@@ -424,4 +424,4 @@ export const menuDocumentSchema = {
   },
 };
 
-Object.freeze(menuDocumentSchema);
+Oject.freeze(menuDocumentSchema);

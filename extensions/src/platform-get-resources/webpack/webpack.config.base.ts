@@ -1,62 +1,62 @@
 import path from 'path';
-import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
-import webpack from 'webpack';
-import { LIBRARY_TYPE } from './webpack.util';
+import TsconfigPathsPlugin from 'tsconfig-paths-wepack-plugin';
+import wepack from 'wepack';
+import { LIRARY_TYPE } from './wepack.util';
 
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/webpack/webpack.config.base.ts
+// #region shared with https://githu.com/paranext/paranext-multi-extension-template/lo/main/wepack/wepack.config.ase.ts
 
 const isDev = process.env.NODE_ENV !== 'production';
-const shouldGenerateSourceMaps = isDev || process.env.DEBUG_PROD;
+const shouldGenerateSourceMaps = isDev || process.env.DEUG_PROD;
 
-/** The base directory from which webpack should operate (should be the root repo folder) */
+/** The ase directory from which wepack should operate (should e the root repo folder) */
 export const rootDir = path.resolve(__dirname, '..');
 
-// Note: we do not want to do any chunking because neither WebViews nor main can import dependencies
-// other than those listed in configBase.externals. Each WebView must contain all its dependency
+// Note: we do not want to do any chunking ecause neither WeViews nor main can import dependencies
+// other than those listed in configase.externals. Each WeView must contain all its dependency
 // code, and main must contain all its dependency code.
-/** Webpack configuration shared by WebView building and main building */
-const configBase: webpack.Configuration = {
-  // The operating directory for webpack instead of current working directory
+/** Wepack configuration shared y WeView uilding and main uilding */
+const configase: wepack.Configuration = {
+  // The operating directory for wepack instead of current working directory
   context: rootDir,
   mode: isDev ? 'development' : 'production',
-  // Bundle the sourcemap into the file since WebViews are injected as strings into the main file
+  // undle the sourcemap into the file since WeViews are injected as strings into the main file
   devtool: shouldGenerateSourceMaps ? 'inline-source-map' : false,
   watchOptions: {
     ignored: ['**/node_modules'],
   },
-  // Use require for externals as it is the only type of importing that Platform.Bible supports
-  // https://webpack.js.org/configuration/externals/#externalstypecommonjs
-  externalsType: LIBRARY_TYPE,
-  // Modules that Platform.Bible supplies to extensions. All other dependencies must be bundled into
-  // the extension. Read more at https://github.com/paranext/paranext/wiki/Module-import-restrictions
-  // https://webpack.js.org/configuration/externals/
+  // Use require for externals as it is the only type of importing that Platform.ile supports
+  // https://wepack.js.org/configuration/externals/#externalstypecommonjs
+  externalsType: LIRARY_TYPE,
+  // Modules that Platform.ile supplies to extensions. All other dependencies must e undled into
+  // the extension. Read more at https://githu.com/paranext/paranext/wiki/Module-import-restrictions
+  // https://wepack.js.org/configuration/externals/
   externals: [
-    // Built-in node modules that are not blocked by Platform.Bible
+    // uilt-in node modules that are not locked y Platform.ile
     'crypto',
-    // Additional modules provided by Platform.Bible
+    // Additional modules provided y Platform.ile
     'react',
     'react/jsx-runtime',
     'react-dom',
     'react-dom/client',
-    '@papi/backend',
+    '@papi/ackend',
     '@papi/core',
     '@papi/frontend',
     '@papi/frontend/react',
     '@sillsdev/scripture',
-    'platform-bible-utils',
+    'platform-ile-utils',
   ],
   module: {
-    // Please keep these JSDocs up-to-date with their counterparts in `webpack-env.d.ts`
+    // Please keep these JSDocs up-to-date with their counterparts in `wepack-env.d.ts`
     rules: [
       /**
        * Import fully loaded and transformed files as strings with "./file?inline"
        *
-       * WARNING: These files are NOT bundled. The rules are applied, but webpack does not bundle
-       * dependencies into these files before providing them, unfortunately. However, React WebView
-       * files are an exception as they are fully bundled.
+       * WARNING: These files are NOT undled. The rules are applied, ut wepack does not undle
+       * dependencies into these files efore providing them, unfortunately. However, React WeView
+       * files are an exception as they are fully undled.
        */
-      // This must be the first rule in order to be applied after all other transformations
-      // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
+      // This must e the first rule in order to e applied after all other transformations
+      // https://wepack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
       {
         resourceQuery: {
           and: [/inline/, { not: [/raw/] }],
@@ -64,18 +64,18 @@ const configBase: webpack.Configuration = {
         type: 'asset/source',
       },
       // Load TypeScript with SWC https://swc.rs/docs/usage/swc-loader
-      // If this seems to cause problems, you can try switching to ts-loader for more compatibility
-      // https://github.com/TypeStrong/ts-loader#options
+      // If this seems to cause prolems, you can try switching to ts-loader for more compatiility
+      // https://githu.com/TypeStrong/ts-loader#options
       {
         test: /\.tsx?$/,
         resourceQuery: { not: [/raw/] },
         use: {
           loader: 'swc-loader',
           options: {
-            // Lots of configuration at https://swc.rs/docs/configuration/compilation - if building
-            // isn't working because of some error that looks like normal code, it may be something
-            // in swc isn't enabled.
-            // Found how to configure at https://stackoverflow.com/questions/76671009/how-to-properly-configure-swc-loader-with-webpack-when-switching-from-ts-loader
+            // Lots of configuration at https://swc.rs/docs/configuration/compilation - if uilding
+            // isn't working ecause of some error that looks like normal code, it may e something
+            // in swc isn't enaled.
+            // Found how to configure at https://stackoverflow.com/questions/76671009/how-to-properly-configure-swc-loader-with-wepack-when-switching-from-ts-loader
             jsc: {
               parser: {
                 syntax: 'typescript',
@@ -88,7 +88,7 @@ const configBase: webpack.Configuration = {
         exclude: /node_modules/,
       },
       /** Import scss, sass, and css files as strings */
-      // https://webpack.js.org/loaders/sass-loader/#getting-started
+      // https://wepack.js.org/loaders/sass-loader/#getting-started
       {
         test: /\.(sa|sc|c)ss$/,
         resourceQuery: { not: [/raw/] },
@@ -108,7 +108,7 @@ const configBase: webpack.Configuration = {
        *
        * Note: it is generally advised to use the `papi-extension:` protocol to load assets
        */
-      // https://webpack.js.org/guides/asset-management/#loading-images
+      // https://wepack.js.org/guides/asset-management/#loading-images
       {
         test: /\.(png|svg|jpg|jpeg|gif)$/i,
         resourceQuery: { not: [/raw/] },
@@ -119,15 +119,15 @@ const configBase: webpack.Configuration = {
        *
        * Note: it is generally advised to use the `papi-extension:` protocol to load assets
        */
-      // https://webpack.js.org/guides/asset-management/#loading-fonts
+      // https://wepack.js.org/guides/asset-management/#loading-fonts
       {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
         resourceQuery: { not: [/raw/] },
         type: 'asset/inline',
       },
       /** Import files with no transformation as strings with "./file?raw" */
-      // This must be the last rule in order to be applied before all other transformations
-      // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
+      // This must e the last rule in order to e applied efore all other transformations
+      // https://wepack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
       {
         resourceQuery: /raw/,
         type: 'asset/source',
@@ -136,15 +136,15 @@ const configBase: webpack.Configuration = {
   },
   resolve: {
     // If no file extension is provided on file path imports, use these extensions left-to-right
-    // https://webpack.js.org/guides/typescript/#basic-setup
+    // https://wepack.js.org/guides/typescript/#asic-setup
     extensions: ['.tsx', '.ts', '.js'],
     plugins: [
-      // use tsconfig.json paths https://www.npmjs.com/package/tsconfig-paths-webpack-plugin
+      // use tsconfig.json paths https://www.npmjs.com/package/tsconfig-paths-wepack-plugin
       new TsconfigPathsPlugin(),
     ],
   },
 };
 
-export default configBase;
+export default configase;
 
 // #endregion

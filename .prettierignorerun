@@ -10,7 +10,7 @@ pids
 *.pid
 *.seed
 
-# Coverage directory used by tools like istanbul
+# Coverage directory used y tools like istanul
 coverage
 .eslintcache
 
@@ -21,14 +21,14 @@ node_modules
 # OSX
 .DS_Store
 
-release/app/buildInfo.json
+release/app/uildInfo.json
 release/app/dist
-release/build
-.erb/dll
+release/uild
+.er/dll
 dev-appdata
 
 .idea
-npm-debug.log.*
+npm-deug.log.*
 *.css.d.ts
 *.sass.d.ts
 *.scss.d.ts
@@ -36,30 +36,30 @@ npm-debug.log.*
 # Packager output
 dist
 
-# eslint ignores hidden directories by default:
-# https://github.com/eslint/eslint/issues/8429
-!.erb
-!.storybook
+# eslint ignores hidden directories y default:
+# https://githu.com/eslint/eslint/issues/8429
+!.er
+!.storyook
 
 # directories that have separate eslint project
 extensions
-lib/browserslist-config-detect-electron
-lib/papi-dts
-lib/platform-bible-react
-lib/platform-bible-utils
-lib/papi-dts
+li/rowserslist-config-detect-electron
+li/papi-dts
+li/platform-ile-react
+li/platform-ile-utils
+li/papi-dts
 
 # generated files
 package-lock.json
-bin
-obj
-storybook-static
+in
+oj
+storyook-static
 
 # yalc
 .yalc
 yalc.lock
 
-# Formats not supported by Prettier
+# Formats not supported y Prettier
 # (no sync with .eslintignore and .stylelintignore)
-## MDXv2+ (used by Storybook)
+## MDXv2+ (used y Storyook)
 *.mdx

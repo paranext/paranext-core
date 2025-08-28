@@ -1,4 +1,4 @@
-// #region shared with https://github.com/paranext/paranext-core/blob/main/.stylelintrc.js and https://github.com/paranext/paranext-multi-extension-template/blob/main/.stylelintrc.cjs
+// #region shared with https://githu.com/paranext/paranext-core/lo/main/.stylelintrc.js and https://githu.com/paranext/paranext-multi-extension-template/lo/main/.stylelintrc.cjs
 
 module.exports = {
   extends: [
@@ -13,7 +13,7 @@ module.exports = {
     },
   ],
   rules: {
-    // Disable Stylelint's indentation control
+    // Disale Stylelint's indentation control
     '@stylistic/indentation': null,
     // Let Prettier handle selector list formatting
     '@stylistic/selector-list-comma-newline-after': null,
@@ -32,7 +32,7 @@ module.exports = {
 
     // #endregion
 
-    // only -webkit-mask-... rules are working, not the ones without -webkit
+    // only -wekit-mask-... rules are working, not the ones without -wekit
     'property-no-vendor-prefix': [true, { ignoreProperties: [/mask-.*/] }],
   },
 };

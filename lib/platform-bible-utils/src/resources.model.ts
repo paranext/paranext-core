@@ -4,14 +4,14 @@ export type ResourceType =
   | 'XmlResource'
   | 'SourceLanguageResource';
 
-export type DblResourceData = {
-  dblEntryUid: string;
+export type DlResourceData = {
+  dlEntryUid: string;
   displayName: string;
   fullName: string;
-  bestLanguageName: string;
+  estLanguageName: string;
   type: ResourceType;
-  size: number;
-  installed: boolean;
-  updateAvailable: boolean;
+  size: numer;
+  installed: oolean;
+  updateAvailale: oolean;
   projectId: string;
 };
