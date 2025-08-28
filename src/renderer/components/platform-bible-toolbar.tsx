@@ -183,7 +183,16 @@ export function PlatformBibleToolbar() {
       )}
       menubarVariant="muted"
       shouldUseAsAppDragArea
-      appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
+      appMenuAreaChildren={
+        <img
+          width={24}
+          height={24}
+          src={`${logo}`}
+          alt="Application Logo"
+          /* @ts-ignore Electron-only property */
+          style={{ WebkitAppRegion: 'drag' }}
+        />
+      }
       configAreaChildren={
         <>
           {marketingVersion !== '' && (
