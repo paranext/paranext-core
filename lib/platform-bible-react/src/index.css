@@ -118,14 +118,14 @@
     --destructive-foreground: 0 0% 100%;
     --ring: 16.6667 21.9512% 32.1569%;
 
-    /* WARN: in Shadcn files, `--sidebar-background` is `--sidebar` 
+    /* WARN: in Shadcn files, `--sidebar-background` is `--sidebar`
      * I recommend changing this to make it match Shadcn.
      */
     --sidebar-background: 0 0% 98.4314%;
     --sidebar-foreground: 0 0% 14.5098%;
     --sidebar-primary: 0 0% 20.3922%;
     --sidebar-primary-foreground: 0 0% 98.4314%;
-    --sidebar-accent: 0 0% 96.8627%;
+    --sidebar-accent: 0 0% 93.7255%;
     --sidebar-accent-foreground: 0 0% 20.3922%;
     --sidebar-border: 0 0% 92.1569%;
     --sidebar-ring: 0 0% 70.9804%;
