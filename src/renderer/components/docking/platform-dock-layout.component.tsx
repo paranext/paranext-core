@@ -115,6 +115,15 @@ export function PlatformDockLayout() {
       ref={dockLayoutRef}
       loadTab={loadTab}
       saveTab={saveTab}
+      /* Put a visual space around all tab-groups.
+       * I tried using CSS padding and margin for this, but both causes overflows. */
+      style={{
+        position: 'absolute',
+        top: 48,
+        bottom: 8,
+        left: 8,
+        right: 8,
+      }}
       onLayoutChange={(...args) => {
         const [layout, currentTabId, direction] = args;
         let webViewDefinition: WebViewDefinition | undefined;

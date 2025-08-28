@@ -31,7 +31,7 @@ export function PlatformPanel({ id, children }: PlatformPanelProps) {
   }, [id]);
 
   return (
-    <div data-tab-id={id} className="platform-panel">
+    <div data-tab-id={id} className="platform-panel tw-bg-background">
       {children}
     </div>
   );
