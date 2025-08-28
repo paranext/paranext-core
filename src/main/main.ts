@@ -50,6 +50,7 @@ import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
+import { themeService } from '@shared/services/theme.service';
 
 // #region Helper functions
 
@@ -339,6 +340,33 @@ async function main() {
           : path.join(__dirname, '../../.erb/dll/preload.js'),
       },
     });
+
+    mainWindow?.setTitleBarOverlay({
+      color: 'hsla(0, 0%, 39.2157%, 1)',
+      symbolColor: 'white',
+      height: 40,
+    });
+
+    /* // Subscribe to updates to the current theme
+    await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
+      if (isPlatformError(newTheme)) {
+        logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
+        return;
+      }
+      if (newTheme.type === 'dark') {
+        mainWindow?.setTitleBarOverlay({
+          color: 'hsla(0, 0%, 13.3333%, 1)',
+          symbolColor: 'white',
+          height: 40,
+        });
+      } else {
+        mainWindow?.setTitleBarOverlay({
+          color: 'hsla(0, 0%, 100%, 0)', // transparent button background until hovered
+          symbolColor: 'black',
+          height: 47,
+        });
+      }
+    }); */
 
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
