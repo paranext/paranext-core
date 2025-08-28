@@ -128,7 +128,9 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%scripture_section_ot_long%",
 	"%scripture_section_nt_long%",
 	"%scripture_section_dc_long%",
-	"%scripture_section_extra_long%"
+	"%scripture_section_extra_long%",
+	"%history_recent%",
+	"%history_recentSearches_ariaLabel%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -154,6 +156,10 @@ export type BookChapterControlProps = {
 	}>;
 	/** Optional localized strings for the component */
 	localizedStrings?: LanguageStrings;
+	/** Array of recent scripture references for quick access */
+	recentSearches?: SerializedVerseRef[];
+	/** Callback to add a new recent scripture reference */
+	onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -163,7 +169,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -231,6 +237,27 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  *   strings for the component.
  */
 export declare function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
+export interface RecentSearchesProps<T> {
+	/** Array of recent search items */
+	recentSearches: T[];
+	/** Callback when a recent search item is selected */
+	onSearchItemSelect: (item: T) => void;
+	/** Function to render each search item as a string for display */
+	renderItem?: (item: T) => string;
+	/** Function to create a unique key for each item */
+	getItemKey?: (item: T) => string;
+	/** Aria label for the recent searches button */
+	ariaLabel?: string;
+	/** Heading text for the recent searches group */
+	groupHeading?: string;
+}
+/**
+ * Generic component that displays a button to show recent searches in a popover. Only renders if
+ * there are recent searches available. Works with any data type T.
+ */
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+/** Generic hook for managing recent searches state and operations. */
+export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
