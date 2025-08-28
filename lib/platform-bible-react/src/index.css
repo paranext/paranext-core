@@ -31,6 +31,7 @@
    * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
    * section for more information
    */
+  /* ["Slate" base theme by shadcn/ui](https://ui.shadcn.com/docs/theming#slate) */
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%; /* black */
@@ -95,67 +96,67 @@
     --sidebar-ring: 212.7 26.8% 83.9%;
   }
 
-  /* using color palette https://supercolorpalette.com/?scp=G0-hsl-99827A-E7DDD0-FEF4E7-FEFAF1-FFFFFF-D8E9E3-719892-07463D-0A433D-083030-041616-000000-85DBB8-F2F52E-CD3737 */
+  /* Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme*/
   .paratext-light {
-    --background: 0 0% 100%; /* white */
-    --foreground: 0 0% 0%; /* black */
-    --muted: 33.9 32.4% 86.1%; /* paratext light brown */
-    --muted-foreground: 15.5 13.2% 53.9%; /*paratext brown */
-    --popover: 40 20% 98%; /* popover paratext */
-    --popover-foreground: 0 0% 0%; /* black */
-    --card: 0 0% 100%; /* white */
-    --card-foreground: 0 0% 0%; /* black */
-    --border: 220 13% 91%; /* border */
-    --input: 161.3 26.7% 88.2%; /* paratext light green */
-    --primary: 173.4 82.1% 15.3%; /* paratext dark green */
-    --primary-foreground: 40 85.7% 97.3%; /* paratext sand */
-    --secondary: 161.3 26.7% 88.2%; /* paratext light green */
-    --secondary-foreground: 173.4 82.1% 15.3%; /* paratext dark green */
-    --accent: 161.3 26.7% 88.2%; /* paratext light green */
-    --accent-foreground: 173.4 82.1% 15.3%; /* paratext dark green */
-    --destructive: 0 60% 51%;
-    --destructive-foreground: 210 20% 98%;
-    --ring: 15.5 13.2% 53.9%; /*paratext brown */
+    --background: 0 0% 97.6471%;
+    --foreground: 0 0% 12.549%;
+    --muted: 0 0% 93.7255%;
+    --muted-foreground: 0 0% 39.2157%;
+    --popover: 0 0% 98.8235%;
+    --popover-foreground: 0 0% 12.549%;
+    --card: 0 0% 98.8235%;
+    --card-foreground: 0 0% 12.549%;
+    --border: 0 0% 84.7059%;
+    --input: 0 0% 84.7059%;
+    --primary: 171.4286 81.8182% 15.098%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 34.0541 100% 85.4902%;
+    --secondary-foreground: 16.2712 50.4274% 22.9412%;
+    --accent: 0 0% 90.9804%;
+    --accent-foreground: 0 0% 12.549%;
+    --destructive: 10.1639 77.8723% 53.9216%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 16.6667 21.9512% 32.1569%;
 
-    --sidebar-background: 40 20% 98%; /* popover paratext */
-    --sidebar-foreground: 12 10.95% 26.86%; /* dark brown */
-    --sidebar-primary: 173.4 82.1% 15.3%; /* paratext dark green */
-    --sidebar-primary-foreground: 40 85.7% 97.3%; /* paratext sand */
-    --sidebar-accent: 33.9 32.4% 86.1%; /* paratext light brown */
-    --sidebar-accent-foreground: 0 0% 0%; /* black */
-    --sidebar-border: 220 13% 91%; /* border */
-    --sidebar-ring: 15.5 13.2% 53.9%; /*paratext brown */
+    --sidebar: 0 0% 98.4314%;
+    --sidebar-foreground: 0 0% 14.5098%;
+    --sidebar-primary: 0 0% 20.3922%;
+    --sidebar-primary-foreground: 0 0% 98.4314%;
+    --sidebar-accent: 0 0% 96.8627%;
+    --sidebar-accent-foreground: 0 0% 20.3922%;
+    --sidebar-border: 0 0% 92.1569%;
+    --sidebar-ring: 0 0% 70.9804%;
   }
 
   .paratext-dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-    --muted: 15.5 13.2% 53.9%;
-    --muted-foreground: 33.9 32.4% 86.1%;
-    --popover: 180 71.4% 5%;
-    --popover-foreground: 0 0% 100%;
-    --card: 0 0% 0%;
-    --card-foreground: 0 0% 100%;
-    --border: 220 13% 20%;
-    --input: 220 13% 20%;
-    --primary: 161.3 26.7% 88.2%;
-    --primary-foreground: 173.4 82.1% 15.3%;
-    --secondary: 180 71.4% 11%;
-    --secondary-foreground: 161.3 26.7% 88.2%;
-    --accent: 180 71.4% 11%;
-    --accent-foreground: 161.3 26.7% 88.2%;
-    --destructive: 0 60% 51%;
-    --destructive-foreground: 210 20% 98%;
-    --ring: 13.5 13.2% 53.9%;
+    --background: 0 0% 6.6667%;
+    --foreground: 0 0% 93.3333%;
+    --muted: 0 0% 13.3333%;
+    --muted-foreground: 0 0% 70.5882%;
+    --popover: 0 0% 9.8039%;
+    --popover-foreground: 0 0% 93.3333%;
+    --card: 0 0% 9.8039%;
+    --card-foreground: 0 0% 93.3333%;
+    --border: 45 14.2857% 10.9804%;
+    --input: 0 0% 28.2353%;
+    --primary: 40 85.7143% 97.2549%;
+    --primary-foreground: 183.1579 54.2857% 6.8627%;
+    --secondary: 28.2353 17.5258% 19.0196%;
+    --secondary-foreground: 29.5082 100% 88.0392%;
+    --accent: 0 0% 16.4706%;
+    --accent-foreground: 0 0% 93.3333%;
+    --destructive: 10.1639 77.8723% 53.9216%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 29.5082 100% 88.0392%;
 
-    --sidebar-background: 180 71.4% 5%;
-    --sidebar-foreground: 33.9 32.4% 86.1%;
-    --sidebar-primary: 161.3 26.7% 88.2%;
-    --sidebar-primary-foreground: 173.4 82.1% 15.3%;
-    --sidebar-accent: 15.5 13.2% 53.9%;
-    --sidebar-accent-foreground: 33.9 32.4% 86.1%;
-    --sidebar-border: 220 13% 20%;
-    --sidebar-ring: 15.5 13.2% 53.9%;
+    --sidebar: 240 5.8824% 10%;
+    --sidebar-foreground: 240 4.7619% 95.8824%;
+    --sidebar-primary: 224.2781 76.3265% 48.0392%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7037% 15.8824%;
+    --sidebar-accent-foreground: 240 4.7619% 95.8824%;
+    --sidebar-border: 240 3.7037% 15.8824%;
+    --sidebar-ring: 240 4.878% 83.9216%;
   }
 }
 /* #endregion */
