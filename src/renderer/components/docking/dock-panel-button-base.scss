@@ -1,0 +1,51 @@
+@use '../../styles/vars';
+
+// Base class for panel buttons with shared styles
+%panel-button-base {
+  height: 30px;
+  width: 30px;
+  color: hsl(var(--foreground));
+  border-radius: vars.$space--sm;
+
+  &:hover {
+    // I wanted to mimic button hover ghost, but the background color is the same as the tab group.
+    background-color: var(--tab-highlight);
+  }
+
+  //   BEGIN copied and adapted from Shadcn button component
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 16px;
+  padding-block: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  gap: 8px;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+  outline: none;
+  --ring-offset: var(--muted);
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--ring)),
+      0 0 0 4px hsl(var(--ring-offset));
+  }
+
+  &:disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  svg {
+    pointer-events: none;
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+  //   END copied and adapted from Shadcn button component
+}

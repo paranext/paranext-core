@@ -1,5 +1,5 @@
 @use '../../styles/vars';
-@use './panel-extra-content.component';
+@use './dock-panel-button-base';
 
 /* 
 This file styles with SCSS because rc-dock doesn't give us good ways to render with Tailwind.  I also comes with a lot of opinionated styling that we need to undo, so you'll see a lot of rules that use `unset`. We use `unset` instead of the literal initial values to connote their intention: undoing rc-dock's styling.
