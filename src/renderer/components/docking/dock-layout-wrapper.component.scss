@@ -26,7 +26,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   --tab-background: transparent;
 }
 
-// Hovering over a tab makes it slightly highlighted to indicate interactivity
+// Hovering over a tab highlights it to indicate interactivity
 .dock-tab:hover,
 .dock-tab-active:hover {
   color: unset; // reset unwanted rc-dock color (blue)
@@ -270,15 +270,11 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     border-end-start-radius: 0;
     border-end-end-radius: 0;
 
-    background: var(--tab-background);
     color: currentColor;
     border-bottom: unset;
     inset-block-end: calc(
       -1 * var(--tab-header-to-content-gap)
     ); // Move tab up to overlap the tab list
-    height: calc(
-      var(--dock-tab-height) + 2 * var(--tab-header-to-content-gap)
-    ); // Increase height to cover gap created by moving tab down
   }
 
   &.platform-dock-tab-window-focus {
