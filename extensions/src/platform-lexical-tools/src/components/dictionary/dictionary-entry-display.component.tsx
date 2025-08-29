@@ -153,7 +153,7 @@ export function DictionaryEntryDisplay({
   );
 
   return (
-    <div>
+    <>
       <BackToListButton
         dictionaryEntry={dictionaryEntry}
         isDrawer={isDrawer}
@@ -181,20 +181,6 @@ export function DictionaryEntryDisplay({
             ))}
           </ul>
         </div>
-        {dictionaryEntry.lexicalReferenceTextId === 'SDBH' && (
-          <div className="tw-max-w-xs tw-pt-3">
-            <p className="tw-text-xs tw-text-muted-foreground">
-              {localizedStrings['%platformLexicalTools_dictionary_sdbhCopyright%']}
-            </p>
-          </div>
-        )}
-        {dictionaryEntry.lexicalReferenceTextId === 'SDBG' && (
-          <div className="tw-max-w-xs tw-pt-3">
-            <p className="tw-text-xs tw-text-muted-foreground">
-              {localizedStrings['%platformLexicalTools_dictionary_sdbgCopyright%']}
-            </p>
-          </div>
-        )}
       </div>
 
       <Separator className="tw-my-3" />
@@ -293,6 +279,20 @@ export function DictionaryEntryDisplay({
             </li>
           ))}
         </ul>
+        {dictionaryEntry.lexicalReferenceTextId === 'SDBH' && (
+          <div className="tw-max-w-xs tw-pt-3 tw-mt-auto">
+            <p className="tw-text-xs tw-text-muted-foreground">
+              {localizedStrings['%platformLexicalTools_dictionary_sdbhCopyright%']}
+            </p>
+          </div>
+        )}
+        {dictionaryEntry.lexicalReferenceTextId === 'SDBG' && (
+          <div className="tw-max-w-xs tw-pt-3 tw-mt-auto">
+            <p className="tw-text-xs tw-text-muted-foreground">
+              {localizedStrings['%platformLexicalTools_dictionary_sdbgCopyright%']}
+            </p>
+          </div>
+        )}
         <Button
           variant="secondary"
           size="icon"
@@ -302,6 +302,6 @@ export function DictionaryEntryDisplay({
           <ChevronUpIcon />
         </Button>
       </div>
-    </div>
+    </>
   );
 }
