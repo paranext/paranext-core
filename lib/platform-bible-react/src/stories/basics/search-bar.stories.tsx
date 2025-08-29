@@ -1,8 +1,30 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { SearchBar } from '@/components/basics/search-bar.component';
-import { useState } from 'react';
+import { ComponentProps, useCallback, useState } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
+
+// Reusable wrapper component with state management
+function SearchBarWithState({
+  initialValue = '',
+  onSearch,
+  ...props
+}: {
+  initialValue?: string;
+  onSearch?: (query: string) => void;
+} & Omit<ComponentProps<typeof SearchBar>, 'value' | 'onSearch'>) {
+  const [searchQuery, setSearchQuery] = useState(initialValue);
+
+  const handleSearch = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      onSearch?.(query);
+    },
+    [onSearch],
+  );
+
+  return <SearchBar {...props} value={searchQuery} onSearch={handleSearch} />;
+}
 
 const meta: Meta<typeof SearchBar> = {
   title: 'Basics/SearchBar',
@@ -29,9 +51,7 @@ export default meta;
 type Story = StoryObj<typeof SearchBar>;
 
 export const Default: Story = {
-  args: {
-    onSearch: fn(),
-  },
+  render: () => <SearchBarWithState onSearch={fn()} />,
   parameters: {
     docs: {
       description: {
@@ -42,10 +62,7 @@ export const Default: Story = {
 };
 
 export const WithPlaceholder: Story = {
-  args: {
-    placeholder: 'Search for items...',
-    onSearch: fn(),
-  },
+  render: () => <SearchBarWithState placeholder="Search for items..." onSearch={fn()} />,
   parameters: {
     docs: {
       description: {
@@ -56,11 +73,7 @@ export const WithPlaceholder: Story = {
 };
 
 export const FullWidth: Story = {
-  args: {
-    placeholder: 'Full width search',
-    isFullWidth: true,
-    onSearch: fn(),
-  },
+  render: () => <SearchBarWithState placeholder="Full width search" isFullWidth onSearch={fn()} />,
   parameters: {
     docs: {
       description: {
@@ -71,11 +84,7 @@ export const FullWidth: Story = {
 };
 
 export const Disabled: Story = {
-  args: {
-    placeholder: 'Disabled search',
-    isDisabled: true,
-    onSearch: fn(),
-  },
+  render: () => <SearchBarWithState placeholder="Disabled search" isDisabled onSearch={fn()} />,
   parameters: {
     docs: {
       description: {
@@ -86,11 +95,13 @@ export const Disabled: Story = {
 };
 
 export const WithValue: Story = {
-  args: {
-    value: 'Initial search term',
-    placeholder: 'Search...',
-    onSearch: fn(),
-  },
+  render: () => (
+    <SearchBarWithState
+      initialValue="Initial search term"
+      placeholder="Search..."
+      onSearch={fn()}
+    />
+  ),
   parameters: {
     docs: {
       description: {
