@@ -313,6 +313,37 @@ export function formatScrRef(
   return `${book}${bookChapterSeparator ?? ' '}${scrRef.chapterNum}${chapterVerseSeparator ?? ':'}${scrRef.verseNum}`;
 }
 
+/**
+ * Represents the major sections of the Bible and extra materials. Used for grouping and filtering
+ * books in the book selector.
+ */
+export enum Section {
+  /** Old Testament books (Genesis through Malachi) */
+  OT = 'OT',
+  /** New Testament books (Matthew through Revelation) */
+  NT = 'NT',
+  /** Deuterocanonical books (e.g. Tobit, Judith, 1-2 Maccabees) */
+  DC = 'DC',
+  /** Additional materials not part of the biblical canon (e.g. XXA, XXB etc.) */
+  Extra = 'Extra',
+}
+
+/**
+ * Determines which section a book belongs to based on its ID
+ *
+ * @param bookId The ID of the book (e.g., 'GEN', 'MAT')
+ * @returns The section (OT, NT, DC, or Extra) that the book belongs to
+ * @throws Error if the book ID is not recognized or cannot be categorized
+ */
+export const getSectionForBook = (bookId: string): Section => {
+  if (Canon.isBookOT(bookId)) return Section.OT;
+  if (Canon.isBookNT(bookId)) return Section.NT;
+  if (Canon.isBookDC(bookId)) return Section.DC;
+  if (Canon.isExtraMaterial(bookId)) return Section.Extra;
+
+  throw new Error(`Unknown section for book: ${bookId}`);
+};
+
 // #region white space functions
 
 const nonSemanticWhiteSpaceRegex =
