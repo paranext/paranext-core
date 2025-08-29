@@ -5,6 +5,25 @@ import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useState } from 'react';
 import { Home, HomeProps, LocalProjectInfo } from './home.component';
 
+/* This is a minimal set of Tailwind styles needed for the Home component to display correctly in Storybook
+Remove this when we can correctly import the tailwind styles */
+const styles = `
+  @media (min-width: 768px) {
+    .md\\:\\!tw-table-cell {
+      display: table-cell !important;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .sm\\:\\!tw-table-cell {
+      display: table-cell !important;
+    }
+  }
+`;
+const styleElement = document.createElement('style');
+styleElement.innerHTML = styles;
+document.head.appendChild(styleElement);
+
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '1',

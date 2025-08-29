@@ -1453,6 +1453,28 @@ export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (Scroll
  */
 export declare function formatScrRef(scrRef: SerializedVerseRef, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
 /**
+ * Represents the major sections of the Bible and extra materials. Used for grouping and filtering
+ * books in the book selector.
+ */
+export declare enum Section {
+	/** Old Testament books (Genesis through Malachi) */
+	OT = "OT",
+	/** New Testament books (Matthew through Revelation) */
+	NT = "NT",
+	/** Deuterocanonical books (e.g. Tobit, Judith, 1-2 Maccabees) */
+	DC = "DC",
+	/** Additional materials not part of the biblical canon (e.g. XXA, XXB etc.) */
+	Extra = "Extra"
+}
+/**
+ * Determines which section a book belongs to based on its ID
+ *
+ * @param bookId The ID of the book (e.g., 'GEN', 'MAT')
+ * @returns The section (OT, NT, DC, or Extra) that the book belongs to
+ * @throws Error if the book ID is not recognized or cannot be categorized
+ */
+export declare const getSectionForBook: (bookId: string) => Section;
+/**
  * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
  * spaces.
  *
