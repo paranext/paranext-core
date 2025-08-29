@@ -64,6 +64,13 @@ declare module 'papi-shared-types' {
      */
     'paratextRegistration.showParatextRegistration': () => Promise<string | undefined>;
     /**
+     * Show the Paratext Registration Internet Settings window with which the user defines internet
+     * settings for connecting to the Paratext Registration
+     *
+     * @returns Id of the internet settings web view
+     */
+    'paratextRegistration.showInternetSettings': () => Promise<string | undefined>;
+    /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`
      *

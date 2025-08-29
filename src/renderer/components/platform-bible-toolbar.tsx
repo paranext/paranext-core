@@ -14,7 +14,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
-import { HomeIcon, Moon, Sun, User } from 'lucide-react';
+import { CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -61,6 +61,7 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openParatextRegistration%',
+  '%mainMenu_openInternetSettings%',
   '%mainMenu_openHome%',
   '%toolbar_theme_change_to_light%',
   '%toolbar_theme_change_to_dark%',
@@ -240,9 +241,30 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
+                >
+                  <Network />
+                </Button>
+              </TooltipTrigger>
+              {localizedStrings['%mainMenu_openInternetSettings%'] && (
+                <TooltipContent>
+                  <p className="tw-font-light">
+                    {localizedStrings['%mainMenu_openInternetSettings%']}
+                  </p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="pr-twp tw-h-8 tw-flex-shrink-0"
                   onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
                 >
-                  <User />
+                  <CircleUserRound />
                 </Button>
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openParatextRegistration%'] && (
