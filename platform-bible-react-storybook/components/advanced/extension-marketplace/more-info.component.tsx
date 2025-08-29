@@ -63,12 +63,14 @@ export function MoreInfo({
       id={id}
       className="tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center"
     >
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
-        <div className="tw-flex">
-          <span className="tw-text-xs tw-font-semibold tw-text-foreground">{category}</span>
+      {category && (
+        <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
+          <div className="tw-flex">
+            <span className="tw-text-xs tw-font-semibold tw-text-foreground">{category}</span>
+          </div>
+          <span className="tw-text-xs tw-text-foreground">CATEGORY</span>
         </div>
-        <span className="tw-text-xs tw-text-foreground">CATEGORY</span>
-      </div>
+      )}
       <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
         <div className="tw-flex tw-gap-1">
           <User className="tw-h-4 tw-w-4" />

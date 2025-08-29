@@ -1,0 +1,14 @@
+import{j as e}from"./jsx-runtime-CoJcBlqr.js";import{B as d}from"./button-BOi5X0CC.js";import{I as u}from"./input-FiVrRUt5.js";import{r as m,a as f}from"./iframe-ChjBVkNN.js";import{c as a}from"./shadcn-ui.util-DMJ19wEV.js";import{S as w}from"./search-BdbvA1lj.js";import{X as y}from"./x-DEJKqPBv.js";const n=m.forwardRef(({value:r,onSearch:s,placeholder:o,isFullWidth:i,className:l,isDisabled:p=!1},c)=>{const t=f();return e.jsxs("div",{className:a("tw-relative",{"tw-w-full":i},l),children:[e.jsx(w,{className:a("tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50",{"tw-right-3":t==="rtl"},{"tw-left-3":t==="ltr"})}),e.jsx(u,{ref:c,className:"tw-w-full tw-text-ellipsis tw-pe-9 tw-ps-9",placeholder:o,value:r,onChange:h=>s(h.target.value),disabled:p}),r&&e.jsxs(d,{variant:"ghost",size:"icon",className:a("tw-absolute tw-top-1/2 tw-h-7 tw--translate-y-1/2 tw-transform hover:tw-bg-transparent",{"tw-left-0":t==="rtl"},{"tw-right-0":t==="ltr"}),onClick:()=>{s("")},children:[e.jsx(y,{className:"tw-h-4 tw-w-4"}),e.jsx("span",{className:"tw-sr-only",children:"Clear"})]})]})});n.displayName="SearchBar";n.__docgenInfo={description:`A search bar component with a search icon and a clear button when the search query is not empty.
+
+@param {SearchBarProps} props - The props for the component.
+@param {string} props.value - The search query for the search bar
+@param {(searchQuery: string) => void} props.onSearch - Callback fired to handle the search query
+  is updated
+@param {string} [props.placeholder] - Optional string that appears in the search bar without a
+  search string
+@param {boolean} [props.isFullWidth] - Optional boolean to set the input base to full width
+@param {string} [props.className] - Additional css classes to help with unique styling of the
+  search bar
+@param {boolean} [props.isDisabled] - Optional boolean to disable the search bar`,methods:[],displayName:"SearchBar",props:{value:{required:!0,tsType:{name:"string"},description:"Search query for the search bar"},onSearch:{required:!0,tsType:{name:"signature",type:"function",raw:"(searchQuery: string) => void",signature:{arguments:[{type:{name:"string"},name:"searchQuery"}],return:{name:"void"}}},description:`Callback fired to handle the search query is updated
+
+@param searchQuery`},placeholder:{required:!1,tsType:{name:"string"},description:"Optional string that appears in the search bar without a search string"},isFullWidth:{required:!1,tsType:{name:"boolean"},description:"Optional boolean to set the input base to full width"},className:{required:!1,tsType:{name:"string"},description:"Additional css classes to help with unique styling of the search bar"},isDisabled:{required:!1,tsType:{name:"boolean"},description:"Optional boolean to disable the search bar",defaultValue:{value:"false",computed:!1}}}};export{n as S};
