@@ -358,10 +358,10 @@ export function Home({
 
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-      <CardHeader className="tw-flex-shrink-0 [@media(max-height:24rem)]:!tw-pb-2">
+      <CardHeader className="tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2">
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
-            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:24rem)]:!tw-hidden">
+            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden">
               {headerContent}
             </div>
             <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
@@ -430,10 +430,10 @@ export function Home({
                     <TableHeader className="tw-bg-none" stickyHeader>
                       <TableRow>
                         <TableHead />
-                        {buildTableHead('fullName', fullNameText, 'tw-hidden md:tw-table-cell')}
-                        {buildTableHead('language', languageText, 'tw-hidden sm:tw-table-cell')}
+                        {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
+                        {buildTableHead('language', languageText, 'tw-hidden sm:!tw-table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
-                          buildTableHead('activity', activityText, 'tw-hidden sm:tw-table-cell')}
+                          buildTableHead('activity', activityText, 'tw-hidden sm:!tw-table-cell')}
                         {buildTableHead('action', actionText)}
                       </TableRow>
                     </TableHeader>
@@ -463,14 +463,14 @@ export function Home({
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-words tw-cursor-default">
+                          <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="tw-hidden sm:tw-table-cell tw-cursor-default">
+                          <TableCell className="tw-hidden sm:!tw-table-cell tw-cursor-default">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:tw-table-cell tw-cursor-default">
+                            <TableCell className="tw-hidden sm:!tw-table-cell tw-cursor-default">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
@@ -520,7 +520,7 @@ export function Home({
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:24rem)]:!tw-hidden">
+      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:32rem)]:!tw-hidden">
         <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
       </CardFooter>
     </Card>
