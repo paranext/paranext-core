@@ -48,9 +48,16 @@
   },
   "localizedStrings": {
     "en": {
+      "%internetSettings_webView_title%": "Internet Settings",
+      "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
+      "%mainMenu_openInternetSettings%": "Internet Settings...",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
+      "%paratextRegistration_alert_invalidRegistrationNameAndCode_title%": "Registration Name and Code do not match",
+      "%paratextRegistration_alert_invalidRegistrationNameAndCode_subTitle%": "Check to make sure what you entered is an exact match.",
+      "%paratextRegistration_alert_updatedInternetSettings%": "Your changes to the internet settings were successfully applied!",
       "%paratextRegistration_alert_updatedRegistration%": "Updated registration information",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
+      "%paratextRegistration_app_startup_description": "Welcome to Paratext Studio! To get started, login with your registration information.",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
       "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
@@ -75,6 +82,7 @@
       "%paratextRegistration_label_serverType_option_Production%": "Production",
       "%paratextRegistration_label_serverType_option_QualityAssurance%": "Quality Assurance",
       "%paratextRegistration_label_serverType_option_Test%": "Test",
+      "%paratextRegistration_registration_details%": "You can have this information emailed from Paratext Registry, or get help from your organization’s tech support.",
       "%paratextRegistration_section_internetSettings%": "Internet Settings",
       "%paratextRegistration_section_internetSettings_tooltip%": "These Internet settings only apply to some operations, not to the whole application",
       "%paratextRegistration_section_proxySettings%": "Proxy Settings",
@@ -88,7 +96,10 @@
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show “Paratext Registration Information” on startup"
     },
     "es": {
+      "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
+      "%internetSettings_webView_title%": "Configuración de Internet",
+      "%internetSettings_webView_tooltip%": "Introduzca su configuración de registro de Internet de Paratext en este formulario.",
       "%paratextRegistration_alert_updatedRegistration%": "Información de registro actualizada",
       "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados. La aplicación se reiniciará en unos segundos.",
       "%paratextRegistration_button_saveAndRestart%": "Guardar y reiniciar",

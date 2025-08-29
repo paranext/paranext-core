@@ -4,10 +4,21 @@ import {
   ParatextRegistrationWebViewProvider,
   paratextRegistrationWebViewType,
 } from './paratext-registration.web-view-provider';
+import InternetSettingsWebViewProvider, {
+  internetSettingsWebViewType,
+} from './internet-settings.web-view-provider';
 
 async function showParatextRegistration(): Promise<string | undefined> {
   return papi.webViews.openWebView(
     paratextRegistrationWebViewType,
+    { type: 'float', position: 'center', floatSize: { width: 540, height: 448 } },
+    { existingId: '?' },
+  );
+}
+
+async function showInternetSettings(): Promise<string | undefined> {
+  return papi.webViews.openWebView(
+    internetSettingsWebViewType,
     { type: 'float', position: 'center', floatSize: { width: 540, height: 448 } },
     { existingId: '?' },
   );
@@ -48,6 +59,7 @@ export async function activate(context: ExecutionActivationContext) {
   logger.debug('Paratext Registration is activating!');
 
   const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
+  const internetSettingsWebViewProvider = new InternetSettingsWebViewProvider();
 
   const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
     'paratextRegistration.shouldShowOnStartup',
@@ -64,6 +76,15 @@ export async function activate(context: ExecutionActivationContext) {
       paratextRegistrationWebViewProvider,
     );
 
+  const showInternetSettingsPromise = papi.commands.registerCommand(
+    'paratextRegistration.showInternetSettings',
+    showInternetSettings,
+  );
+  const showInternetSettingsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    internetSettingsWebViewType,
+    internetSettingsWebViewProvider,
+  );
+
   // No need to wait for this; it will do its thing and handle its own errors
   showParatextRegistrationIfNoRegistrationData();
 
@@ -71,6 +92,8 @@ export async function activate(context: ExecutionActivationContext) {
     await shouldShowOnStartupValidatorPromise,
     await showParatextRegistrationPromise,
     await showParatextRegistrationWebViewProviderPromise,
+    await showInternetSettingsPromise,
+    await showInternetSettingsWebViewProviderPromise,
   );
 }
 
