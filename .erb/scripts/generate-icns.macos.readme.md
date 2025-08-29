@@ -34,14 +34,14 @@ Run the script from the paranext-core repository root:
 
 ```bash
 # Basic usage with default paths (looks for ./icon-exports, outputs to ./assets)
-./.erb/scripts/generate-icns.sh
+./.erb/scripts/generate-icns.macos.sh
 
 # Specify custom source and target directories
-./.erb/scripts/generate-icns.sh /path/to/icon-exports ./assets
+./.erb/scripts/generate-icns.macos.sh /path/to/icon-exports ./assets
 
 # Examples
-./.erb/scripts/generate-icns.sh ./icon-exports ./assets
-./.erb/scripts/generate-icns.sh /Users/merc/tmp/platform-bible-icon-composer-exports ./assets
+./.erb/scripts/generate-icns.macos.sh ./icon-exports ./assets
+./.erb/scripts/generate-icns.macos.sh /Users/merc/tmp/platform-bible-icon-composer-exports ./assets
 ```
 
 ## Supported Input Patterns

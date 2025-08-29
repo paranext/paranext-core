@@ -20,9 +20,9 @@
 # - Generic *-macOS-*.png patterns
 # - Falls back to iOS patterns if no macOS icons found
 #
-# Usage: ./.erb/scripts/generate-icns.sh [source_dir] [target_dir]
-# Example: ./.erb/scripts/generate-icns.sh ./icon-exports ./assets
-# Example: ./.erb/scripts/generate-icns.sh /path/to/platform-bible-icon-composer-exports ./assets
+# Usage: ./.erb/scripts/generate-icns.macos.sh [source_dir] [target_dir]
+# Example: ./.erb/scripts/generate-icns.macos.sh ./icon-exports ./assets
+# Example: ./.erb/scripts/generate-icns.macos.sh /path/to/platform-bible-icon-composer-exports ./assets
 #
 # Supported themes: Default, Dark, Light, ClearDark, ClearLight, TintedDark, TintedLight
 
