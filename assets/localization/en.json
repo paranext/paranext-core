@@ -28,6 +28,8 @@
   "%getResources_errorUninstallResource_resourceNotInstalled%": "Resource is not currently installed, so it can't be removed.",
   "%getResources_errorUninstallResource_localResourceNotFound%": "Resource cannot be located, so it can't be removed.",
   "%getResources_errorUninstallResource_localResourceStillPresent%": "Resource is still present. Removing failed.",
+  "%history_recent%": "Recent",
+  "%history_recentSearches_ariaLabel%": "Show Recent Searches",
   "%home_dialog_title%": "Home",
   "%insertNote%": "Insert Note",
   "%mainMenu_edit%": "Edit",

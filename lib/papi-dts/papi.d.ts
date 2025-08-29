@@ -9243,6 +9243,17 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
   export default useWebViewController;
 }
+declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  /**
+   * Custom hook that provides synchronized recent scripture references across all components. This
+   * hook automatically syncs with localStorage changes from other components.
+   */
+  export default function useRecentScriptureRefs(): {
+    recentScriptureRefs: SerializedVerseRef[];
+    addRecentScriptureRef: (newRef: SerializedVerseRef) => void;
+  };
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -9255,6 +9266,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
+  export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';

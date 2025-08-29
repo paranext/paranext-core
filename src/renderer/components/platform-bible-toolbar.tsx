@@ -5,6 +5,7 @@ import {
   useDataProvider,
   useLocalizedStrings,
   useScrollGroupScrRef,
+  useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { app } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
@@ -90,6 +91,8 @@ export function PlatformBibleToolbar() {
   );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
@@ -276,7 +279,13 @@ export function PlatformBibleToolbar() {
           )}
         </Tooltip>
       </TooltipProvider>
-      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-w-96" />
+      <BookChapterControl
+        scrRef={scrRef}
+        handleSubmit={setScrRef}
+        className="tw-w-96"
+        recentSearches={recentScriptureRefs}
+        onAddRecentSearch={addRecentScriptureRef}
+      />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
         scrollGroupId={scrollGroupId}

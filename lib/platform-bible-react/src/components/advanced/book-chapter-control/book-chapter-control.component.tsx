@@ -10,7 +10,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Canon } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
 import {
@@ -23,6 +23,7 @@ import {
 } from '@/components/shared/book.utils';
 import { KeyboardEvent, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { generateCommandValue } from '@/components/shared/book-item.utils';
+import RecentSearches from '../recent-searches.component';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
 import { BookChapterControlProps, ViewMode } from './book-chapter-control.types';
 import {
@@ -47,6 +48,8 @@ export function BookChapterControl({
   getActiveBookIds,
   localizedBookNames,
   localizedStrings,
+  recentSearches,
+  onAddRecentSearch,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -78,6 +81,17 @@ export function BookChapterControl({
   const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
   // References to the chapters that are shown as CommandItems
   const chapterRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Wrapper function to handle submit and add to recent searches
+  const handleSubmitAndAddToRecent = useCallback(
+    (newScrRef: SerializedVerseRef) => {
+      handleSubmit(newScrRef);
+      if (onAddRecentSearch) {
+        onAddRecentSearch(newScrRef);
+      }
+    },
+    [handleSubmit, onAddRecentSearch],
+  );
 
   // #region Available books, filtering and top match logic
 
@@ -133,7 +147,7 @@ export function BookChapterControl({
   const handleTopMatchSelect = useCallback(() => {
     // If we have a top match (smart parsed or single book filter), use its specific chapter/verse
     if (topMatch) {
-      handleSubmit({
+      handleSubmitAndAddToRecent({
         book: topMatch.book,
         chapterNum: topMatch.chapterNum ?? 1,
         verseNum: topMatch.verseNum ?? 1,
@@ -142,14 +156,14 @@ export function BookChapterControl({
       setInputValue('');
       setCommandValue(''); // Reset command value
     }
-  }, [handleSubmit, topMatch]);
+  }, [handleSubmitAndAddToRecent, topMatch]);
 
   const handleBookSelect = useCallback(
     (bookId: string) => {
       // Check if book has chapters - if not, submit immediately
       const endChapter = fetchEndChapter(bookId);
       if (endChapter <= 1) {
-        handleSubmit({
+        handleSubmitAndAddToRecent({
           book: bookId,
           chapterNum: 1,
           verseNum: 1,
@@ -163,7 +177,7 @@ export function BookChapterControl({
       setSelectedBookForChaptersView(bookId);
       setViewMode('chapters');
     },
-    [handleSubmit],
+    [handleSubmitAndAddToRecent],
   );
 
   const handleChapterSelect = useCallback(
@@ -172,7 +186,7 @@ export function BookChapterControl({
       const bookId = viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
       if (!bookId) return;
 
-      handleSubmit({
+      handleSubmitAndAddToRecent({
         book: bookId,
         chapterNum: chapterNumber,
         verseNum: 1,
@@ -182,7 +196,16 @@ export function BookChapterControl({
       setSelectedBookForChaptersView(undefined);
       setInputValue('');
     },
-    [handleSubmit, viewMode, selectedBookForChaptersView, topMatch],
+    [handleSubmitAndAddToRecent, viewMode, selectedBookForChaptersView, topMatch],
+  );
+
+  const handleRecentItemSelect = useCallback(
+    (item: SerializedVerseRef) => {
+      handleSubmitAndAddToRecent(item);
+      setIsCommandOpen(false);
+      setInputValue('');
+    },
+    [handleSubmitAndAddToRecent],
   );
 
   // #endregion
@@ -502,13 +525,28 @@ export function BookChapterControl({
           {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
             <div className="tw-flex tw-items-end">
-              <CommandInput
-                ref={commandInputRef}
-                value={inputValue}
-                onValueChange={setInputValue}
-                onKeyDown={handleInputKeyDown}
-                onFocus={() => setIsCommandListHidden(false)}
-              />
+              <div className="tw-relative tw-flex-1">
+                <CommandInput
+                  ref={commandInputRef}
+                  value={inputValue}
+                  onValueChange={setInputValue}
+                  onKeyDown={handleInputKeyDown}
+                  onFocus={() => setIsCommandListHidden(false)}
+                  className={recentSearches && recentSearches.length > 0 ? '!tw-pr-10' : ''}
+                />
+                {recentSearches && recentSearches.length > 0 && (
+                  <RecentSearches
+                    recentSearches={recentSearches}
+                    onSearchItemSelect={handleRecentItemSelect}
+                    renderItem={(verseRef) => formatScrRef(verseRef, 'English')}
+                    getItemKey={(verseRef) =>
+                      `${verseRef.book}-${verseRef.chapterNum}-${verseRef.verseNum}`
+                    }
+                    ariaLabel={localizedStrings?.['%history_recentSearches_ariaLabel%']}
+                    groupHeading={localizedStrings?.['%history_recent%']}
+                  />
+                )}
+              </div>
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-pe-2">
                 {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (

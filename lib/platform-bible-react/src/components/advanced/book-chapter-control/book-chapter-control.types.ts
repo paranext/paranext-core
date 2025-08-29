@@ -11,6 +11,8 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%scripture_section_nt_long%',
   '%scripture_section_dc_long%',
   '%scripture_section_extra_long%',
+  '%history_recent%',
+  '%history_recentSearches_ariaLabel%',
 ] as const);
 
 /** Type definition for the localized strings used in the BookChapterControl component */
@@ -40,4 +42,8 @@ export type BookChapterControlProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Optional localized strings for the component */
   localizedStrings?: LanguageStrings;
+  /** Array of recent scripture references for quick access */
+  recentSearches?: SerializedVerseRef[];
+  /** Callback to add a new recent scripture reference */
+  onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
 };
