@@ -39,8 +39,8 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@biblionexus-foundation/platform-editor": "~0.7.12",
-    "@biblionexus-foundation/scripture-utilities": "~0.1.0",
+    "@eten-tech-foundation/platform-editor": "~0.8.0",
+    "@eten-tech-foundation/scripture-utilities": "~0.1.1",
     "@swc/core": "1.13.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^20.17.10",

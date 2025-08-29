@@ -1,5 +1,5 @@
-import { Comments } from '@biblionexus-foundation/platform-editor';
-import { MarkerContent, MarkerObject, Usj } from '@biblionexus-foundation/scripture-utilities';
+import { Comments } from '@eten-tech-foundation/platform-editor';
+import { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   CHAPTER_TYPE,
   UsjContentLocation,
