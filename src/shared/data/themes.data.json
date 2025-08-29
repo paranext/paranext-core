@@ -135,35 +135,7 @@
   "user-0": {
     "light": {
       "label": "%theme_label_user_light%",
-      "cssVariables": {
-        "background": "0 0% 100%",
-        "foreground": "0 0% 0%",
-        "muted": "33.9 32.4% 86.1%",
-        "muted-foreground": "15.5 13.2% 53.9%",
-        "popover": "40 20% 98%",
-        "popover-foreground": "0 0% 0%",
-        "card": "0 0% 100%",
-        "card-foreground": "0 0% 0%",
-        "border": "220 13% 91%",
-        "input": "161.3 26.7% 88.2%",
-        "primary": "173.4 82.1% 15.3%",
-        "primary-foreground": "40 85.7% 97.3%",
-        "secondary": "161.3 26.7% 88.2%",
-        "secondary-foreground": "173.4 82.1% 15.3%",
-        "accent": "161.3 26.7% 88.2%",
-        "accent-foreground": "173.4 82.1% 15.3%",
-        "destructive": "0 60% 51%",
-        "destructive-foreground": "210 20% 98%",
-        "ring": "15.5 13.2% 53.9%",
-        "sidebar-background": "40 20% 98%",
-        "sidebar-foreground": "12 10.95% 26.86%",
-        "sidebar-primary": "173.4 82.1% 15.3%",
-        "sidebar-primary-foreground": "40 85.7% 97.3%",
-        "sidebar-accent": "33.9 32.4% 86.1%",
-        "sidebar-accent-foreground": "0 0% 0%",
-        "sidebar-border": "220 13% 91%",
-        "sidebar-ring": "15.5 13.2% 53.9%"
-      }
+      "cssVariables": {}
     },
     "dark": {
       "label": "%theme_label_user_dark%",
