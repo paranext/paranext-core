@@ -7,8 +7,16 @@ import { safeStorage } from 'electron';
 
 /** If encryption is not available, return reason why. If encryption is available, return `undefined` */
 function getReasonEncryptionIsNotAvailable() {
-  if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')
-    return 'safeStorage did not find a keyring service it could use for encryption. Please install a supported service. See https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux#install-a-keyring-service for more information';
+  if (process.platform === 'linux') {
+    const backend = safeStorage.getSelectedStorageBackend();
+    if (!backend || backend === 'basic_text') {
+      if (process.env.ALLOW_BASIC_TEXT_KEYRING === 'true') {
+        safeStorage.setUsePlainTextEncryption(true);
+        return undefined;
+      }
+      return 'safeStorage did not find a keyring service it could use for encryption. Please install a supported service. See https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux#install-a-keyring-service for more information';
+    }
+  }
   if (!safeStorage.isEncryptionAvailable()) {
     return 'safeStorage.isEncryptionAvailable returned false';
   }
