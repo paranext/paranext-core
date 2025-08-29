@@ -5,7 +5,7 @@ import {
   type MarkerContent,
   type MarkerObject,
   type Usj,
-} from '@biblionexus-foundation/scripture-utilities';
+} from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { JSONPath } from 'jsonpath-plus';
 import {

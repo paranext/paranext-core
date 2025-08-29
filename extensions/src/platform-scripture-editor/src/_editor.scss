@@ -152,48 +152,48 @@
   color: #dd4a68;
 }
 
-.editor-typed-mark-spelling {
+.editor-typed-mark-external-spelling {
   background: inherit;
   text-decoration: underline wavy red;
 }
 
-.editor-typed-mark-grammar {
+.editor-typed-mark-external-grammar {
   background: inherit;
   text-decoration: underline wavy grey;
 }
 
-.editor-typed-mark-other {
+.editor-typed-mark-external-other {
   background: inherit;
   text-decoration: underline wavy green;
 }
 
-.editor-typed-mark-spelling.editor-typed-mark-grammar {
+.editor-typed-mark-external-spelling.editor-typed-mark-external-grammar {
   text-decoration-color: rgb(192, 64, 64);
 }
 
-.editor-typed-mark-spelling.editor-typed-mark-grammar.editor-typed-mark-other {
+.editor-typed-mark-external-spelling.editor-typed-mark-external-grammar.editor-typed-mark-external-other {
   text-decoration-color: rgb(128, 85, 43);
 }
 
-.editor-typed-mark-comment {
+.editor-typed-mark-internal-comment {
   background: rgba(255, 212, 0, 0.14);
   border-bottom: 2px solid rgba(255, 212, 0, 0.3);
   padding-bottom: 2px;
 }
 
-.editor-typed-mark-comment.selected {
+.editor-typed-mark-internal-comment.selected {
   background: rgba(255, 212, 0, 0.5);
   border-bottom: 2px solid rgba(255, 212, 0, 1);
 }
 
 /* stylelint-disable-next-line selector-class-pattern */
-.editor-typed-markOverlap-comment {
+.editor-typed-markOverlap-internal-comment {
   background: rgba(255, 212, 0, 0.3);
   border-bottom: 2px solid rgba(255, 212, 0, 0.7);
 }
 
 /* stylelint-disable-next-line selector-class-pattern */
-.editor-typed-markOverlap-comment.selected {
+.editor-typed-markOverlap-internal-comment.selected {
   background: rgba(255, 212, 0, 0.7);
   border-bottom: 2px solid rgba(255, 212, 0, 0.7);
 }

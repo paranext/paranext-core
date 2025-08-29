@@ -62,8 +62,6 @@
     "react-dom": ">=18.3.1"
   },
   "dependencies": {
-    "@biblionexus-foundation/platform-editor": "~0.7.12",
-    "@biblionexus-foundation/scripture-utilities": "~0.1.0",
     "@radix-ui/react-avatar": "^1.1.9",
     "@radix-ui/react-checkbox": "^1.3.1",
     "@radix-ui/react-context-menu": "^2.2.15",
@@ -105,6 +103,8 @@
     "@babel/preset-react": "^7.26.3",
     "@babel/preset-typescript": "^7.26.0",
     "@chromatic-com/storybook": "^4.0.0",
+    "@eten-tech-foundation/platform-editor": "~0.8.0",
+    "@eten-tech-foundation/scripture-utilities": "~0.1.1",
     "@senojs/rollup-plugin-style-inject": "^0.2.3",
     "@storybook/addon-a11y": "9.0.17",
     "@storybook/addon-docs": "9.0.17",

@@ -1,4 +1,4 @@
-import { type MarkerContent, type MarkerObject } from '@biblionexus-foundation/scripture-utilities';
+import { type MarkerContent, type MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** USJ content node type for a chapter */
