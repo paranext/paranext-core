@@ -204,7 +204,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-list {
   position: relative;
   gap: vars.$space--xs;
-  padding-top: var(--tab-header-to-content-gap);
+  padding-block-start: var(--tab-header-to-content-gap);
   height: var(--dock-tab-height);
 }
 
@@ -250,13 +250,13 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   border: unset;
 
   --dock-tab-height: 30px; // also from rc-dock
-  height: calc(var(--dock-tab-height) + 6px);
+  height: calc(var(--dock-tab-height) + var(--tab-header-to-content-gap));
 
   display: flex;
   align-items: center;
   flex: 1 0 auto;
   max-width: max-content;
-  background-color: transparent;
+  background-color: unset; // reset rc-dock color
 
   transition:
     background-color 0.1s,
@@ -276,7 +276,6 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   &.platform-dock-tab-window-focus {
     // TODO these two properties should get the same level of abstraction
     --tab-background: var(--tab-front-focus-within);
-    background-color: var(--tab-background);
     color: hsl(var(--primary-foreground));
 
     outline: none;
@@ -297,12 +296,14 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   }
 }
 
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active .dock-tab-btn {
-  background-color: transparent;
+.dock-layout
+  .dock-panel.dock-style-platform-bible
+  .dock-tab:not(.dock-tab-active)
+  .dock-tab-btn:hover {
+  background-color: var(--tab-highlight);
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn {
-  background-color: var(--tab-background);
   border-radius: var(--radius);
   padding: unset;
   box-sizing: border-box;
