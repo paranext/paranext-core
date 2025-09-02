@@ -16,6 +16,7 @@ const localServerPort = process.env.LOCAL_OAUTH_SERVER_PORT
 export async function startLocalOAuthServer(): Promise<void> {
   // We only need this for development and testing purposes. Don't run it in production.
   if (globalThis.isPackaged) return;
+  if (process.env.ENABLE_LOCAL_OAUTH_SERVER?.toLowerCase() !== 'true') return;
 
   return new Promise((resolve, reject) => {
     localServer = createServer(async (req, res) => {
