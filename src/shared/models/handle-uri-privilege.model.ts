@@ -34,6 +34,11 @@ export type HandleUri = {
    * Note: There is currently no check in place to guarantee that a call to this handler will only
    * come from navigating to the uri; a process connecting over the PAPI WebSocket could fake a call
    * to this handler. However, there is no expectation for this to happen.
+   *
+   * Note: In a development environment, localhost-based redirect URIs can be used instead of app
+   * name-based redirect URIs. These localhost-based URIs are passed to all extensions that have
+   * registered any URI handler. That means in a development environment, extensions may have access
+   * to URI data intended for other extensions for localhost-based redirect URIs.
    */
   registerUriHandler: RegisterUriHandler;
   /**
@@ -48,7 +53,7 @@ export type HandleUri = {
    *   manifest
    * - `<extension-name>` is the name of this extension as specified in the extension manifest
    *
-   * NOTE: In a development environment, other `redirectUri` structures are possible, such as
+   * Note: In a development environment, other `redirectUri` structures are possible, such as
    * localhost-based URIs. These alternative URI structures will not be used in packaged
    * applications by end users.
    *
