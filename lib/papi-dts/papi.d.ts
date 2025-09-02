@@ -6197,8 +6197,8 @@ declare module 'shared/models/handle-uri-privilege.model' {
      * extension. Each extension can only register one uri handler at a time.
      *
      * Each extension has its own exclusive URI that it can handle. Extensions cannot handle each
-     * others' URIs. The URIs this extension's handler will receive will have the following
-     * structure:
+     * others' URIs outside of a development environment. The URIs this extension's handler will
+     * receive will have the following structure:
      *
      *     `<redirect-uri><additional-data>`;
      *
@@ -6225,6 +6225,10 @@ declare module 'shared/models/handle-uri-privilege.model' {
      * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
      *   manifest
      * - `<extension-name>` is the name of this extension as specified in the extension manifest
+     *
+     * NOTE: In a development environment, other `redirectUri` structures are possible, such as
+     * localhost-based URIs. These alternative URI structures will not be used in packaged
+     * applications by end users.
      *
      * Additional data can be added to the end of the URI; this is just the scheme and authority. See
      * {@link HandleUri.registerUriHandler} for more information.
