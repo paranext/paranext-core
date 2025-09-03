@@ -247,6 +247,21 @@ npm run bump-versions -- 0.2.0 --marketing-version β1 --marketing-version-monik
 
 Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
 
+### Publishing problems
+
+Following are some problems you may encounter while publishing and steps to solve them.
+
+#### `@swc/core` Failed to load native binding
+
+If you see the following error in the GitHub Actions workflow logs while packaging:
+
+```
+Module build failed (from ./node_modules/swc-loader/src/index.js):
+Error: Failed to load native binding
+```
+
+Please see ["Failed to load native binding" in the Troubleshooting guide for how to solve this problem](https://github.com/paranext/paranext/wiki/Troubleshooting-Guide#failed-to-load-native-binding).
+
 ## Testing
 
 The following tests run automatically on each GitHub PR (see [test.yml](https://github.com/paranext/paranext-core/blob/main/.github/workflows/test.yml)).
