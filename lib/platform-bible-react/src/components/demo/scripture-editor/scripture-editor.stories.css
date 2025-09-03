@@ -1,10 +1,9 @@
 /*
  * WARNING: This CSS file is for DEMO PURPOSES ONLY
- * 
+ *
  * This stylesheet is part of a demo component used in Storybook.
  * For production applications, use the Scripture Editor component from:
- * - @biblionexus-foundation/platform-editor
- * - @eten-foundation/platform-editor
+ * - @eten-tech-foundation/platform-editor
  *
  * Copied from paranext-core/extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.scss
  */
@@ -12,9 +11,9 @@
 @import './usj-nodes.css';
 /* @import './commenting.css'; */
 @import './editor.css';
-@import './editor-overrides.css';
-/* @import './nodes-menu.css'; */
+@import './nodes-menu.css';
 /* @import './tailwind.css'; */
+@import './editor-overrides.css';
 
 body {
   background-color: hsl(var(--background));
