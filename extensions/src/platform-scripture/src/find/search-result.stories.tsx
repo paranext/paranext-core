@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import SearchResult, { SearchResultProps } from './search-result.component';
-import { ReactElement } from 'react';
+import { ReactElement, useState } from 'react';
+import { LocalizeKey } from 'platform-bible-utils';
 
 const meta: Meta<typeof SearchResult> = {
   title: 'Bundled Extensions/platform-scripture/search-result',
@@ -13,10 +14,19 @@ export default meta;
 
 type Story = StoryObj<typeof SearchResult>;
 
+const localizedBookData = new Map([['GEN', { localizedId: 'Genesis' }]]);
+const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 }; // mock verseRef object
+const currentVerseUsfm = '\\v1 In the beginning God created the heavens and the earth.'; // mock usfm text
+const text = 'In the beginning'; // mock verse text
+type LocalizedStrings = Record<LocalizeKey, string>;
+const dummyLocalizedStrings = (keys: LocalizeKey[]): [LocalizedStrings, boolean] => [
+  Object.fromEntries(keys.map((k) => [k, k])) as LocalizedStrings,
+  false,
+];
+
 function DefaultDecorator(Story: (update?: { args: SearchResultProps }) => ReactElement) {
-  const localizedBookData = new Map([['GEN', { localizedId: 'Genesis' }]]);
-  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 }; // mock verseRef object
-  const text = 'In the beginning God created the heavens and the earth.'; // mock text
+  const [selectedResult, setSelectedResult] = useState<number | undefined>();
+
   return (
     <>
       <Story
@@ -28,10 +38,11 @@ function DefaultDecorator(Story: (update?: { args: SearchResultProps }) => React
           },
           occurrenceInVerseIndex: 0,
           globalResultsIndex: 0,
-          isSelected: false,
-          projectId: 'project-id',
-          onResultClick: () => {},
+          isSelected: selectedResult === 0,
+          onResultClick: () => setSelectedResult(selectedResult === 0 ? undefined : 0),
           onHideResult: () => {},
+          useLocalizedStrings: dummyLocalizedStrings,
+          currentVerseUsfm,
         }}
       />
       <Story
@@ -42,11 +53,12 @@ function DefaultDecorator(Story: (update?: { args: SearchResultProps }) => React
             text,
           },
           occurrenceInVerseIndex: 0,
-          globalResultsIndex: 0,
-          isSelected: true,
-          projectId: 'project-id',
-          onResultClick: () => {},
+          globalResultsIndex: 1,
+          isSelected: selectedResult === 1,
+          onResultClick: () => setSelectedResult(selectedResult === 1 ? undefined : 1),
           onHideResult: () => {},
+          useLocalizedStrings: dummyLocalizedStrings,
+          currentVerseUsfm,
         }}
       />
     </>

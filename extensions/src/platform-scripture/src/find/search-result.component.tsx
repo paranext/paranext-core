@@ -1,5 +1,5 @@
+import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useLocalizedStrings, useProjectData } from 'renderer/hooks/papi-hooks/index';
 import { Copy, MoreVertical, X } from 'lucide-react';
 import {
   Button,
@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useMemo } from 'react';
 
@@ -33,8 +33,6 @@ export interface SearchResultProps {
   globalResultsIndex: number;
   /** Whether this search result is currently selected/focused */
   isSelected: boolean;
-  /** The ID of the project being searched */
-  projectId: string | undefined;
   /** Map of book ids to their localized display names */
   localizedBookData: Map<string, { localizedId: string }>;
   /** The index of this occurrence within the verse (for multiple matches in same verse) */
@@ -50,6 +48,33 @@ export interface SearchResultProps {
   ) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
+
+  /**
+   * From papi Gets localizations on the papi.
+   *
+   * @param localizationKeys Array of keys to get localizations of
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param localizationLocales Array of localization languages to look up the keys in
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[localizedStrings]`
+   *
+   *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
+   *       state on the papi, if any
+   */
+  useLocalizedStrings: (keys: LocalizeKey[]) => [Record<LocalizeKey, string>, boolean];
+
+  /** The USFM text of the verse containing this search result, if available */
+  currentVerseUsfm: string | undefined;
 }
 
 const countWords = (text: string): number => {
@@ -78,33 +103,22 @@ export default function SearchResult({
   searchResult,
   globalResultsIndex,
   isSelected,
-  projectId,
   localizedBookData,
   occurrenceInVerseIndex,
   onResultClick,
   onHideResult,
+  useLocalizedStrings,
+  currentVerseUsfm,
 }: SearchResultProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => SEARCH_RESULT_LOCALIZED_STRINGS, []),
   );
 
-  const [currentProjectVersePossiblyError] = useProjectData(
-    'platformScripture.USFM_Verse',
-    projectId ?? undefined,
-  ).VerseUSFM(searchResult.verseRef, localizedStrings['%webView_find_loadingVerseText%']);
-
-  const focusedVerseText = useMemo(() => {
-    if (isPlatformError(currentProjectVersePossiblyError)) {
-      return getErrorMessage(currentProjectVersePossiblyError);
-    }
-    return currentProjectVersePossiblyError;
-  }, [currentProjectVersePossiblyError]);
-
   /** Start and end index for the occurrence in the verse */
   const occurrenceTextPosition = useMemo(() => {
-    if (!focusedVerseText || !searchResult.text) return undefined;
+    if (!currentVerseUsfm || !searchResult.text) return undefined;
 
-    const lowerFocusedVerseText = focusedVerseText.toLowerCase();
+    const lowerFocusedVerseText = currentVerseUsfm.toLowerCase();
     const lowerResultText = searchResult.text.toLowerCase();
     const occurrences: number[] = [];
     let searchIndex = 0;
@@ -124,7 +138,7 @@ export default function SearchResult({
     if (targetOccurrenceIndex === undefined) return undefined;
 
     return { start: targetOccurrenceIndex, end: targetOccurrenceIndex + searchResult.text.length };
-  }, [focusedVerseText, occurrenceInVerseIndex, searchResult.text]);
+  }, [currentVerseUsfm, occurrenceInVerseIndex, searchResult.text]);
 
   /**
    * Highlights the search term within the verse text by wrapping the specified occurrence in a
@@ -133,14 +147,14 @@ export default function SearchResult({
    * @returns The verse text with the search term highlighted, or plain text if not selected
    */
   const getFocusedVerseText = () => {
-    if (!focusedVerseText || !occurrenceTextPosition || !isSelected) return undefined;
+    if (!currentVerseUsfm || !occurrenceTextPosition || !isSelected) return undefined;
 
-    let beforeText = focusedVerseText.substring(0, occurrenceTextPosition.start);
-    const matchText = focusedVerseText.substring(
+    let beforeText = currentVerseUsfm.substring(0, occurrenceTextPosition.start);
+    const matchText = currentVerseUsfm.substring(
       occurrenceTextPosition.start,
       occurrenceTextPosition.end,
     );
-    let afterText = focusedVerseText.substring(occurrenceTextPosition.end);
+    let afterText = currentVerseUsfm.substring(occurrenceTextPosition.end);
 
     if (countWords(beforeText) > 50) {
       beforeText = truncateText(beforeText, 50, true);
@@ -165,12 +179,12 @@ export default function SearchResult({
   };
 
   const handleCopyVerseText = () => {
-    if (focusedVerseText) navigator.clipboard.writeText(focusedVerseText);
+    if (currentVerseUsfm) navigator.clipboard.writeText(currentVerseUsfm);
   };
 
   const handleCopyReferenceAndVerseText = () => {
     navigator.clipboard.writeText(
-      `${searchResult.verseRef.book} ${searchResult.verseRef.chapterNum}:${searchResult.verseRef.verseNum} - ${focusedVerseText ?? localizedStrings['%webView_find_noVerseTextAvailable%']}`,
+      `${searchResult.verseRef.book} ${searchResult.verseRef.chapterNum}:${searchResult.verseRef.verseNum} - ${currentVerseUsfm ?? localizedStrings['%webView_find_noVerseTextAvailable%']}`,
     );
   };
 
