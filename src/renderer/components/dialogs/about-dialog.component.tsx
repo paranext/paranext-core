@@ -57,35 +57,37 @@ function AboutDialog() {
   if (appInfo.version) packageInfo.version = appInfo.version;
 
   return (
-    <div className="about">
-      <InlineLogoAndName className="about-logo" />
-      <h1 className="about-title">{productName}</h1>
-      <p className="about-description">{packageInfo.description}</p>
-      <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
-      <p className="about-license">{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
-      <p className="about-attribution">
-        Copyright ©2017-2025 SIL Global and United Bible Societies
-      </p>
-      <p className="about-db-ip-attribution">
-        {formatReplacementStringToArray(dbIpAttributionFormat, {
-          intro: dbIpAttributionIntro,
-          websiteLink: (
-            <a target="_blank" rel="noreferrer" href={DB_IP_WEBSITE_LINK}>
-              {DB_IP_WEBSITE_NAME}
-            </a>
-          ),
-          license: DB_IP_LICENSE,
-          terms: (
-            <a target="_blank" rel="noreferrer" href={DB_IP_ATTRIBUTION_LINK}>
-              {dbIpAttributionTerms}
-            </a>
-          ),
-        }).map((contribution, index) => (
-          // We can use index as key here because the array is static and will not change.
-          // eslint-disable-next-line react/no-array-index-key
-          <Fragment key={`key-${index}`}>{contribution}</Fragment>
-        ))}
-      </p>
+    <div className="about-scroll-container">
+      <div className="about-content">
+        <InlineLogoAndName className="about-logo" />
+        <h1 className="about-title">{productName}</h1>
+        <p className="about-description">{packageInfo.description}</p>
+        <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
+        <p className="about-license">{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
+        <p className="about-attribution">
+          Copyright ©2017-2025 SIL Global and United Bible Societies
+        </p>
+        <p className="about-db-ip-attribution">
+          {formatReplacementStringToArray(dbIpAttributionFormat, {
+            intro: dbIpAttributionIntro,
+            websiteLink: (
+              <a target="_blank" rel="noreferrer" href={DB_IP_WEBSITE_LINK}>
+                {DB_IP_WEBSITE_NAME}
+              </a>
+            ),
+            license: DB_IP_LICENSE,
+            terms: (
+              <a target="_blank" rel="noreferrer" href={DB_IP_ATTRIBUTION_LINK}>
+                {dbIpAttributionTerms}
+              </a>
+            ),
+          }).map((contribution, index) => (
+            // We can use index as key here because the array is static and will not change.
+            // eslint-disable-next-line react/no-array-index-key
+            <Fragment key={`key-${index}`}>{contribution}</Fragment>
+          ))}
+        </p>
+      </div>
     </div>
   );
 }

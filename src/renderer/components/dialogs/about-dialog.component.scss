@@ -1,12 +1,18 @@
-.about {
+.about-scroll-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto; // Allow scrolling if content is too tall
+}
+
+.about-content {
   align-self: center;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 100%; // Needed to vertical center in big containers
   max-width: 448px; // tw-max-w-md equivalent
-  overflow-y: auto; // Allow scrolling if content is too tall
-  overflow-x: clip;
   padding-inline: clamp(1rem, 10vw, 4rem);
   padding-block: clamp(1rem, 10vh, 4rem);
   gap: 0.25rem;
@@ -14,11 +20,11 @@
   box-sizing: border-box; // Include padding in width calculations
 }
 
-:where(.about) > * {
+:where(.about-content) > * {
   margin-block: unset; // Reset default (16px) margins on all children. Maybe this should be in a CSS reset instead?
 }
 
-:where(.about) p {
+:where(.about-content) p {
   line-height: 1.6; // Arbitrary, but improves readability
   margin-block-end: 0.5rem; // Space between paragraphs
 }
