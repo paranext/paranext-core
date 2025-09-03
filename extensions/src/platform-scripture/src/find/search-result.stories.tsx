@@ -14,22 +14,42 @@ export default meta;
 type Story = StoryObj<typeof SearchResult>;
 
 function DefaultDecorator(Story: (update?: { args: SearchResultProps }) => ReactElement) {
+  const localizedBookData = new Map([['GEN', { localizedId: 'Genesis' }]]);
+  const verseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 }; // mock verseRef object
+  const text = 'In the beginning God created the heavens and the earth.'; // mock text
   return (
-    <Story
-      args={{
-        localizedBookData: new Map([['GEN', { localizedId: 'Genesis' }]]),
-        searchResult: {
-          verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, // mock verseRef object
-          text: 'In the beginning God created the heavens and the earth.', // mock text
-        },
-        occurrenceInVerseIndex: 0,
-        globalResultsIndex: 0,
-        isSelected: false,
-        projectId: 'project-id',
-        onResultClick: () => {},
-        onHideResult: () => {},
-      }}
-    />
+    <>
+      <Story
+        args={{
+          localizedBookData,
+          searchResult: {
+            verseRef,
+            text,
+          },
+          occurrenceInVerseIndex: 0,
+          globalResultsIndex: 0,
+          isSelected: false,
+          projectId: 'project-id',
+          onResultClick: () => {},
+          onHideResult: () => {},
+        }}
+      />
+      <Story
+        args={{
+          localizedBookData,
+          searchResult: {
+            verseRef,
+            text,
+          },
+          occurrenceInVerseIndex: 0,
+          globalResultsIndex: 0,
+          isSelected: true,
+          projectId: 'project-id',
+          onResultClick: () => {},
+          onHideResult: () => {},
+        }}
+      />
+    </>
   );
 }
 
