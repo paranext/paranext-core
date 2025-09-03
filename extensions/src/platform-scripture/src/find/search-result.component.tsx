@@ -1,5 +1,5 @@
-import { useLocalizedStrings, useProjectData } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { useLocalizedStrings, useProjectData } from 'renderer/hooks/papi-hooks/index';
 import { Copy, MoreVertical, X } from 'lucide-react';
 import {
   Button,
@@ -26,7 +26,7 @@ const SEARCH_RESULT_LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 /** Props interface for the SearchResult component */
-interface SearchResultProps {
+export interface SearchResultProps {
   /** The search result data to display */
   searchResult: HidableFindResult;
   /** The global index of this result in the complete search results list */
@@ -235,7 +235,9 @@ export default function SearchResult({
         </div>
 
         {isSelected && (
-          <div className="tw-mt-2 tw-text-sm tw-text-muted-foreground">{getFocusedVerseText()}</div>
+          <div className="tw-mt-2 tw-text-sm tw-text-muted-foreground tw-break-words">
+            {getFocusedVerseText()}
+          </div>
         )}
       </CardContent>
     </Card>
