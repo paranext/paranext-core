@@ -488,22 +488,20 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const DefaultVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+  const verseRef: SerializedVerseRef =
+    (focusedResultIndex && results?.at(focusedResultIndex)?.verseRef) || DefaultVerseRef;
+  const [currentProjectVersePossiblyError] = useProjectData(
+    'platformScripture.USFM_Verse',
+    projectId ?? undefined,
+  ).VerseUSFM(verseRef, localizedStrings['%webView_find_loadingVerseText%']);
+
   const currentVerseUsfm = useMemo(() => {
-    if (!results || focusedResultIndex === undefined) return;
-    const currentResult = results.at(focusedResultIndex);
-    const verseRef = currentResult?.verseRef;
-    if (!verseRef) return;
-
-    const [currentProjectVersePossiblyError] = useProjectData(
-      'platformScripture.USFM_Verse',
-      'projectId',
-    ).VerseUSFM(verseRef, localizedStrings['%webView_find_loadingVerseText%']);
-
     if (isPlatformError(currentProjectVersePossiblyError)) {
       return getErrorMessage(currentProjectVersePossiblyError);
     }
     return currentProjectVersePossiblyError;
-  }, [focusedResultIndex, results, localizedStrings]);
+  }, [currentProjectVersePossiblyError]);
 
   return (
     <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
