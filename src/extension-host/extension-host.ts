@@ -20,6 +20,7 @@ import { initialize as initializeLocalizationService } from '@extension-host/ser
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
+import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
@@ -71,6 +72,7 @@ process.on('unhandledRejection', (reason) => {
       initializeSettingsService(),
       startProjectSettingsService(),
       initializeDatabaseService(),
+      startLocalOAuthServer(),
     ]);
 
     // The extension service locks down importing other modules, so be careful what runs after it

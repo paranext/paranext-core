@@ -32,6 +32,9 @@ export {
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
 
+// Enums
+export { Section } from './scripture-util';
+
 // Functions
 export {
   createSyncProxyForAsyncObject,
@@ -52,6 +55,7 @@ export {
   compareScrRefs,
   formatScrRef,
   getLocalizedIdFromBookNumber,
+  getSectionForBook,
   normalizeScriptureSpaces,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,

@@ -1,5 +1,6 @@
 declare module 'platform-scripture-editor' {
-  // Used in JSDocs
+  import { SelectionRange as PlatformEditorSelectionRange } from '@eten-tech-foundation/platform-editor';
+  // Used in TSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { CheckLocation } from 'platform-scripture';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -8,20 +9,11 @@ declare module 'platform-scripture-editor' {
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
 
-  // #region copied from @biblionexus-foundation/platform-editor because they are not yet properly
-  // exported
-
-  type UsjLocation = {
-    jsonPath: string;
-    offset: number;
-  };
-
-  export type SelectionRange = {
-    start: UsjLocation;
-    end?: UsjLocation;
-  };
-
-  // #endregion
+  /**
+   * @deprecated 4 September 2025. Use `SelectionRange` from '@eten-tech-foundation/platform-editor'
+   *   instead.
+   */
+  export type SelectionRange = PlatformEditorSelectionRange;
 
   /** Tell the editor to select a specific range */
   export type EditorMessageSelectRange = {

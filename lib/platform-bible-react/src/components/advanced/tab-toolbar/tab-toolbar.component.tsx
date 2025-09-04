@@ -67,7 +67,7 @@ export function TabToolbar({
   menuButtonIcon,
 }: TabToolbarProps) {
   return (
-    <TabToolbarContainer className={`tw-w-full tw-border tw-bg-background ${className}`} id={id}>
+    <TabToolbarContainer className={`tw-w-full tw-border ${className}`} id={id}>
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}

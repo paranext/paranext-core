@@ -1,6 +1,6 @@
 @use '../../styles/vars';
 
-.title {
+.platform-tab-title {
   display: flex;
   align-items: center;
   gap: 0.25rem; // tw-gap-1
@@ -14,12 +14,12 @@
   background: transparent;
   background-image: url('/assets/icon.png');
   background-size: 100%;
-  width: vars.$space--m;
-  height: vars.$space--m;
+  width: vars.$space--md;
+  height: vars.$space--md;
   vertical-align: middle;
 }
 
-.tooltip {
+.platform-tab-tooltip {
   white-space: pre-wrap;
   z-index: 250;
 }

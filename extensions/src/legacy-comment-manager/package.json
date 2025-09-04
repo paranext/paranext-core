@@ -1,7 +1,7 @@
 {
   "name": "legacy-comment-manager",
   "private": true,
-  "version": "0.5.0-alpha.1",
+  "version": "0.6.0-alpha.0",
   "main": "src/main.js",
   "types": "src/types/legacy-comment-manager.d.ts",
   "author": "Paranext",
@@ -39,7 +39,7 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@biblionexus-foundation/scripture-utilities": "~0.1.0",
+    "@eten-tech-foundation/scripture-utilities": "~0.1.1",
     "@swc/core": "1.13.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^20.17.10",

@@ -33,7 +33,7 @@ import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
  * will be used instead.
  */
 export async function subscribeCurrentMacosMenubar() {
-  await menuDataService.subscribeUnlocalizedMainMenu(
+  return menuDataService.subscribeUnlocalizedMainMenu(
     undefined,
     async (menuContent: MultiColumnMenu | PlatformError) => {
       let currentMacosMenubarTemplate;

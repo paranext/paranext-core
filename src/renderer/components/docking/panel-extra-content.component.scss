@@ -1,14 +1,4 @@
-@use '../../styles/vars';
-
-// Base class for panel buttons with shared styles
-%panel-button-base {
-  height: 24px;
-  width: 32px;
-
-  &:hover {
-    background-color: hsl(var(--muted-foreground));
-  }
-}
+@use './dock-panel-button-base';
 
 .new-tab-button {
   @extend %panel-button-base;

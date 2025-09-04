@@ -19,8 +19,8 @@ export type HandleUri = {
    * extension. Each extension can only register one uri handler at a time.
    *
    * Each extension has its own exclusive URI that it can handle. Extensions cannot handle each
-   * others' URIs. The URIs this extension's handler will receive will have the following
-   * structure:
+   * others' URIs outside of a development environment. The URIs this extension's handler will
+   * receive will have the following structure:
    *
    *     `<redirect-uri><additional-data>`;
    *
@@ -34,6 +34,11 @@ export type HandleUri = {
    * Note: There is currently no check in place to guarantee that a call to this handler will only
    * come from navigating to the uri; a process connecting over the PAPI WebSocket could fake a call
    * to this handler. However, there is no expectation for this to happen.
+   *
+   * Note: In a development environment, localhost-based redirect URIs can be used instead of app
+   * name-based redirect URIs. These localhost-based URIs are passed to all extensions that have
+   * registered any URI handler. That means in a development environment, extensions may have access
+   * to URI data intended for other extensions for localhost-based redirect URIs.
    */
   registerUriHandler: RegisterUriHandler;
   /**
@@ -47,6 +52,10 @@ export type HandleUri = {
    * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
    *   manifest
    * - `<extension-name>` is the name of this extension as specified in the extension manifest
+   *
+   * Note: In a development environment, other `redirectUri` structures are possible, such as
+   * localhost-based URIs. These alternative URI structures will not be used in packaged
+   * applications by end users.
    *
    * Additional data can be added to the end of the URI; this is just the scheme and authority. See
    * {@link HandleUri.registerUriHandler} for more information.
