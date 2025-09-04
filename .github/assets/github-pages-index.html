@@ -406,6 +406,20 @@
         font-size: 0.875em;
       }
 
+      /* Footer */
+      footer {
+        margin-top: 4rem;
+        padding: 2rem 0;
+        background-color: hsl(var(--muted));
+        border-top: 1px solid hsl(var(--border));
+        text-align: center;
+      }
+
+      .footer-content {
+        color: hsl(var(--muted-foreground));
+        font-size: 0.875rem;
+      }
+
       /* Responsive Design */
       @media (max-width: 768px) {
         .container {
@@ -716,5 +730,11 @@
         </div>
       </section>
     </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-content">© SIL Global and United Bible Societies</div>
+      </div>
+    </footer>
   </body>
 </html>
