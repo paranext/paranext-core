@@ -13,6 +13,42 @@
     />
     <title>Platform.Bible API</title>
     <style>
+      /* Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme*/
+      .paratext-light {
+        /* Copied from Paratext Dark theme for Shadcn/ui */
+        --background: 0 0% 97.6471%;
+        --foreground: 0 0% 12.549%;
+        --muted: 0 0% 93.7255%;
+        --muted-foreground: 0 0% 39.2157%;
+        --popover: 0 0% 98.8235%;
+        --popover-foreground: 0 0% 12.549%;
+        --card: 0 0% 98.8235%;
+        --card-foreground: 0 0% 12.549%;
+        --border: 0 0% 84.7059%;
+        --input: 0 0% 84.7059%;
+        --primary: 171.4286 81.8182% 15.098%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 34.0541 100% 85.4902%;
+        --secondary-foreground: 16.2712 50.4274% 22.9412%;
+        --accent: 0 0% 90.9804%;
+        --accent-foreground: 0 0% 12.549%;
+        --destructive: 10.1639 77.8723% 53.9216%;
+        --destructive-foreground: 0 0% 100%;
+        --ring: 16.6667 21.9512% 32.1569%;
+
+        /* WARN: in Shadcn files, `--sidebar-background` is `--sidebar`
+         * I recommend changing this to make it match Shadcn.
+         */
+        --sidebar-background: 0 0% 98.4314%;
+        --sidebar-foreground: 0 0% 14.5098%;
+        --sidebar-primary: 0 0% 20.3922%;
+        --sidebar-primary-foreground: 0 0% 98.4314%;
+        --sidebar-accent: 0 0% 93.7255%;
+        --sidebar-accent-foreground: 0 0% 20.3922%;
+        --sidebar-border: 0 0% 92.1569%;
+        --sidebar-ring: 0 0% 70.9804%;
+      }
+
       .paratext-dark {
         /* Copied from Paratext Dark theme for Shadcn/ui */
         --background: 0 0% 6.6667%;
@@ -34,6 +70,7 @@
         --destructive: 10.1639 77.8723% 53.9216%;
         --destructive-foreground: 0 0% 100%;
         --ring: 29.5082 100% 88.0392%;
+
         --sidebar-background: 240 5.8824% 10%;
         --sidebar-foreground: 240 4.7619% 95.8824%;
         --sidebar-primary: 224.2781 76.3265% 48.0392%;
@@ -110,7 +147,7 @@
       }
     </style>
   </head>
-  <body class="paratext-dark">
+  <body class="paratext-light">
     <h1>Platform.Bible API</h1>
     <ul class="button-list">
       <li class="link-item">
