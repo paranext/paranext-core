@@ -38,6 +38,7 @@ import {
   useLocalizedStrings,
   useProjectSetting,
   useScrollGroupScrRef,
+  useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
@@ -381,6 +382,8 @@ export function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
+
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
@@ -446,6 +449,8 @@ export function WebView({
               scrRef={scrRef}
               handleSubmit={setScrRef}
               getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+              recentSearches={recentScriptureRefs}
+              onAddRecentSearch={addRecentScriptureRef}
             />
           }
           endAreaChildren={
