@@ -1,4 +1,3 @@
-import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Copy, MoreVertical, X } from 'lucide-react';
 import {
