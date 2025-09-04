@@ -417,7 +417,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         <CardContent className="tw-flex-grow tw-overflow-auto">
           {isLoadingResources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-              <Label>{loadingText}</Label>
               <Spinner />
             </div>
           ) : (

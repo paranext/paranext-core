@@ -19,6 +19,12 @@ const styles = `
       display: table-cell !important;
     }
   }
+
+  @media (min-width: 340px) {
+    .min-\\[340px\\]\\:\\!tw-table-cell {
+      display: table-cell !important;
+    }
+  }
 `;
 const styleElement = document.createElement('style');
 styleElement.innerHTML = styles;

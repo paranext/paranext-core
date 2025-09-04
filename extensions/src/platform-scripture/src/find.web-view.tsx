@@ -487,6 +487,11 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const findButtonText =
+    localizedStrings['%webView_find_findButton%'] === '%webView_find_findButton%'
+      ? ''
+      : localizedStrings['%webView_find_findButton%'];
+
   return (
     <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
       {/* Header with searchbar and filters */}
@@ -527,13 +532,11 @@ global.webViewComponent = function FindWebView({
                   ) : (
                     <Button
                       onClick={handleStartSearch}
-                      disabled={!isSearchQueryValid || searchStatus === 'running'}
+                      disabled={
+                        !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                      }
                     >
-                      {searchStatus === 'running' ? (
-                        <Spinner />
-                      ) : (
-                        localizedStrings['%webView_find_findButton%']
-                      )}
+                      {searchStatus === 'running' ? <Spinner /> : findButtonText}
                     </Button>
                   )}
                 </TooltipTrigger>
