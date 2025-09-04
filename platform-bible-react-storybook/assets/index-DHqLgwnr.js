@@ -1,1 +1,0 @@
-import{r as c}from"./iframe-yPAa1VDz.js";import{u as d}from"./index-Cw0TAvo3.js";function u(r,e=globalThis==null?void 0:globalThis.document){const t=d(r);c.useEffect(()=>{const n=o=>{o.key==="Escape"&&t(o)};return e.addEventListener("keydown",n,{capture:!0}),()=>e.removeEventListener("keydown",n,{capture:!0})},[t,e])}export{u};
