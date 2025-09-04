@@ -5,44 +5,134 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap"
     />
     <title>Platform.Bible API</title>
     <style>
+      .paratext-dark {
+        /* Copied from Paratext Dark theme for Shadcn/ui */
+        --background: 0 0% 6.6667%;
+        --foreground: 0 0% 93.3333%;
+        --muted: 0 0% 13.3333%;
+        --muted-foreground: 0 0% 70.5882%;
+        --popover: 0 0% 9.8039%;
+        --popover-foreground: 0 0% 93.3333%;
+        --card: 0 0% 9.8039%;
+        --card-foreground: 0 0% 93.3333%;
+        --border: 45 14.2857% 10.9804%;
+        --input: 0 0% 28.2353%;
+        --primary: 40 85.7143% 97.2549%;
+        --primary-foreground: 183.1579 54.2857% 6.8627%;
+        --secondary: 28.2353 17.5258% 19.0196%;
+        --secondary-foreground: 29.5082 100% 88.0392%;
+        --accent: 0 0% 16.4706%;
+        --accent-foreground: 0 0% 93.3333%;
+        --destructive: 10.1639 77.8723% 53.9216%;
+        --destructive-foreground: 0 0% 100%;
+        --ring: 29.5082 100% 88.0392%;
+        --sidebar-background: 240 5.8824% 10%;
+        --sidebar-foreground: 240 4.7619% 95.8824%;
+        --sidebar-primary: 224.2781 76.3265% 48.0392%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 240 3.7037% 15.8824%;
+        --sidebar-accent-foreground: 240 4.7619% 95.8824%;
+        --sidebar-border: 240 3.7037% 15.8824%;
+        --sidebar-ring: 240 4.878% 83.9216%;
+      }
+
       body {
-        font-family: 'Roboto', sans-serif;
+        font-family: 'IBM Plex Sans', sans-serif;
         margin: 40px;
         padding: 20px;
-        background-color: #fcfcfc;
-        text-align: center;
+        height: 100dvh;
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        place-items: center;
       }
 
       h1 {
-        color: #121212;
-        font-weight: 700;
+        color: hsl(var(--foreground));
+        font-weight: 500;
       }
 
-      a {
+      ul {
+        list-style: none; /* removes bullets */
+        margin: 0; /* removes default margin */
+        padding: 0; /* removes default padding */
+      }
+
+      li {
+        margin: 0; /* removes default margin on list items */
+        padding: 0; /* optional: removes padding if any on list items */
+      }
+
+      .button-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .button-link {
+        /* Style as button link */
         display: inline-block;
-        margin: 20px 10px;
-        padding: 10px;
-        background-color: #a70e13;
-        color: #fcfcfc;
+        height: 64px;
+        width: 256px;
+        padding: 12px;
+        place-items: center;
+
         text-decoration: none;
-        border-radius: 5px;
+        background-color: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground));
+        font-weight: 300;
+        font-size: small;
+
+        border-radius: 6px;
         transition: background-color 0.3s ease;
       }
 
-      a:hover {
-        background-color: #830c14;
+      .button-link:hover {
+        background-color: hsl(var(--secondary) / 0.8);
+      }
+
+      code {
+        font-family: 'IBM Plex Mono', monospace;
+        white-space: nowrap;
+      }
+      strong,
+      strong code {
+        font-weight: 500;
+        font-size: large;
+        display: block;
       }
     </style>
   </head>
-  <body>
+  <body class="paratext-dark">
     <h1>Platform.Bible API</h1>
-    <a href="platform-bible-react/index.html">Go to platform-bible-react</a>
-    <a href="platform-bible-react-storybook">Open platform-bible-react in Storybook</a>
-    <a href="platform-bible-utils/index.html">Go to platform-bible-utils</a>
-    <a href="papi-dts/index.html">Go to papi-dts</a>
+    <ul class="button-list">
+      <li class="link-item">
+        <a class="button-link" href="platform-bible-react-storybook"
+          >Go to <strong>Storybook</strong> for <code>platform-bible-react</code></a
+        >
+      </li>
+      <li class="link-item">
+        <a class="button-link" href="platform-bible-react/index.html"
+          >Go to <strong><code>platform-bible-react</code></strong> API</a
+        >
+      </li>
+      <li class="link-item">
+        <a class="button-link" href="platform-bible-utils/index.html"
+          >Go to <strong><code>platform-bible-utils</code></strong> API</a
+        >
+      </li>
+      <li class="link-item">
+        <a class="button-link" href="papi-dts/index.html"
+          >Go to <strong><code>papi-dts</code></strong> API</a
+        >
+      </li>
+    </ul>
   </body>
 </html>
