@@ -48,7 +48,6 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
-  '%resources_loading%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
@@ -189,9 +188,9 @@ export function Home({
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
-  const itemsText: string = getLocalizedString('%resources_items%');
+  const itemsTextL10nKey = '%resources_items%';
+  const itemsText: string = getLocalizedString(itemsTextL10nKey);
   const languageText: string = getLocalizedString('%resources_language%');
-  const loadingText: string = getLocalizedString('%resources_loading%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
@@ -358,30 +357,31 @@ export function Home({
 
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-      <CardHeader className="tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2">
+      <CardHeader
+        className={`tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-p-4 ${showGetResourcesButton ? 'max-[300px]:!tw-pb-2' : 'max-[300px]:!tw-pb-0'}`}
+      >
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
-            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden">
+            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden max-[300px]:!tw-hidden">
               {headerContent}
             </div>
             <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
-          <div className="tw-self-end">
-            {showGetResourcesButton && (
+          {showGetResourcesButton && (
+            <div className="tw-self-end">
               <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
                 {`+ ${getResourcesText}`}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </CardHeader>
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
         <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
-          <Label>{loadingText}</Label>
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32">
+        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32 max-[300px]:!tw-px-4">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
@@ -427,7 +427,7 @@ export function Home({
                   </div>
                 ) : (
                   <Table stickyHeader>
-                    <TableHeader className="tw-bg-none" stickyHeader>
+                    <TableHeader className="tw-bg-none max-[300px]:tw-hidden" stickyHeader>
                       <TableRow>
                         <TableHead />
                         {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
@@ -443,8 +443,8 @@ export function Home({
                           onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
                           key={project.projectId}
                         >
-                          <TableCell>
-                            <div className="tw-flex tw-flex-row tw-items-center tw-ms-4 tw-gap-4">
+                          <TableCell className="max-[300px]:!tw-px-0">
+                            <div className="tw-flex tw-flex-row tw-items-center tw-gap-4">
                               {project.isEditable ? (
                                 <ScrollText
                                   className="tw-pr-0"
@@ -478,7 +478,7 @@ export function Home({
                                 )}
                             </TableCell>
                           )}
-                          <TableCell>
+                          <TableCell className="max-[300px]:tw-hidden">
                             <div className="tw-flex tw-justify-between tw-items-center">
                               {project.isSendReceivable &&
                               (!project.isLocallyAvailable || project.editedStatus === 'edited')
@@ -521,7 +521,7 @@ export function Home({
         </CardContent>
       )}
       <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:32rem)]:!tw-hidden">
-        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
+        <Label>{`${filteredAndSortedProjects.length} ${itemsText === itemsTextL10nKey ? '' : itemsText}`}</Label>
       </CardFooter>
     </Card>
   );
