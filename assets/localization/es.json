@@ -301,6 +301,7 @@
   "%webView_edit%": "Editar",
   "%webView_error_dump_header%": "Detalles del error",
   "%webView_error_dump_info_message%": "¿Necesita ayuda? Comparta esto con nuestro equipo de soporte técnico para ayudar a resolver el problema.",
+  "%webView_error_dump_copied_message%": "Error copiado en el portapapeles",
   "%webView_openProjectSettings%": "Abrir configuraciones del proyecto...",
   "%webView_project%": "Proyecto",
   "%webView_projectAssignmentsAndProgress%": "Asignaciones y progreso",
