@@ -56,7 +56,6 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
-  '%resources_loading%',
   '%resources_noResults%',
   '%resources_noResultsError%',
   '%resources_open%',
@@ -184,7 +183,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installedText: string = localizedStrings['%resources_installed%'];
   const languageText: string = localizedStrings['%resources_language%'];
   const languagesText: string = localizedStrings['%resources_languages%'];
-  const loadingText: string = localizedStrings['%resources_loading%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
   const noResultsErrorText: string = localizedStrings['%resources_noResultsError%'];
   const openText: string = localizedStrings['%resources_open%'];

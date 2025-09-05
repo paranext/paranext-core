@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Circle, ScrollText } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, ScrollText } from 'lucide-react';
 import {
   Button,
   Card,
