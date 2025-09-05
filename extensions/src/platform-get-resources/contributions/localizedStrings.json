@@ -2,11 +2,11 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
-      "%home_dialog_title%": "Home",
       "%new_tab_dialog_title%": "New Tab",
       "%resources_action%": "Action",
       "%resources_activity%": "Activity",
-      "%resources_any%": "Any",
+      "%resources_any_language%": "Any",
+      "%resources_any_type%": "Any",
       "%resources_clearSearch%": "Clear Search",
       "%resources_dialog_subtitle%": "Add resources to Home",
       "%resources_dialog_title%": "Get Resources",
@@ -45,15 +45,14 @@
       "%settings_get_resources_group1_label%": "Get Resources Project Settings",
       "%settings_get_resources_excludePdpFactoryIdsInHome_label%": "PDP Factory IDs to exclude in Home",
       "%settings_get_resources_excludePdpFactoryIdsInHome_description%": "List of PDP Factory IDs to exclude when searching for projects to display in the Home projects list",
-      "%mainMenu_openHome%": "Home...",
       "%mainMenu_open%": "Open..."
     },
     "es": {
-      "%home_dialog_title%": "Inicio",
       "%new_tab_dialog_title%": "Nueva pestaña",
       "%resources_action%": "Acción",
       "%resources_activity%": "Actividad",
-      "%resources_any%": "Cualquiera",
+      "%resources_any_language%": "Sin filtro",
+      "%resources_any_type%": "Sin filtro",
       "%resources_clearSearch%": "Borrar búsqueda",
       "%resources_dialog_subtitle%": "Agregar recursos a Inicio",
       "%resources_dialog_title%": "Obtener recursos",
@@ -64,14 +63,14 @@
       "%resources_getResources%": "Obtener recursos",
       "%resources_getStarted%": "Comenzar",
       "%resources_getStartedDescription%": "¿Esperaba más?",
-      "%resources_installed%": "Instalados",
+      "%resources_installed%": "Instalado",
       "%resources_items%": "elementos",
       "%resources_language%": "Idioma",
       "%resources_languages%": "Idiomas",
       "%resources_loading%": "Cargando...",
       "%resources_noProjects%": "Nada para mostrar",
       "%resources_noProjectsInstruction%": "Para comenzar, pide a un compañero que te agregue a un proyecto, o consigue recursos.",
-      "%resources_noSearchResults%": "No se encontró nada.",
+      "%resources_noSearchResults%": "No se encontraron resultados.",
       "%resources_noResults%": "No se encontraron resultados.",
       "%resources_noResultsError%": "Se produjo un error al buscar recursos.",
       "%resources_open%": "Abrir",
@@ -92,7 +91,6 @@
       "%settings_get_resources_group1_label%": "Obtención de recursos",
       "%settings_get_resources_excludePdpFactoryIdsInHome_label%": "IDs de PDP Factory a excluir en Inicio",
       "%settings_get_resources_excludePdpFactoryIdsInHome_description%": "Lista de IDs de PDP Factory a excluir al buscar proyectos para mostrar en la lista de proyectos de Inicio",
-      "%mainMenu_openHome%": "Inicio...",
       "%mainMenu_open%": "Abrir..."
     }
   }
