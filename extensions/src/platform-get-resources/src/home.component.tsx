@@ -1,21 +1,11 @@
-import {
-  BookOpen,
-  ChevronDown,
-  ChevronsUpDown,
-  ChevronUp,
-  Ellipsis,
-  ScrollText,
-} from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Circle, ScrollText } from 'lucide-react';
 import {
   Button,
   Card,
   CardContent,
   CardFooter,
   CardHeader,
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   Label,
   SearchBar,
   Spinner,
@@ -30,6 +20,7 @@ import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
+import { HomeItemDropdownMenu } from './home-item-menu';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -226,6 +217,7 @@ export function Home({
           language: project.language,
           isEditable: project.isEditable,
           isSendReceivable: false,
+          isLocallyAvailable: true,
         });
       }
     });
@@ -440,8 +432,15 @@ export function Home({
                     <TableBody>
                       {filteredAndSortedProjects.map((project) => (
                         <TableRow
-                          onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
+                          onDoubleClick={() =>
+                            project.isLocallyAvailable
+                              ? onOpenProject(project.projectId, project.isEditable)
+                              : isSendReceiveInProgress
+                                ? ''
+                                : onSendReceiveProject(project.projectId)
+                          }
                           key={project.projectId}
+                          className={project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}
                         >
                           <TableCell className="max-[300px]:!tw-px-0">
                             <div className="tw-flex tw-flex-row tw-items-center tw-gap-4">
@@ -458,8 +457,29 @@ export function Home({
                                   style={{ minWidth: '24px' }}
                                 />
                               )}
-                              <div className="tw-whitespace-nowrap tw-cursor-default">
-                                {project.name}
+
+                              <div className="tw-whitespace-nowrap tw-cursor-default tw-flex tw-gap-2 tw-items-center">
+                                {project.editedStatus === 'edited' && (
+                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2" />
+                                )}
+                                <span>{project.name}</span>
+                              </div>
+
+                              <div className="tw-grow tw-hidden max-[300px]:tw-flex">
+                                <div className="tw-grow" />
+                                <HomeItemDropdownMenu ellipsisButtonClassName="tw-h-6">
+                                  {(!project.isLocallyAvailable ||
+                                    project.editedStatus === 'edited') && (
+                                    <DropdownMenuItem asChild>
+                                      {syncOrGetButton(project, true)}
+                                    </DropdownMenuItem>
+                                  )}
+                                  {project.isLocallyAvailable && (
+                                    <DropdownMenuItem asChild>
+                                      {openButton(project, true)}
+                                    </DropdownMenuItem>
+                                  )}
+                                </HomeItemDropdownMenu>
                               </div>
                             </div>
                           </TableCell>
@@ -485,20 +505,13 @@ export function Home({
                                 ? syncOrGetButton(project)
                                 : openButton(project)}
                               {project.isSendReceivable && project.isLocallyAvailable && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost">
-                                      <Ellipsis className="tw-w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="start">
-                                    <DropdownMenuItem asChild>
-                                      {project.editedStatus === 'edited'
-                                        ? openButton(project, true)
-                                        : syncOrGetButton(project, true)}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                <HomeItemDropdownMenu>
+                                  <DropdownMenuItem asChild>
+                                    {project.editedStatus === 'edited'
+                                      ? openButton(project, true)
+                                      : syncOrGetButton(project, true)}
+                                  </DropdownMenuItem>
+                                </HomeItemDropdownMenu>
                               )}
                             </div>
                           </TableCell>
