@@ -2,7 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { Plus } from 'lucide-react';
-import { CardTitle } from 'platform-bible-react';
+import { CardTitle, Label } from 'platform-bible-react';
 import { isPlatformError } from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
@@ -28,12 +28,16 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
 
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
-      return [...Array.from(HOME_STRING_KEYS), '%new_tab_dialog_title%'];
+      return [...Array.from(HOME_STRING_KEYS), '%new_tab_dialog_title%', '%resources_loading%'];
     }, []),
   );
 
-  const openResource = (projectId: string, isEditable: boolean) =>
-    papi.commands.sendCommand(
+  const [projectLoading, setProjectLoading] = useState<boolean>(false);
+
+  const openResource = (projectId: string, isEditable: boolean) => {
+    setProjectLoading(true);
+
+    return papi.commands.sendCommand(
       isEditable
         ? 'platformScriptureEditor.openScriptureEditor'
         : 'platformScriptureEditor.openResourceViewer',
@@ -41,6 +45,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
       undefined,
       webViewId,
     );
+  };
 
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
@@ -96,20 +101,30 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
   }, [excludePdpFactoryIds]);
 
   const dialogTitleText: string = localizedStrings['%new_tab_dialog_title%'];
+  const loadingText: string = localizedStrings['%resources_loading%'];
 
   return (
-    <Home
-      localizedStrings={localizedStrings}
-      localProjectsInfo={localProjectsInfo}
-      isLoadingLocalProjects={isLoadingLocalProjects}
-      onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}
-      showGetResourcesButton={false}
-      headerContent={
-        <>
-          <Plus size={36} />
-          <CardTitle>{dialogTitleText}</CardTitle>
-        </>
-      }
-    />
+    <>
+      {projectLoading && (
+        <div className="tw-p-8">
+          <Label>{loadingText}</Label>
+        </div>
+      )}
+      {!projectLoading && (
+        <Home
+          localizedStrings={localizedStrings}
+          localProjectsInfo={localProjectsInfo}
+          isLoadingLocalProjects={isLoadingLocalProjects}
+          onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}
+          showGetResourcesButton={false}
+          headerContent={
+            <>
+              <Plus size={36} />
+              <CardTitle>{dialogTitleText}</CardTitle>
+            </>
+          }
+        />
+      )}
+    </>
   );
 };
