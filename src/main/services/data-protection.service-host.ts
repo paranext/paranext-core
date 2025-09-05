@@ -14,7 +14,7 @@ function getReasonEncryptionIsNotAvailable() {
         safeStorage.setUsePlainTextEncryption(true);
         return undefined;
       }
-      return 'safeStorage did not find a keyring service it could use for encryption. Please install a supported service. See https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux#install-a-keyring-service for more information';
+      return 'safeStorage did not find a keyring service it could use for encryption. Please install a supported service. See https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux#how-secrets-are-stored for more information';
     }
   }
   if (!safeStorage.isEncryptionAvailable()) {
