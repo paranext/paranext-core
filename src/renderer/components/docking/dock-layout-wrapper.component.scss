@@ -104,12 +104,14 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   background: none;
 }
 
-/* global dock layout styles */
+/* While dragging a tab, shows where it will go when user releases. */
 .dock-layout > .dock-drop-indicator {
-  /* darken(#a6c9ff, 40%) = #0055d9 */
-  border: solid 1px #0055d9;
-  box-shadow: inset 0 0 10px #0055d9;
-  background: #a6c9ff;
+  --ring-offset-width: 3px;
+  --ring-color: hsl(var(--ring));
+  opacity: 100%; // reset rc-dock
+  background: hsl(var(--primary) / 0.5);
+  box-shadow: 0 0 0 calc(3px + var(--ring-offset-width)) var(--ring-color, currentcolor); // copied from Shadcn focus ring
+  border-radius: var(--radius);
 }
 // #endregion GENERAL ///////////////////////////////////////////////////
 
