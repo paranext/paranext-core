@@ -264,7 +264,12 @@ async function main() {
   // Note that this condition (`process.defaultApp`) is not quite the same as whether we're
   // packaged, so we're not using `globalThis.isPackaged` here.
   if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
-  app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
+  const uriSchemeHandlerWasSet = app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
+  if (!uriSchemeHandlerWasSet) {
+    logger.error(
+      `Failed to set myself (${launchPath} with arguments ${args}) as handler for ${APP_URI_SCHEME}://... URIs, reason unknown`,
+    );
+  }
   if (process.platform === 'darwin') {
     // Use OSX's event to handle navigation
     app.on('open-url', (_event, url) => handleUri(url));
