@@ -6,10 +6,11 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from 'platform-bible-react';
+import { ReactNode } from 'react';
 
 export interface HomeItemMenuProps {
   /* children of type <DropdownMenuItem> */
-  children: React.ReactNode;
+  children: ReactNode;
   /* Optional class name to apply to the ellipsis button */
   ellipsisButtonClassName?: string;
 }

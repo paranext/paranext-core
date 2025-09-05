@@ -435,9 +435,7 @@ export function Home({
                           onDoubleClick={() =>
                             project.isLocallyAvailable
                               ? onOpenProject(project.projectId, project.isEditable)
-                              : isSendReceiveInProgress
-                                ? ''
-                                : onSendReceiveProject(project.projectId)
+                              : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
                           className={`tw-rounded-sm {project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}`}
