@@ -28,8 +28,8 @@ const styles = `
     .max-\\[300px\\]\\:\\!tw-hidden {
       display: none !important;
     }
-    .max-\\[300px\\]\\:tw-flex {
-      display: flex;
+    .max-\\[300px\\]\\:!tw-flex {
+      display: flex !important;
     }
   }
 `;

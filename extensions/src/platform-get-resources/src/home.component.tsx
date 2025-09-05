@@ -420,7 +420,7 @@ export function Home({
                 ) : (
                   <Table stickyHeader>
                     <TableHeader className="tw-bg-none max-[300px]:tw-hidden" stickyHeader>
-                      <TableRow>
+                      <TableRow className="tw-rounded-sm">
                         <TableHead />
                         {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
                         {buildTableHead('language', languageText, 'tw-hidden sm:!tw-table-cell')}
@@ -440,7 +440,7 @@ export function Home({
                                 : onSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
-                          className={project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}
+                          className={`tw-rounded-sm {project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}`}
                         >
                           <TableCell className="max-[300px]:!tw-px-0">
                             <div className="tw-flex tw-flex-row tw-items-center tw-gap-4">
@@ -465,7 +465,7 @@ export function Home({
                                 <span>{project.name}</span>
                               </div>
 
-                              <div className="tw-grow tw-hidden max-[300px]:tw-flex">
+                              <div className="tw-grow tw-hidden max-[300px]:!tw-flex">
                                 <div className="tw-grow" />
                                 <HomeItemDropdownMenu ellipsisButtonClassName="tw-h-6">
                                   {(!project.isLocallyAvailable ||
