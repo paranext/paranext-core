@@ -49,6 +49,8 @@
   "%mainMenu_feedbackForm_textArea%": "Submit an idea",
   "%mainMenu_feedbackForm_screenshot%": "Report a bug / Send feedback",
   "%mainMenu_feedback_emailDevelopers%": "Email the team",
+  "%mainMenu_feedback_unavailable%": "Feedback form unavailable. Please check your internet connection, restart the application, and try again.",
+  "%mainMenu_feedback_failed_to_open%": "Failed to open feedback form. Please try again.",
   "%mainMenu_visitSupportBible%": "Visit Support.Bible",
   "%mainMenu_helpInfo_visitGettingStartedPage%": "Getting started",
   "%mainMenu_helpInfo_visitFAQsPage%": "FAQs",
