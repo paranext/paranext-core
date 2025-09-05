@@ -43,27 +43,26 @@ class HelloCheck implements Check {
   async getCheckResults(range: ScriptureRange): Promise<CheckRunResult[]> {
     if (range.end && range.end.book !== range.start.book)
       throw new Error('This only supports checks within a single book right now');
+    if (!this.pdp) throw new Error('Check not initialized');
 
     const usfm = await this.pdp?.getBookUSFM(range.start);
     if (!usfm)
-      throw new Error(`Could not load ${range.start.toString()} from ${this.targetProjectId}`);
+      throw new Error(`Could not load ${JSON.stringify(range.start)} from ${this.targetProjectId}`);
 
     logger.debug(
-      `Getting test check results for ${JSON.stringify(range)} on ${this.targetProjectId}`,
+      `Getting test check results for ${JSON.stringify(range)} on ${this.targetProjectId} (length ${usfm.length})`,
     );
 
     let results: CheckRunResult[] = [];
     let startingPoint = 0;
-    startingPoint = usfm.indexOf(`\\c ${range.start.chapterNum.toString()}`, startingPoint);
-    startingPoint = usfm.indexOf(`\\v ${range.start.verseNum.toString()}`, startingPoint);
+    startingPoint = usfm.indexOf(`\\c ${range.start.chapterNum.toString()}`, 0);
     let stoppingPoint = 0;
     if (!range.end) stoppingPoint = usfm.length - 1;
     else {
-      stoppingPoint = usfm.indexOf(`\\c ${range.end.chapterNum.toString()}`, startingPoint);
-      stoppingPoint = usfm.indexOf(`\\v ${range.end.verseNum.toString()}`, stoppingPoint);
-      let nextChapter = usfm.indexOf('\\c ', stoppingPoint);
+      stoppingPoint = usfm.indexOf(`\\c ${range.end.chapterNum.toString()}`, 0);
+      let nextChapter = usfm.indexOf('\\c ', startingPoint + 1);
       nextChapter = nextChapter > 0 ? nextChapter : 0;
-      let nextVerse = usfm.indexOf('\\v ', stoppingPoint);
+      let nextVerse = usfm.indexOf('\\v ', startingPoint + 1);
       nextVerse = nextVerse > 0 ? nextVerse : 0;
       stoppingPoint = Math.max(stoppingPoint, nextChapter, nextVerse);
     }
@@ -81,9 +80,17 @@ class HelloCheck implements Check {
         chapterNum: inChapter,
         verseNum: inVerse,
       };
+      const previousResult = results.at(-1);
+      const previousUniqueIdForThisVerse =
+        previousResult &&
+        previousResult.verseRef.chapterNum === inChapter &&
+        previousResult.verseRef.verseNum === inVerse
+          ? previousResult.checkResultUniqueId
+          : '0';
       const newResult: CheckRunResult = {
         checkId: 'sheep',
         checkResultType: 'sheep',
+        checkResultUniqueId: (parseInt(previousUniqueIdForThisVerse ?? '0', 10) + 1).toString(),
         isDenied: false,
         projectId: this.targetProjectId ?? '',
         messageFormatString: 'Found the word "sheep"',
@@ -99,6 +106,7 @@ class HelloCheck implements Check {
       results = results.concat([newResult]);
       cursor += 1;
     }
+    logger.debug(`Returning ${results.length} check results with "sheep"`);
     return results;
   }
 }

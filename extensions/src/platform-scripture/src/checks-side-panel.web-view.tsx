@@ -1,22 +1,26 @@
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { logger, network } from '@papi/frontend';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckInputRange,
+  CheckJobScope,
+  CheckJobStatusReport,
+  CheckResultsInvalidated,
   CheckRunnerCheckDetails,
   CheckRunResult,
-  CheckSubscriptionId,
-  SettableCheckDetails,
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
+  deepEqual,
   getChaptersForBook,
+  getErrorMessage,
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   LocalizeKey,
+  Mutex,
 } from 'platform-bible-utils';
-import { Button, Spinner } from 'platform-bible-react';
+import { Button, Progress, Spinner, useEvent } from 'platform-bible-react';
 import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
 import {
   ChecksScopeFilter,
@@ -24,15 +28,27 @@ import {
 } from './checks/configure-checks/checks-scope-filter.component';
 import { ChecksProjectFilter } from './checks/configure-checks/checks-project-filter.component';
 import ChecksCheckTypeFilter from './checks/configure-checks/checks-check-type-filter.component';
+import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
   checkId: '',
   checkName: '',
-  enabledProjectIds: [''],
 };
 
+const defaultJobStatusReport: CheckJobStatusReport = {
+  jobId: '',
+  status: 'completed',
+  percentComplete: 0,
+  totalResultsCount: 0,
+  nextResults: [],
+  totalExecutionTimeMs: 0,
+};
+
+const defaultCheckResults: CheckRunResult[] = [];
+
 const LOCALIZED_STRINGS: LocalizeKey[] = [
+  '%general_cancel%',
   '%webView_checksSidePanel_fixedBadge_title%',
   '%webView_checksSidePanel_deniedBadge_title%',
   '%webView_checksSidePanel_checkingBadge_title%',
@@ -43,6 +59,10 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_noChecksSelected%',
   '%webView_checksSidePanel_selectChecks%',
 ];
+
+const RESULTS_PAGE_SIZE = 500;
+
+const aggregatorMutex = new Mutex();
 
 global.webViewComponent = function ChecksSidePanelWebView({
   projectId,
@@ -58,64 +78,27 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
-  const [subscriptionId, setSubscriptionId] = useWebViewState<CheckSubscriptionId>(
-    'subscriptionId',
-    '',
-  );
+  const [activeRanges, setActiveRanges] = useState<CheckInputRange[]>(() => []);
+  const [activeJobStatusReport, setActiveJobStatusReport] =
+    useState<CheckJobStatusReport>(defaultJobStatusReport);
+  const activeJobIdRef = useRef<string | undefined>(undefined);
+  const [forceNewCheckRun, setForceNewCheckRun] = useState(1);
+  const [checkResults, setCheckResults] = useState<CheckRunResult[]>(() => defaultCheckResults);
+  const checkResultsRef = useRef<CheckRunResult[]>(checkResults);
+  const [isResultLoadingCancelled, setIsResultLoadingCancelled] = useState(false);
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
-
-  const checkAggregator = useDataProvider('platformScripture.checkAggregator');
-
-  useEffect(() => {
-    const validateSubscriptionId = async () => {
-      logger.info('Validating subscription ID');
-      const isIDValid = await checkAggregator?.validateSubscription(subscriptionId);
-      if (!isIDValid) {
-        logger.info('Subscription ID invalid; creating a new one');
-        const newSubscriptionId = await checkAggregator?.createSubscription();
-        setSubscriptionId(newSubscriptionId || '');
-        logger.info('Created subscription ID', newSubscriptionId);
-      }
-    };
-
-    validateSubscriptionId();
-
-    return () => {
-      const deleteSubscription = async () => {
-        if (subscriptionId) {
-          await checkAggregator?.deleteSubscription(subscriptionId);
-          logger.info('Deleted subscription ID while unmounting', subscriptionId);
-        }
-      };
-
-      deleteSubscription();
-    };
-  }, [checkAggregator, subscriptionId, setSubscriptionId]);
-
-  const [availableChecks, setAvailableChecks, isLoadingAvailableChecks] = useData(
+  const [availableChecks, , isLoadingAvailableChecks] = useData(
     'platformScripture.checkAggregator',
   ).AvailableChecks(
-    subscriptionId,
+    undefined,
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
+  const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
-  const defaultScriptureRange: CheckInputRange = useMemo(() => {
-    return {
-      projectId: projectId ?? '',
-      start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-    };
-  }, [projectId]);
+  const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const [, setActiveRanges, isLoadingActiveRanges] = useData(
-    'platformScripture.checkAggregator',
-  ).ActiveRanges(
-    subscriptionId,
-    useMemo(() => [defaultScriptureRange], [defaultScriptureRange]),
-  );
-
-  const [, setIncludeDeniedResults, isLoadingIncludeDeniedResults] = useData(
-    'platformScripture.checkAggregator',
-  ).IncludeDeniedResults(subscriptionId, true);
+  // #region Calculating the active ranges
 
   const checkInputRange: CheckInputRange = useMemo(() => {
     // Default is chapter
@@ -139,7 +122,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     };
   }, [projectId, scope, scrRef]);
 
-  const getActiveRangesForScopeAll = useCallback((): CheckInputRange[] => {
+  const getInputRangesForScopeAll = useCallback((): CheckInputRange[] => {
     return Array.from({ length: LAST_SCR_BOOK_NUM }, (_, bookIndex) => {
       const start = { book: Canon.bookNumberToId(bookIndex + 1), chapterNum: 1, verseNum: 1 };
       const end = {
@@ -155,43 +138,275 @@ global.webViewComponent = function ChecksSidePanelWebView({
     });
   }, [projectId]);
 
-  const settableCheckDetails: SettableCheckDetails[] = useMemo(() => {
-    return selectedCheckTypeIds.length > 0
-      ? selectedCheckTypeIds.map((checkId) => ({
-          checkId,
-          enabledProjectIds: [projectId ?? ''],
-        }))
-      : [];
-  }, [selectedCheckTypeIds, projectId]);
+  const previousScope = useRef<CheckScopes>(undefined);
+  const previousScrRef = useRef<SerializedVerseRef>(scrRef);
+
+  // Effect to determine if the range used by the check job has changed
+  useEffect(() => {
+    // If the scope hasn't changed, determine if the scrRef change actually affects the ranges
+    if (previousScope.current === scope) {
+      // For "All" scope, scrRef changes do not impact the ranges; avoid resetting them
+      if (scope === CheckScopes.All) return;
+      // For "Book" scope, only changes to the book matter
+      if (scope === CheckScopes.Book && previousScrRef.current.book === scrRef.book) return;
+      // For "Chapter" scope, changes to the book and chapter matter
+      if (
+        scope === CheckScopes.Chapter &&
+        previousScrRef.current.book === scrRef.book &&
+        previousScrRef.current.chapterNum === scrRef.chapterNum
+      )
+        return;
+    }
+
+    previousScope.current = scope;
+    previousScrRef.current = scrRef;
+    setActiveRanges(scope === CheckScopes.All ? getInputRangesForScopeAll() : [checkInputRange]);
+  }, [checkInputRange, getInputRangesForScopeAll, scope, scrRef]);
+
+  // #endregion
+
+  // #region Safe wrappers for checkAggregator to prevent race conditions with stale jobs
+
+  const beginNewCheckJob = useCallback(
+    async (jobScope: CheckJobScope) => {
+      aggregatorMutex.runExclusive(async () => {
+        if (!checkAggregator) return;
+
+        try {
+          const newJobId = await checkAggregator.beginCheckJob(jobScope);
+          logger.debug(`Started new check job with ID ${newJobId}`);
+          activeJobIdRef.current = newJobId;
+          setActiveJobStatusReport({
+            ...defaultJobStatusReport,
+            jobId: newJobId,
+            status: 'queued',
+          });
+        } catch (error) {
+          logger.error(`Error starting check job: ${getErrorMessage(error)}`);
+          setActiveJobStatusReport(defaultJobStatusReport);
+        }
+      });
+    },
+    [checkAggregator],
+  );
+
+  const stopActiveJob = useCallback(async () => {
+    aggregatorMutex.runExclusive(async () => {
+      if (!checkAggregator || !activeJobIdRef.current) return;
+
+      const jobId = activeJobIdRef.current;
+      try {
+        await checkAggregator.stopCheckJob(jobId);
+        logger.debug(`Stopped check job ID ${jobId}`);
+      } catch (error) {
+        logger.error(`Error stopping check job ${jobId}: ${getErrorMessage(error)}`);
+      }
+    });
+  }, [checkAggregator]);
+
+  const abandonActiveJob = useCallback(async () => {
+    aggregatorMutex.runExclusive(async () => {
+      if (!checkAggregator) return;
+
+      const jobId = activeJobIdRef.current;
+      if (!jobId) return;
+
+      // Invalidate the active job and cancel scheduled polls before abandoning to minimize race windows
+      activeJobIdRef.current = undefined;
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = undefined;
+      }
+
+      try {
+        await checkAggregator.abandonCheckJob(jobId);
+        logger.debug(`Abandoned check job ID ${jobId}`);
+      } catch (error) {
+        logger.error(`Error abandoning check job: ${getErrorMessage(error)}`);
+      }
+    });
+  }, [checkAggregator]);
+
+  const retrieveActiveJobUpdate = useCallback(async (): Promise<
+    CheckJobStatusReport | undefined
+  > => {
+    return aggregatorMutex.runExclusive(async () => {
+      if (!checkAggregator || !activeJobIdRef.current) return undefined;
+
+      try {
+        const update = await checkAggregator.retrieveCheckJobUpdate(
+          activeJobIdRef.current,
+          RESULTS_PAGE_SIZE,
+        );
+        if (update) setActiveJobStatusReport(update);
+        return update;
+      } catch (error) {
+        logger.error(`Error retrieving check job update: ${getErrorMessage(error)}`);
+        return undefined;
+      }
+    });
+  }, [checkAggregator]);
+
+  // #endregion
+
+  // #region Starting a new check job
+
+  // Effect to start a new check job when configuration or project data changes
+  useEffect(() => {
+    const startNewJob = async () => {
+      if (!checkAggregator) return;
+
+      // Abandon the existing job before starting a new one
+      await abandonActiveJob();
+      setActiveJobStatusReport(defaultJobStatusReport);
+      setCheckResults(defaultCheckResults);
+      setIsResultLoadingCancelled(false);
+
+      // If nothing is configured to check, don't start a new job
+      const jobScope: CheckJobScope = {
+        checkIds: [...selectedCheckTypeIds],
+        inputRanges: activeRanges,
+      };
+      if (jobScope.checkIds.length === 0 || jobScope.inputRanges.length === 0) return;
+
+      // Start a new job
+      await beginNewCheckJob(jobScope);
+    };
+
+    startNewJob();
+    // Not including activeJobStatusReport.jobId in dependencies as it would cause a loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRanges, checkAggregator, forceNewCheckRun, selectedCheckTypeIds]);
+
+  // #endregion
+
+  // #region Managing a check job after it has started
+
+  // Effect to poll for updates on the active job
+  useEffect(() => {
+    if (!checkAggregator || !activeJobIdRef.current || isResultLoadingCancelled) return;
+
+    const { status, totalResultsCount } = activeJobStatusReport;
+
+    // Start polling if job is active or complete but we haven't loaded all results yet
+    const needsPolling =
+      status === 'queued' ||
+      status === 'running' ||
+      ((status === 'completed' || status === 'stopped') && checkResults.length < totalResultsCount);
+    if (!needsPolling) return;
+
+    let isEffectCleanedUp = false;
+    const pollForUpdates = async () => {
+      try {
+        if (isEffectCleanedUp || isResultLoadingCancelled) return;
+
+        const update = await retrieveActiveJobUpdate();
+        if (!update) return;
+
+        // Add any new results to the results list
+        if (update.nextResults && update.nextResults.length > 0) {
+          setCheckResults((existingResults) => {
+            return [...(existingResults || []), ...(update.nextResults || [])];
+          });
+        }
+
+        // Determine if we should continue polling (default is not to poll again)
+        let pollDelay = -1;
+        if (update.status === 'running' || update.status === 'queued') {
+          // Checks are still running, so give them some time before polling again
+          pollDelay = 250;
+        } else if (checkResults.length < update.totalResultsCount) {
+          // Checks are finished but we have more results to load, so only wait a short time
+          pollDelay = 25;
+        }
+
+        if (pollDelay >= 0 && !isEffectCleanedUp)
+          pollingTimeoutRef.current = setTimeout(pollForUpdates, pollDelay);
+      } catch (error) {
+        logger.debug(`Failed to retrieve check job update: ${getErrorMessage(error)}`);
+      }
+    };
+
+    // Start polling immediately
+    pollForUpdates();
+
+    return () => {
+      isEffectCleanedUp = true;
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = undefined;
+      }
+    };
+    // Only trigger on activeJobStatusReport's jobId changing, not other aspects of it
+    // Don't trigger on checkResults changing as the polling function updates it as needed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkAggregator, activeJobStatusReport.jobId, isResultLoadingCancelled]);
+
+  // #endregion
+
+  // #region Listening for invalidation events to trigger a new check run
+
+  const invalidateResultsIfNecessary = useCallback(
+    (details: CheckResultsInvalidated) => {
+      if (!checkAggregator) return;
+
+      // Clear any existing timeout
+      if (invalidateTimeoutRef.current) {
+        clearTimeout(invalidateTimeoutRef.current);
+        invalidateTimeoutRef.current = undefined;
+      }
+
+      // Set up a new debounced call
+      invalidateTimeoutRef.current = setTimeout(() => {
+        // Check if the invalidation applies to our current project and scope
+        let applies =
+          activeRanges.some((range) => range.projectId === details.projectId) &&
+          (details.scope === 'all' ||
+            (details.scope === 'book' &&
+              details.bookId &&
+              activeRanges.some((range) => range.start.book === details.bookId)));
+
+        // If it applies to our scope, check if any of the invalidated checks are currently selected
+        if (applies) {
+          const changedCheckIds = new Set(details.checkIds);
+          applies = selectedCheckTypeIds.some((checkId) => changedCheckIds.has(checkId));
+        }
+
+        // Trigger a new check run if the invalidation applies to us
+        if (applies) setForceNewCheckRun((x) => x + 1);
+      }, 1000); // Debounce for 1 second
+    },
+    [activeRanges, checkAggregator, selectedCheckTypeIds],
+  );
+
+  useEvent(network.getNetworkEvent(CHECK_RESULTS_INVALIDATED_EVENT), invalidateResultsIfNecessary);
+
+  // #endregion
+
+  // #region Cleaning up any active jobs and timeouts on unmount
 
   useEffect(() => {
-    async function updateChecksAndRanges() {
-      if (setAvailableChecks) await setAvailableChecks(settableCheckDetails);
-      if (setActiveRanges && (scope === CheckScopes.Book || scope === CheckScopes.Chapter))
-        await setActiveRanges([checkInputRange]);
-      if (setActiveRanges && scope === CheckScopes.All)
-        await setActiveRanges(getActiveRangesForScopeAll());
-      if (setIncludeDeniedResults) await setIncludeDeniedResults(true);
-    }
-    updateChecksAndRanges();
-  }, [
-    checkInputRange,
-    projectId,
-    setActiveRanges,
-    setAvailableChecks,
-    setIncludeDeniedResults,
-    settableCheckDetails,
-    scope,
-    getActiveRangesForScopeAll,
-    availableChecks,
-  ]);
+    return () => {
+      // Clear any pending debounce timeout
+      if (invalidateTimeoutRef.current) {
+        clearTimeout(invalidateTimeoutRef.current);
+        invalidateTimeoutRef.current = undefined;
+      }
 
-  const [checkResults, , isLoadingCheckResults] = useData(
-    'platformScripture.checkAggregator',
-  ).CheckResults(
-    subscriptionId,
-    useMemo(() => [], []),
-  );
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = undefined;
+      }
+
+      abandonActiveJob();
+    };
+    // Empty dependency array - only run on unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // #endregion
+
+  // #region Helpers for rendering and interaction
 
   const openSettingsAndInventories = useCallback(() => {
     logger.info('Open check settings and inventories');
@@ -225,6 +440,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
     );
   }, [availableChecks, getLocalizedCheckDescription]);
 
+  // Keep the ref up to date with the current checkResults
+  useEffect(() => {
+    checkResultsRef.current = checkResults;
+  }, [checkResults]);
+
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
    * Scrolls the editor to the reference of the selected check result by setting the scripture
@@ -234,16 +454,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
    */
   const scrollToCheckReferenceInEditor = useCallback(
     (id: string) => {
-      if (isPlatformError(checkResults)) return;
-
-      const selectedResult = checkResults.find(
+      const selectedResult = checkResultsRef.current.find(
         (result, index) => writeCheckId(result, index) === id,
       );
       if (!selectedResult) return;
 
       setScrRef(selectedResult.verseRef);
     },
-    [checkResults, setScrRef, writeCheckId],
+    [setScrRef, writeCheckId],
   );
 
   const handleSelectCheck = useCallback(
@@ -252,6 +470,27 @@ global.webViewComponent = function ChecksSidePanelWebView({
       scrollToCheckReferenceInEditor(id);
     },
     [scrollToCheckReferenceInEditor],
+  );
+
+  const setDeniedStatusForResult = useCallback(
+    (result: CheckRunResult, isDenied: boolean) => {
+      if (!result || !projectId || !checkAggregator) return false;
+
+      const currentCheckResults = checkResultsRef.current;
+      if (currentCheckResults) {
+        const resultIndex = currentCheckResults.findIndex((r) => deepEqual(r, result));
+        if (resultIndex !== -1) {
+          const newCheckResults = [...currentCheckResults];
+          newCheckResults[resultIndex].isDenied = isDenied;
+          setCheckResults(newCheckResults);
+        } else {
+          logger.info('Could not find check result in current results list, reloading');
+          setForceNewCheckRun((x) => x + 1);
+        }
+      }
+      return true;
+    },
+    [checkAggregator, projectId],
   );
 
   const handleDenyCheck = useCallback(
@@ -266,10 +505,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.itemText,
         result.checkResultUniqueId,
       );
-
+      if (denyResultSuccess) setDeniedStatusForResult(result, true);
+      else logger.debug(`Could not deny check result: ${JSON.stringify(result)}`);
       return denyResultSuccess;
     },
-    [checkAggregator, projectId],
+    [checkAggregator, projectId, setDeniedStatusForResult],
   );
 
   const handleAllowCheck = useCallback(
@@ -284,10 +524,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.itemText,
         result.checkResultUniqueId,
       );
-
+      if (allowResultStatus) setDeniedStatusForResult(result, false);
+      else logger.debug(`Could not allow check result: ${JSON.stringify(result)}`);
       return allowResultStatus;
     },
-    [checkAggregator, projectId],
+    [checkAggregator, projectId, setDeniedStatusForResult],
   );
 
   const handleSelectProject = useCallback(
@@ -308,13 +549,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setSelectedCheckTypeIds(updatedCheckIds);
   };
 
-  if (
-    isLoadingCheckResults ||
-    isLoadingAvailableChecks ||
-    isLoadingActiveRanges ||
-    isLoadingIncludeDeniedResults ||
-    !checkAggregator
-  ) {
+  const handleCancelOperation = useCallback(async () => {
+    stopActiveJob();
+    setIsResultLoadingCancelled(true);
+  }, [stopActiveJob]);
+
+  // #endregion
+
+  if (isLoadingAvailableChecks || !checkAggregator) {
     return (
       <div className="pr-twp tw-h-screen tw-box-border tw-bg-sidebar tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
@@ -327,6 +569,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   return (
     <div className="pr-twp tw-flex tw-flex-col tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen tw-min-w-[10rem]">
+      {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         <ChecksProjectFilter
           handleSelectProject={handleSelectProject}
@@ -341,10 +584,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
           onOpenChange={(open) => setIsCheckTypesOpen(open)}
         />
       </div>
+      {/* Check results */}
       {
         // TODO: Display something else if there is an error getting check results
-        isPlatformError(checkResults) || checkResults.length === 0 ? (
-          <div className="tw-grow tw-flex tw-flex-col tw-items-center tw-justify-center tw-w-full">
+        !checkResults || isPlatformError(checkResults) || checkResults.length === 0 ? (
+          <div className="tw-min-h-48 tw-flex-1 tw-flex tw-flex-col tw-items-center tw-justify-center tw-w-full">
             <div className="tw-mb-2">
               {selectedCheckTypeIds.length === 0
                 ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
@@ -355,8 +599,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
             </Button>
           </div>
         ) : (
-          <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3 tw-pb-3">
-            {checkResults?.map((result, index) => (
+          <div className="tw-min-h-48 tw-flex-1 tw-flex tw-flex-col tw-justify-start tw-items-start tw-p-0 tw-gap-3 tw-pb-3 tw-overflow-y-auto">
+            {checkResults.map((result, index) => (
               <CheckCard
                 key={writeCheckId(result, index)}
                 checkResult={result}
@@ -375,6 +619,55 @@ global.webViewComponent = function ChecksSidePanelWebView({
           </div>
         )
       }
+      {/* Status bar */}
+      {activeJobStatusReport && checkResults && (
+        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
+          {/* The job is active */}
+          {activeJobStatusReport.status === 'queued' ||
+            (activeJobStatusReport.status === 'running' &&
+              // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
+              activeJobStatusReport.percentComplete > 0 && (
+                <div className="tw-flex tw-items-center tw-gap-4">
+                  <Progress value={activeJobStatusReport.percentComplete} className="tw-w-64" />
+                  <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
+                    {localizedStrings['%general_cancel%']}
+                  </Button>
+                </div>
+              ))}
+          {/* The job has finished but not all results are loaded into the UI yet */}
+          {(activeJobStatusReport.status === 'completed' ||
+            activeJobStatusReport.status === 'stopped') &&
+            checkResults &&
+            checkResults.length < activeJobStatusReport.totalResultsCount && (
+              <div className="tw-flex tw-items-center tw-gap-4">
+                <Progress
+                  value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
+                  className="tw-w-64"
+                />
+                {checkResults.length.toString()} /{' '}
+                {activeJobStatusReport.totalResultsCount.toString()}
+                <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
+                  {localizedStrings['%general_cancel%']}
+                </Button>
+              </div>
+            )}
+          {/* The job has finished and all results are loaded into the UI */}
+          {(activeJobStatusReport.status === 'completed' ||
+            activeJobStatusReport.status === 'stopped') &&
+            checkResults &&
+            checkResults.length === activeJobStatusReport.totalResultsCount && (
+              <p className="tw-font-light">
+                {checkResults.length > 0
+                  ? checkResults.length.toString()
+                  : localizedStrings['%webView_find_noResultsFound%']}
+              </p>
+            )}
+          {/* The job encountered an error while running */}
+          {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
+            <p className="tw-font-light"> {activeJobStatusReport.error}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 };

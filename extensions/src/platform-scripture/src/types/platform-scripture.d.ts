@@ -9,7 +9,13 @@ declare module 'platform-scripture' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import {
+    Dispose,
+    LocalizeKey,
+    PlatformError,
+    Unsubscriber,
+    UnsubscriberAsync,
+  } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
   import { InventoryItem } from 'platform-bible-react';
 
@@ -896,10 +902,7 @@ declare module 'platform-scripture' {
   // #region Check Runner Types
 
   /** Details about a check provided by a {@link ICheckRunner} */
-  export type CheckRunnerCheckDetails = CheckDetailsWithCheckId & {
-    /** List of project IDs that one particular check is enabled to evaluate */
-    enabledProjectIds: string[];
-  };
+  export type CheckRunnerCheckDetails = CheckDetailsWithCheckId;
 
   /**
    * Details about a check (as identified by its checkId) that can be set on a subscription by the
@@ -913,16 +916,56 @@ declare module 'platform-scripture' {
   /** Data types provided by a service that runs checks */
   export type CheckRunnerDataTypes = {
     AvailableChecks: DataProviderDataType<undefined, CheckRunnerCheckDetails[], never>;
-    ActiveRanges: DataProviderDataType<undefined, CheckInputRange[], CheckInputRange[]>;
-    CheckResults: DataProviderDataType<undefined, CheckRunResult[], never>;
   };
 
-  export type CheckEnablerDisabler = {
-    /** Enable the check with the given checkId to run on the given project */
-    enableCheck: (checkId: string, projectId: string) => Promise<void>;
+  export type CheckJobScope = {
+    /** IDs of the check to run */
+    checkIds: string[];
+    /** Ranges of project text to evaluate using the checks */
+    inputRanges: CheckInputRange[];
+  };
 
-    /** Disable the check with the given checkId from producing results for the given project */
-    disableCheck: (checkId: string, projectId?: string) => Promise<void>;
+  /**
+   * The status of a check job.
+   *
+   * - `queued`: The job is waiting to run
+   * - `running`: The job is currently running
+   * - `stopped`: The job was stopped by the user
+   * - `errored`: The job encountered an error and is no longer running
+   * - `completed`: The job completed successfully
+   */
+  export type CheckJobStatus = 'queued' | 'running' | 'stopped' | 'errored' | 'completed';
+
+  export type CheckJobStatusReport = {
+    /** Unique ID of the check job */
+    jobId: string;
+    /** Current status of the check job */
+    status: CheckJobStatus;
+    /** Percentage of the job that is complete (0-100) */
+    percentComplete: number;
+    /** Total number of results found so far */
+    totalResultsCount: number;
+    /** The next set of results found so far, if any. */
+    nextResults?: CheckRunResult[];
+    /** If the job encountered an error, this will contain the error message */
+    error?: string;
+    /**
+     * Total time in milliseconds that the check operation has taken to run. This is the total time
+     * from when the job started until now if the job is still running. If the job is no longer
+     * running, then this is the total time it took to run the job until it finished.
+     */
+    totalExecutionTimeMs: number;
+  };
+
+  export type CheckJobRunner = {
+    beginCheckJob: (jobScope: CheckJobScope) => Promise<string>;
+    stopCheckJob: (jobId: string, timeoutMs?: number) => Promise<boolean>;
+    cleanUpCheckJob: (jobId: string) => Promise<void>;
+    abandonCheckJob: (jobId: string) => Promise<void>;
+    retrieveCheckJobUpdate: (
+      jobId: string,
+      maxResultsToInclude: number,
+    ) => Promise<CheckJobStatusReport>;
   };
 
   export type CheckResultClassifier = {
@@ -962,9 +1005,21 @@ declare module 'platform-scripture' {
    * registered with object type 'checkRunner'
    */
   export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
-    CheckEnablerDisabler &
+    CheckJobRunner &
     CheckResultClassifier &
     InventoryDataRetriever;
+
+  export type CheckResultsInvalidated = {
+    checkIds: string[];
+    projectId: string;
+    scope: 'all' | 'book';
+    bookId?: string;
+  };
+
+  export type ICheckAggregatorService = ICheckRunner & {
+    dataProviderName: string;
+    onCheckResultsInvalidated: (listener: (e: CheckResultsInvalidated) => void) => Unsubscriber;
+  };
 
   // #endregion
 
@@ -992,60 +1047,6 @@ declare module 'platform-scripture' {
 
   // #endregion
 
-  // #region Check Aggregator Types
-
-  /** Uniquely identifies one subscriber to the check service */
-  export type CheckSubscriptionId = string;
-
-  export type CheckSubscriptionManager = {
-    /** Create a new subscription keyed by the returned subscription ID */
-    createSubscription: () => Promise<CheckSubscriptionId>;
-
-    /**
-     * Deactivate and throw away the subscription with the given ID
-     *
-     * @returns `true` if the subscription could be deleted, `false` otherwise
-     */
-    deleteSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
-    /**
-     * Validates the subscription with the given ID.
-     *
-     * @param subscriptionId - The ID of the subscription to validate.
-     * @returns `true` if the subscription is valid, `false` otherwise.
-     */
-    validateSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
-  };
-
-  /**
-   * Data types provided by a service that aggregates check results for multiple callers across
-   * multiple ICheckRunner instances
-   */
-  export type CheckAggregatorDataTypes = {
-    AvailableChecks: DataProviderDataType<
-      CheckSubscriptionId,
-      CheckRunnerCheckDetails[],
-      SettableCheckDetails[]
-    >;
-    ActiveRanges: DataProviderDataType<CheckSubscriptionId, CheckInputRange[], CheckInputRange[]>;
-    IncludeDeniedResults: DataProviderDataType<CheckSubscriptionId, boolean, boolean>;
-    CheckResults: DataProviderDataType<CheckSubscriptionId, CheckRunResult[], never>;
-  };
-
-  /**
-   * Service that multiplexes/demultiplexes calls across all {@link ICheckRunner} data providers so
-   * things like UI only have to talk to a single service to communicate with all
-   * {@link ICheckRunner}s.
-   *
-   * Use the "platformScripture.checkAggregator" data provider name to access the service.
-   */
-  export type ICheckAggregatorService = IDataProvider<CheckAggregatorDataTypes> &
-    CheckResultClassifier &
-    CheckSubscriptionManager &
-    InventoryDataRetriever & {
-      dataProviderName: string;
-    };
-
-  // #endregion
   // #region Send/Receive Types
 
   /**
@@ -1078,6 +1079,7 @@ declare module 'platform-scripture' {
   export type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
 
   // #endregion
+
   // #region ChecksSetup Types
   export type ChecksSetUpProps = {
     /** Optional string representing the id attribute of the Checks dropdown */
@@ -1117,6 +1119,7 @@ declare module 'papi-shared-types' {
     ICheckRunner,
     CheckDetails,
     CheckCreatorFunction,
+    CheckResultsInvalidated,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -1161,6 +1164,8 @@ declare module 'papi-shared-types' {
       checkDetails: CheckDetails,
       createCheck: CheckCreatorFunction,
     ) => Promise<UnsubscriberAsync>;
+
+    'platformScripture.invalidateCheckResults': (details: CheckResultsInvalidated) => Promise<void>;
 
     'platformScripture.openCharactersInventory': (
       projectId?: string | undefined,
