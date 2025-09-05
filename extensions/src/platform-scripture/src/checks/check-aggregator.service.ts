@@ -6,7 +6,7 @@ import {
 } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { InventoryItem } from 'platform-bible-react';
-import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
+import { compareScrRefs, createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
   CheckAggregatorDataTypes,
   CheckInputRange,
@@ -206,6 +206,16 @@ class CheckAggregatorDataProviderEngine
         });
       }),
     );
+
+    // Sort results by BCV, project, and check ID
+    retVal.sort((a, b) => {
+      const cmp = compareScrRefs(a.verseRef, b.verseRef);
+      if (cmp !== 0) return cmp;
+      if (a.projectId !== b.projectId) return a.projectId.localeCompare(b.projectId);
+      if (a.checkId && b.checkId && a.checkId !== b.checkId)
+        return a.checkId.localeCompare(b.checkId);
+      return 0;
+    });
     return retVal;
   }
 
@@ -315,10 +325,11 @@ class CheckAggregatorDataProviderEngine
   }
 
   private async refreshCheckRunners(): Promise<void> {
-    // Wait for any check runner to be registered
+    // Wait for the .NET check runner to be available
+    // Ideally we would wait for all of them, but the .NET runner is the only critical one for now
     const timeoutInMS = 20_000;
     await papi.networkObjectStatus.waitForNetworkObject(
-      { objectType: CHECK_RUNNER_NETWORK_OBJECT_TYPE },
+      { id: 'dotNetCheckRunner-data', objectType: CHECK_RUNNER_NETWORK_OBJECT_TYPE },
       timeoutInMS,
     );
 

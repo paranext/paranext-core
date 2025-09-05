@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Paratext.Data.Checking;
 using PtxUtils;
 
