@@ -148,13 +148,15 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
         headerContent: (
           <>
             <HomeIcon size="36" />
-            <CardTitle>Home Story</CardTitle>
+            <CardTitle>Home or New Tab</CardTitle>
           </>
         ),
         onOpenProject: () => {
+          // eslint-disable-next-line no-alert
           alert('Open project');
         },
         onSendReceiveProject: () => {
+          // eslint-disable-next-line no-alert
           alert('Send/Receive project');
         },
       }}
