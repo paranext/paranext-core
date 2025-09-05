@@ -1,6 +1,7 @@
 import { appService } from '@shared/services/app.service';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { notificationService } from '@shared/services/notification.service';
 import { loadSpace, type InitOptions, type SpaceApi } from '@usersnap/browser';
 
 /**
@@ -87,144 +88,203 @@ function findAndStyleUsersnapShadowRoots(): boolean {
 function initializeUsersnapDomObserver(): void {
   if (usersnapDomObserver) return;
 
-  usersnapDomObserver = new MutationObserver((mutations) => {
-    if (!isUsersnapFormOpen) return;
+  try {
+    usersnapDomObserver = new MutationObserver((mutations) => {
+      if (!isUsersnapFormOpen) return;
 
-    const shouldSearchForShadowRoots = mutations.some((mutation) => {
-      if (mutation.type !== 'childList') return false;
-      return Array.from(mutation.addedNodes).some((node) => {
-        if (node instanceof Element && node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
-          return true;
-        }
-        return false;
+      const shouldSearchForShadowRoots = mutations.some((mutation) => {
+        if (mutation.type !== 'childList') return false;
+        return Array.from(mutation.addedNodes).some((node) => {
+          if (node instanceof Element && node.nodeType === Node.ELEMENT_NODE && node.shadowRoot) {
+            return true;
+          }
+          return false;
+        });
       });
+
+      if (shouldSearchForShadowRoots) {
+        const startTime = Date.now();
+        const maxDuration = 10000; // 10 seconds
+        shadowRootStylingInterval = setInterval(() => {
+          const success = findAndStyleUsersnapShadowRoots();
+          const elapsed = Date.now() - startTime;
+
+          if (success || elapsed >= maxDuration) {
+            if (!success) {
+              logger.warn(
+                'Timeout reached while waiting for Usersnap shadow DOM elements to appear',
+              );
+            }
+            clearInterval(shadowRootStylingInterval);
+            shadowRootStylingInterval = undefined;
+          }
+        }, 100);
+      }
     });
 
-    if (shouldSearchForShadowRoots) {
-      const startTime = Date.now();
-      const maxDuration = 10000; // 10 seconds
-      shadowRootStylingInterval = setInterval(() => {
-        const success = findAndStyleUsersnapShadowRoots();
-        const elapsed = Date.now() - startTime;
-
-        if (success || elapsed >= maxDuration) {
-          if (!success) {
-            logger.warn('Timeout reached while waiting for Usersnap shadow DOM elements to appear');
-          }
-          clearInterval(shadowRootStylingInterval);
-          shadowRootStylingInterval = undefined;
-        }
-      }, 100);
-    }
-  });
-
-  logger.debug('Usersnap DOM observer initialized');
+    logger.debug('Usersnap DOM observer initialized');
+  } catch (error) {
+    logger.warn('Failed to initialize Usersnap DOM observer:', error);
+    usersnapDomObserver = undefined;
+  }
 }
 
 /** Starts the Usersnap DOM observer */
 function startUsersnapObserver(): void {
   if (usersnapDomObserver) {
-    usersnapDomObserver.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    try {
+      usersnapDomObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    } catch (error) {
+      logger.warn('Failed to start Usersnap DOM observer:', error);
+    }
   }
 }
 
 /** Disconnects the Usersnap DOM observer */
 function stopUsersnapObserver(): void {
   if (usersnapDomObserver) {
-    usersnapDomObserver.disconnect();
+    try {
+      usersnapDomObserver.disconnect();
+    } catch (error) {
+      logger.warn('Failed to stop Usersnap DOM observer:', error);
+    }
   }
 }
 
 /** Initializes the global UserSnap API instance */
 export async function initializeUsersnapApi() {
-  const defaultInitParams: InitOptions = {
-    enableScreenshot: true,
-    collectGeoLocation: 'none',
-    useSystemFonts: true,
-    useLocalStorage: true,
-  };
-
-  const startTime = performance.now();
-  const api = await loadSpace(USERSNAP_SPACE_API_KEY);
-  await api.init(defaultInitParams);
-  const endTime = performance.now();
-  logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
-
-  let customData = {};
-
-  const setCustomData = async (shouldIncludeLog: boolean) => {
-    const appName = (await appService.getAppInfo()).name;
-    let logContent: string = '';
-    if (shouldIncludeLog) logContent = await sendCommand('platform.getLogFileContent');
-    customData = {
-      App: appName,
-      Environment: globalThis.isPackaged ? 'Production' : 'Development',
+  try {
+    const defaultInitParams: InitOptions = {
+      enableScreenshot: true,
+      collectGeoLocation: 'none',
+      useSystemFonts: true,
+      useLocalStorage: true,
     };
-    if (logContent) customData = { Log: logContent, ...customData };
-  };
 
-  api.on('open', (event) => {
-    const shouldIncludeLog = event.apiKey === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY;
-    setCustomData(shouldIncludeLog);
+    const startTime = performance.now();
+    const api = await loadSpace(USERSNAP_SPACE_API_KEY);
+    await api.init(defaultInitParams);
+    const endTime = performance.now();
+    logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
 
-    isUsersnapFormOpen = true;
-    apiKeyOfOpenForm = event.apiKey;
+    let customData = {};
 
-    startUsersnapObserver();
-  });
-  api.on('beforeSubmit', async (event) => {
-    event.api.setValue('custom', customData);
-  });
-  api.on('close', () => {
-    isUsersnapFormOpen = false;
-    apiKeyOfOpenForm = undefined;
+    const setCustomData = async (shouldIncludeLog: boolean) => {
+      try {
+        const appName = (await appService.getAppInfo()).name;
+        let logContent: string = '';
+        if (shouldIncludeLog) {
+          try {
+            logContent = await sendCommand('platform.getLogFileContent');
+          } catch (logError) {
+            logger.warn('Failed to retrieve log content for Usersnap form:', logError);
+          }
+        }
+        customData = {
+          App: appName,
+          Environment: globalThis.isPackaged ? 'Production' : 'Development',
+        };
+        if (logContent) customData = { Log: logContent, ...customData };
+      } catch (error) {
+        logger.warn('Failed to set custom data for Usersnap form:', error);
+        // Provide fallback data
+        customData = {
+          App: 'Unknown',
+          Environment: globalThis.isPackaged ? 'Production' : 'Development',
+        };
+      }
+    };
 
-    if (shadowRootStylingInterval) {
-      clearInterval(shadowRootStylingInterval);
-      shadowRootStylingInterval = undefined;
-    }
+    api.on('open', (event) => {
+      const shouldIncludeLog = event.apiKey === USERSNAP_PROJECT_REPORT_ISSUE_API_KEY;
+      setCustomData(shouldIncludeLog);
 
-    stopUsersnapObserver();
-  });
+      isUsersnapFormOpen = true;
+      apiKeyOfOpenForm = event.apiKey;
 
-  globalUsersnapApi = api;
+      startUsersnapObserver();
+    });
+    api.on('beforeSubmit', async (event) => {
+      event.api.setValue('custom', customData);
+    });
+    api.on('close', () => {
+      isUsersnapFormOpen = false;
+      apiKeyOfOpenForm = undefined;
 
-  initializeUsersnapDomObserver();
-}
+      if (shadowRootStylingInterval) {
+        clearInterval(shadowRootStylingInterval);
+        shadowRootStylingInterval = undefined;
+      }
 
-/**
- * Gets the current UserSnap API instance
- *
- * @returns The UserSnap API instance or undefined if not initialized
- */
-export function getUsersnapApi(): SpaceApi | undefined {
-  return globalUsersnapApi;
+      stopUsersnapObserver();
+    });
+
+    globalUsersnapApi = api;
+
+    initializeUsersnapDomObserver();
+  } catch (error) {
+    logger.error('Failed to initialize UserSnap API:', error);
+    logger.warn(
+      'UserSnap functionality will be unavailable. This may be due to network connectivity issues, invalid API keys, or blocked external requests.',
+    );
+
+    // Set globalUsersnapApi to undefined to indicate initialization failed
+    globalUsersnapApi = undefined;
+  }
 }
 
 export async function openUsersnapForm(apiKey: string) {
-  if (globalUsersnapApi) {
-    try {
-      const widgetApi = await globalUsersnapApi.show(apiKey);
-      await widgetApi.open();
-    } catch (error) {
-      logger.warn(`Failed to open Usersnap widget: ${error}`);
-    }
+  if (!globalUsersnapApi) {
+    logger.warn(
+      'Cannot open Usersnap form: UserSnap API is not initialized. This may be due to network connectivity issues or blocked external requests.',
+    );
+    await notificationService.send({
+      message:
+        'Usersnap unavailable. Unable to load feedback form. Please check your internet connection, restart the application, and try again.',
+      severity: 'warning',
+    });
+
+    return;
+  }
+
+  if (!apiKey) {
+    logger.error('Cannot open Usersnap form: API key is required');
+    return;
+  }
+
+  try {
+    const widgetApi = await globalUsersnapApi.show(apiKey);
+    await widgetApi.open();
+  } catch (error) {
+    logger.warn(`Failed to open Usersnap widget: ${error}`);
+    await notificationService.send({
+      message: 'Failed to open Usersnap feedback form. Please try again.',
+      severity: 'warning',
+    });
   }
 }
 
 /** Closes open UserSnap form */
 export async function closeOpenUsersnapForm() {
-  if (globalUsersnapApi && apiKeyOfOpenForm) {
-    try {
-      // We need to call the 'show' function to get the widgetApi
-      const widgetApi = await globalUsersnapApi.show(apiKeyOfOpenForm);
-      widgetApi.close();
-    } catch (error) {
-      logger.warn(`Failed to close Usersnap forms: ${error}`);
-    }
+  if (!globalUsersnapApi) {
+    logger.debug('Cannot close Usersnap form: UserSnap API is not initialized');
+    return;
+  }
+
+  if (!apiKeyOfOpenForm) {
+    logger.debug('No Usersnap form is currently open');
+    return;
+  }
+
+  try {
+    // We need to call the 'show' function to get the widgetApi
+    const widgetApi = await globalUsersnapApi.show(apiKeyOfOpenForm);
+    widgetApi.close();
+  } catch (error) {
+    logger.warn(`Failed to close Usersnap forms: ${error}`);
   }
 }
 
