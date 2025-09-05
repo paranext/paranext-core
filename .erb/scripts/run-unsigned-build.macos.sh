@@ -40,25 +40,35 @@ TEMP_DIR="/tmp/app_install_$$"
 # Find the zip file based on provided path or default
 SEARCH_PATH="${1:-$HOME/Downloads}"  # Use first argument or default to ~/Downloads
 
-# Determine if the path is a file or directory and find the zip file
+# Determine if the path is a file or directory and find the app file (zip or dmg)
 if [ -f "$SEARCH_PATH" ]; then
     # Path is a file - use it directly
     if [[ "$SEARCH_PATH" == *.zip ]]; then
-        ZIP_FILE="$SEARCH_PATH"
-        echo "Using specified zip file: $(basename "$ZIP_FILE")"
+        APP_ARCHIVE="$SEARCH_PATH"
+        echo "Using specified zip file: $(basename "$APP_ARCHIVE")"
+    elif [[ "$SEARCH_PATH" == *.dmg ]]; then
+        DMG_FILE="$SEARCH_PATH"
+        echo "Using specified DMG file: $(basename "$DMG_FILE")"
     else
-        echo "Error: Specified file '$SEARCH_PATH' is not a zip file!"
+        echo "Error: Specified file '$SEARCH_PATH' is not a zip or dmg file!"
         exit 1
     fi
 elif [ -d "$SEARCH_PATH" ]; then
-    # Path is a directory - search for app-macos*.zip files
-    echo "Looking for app-macos*.zip files in $SEARCH_PATH..."
-    ZIP_FILE=$(ls -t "$SEARCH_PATH/app-macos"*.zip 2>/dev/null | head -1)
+    # Path is a directory - search for dmg or app-macos*.zip files
+    echo "Looking for DMG or app-macos*.zip files in $SEARCH_PATH..."
+    DMG_FILE=$(ls -t "$SEARCH_PATH"/*.dmg 2>/dev/null | head -1)
+    if [ -z "$DMG_FILE" ]; then
+        APP_ARCHIVE=$(ls -t "$SEARCH_PATH/app-macos"*.zip 2>/dev/null | head -1)
+    fi
 
-    if [ -z "$ZIP_FILE" ]; then
-        echo "Error: No app-macos*.zip file found in $SEARCH_PATH!"
-        echo "Available zip files in $SEARCH_PATH:"
-        ls -la "$SEARCH_PATH/"*.zip 2>/dev/null || echo "No zip files found"
+    if [ -n "$DMG_FILE" ]; then
+        echo "Found most recent DMG file: $(basename "$DMG_FILE")"
+    elif [ -n "$APP_ARCHIVE" ]; then
+        echo "Found most recent zip file: $(basename "$APP_ARCHIVE")"
+    else
+        echo "Error: No app-macos*.zip or *.dmg file found in $SEARCH_PATH!"
+        echo "Available files in $SEARCH_PATH:"
+        ls -la "$SEARCH_PATH/"*.{zip,dmg} 2>/dev/null || echo "No zip or dmg files found"
         exit 1
     fi
 else
@@ -66,23 +76,18 @@ else
     exit 1
 fi
 
-echo "Found most recent file: $(basename "$ZIP_FILE")"
-
-# Create temporary directory
-mkdir -p "$TEMP_DIR"
-echo "Created temporary directory: $TEMP_DIR"
-
-# Extract zip file
-echo "Extracting zip file..."
-unzip -q "$ZIP_FILE" -d "$TEMP_DIR"
-
-# Detect DMG (universal or arch-specific)
-DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" -type f | head -1)
-
-if [ -z "$DMG_FILE" ]; then
-    echo "Error: No DMG found in $TEMP_DIR"
-    rm -rf "$TEMP_DIR"
-    exit 1
+# If we have a zip, extract to temporary directory and locate the DMG
+if [ -n "$APP_ARCHIVE" ]; then
+    echo "Created temporary directory: $TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    echo "Extracting zip file..."
+    unzip -q "$APP_ARCHIVE" -d "$TEMP_DIR"
+    DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" -type f | head -1)
+    if [ -z "$DMG_FILE" ]; then
+        echo "Error: No DMG found inside zip archive"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
 fi
 
 echo "Using DMG: $DMG_FILE"
