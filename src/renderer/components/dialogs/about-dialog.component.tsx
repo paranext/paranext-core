@@ -57,15 +57,17 @@ function AboutDialog() {
   if (appInfo.version) packageInfo.version = appInfo.version;
 
   return (
-    <div className="about-panel dark">
-      <div className="about">
-        <InlineLogoAndName width="80%" />
-        <h1>{productName}</h1>
-        <p>Copyright ©2017-2025 SIL Global and United Bible Societies.</p>
-        <p>{formatReplacementString(versionLabelFormat, packageInfo)}</p>
-        <p>{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
-        <p>{packageInfo.description}</p>
-        <p>
+    <div className="about-scroll-container">
+      <div className="about-content">
+        <InlineLogoAndName className="about-logo" />
+        <h1 className="about-title">{productName}</h1>
+        <p className="about-description">{packageInfo.description}</p>
+        <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
+        <p className="about-license">{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
+        <p className="about-attribution">
+          Copyright ©2017-2025 SIL Global and United Bible Societies
+        </p>
+        <p className="about-db-ip-attribution">
           {formatReplacementStringToArray(dbIpAttributionFormat, {
             intro: dbIpAttributionIntro,
             websiteLink: (
