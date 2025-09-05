@@ -14,7 +14,6 @@ import {
   CheckCreatorFunction,
   CheckDetails,
   CheckDetailsWithCheckId,
-  CheckEnablerDisabler,
   CheckInputRange,
   CheckResultClassifier,
   CheckRunResult,
@@ -56,7 +55,6 @@ class CheckRunnerEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
   implements
     IDataProviderEngine<CheckRunnerDataTypes>,
-    CheckEnablerDisabler,
     CheckResultClassifier,
     InventoryDataRetriever
 {

@@ -3,8 +3,8 @@ using SIL.Scripture;
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// Represents a specific location in project text. This class must serialize/deserialize
-/// to the CheckLocation type defined in TypeScript.
+/// Represents a specific location in project text. The offset is in terms of USFM. This class must
+/// serialize/deserialize to the CheckLocation type defined in TypeScript.
 /// <br />
 /// This differs from a <see cref="CheckInputRange"/> in that this represents a single point that
 /// may be in the middle of project text (e.g., partway through a verse). A
