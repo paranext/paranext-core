@@ -6,23 +6,30 @@ import { ReactElement, useState } from 'react';
 import { Home, HomeProps, LocalProjectInfo } from './home.component';
 
 /* This is a minimal set of Tailwind styles needed for the Home component to display correctly in Storybook
-Remove this when we can correctly import the tailwind styles */
+Remove this when we can correctly import the tailwind styles
+Numbers are also different in Storybook due to a 50px margin left and right of the Story */
 const styles = `
-  @media (min-width: 768px) {
+  @media (min-width: 868px) {
     .md\\:\\!tw-table-cell {
       display: table-cell !important;
     }
   }
 
-  @media (min-width: 640px) {
+  @media (min-width: 740px) {
     .sm\\:\\!tw-table-cell {
       display: table-cell !important;
     }
   }
 
-  @media (min-width: 340px) {
-    .min-\\[340px\\]\\:\\!tw-table-cell {
-      display: table-cell !important;
+  @media (max-width: 400px) {
+    .max-\\[300px\\]\\:tw-hidden {
+      display: none;
+    }
+    .max-\\[300px\\]\\:\\!tw-hidden {
+      display: none !important;
+    }
+    .max-\\[300px\\]\\:tw-flex {
+      display: flex;
     }
   }
 `;
@@ -79,7 +86,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
 const staticProjectsAndResources: SharedProjectsInfo = {
   '13': {
     id: '13',
-    name: 'Pr4-fromRemote',
+    name: 'Pr4--S/R',
     fullName: 'Project 4 - fromRemote-wasEditable',
     language: '2ndLanguage-fromRemote',
     editedStatus: 'edited',
@@ -87,7 +94,7 @@ const staticProjectsAndResources: SharedProjectsInfo = {
   },
   '17': {
     id: '17',
-    name: 'Pr7-fromRemote',
+    name: 'HPUX-S/R',
     fullName: 'Project 7 - fromRemote',
     language: '2ndLanguage-fromRemote',
     editedStatus: 'new',
@@ -144,6 +151,12 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
             <CardTitle>Home Story</CardTitle>
           </>
         ),
+        onOpenProject: () => {
+          alert('Open project');
+        },
+        onSendReceiveProject: () => {
+          alert('Send/Receive project');
+        },
       }}
     />
   );
