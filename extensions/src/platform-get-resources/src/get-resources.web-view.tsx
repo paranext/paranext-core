@@ -45,7 +45,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
-  '%resources_any%',
+  '%resources_any_language%',
+  '%resources_any_type%',
   '%resources_dialog_subtitle%',
   '%resources_dialog_title%',
   '%resources_filterBy%',
