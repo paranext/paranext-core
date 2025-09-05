@@ -71,8 +71,8 @@ export class PersistedCheckRunResults {
     const index = chapterResults.findIndex((existingResult) => {
       return (
         existingResult.checkResultType === result.checkResultType &&
-        existingResult.verseRef.verse === result.verseRef.verse &&
-        existingResult.verseText === result.verseText &&
+        existingResult.verseRef.verseNum === result.verseRef.verseNum &&
+        existingResult.itemText === result.itemText &&
         existingResult.checkResultUniqueId === result.checkResultUniqueId
       );
     });
@@ -100,8 +100,8 @@ export class PersistedCheckRunResults {
     return !!possibleMatches.find((possibleMatch) => {
       return (
         possibleMatch.checkResultType === result.checkResultType &&
-        possibleMatch.verseRef.verse === result.verseRef.verse &&
-        possibleMatch.verseText === result.verseText &&
+        possibleMatch.verseRef.verseNum === result.verseRef.verseNum &&
+        possibleMatch.itemText === result.itemText &&
         possibleMatch.checkResultUniqueId === result.checkResultUniqueId
       );
     });

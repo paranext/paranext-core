@@ -2,20 +2,29 @@ import papi, { DataProviderEngine, dataProviders, logger } from '@papi/backend';
 import {
   DataProviderUpdateInstructions,
   ExtensionDataScope,
-  IDataProviderEngine,
   IDisposableDataProvider,
 } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { InventoryItem } from 'platform-bible-react';
-import { Mutex, MutexMap, UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  getErrorMessage,
+  Mutex,
+  MutexMap,
+  newGuid,
+  UnsubscriberAsync,
+  UnsubscriberAsyncList,
+} from 'platform-bible-utils';
 import {
   Check,
   CheckCreatorFunction,
   CheckDetails,
   CheckDetailsWithCheckId,
-  CheckEnablerDisabler,
   CheckInputRange,
+  CheckJobRunner,
+  CheckJobScope,
+  CheckJobStatusReport,
   CheckResultClassifier,
   CheckRunResult,
   CheckRunnerCheckDetails,
@@ -36,12 +45,6 @@ type CheckDetailsWithCreator = CheckDetailsWithCheckId & {
 // This lives outside the engine because the register and unregister functions also need to do so
 const registeredChecksById = new Map<string, CheckDetailsWithCreator>();
 
-type DetailsAboutCheckInProject = {
-  checkId: string;
-  check: Check;
-  latestResults: CheckRunResult[];
-};
-
 type CheckRunnerPdps = {
   usfmBookPdp: ProjectDataProviderInterfaces['platformScripture.USFM_Book'];
   basePdp: ProjectDataProviderInterfaces['platform.base'];
@@ -52,22 +55,27 @@ const deniedDataScope: ExtensionDataScope = {
   dataQualifier: 'deniedResultsList',
 };
 
+type CheckJob = Omit<CheckJobStatusReport, 'nextResults' | 'totalExecutionTimeMs'> & {
+  jobScope: CheckJobScope;
+  promise: Promise<void>;
+  results: CheckRunResult[];
+  startTime: number;
+  endTime?: number;
+  stopRequested: boolean;
+};
+
 class CheckRunnerEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
-  implements
-    IDataProviderEngine<CheckRunnerDataTypes>,
-    CheckEnablerDisabler,
-    CheckResultClassifier,
-    InventoryDataRetriever
+  implements CheckJobRunner, CheckResultClassifier, InventoryDataRetriever
 {
-  private activeRanges: CheckInputRange[] = [];
-  private mutexesPerCheck = new MutexMap();
-  private enabledChecksByProjectId = new Map<string, DetailsAboutCheckInProject[]>();
-  private subscribedProjects = new Map<string, CheckRunnerPdps>();
-  private deniedCheckResultsByProjectId = new Map<string, PersistedCheckRunResults>();
+  #deniedCheckResultsByProjectId = new Map<string, PersistedCheckRunResults>();
+  #jobs = new Map<string, CheckJob>();
+  #mutexesPerCheck = new MutexMap();
+  #subscribedProjects = new Map<string, CheckRunnerPdps>();
 
   // #region Checks
 
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getAvailableChecks(): Promise<CheckRunnerCheckDetails[]> {
     // Copy over check details to return
     const checks = new Map<string, CheckRunnerCheckDetails>();
@@ -77,18 +85,9 @@ class CheckRunnerEngine
         checkId: checkDetails.checkId,
         checkName: checkDetails.checkName,
         checkDescription: checkDetails.checkDescription,
-        enabledProjectIds: [],
       });
     });
 
-    // Add details about which ones are enabled for which projects
-    Object.getOwnPropertyNames(this.enabledChecksByProjectId).forEach((projectId) => {
-      this.enabledChecksByProjectId.get(projectId)?.forEach(({ checkId }) => {
-        const check = checks.get(checkId);
-        if (!check) throw new Error(`Check ${checkId} is enabled but not registered!`);
-        check.enabledProjectIds.push(projectId);
-      });
-    });
     return [...checks.values()];
   }
 
@@ -96,139 +95,6 @@ class CheckRunnerEngine
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setAvailableChecks disabled - use enableCheck and disableCheck');
-  }
-
-  async enableCheck(checkId: string, projectId: string): Promise<void> {
-    await this.mutexesPerCheck.get(checkId).runExclusive(async () => {
-      let checksForProject = this.enabledChecksByProjectId.get(projectId);
-      // If the check is already enabled for this project, there is nothing to do
-      if (
-        !!checksForProject &&
-        checksForProject.find((checkData) => {
-          return checkData.checkId === checkId;
-        })
-      ) {
-        logger.debug(
-          `Re-enabling check ${checkId} for project ${projectId} that was already enabled`,
-        );
-        return;
-      }
-
-      // Make sure we know about the check
-      const checkDetails = registeredChecksById.get(checkId);
-      if (!checkDetails) throw new Error(`Cannot enable unknown check: ${checkId}`);
-
-      // Make sure there is an entry to store the check details for the given project
-      if (!checksForProject) {
-        checksForProject = [];
-        this.enabledChecksByProjectId.set(projectId, checksForProject);
-      }
-
-      // Create a check and initialize it with the given project
-      logger.debug(`Creating check with object of type ${typeof checkDetails.createFunction}`);
-      let warnings: string[] = [];
-      try {
-        const checkObj = await checkDetails.createFunction();
-        warnings = await checkObj.initialize(projectId);
-        const checkData: DetailsAboutCheckInProject = {
-          checkId,
-          check: checkObj,
-          latestResults: [],
-        };
-        checksForProject.push(checkData);
-      } catch (error) {
-        logger.error(`Error initializing check "${checkId}": ${JSON.stringify(error)}`);
-      }
-      this.notifyUpdate('AvailableChecks');
-
-      // Automatically rebuild results when project data changes
-      if (!this.subscribedProjects.has(projectId)) {
-        // This is assuming that whenever project data changes, this PDP will see an update.
-        const usfmBookPdp = await papi.projectDataProviders.get(
-          'platformScripture.USFM_Book',
-          projectId,
-        );
-        const basePdp = await papi.projectDataProviders.get('platform.base', projectId);
-        const pdps: CheckRunnerPdps = { usfmBookPdp, basePdp };
-        // We should check a second time since we `await`ed a few lines back
-        if (!this.subscribedProjects.has(projectId)) {
-          this.subscribedProjects.set(projectId, pdps);
-          // We just need something to tell us when project data changes
-          await usfmBookPdp.subscribeBookUSFM(
-            { book: 'GEN', chapterNum: 1, verseNum: 1 },
-            async () => {
-              // Ideally we'd want to check if the text that changed is inside of an active range
-              // This isn't available to subscriptions right now, so just rebuild everything
-              try {
-                await this.rebuildResults(projectId);
-              } catch (error) {
-                logger.error(
-                  `Error when building check results for project ${projectId}: ${JSON.stringify(error)}`,
-                );
-              }
-            },
-            { retrieveDataImmediately: false, whichUpdates: '*' },
-          );
-
-          usfmBookPdp.onDidDispose(() => {
-            this.enabledChecksByProjectId.get(projectId)?.forEach((enabledCheckDetails) => {
-              this.disableCheck(enabledCheckDetails.checkId, projectId);
-            });
-            this.enabledChecksByProjectId.delete(projectId);
-            this.subscribedProjects.delete(projectId);
-          });
-        }
-      }
-
-      if (warnings.length > 0)
-        logger.warn(`Warnings when enabling check ${checkId}: ${JSON.stringify(warnings)}`);
-    });
-    await this.rebuildResults(projectId);
-  }
-
-  async disableCheck(checkId: string, projectId?: string): Promise<void> {
-    const lock = this.mutexesPerCheck.get(checkId);
-    await lock.runExclusive(async () => {
-      const checksToDispose: Check[] = [];
-
-      this.enabledChecksByProjectId.forEach((enabledChecks, enabledProjectId) => {
-        const relevantCheckIndex = enabledChecks.findIndex(
-          (enabledCheck) =>
-            enabledCheck.checkId === checkId && (!projectId || enabledProjectId === projectId),
-        );
-        if (relevantCheckIndex < 0) return;
-
-        // Remove the check from the list of enabled checks and prepare to dispose of it
-        const relevantCheck = enabledChecks.splice(relevantCheckIndex, 1)[0];
-        checksToDispose.push(relevantCheck.check);
-      });
-
-      await Promise.all(
-        checksToDispose.map(async (check) => {
-          // The check object might be gone already if an extension was unloaded that contained it
-          if (check) await check.dispose();
-        }),
-      );
-
-      this.notifyUpdate(['AvailableChecks', 'CheckResults']);
-    });
-  }
-
-  // #endregion
-
-  // #region Ranges
-
-  async getActiveRanges(): Promise<CheckInputRange[]> {
-    return this.activeRanges;
-  }
-
-  async setActiveRanges(
-    _: undefined,
-    ranges: CheckInputRange[],
-  ): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
-    this.activeRanges = ranges;
-    await this.rebuildResults();
-    return 'ActiveRanges';
   }
 
   // #endregion
@@ -273,67 +139,22 @@ class CheckRunnerEngine
     return retVal;
   }
 
-  async getCheckResults(): Promise<CheckRunResult[]> {
-    const retVal: CheckRunResult[] = [];
-    this.enabledChecksByProjectId.forEach((checkDetails) => {
-      checkDetails.forEach((oneCheckDetails) => {
-        retVal.push(...oneCheckDetails.latestResults);
-      });
-    });
-    return Promise.all(
-      retVal.map(async (checkRunResult) => {
-        const deniedResults = await this.loadDeniedResults(checkRunResult.projectId);
-        checkRunResult.isDenied = deniedResults.containsResult(checkRunResult);
-        return checkRunResult;
-      }),
-    );
-  }
-
-  // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
-    throw new Error('setCheckResults disabled');
-  }
-
   async loadDeniedResults(projectId: string): Promise<PersistedCheckRunResults> {
-    let deniedResults = this.deniedCheckResultsByProjectId.get(projectId);
+    let deniedResults = this.#deniedCheckResultsByProjectId.get(projectId);
     if (!deniedResults) {
       deniedResults = new PersistedCheckRunResults(
-        await this.subscribedProjects.get(projectId)?.basePdp.getExtensionData(deniedDataScope),
+        await this.#subscribedProjects.get(projectId)?.basePdp.getExtensionData(deniedDataScope),
       );
-      this.deniedCheckResultsByProjectId.set(projectId, deniedResults);
+      this.#deniedCheckResultsByProjectId.set(projectId, deniedResults);
     }
     return deniedResults;
   }
 
   async saveDeniedResults(projectId: string): Promise<void> {
-    const deniedResults = this.deniedCheckResultsByProjectId.get(projectId);
+    const deniedResults = this.#deniedCheckResultsByProjectId.get(projectId);
     if (!deniedResults) return;
     const data = deniedResults.serialize();
-    await this.subscribedProjects.get(projectId)?.basePdp.setExtensionData(deniedDataScope, data);
-  }
-
-  async rebuildResults(projectId?: string): Promise<void> {
-    // First dimension of array is by project ID. Second dimension is by check for the project.
-    const twoDimArray = this.activeRanges.map((checkRange) => {
-      if (!!projectId && projectId !== checkRange.projectId) return [];
-      const enabledChecksForProject = this.enabledChecksByProjectId.get(checkRange.projectId);
-      if (!enabledChecksForProject) return [];
-      return Array.from(enabledChecksForProject).map(async (enabledCheck) => {
-        try {
-          const results = await enabledCheck.check.getCheckResults(checkRange);
-          enabledCheck.latestResults = results;
-        } catch (error) {
-          logger.error(`Check error for "${enabledCheck.checkId}": ${JSON.stringify(error)}`);
-          enabledCheck.latestResults = [];
-        }
-      });
-    });
-    // Flatten the 2D array to a 1D array of promises to get check results
-    const oneDimArray = twoDimArray.reduce((accumulator, value) => accumulator.concat(value), []);
-    // After all the promises are settled, every check's `latestResults` will be filled in
-    await Promise.all(oneDimArray);
-    this.notifyUpdate('CheckResults');
+    await this.#subscribedProjects.get(projectId)?.basePdp.setExtensionData(deniedDataScope, data);
   }
 
   // #endregion
@@ -351,6 +172,181 @@ class CheckRunnerEngine
   ): Promise<InventoryItem[]> {
     throw new Error(`retrieveInventoryData is not implemented for the extensionHostCheckRunner.
         Did you mean to call the checkAggregator?`);
+  }
+
+  // #endregion
+
+  // #region Jobs
+
+  async beginCheckJob(jobScope: CheckJobScope): Promise<string> {
+    if (jobScope.inputRanges.length === 0 || jobScope.checkIds.length === 0)
+      throw new Error('At least 1 input range and 1 check ID are required to begin a check job');
+
+    const jobId = newGuid();
+    const job: CheckJob = {
+      jobId,
+      jobScope,
+      status: 'queued',
+      percentComplete: 0,
+      results: [],
+      totalResultsCount: 0,
+      stopRequested: false,
+      startTime: performance.now(),
+      promise: Promise.resolve(),
+    };
+    this.#jobs.set(jobId, job);
+    job.promise = this.#processCheckJob(job);
+    return jobId;
+  }
+
+  async stopCheckJob(jobId: string, timeoutMs?: number): Promise<boolean> {
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new Error(`Job with ID ${jobId} not found`);
+    job.stopRequested = true;
+    const stopCheckAsyncVariable = new AsyncVariable<void>('Stop check', timeoutMs);
+    // Wait for the check job to stop in an IIFE, resolving the async variable when done
+    (async () => {
+      await job.promise;
+      stopCheckAsyncVariable.resolveToValue(undefined);
+    })();
+
+    try {
+      // Wait for the check job to stop or the timeout to be hit, whichever comes first
+      await stopCheckAsyncVariable.promise;
+      return true;
+    } catch (error) {
+      logger.warn(
+        `Check job ${jobId} did not stop gracefully within ${timeoutMs}ms: ${getErrorMessage(error)}`,
+      );
+      return false;
+    }
+  }
+
+  async cleanUpCheckJob(jobId: string): Promise<void> {
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new Error(`Job with ID ${jobId} not found`);
+    if (job.status === 'running')
+      throw new Error(`Job with ID ${jobId} is running. It must be stopped before completing.`);
+    this.#jobs.delete(jobId);
+  }
+
+  async abandonCheckJob(jobId: string): Promise<void> {
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new Error(`Job with ID ${jobId} not found`);
+    job.stopRequested = true;
+    this.#jobs.delete(jobId);
+  }
+
+  async retrieveCheckJobUpdate(
+    jobId: string,
+    maxResultsToInclude: number,
+  ): Promise<CheckJobStatusReport> {
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new Error(`Job with ID ${jobId} not found`);
+    return {
+      jobId: job.jobId,
+      status: job.status,
+      percentComplete: job.percentComplete,
+      totalResultsCount: job.totalResultsCount,
+      nextResults: job.results.splice(0, maxResultsToInclude),
+      error: job.error,
+      totalExecutionTimeMs: (job.endTime ?? performance.now()) - job.startTime,
+    };
+  }
+
+  async #processCheckJob(job: CheckJob): Promise<void> {
+    job.status = 'running';
+    let stepsCompleted = 0;
+    let totalSteps = 1;
+
+    // Function to safely increment steps completed counter
+    const incrementStepsCompleted = () => {
+      stepsCompleted += 1;
+    };
+
+    try {
+      totalSteps = job.jobScope.checkIds.length * job.jobScope.inputRanges.length;
+
+      // We need to run each check asynchronously for each range
+      /* eslint-disable no-await-in-loop */
+      for (let onCheck = 0; onCheck < job.jobScope.checkIds.length; onCheck++) {
+        const checkId = job.jobScope.checkIds[onCheck];
+        if (job.stopRequested) return;
+
+        const checkDetails = registeredChecksById.get(checkId);
+        if (!checkDetails) {
+          job.error = `Check with ID ${checkId} is not registered and cannot be run`;
+          job.status = 'errored';
+          job.endTime = performance.now();
+          return;
+        }
+
+        // Get mutex for this check so that only one job can run it at a time
+        const mutex = this.#mutexesPerCheck.get(checkId);
+
+        // Run the check within the mutex
+        await mutex.runExclusive(async () => {
+          if (job.stopRequested) return;
+
+          for (let onRange = 0; onRange < job.jobScope.inputRanges.length; onRange++) {
+            const range = job.jobScope.inputRanges[onRange];
+
+            // Ensure we have the pdps we need for the project
+            if (!this.#subscribedProjects.has(range.projectId)) {
+              const usfmBookPdp = await papi.projectDataProviders.get(
+                'platformScripture.USFM_Book',
+                range.projectId,
+              );
+              if (!usfmBookPdp) throw new Error(`Could not get USFM for ${range.projectId}`);
+              const basePdp = await papi.projectDataProviders.get('platform.base', range.projectId);
+              if (!basePdp)
+                throw new Error(
+                  `Project ${range.projectId} does not have a platform.base PDP, which is required to run checks`,
+                );
+              this.#subscribedProjects.set(range.projectId, {
+                usfmBookPdp,
+                basePdp,
+              });
+            }
+
+            if (job.stopRequested) return;
+
+            let check: Check | undefined;
+            try {
+              check = await checkDetails.createFunction();
+              if (!check)
+                throw new Error(`Check with ID ${checkId} could not be created and cannot be run`);
+              const initializationErrors = await check.initialize(range.projectId);
+              if (initializationErrors.length > 0) throw new Error(initializationErrors.join('; '));
+
+              const results = await check.getCheckResults(range);
+              const deniedResults = await this.loadDeniedResults(range.projectId);
+              results.forEach((result) => {
+                result.checkId = checkId;
+                if (deniedResults.containsResult(result)) result.isDenied = true;
+              });
+              job.results.push(...results);
+              job.totalResultsCount += results.length;
+              incrementStepsCompleted();
+            } finally {
+              if (check) await check.dispose();
+            }
+          }
+        });
+      }
+      /* eslint-disable no-await-in-loop */
+
+      // At this point we finished all checks in all ranges
+      job.status = 'completed';
+    } catch (error) {
+      job.status = 'errored';
+      job.error = getErrorMessage(error);
+    } finally {
+      if (job.stopRequested && job.status === 'running') job.status = 'stopped';
+      job.endTime = job.endTime ?? performance.now();
+      job.percentComplete =
+        stepsCompleted === totalSteps ? 100 : (stepsCompleted / totalSteps) * 100;
+    }
   }
 
   // #endregion
@@ -374,7 +370,6 @@ const unregisterCheck = async (checkId: string): Promise<boolean> => {
     }
 
     await initialize();
-    await dataProvider.disableCheck(checkId);
     registeredChecksById.delete(checkId);
     succeeded = true;
   });
@@ -386,7 +381,7 @@ const registerCheck = async (
   checkDetails: CheckDetails,
   createCheck: CheckCreatorFunction,
 ): Promise<UnsubscriberAsync> => {
-  const checkId = `${checkDetails.checkName}-${Date.now()}`;
+  const checkId = `registered-${checkDetails.checkName}-${checkDetails.checkDescription}`;
 
   // Make sure we aren't registering and unregistering checks at the same time
   await registrationLock.runExclusive(async () => {
