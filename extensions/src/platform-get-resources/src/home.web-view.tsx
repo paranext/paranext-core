@@ -155,7 +155,7 @@ globalThis.webViewComponent = function HomeWebView() {
             severity: 'error',
             message: '%data_loading_error_paratextData_internet_disabled%',
             clickCommandLabel: '%general_open%',
-            clickCommand: 'paratextRegistration.showParatextRegistration',
+            clickCommand: 'paratextRegistration.showInternetSettings',
             notificationId: sharedProjectErrorNotificationId,
           });
         } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
@@ -163,7 +163,7 @@ globalThis.webViewComponent = function HomeWebView() {
             severity: 'error',
             message: '%data_loading_error_paratextData_auth_failure%',
             clickCommandLabel: '%general_open%',
-            clickCommand: 'paratextRegistration.showParatextRegistration',
+            clickCommand: 'paratextRegistration.showProfile',
             notificationId: sharedProjectErrorNotificationId,
           });
         } else {

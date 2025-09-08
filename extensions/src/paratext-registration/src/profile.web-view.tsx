@@ -7,11 +7,12 @@ import { useMemo } from 'react';
 import { MarkdownRenderer } from 'platform-bible-react';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%paratextRegistration_description_shared_with_paratext_9%',
+  '%paratextRegistration_description_is_registered%',
   '%paratextRegistration_registration_details%',
+  '%product_name%',
 ];
 
-globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
+globalThis.webViewComponent = function Profile({ useWebViewState }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
   const registrationDetails = useMemo(
     () =>
@@ -23,11 +24,14 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-4 tw-h-screen tw-p-4">
-      <div className="tw-flex tw-flex-col tw-gap-2">
-        <p>{localizedStrings['%paratextRegistration_description_shared_with_paratext_9%']}</p>
-        <MarkdownRenderer anchorTarget="_blank" markdown={registrationDetails} />
-      </div>
+      <p>
+        {formatReplacementString(
+          localizedStrings['%paratextRegistration_description_is_registered%'],
+          { ...localizedStrings },
+        )}
+      </p>
       <RegistrationForm useWebViewState={useWebViewState} />
+      <MarkdownRenderer anchorTarget="_blank" markdown={registrationDetails} />
     </div>
   );
 };
