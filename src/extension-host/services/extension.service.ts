@@ -148,6 +148,12 @@ const FORBIDDEN_EXTENSION_NAMES = ['', PLATFORM_NAMESPACE];
  */
 const RESTART_DELAY_MS = 2000;
 
+/**
+ * Timeout duration in milliseconds to automatically reject the promise returned by
+ * `waitForExtensionsReload()` if it takes to long
+ */
+const RESTART_WAIT_TIMEOUT_MS = 60000;
+
 /** Save the original `require` function. */
 const requireOriginal = Module.prototype.require;
 
@@ -780,6 +786,27 @@ async function normalizeExtensionFileName(baseUri: string, zipUri: string) {
   }
 }
 
+/**
+ * Function to wait for the extensions to be reloaded. If for some reason the event didn't get
+ * emitted or something else happened, there is an automatic timeout that will reject the Promise if
+ * the reload took too long.
+ */
+async function waitForExtensionsReload(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Subscribes to the reload event emitter and waits till that fires off
+    const unsubscribe = reloadFinishedEventEmitter.subscribe(() => {
+      resolve();
+      unsubscribe();
+    });
+
+    // Timeout that automatically rejects the promise if it's been waiting for 60 seconds
+    setTimeout(() => {
+      reject(new Error('Extensions reload wait took too long!'));
+      unsubscribe();
+    }, RESTART_WAIT_TIMEOUT_MS);
+  });
+}
+
 // #region Extension management privileges
 
 async function installExtension(
@@ -836,6 +863,18 @@ async function installExtension(
   if (await nodeFS.getStats(extensionUri))
     logger.warn(`Attempting to overwrite extension ZIP file: ${extensionUri}`);
   await nodeFS.writeFile(extensionUri, extensionBuffer);
+
+  // Waits for the extensions to reload
+  await waitForExtensionsReload();
+  // Checks to make sure the extension is active
+  if (
+    ![...activeExtensions.values()].find(
+      (active) => active.info.name === extensionName && active.info.version === extensionVersion,
+    )
+  ) {
+    throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
+  }
+
   logger.info(`Installed ${extensionName} ${extensionVersion} from ${extensionUrlToDownload}`);
 }
 
@@ -848,6 +887,17 @@ async function enableExtension(extensionId: ExtensionIdentifier) {
   if (await nodeFS.getStats(destinationUri))
     throw new Error(`'${extensionName} ${extensionVersion}' is already enabled`);
   await nodeFS.moveFile(sourceUri, destinationUri);
+  // Waits for the extensions to reload
+  await waitForExtensionsReload();
+  // Checks to make sure the extension is active
+  if (
+    ![...activeExtensions.values()].find(
+      (active) => active.info.name === extensionName && active.info.version === extensionVersion,
+    )
+  ) {
+    throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
+  }
+
   logger.info(`Enabled ${extensionName} ${extensionVersion}`);
 }
 
@@ -860,6 +910,17 @@ async function disableExtension(extensionId: ExtensionIdentifier) {
   if (await nodeFS.getStats(destinationUri))
     logger.warn(`Attempting to overwrite extension ZIP file: ${destinationUri}`);
   await nodeFS.moveFile(sourceUri, destinationUri);
+  // Waits for the extensions to reload
+  await waitForExtensionsReload();
+  // Checks to make sure the extension is no longer active
+  if (
+    [...activeExtensions.values()].find(
+      (active) => active.info.name === extensionName && active.info.version === extensionVersion,
+    )
+  ) {
+    throw new Error(`'${extensionName} ${extensionVersion}' failed to disable!`);
+  }
+
   logger.info(`Disabled ${extensionName} ${extensionVersion}`);
 }
 
