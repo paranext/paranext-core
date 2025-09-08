@@ -868,6 +868,8 @@ async function installExtension(
   await waitForExtensionsReload();
   // Checks to make sure the extension is active
   if (activeExtensions.get(extensionName)?.info.version !== extensionVersion) {
+    // Deletes the installed extension if it hasn't already been removed
+    if (await nodeFS.getStats(extensionUri)) await nodeFS.deleteFile(extensionUri);
     throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
   }
 
@@ -887,6 +889,9 @@ async function enableExtension(extensionId: ExtensionIdentifier) {
   await waitForExtensionsReload();
   // Checks to make sure the extension is active
   if (activeExtensions.get(extensionName)?.info.version !== extensionVersion) {
+    // Moves the extension zip file back to where it was if it exists at the destination Uri
+    // and hasn't already been moved yet
+    if (await nodeFS.getStats(destinationUri)) await nodeFS.moveFile(destinationUri, sourceUri);
     throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
   }
 
@@ -906,6 +911,9 @@ async function disableExtension(extensionId: ExtensionIdentifier) {
   await waitForExtensionsReload();
   // Checks to make sure the extension is no longer active
   if (activeExtensions.get(extensionName)?.info.version === extensionVersion) {
+    // Moves the extension zip file back to where it was if it exists at the destination Uri
+    // and hasn't already been moved yet
+    if (await nodeFS.getStats(destinationUri)) await nodeFS.moveFile(destinationUri, sourceUri);
     throw new Error(`'${extensionName} ${extensionVersion}' failed to disable!`);
   }
 
