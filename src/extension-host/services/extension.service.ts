@@ -867,11 +867,7 @@ async function installExtension(
   // Waits for the extensions to reload
   await waitForExtensionsReload();
   // Checks to make sure the extension is active
-  if (
-    ![...activeExtensions.values()].find(
-      (active) => active.info.name === extensionName && active.info.version === extensionVersion,
-    )
-  ) {
+  if (activeExtensions.get(extensionName)?.info.version !== extensionVersion) {
     throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
   }
 
@@ -890,11 +886,7 @@ async function enableExtension(extensionId: ExtensionIdentifier) {
   // Waits for the extensions to reload
   await waitForExtensionsReload();
   // Checks to make sure the extension is active
-  if (
-    ![...activeExtensions.values()].find(
-      (active) => active.info.name === extensionName && active.info.version === extensionVersion,
-    )
-  ) {
+  if (activeExtensions.get(extensionName)?.info.version !== extensionVersion) {
     throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
   }
 
@@ -913,11 +905,7 @@ async function disableExtension(extensionId: ExtensionIdentifier) {
   // Waits for the extensions to reload
   await waitForExtensionsReload();
   // Checks to make sure the extension is no longer active
-  if (
-    [...activeExtensions.values()].find(
-      (active) => active.info.name === extensionName && active.info.version === extensionVersion,
-    )
-  ) {
+  if (activeExtensions.get(extensionName)?.info.version === extensionVersion) {
     throw new Error(`'${extensionName} ${extensionVersion}' failed to disable!`);
   }
 
