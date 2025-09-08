@@ -33,6 +33,32 @@
       "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Open Dictionary: SDBH/SDBG",
       "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Open HEBGRK Dictionary",
       "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary"
+    },
+    "es": {
+      "%platformLexicalTools_dictionary_allOccurrencesLabel%": "Ocurrencias",
+      "%platformLexicalTools_dictionary_backToList%": "Volver a la lista",
+      "%platformLexicalTools_dictionary_definitionLabel%": "Definición",
+      "%platformLexicalTools_dictionary_domainTaxonomyLabel%": "Dominio de {taxonomy}",
+      "%platformLexicalTools_dictionary_noResults%": "No hay resultados",
+      "%platformLexicalTools_dictionary_occurrencesInChapterLabel%": "Ocurrencias en el capítulo",
+      "%platformLexicalTools_dictionary_occurrencesForSenseLabel%": "Ocurrencias del sentido {index}",
+      "%platformLexicalTools_dictionary_occurrencesToggleAll%": "todas",
+      "%platformLexicalTools_dictionary_occurrencesToggleChapter%": "capítulo",
+      "%platformLexicalTools_dictionary_searchDictionary%": "Buscar en el diccionario...",
+      "%platformLexicalTools_dictionary_sensesLabel%": "Sentidos",
+      "%platformLexicalTools_dictionary_scopeSelector_chapter%": "Capítulo actual",
+      "%platformLexicalTools_dictionary_scopeSelector_section%": "Sección actual",
+      "%platformLexicalTools_dictionary_scopeSelector_verse%": "Versículo actual",
+      "%platformLexicalTools_dictionary_strongsCodeLabel%": "Código de Strong",
+      "%platformLexicalTools_dictionary_sdbgCopyright%": "Diccionario Semántico del Griego del Nuevo Testamento, basado en el Léxico Griego-Inglés del Nuevo Testamento de Louw y Nida, ©1988-2021 Sociedades Bíblicas Unidas.",
+      "%platformLexicalTools_dictionary_sdbhCopyright%": "Diccionario Semántico del Hebreo Bíblico, editado por Reinier de Blois, con la asistencia de Enio R. Mueller, ©2000-2025 Sociedades Bíblicas Unidas.",
+      "%platformLexicalTools_dictionary_title%": "Diccionario HEBGRK",
+      "%platformLexicalTools_dictionary_title_sdbhSdbg%": "Diccionario: SDBH/SDBG",
+      "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Hacer un seguimiento de vocablos bíblicos",
+      "%platformLexicalTools_mainMenu_openDictionary%": "Abrir diccionario",
+      "%platformLexicalTools_mainMenu_openDictionary_sdbhSdbg%": "Abrir diccionario: SDBH/SDBG",
+      "%platformLexicalTools_mainMenu_openHebGrkDictionary%": "Abrir diccionario HEBGRK",
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Abrir diccionario"
     }
   }
 }
