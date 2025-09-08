@@ -215,6 +215,8 @@ type InventoryProps = {
    * other columns you can add these yourself
    */
   columns: ColumnDef<InventoryTableData>[];
+  /** Unique identifier for the Inventory component */
+  id?: string;
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -228,6 +230,7 @@ export function Inventory({
   scope,
   onScopeChange,
   columns,
+  id,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -355,7 +358,7 @@ export function Inventory({
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
   return (
-    <div className="pr-twp tw-flex tw-h-full tw-flex-col">
+    <div id={id} className="pr-twp tw-flex tw-h-full tw-flex-col">
       <div className="tw-flex tw-items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}

@@ -99,6 +99,9 @@ export type ScrollGroupSelectorProps = {
 
   /** Additional css classes to help with unique styling */
   className?: string;
+
+  /** Optional id for the select element */
+  id?: string;
 };
 
 /** Selector component for choosing a scroll group */
@@ -109,6 +112,7 @@ export function ScrollGroupSelector({
   localizedStrings = {},
   size = 'sm',
   className,
+  id,
 }: ScrollGroupSelectorProps) {
   const localizedStringsDefaulted = {
     ...DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
@@ -145,6 +149,7 @@ export function ScrollGroupSelector({
         />
       </SelectTrigger>
       <SelectContent
+        id={id}
         align={dir === 'rtl' ? 'end' : 'start'}
         // Need to get over the floating web view z-index 200
         style={{ zIndex: 250 }}

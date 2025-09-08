@@ -46,4 +46,6 @@ export type BookChapterControlProps = {
   recentSearches?: SerializedVerseRef[];
   /** Callback to add a new recent scripture reference */
   onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
+  /** Optional ID for the popover content for accessibility */
+  id?: string;
 };
