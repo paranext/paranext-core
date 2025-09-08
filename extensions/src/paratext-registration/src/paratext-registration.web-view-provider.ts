@@ -29,6 +29,7 @@ export class ParatextRegistrationWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
       },
+      allowPopups: true,
     };
   }
 }

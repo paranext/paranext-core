@@ -7,11 +7,20 @@ import {
 import InternetSettingsWebViewProvider, {
   internetSettingsWebViewType,
 } from './internet-settings.web-view-provider';
+import ProfileWebViewProvider, { profileWebViewType } from './profile.web-view-provider';
 
 async function showParatextRegistration(): Promise<string | undefined> {
   return papi.webViews.openWebView(
     paratextRegistrationWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 540, height: 448 } },
+    { type: 'float', position: 'center', floatSize: { width: 600, height: 540 } },
+    { existingId: '?' },
+  );
+}
+
+async function showProfile(): Promise<string | undefined> {
+  return papi.webViews.openWebView(
+    profileWebViewType,
+    { type: 'float', position: 'center', floatSize: { width: 600, height: 540 } },
     { existingId: '?' },
   );
 }
@@ -19,7 +28,7 @@ async function showParatextRegistration(): Promise<string | undefined> {
 async function showInternetSettings(): Promise<string | undefined> {
   return papi.webViews.openWebView(
     internetSettingsWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 540, height: 448 } },
+    { type: 'float', position: 'center', floatSize: { width: 450, height: 320 } },
     { existingId: '?' },
   );
 }
@@ -60,6 +69,7 @@ export async function activate(context: ExecutionActivationContext) {
 
   const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
   const internetSettingsWebViewProvider = new InternetSettingsWebViewProvider();
+  const profileWebViewProvider = new ProfileWebViewProvider();
 
   const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
     'paratextRegistration.shouldShowOnStartup',
@@ -85,6 +95,15 @@ export async function activate(context: ExecutionActivationContext) {
     internetSettingsWebViewProvider,
   );
 
+  const showProfilePromise = papi.commands.registerCommand(
+    'paratextRegistration.showProfile',
+    showProfile,
+  );
+  const showProfileProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    profileWebViewType,
+    profileWebViewProvider,
+  );
+
   // No need to wait for this; it will do its thing and handle its own errors
   showParatextRegistrationIfNoRegistrationData();
 
@@ -94,6 +113,8 @@ export async function activate(context: ExecutionActivationContext) {
     await showParatextRegistrationWebViewProviderPromise,
     await showInternetSettingsPromise,
     await showInternetSettingsWebViewProviderPromise,
+    await showProfilePromise,
+    await showProfileProviderPromise,
   );
 }
 

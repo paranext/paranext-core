@@ -9,5 +9,6 @@ export function scrollToRef(ref: HTMLElement | null) {
 export enum SaveState {
   HasNotSaved,
   IsSaving,
+  IsRestarting,
   HasSaved,
 }

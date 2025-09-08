@@ -164,141 +164,139 @@ globalThis.webViewComponent = function InternetSettings({ useWebViewState }: Web
   }, [internetSettings]);
 
   return (
-    <div className="tw-p-2 tw-flex tw-flex-col tw-justify-between tw-h-screen">
-      <div>
-        <Section className="tw-text-muted-foreground">
-          {localizedStrings['%paratextRegistration_description_internetUse_disclaimer%']}
-        </Section>
-        <Section>
-          <Select
-            disabled={isFormDisabled}
-            value={internetSettings.permittedInternetUse}
-            onValueChange={(newInternetUse: InternetUse) =>
-              setInternetSettings({ ...internetSettings, permittedInternetUse: newInternetUse })
-            }
+    <div className="tw-flex tw-flex-col tw-gap-2 tw-h-screen tw-p-4">
+      <Section>
+        {localizedStrings['%paratextRegistration_description_internetUse_disclaimer%']}
+      </Section>
+      <Section>
+        <Select
+          disabled={isFormDisabled}
+          value={internetSettings.permittedInternetUse}
+          onValueChange={(newInternetUse: InternetUse) =>
+            setInternetSettings({ ...internetSettings, permittedInternetUse: newInternetUse })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent
+            // Need to get over the floating web view z-index 200
+            style={{ zIndex: 250 }}
           >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent
-              // Need to get over the floating web view z-index 200
-              style={{ zIndex: 250 }}
-            >
-              {INTERNET_USE_OPTIONS.map((internetUseOption) => (
-                <SelectItem key={internetUseOption} value={internetUseOption}>
-                  {localizedStrings[getLocalizeKeyForInternetUse(internetUseOption)]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Section>
-        {internetSettings.permittedInternetUse === 'ProxyOnly' && (
-          <Card className="tw-m-2">
-            <CardHeader>
-              {localizedStrings['%paratextRegistration_section_proxySettings%']}
-            </CardHeader>
-            <CardContent>
-              <Grid className="tw-m-0">
-                <span>{localizedStrings['%paratextRegistration_label_proxyMode%']}</span>
-                <Select
-                  disabled={isFormDisabled}
-                  value={internetSettings.proxyMode}
-                  onValueChange={(newProxyMode: string) =>
-                    setInternetSettings({ ...internetSettings, proxyMode: newProxyMode })
-                  }
+            {INTERNET_USE_OPTIONS.map((internetUseOption) => (
+              <SelectItem key={internetUseOption} value={internetUseOption}>
+                {localizedStrings[getLocalizeKeyForInternetUse(internetUseOption)]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Section>
+      {internetSettings.permittedInternetUse === 'ProxyOnly' && (
+        <Card className="tw-m-2">
+          <CardHeader>
+            {localizedStrings['%paratextRegistration_section_proxySettings%']}
+          </CardHeader>
+          <CardContent>
+            <Grid className="tw-m-0">
+              <span>{localizedStrings['%paratextRegistration_label_proxyMode%']}</span>
+              <Select
+                disabled={isFormDisabled}
+                value={internetSettings.proxyMode}
+                onValueChange={(newProxyMode: string) =>
+                  setInternetSettings({ ...internetSettings, proxyMode: newProxyMode })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  // Need to get over the floating web view z-index 200
+                  style={{ zIndex: 250 }}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent
-                    // Need to get over the floating web view z-index 200
-                    style={{ zIndex: 250 }}
-                  >
-                    {PROXY_MODE_OPTIONS.map((proxyModeOption) => (
-                      <SelectItem key={proxyModeOption} value={proxyModeOption}>
-                        {localizedStrings[getLocalizeKeyForProxyMode(proxyModeOption)]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span>{localizedStrings['%paratextRegistration_label_proxyHost%']}</span>
-                <Input
-                  className="invalid:tw-border-destructive"
-                  minLength={1}
-                  required
-                  value={internetSettings.proxyHost}
-                  disabled={isFormDisabled}
-                  onChange={(e) =>
-                    setInternetSettings({ ...internetSettings, proxyHost: e.target.value })
-                  }
-                />
-                <span>{localizedStrings['%paratextRegistration_label_proxyPort%']}</span>
-                <Input
-                  type="number"
-                  value={internetSettings.proxyPort}
-                  disabled={isFormDisabled}
-                  onChange={(e) =>
-                    setInternetSettings({
-                      ...internetSettings,
-                      proxyPort: e.target.value.length > 0 ? parseInt(e.target.value, 10) : 0,
-                    })
-                  }
-                />
-                <span>{localizedStrings['%paratextRegistration_label_proxyUsername%']}</span>
-                <Input
-                  value={internetSettings.proxyUsername}
-                  disabled={isFormDisabled}
-                  onChange={(e) =>
-                    setInternetSettings({ ...internetSettings, proxyUsername: e.target.value })
-                  }
-                />
-                <span>{localizedStrings['%paratextRegistration_label_proxyPassword%']}</span>
-                <Input
-                  type="password"
-                  value={internetSettings.proxyPassword}
-                  disabled={isFormDisabled}
-                  onChange={(e) =>
-                    setInternetSettings({ ...internetSettings, proxyPassword: e.target.value })
-                  }
-                />
-              </Grid>
-            </CardContent>
-          </Card>
-        )}
-        <Grid>
-          <span>{localizedStrings['%paratextRegistration_label_selectedServer%']}</span>
-          <Select
-            disabled={isFormDisabled}
-            value={internetSettings.selectedServer}
-            onValueChange={(newSelectedServer: ServerType) =>
-              setInternetSettings({ ...internetSettings, selectedServer: newSelectedServer })
-            }
+                  {PROXY_MODE_OPTIONS.map((proxyModeOption) => (
+                    <SelectItem key={proxyModeOption} value={proxyModeOption}>
+                      {localizedStrings[getLocalizeKeyForProxyMode(proxyModeOption)]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span>{localizedStrings['%paratextRegistration_label_proxyHost%']}</span>
+              <Input
+                className="invalid:tw-border-destructive"
+                minLength={1}
+                required
+                value={internetSettings.proxyHost}
+                disabled={isFormDisabled}
+                onChange={(e) =>
+                  setInternetSettings({ ...internetSettings, proxyHost: e.target.value })
+                }
+              />
+              <span>{localizedStrings['%paratextRegistration_label_proxyPort%']}</span>
+              <Input
+                type="number"
+                value={internetSettings.proxyPort}
+                disabled={isFormDisabled}
+                onChange={(e) =>
+                  setInternetSettings({
+                    ...internetSettings,
+                    proxyPort: e.target.value.length > 0 ? parseInt(e.target.value, 10) : 0,
+                  })
+                }
+              />
+              <span>{localizedStrings['%paratextRegistration_label_proxyUsername%']}</span>
+              <Input
+                value={internetSettings.proxyUsername}
+                disabled={isFormDisabled}
+                onChange={(e) =>
+                  setInternetSettings({ ...internetSettings, proxyUsername: e.target.value })
+                }
+              />
+              <span>{localizedStrings['%paratextRegistration_label_proxyPassword%']}</span>
+              <Input
+                type="password"
+                value={internetSettings.proxyPassword}
+                disabled={isFormDisabled}
+                onChange={(e) =>
+                  setInternetSettings({ ...internetSettings, proxyPassword: e.target.value })
+                }
+              />
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+      <Grid>
+        <span>{localizedStrings['%paratextRegistration_label_selectedServer%']}</span>
+        <Select
+          disabled={isFormDisabled}
+          value={internetSettings.selectedServer}
+          onValueChange={(newSelectedServer: ServerType) =>
+            setInternetSettings({ ...internetSettings, selectedServer: newSelectedServer })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent
+            // Need to get over the floating web view z-index 200
+            style={{ zIndex: 250 }}
           >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent
-              // Need to get over the floating web view z-index 200
-              style={{ zIndex: 250 }}
-            >
-              {SERVER_TYPE_OPTIONS.map((serverTypeOption) => (
-                <SelectItem key={serverTypeOption} value={serverTypeOption}>
-                  {localizedStrings[getLocalizeKeyForServerType(serverTypeOption)]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Grid>
-        {saveError && (
-          <Section className="tw-my-4">
-            <Alert ref={scrollToRef} variant="destructive">
-              <AlertCircle className="tw-h-4 tw-w-4" />
-              <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
-              <AlertDescription>{saveError}</AlertDescription>
-            </Alert>
-          </Section>
-        )}
-      </div>
+            {SERVER_TYPE_OPTIONS.map((serverTypeOption) => (
+              <SelectItem key={serverTypeOption} value={serverTypeOption}>
+                {localizedStrings[getLocalizeKeyForServerType(serverTypeOption)]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Grid>
+      {saveError && (
+        <Section className="tw-my-4">
+          <Alert ref={scrollToRef} variant="destructive">
+            <AlertCircle className="tw-h-4 tw-w-4" />
+            <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
+            <AlertDescription>{saveError}</AlertDescription>
+          </Alert>
+        </Section>
+      )}
     </div>
   );
 };
