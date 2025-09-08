@@ -792,19 +792,17 @@ async function normalizeExtensionFileName(baseUri: string, zipUri: string) {
  * the reload took too long.
  */
 async function waitForExtensionsReload(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Subscribes to the reload event emitter and waits till that fires off
-    const unsubscribe = reloadFinishedEventEmitter.subscribe(() => {
-      resolve();
-      unsubscribe();
-    });
+  const responseAsyncVariable = new AsyncVariable<void>(
+    'response for extensions reload wait',
+    RESTART_WAIT_TIMEOUT_MS,
+  );
 
-    // Timeout that automatically rejects the promise if it's been waiting for 60 seconds
-    setTimeout(() => {
-      reject(new Error('Extensions reload wait took too long!'));
-      unsubscribe();
-    }, RESTART_WAIT_TIMEOUT_MS);
+  const unsubscribe = reloadFinishedEventEmitter.subscribe(() => {
+    responseAsyncVariable.resolveToValue();
+    unsubscribe();
   });
+
+  return responseAsyncVariable.promise;
 }
 
 // #region Extension management privileges
