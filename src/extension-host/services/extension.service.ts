@@ -868,7 +868,7 @@ async function installExtension(
   if (activeExtensions.get(extensionName)?.info.version !== extensionVersion) {
     // Deletes the installed extension if it hasn't already been removed
     if (await nodeFS.getStats(extensionUri)) await nodeFS.deleteFile(extensionUri);
-    throw new Error(`'${extensionName} ${extensionVersion}' failed to enable!`);
+    throw new Error(`'${extensionName} ${extensionVersion}' failed to activate after installing!`);
   }
 
   logger.info(`Installed ${extensionName} ${extensionVersion} from ${extensionUrlToDownload}`);
