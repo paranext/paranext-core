@@ -343,7 +343,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
                 </Button>
               )}
               <Button variant="default" disabled={isButtonDisabled} onClick={saveAndRestart}>
-                {saveState === SaveState.IsSaving ? (
+                {saveState === SaveState.IsRestarting ? (
                   <>
                     <Spinner /> Restarting...
                   </>
