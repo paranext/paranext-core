@@ -247,6 +247,8 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   };
 
   const cancelEditing = () => {
+    setName(currentRegistrationData.name);
+    setRegistrationCode(currentRegistrationData.code);
     setIsEditing(false);
   };
 

@@ -105,7 +105,7 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     /// </summary>
     /// <param name="registrationData">registration data object to validate</param>
     /// <returns>Whether the registration data is valid</returns>
-    private Boolean ValidateParatextRegistrationData(RegistrationData registrationData)
+    static private Boolean ValidateParatextRegistrationData(RegistrationData registrationData)
     {
         return RegistrationInfo.IsValidRegistration(registrationData.Code, registrationData.Name);
     }
