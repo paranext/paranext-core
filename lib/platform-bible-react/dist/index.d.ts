@@ -160,6 +160,8 @@ export type BookChapterControlProps = {
 	recentSearches?: SerializedVerseRef[];
 	/** Callback to add a new recent scripture reference */
 	onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
+	/** Optional ID for the popover content for accessibility */
+	id?: string;
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -169,7 +171,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -250,12 +252,14 @@ export interface RecentSearchesProps<T> {
 	ariaLabel?: string;
 	/** Heading text for the recent searches group */
 	groupHeading?: string;
+	/** Optional ID for the popover content for accessibility */
+	id?: string;
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
@@ -270,12 +274,13 @@ interface DataTableProps<TData, TValue> {
 	showColumnVisibilityControls?: boolean;
 	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
+	id?: string;
 }
 /**
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -319,9 +324,11 @@ interface ErrorDumpProps {
 	 * in `ERROR_DUMP_STRING_KEYS`
 	 */
 	localizedStrings: ErrorDumpLocalizedStrings;
+	/** Optional id for the root element */
+	id?: string;
 }
 /** Component to render an error dump */
-export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
+export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings, id, }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the ErrorPopover component. This extends
  * ERROR_DUMP_STRING_KEYS with additional keys specific to the ErrorPopover. If you're using this
@@ -344,9 +351,11 @@ type ErrorPopoverProps = React$1.PropsWithChildren & Omit<ErrorDumpProps, "local
 	localizedStrings: ErrorPopoverLocalizedStrings;
 	/** Optional CSS classes to insert into the `PopoverContent` */
 	className?: string;
+	/** Optional ID for the popover content for accessibility */
+	id?: string;
 };
 /** A popover component that displays detailed error information using the ErrorDump component. */
-export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children, className, }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
+export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children, className, id, }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
 /** The DropdownMenuItemType enum is used to determine the type of the dropdown item */
 export declare enum DropdownMenuItemType {
 	Check = 0,
@@ -461,6 +470,7 @@ interface MultiSelectComboBoxProps {
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
 	className?: string;
+	id?: string;
 }
 /**
  * MultiSelectComboBox is a component that provides a UI for selecting multiple items from a list.
@@ -479,14 +489,17 @@ interface MultiSelectComboBoxProps {
  * @param {boolean} [props.sortSelected] - Flag to sort selected items.
  * @param {ReactNode} [props.icon] - Optional icon to display in the button.
  * @param {string} [props.className] - Additional class names for styling.
+ * @param {string} [props.id] - Optional ID for the component.
  */
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
 	 * location where the badges would be if any items were selected.
 	 */
 	badgesPlaceholder: string;
+	/** Optional id for the component */
+	id?: string;
 }
 /**
  * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
@@ -494,7 +507,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
@@ -629,9 +642,11 @@ type InventoryProps = {
 	 * other columns you can add these yourself
 	 */
 	columns: ColumnDef<InventoryTableData>[];
+	/** Unique identifier for the Inventory component */
+	id?: string;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -790,6 +805,8 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 	showSourceColumn?: boolean;
 	/** Callback function to notify when a row is selected */
 	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
+	/** Optional id attribute for the outermost element */
+	id?: string;
 };
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
@@ -800,7 +817,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export declare function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, id, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -868,13 +885,15 @@ interface ScopeSelectorProps {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/** Optional ID that is applied to the root element of this component */
+	id?: string;
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
  * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
  * component is displayed to allow users to choose specific books.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -929,9 +948,11 @@ export type ScrollGroupSelectorProps = {
 	size?: "default" | "sm" | "lg" | "icon";
 	/** Additional css classes to help with unique styling */
 	className?: string;
+	/** Optional id for the select element */
+	id?: string;
 };
 /** Selector component for choosing a scroll group */
-export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, id, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
@@ -1109,6 +1130,8 @@ type TabNavigationContentSearchProps = {
 	headerTitle?: string;
 	/** Optional className to modify the search input */
 	searchClassName?: string;
+	/** Optional id for the root element */
+	id?: string;
 };
 /**
  * TabNavigationContentSearch component provides a vertical tab navigation interface with a search
@@ -1125,8 +1148,9 @@ type TabNavigationContentSearchProps = {
  * @param {string} [props.headerTitle] - Optional title to display above the search input.
  * @param {string} [props.searchClassName] - Optional CSS class name to apply custom styles to the
  *   search input.
+ * @param {string} [props.id] - Optional id for the root element.
  */
-declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, id, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	onSelectMenuItem: SelectMenuItemHandler;
@@ -1231,6 +1255,8 @@ export type UiLanguageSelectorProps = {
 	localizedStrings: UiLanguageSelectorLocalizedStrings;
 	/** Additional css classes to help with unique styling of the control */
 	className?: string;
+	/** Optional id for the root element */
+	id?: string;
 };
 /**
  * A component for selecting the user interface language and managing fallback languages. Allows
@@ -1238,7 +1264,7 @@ export type UiLanguageSelectorProps = {
  *
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
-export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -1376,6 +1402,8 @@ export type SearchBarProps = {
 	className?: string;
 	/** Optional boolean to disable the search bar */
 	isDisabled?: boolean;
+	/** Optional id for the root element */
+	id?: string;
 };
 /**
  * A search bar component with a search icon and a clear button when the search query is not empty.
@@ -1390,6 +1418,7 @@ export type SearchBarProps = {
  * @param {string} [props.className] - Additional css classes to help with unique styling of the
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
+ * @param {string} [props.id] - Optional id for the root element
  */
 export declare const SearchBar: import("react").ForwardRefExoticComponent<SearchBarProps & import("react").RefAttributes<HTMLInputElement>>;
 export type SpinnerProps = LucideProps;

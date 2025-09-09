@@ -10,6 +10,8 @@ interface FilterProps extends MultiSelectComboBoxProps {
    * location where the badges would be if any items were selected.
    */
   badgesPlaceholder: string;
+  /** Optional id for the component */
+  id?: string;
 }
 
 /**
@@ -31,9 +33,10 @@ export function Filter({
   icon,
   className,
   badgesPlaceholder,
+  id,
 }: FilterProps) {
   return (
-    <div className="tw-flex tw-items-center tw-gap-2">
+    <div id={id} className="tw-flex tw-items-center tw-gap-2">
       <MultiSelectComboBox
         entries={entries}
         getEntriesCount={getEntriesCount}

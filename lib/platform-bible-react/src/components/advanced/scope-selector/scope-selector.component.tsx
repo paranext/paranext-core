@@ -92,6 +92,8 @@ interface ScopeSelectorProps {
    * value contains localized versions of the ID and full book name
    */
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
+  /** Optional ID that is applied to the root element of this component */
+  id?: string;
 }
 
 /**
@@ -108,6 +110,7 @@ export function ScopeSelector({
   onSelectedBookIdsChange,
   localizedStrings,
   localizedBookNames,
+  id,
 }: ScopeSelectorProps) {
   const selectedTextText = localizeString(
     localizedStrings,
@@ -139,7 +142,7 @@ export function ScopeSelector({
     : SCOPE_OPTIONS;
 
   return (
-    <div className="tw-grid tw-gap-4">
+    <div id={id} className="tw-grid tw-gap-4">
       <div className="tw-grid tw-gap-2">
         <Label>{scopeText}</Label>
         <RadioGroup
@@ -147,10 +150,10 @@ export function ScopeSelector({
           onValueChange={onScopeChange}
           className="tw-flex tw-flex-col tw-space-y-1"
         >
-          {displayedScopes.map(({ value, label, id }) => (
-            <div key={id} className="tw-flex tw-items-center">
-              <RadioGroupItem className="tw-me-2" value={value} id={id} />
-              <Label htmlFor={id}>{label}</Label>
+          {displayedScopes.map(({ value, label, id: scopeId }) => (
+            <div key={scopeId} className="tw-flex tw-items-center">
+              <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
+              <Label htmlFor={scopeId}>{label}</Label>
             </div>
           ))}
         </RadioGroup>

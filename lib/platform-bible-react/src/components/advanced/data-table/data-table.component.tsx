@@ -43,6 +43,7 @@ interface DataTableProps<TData, TValue> {
   showColumnVisibilityControls?: boolean;
   stickyHeader?: boolean;
   onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
+  id?: string;
 }
 
 /**
@@ -57,6 +58,7 @@ export function DataTable<TData, TValue>({
   showColumnVisibilityControls = false,
   stickyHeader = false,
   onRowClickHandler = () => {},
+  id,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -83,7 +85,7 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="pr-twp">
+    <div className="pr-twp" id={id}>
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
       <Table stickyHeader={stickyHeader}>
         <TableHeader stickyHeader={stickyHeader}>

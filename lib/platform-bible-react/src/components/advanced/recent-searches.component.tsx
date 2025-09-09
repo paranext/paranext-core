@@ -17,6 +17,8 @@ export interface RecentSearchesProps<T> {
   ariaLabel?: string;
   /** Heading text for the recent searches group */
   groupHeading?: string;
+  /** Optional ID for the popover content for accessibility */
+  id?: string;
 }
 
 /**
@@ -30,6 +32,7 @@ export default function RecentSearches<T>({
   getItemKey = (item) => String(item),
   ariaLabel = 'Show recent searches',
   groupHeading = 'Recent',
+  id,
 }: RecentSearchesProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -54,7 +57,7 @@ export default function RecentSearches<T>({
           <Clock className="tw-h-4 tw-w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
+      <PopoverContent id={id} className="tw-w-[300px] tw-p-0" align="start">
         <Command>
           <CommandList>
             <CommandGroup heading={groupHeading}>
