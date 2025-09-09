@@ -71,13 +71,6 @@ declare module 'papi-shared-types' {
      */
     'paratextRegistration.showInternetSettings': () => Promise<string | undefined>;
     /**
-     * Show the Paratext Registration Profile window with which the user modifies their Paratext
-     * Registry account details
-     *
-     * @returns Id of the profile web view
-     */
-    'paratextRegistration.showProfile': () => Promise<string | undefined>;
-    /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`
      *

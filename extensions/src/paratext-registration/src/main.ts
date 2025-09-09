@@ -10,16 +10,15 @@ import InternetSettingsWebViewProvider, {
 import ProfileWebViewProvider, { profileWebViewType } from './profile.web-view-provider';
 
 async function showParatextRegistration(): Promise<string | undefined> {
-  return papi.webViews.openWebView(
-    paratextRegistrationWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 600, height: 540 } },
-    { existingId: '?' },
+  // First checks to see if the app has been registered yet
+  const registrationData = await papi.commands.sendCommand(
+    'paratextRegistration.getParatextRegistrationData',
   );
-}
 
-async function showProfile(): Promise<string | undefined> {
+  // If it has been registered, then it shows the profile view. Else, it shows the initial
+  // registration view
   return papi.webViews.openWebView(
-    profileWebViewType,
+    registrationData.code ? profileWebViewType : paratextRegistrationWebViewType,
     { type: 'float', position: 'center', floatSize: { width: 600, height: 540 } },
     { existingId: '?' },
   );
@@ -95,10 +94,6 @@ export async function activate(context: ExecutionActivationContext) {
     internetSettingsWebViewProvider,
   );
 
-  const showProfilePromise = papi.commands.registerCommand(
-    'paratextRegistration.showProfile',
-    showProfile,
-  );
   const showProfileProviderPromise = papi.webViewProviders.registerWebViewProvider(
     profileWebViewType,
     profileWebViewProvider,
@@ -113,7 +108,6 @@ export async function activate(context: ExecutionActivationContext) {
     await showParatextRegistrationWebViewProviderPromise,
     await showInternetSettingsPromise,
     await showInternetSettingsWebViewProviderPromise,
-    await showProfilePromise,
     await showProfileProviderPromise,
   );
 }

@@ -163,7 +163,7 @@ globalThis.webViewComponent = function HomeWebView() {
             severity: 'error',
             message: '%data_loading_error_paratextData_auth_failure%',
             clickCommandLabel: '%general_open%',
-            clickCommand: 'paratextRegistration.showProfile',
+            clickCommand: 'paratextRegistration.showParatextRegistration',
             notificationId: sharedProjectErrorNotificationId,
           });
         } else {
