@@ -51,7 +51,7 @@
   font-size: 100%;
 }
 
-.book[data-code]::before {
+.marker-hidden .book[data-code]::before {
   content: attr(data-code) ' ';
 }
 
@@ -2064,8 +2064,16 @@ body {
 .marker {
   unicode-bidi: isolate;
 }
-.formatted-font .marker {
+
+.marker-visible .marker,
+.marker-hidden .marker,
+.marker-hidden .book[data-code]::before,
+.marker-editable .book .marker {
   color: rgba(140, 140, 140, 1);
+}
+
+.marker-visible .marker:not(.chapter),
+.marker-hidden .marker:not(.chapter) {
   font-size: 0.7em;
 }
 
