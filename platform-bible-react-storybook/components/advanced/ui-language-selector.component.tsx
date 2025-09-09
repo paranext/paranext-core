@@ -78,6 +78,8 @@ export type UiLanguageSelectorProps = {
   localizedStrings: UiLanguageSelectorLocalizedStrings;
   /** Additional css classes to help with unique styling of the control */
   className?: string;
+  /** Optional id for the root element */
+  id?: string;
 };
 
 /**
@@ -95,6 +97,7 @@ export function UiLanguageSelector({
   onFallbackLanguagesChange,
   localizedStrings,
   className,
+  id,
 }: UiLanguageSelectorProps) {
   const selectFallbackLanguagesText = localizeString(
     localizedStrings,
@@ -135,7 +138,7 @@ export function UiLanguageSelector({
   };
 
   return (
-    <div className={cn('pr-twp tw-max-w-sm', className)}>
+    <div id={id} className={cn('pr-twp tw-max-w-sm', className)}>
       {/* Language Selector */}
       <Select
         name="uiLanguage"

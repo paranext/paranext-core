@@ -42,10 +42,17 @@ export interface ErrorDumpProps {
    * in `ERROR_DUMP_STRING_KEYS`
    */
   localizedStrings: ErrorDumpLocalizedStrings;
+  /** Optional id for the root element */
+  id?: string;
 }
 
 /** Component to render an error dump */
-export function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps) {
+export function ErrorDump({
+  errorDetails,
+  handleCopyNotify,
+  localizedStrings,
+  id,
+}: ErrorDumpProps) {
   const headerText = localizeString(localizedStrings, '%webView_error_dump_header%');
   const infoMessage = localizeString(localizedStrings, '%webView_error_dump_info_message%');
 
@@ -57,7 +64,10 @@ export function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: 
   }
 
   return (
-    <div className="tw-inline-flex tw-w-full tw-flex-col tw-items-start tw-justify-start tw-gap-4">
+    <div
+      id={id}
+      className="tw-inline-flex tw-w-full tw-flex-col tw-items-start tw-justify-start tw-gap-4"
+    >
       <div className="tw-inline-flex tw-items-start tw-justify-start tw-gap-4 tw-self-stretch">
         <div className="tw-inline-flex tw-flex-1 tw-flex-col tw-items-start tw-justify-start">
           <div className="tw-text-color-text tw-justify-center tw-text-center tw-text-lg tw-font-semibold tw-leading-loose">

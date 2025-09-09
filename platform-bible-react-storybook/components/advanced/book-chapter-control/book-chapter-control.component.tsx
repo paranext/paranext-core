@@ -50,6 +50,7 @@ export function BookChapterControl({
   localizedStrings,
   recentSearches,
   onAddRecentSearch,
+  id,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -513,7 +514,7 @@ export function BookChapterControl({
           <span className="tw-truncate">{currentDisplayValue}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent forceMount className="tw-w-[280px] tw-p-0" align="center">
+      <PopoverContent id={id} forceMount className="tw-w-[280px] tw-p-0" align="center">
         <Command
           ref={commandRef}
           onKeyDown={handleCommandKeyDown}
