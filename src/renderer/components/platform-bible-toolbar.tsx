@@ -265,7 +265,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showProfile')}
+                  onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
                 >
                   <CircleUserRound />
                 </Button>

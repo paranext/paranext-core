@@ -6,7 +6,6 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
-  CardHeader,
   cn,
   Input,
   Spinner,
@@ -118,14 +117,14 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   // #endregion
 
   // Automatically adds slashes to the ends of the size letter sequences
-  useEffect(() => {
-    if (
-      !registrationCode.match(REGISTRATION_CODE_REGEX_STRING) &&
-      registrationCode.match(REGISTRATION_CODE_INSERT_DASH_REGEX_STRING)
-    ) {
-      setRegistrationCode(registrationCode + '-');
-    }
-  }, [registrationCode, setRegistrationCode]);
+  // useEffect(() => {
+  //   if (
+  //     !registrationCode.match(REGISTRATION_CODE_REGEX_STRING) &&
+  //     registrationCode.match(REGISTRATION_CODE_INSERT_DASH_REGEX_STRING)
+  //   ) {
+  //     setRegistrationCode(registrationCode + '-');
+  //   }
+  // }, [registrationCode, setRegistrationCode]);
 
   // How much progress the form has made in saving registration data
   const [saveState, setSaveState] = useWebViewState('saveState', SaveState.HasNotSaved);
@@ -252,6 +251,18 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
     setIsEditing(false);
   };
 
+  const onRegistrationCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    let newRegistrationCode = event.target.value;
+    if (
+      !newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING) &&
+      newRegistrationCode.match(REGISTRATION_CODE_INSERT_DASH_REGEX_STRING) &&
+      !registrationCode.endsWith('-')
+    ) {
+      newRegistrationCode += '-';
+    }
+    setRegistrationCode(newRegistrationCode);
+  };
+
   return (
     <div className="tw-rounded-md tw-border tw-p-4 tw-shadow-md">
       <div className="tw-flex tw-flex-col">
@@ -285,16 +296,17 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
               className="tw-font-mono tw-box-content tw-h-5 tw-max-w-[350px] invalid:tw-border-destructive"
               maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
               pattern={REGISTRATION_CODE_REGEX_STRING}
+              placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
               required
               value={registrationCode}
               disabled={isFormDisabled}
-              onChange={(e) => setRegistrationCode(e.target.value)}
+              onChange={onRegistrationCodeChange}
             />
           ) : (
             <span>{currentRegistrationData.code}</span>
           )}
           <span />
-          {!isCodeValid && (
+          {registrationCode && !isCodeValid && (
             <p className="tw-text-muted-foreground">
               {localizedStrings['%paratextRegistration_warning_invalid_registration_format%']}
             </p>

@@ -111,11 +111,13 @@ function constructErrorNotification(exception: unknown): PlatformNotification | 
     clickCommandLabel: '%general_open%',
     // TS doesn't realize this is a valid command handler key since it is defined in an extension
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    clickCommand: 'paratextRegistration.showProfile' as keyof CommandHandlers,
+    clickCommand: 'paratextRegistration.showParatextRegistration' as keyof CommandHandlers,
   };
 
   if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
     retVal.message = '%data_loading_error_paratextData_internet_disabled%';
+    // TS doesn't realize this is a valid command handler key since it is defined in an extension
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     retVal.clickCommand = 'paratextRegistration.showInternetSettings' as keyof CommandHandlers;
   } else if (isErrorMessageAboutRegistryAuthFailure(exception)) {
     retVal.message = '%data_loading_error_paratextData_auth_failure%';

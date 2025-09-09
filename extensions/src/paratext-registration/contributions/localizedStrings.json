@@ -44,6 +44,12 @@
     },
     "%paratextRegistration_warning_invalid_email%": {
       "fallbackKey": "%Paratext.RegistrationForm.cmdOK_Click.&quot;Enter valid email address&quot;%"
+    },
+    "%paratextRegistration_warning_invalid_registration%": {
+      "deprecationInfo": {
+        "message": "The invalid registration warning became an alert with both a title and subtitle instead of just a one-line warning",
+        "date": "2025-09-09"
+      }
     }
   },
   "localizedStrings": {
@@ -94,7 +100,8 @@
       "%paratextRegistration_section_internetSettings_tooltip%": "These Internet settings only apply to some operations, not to the whole application",
       "%paratextRegistration_section_proxySettings%": "Proxy Settings",
       "%paratextRegistration_warning_invalid_email%": "Please enter a valid email address.",
-      "%paratextRegistration_warning_invalid_registration_format%": "Registration code must be in the format of '******-******-******-******-******'",
+      "%paratextRegistration_warning_invalid_registration%": "This registration code is not correct for this user.",
+      "%paratextRegistration_warning_invalid_registration_format%": "Registration code must be in the format of 'XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX'",
       "%paratextRegistration_webView_title%": "Paratext Registration",
       "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",
       "%paratextRegistrationProfile_webView_title%": "Account",
