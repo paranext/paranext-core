@@ -32,6 +32,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_activity%',
   '%resources_clearSearch%',
   '%resources_filterInput%',
+  '%resources_shortNameText%',
   '%resources_fullName%',
   '%resources_get%',
   '%resources_getStarted%',
@@ -53,7 +54,7 @@ type HomeLocalizedStrings = {
 };
 
 export type SortConfig = {
-  key: 'fullName' | 'language' | 'activity' | 'action';
+  key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
 };
 
@@ -174,6 +175,7 @@ export function Home({
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
+  const shortNameText: string = getLocalizedString('%resources_shortNameText%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
@@ -245,6 +247,14 @@ export function Home({
 
     return textFilteredProjects.sort((a, b) => {
       switch (sortConfig.key) {
+        case 'shortName':
+          if (a.name < b.name) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+          }
+          if (a.name > b.name) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+          }
+          return 0;
         case 'fullName':
           if (a.fullName < b.fullName) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -421,7 +431,7 @@ export function Home({
                   <Table stickyHeader>
                     <TableHeader className="tw-bg-none max-[300px]:tw-hidden" stickyHeader>
                       <TableRow className="tw-rounded-sm">
-                        <TableHead />
+                        {buildTableHead('shortName', shortNameText)}
                         {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
                         {buildTableHead('language', languageText, 'tw-hidden sm:!tw-table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
