@@ -1,6 +1,6 @@
 import { cn } from 'platform-bible-react';
-import { Section } from './section.component';
 import { DetailedHTMLProps, HTMLAttributes } from 'react';
+import { Section } from './section.component';
 
 type GridComponentProps = DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>;
 

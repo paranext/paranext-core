@@ -13,16 +13,15 @@ import {
 } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SaveState, scrollToRef } from '../utils/helpers';
+import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
+import { SaveState, scrollToRef } from '../utils';
 import { Grid } from './grid.component';
 import { Section } from './section.component';
-import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
   '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
 const REGISTRATION_CODE_INSERT_DASH_REGEX_STRING = '[a-zA-Z0-9]{6}$';
-const EMAIL_REGEX_STRING = '^.+@.+\\..+$';
 /**
  * Time in milliseconds to wait before restarting the application after changing Paratext
  * registration information
@@ -116,16 +115,6 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
 
   // #endregion
 
-  // Automatically adds slashes to the ends of the size letter sequences
-  // useEffect(() => {
-  //   if (
-  //     !registrationCode.match(REGISTRATION_CODE_REGEX_STRING) &&
-  //     registrationCode.match(REGISTRATION_CODE_INSERT_DASH_REGEX_STRING)
-  //   ) {
-  //     setRegistrationCode(registrationCode + '-');
-  //   }
-  // }, [registrationCode, setRegistrationCode]);
-
   // How much progress the form has made in saving registration data
   const [saveState, setSaveState] = useWebViewState('saveState', SaveState.HasNotSaved);
   const [error, setError] = useState('');
@@ -200,6 +189,8 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   // As the registration becomes the correct form, validates it with the backend
   const [registrationIsValid, isLoading] = usePromise(
     useCallback(async () => {
+      // If the validation timeout exists
+
       if (isCodeValid && hasUnsavedChanges) {
         try {
           return papi.commands.sendCommand(
@@ -214,7 +205,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
         }
       }
       return true;
-    }, [registrationCode, hasUnsavedChanges]),
+    }, [registrationCode, name, email, supporter, hasUnsavedChanges]),
     true,
   );
 

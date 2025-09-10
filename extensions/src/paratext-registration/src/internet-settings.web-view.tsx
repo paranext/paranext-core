@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Section } from './components/section.component';
 import { Grid } from './components/grid.component';
 import { AlertCircle } from 'lucide-react';
-import { scrollToRef, SaveState } from './utils/helpers';
+import { scrollToRef, SaveState } from './utils';
 
 const SAVE_SETTINGS_DELAY_MS = 500;
 
@@ -63,6 +63,7 @@ function getLocalizeKeyForProxyMode(option: string): LocalizeKey {
 }
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%general_error_title%',
   '%paratextRegistration_description_internetUse_disclaimer%',
   ...INTERNET_USE_OPTIONS.map(getLocalizeKeyForInternetUse),
   '%paratextRegistration_label_proxyHost%',
@@ -179,10 +180,7 @@ globalThis.webViewComponent = function InternetSettings({ useWebViewState }: Web
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent
-            // Need to get over the floating web view z-index 200
-            style={{ zIndex: 250 }}
-          >
+          <SelectContent>
             {INTERNET_USE_OPTIONS.map((internetUseOption) => (
               <SelectItem key={internetUseOption} value={internetUseOption}>
                 {localizedStrings[getLocalizeKeyForInternetUse(internetUseOption)]}
