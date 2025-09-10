@@ -39,8 +39,9 @@ public sealed record CheckRunResult(
 
     public override int GetHashCode()
     {
-        // ItemText is intentionally omitted from the hash code calculation, since it is already
-        // present in MessageFormatString, and Combine can only take up to 8 arguments.
+        // ItemText is intentionally omitted from the hash code calculation. Typically, ItemText is
+        // extracted from MessageFormatString, but if extraction fails, ItemText may be set to the entire
+        // message. Combine can only take up to 8 arguments.
         int hash = HashCode.Combine(
             CheckId,
             CheckResultType,
