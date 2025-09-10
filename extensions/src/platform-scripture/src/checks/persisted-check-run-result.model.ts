@@ -11,7 +11,7 @@ export type PersistedCheckRunResult = {
   verseText?: string;
   /**
    * The specific item (i.e. marker, word, punctuation character et cetera) that the result applies
-   * to. Is also used present in `messageFormatString` to form a localizable message.
+   * to. Is also present in `messageFormatString` to form a localizable message.
    */
   itemText: string;
   /** Distinct ID for this check result if it might occur more than once in a single verse */
