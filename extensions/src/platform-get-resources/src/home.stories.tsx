@@ -140,6 +140,7 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
           '%resources_open%': 'Open',
           '%resources_sync%': 'Sync',
           '%resources_get%': 'Get',
+          '%resources_shortNameText%': 'Name',
         },
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
