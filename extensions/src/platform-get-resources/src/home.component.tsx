@@ -452,25 +452,17 @@ export function Home({
                         >
                           <TableCell className="max-[300px]:!tw-px-0">
                             <div className="tw-flex tw-flex-row tw-items-center tw-gap-4">
+                              {project.editedStatus === 'edited' && (
+                                <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
+                              )}
                               {project.isEditable ? (
-                                <ScrollText
-                                  className="tw-pr-0"
-                                  size={18}
-                                  style={{ minWidth: '24px' }}
-                                />
+                                <ScrollText className="tw-pr-0" size={18} />
                               ) : (
-                                <BookOpen
-                                  className="tw-pr-0"
-                                  size={18}
-                                  style={{ minWidth: '24px' }}
-                                />
+                                <BookOpen className="tw-pr-0" size={18} />
                               )}
 
-                              <div className="tw-whitespace-nowrap tw-cursor-default tw-flex tw-gap-2 tw-items-center">
-                                {project.editedStatus === 'edited' && (
-                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2" />
-                                )}
-                                <span>{project.name}</span>
+                              <div className="tw-whitespace-nowrap tw-cursor-default">
+                                {project.name}
                               </div>
 
                               <div className="tw-grow tw-hidden max-[300px]:!tw-flex">
