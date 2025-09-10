@@ -52,30 +52,6 @@ export const Default: Story = {
   },
 };
 
-export const WithButtons: Story = {
-  render: () => (
-    <Tabs defaultValue="2-youShouldNotSeeThis">
-      <TabsList>
-        <TabsTrigger value="1">
-          <Button>non-text tab trigger</Button>
-        </TabsTrigger>
-        <TabsTrigger value="2-youShouldNotSeeThis">Tab 2</TabsTrigger>
-        <TabsTrigger value="3">Tab 3 - no linked content</TabsTrigger>
-      </TabsList>
-      <TabsContent value="1">Tab 1 Content</TabsContent>
-      <TabsContent value="2-youShouldNotSeeThis">Tab 2 Content</TabsContent>
-      {/* intentionally left out 3 to see the effect */}
-    </Tabs>
-  ),
-  parameters: {
-    docs: {
-      description: {
-        story: 'Tabs with button triggers and missing content, similar to the original example.',
-      },
-    },
-  },
-};
-
 export const Vertical: Story = {
   render: () => (
     <VerticalTabs defaultValue="tab1">

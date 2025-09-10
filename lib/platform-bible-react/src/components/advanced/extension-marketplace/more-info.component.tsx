@@ -61,7 +61,7 @@ export function MoreInfo({
   return (
     <div
       id={id}
-      className="tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center"
+      className="pr-twp tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center"
     >
       {category && (
         <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">

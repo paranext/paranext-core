@@ -1,12 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { useState } from 'react';
 import { History } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
-import { DirectionProps, DirToggle } from '@/storybook/direction-toggle.component';
 
-function DirectionGuide({ direction, onChangeDirection: setDirection }: DirectionProps) {
+function DirectionGuide() {
   return (
     <>
       <p>
@@ -18,8 +16,7 @@ function DirectionGuide({ direction, onChangeDirection: setDirection }: Directio
         corner.
       </p>
       <div className="tw-flex tw-items-center tw-gap-2">
-        Try it: change direction
-        <DirToggle direction={direction} onChangeDirection={setDirection} />
+        Try it: change direction by clicking the blue arrow icon at the top toolbar
       </div>
       <br />
       <p>
@@ -141,45 +138,13 @@ type Story = StoryObj<typeof DirectionGuide>;
 
 export const Default: Story = {
   render: () => {
-    const [direction, setDirection] = useState<'ltr' | 'rtl'>('ltr');
-
-    return <DirectionGuide direction={direction} onChangeDirection={setDirection} />;
+    return <DirectionGuide />;
   },
   parameters: {
     docs: {
       description: {
         story:
           'A comprehensive guide on handling text direction (LTR/RTL) in components, including best practices for logical properties, spacing, and layout.',
-      },
-    },
-  },
-};
-
-export const LeftToRight: Story = {
-  render: () => {
-    const [direction, setDirection] = useState<'ltr' | 'rtl'>('ltr');
-
-    return <DirectionGuide direction={direction} onChangeDirection={setDirection} />;
-  },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Direction guide demonstrating left-to-right text direction.',
-      },
-    },
-  },
-};
-
-export const RightToLeft: Story = {
-  render: () => {
-    const [direction, setDirection] = useState<'ltr' | 'rtl'>('rtl');
-
-    return <DirectionGuide direction={direction} onChangeDirection={setDirection} />;
-  },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Direction guide demonstrating right-to-left text direction.',
       },
     },
   },
