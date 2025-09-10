@@ -6,6 +6,7 @@ using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
 using Paratext.Data.ProjectFileAccess;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -302,7 +303,7 @@ internal class CheckRunner : NetworkObjects.DataProvider
         string checkResultType,
         string projectId,
         VerseRef vRef,
-        string selectedText,
+        string itemText,
         string? _checkResultUniqueId
     )
     {
@@ -311,7 +312,7 @@ internal class CheckRunner : NetworkObjects.DataProvider
         lock (check.Lock)
         {
             var denials = GetOrCreateDenials(projectId);
-            denials.AddDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
+            denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
             denials.Save();
             check.ResultsRecorder.PostProcessResults(null, denials, null);
             SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Denied check result");
@@ -324,7 +325,7 @@ internal class CheckRunner : NetworkObjects.DataProvider
         string checkResultType,
         string projectId,
         VerseRef vRef,
-        string selectedText,
+        string itemText,
         string? _checkResultUniqueId
     )
     {
@@ -333,7 +334,7 @@ internal class CheckRunner : NetworkObjects.DataProvider
         lock (check.Lock)
         {
             var denials = GetOrCreateDenials(projectId);
-            denials.RemoveDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
+            denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
             denials.Save();
             check.ResultsRecorder.PostProcessResults(null, denials, null);
             SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Allowed check result");

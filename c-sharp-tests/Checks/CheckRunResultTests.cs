@@ -33,7 +33,7 @@ public class CheckRunResultTests
         VerseRef vrefEnd1 = new("GEN 1:2");
         CheckLocation end1 = new(vrefEnd1, 5);
         CheckRunResult checkRunResult1 =
-            new("checkId", "resType", "projectId", "msg", "", false, vrefStart1, start1, end1);
+            new("checkId", "resType", "projectId", "msg", "", "", false, vrefStart1, start1, end1);
 
         VerseRef vrefStart2 = new(verseRefStart2);
         CheckLocation start2 = new(vrefStart2, offsetStart2);
@@ -45,6 +45,7 @@ public class CheckRunResultTests
                 checkResultType2,
                 projectId2,
                 message2,
+                "",
                 "",
                 isDenied2,
                 vrefStart2,

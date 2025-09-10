@@ -87,8 +87,9 @@ class HelloCheck implements Check {
         isDenied: false,
         projectId: this.targetProjectId ?? '',
         messageFormatString: 'Found the word "sheep"',
-        selectedText: 'sheep',
+        itemText: 'sheep',
         verseRef,
+        verseText: 'And lo, there were sheep in the field.',
         start: { verseRef, offset },
         end: {
           verseRef,

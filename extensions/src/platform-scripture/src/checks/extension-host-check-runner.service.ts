@@ -240,14 +240,14 @@ class CheckRunnerEngine
     checkResultType: string,
     projectId: string,
     verseRef: SerializedVerseRef,
-    selectedText: string,
+    itemText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const deniedResults = await this.loadDeniedResults(projectId);
     const retVal = deniedResults.addResult({
       checkResultType,
       verseRef,
-      selectedText,
+      itemText,
       checkResultUniqueId,
     });
     if (retVal) await this.saveDeniedResults(projectId);
@@ -259,14 +259,14 @@ class CheckRunnerEngine
     checkResultType: string,
     projectId: string,
     verseRef: SerializedVerseRef,
-    selectedText: string,
+    itemText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const deniedResults = await this.loadDeniedResults(projectId);
     const retVal = deniedResults.removeResult({
       checkResultType,
       verseRef,
-      selectedText,
+      itemText,
       checkResultUniqueId,
     });
     if (retVal) await this.saveDeniedResults(projectId);

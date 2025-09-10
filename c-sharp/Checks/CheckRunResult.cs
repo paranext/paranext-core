@@ -12,7 +12,8 @@ public sealed record CheckRunResult(
     string CheckResultType,
     string ProjectId,
     string MessageFormatString,
-    string SelectedText,
+    string VerseText,
+    string ItemText,
     bool IsDenied,
     VerseRef VerseRef,
     CheckLocation Start,
@@ -28,7 +29,8 @@ public sealed record CheckRunResult(
             && CheckResultType == other.CheckResultType
             && ProjectId == other.ProjectId
             && MessageFormatString == other.MessageFormatString
-            && SelectedText == other.SelectedText
+            && VerseText == other.VerseText
+            && ItemText == other.ItemText
             && IsDenied == other.IsDenied
             && VerseRef.ToStringWithVersification() == other.VerseRef.ToStringWithVersification()
             && Start == other.Start
@@ -37,12 +39,14 @@ public sealed record CheckRunResult(
 
     public override int GetHashCode()
     {
+        // ItemText is intentionally omitted from the hash code calculation, since it is already
+        // present in MessageFormatString, and Combine can only take up to 8 arguments.
         int hash = HashCode.Combine(
             CheckId,
             CheckResultType,
             ProjectId,
             MessageFormatString,
-            SelectedText,
+            VerseText,
             IsDenied,
             VerseRef,
             Start
