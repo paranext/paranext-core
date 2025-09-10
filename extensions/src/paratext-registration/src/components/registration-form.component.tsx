@@ -12,7 +12,7 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 import { SaveState, scrollToRef } from '../utils';
 import { Grid } from './grid.component';
@@ -95,6 +95,8 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   const [email, setEmail] = useWebViewState('email', '');
   const [supporter, setSupporter] = useWebViewState('supporter', '');
 
+  const [isEditing, setIsEditing] = useState(true);
+
   const [currentRegistrationData, isLoadingCurrentRegistrationData] = usePromise(
     getRegistrationData,
     useMemo(
@@ -119,14 +121,13 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   const [saveState, setSaveState] = useWebViewState('saveState', SaveState.HasNotSaved);
   const [error, setError] = useState('');
   const [errorDescription, setErrorDescription] = useState('');
-  const [isEditing, setIsEditing] = useState(true);
 
   // If the app just got done with restarting, then changes the save state to `HasSaved`
   useEffect(() => {
     if (saveState === SaveState.IsRestarting) {
       setSaveState(SaveState.HasSaved);
     }
-  }, []);
+  }, [saveState, setSaveState]);
 
   // whether any form fields have changed
   const hasUnsavedChanges =
@@ -205,7 +206,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
         }
       }
       return true;
-    }, [registrationCode, name, email, supporter, hasUnsavedChanges]),
+    }, [registrationCode, name, email, supporter, isCodeValid, hasUnsavedChanges]),
     true,
   );
 
@@ -220,7 +221,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
         localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
       );
     }
-  }, [registrationIsValid]);
+  }, [registrationIsValid, error, localizedStrings]);
 
   const isButtonDisabled =
     isFormDisabled || !hasUnsavedChanges || !isContentValid || (!isLoading && !registrationIsValid);
@@ -228,11 +229,14 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   const formatSuccessAlertDescription = () => {
     if (saveState === SaveState.IsRestarting) {
       return localizedStrings['%paratextRegistration_alert_updatedRegistration_description%'];
-    } else if (saveState === SaveState.HasSaved) {
+    }
+
+    if (saveState === SaveState.HasSaved) {
       return localizedStrings[
         '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%'
       ];
     }
+
     return localizedStrings['%paratextRegistration_alert_validRegistration_description%'];
   };
 
@@ -242,7 +246,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
     setIsEditing(false);
   };
 
-  const onRegistrationCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onRegistrationCodeChange = (event: ChangeEvent<HTMLInputElement>) => {
     let newRegistrationCode = event.target.value;
     if (
       !newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING) &&

@@ -19,9 +19,9 @@ import {
 } from 'platform-bible-react';
 import { deepEqual, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { Section } from './components/section.component';
 import { Grid } from './components/grid.component';
-import { AlertCircle } from 'lucide-react';
 import { scrollToRef, SaveState } from './utils';
 
 const SAVE_SETTINGS_DELAY_MS = 500;
@@ -81,7 +81,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 
 // #endregion
 
-globalThis.webViewComponent = function InternetSettings({ useWebViewState }: WebViewProps) {
+globalThis.webViewComponent = function InternetSettingsComponent({
+  useWebViewState,
+}: WebViewProps) {
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -95,6 +97,9 @@ globalThis.webViewComponent = function InternetSettings({ useWebViewState }: Web
   // How much progress the form has made in saving registration data
   const [saveState, setSaveState] = useState(SaveState.HasNotSaved);
   const [saveError, setSaveError] = useState('');
+  // For some reason the lint doesn't like using the NodeJS namespace, but this is required for the
+  // `Timeout` type
+  // eslint-disable-next-line no-undef
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | undefined>();
 
   // #region InternetSettings
@@ -162,7 +167,7 @@ globalThis.webViewComponent = function InternetSettings({ useWebViewState }: Web
       }, SAVE_SETTINGS_DELAY_MS);
       setSaveTimeout(newSaveTimeout);
     }
-  }, [internetSettings]);
+  }, [internetSettings, hasUnsavedChanges, isFormDisabled, isProxyHostValid, saveTimeout]);
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-2 tw-h-screen tw-p-4">
