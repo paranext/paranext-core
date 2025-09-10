@@ -1,0 +1,164 @@
+import { Meta, Controls } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Vocabulary" />
+
+{/*
+  References:
+  [Intuit Content Design | Word list](https://contentdesign.intuit.com/word-list/)
+  [UK Government Digital Service | Style guide ](https://www.gov.uk/guidance/style-guide/a-to-z)
+
+  TODO: One-page navigation
+  TODO: Custom styling for vocabulary entries
+  */}
+
+# Vocabulary
+
+Vocabulary isn’t a glossary or a dictionary. It contains usage guidelines for terms specific to products, extensions, and training in the Paratext Ecosystem.
+
+To recommend additions, [email the UX team](mailto:feedback+studio@paratext.org) or make a pull request to [this file on Github](https://github.com/paranext/paranext-core/tree/main/src/stories/Vocabulary.mdx).
+
+## User-facing vocabulary
+
+### my vs. your
+
+Use "your", not "my", in the UI and related text
+
+Using second person maintains a consistent voice and promotes a friendly, conversational quality. While "my" can feel personal, it risks encroaching on a user's sense of personal space and attributing choices to them that they haven't made. "Your" is clearer and avoids confusion because it can be used more consistently. For example, try writing this error message with "my":
+
+```diff
++ The following files are different from the shared project.  Do you wish to overwrite them with the shared project files?
+- The following files are different from the shared project.  Do I wish to overwrite them with the shared project files?
+```
+
+Since some messages are best given in the second person, we use "your" to refer to the user. This keeps the focus on the user's actions and choices, while still allowing for a personal touch when needed.
+
+### entry
+
+Use entry to refer to a single item in a list.
+
+### filter
+
+Use filter for UI elements that narrow down lists by type, language, or other criteria.
+
+## Development vocabulary
+
+### badge
+
+Use badge for small UI elements that highlight status or category (e.g., installed, update available).
+
+### muted
+
+Use muted for text or UI elements that are less prominent, often for secondary information.
+
+### ghost
+
+Use ghost for control styles with very low emphasis. Ghost styles lack visual indications of their bounds, such as background color or border (unless they're hovered or focused). Ghost styles are often used in toolbars, dropdowns, or secondary actions.
+
+{/*
+  ## Vocabulary that needs to be written
+
+  * resource
+  * action
+  * command
+
+
+  ## genAI drafts for consideration
+
+  ### install vs. get
+  Use get for actions that download and install a resource in one step. Use install only when the process is distinct from downloading.
+
+  "Get" is friendlier and less technical, making it more approachable for users.
+
+  ### open vs. view
+  Use open for actions that launch a resource or project. Use view for read-only or preview actions.
+
+  "Open" implies full access and editing, while "view" suggests limited interaction.
+
+  ### remove vs. delete
+  Use remove for actions that take a resource out of the app but do not erase it from disk. Use delete only when the resource is permanently erased.
+
+  "Remove" is safer and less alarming for users, reducing fear of accidental loss.
+
+  ### update
+  Use update for actions that bring a resource to its latest version.
+
+  Avoid "refresh" or "upgrade" unless those terms have specific technical meaning.
+
+  ### type
+  Use type to refer to the category of a resource (e.g., Scripture, Enhanced Resource).
+
+  ### language
+  Use language to refer to the language of a resource. Avoid "locale" unless discussing localization or translation features.
+
+  ### card
+  Use card for UI containers that group related information visually.
+
+  ### table
+  Use table for UI elements that display resources in rows and columns.
+
+  ### label
+  Use label for text elements that identify or describe UI components.
+
+  ### dropdown
+  Use dropdown for menus that expand to show options.
+
+  ### combo box
+  Use combo box for UI elements that combine a dropdown with text input.
+
+  ### search bar
+  Use search bar for UI elements that allow users to find resources by text.
+
+  ### header
+  Use header for the top section of a card or table.
+
+  ### footer
+  Use footer for the bottom section of a card or table.
+
+  ### icon
+  Use icon for small graphical elements representing actions or types.
+
+  ### project
+  Use project to refer to a collection of resources or work in Paratext.
+
+  ### provider
+  Use provider for components or services that supply data to the UI.
+
+  ### viewer
+  Use viewer for components that display resources for reading or review.
+
+  ### dialog
+  Use dialog for modal UI elements that prompt the user for input or confirmation.
+
+  ### separator
+  Use separator for UI elements that divide groups of options or content.
+
+  ### content
+  Use content for the main area displaying information or resources.
+
+  ### description
+  Use description for text that explains or adds detail to UI elements.
+
+  ### title
+  Use title for the main heading of a card, dialog, or page.
+
+  ### subtitle
+  Use subtitle for secondary headings that provide context or detail.
+
+  ### sticky
+  Use sticky for UI elements that remain visible while scrolling.
+
+  ### installed
+  Use installed to indicate resources that are available for use in the app.
+
+  ### update available
+  Use update available to indicate resources that can be updated to a newer version.
+
+  ### unknown
+  Use unknown for types or statuses that are not recognized by the app.
+
+  ### showing
+  Use showing to indicate the number of resources currently displayed.
+
+  ### results
+  Use results to refer to the outcome of a search or filter operation.
+  */}
