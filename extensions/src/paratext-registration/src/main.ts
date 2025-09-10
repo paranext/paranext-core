@@ -27,7 +27,7 @@ async function showParatextRegistration(): Promise<string | undefined> {
 async function showInternetSettings(): Promise<string | undefined> {
   return papi.webViews.openWebView(
     internetSettingsWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 450, height: 320 } },
+    { type: 'float', position: 'center', floatSize: { width: 450, height: 390 } },
     { existingId: '?' },
   );
 }

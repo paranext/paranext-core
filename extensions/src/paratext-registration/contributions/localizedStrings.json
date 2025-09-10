@@ -47,7 +47,7 @@
     },
     "%paratextRegistration_warning_invalid_registration%": {
       "deprecationInfo": {
-        "message": "The invalid registration warning became an alert with both a title and subtitle instead of just a one-line warning",
+        "message": "The invalid registration warning became an alert with both a title and subtitle instead of just a one-line warning. The replacement keys are %paratextRegistration_alert_invalidRegistration% and %paratextRegistration_alert_invalidRegistration_description%.",
         "date": "2025-09-09"
       }
     }
