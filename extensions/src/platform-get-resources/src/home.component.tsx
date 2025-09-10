@@ -5,6 +5,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
+  cn,
   DropdownMenuItem,
   Label,
   SearchBar,
@@ -300,8 +301,8 @@ export function Home({
   };
 
   const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
-    <TableHead onClick={() => handleSort(key)} className={className}>
-      <div className="tw-flex tw-items-center tw-px-0">
+    <TableHead onClick={() => handleSort(key)} className={cn('tw-px-2', className)}>
+      <Button className="tw-flex tw-items-center tw-px-2" variant="ghost">
         <div className="tw-font-normal">{label}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
@@ -310,7 +311,7 @@ export function Home({
           ) : (
             <ChevronDown className="tw-pl-1" size={16} />
           ))}
-      </div>
+      </Button>
     </TableHead>
   );
 
@@ -360,7 +361,7 @@ export function Home({
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
       <CardHeader
-        className={`tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-p-4 ${showGetResourcesButton ? 'max-[300px]:!tw-pb-2' : 'max-[300px]:!tw-pb-0'}`}
+        className={`tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 ${showGetResourcesButton ? 'max-[300px]:!tw-pb-2' : 'max-[300px]:!tw-pb-0'}`}
       >
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
@@ -383,7 +384,7 @@ export function Home({
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32 max-[300px]:!tw-px-4">
+        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32 tw-px-0">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
@@ -431,7 +432,7 @@ export function Home({
                   <Table stickyHeader>
                     <TableHeader className="tw-bg-none max-[300px]:tw-hidden" stickyHeader>
                       <TableRow className="tw-rounded-sm">
-                        {buildTableHead('shortName', shortNameText)}
+                        {buildTableHead('shortName', shortNameText, 'tw-ps-4')}
                         {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
                         {buildTableHead('language', languageText, 'tw-hidden sm:!tw-table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
@@ -448,18 +449,24 @@ export function Home({
                               : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
-                          className={`tw-rounded-sm {project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}`}
+                          className={`tw-rounded-sm ${project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}`}
                         >
-                          <TableCell className="max-[300px]:!tw-px-0">
-                            <div className="tw-flex tw-flex-row tw-items-center tw-gap-4">
-                              {project.editedStatus === 'edited' && (
-                                <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
-                              )}
-                              {project.isEditable ? (
-                                <ScrollText className="tw-pr-0" size={18} />
-                              ) : (
-                                <BookOpen className="tw-pr-0" size={18} />
-                              )}
+                          <TableCell
+                            className={`${project.editedStatus === 'edited' ? 'tw-ps-2' : ''}`}
+                          >
+                            <div
+                              className={`tw-flex tw-flex-row tw-items-center tw-gap-4 ${project.editedStatus === 'edited' ? 'tw-ps-0' : 'tw-ps-2'}`}
+                            >
+                              <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
+                                {project.editedStatus === 'edited' && (
+                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
+                                )}
+                                {project.isEditable ? (
+                                  <ScrollText className="tw-pr-0" size={18} />
+                                ) : (
+                                  <BookOpen className="tw-pr-0" size={18} />
+                                )}
+                              </div>
 
                               <div className="tw-whitespace-nowrap tw-cursor-default">
                                 {project.name}

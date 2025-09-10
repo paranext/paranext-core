@@ -31,6 +31,14 @@ const styles = `
     .max-\\[300px\\]\\:\\!tw-flex {
       display: flex !important;
     }
+    .max-\\[300px\\]\\:\\!tw-px-4 {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+  }
+
+  .tw-ps-2 {
+    padding-left: 0.5rem;
   }
 `;
 const styleElement = document.createElement('style');
