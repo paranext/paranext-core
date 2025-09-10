@@ -857,7 +857,12 @@ declare module 'platform-scripture' {
     /** ID of the project evaluated by the check */
     projectId: string;
     /** Project text that was selected in the check result */
-    selectedText: string;
+    verseText: string;
+    /**
+     * The specific item (i.e. marker, word, punctuation character et cetera) that the result
+     * applies to. Is also used present in `messageFormatString` to form a localizable message.
+     */
+    itemText: string;
     /**
      * Format string or {@link LocalizeKey} of the format string to display regarding the range of
      * text referenced in this result. A format string should be of the form "... {arg1} ... {arg2}
@@ -930,7 +935,7 @@ declare module 'platform-scripture' {
       checkResultType: string,
       projectId: string,
       verseRef: SerializedVerseRef,
-      selectedText: string,
+      itemText: string,
       checkResultUniqueId?: string,
     ) => Promise<boolean>;
     /** Reverse the denial of one particular check result */
@@ -939,7 +944,7 @@ declare module 'platform-scripture' {
       checkResultType: string,
       projectId: string,
       verseRef: SerializedVerseRef,
-      selectedText: string,
+      itemText: string,
       checkResultUniqueId?: string,
     ) => Promise<boolean>;
   };

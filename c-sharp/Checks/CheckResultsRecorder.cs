@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Paranext.DataProvider.ParatextUtils;
 using Paratext.Checks;
 using Paratext.Data;
@@ -14,9 +15,35 @@ namespace Paranext.DataProvider.Checks;
 /// objects for reporting problems to the user. This class is essentially an adapter for storing a
 /// list of problems from checks.
 /// </summary>
-public sealed class CheckResultsRecorder(string checkId, string projectId) : IRecordCheckError
+public sealed partial class CheckResultsRecorder(string checkId, string projectId)
+    : IRecordCheckError
 {
+    /// <summary>
+    /// Pre-compiled regex for extracting text between ||...|| markers for better performance
+    /// </summary>
+    [GeneratedRegex(@"\|\|(.*?)\|\|")]
+    private static partial Regex ItemTextRegex();
+
     public List<CheckRunResult> CheckRunResults { get; } = [];
+
+    /// <summary>
+    /// This regex extracts the part of the message between ||...|| if present. The message is
+    /// typically formatted as `Check name: ||item||` (e.g. `Repeated word: ||he||`).
+    /// If the extracted item text is empty, a warning is logged and the entire message is returned.
+    /// </summary>
+    /// <returns>The extracted item text. When extraction fails returns the entire message</returns>
+    private static string GetItemTextFromMessage(string message)
+    {
+        var itemText = ItemTextRegex().Match(message).Groups[1]?.Value;
+        if (string.IsNullOrEmpty(itemText))
+        {
+            Console.WriteLine(
+                $"Empty itemText in CheckResultsRecorder.RecordError, replacing with message: {message}"
+            );
+            return message;
+        }
+        return itemText;
+    }
 
     public void RecordError(
         ITextToken token,
@@ -36,6 +63,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 message,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 token.Text.TrimEnd(),
+                GetItemTextFromMessage(message),
                 false,
                 token.VerseRef,
                 // Actual offsets will be calculated below after results have been filtered
@@ -63,6 +91,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 message,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 text.TrimEnd(),
+                GetItemTextFromMessage(message),
                 false,
                 vref,
                 // Actual offsets will be calculated below after results have been filtered
@@ -135,8 +164,8 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 var isDenied = denials.IsDenied(
                     new Enum<MessageId>(result.CheckResultType),
                     result.VerseRef,
-                    result.MessageFormatString,
-                    result.SelectedText
+                    "",
+                    result.ItemText
                 );
                 if (isDenied != result.IsDenied)
                     CheckRunResults[i] = new CheckRunResult(
@@ -144,7 +173,8 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                         result.CheckResultType,
                         result.ProjectId,
                         result.MessageFormatString,
-                        result.SelectedText,
+                        result.VerseText,
+                        result.ItemText,
                         isDenied,
                         result.VerseRef,
                         result.Start,
@@ -162,7 +192,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                     continue;
                 }
 
-                var textIndex = indexer.Usfm.IndexOf(result.SelectedText, verseIndex.Value);
+                var textIndex = indexer.Usfm.IndexOf(result.VerseText, verseIndex.Value);
                 if (textIndex < 0)
                 {
                     result.Start.Offset = 0;
@@ -170,7 +200,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 }
 
                 result.Start.Offset += textIndex - verseIndex.Value;
-                result.End.Offset = result.Start.Offset + result.SelectedText.Length;
+                result.End.Offset = result.Start.Offset + result.VerseText.Length;
             }
         }
     }
