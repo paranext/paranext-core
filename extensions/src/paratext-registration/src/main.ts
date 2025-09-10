@@ -4,10 +4,11 @@ import {
   ParatextRegistrationWebViewProvider,
   paratextRegistrationWebViewType,
 } from './paratext-registration.web-view-provider';
-import InternetSettingsWebViewProvider, {
+import {
+  InternetSettingsWebViewProvider,
   internetSettingsWebViewType,
 } from './internet-settings.web-view-provider';
-import ProfileWebViewProvider, { profileWebViewType } from './profile.web-view-provider';
+import { ProfileWebViewProvider, profileWebViewType } from './profile.web-view-provider';
 
 async function showParatextRegistration(): Promise<string | undefined> {
   // First checks to see if the app has been registered yet

@@ -1,10 +1,10 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import { RegistrationForm } from './components/registration-form.component';
-import { PARATEXT_REGISTRY_LINK } from './utils/strings';
 import { useMemo } from 'react';
 import { MarkdownRenderer } from 'platform-bible-react';
+import { RegistrationForm } from './components/registration-form.component';
+import { PARATEXT_REGISTRY_LINK } from './utils';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_description_is_registered%',

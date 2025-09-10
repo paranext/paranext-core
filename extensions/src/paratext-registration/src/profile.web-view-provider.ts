@@ -33,5 +33,3 @@ export class ProfileWebViewProvider implements IWebViewProvider {
     };
   }
 }
-
-export default ProfileWebViewProvider;

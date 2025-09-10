@@ -32,5 +32,3 @@ export class InternetSettingsWebViewProvider implements IWebViewProvider {
     };
   }
 }
-
-export default InternetSettingsWebViewProvider;

@@ -33,5 +33,3 @@ export class ParatextRegistrationWebViewProvider implements IWebViewProvider {
     };
   }
 }
-
-export default ParatextRegistrationWebViewProvider;
