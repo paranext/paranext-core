@@ -197,14 +197,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
     logger.info('Open check settings and inventories');
   }, []);
 
-  // Used messageFormatString because result.selectedText is the entire verse.
-  const writeCheckTitle = useCallback((result: CheckRunResult) => {
-    if (!result || !result.messageFormatString) return '';
-    const [, extractedWord] = result.messageFormatString.match(/\|\|(.*?)\|\|/) || [];
-
-    return `${result.verseRef.book} ${result.verseRef.chapterNum}:${result.verseRef.verseNum} ${extractedWord} ${extractedWord}`;
-  }, []);
-
   /**
    * Creates a unique identifier for a CheckRunResult, used to provide a unique key to the UI and to
    * track which check result is selected.
@@ -271,7 +263,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.checkResultType,
         projectId,
         result.verseRef,
-        result.selectedText,
+        result.itemText,
         result.checkResultUniqueId,
       );
 
@@ -289,7 +281,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.checkResultType,
         projectId,
         result.verseRef,
-        result.selectedText,
+        result.itemText,
         result.checkResultUniqueId,
       );
 
@@ -371,7 +363,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 checkId={writeCheckId(result, index)}
                 isSelected={selectedCheckId === writeCheckId(result, index)}
                 handleSelectCheck={handleSelectCheck}
-                checkCardTitle={writeCheckTitle(result)}
+                checkCardTitle={`${result.verseRef.book} ${result.verseRef.chapterNum}:${result.verseRef.verseNum} ${result.itemText}`}
                 checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
                 handleDenyCheck={handleDenyCheck}
                 handleAllowCheck={handleAllowCheck}

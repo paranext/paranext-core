@@ -224,7 +224,7 @@ class CheckAggregatorDataProviderEngine
     checkResultType: string,
     projectId: string,
     verseRef: SerializedVerseRef,
-    selectedText: string,
+    itemText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
@@ -233,7 +233,7 @@ class CheckAggregatorDataProviderEngine
       checkResultType,
       projectId,
       verseRef,
-      selectedText,
+      itemText,
       checkResultUniqueId,
     );
     this.notifyUpdate('CheckResults');
@@ -245,7 +245,7 @@ class CheckAggregatorDataProviderEngine
     checkResultType: string,
     projectId: string,
     verseRef: SerializedVerseRef,
-    selectedText: string,
+    itemText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
@@ -254,7 +254,7 @@ class CheckAggregatorDataProviderEngine
       checkResultType,
       projectId,
       verseRef,
-      selectedText,
+      itemText,
       checkResultUniqueId,
     );
     this.notifyUpdate('CheckResults');
