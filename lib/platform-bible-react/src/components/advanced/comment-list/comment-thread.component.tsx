@@ -1,70 +1,101 @@
-import clsx from "clsx";
-import { CommentItem } from "./comment-item.component";
-import { CommentThreadProps } from "./comment-list.types";
-import { useState } from "react";
-import { formatReplacementString } from "platform-bible-utils";
+import { cn } from '@/utils/shadcn-ui.util';
+import { formatReplacementString } from 'platform-bible-utils';
+import { useCallback, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/shadcn-ui/card';
+import { Button } from '@/components/shadcn-ui/button';
+import { Separator } from '@/components/shadcn-ui/separator';
+import { CommentItem } from './comment-item.component';
+import { CommentThreadProps } from './comment-list.types';
 
 export function CommentThread({
-                                 comment,
-                                 formatDate,
-                                 localizedStrings,
-                                 selected: selectedProp = false,
-                               }: CommentThreadProps) {
+  comment,
+  formatDate,
+  localizedStrings,
+  isSelected = false,
+}: CommentThreadProps) {
+  const [isExpanded, setIsExpanded] = useState(isSelected || (comment.replies?.length ?? 0) === 0);
 
-  const [selected, setSelected] = useState(selectedProp);
+  const localizedReplies = useMemo(
+    () => ({
+      singleReply: localizedStrings?.['%comment_thread_single_reply%'] ?? '1 reply',
+      multipleReplies: localizedStrings?.['%comment_thread_multiple_replies%'] ?? '{count} replies',
+    }),
+    [localizedStrings],
+  );
 
-  const { singleReply, multipleReplies } = {
-    singleReply: localizedStrings?.['%comment_thread_single_reply%'] ?? '1 reply',
-    multipleReplies: localizedStrings?.['%comment_thread_multiple_replies%'] ?? '{count} replies',
-  };
+  const replyCount = useMemo(() => comment.replies?.length ?? 0, [comment.replies?.length]);
+  const hasReplies = useMemo(() => replyCount > 0, [replyCount]);
 
-  const replyCount = comment.replies?.length ?? 0;
-
-  const handleClick = () => {
-    if (replyCount > 0) {
-      setSelected((prev) => !prev);
+  const toggleExpanded = useCallback(() => {
+    if (hasReplies) {
+      setIsExpanded((prev) => !prev);
     }
-  };
+  }, [hasReplies]);
+
+  const replyText = useMemo(
+    () =>
+      replyCount === 1
+        ? localizedReplies.singleReply
+        : formatReplacementString(localizedReplies.multipleReplies, { count: replyCount }),
+    [replyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
+  );
 
   return (
-    <div
-      role="option"
-      aria-selected={selected}
-      onClick={handleClick}
-      className={clsx(
-        "p-2 rounded-md transition-shadow",
-        selected
-          ? "bg-white shadow-[0px_1px_3px_0px_rgba(16,24,40,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]"
-          : "bg-slate-50 border"
-      )}>
-      <CommentItem comment={comment} formatDate={formatDate} localizedStrings={localizedStrings}/>
-{selected ? (
-        comment.replies?.map((reply) => (
-          <div key={reply.id} className="mt-2">
-            <CommentItem comment={reply} formatDate={formatDate} isReply />
-          </div>
-        ))
-      ) : replyCount > 0 ? (
-        <div className="ml-4 mt-2 flex items-center text-sm text-gray-500">
-          <div
-            className="mr-2"
-            style={{
-              width: "30px",
-              height: "0px",
-              borderWidth: "1px",
-              borderStyle: "solid",
-              borderColor: "#CBD5E1",
-              background: "#475569",
-              opacity: 1,
-            }}
+    <Card
+      className={cn(
+        'tw-w-full tw-transition-all tw-duration-200',
+        hasReplies && !isExpanded && 'hover:tw-shadow-md',
+      )}
+    >
+      <CardContent className="tw-p-0">
+        <div className="tw-p-4">
+          <CommentItem
+            comment={comment}
+            formatDate={formatDate}
+            localizedStrings={localizedStrings}
           />
-          {replyCount === 1
-            ? singleReply
-            : formatReplacementString(multipleReplies, {
-                count: replyCount,
-              })}
         </div>
-      ) : null}
-    </div>
+
+        {hasReplies && (
+          <>
+            <Separator />
+            <div className="tw-px-4 tw-py-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleExpanded}
+                className="tw-w-full tw-justify-between tw-text-muted-foreground hover:tw-text-foreground"
+              >
+                <div className="tw-flex tw-items-center tw-gap-2">
+                  <MessageCircle className="tw-h-4 tw-w-4" />
+                  <span>{replyText}</span>
+                </div>
+                {isExpanded ? (
+                  <ChevronUp className="tw-h-4 tw-w-4" />
+                ) : (
+                  <ChevronDown className="tw-h-4 tw-w-4" />
+                )}
+              </Button>
+
+              {isExpanded && (
+                <div className="tw-mt-4 tw-space-y-3">
+                  {comment.replies?.map((reply) => (
+                    <div key={reply.id} className="tw-ml-6 tw-border-l tw-border-border tw-pl-4">
+                      <CommentItem
+                        comment={reply}
+                        formatDate={formatDate}
+                        localizedStrings={localizedStrings}
+                        isReply
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

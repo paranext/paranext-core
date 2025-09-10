@@ -258,6 +258,28 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
+export type CommentData = {
+	assignedUser?: string;
+	/** Details of the comment in markdown format */
+	contents: string;
+	date: Date;
+	deleted?: boolean;
+	id: string;
+	replies?: CommentData[];
+	status?: string;
+	thread: string;
+	user: string;
+	verse?: string;
+	verseRef: string;
+};
+export interface CommentListProps {
+	className?: string;
+	comments: CommentData[];
+	formatDate?: (date: Date) => string;
+	/** Optional localized strings for the component */
+	localizedStrings?: LanguageStrings;
+}
+export declare function CommentList({ className, formatDate, comments, localizedStrings, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

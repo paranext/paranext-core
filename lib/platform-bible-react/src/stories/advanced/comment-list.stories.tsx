@@ -1,10 +1,10 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { CommentList } from '@/components/advanced/comment-list/comment-list.component';
 import { CommentData } from '@/components/advanced/comment-list/comment-list.types';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof CommentList> = {
-  title: 'Components/CommentList',
+  title: 'Advanced/CommentList',
   component: CommentList,
   tags: ['autodocs'],
   decorators: [
