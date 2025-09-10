@@ -1,8 +1,8 @@
-import { MarkerObject } from "@eten-tech-foundation/scripture-utilities";
+import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 
 export interface FootnoteItemProps {
   className?: string;
   footnote: MarkerObject;
-  formatCaller? (caller: string | undefined): string | undefined;
-  showMarkers?: boolean,
+  showMarkers?: boolean;
+  formatCaller?: (caller: string | undefined) => string | undefined;
 }

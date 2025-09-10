@@ -1,10 +1,10 @@
-import { FootnoteItem } from "@/components/advanced/footnotes/footnote-item.component";
-import { FootnoteItemProps } from "@/components/advanced/footnotes/footnotes.types";
-import type { Meta, StoryObj } from "@storybook/react";
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { FootnoteItem } from '@/components/advanced/footnotes/footnote-item.component';
+import { FootnoteItemProps } from '@/components/advanced/footnotes/footnotes.types';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof FootnoteItem> = {
-  title: "Advanced/FootnoteItem",
+  title: 'Advanced/FootnoteItem',
   component: FootnoteItem,
   tags: ['autodocs'],
   decorators: [
@@ -17,7 +17,7 @@ const meta: Meta<typeof FootnoteItem> = {
     ),
   ],
   args: {
-    className: "",
+    className: '',
     formatCaller: undefined,
     showMarkers: true,
   },
@@ -29,15 +29,14 @@ type Story = StoryObj<typeof FootnoteItem>;
 export const Basic: Story = {
   args: {
     footnote: {
-      type: "note",
-      marker: "f",
-      caller: "a",
+      type: 'note',
+      marker: 'f',
+      caller: 'a',
       content: [
-        "This is a plain text footnote. ",
         {
-          marker: "ft",
-          type: "text",
-          content: ["Nested ", { marker: "it", type: "italic", content: ["italic"] }, " text."],
+          marker: 'ft',
+          type: 'text',
+          content: ['This is a basic footnote.'],
         },
       ],
     },
@@ -47,19 +46,19 @@ export const Basic: Story = {
 export const CrossReferenceWithoutCaller: Story = {
   args: {
     footnote: {
-      type: "note",
-      marker: "x",
+      type: 'note',
+      marker: 'x',
       caller: undefined,
       content: [
         {
-          marker: "xo",
-          type: "text",
-          content: ["1:2"],
+          marker: 'xo',
+          type: 'text',
+          content: ['1:2'],
         },
         {
-          marker: "xt",
-          type: "text",
-          content: ["Malachi 3:1"],
+          marker: 'xt',
+          type: 'text',
+          content: ['Malachi 3:1'],
         },
       ],
     },
@@ -68,23 +67,38 @@ export const CrossReferenceWithoutCaller: Story = {
 
 export const WithCallerFormatting: Story = {
   args: {
-    formatCaller: (c) => c == "+" ? "a" : c == "-" ? undefined : c,
+    formatCaller: (c) => {
+      if (c === '+') return 'a';
+      if (c === '-') return undefined;
+      return c;
+    },
     footnote: {
-      type: "note",
-      marker: "f",
-      caller: "+",
+      type: 'note',
+      marker: 'f',
+      caller: '+',
       content: [
         {
-          marker: "fr",
-          type: "text",
-          content: ["1:8"],
+          marker: 'fr',
+          type: 'text',
+          content: ['1:8'],
         },
         {
-          marker: "ft",
-          type: "text",
-          content: ["Footnote with a custom caller formatter."],
+          marker: 'ft',
+          type: 'text',
+          content: ['Footnote with a custom caller formatter.'],
         },
       ],
+    },
+  } satisfies FootnoteItemProps,
+};
+
+export const FootnoteTextWithoutMarker: Story = {
+  args: {
+    footnote: {
+      type: 'note',
+      marker: 'f',
+      caller: 'a',
+      content: ['This text is not marked using a valid footnote character style.'],
     },
   } satisfies FootnoteItemProps,
 };

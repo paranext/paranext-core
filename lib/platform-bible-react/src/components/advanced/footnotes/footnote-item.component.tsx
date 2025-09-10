@@ -1,42 +1,64 @@
+import React from 'react';
 import { MarkerContent, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { FootnoteItemProps } from './footnotes.types';
 import clsx from 'clsx';
+import { AlertCircle } from 'lucide-react';
+import { FootnoteItemProps } from './footnotes.types';
 
 function renderContent(
+  parentMarker: string | undefined,
   content?: MarkerContent[],
   showMarkers = true,
+  allowUnmarkedText = true,
+  path: string[] = [],
 ): React.ReactNode {
-  if (!content || content.length === 0) return null;
-  return content.map((c, i) => {
-    if (typeof c === "string") {
-      // plain text node — ensure a single leading space before it
-      return <span key={i}>{' '}{c}</span>;
-    } else {
-      return renderMarkerObject(c, `m-${i}`, showMarkers);
+  if (!content || content.length === 0) return undefined;
+
+  return content.map((c) => {
+    // Build a key based on the hierarchy and marker/text
+    let key = path.join('-');
+    if (typeof c === 'string') {
+      key += `-${c.slice(0, 10)}`; // first few chars of text
+      if (allowUnmarkedText) {
+        return <span key={key}> {c}</span>;
+      }
+      return (
+        <span
+          key={key}
+          className="tw-inline-flex tw-items-center tw-gap-1 tw-underline tw-decoration-destructive"
+        >
+          <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
+          <span>{c}</span>
+          <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
+        </span>
+      );
     }
+
+    // For MarkerObjects, include marker in the key and pass updated path
+    key += `-${c.marker ?? 'unknown'}`;
+    return renderMarkerObject(c, key, showMarkers, [...path, parentMarker ?? 'unknown']);
   });
 }
 
 function renderMarkerObject(
   markerObj: MarkerObject,
   key: React.Key,
-  showMarkers: boolean
+  showMarkers: boolean,
+  path: string[] = [],
 ): React.ReactNode {
-  const marker = markerObj.marker;
-  const classes = clsx("footnote", marker && `usfm_${marker}`);
-  const dataAttrs = {
-    "data-marker": marker,
-    "data-type": markerObj.type,
-    ...(markerObj.sid ? { "data-sid": markerObj.sid } : {}),
-    ...(markerObj.number ? { "data-number": markerObj.number } : {}),
-  };
+  const { marker } = markerObj;
+  const classes = clsx('footnote', marker && `usfm_${marker}`);
 
   return (
-    <span key={key} className={classes} {...(dataAttrs as any)}>
-      {showMarkers && (
-        <span className="tw-text-muted-foreground">{'\\' + marker + ' '}</span>
+    <span key={key} className={classes}>
+      {marker ? (
+        showMarkers && <span className="tw-text-muted-foreground">{`\\${marker} `}</span>
+      ) : (
+        <AlertCircle
+          className="tw-text-error tw-mr-1 tw-inline-block tw-h-4 tw-w-4"
+          aria-label="Missing marker"
+        />
       )}
-      {renderContent(markerObj.content, showMarkers)}
+      {renderContent(marker, markerObj.content, showMarkers, true, [...path, marker ?? 'unknown'])}
     </span>
   );
 }
@@ -47,26 +69,23 @@ export function FootnoteItem({
   formatCaller,
   showMarkers = true,
 }: FootnoteItemProps & { showMarkers?: boolean }) {
-  const caller = (formatCaller ? formatCaller(footnote.caller) : footnote.caller);
+  const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
 
   return (
     <p
-      className={clsx("footnote-item tw-text-sm", className)}
+      className={clsx('footnote-item tw-text-sm', className)}
       data-type={footnote.type}
       data-marker={footnote.marker}
     >
-      {showMarkers && (
-        <span className="tw-text-muted-foreground">{'\\' + footnote.marker + ' '}</span>
-      )}
+      {showMarkers && <span className="tw-text-muted-foreground">{`\\${footnote.marker} `}</span>}
 
-      {caller ? <span className="footnote-caller tw-text-xs tw-font-medium">{caller} </span> : undefined}
+      {caller ? (
+        <span className="footnote-caller tw-text-xs tw-font-medium">{caller} </span>
+      ) : undefined}
 
-      {renderContent(footnote.content, showMarkers)}
+      {renderContent(footnote.marker, footnote.content, showMarkers, false)}
 
-      {showMarkers && (
-        <span className="tw-text-muted-foreground">{' \\'+ footnote.marker +'*'}</span>
-      )}
-
+      {showMarkers && <span className="tw-text-muted-foreground">{` \\${footnote.marker}*`}</span>}
     </p>
   );
 }
