@@ -50,6 +50,12 @@
         "message": "The invalid registration warning became an alert with both a title and subtitle instead of just a one-line warning. The replacement keys are %paratextRegistration_alert_invalidRegistration% and %paratextRegistration_alert_invalidRegistration_description%.",
         "date": "2025-09-09"
       }
+    },
+    "%paratextRegistration_description_shared_with_paratext_9%": {
+      "deprecationInfo": {
+        "message": "The registration in Paratext 10 Studio is no longer shared with Paratext 9",
+        "date": "2025-09-10"
+      }
     }
   },
   "localizedStrings": {
@@ -68,7 +74,7 @@
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
       "%paratextRegistration_alert_validRegistration%": "Registration Code and Name are valid",
       "%paratextRegistration_alert_validRegistration_description%": "You can now save the changes and the app will restart to make them in effect.",
-      "%paratextRegistration_app_startup_description%": "Welcome to Paratext Studio! To get started, login with your registration information.",
+      "%paratextRegistration_app_startup_description%": "Welcome to {%product_name%}! To get started, login with your registration information.",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
       "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
@@ -101,6 +107,8 @@
       "%paratextRegistration_section_proxySettings%": "Proxy Settings",
       "%paratextRegistration_warning_invalid_email%": "Please enter a valid email address.",
       "%paratextRegistration_warning_invalid_registration%": "This registration code is not correct for this user.",
+      "%paratextRegistration_warning_invalid_registration_characters%": "No special symbols except for hyphen `-`.",
+      "%paratextRegistration_warning_invalid_registration_length%": "Registration codes are exactly 34 characters.",
       "%paratextRegistration_warning_invalid_registration_format%": "Registration code must be in the format of 'XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX'",
       "%paratextRegistration_webView_title%": "Paratext Registration",
       "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",

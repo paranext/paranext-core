@@ -113,23 +113,24 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     },
   );
 
-  const [currentInternetSettings, isLoadingCurrentInternetSettings] = usePromise(
+  const [fetchedInternetSettings, isLoadingCurrentInternetSettings] = usePromise(
     getInternetSettings,
     internetSettings,
   );
+  const [currentInternetSettings, setCurrentInternetSettings] = useState<
+    InternetSettings | undefined
+  >();
 
   // Set the form to show the current internet settings when we receive it
   useEffect(() => {
-    setInternetSettings(currentInternetSettings);
-  }, [currentInternetSettings, setInternetSettings]);
+    setInternetSettings(fetchedInternetSettings);
+    setCurrentInternetSettings(fetchedInternetSettings);
+  }, [fetchedInternetSettings, setCurrentInternetSettings, setInternetSettings]);
 
   // #endregion
 
   // Whether you should be able to type into the form
-  const isFormDisabled =
-    isLoadingCurrentInternetSettings ||
-    saveState === SaveState.IsSaving ||
-    saveState === SaveState.HasSaved;
+  const isFormDisabled = isLoadingCurrentInternetSettings || saveState === SaveState.IsSaving;
 
   const isProxyHostValid =
     internetSettings.permittedInternetUse !== 'ProxyOnly' || !!internetSettings.proxyHost;
@@ -139,7 +140,12 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // Hook to try to update the internet settings as they change
   useEffect(() => {
     // If the settings are able to be updated
-    if (!isFormDisabled && hasUnsavedChanges && isProxyHostValid) {
+    if (
+      !isFormDisabled &&
+      !isLoadingCurrentInternetSettings &&
+      hasUnsavedChanges &&
+      isProxyHostValid
+    ) {
       setSaveState(SaveState.IsSaving);
       setSaveError('');
 
@@ -152,6 +158,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       const newSaveTimeout = setTimeout(async () => {
         try {
           await saveInternetSettings(internetSettings);
+          setCurrentInternetSettings(internetSettings);
           setSaveState(SaveState.HasSaved);
           papi.notifications.send({
             severity: 'info',

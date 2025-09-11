@@ -7,7 +7,8 @@ import { RegistrationForm } from './components/registration-form.component';
 import { PARATEXT_REGISTRY_LINK } from './utils';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%paratextRegistration_description_shared_with_paratext_9%',
+  '%product_name%',
+  '%paratextRegistration_app_startup_description%',
   '%paratextRegistration_registration_details%',
 ];
 
@@ -24,7 +25,12 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
   return (
     <div className="tw-flex tw-flex-col tw-gap-4 tw-h-screen tw-p-4">
       <div className="tw-flex tw-flex-col tw-gap-2">
-        <p>{localizedStrings['%paratextRegistration_description_shared_with_paratext_9%']}</p>
+        <p>
+          {formatReplacementString(
+            localizedStrings['%paratextRegistration_app_startup_description%'],
+            { ...localizedStrings },
+          )}
+        </p>
         <MarkdownRenderer anchorTarget="_blank" markdown={registrationDetails} />
       </div>
       <RegistrationForm useWebViewState={useWebViewState} />

@@ -11,7 +11,7 @@ import {
   Spinner,
   usePromise,
 } from 'platform-bible-react';
-import { getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
+import { debounce, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 import { SaveState, scrollToRef } from '../utils';
@@ -21,12 +21,18 @@ import { Section } from './section.component';
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
   '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
-const REGISTRATION_CODE_INSERT_DASH_REGEX_STRING = '[a-zA-Z0-9]{6}$';
+const REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX = '^[a-zA-Z0-9\\-]*$';
+const REGISTRATION_CODE_INSERT_DASH_REGEX_STRING = '^[a-zA-Z0-9]{6}$|-[[a-zA-Z0-9\\-]{6}$';
 /**
  * Time in milliseconds to wait before restarting the application after changing Paratext
  * registration information
  */
 const REGISTRATION_CHANGE_RESTART_DELAY_MS = 5 * 1000;
+/**
+ * Time in milliseconds to debounce the validation of the registration code so that it's not always
+ * validating
+ */
+const REGISTRATION_CODE_VALIDATION_DEBOUNCE_MS = 1000;
 
 // #region RegistrationData functions
 
@@ -68,6 +74,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_label_registrationCode%',
   '%paratextRegistration_label_registrationName%',
   '%paratextRegistration_label_yourRegistration%',
+  '%paratextRegistration_warning_invalid_registration_characters%',
+  '%paratextRegistration_warning_invalid_registration_length%',
   '%paratextRegistration_warning_invalid_registration_format%',
 ];
 
@@ -90,10 +98,11 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
 
   // #region RegistrationData
 
-  const [name, setName] = useWebViewState('name', '');
-  const [registrationCode, setRegistrationCode] = useWebViewState('registrationCode', '');
-  const [email, setEmail] = useWebViewState('email', '');
-  const [supporter, setSupporter] = useWebViewState('supporter', '');
+  const [name, setName] = useState('');
+  const [registrationCode, setRegistrationCode] = useState('');
+  const [validatedRegistrationCode, setValidatedRegistrationCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [supporter, setSupporter] = useState('');
 
   const [isEditing, setIsEditing] = useState(true);
 
@@ -108,7 +117,6 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   // Set the form to show the current registration data when we receive it
   useEffect(() => {
     setName(currentRegistrationData.name);
-    setRegistrationCode(currentRegistrationData.code);
     setEmail(currentRegistrationData.email);
     setSupporter(currentRegistrationData.supporterName);
     // If the registration code is unset, then by default the form should be editing
@@ -121,13 +129,16 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   const [saveState, setSaveState] = useWebViewState('saveState', SaveState.HasNotSaved);
   const [error, setError] = useState('');
   const [errorDescription, setErrorDescription] = useState('');
+  const [showInvalidCode, setShowInvalidCode] = useState(false);
+  const [registrationIsValid, setRegistrationIsValid] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // If the app just got done with restarting, then changes the save state to `HasSaved`
   useEffect(() => {
     if (saveState === SaveState.IsRestarting) {
       setSaveState(SaveState.HasSaved);
     }
-  }, [saveState, setSaveState]);
+  }, []);
 
   // whether any form fields have changed
   const hasUnsavedChanges =
@@ -180,51 +191,10 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
     isLoadingCurrentRegistrationData ||
     saveState === SaveState.IsSaving ||
     saveState === SaveState.IsRestarting ||
-    saveState === SaveState.HasSaved ||
     !isEditing;
 
-  // whether various fields seem valid according to a quick check
-  const isCodeValid = !!registrationCode.match(REGISTRATION_CODE_REGEX_STRING);
-  const isContentValid = isCodeValid;
-
-  // As the registration becomes the correct form, validates it with the backend
-  const [registrationIsValid, isLoading] = usePromise(
-    useCallback(async () => {
-      // If the validation timeout exists
-
-      if (isCodeValid && hasUnsavedChanges) {
-        try {
-          return papi.commands.sendCommand(
-            'paratextRegistration.validateParatextRegistrationData',
-            { name, code: registrationCode, email, supporterName: supporter },
-          );
-        } catch (err: unknown) {
-          logger.warn(
-            'An error occurred while validating paratext registration:',
-            getErrorMessage(err),
-          );
-        }
-      }
-      return true;
-    }, [registrationCode, name, email, supporter, isCodeValid, hasUnsavedChanges]),
-    true,
-  );
-
-  // If the registration code validation promise returns false, then indicates the error
-  useEffect(() => {
-    if (registrationIsValid && error) {
-      setError('');
-      setErrorDescription('');
-    } else if (!registrationIsValid) {
-      setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
-      setErrorDescription(
-        localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
-      );
-    }
-  }, [registrationIsValid, error, localizedStrings]);
-
   const isButtonDisabled =
-    isFormDisabled || !hasUnsavedChanges || !isContentValid || (!isLoading && !registrationIsValid);
+    isFormDisabled || !hasUnsavedChanges || isLoading || !registrationIsValid;
 
   const formatSuccessAlertDescription = () => {
     if (saveState === SaveState.IsRestarting) {
@@ -242,9 +212,55 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
 
   const cancelEditing = () => {
     setName(currentRegistrationData.name);
-    setRegistrationCode(currentRegistrationData.code);
+    setRegistrationCode('');
     setIsEditing(false);
   };
+
+  const onClickChange = () => {
+    setRegistrationCode('');
+    setIsEditing(true);
+  };
+
+  const validateRegistration = debounce(async (newRegistrationCode: string, newName: string) => {
+    const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
+    setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
+
+    // If the new code is valid, then validates the code with the name on the backend
+    if (newCodeIsValid && newName && !isLoading) {
+      setIsLoading(true);
+      try {
+        const isValid = await papi.commands.sendCommand(
+          'paratextRegistration.validateParatextRegistrationData',
+          { name: newName, code: newRegistrationCode, email, supporterName: supporter },
+        );
+        setRegistrationIsValid(isValid);
+
+        if (isValid && error) {
+          setError('');
+          setErrorDescription('');
+        } else if (!isValid) {
+          setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
+          setErrorDescription(
+            localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
+          );
+        }
+      } catch (err: unknown) {
+        logger.warn(
+          'An error occurred while validating paratext registration:',
+          getErrorMessage(err),
+        );
+        setRegistrationIsValid(false);
+      } finally {
+        setIsLoading(false);
+      }
+    } else if (registrationIsValid) {
+      setRegistrationIsValid(false);
+    } else if (!registrationIsValid) {
+      setError('');
+      setErrorDescription('');
+    }
+    setValidatedRegistrationCode(newRegistrationCode);
+  }, REGISTRATION_CODE_VALIDATION_DEBOUNCE_MS);
 
   const onRegistrationCodeChange = (event: ChangeEvent<HTMLInputElement>) => {
     let newRegistrationCode = event.target.value;
@@ -256,6 +272,24 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
       newRegistrationCode += '-';
     }
     setRegistrationCode(newRegistrationCode);
+
+    validateRegistration(newRegistrationCode, name);
+  };
+
+  const onNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const newName = event.target.value;
+    setName(newName);
+    validateRegistration(registrationCode, newName);
+  };
+
+  const formatRegistrationCodeFormatError = () => {
+    if (validatedRegistrationCode.length < 34) {
+      return localizedStrings['%paratextRegistration_warning_invalid_registration_length%'];
+    } else if (!validatedRegistrationCode.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX)) {
+      return localizedStrings['%paratextRegistration_warning_invalid_registration_characters%'];
+    } else {
+      return localizedStrings['%paratextRegistration_warning_invalid_registration_format%'];
+    }
   };
 
   return (
@@ -277,8 +311,9 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
             <Input
               className="tw-max-w-[260px]"
               value={name}
+              required
               disabled={isFormDisabled}
-              onChange={(e) => setName(e.target.value)}
+              onChange={onNameChange}
             />
           ) : (
             <span>{currentRegistrationData.name}</span>
@@ -301,10 +336,8 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
             <span>{currentRegistrationData.code}</span>
           )}
           <span />
-          {registrationCode && !isCodeValid && (
-            <p className="tw-text-muted-foreground">
-              {localizedStrings['%paratextRegistration_warning_invalid_registration_format%']}
-            </p>
+          {registrationCode && showInvalidCode && (
+            <p className="tw-text-muted-foreground">{formatRegistrationCodeFormatError()}</p>
           )}
         </Grid>
         {/* UX said to remove supporter info until we are using it in P10S. Leaving here for uncommenting when the time is right */}
@@ -318,7 +351,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
         {!error &&
           (saveState === SaveState.IsRestarting ||
             saveState === SaveState.HasSaved ||
-            !isButtonDisabled) && (
+            (!isLoading && registrationIsValid)) && (
             <Section className="tw-my-4">
               <Alert ref={scrollToRef}>
                 <CircleCheck className="tw-h-4 tw-w-4" />
