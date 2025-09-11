@@ -49,14 +49,15 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_findButton%',
   '%webView_find_findInProject%',
   '%webView_find_matchCase%',
-  '%webView_find_maxResultsExceeded%',
   '%webView_find_noResultsFound%',
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
   '%webView_find_scopeUndetermined%',
   '%webView_find_scrollGroup%',
   '%webView_find_searchPlaceholder%',
+  '%webView_find_result%',
   '%webView_find_showingResults%',
+  '%webView_find_showingResultsOfMore%',
   '%webView_find_toggleFilters%',
 ];
 
@@ -492,6 +493,22 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const resultsMessage = useMemo(() => {
+    if (!results) return '';
+    if (results.length === 0) {
+      return localizedStrings['%webView_find_noResultsFound%'];
+    }
+    const l10nKey =
+      searchStatus === 'exceeded'
+        ? '%webView_find_showingResultsOfMore%'
+        : (numberOfHiddenResults > 0 && '%webView_find_result%') || '%webView_find_showingResults%';
+
+    return formatReplacementString(localizedStrings[l10nKey], {
+      visibleNumber: (results.length - numberOfHiddenResults).toString(),
+      totalNumber: totalNumberOfResults.toString(),
+    });
+  }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
+
   return (
     <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
       {/* Header with searchbar and filters */}
@@ -683,19 +700,7 @@ global.webViewComponent = function FindWebView({
           {(searchStatus === 'completed' ||
             searchStatus === 'stopped' ||
             searchStatus === 'exceeded') &&
-            results && (
-              <p className="tw-font-light">
-                {results.length > 0
-                  ? formatReplacementString(localizedStrings['%webView_find_showingResults%'], {
-                      visibleNumber: (results.length - numberOfHiddenResults).toString(),
-                      totalNumber: totalNumberOfResults.toString(),
-                    })
-                  : localizedStrings['%webView_find_noResultsFound%']}
-              </p>
-            )}
-          {searchStatus === 'exceeded' && (
-            <p className="tw-font-light">{localizedStrings['%webView_find_maxResultsExceeded%']}</p>
-          )}
+            results && <p className="tw-font-light">{resultsMessage}</p>}
           {searchStatus === 'errored' && searchError && (
             <p className="tw-font-light">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
