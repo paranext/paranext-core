@@ -12,11 +12,10 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { debounce, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 import { SaveState, scrollToRef } from '../utils';
 import { Grid } from './grid.component';
-import { Section } from './section.component';
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
@@ -77,15 +76,20 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_warning_invalid_registration_characters%',
   '%paratextRegistration_warning_invalid_registration_length%',
   '%paratextRegistration_warning_invalid_registration_format%',
+  '%paratextRegistration_webView_title%',
+  '%paratextRegistration_webView_tooltip%',
+  '%paratextRegistrationProfile_webView_title%',
+  '%paratextRegistrationProfile_webView_tooltip%',
 ];
 
 // #endregion
 
 interface RegistrationFormProps {
   useWebViewState: UseWebViewStateHook;
+  handleFormTypeChange: (isInitial: boolean) => void;
 }
 
-export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
+export function RegistrationForm({ useWebViewState, handleFormTypeChange }: RegistrationFormProps) {
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -104,7 +108,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   const [email, setEmail] = useState('');
   const [supporter, setSupporter] = useState('');
 
-  const [isEditing, setIsEditing] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [currentRegistrationData, isLoadingCurrentRegistrationData] = usePromise(
     getRegistrationData,
@@ -119,9 +123,31 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
     setName(currentRegistrationData.name);
     setEmail(currentRegistrationData.email);
     setSupporter(currentRegistrationData.supporterName);
-    // If the registration code is unset, then by default the form should be editing
-    setIsEditing(currentRegistrationData.code === '');
-  }, [currentRegistrationData, setName, setRegistrationCode, setEmail, setSupporter]);
+
+    // If there is no registration currently, then changes the form and dialog to reflect as such
+    const isInitialRegistration =
+      currentRegistrationData.code === '' || currentRegistrationData.name === '';
+    setIsEditing(isInitialRegistration);
+    // For some reason lint says this function is undefined when it is
+    // eslint-disable-next-line no-undef
+    updateWebViewDefinition({
+      title: isInitialRegistration
+        ? localizedStrings['%paratextRegistration_webView_title%']
+        : localizedStrings['%paratextRegistrationProfile_webView_title%'],
+      tooltip: isInitialRegistration
+        ? localizedStrings['%paratextRegistration_webView_tooltip%']
+        : localizedStrings['%paratextRegistrationProfile_webView_tooltip%'],
+    });
+    handleFormTypeChange(isInitialRegistration);
+  }, [
+    currentRegistrationData,
+    handleFormTypeChange,
+    localizedStrings,
+    setName,
+    setRegistrationCode,
+    setEmail,
+    setSupporter,
+  ]);
 
   // #endregion
 
@@ -138,7 +164,16 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
     if (saveState === SaveState.IsRestarting) {
       setSaveState(SaveState.HasSaved);
     }
+    // This hook needs to only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // If the `isEditing` state changes, then this should clear the alert messages
+  useEffect(() => {
+    setRegistrationIsValid(false);
+    setError('');
+    setErrorDescription('');
+  }, [isEditing, setRegistrationIsValid, setError, setErrorDescription]);
 
   // whether any form fields have changed
   const hasUnsavedChanges =
@@ -216,11 +251,6 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
     setIsEditing(false);
   };
 
-  const onClickChange = () => {
-    setRegistrationCode('');
-    setIsEditing(true);
-  };
-
   const validateRegistration = debounce(async (newRegistrationCode: string, newName: string) => {
     const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
     setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
@@ -285,11 +315,13 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
   const formatRegistrationCodeFormatError = () => {
     if (validatedRegistrationCode.length < 34) {
       return localizedStrings['%paratextRegistration_warning_invalid_registration_length%'];
-    } else if (!validatedRegistrationCode.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX)) {
-      return localizedStrings['%paratextRegistration_warning_invalid_registration_characters%'];
-    } else {
-      return localizedStrings['%paratextRegistration_warning_invalid_registration_format%'];
     }
+
+    if (!validatedRegistrationCode.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX)) {
+      return localizedStrings['%paratextRegistration_warning_invalid_registration_characters%'];
+    }
+
+    return localizedStrings['%paratextRegistration_warning_invalid_registration_format%'];
   };
 
   return (
@@ -352,7 +384,7 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
           (saveState === SaveState.IsRestarting ||
             saveState === SaveState.HasSaved ||
             (!isLoading && registrationIsValid)) && (
-            <Section className="tw-my-4">
+            <div className="tw-mx-2 tw-my-4">
               <Alert ref={scrollToRef}>
                 <CircleCheck className="tw-h-4 tw-w-4" />
                 <AlertTitle>
@@ -362,16 +394,16 @@ export function RegistrationForm({ useWebViewState }: RegistrationFormProps) {
                 </AlertTitle>
                 <AlertDescription>{formatSuccessAlertDescription()}</AlertDescription>
               </Alert>
-            </Section>
+            </div>
           )}
         {error && (
-          <Section className="tw-my-4">
+          <div className="tw-mx-2 tw-my-4">
             <Alert ref={scrollToRef} variant="destructive">
               <AlertCircle className="tw-h-4 tw-w-4" />
               <AlertTitle>{error}</AlertTitle>
               <AlertDescription>{errorDescription}</AlertDescription>
             </Alert>
-          </Section>
+          </div>
         )}
         <Grid className="tw-grid-cols-[1fr_auto] tw-items-end">
           <span />

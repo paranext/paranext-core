@@ -120,10 +120,7 @@
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show “Paratext Registration Information” on startup"
     },
     "es": {
-      "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
-      "%internetSettings_webView_title%": "Configuración de Internet",
-      "%internetSettings_webView_tooltip%": "Introduzca su configuración de registro de Internet de Paratext en este formulario.",
       "%paratextRegistration_alert_updatedRegistration%": "Información de registro actualizada",
       "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados. La aplicación se reiniciará en unos segundos.",
       "%paratextRegistration_button_saveAndRestart%": "Guardar y reiniciar",

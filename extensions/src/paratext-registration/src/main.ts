@@ -8,18 +8,10 @@ import {
   InternetSettingsWebViewProvider,
   internetSettingsWebViewType,
 } from './internet-settings.web-view-provider';
-import { ProfileWebViewProvider, profileWebViewType } from './profile.web-view-provider';
 
 async function showParatextRegistration(): Promise<string | undefined> {
-  // First checks to see if the app has been registered yet
-  const registrationData = await papi.commands.sendCommand(
-    'paratextRegistration.getParatextRegistrationData',
-  );
-
-  // If it has been registered, then it shows the profile view. Else, it shows the initial
-  // registration view
   return papi.webViews.openWebView(
-    registrationData.code ? profileWebViewType : paratextRegistrationWebViewType,
+    paratextRegistrationWebViewType,
     { type: 'float', position: 'center', floatSize: { width: 600, height: 540 } },
     { existingId: '?' },
   );
@@ -69,7 +61,6 @@ export async function activate(context: ExecutionActivationContext) {
 
   const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
   const internetSettingsWebViewProvider = new InternetSettingsWebViewProvider();
-  const profileWebViewProvider = new ProfileWebViewProvider();
 
   const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
     'paratextRegistration.shouldShowOnStartup',
@@ -95,11 +86,6 @@ export async function activate(context: ExecutionActivationContext) {
     internetSettingsWebViewProvider,
   );
 
-  const showProfileProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    profileWebViewType,
-    profileWebViewProvider,
-  );
-
   // No need to wait for this; it will do its thing and handle its own errors
   showParatextRegistrationIfNoRegistrationData();
 
@@ -109,7 +95,6 @@ export async function activate(context: ExecutionActivationContext) {
     await showParatextRegistrationWebViewProviderPromise,
     await showInternetSettingsPromise,
     await showInternetSettingsWebViewProviderPromise,
-    await showProfileProviderPromise,
   );
 }
 

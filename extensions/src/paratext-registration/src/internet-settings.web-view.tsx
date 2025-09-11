@@ -20,7 +20,6 @@ import {
 import { deepEqual, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
-import { Section } from './components/section.component';
 import { Grid } from './components/grid.component';
 import { scrollToRef, SaveState } from './utils';
 
@@ -97,10 +96,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // How much progress the form has made in saving registration data
   const [saveState, setSaveState] = useState(SaveState.HasNotSaved);
   const [saveError, setSaveError] = useState('');
-  // For some reason the lint doesn't like using the NodeJS namespace, but this is required for the
-  // `Timeout` type
-  // eslint-disable-next-line no-undef
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | undefined>();
+  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | undefined>();
 
   // #region InternetSettings
 
@@ -174,14 +170,28 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       }, SAVE_SETTINGS_DELAY_MS);
       setSaveTimeout(newSaveTimeout);
     }
-  }, [internetSettings, hasUnsavedChanges, isFormDisabled, isProxyHostValid, saveTimeout]);
+
+    // If the component unmounts early, clears the timeout if it exists
+    return () => {
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+    };
+  }, [
+    isLoadingCurrentInternetSettings,
+    internetSettings,
+    hasUnsavedChanges,
+    isFormDisabled,
+    isProxyHostValid,
+    saveTimeout,
+  ]);
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-2 tw-h-screen tw-p-4">
-      <Section>
+      <div className="tw-m-2">
         {localizedStrings['%paratextRegistration_description_internetUse_disclaimer%']}
-      </Section>
-      <Section>
+      </div>
+      <div className="tw-m-2">
         <Select
           disabled={isFormDisabled}
           value={internetSettings.permittedInternetUse}
@@ -200,7 +210,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
             ))}
           </SelectContent>
         </Select>
-      </Section>
+      </div>
       {internetSettings.permittedInternetUse === 'ProxyOnly' && (
         <Card className="tw-m-2">
           <CardHeader>
@@ -219,10 +229,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent
-                  // Need to get over the floating web view z-index 200
-                  style={{ zIndex: 250 }}
-                >
+                <SelectContent>
                   {PROXY_MODE_OPTIONS.map((proxyModeOption) => (
                     <SelectItem key={proxyModeOption} value={proxyModeOption}>
                       {localizedStrings[getLocalizeKeyForProxyMode(proxyModeOption)]}
@@ -286,10 +293,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent
-            // Need to get over the floating web view z-index 200
-            style={{ zIndex: 250 }}
-          >
+          <SelectContent>
             {SERVER_TYPE_OPTIONS.map((serverTypeOption) => (
               <SelectItem key={serverTypeOption} value={serverTypeOption}>
                 {localizedStrings[getLocalizeKeyForServerType(serverTypeOption)]}
@@ -299,13 +303,13 @@ globalThis.webViewComponent = function InternetSettingsComponent({
         </Select>
       </Grid>
       {saveError && (
-        <Section className="tw-my-4">
+        <div className="tw-mx-2 tw-my-4">
           <Alert ref={scrollToRef} variant="destructive">
             <AlertCircle className="tw-h-4 tw-w-4" />
             <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
             <AlertDescription>{saveError}</AlertDescription>
           </Alert>
-        </Section>
+        </div>
       )}
     </div>
   );
