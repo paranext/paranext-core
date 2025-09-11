@@ -26,7 +26,7 @@ globalThis.webViewComponent = function HomeWebView() {
     };
   }, []);
 
-  const [localizedStrings] = useLocalizedStrings(
+  const localizedStringsWithLoadingState = useLocalizedStrings(
     useMemo(() => {
       return [...Array.from(HOME_STRING_KEYS), '%home_dialog_title%'];
     }, []),
@@ -258,11 +258,11 @@ globalThis.webViewComponent = function HomeWebView() {
     return interfaceLanguages;
   }, [interfaceLanguages]);
 
-  const dialogTitleText: string = localizedStrings['%home_dialog_title%'];
+  const dialogTitleText: string = localizedStringsWithLoadingState[0]['%home_dialog_title%'];
 
   return (
     <Home
-      localizedStrings={localizedStrings}
+      localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}
       onOpenProject={openProject}

@@ -144,12 +144,15 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   return (
     <Story
       args={{
-        localizedStrings: {
-          '%resources_open%': 'Open',
-          '%resources_sync%': 'Sync',
-          '%resources_get%': 'Get',
-          '%resources_shortNameText%': 'Name',
-        },
+        localizedStringsWithLoadingState: [
+          {
+            '%resources_open%': 'Open',
+            '%resources_sync%': 'Sync',
+            '%resources_get%': 'Get',
+            '%resources_shortNameText%': 'Name',
+          },
+          false,
+        ],
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
