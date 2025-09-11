@@ -40,6 +40,10 @@ const styles = `
   .tw-ps-2 {
     padding-left: 0.5rem;
   }
+
+  .tw-text-muted-foreground\\/70 {
+    color: hsl(var(--muted-foreground) / 0.7);
+  }
 `;
 const styleElement = document.createElement('style');
 styleElement.innerHTML = styles;
