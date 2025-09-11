@@ -103,27 +103,23 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
   const dialogTitleText: string = localizedStringsWithLoadingState[0]['%new_tab_dialog_title%'];
   const loadingText: string = localizedStringsWithLoadingState[0]['%resources_loading%'];
 
-  return (
-    <>
-      {projectLoading ? (
-        <div className="tw-p-8">
-          <Label>{loadingText}</Label>
-        </div>
-      ) : (
-        <Home
-          localizedStringsWithLoadingState={localizedStringsWithLoadingState}
-          localProjectsInfo={localProjectsInfo}
-          isLoadingLocalProjects={isLoadingLocalProjects}
-          onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}
-          showGetResourcesButton={false}
-          headerContent={
-            <>
-              <Plus size={36} />
-              <CardTitle>{dialogTitleText}</CardTitle>
-            </>
-          }
-        />
-      )}
-    </>
+  return projectLoading ? (
+    <div className="tw-p-8">
+      <Label>{loadingText}</Label>
+    </div>
+  ) : (
+    <Home
+      localizedStringsWithLoadingState={localizedStringsWithLoadingState}
+      localProjectsInfo={localProjectsInfo}
+      isLoadingLocalProjects={isLoadingLocalProjects}
+      onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}
+      showGetResourcesButton={false}
+      headerContent={
+        <>
+          <Plus size={36} />
+          <CardTitle>{dialogTitleText}</CardTitle>
+        </>
+      }
+    />
   );
 };
