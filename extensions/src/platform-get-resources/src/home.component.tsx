@@ -456,7 +456,7 @@ export function Home({
                           }
                           key={project.projectId}
                           className={cn('tw-rounded-sm', {
-                            'tw-text-muted-foreground': !project.isLocallyAvailable,
+                            'tw-text-muted-foreground/70': !project.isLocallyAvailable,
                           })}
                         >
                           <TableCell
@@ -501,7 +501,7 @@ export function Home({
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default">
+                          <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default tw-break-all">
                             {project.fullName}
                           </TableCell>
                           <TableCell className="tw-hidden sm:!tw-table-cell tw-cursor-default">
