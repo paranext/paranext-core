@@ -105,12 +105,11 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
 
   return (
     <>
-      {projectLoading && (
+      {projectLoading ? (
         <div className="tw-p-8">
           <Label>{loadingText}</Label>
         </div>
-      )}
-      {!projectLoading && (
+      ) : (
         <Home
           localizedStringsWithLoadingState={localizedStringsWithLoadingState}
           localProjectsInfo={localProjectsInfo}
