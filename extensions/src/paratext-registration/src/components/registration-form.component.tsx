@@ -14,7 +14,7 @@ import {
 import { debounce, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
-import { SaveState, scrollToRef } from '../utils';
+import { SaveState } from '../utils';
 import { Grid } from './grid.component';
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
@@ -388,7 +388,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             saveState === SaveState.HasSaved ||
             (!isLoading && registrationIsValid)) && (
             <div className="tw-mx-2 tw-my-4">
-              <Alert ref={scrollToRef}>
+              <Alert>
                 <CircleCheck className="tw-h-4 tw-w-4" />
                 <AlertTitle>
                   {saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved
@@ -401,7 +401,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           )}
         {error && (
           <div className="tw-mx-2 tw-my-4">
-            <Alert ref={scrollToRef} variant="destructive">
+            <Alert variant="destructive">
               <AlertCircle className="tw-h-4 tw-w-4" />
               <AlertTitle>{error}</AlertTitle>
               <AlertDescription>{errorDescription}</AlertDescription>

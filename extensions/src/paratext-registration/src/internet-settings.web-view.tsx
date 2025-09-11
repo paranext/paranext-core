@@ -21,7 +21,7 @@ import { deepEqual, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Grid } from './components/grid.component';
-import { scrollToRef, SaveState } from './utils';
+import { SaveState } from './utils';
 
 const SAVE_SETTINGS_DELAY_MS = 500;
 
@@ -304,7 +304,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       </Grid>
       {saveError && (
         <div className="tw-mx-2 tw-my-4">
-          <Alert ref={scrollToRef} variant="destructive">
+          <Alert variant="destructive">
             <AlertCircle className="tw-h-4 tw-w-4" />
             <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
             <AlertDescription>{saveError}</AlertDescription>
