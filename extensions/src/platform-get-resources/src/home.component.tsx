@@ -364,7 +364,10 @@ export function Home({
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
       <CardHeader
-        className={`tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 ${showGetResourcesButton ? 'max-[300px]:!tw-pb-2' : 'max-[300px]:!tw-pb-0'}`}
+        className={cn(
+          'tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-pb-0',
+          { 'max-[300px]:!tw-pb-2': showGetResourcesButton },
+        )}
       >
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
@@ -452,13 +455,18 @@ export function Home({
                               : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
-                          className={`tw-rounded-sm ${project.isLocallyAvailable ? '' : 'tw-text-muted-foreground'}`}
+                          className={cn('tw-rounded-sm', {
+                            'tw-text-muted-foreground': !project.isLocallyAvailable,
+                          })}
                         >
                           <TableCell
-                            className={`${project.editedStatus === 'edited' ? 'tw-ps-2' : ''}`}
+                            className={cn({ 'tw-ps-2': project.editedStatus === 'edited' })}
                           >
                             <div
-                              className={`tw-flex tw-flex-row tw-items-center tw-gap-4 ${project.editedStatus === 'edited' ? 'tw-ps-0' : 'tw-ps-2'}`}
+                              className={cn(
+                                'tw-flex tw-flex-row tw-items-center tw-gap-4 tw-ps-2',
+                                { 'tw-ps-0': project.editedStatus === 'edited' },
+                              )}
                             >
                               <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
                                 {project.editedStatus === 'edited' && (
