@@ -133,7 +133,9 @@ global.webViewComponent = function FindWebView({
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
+    useMemo(() => LOCALIZED_STRINGS, []),
+  );
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -612,10 +614,9 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
-  const findButtonText =
-    localizedStrings['%webView_find_findButton%'] === '%webView_find_findButton%'
-      ? ''
-      : localizedStrings['%webView_find_findButton%'];
+  const findButtonText = isLocalizedStringsLoading
+    ? ''
+    : localizedStrings['%webView_find_findButton%'];
 
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
