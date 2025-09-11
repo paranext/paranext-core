@@ -481,3 +481,27 @@ i.chevron-down {
   mask-image: url('../../../../../../extensions/src/platform-scripture-editor/assets/images/icons/chevron-down.svg');
   background-image: none;
 }
+
+/* This was needed after introducing the story description and the `CanvasWithDescription` item. */
+.toolbar {
+  min-height: 45px;
+}
+
+/* Darker background when the Pilcrow toggle is active to match other toggles */
+.toolbar .toolbar-item.active[aria-pressed='true'] {
+  background-color: color-mix(in oklab, hsl(var(--accent)) 85%, black);
+}
+
+/* Ensure the pilcrow glyph matches icon sizing and vertical centering */
+.toolbar .toolbar-item .icon.pilcrow-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px; /* similar visual weight as other icons */
+  line-height: 1;
+  vertical-align: middle;
+  background-color: unset;
+  margin-right: 0;
+}
