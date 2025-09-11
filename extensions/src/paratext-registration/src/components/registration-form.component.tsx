@@ -170,10 +170,13 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
 
   // If the `isEditing` state changes, then this should clear the alert messages
   useEffect(() => {
+    setSaveState(SaveState.HasNotSaved);
     setRegistrationIsValid(false);
     setError('');
     setErrorDescription('');
-  }, [isEditing, setRegistrationIsValid, setError, setErrorDescription]);
+    // This effect must only trigger when `isEditing` changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
 
   // whether any form fields have changed
   const hasUnsavedChanges =
