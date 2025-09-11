@@ -26,7 +26,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
     };
   }, []);
 
-  const [localizedStrings] = useLocalizedStrings(
+  const localizedStringsWithLoadingState = useLocalizedStrings(
     useMemo(() => {
       return [...Array.from(HOME_STRING_KEYS), '%new_tab_dialog_title%', '%resources_loading%'];
     }, []),
@@ -100,8 +100,8 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
     };
   }, [excludePdpFactoryIds]);
 
-  const dialogTitleText: string = localizedStrings['%new_tab_dialog_title%'];
-  const loadingText: string = localizedStrings['%resources_loading%'];
+  const dialogTitleText: string = localizedStringsWithLoadingState[0]['%new_tab_dialog_title%'];
+  const loadingText: string = localizedStringsWithLoadingState[0]['%resources_loading%'];
 
   return (
     <>
@@ -112,7 +112,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
       )}
       {!projectLoading && (
         <Home
-          localizedStrings={localizedStrings}
+          localizedStringsWithLoadingState={localizedStringsWithLoadingState}
           localProjectsInfo={localProjectsInfo}
           isLoadingLocalProjects={isLoadingLocalProjects}
           onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}

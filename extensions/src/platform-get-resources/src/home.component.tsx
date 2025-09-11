@@ -86,7 +86,7 @@ export type HomeProps = {
    * from this library, pass it in to the Platform's localization hook, and pass the localized keys
    * that are returned by the hook into this prop.
    */
-  localizedStrings?: HomeLocalizedStrings;
+  localizedStringsWithLoadingState?: [HomeLocalizedStrings, boolean];
   /**
    * Locales for formatting dates and times. This is used to format the last send/receive date of
    * projects.
@@ -134,7 +134,8 @@ export type HomeProps = {
  * A component that displays a list of local and remote projects, allowing users to open,
  * synchronize, and manage them. It also provides a button to get more resources.
  *
- * @param {localizedStrings} - Object with localized strings for the component.
+ * @param {localizedStringsWithLoadingState} - Array of [Object with localized strings for the
+ *   component, isLoading].
  * @param {uiLocales} - Locales for formatting dates and times.
  * @param {onOpenGetResources} - Callback function to open the Get Resources dialog.
  * @param {onOpenProject} - Callback function to open a project.
@@ -154,7 +155,7 @@ export type HomeProps = {
  * @returns
  */
 export function Home({
-  localizedStrings = {},
+  localizedStringsWithLoadingState = [{}, false],
   uiLocales = [],
   onOpenGetResources = () => {},
   onOpenProject = () => {},
@@ -170,8 +171,9 @@ export function Home({
   headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
-    return localizedStrings[localizeKey] ?? localizeKey;
+    return localizedStringsWithLoadingState[0][localizeKey] ?? localizeKey;
   };
+  const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
@@ -182,8 +184,9 @@ export function Home({
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
-  const itemsTextL10nKey = '%resources_items%';
-  const itemsText: string = getLocalizedString(itemsTextL10nKey);
+  const itemsText: string = isLocalizedStringsLoading
+    ? ''
+    : getLocalizedString('%resources_items%');
   const languageText: string = getLocalizedString('%resources_language%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
@@ -541,7 +544,7 @@ export function Home({
         </CardContent>
       )}
       <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:32rem)]:!tw-hidden">
-        <Label>{`${filteredAndSortedProjects.length} ${itemsText === itemsTextL10nKey ? '' : itemsText}`}</Label>
+        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
       </CardFooter>
     </Card>
   );
