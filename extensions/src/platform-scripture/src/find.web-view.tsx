@@ -627,7 +627,7 @@ global.webViewComponent = function FindWebView({
     const l10nKey =
       searchStatus === 'exceeded'
         ? '%webView_find_showingResultsOfMore%'
-        : (numberOfHiddenResults > 0 && '%webView_find_result%') || '%webView_find_showingResults%';
+        : (numberOfHiddenResults > 0 && '%webView_find_showingResults%') || '%webView_find_result%';
 
     return formatReplacementString(localizedStrings[l10nKey], {
       visibleNumber: (results.length - numberOfHiddenResults).toString(),
