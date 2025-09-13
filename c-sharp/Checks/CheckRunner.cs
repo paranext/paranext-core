@@ -15,7 +15,7 @@ namespace Paranext.DataProvider.Checks;
 /// The data provider implements the ICheckRunner interface that is defined in TypeScript. See the
 /// definition of ICheckRunner and its related types in TypeScript for more details.
 /// </summary>
-internal class CheckRunner : NetworkObjects.DataProvider
+internal sealed class CheckRunner : NetworkObjects.DataProvider
 {
     #region Internal classes
 

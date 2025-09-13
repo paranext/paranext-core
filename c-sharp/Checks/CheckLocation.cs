@@ -17,7 +17,7 @@ namespace Paranext.DataProvider.Checks;
 /// nothing about USJ and JsonPath, so we can only create <see cref="SIL.Scripture.VerseRef"/>
 /// representations in this class. See the TypeScript check data types for more details.
 /// </summary>
-public sealed class CheckLocation(VerseRef verseRef, int offset) : IEquatable<CheckLocation>
+internal sealed class CheckLocation(VerseRef verseRef, int offset) : IEquatable<CheckLocation>
 {
     public VerseRef VerseRef { get; } = verseRef;
     public int Offset { get; set; } = offset;

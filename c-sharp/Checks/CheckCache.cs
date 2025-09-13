@@ -1,16 +1,16 @@
 using System.Collections.Concurrent;
-using Paranext.DataProvider;
-using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data.ProjectFileAccess;
 
+namespace Paranext.DataProvider.Checks;
+
 /// <summary>
-/// A cache of checks for all Paratext projects.
+/// A cache of checks (the executable code and the results) for all Paratext projects.
 /// This ensures that there is only one instance of each check and data source per project.
 /// Also, this automatically clears check results when project text or settings change.
 /// </summary>
-internal class CheckCache
+internal sealed class CheckCache
 {
     // See platform-scripture.d.ts for the TypeScript definition
     private const string INVALIDATE_CHECK_RESULTS =
@@ -43,6 +43,7 @@ internal class CheckCache
                     var projectId = scrText.GetProjectDetails().Metadata.Id;
 
                     // Update all checks for this project to indicate that settings have changed
+                    // This will cause them to reload settings and clear results before the next run
                     _checksByIds
                         .Where((kvp) => kvp.Key.projectId == projectId)
                         .Select((kvp) => kvp.Value)

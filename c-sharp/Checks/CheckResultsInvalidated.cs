@@ -1,6 +1,14 @@
 namespace Paranext.DataProvider.Checks;
 
-public class CheckResultsInvalidated(List<string> checkIds, string projectId, string? bookId)
+/// <summary>
+/// Represents check results that have been invalidated for a project.  This class must
+/// serialize to the CheckResultsInvalidated type defined in TypeScript.
+/// </summary>
+internal sealed class CheckResultsInvalidated(
+    List<string> checkIds,
+    string projectId,
+    string? bookId
+)
 {
     public List<string> CheckIds { get; init; } =
         (checkIds != null && checkIds.Count > 0)

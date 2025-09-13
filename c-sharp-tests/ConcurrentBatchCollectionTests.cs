@@ -198,7 +198,10 @@ public class ConcurrentBatchCollectionTests
             }
         });
 
+        // Disabled just for this automatically generated multithreaded test
+#pragma warning disable VSTHRD002 // Avoid problematic synchronous waits
         Task.WaitAll(addTask, removeTask);
+#pragma warning restore VSTHRD002 // Avoid problematic synchronous waits
 
         // Verify all items were processed
         Assert.That(removedItems.Count, Is.EqualTo(itemsPerBatch * numberOfBatches));

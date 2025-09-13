@@ -18,7 +18,7 @@ namespace Paranext.DataProvider.Checks;
 /// <br />
 /// See the TypeScript check data types for more details.
 /// </summary>
-public sealed class CheckInputRange
+internal sealed class CheckInputRange
 {
     private string _projectId;
     private VerseRef _start;

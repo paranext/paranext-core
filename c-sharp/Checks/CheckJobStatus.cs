@@ -1,7 +1,10 @@
-using Paranext.DataProvider;
-using Paranext.DataProvider.Checks;
+namespace Paranext.DataProvider.Checks;
 
-internal class CheckJobStatus : CheckJobStatusReport
+/// <summary>
+/// Represents the current status of a check job, including its results. This is the
+/// CheckJobStatusReport plus additional runtime information used internally.
+/// </summary>
+internal sealed class CheckJobStatus : CheckJobStatusReport
 {
     #region Possible Status Values
 

@@ -15,7 +15,7 @@ namespace Paranext.DataProvider.Checks;
 /// objects for reporting problems to the user. This class is essentially an adapter for storing a
 /// list of problems from checks.
 /// </summary>
-public sealed partial class CheckResultsRecorder(string checkId, string projectId)
+internal sealed partial class CheckResultsRecorder(string checkId, string projectId)
     : IRecordCheckError
 {
     /// <summary>

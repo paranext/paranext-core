@@ -1,7 +1,8 @@
-using Paranext.DataProvider.Checks;
+namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// A report on the status of a check job, including a batch of results if available
+/// A report on the status of a check job, including a batch of results if available. This class
+/// must serialize to the CheckJobStatusReport type defined in TypeScript.
 /// </summary>
 internal class CheckJobStatusReport
 {

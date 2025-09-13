@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
-using Paranext.DataProvider.Checks;
 using Paratext.Checks;
 
+namespace Paranext.DataProvider.Checks;
+
 /// <summary>
-/// Holds a check and its results for a specific project
+/// Holds a check and its results for a specific project. Any code that modifies the results
+/// should lock on the ModifyResultsLock object before doing so.
 /// </summary>
 internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
 {
@@ -11,7 +13,7 @@ internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, 
 
     public ScriptureCheckBase Check { get; } = check;
     public bool SettingsChanged { get; set; } = false;
-    public readonly object ModifyResultsLock = new();
+    public object ModifyResultsLock { get; init; } = new();
 
     public CheckResultsRecorder GetResultsRecorder(int bookNum)
     {

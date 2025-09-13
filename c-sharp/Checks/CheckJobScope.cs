@@ -1,9 +1,10 @@
-using Paranext.DataProvider.Checks;
+namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// Describes the scope of a check job, including which checks to run on parts of which projects
+/// Describes which checks to run on which parts of which projects. This class must
+/// serialize/deserialize to the CheckJobScope type defined in TypeScript.
 /// </summary>
-internal class CheckJobScope
+internal sealed class CheckJobScope
 {
     public string[] CheckIds { get; set; } = [];
     public CheckInputRange[] InputRanges { get; set; } = [];
