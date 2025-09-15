@@ -76,7 +76,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_warning_invalid_registration_characters%',
   '%paratextRegistration_warning_invalid_registration_length%',
   '%paratextRegistration_warning_invalid_registration_format%',
-  '%paratextRegistration_webView_title%',
+  '%paratextRegistration_webView_title_2%',
   '%paratextRegistration_webView_tooltip%',
   '%paratextRegistrationProfile_webView_title%',
   '%paratextRegistrationProfile_webView_tooltip%',
@@ -132,7 +132,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     // eslint-disable-next-line no-undef
     updateWebViewDefinition({
       title: isInitialRegistration
-        ? localizedStrings['%paratextRegistration_webView_title%']
+        ? localizedStrings['%paratextRegistration_webView_title_2%']
         : localizedStrings['%paratextRegistrationProfile_webView_title%'],
       tooltip: isInitialRegistration
         ? localizedStrings['%paratextRegistration_webView_tooltip%']

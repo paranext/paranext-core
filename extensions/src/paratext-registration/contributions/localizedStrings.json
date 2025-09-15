@@ -56,6 +56,12 @@
         "message": "The registration in Paratext 10 Studio is no longer shared with Paratext 9",
         "date": "2025-09-10"
       }
+    },
+    "%paratextRegistration_webView_title%": {
+      "deprecationInfo": {
+        "message": "Changed the value of this locale to just be \"Paratext Registration\". The new key is %paratextRegistration_webView_title_2%.",
+        "date": "2025-09-15"
+      }
     }
   },
   "localizedStrings": {
@@ -110,7 +116,8 @@
       "%paratextRegistration_warning_invalid_registration_characters%": "No special symbols except for hyphen `-`.",
       "%paratextRegistration_warning_invalid_registration_length%": "Registration codes are exactly 34 characters.",
       "%paratextRegistration_warning_invalid_registration_format%": "Registration code must be in the format of 'XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX'",
-      "%paratextRegistration_webView_title%": "Paratext Registration",
+      "%paratextRegistration_webView_title%": "Paratext Registration Information",
+      "%paratextRegistration_webView_title_2%": "Paratext Registration",
       "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",
       "%paratextRegistrationProfile_webView_title%": "Account",
       "%paratextRegistrationProfile_webView_tooltip%": "Adjust your Paratext Registration Account Information here.",
