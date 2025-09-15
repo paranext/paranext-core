@@ -1,7 +1,7 @@
 import React from 'react';
 import { MarkerContent, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import clsx from 'clsx';
 import { AlertCircle } from 'lucide-react';
+import { cn } from '@/utils/shadcn-ui.util';
 import { FootnoteItemProps } from './footnotes.types';
 
 function renderContent(
@@ -9,17 +9,17 @@ function renderContent(
   content?: MarkerContent[],
   showMarkers = true,
   allowUnmarkedText = true,
-  path: string[] = [],
+  markerHierarchy: string[] = [],
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
 
-  return content.map((c) => {
+  return content.map((footnotePart) => {
     // Build a key based on the hierarchy and marker/text
-    let key = path.join('-');
-    if (typeof c === 'string') {
-      key += `-${c.slice(0, 10)}`; // first few chars of text
+    let key = markerHierarchy.join('-');
+    if (typeof footnotePart === 'string') {
+      key += `-${footnotePart.slice(0, 10)}`; // first few chars of text
       if (allowUnmarkedText) {
-        return <span key={key}> {c}</span>;
+        return <span key={key}> {footnotePart}</span>;
       }
       return (
         <span
@@ -27,15 +27,18 @@ function renderContent(
           className="tw-inline-flex tw-items-center tw-gap-1 tw-underline tw-decoration-destructive"
         >
           <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
-          <span>{c}</span>
+          <span>{footnotePart}</span>
           <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
         </span>
       );
     }
 
-    // For MarkerObjects, include marker in the key and pass updated path
-    key += `-${c.marker ?? 'unknown'}`;
-    return renderMarkerObject(c, key, showMarkers, [...path, parentMarker ?? 'unknown']);
+    // For MarkerObjects, include marker in the key and pass updated hierarchy
+    key += `-${footnotePart.marker ?? 'unknown'}`;
+    return renderMarkerObject(footnotePart, key, showMarkers, [
+      ...markerHierarchy,
+      parentMarker ?? 'unknown',
+    ]);
   });
 }
 
@@ -43,10 +46,10 @@ function renderMarkerObject(
   markerObj: MarkerObject,
   key: React.Key,
   showMarkers: boolean,
-  path: string[] = [],
+  markerHierarchy: string[] = [],
 ): React.ReactNode {
   const { marker } = markerObj;
-  const classes = clsx('footnote', marker && `usfm_${marker}`);
+  const classes = cn(marker && `usfm_${marker}`);
 
   return (
     <span key={key} className={classes}>
@@ -58,7 +61,10 @@ function renderMarkerObject(
           aria-label="Missing marker"
         />
       )}
-      {renderContent(marker, markerObj.content, showMarkers, true, [...path, marker ?? 'unknown'])}
+      {renderContent(marker, markerObj.content, showMarkers, true, [
+        ...markerHierarchy,
+        marker ?? 'unknown',
+      ])}
     </span>
   );
 }
@@ -73,15 +79,17 @@ export function FootnoteItem({
 
   return (
     <p
-      className={clsx('footnote-item tw-text-sm', className)}
+      className={cn('footnote-item tw-text-sm', className)}
       data-type={footnote.type}
       data-marker={footnote.marker}
     >
       {showMarkers && <span className="tw-text-muted-foreground">{`\\${footnote.marker} `}</span>}
 
-      {caller ? (
+      {caller && (
+        // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
+        // specific class name in case styling is needed.
         <span className="footnote-caller tw-text-xs tw-font-medium">{caller} </span>
-      ) : undefined}
+      )}
 
       {renderContent(footnote.marker, footnote.content, showMarkers, false)}
 
@@ -89,3 +97,5 @@ export function FootnoteItem({
     </p>
   );
 }
+
+export default FootnoteItem;

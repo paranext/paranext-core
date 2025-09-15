@@ -42,7 +42,7 @@ export type { VersionHistoryType } from './components/advanced/extension-marketp
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as Filter } from './components/advanced/filter.component';
 export type { FootnoteItemProps } from './components/advanced/footnotes/footnotes.types';
-export type { FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
+export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export {
   default as Inventory,
   type InventoryItem,
