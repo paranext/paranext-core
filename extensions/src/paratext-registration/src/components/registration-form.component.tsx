@@ -238,6 +238,13 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     return localizedStrings['%paratextRegistration_alert_validRegistration_description%'];
   };
 
+  const onEditingChange = () => {
+    setSaveState(SaveState.HasNotSaved);
+    setRegistrationIsValid(false);
+    setError('');
+    setErrorDescription('');
+  };
+
   const cancelEditing = () => {
     setName(currentRegistrationData.name);
     setRegistrationCode('');
@@ -248,13 +255,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const onClickChange = () => {
     setIsEditing(true);
     onEditingChange();
-  };
-
-  const onEditingChange = () => {
-    setSaveState(SaveState.HasNotSaved);
-    setRegistrationIsValid(false);
-    setError('');
-    setErrorDescription('');
   };
 
   const validateRegistration = debounce(async (newRegistrationCode: string, newName: string) => {
