@@ -168,16 +168,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // If the `isEditing` state changes, then this should clear the alert messages
-  useEffect(() => {
-    setSaveState(SaveState.HasNotSaved);
-    setRegistrationIsValid(false);
-    setError('');
-    setErrorDescription('');
-    // This effect must only trigger when `isEditing` changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditing]);
-
   // whether any form fields have changed
   const hasUnsavedChanges =
     currentRegistrationData.name !== name ||
@@ -252,6 +242,19 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     setName(currentRegistrationData.name);
     setRegistrationCode('');
     setIsEditing(false);
+    onEditingChange();
+  };
+
+  const onClickChange = () => {
+    setIsEditing(true);
+    onEditingChange();
+  };
+
+  const onEditingChange = () => {
+    setSaveState(SaveState.HasNotSaved);
+    setRegistrationIsValid(false);
+    setError('');
+    setErrorDescription('');
   };
 
   const validateRegistration = debounce(async (newRegistrationCode: string, newName: string) => {
@@ -358,7 +361,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           </span>
           {isEditing ? (
             <Input
-              className="tw-font-mono tw-box-content tw-h-5 tw-max-w-[350px] invalid:tw-border-destructive"
+              className="tw-font-mono tw-box-content tw-h-6 tw-max-w-[350px] invalid:tw-border-destructive"
               maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
               pattern={REGISTRATION_CODE_REGEX_STRING}
               placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
@@ -428,7 +431,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
               </Button>
             </div>
           ) : (
-            <Button variant="default" onClick={() => setIsEditing(true)}>
+            <Button variant="default" onClick={onClickChange}>
               <PenIcon /> Change
             </Button>
           )}
