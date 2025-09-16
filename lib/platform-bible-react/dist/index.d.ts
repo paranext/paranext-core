@@ -515,9 +515,20 @@ export interface FootnoteItemProps {
 	showMarkers?: boolean;
 	formatCaller?: (caller: string | undefined) => string | undefined;
 }
+export interface FootnoteListProps {
+	className?: string;
+	footnotes: MarkerObject[];
+	showMarkers?: boolean;
+	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
+	/** The currently selected footnote (or undefined if none) */
+	selectedFootnote?: MarkerObject;
+	/** Callback to handle clicking/selecting a footnote in the list */
+	onFootnoteSelected?: (footnote: MarkerObject) => void;
+}
 export declare function FootnoteItem({ className, footnote, formatCaller, showMarkers, }: FootnoteItemProps & {
 	showMarkers?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ footnotes, showMarkers, formatCaller, selectedFootnote, onFootnoteSelected, className, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
