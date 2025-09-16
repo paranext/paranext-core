@@ -254,8 +254,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
   // Effect to start a new check job when configuration or project data changes
   useEffect(() => {
     const startNewJob = async () => {
-      if (!checkAggregator) return;
-
       // Abandon the existing job before starting a new one
       await abandonActiveJob();
       setActiveJobStatusReport(defaultJobStatusReport);
@@ -274,13 +272,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
     };
 
     startNewJob();
-    // Not including activeJobStatusReport.jobId in dependencies as it would cause a loop
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRanges, checkAggregator, forceNewCheckRun, selectedCheckTypeIds]);
+  }, [abandonActiveJob, activeRanges, beginNewCheckJob, forceNewCheckRun, selectedCheckTypeIds]);
 
   // #endregion
 
   // #region Managing a check job after it has started
+
+  // Keep the ref up to date with the current checkResults
+  useEffect(() => {
+    checkResultsRef.current = checkResults;
+  }, [checkResults]);
 
   // Effect to poll for updates on the active job
   useEffect(() => {
@@ -292,10 +293,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
     const needsPolling =
       status === 'queued' ||
       status === 'running' ||
-      ((status === 'completed' || status === 'stopped') && checkResults.length < totalResultsCount);
+      ((status === 'completed' || status === 'stopped') &&
+        checkResultsRef.current.length < totalResultsCount);
     if (!needsPolling) return;
 
     let isEffectCleanedUp = false;
+    let currentResultsCount = checkResultsRef.current.length;
+
     const pollForUpdates = async () => {
       try {
         if (isEffectCleanedUp || isResultLoadingCancelled) return;
@@ -306,7 +310,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
         // Add any new results to the results list
         if (update.nextResults && update.nextResults.length > 0) {
           setCheckResults((existingResults) => {
-            return [...(existingResults || []), ...(update.nextResults || [])];
+            const newResults = [...(existingResults || []), ...(update.nextResults || [])];
+            currentResultsCount = newResults.length;
+            return newResults;
           });
         }
 
@@ -315,7 +321,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         if (update.status === 'running' || update.status === 'queued') {
           // Checks are still running, so give them some time before polling again
           pollDelay = 250;
-        } else if (checkResults.length < update.totalResultsCount) {
+        } else if (currentResultsCount < update.totalResultsCount) {
           // Checks are finished but we have more results to load, so only wait a short time
           pollDelay = 25;
         }
@@ -337,10 +343,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
         pollingTimeoutRef.current = undefined;
       }
     };
-    // Only trigger on activeJobStatusReport's jobId changing, not other aspects of it
+    // Only trigger on activeJobStatusReport's jobId changing, not other properties of it
     // Don't trigger on checkResults changing as the polling function updates it as needed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkAggregator, activeJobStatusReport.jobId, isResultLoadingCancelled]);
+  }, [activeJobStatusReport.jobId, checkAggregator, isResultLoadingCancelled]);
 
   // #endregion
 
@@ -439,11 +445,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
       (check) => `${getLocalizedCheckDescription(check.checkId)},${check.checkId}`,
     );
   }, [availableChecks, getLocalizedCheckDescription]);
-
-  // Keep the ref up to date with the current checkResults
-  useEffect(() => {
-    checkResultsRef.current = checkResults;
-  }, [checkResults]);
 
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
