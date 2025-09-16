@@ -169,7 +169,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const beginNewCheckJob = useCallback(
     async (jobScope: CheckJobScope) => {
-      aggregatorMutex.runExclusive(async () => {
+      return aggregatorMutex.runExclusive(async () => {
         if (!checkAggregator) return;
 
         try {
@@ -191,7 +191,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   const stopActiveJob = useCallback(async () => {
-    aggregatorMutex.runExclusive(async () => {
+    return aggregatorMutex.runExclusive(async () => {
       if (!checkAggregator || !activeJobIdRef.current) return;
 
       const jobId = activeJobIdRef.current;
@@ -205,7 +205,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }, [checkAggregator]);
 
   const abandonActiveJob = useCallback(async () => {
-    aggregatorMutex.runExclusive(async () => {
+    return aggregatorMutex.runExclusive(async () => {
       if (!checkAggregator) return;
 
       const jobId = activeJobIdRef.current;
@@ -550,7 +550,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   };
 
   const handleCancelOperation = useCallback(async () => {
-    stopActiveJob();
+    await stopActiveJob();
     setIsResultLoadingCancelled(true);
   }, [stopActiveJob]);
 

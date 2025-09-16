@@ -32,8 +32,8 @@ public sealed class CheckJobStatus : CheckJobStatusReport
             PercentComplete = PercentComplete,
             TotalResultsCount = AllResults.TotalCountAdded,
             NextResults =
-                AllResults.Count > 0 ? AllResults.DequeueRange(maxResultsToInclude) : null!,
-            Error = string.IsNullOrEmpty(Error) ? null! : Error,
+                AllResults.Count > 0 ? AllResults.DequeueRange(maxResultsToInclude) : null,
+            Error = string.IsNullOrEmpty(Error) ? null : Error,
             TotalExecutionTimeMs = (
                 (EndTimeUtc ?? DateTime.UtcNow) - StartTimeUtc
             ).TotalMilliseconds,

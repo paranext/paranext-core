@@ -10,7 +10,7 @@ public class CheckJobStatusReport
     public string Status { get; set; } = CheckJobStatus.Queued;
     public double PercentComplete { get; set; } = 0;
     public int TotalResultsCount { get; set; } = 0;
-    public IList<CheckRunResult> NextResults { get; set; } = [];
-    public string Error { get; set; } = "";
+    public IList<CheckRunResult>? NextResults { get; set; } = null;
+    public string? Error { get; set; } = null;
     public double TotalExecutionTimeMs { get; set; } = 0;
 }
