@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteList } from '@/components/advanced/footnotes/footnote-list.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
+import { getFormatCallerFunction } from 'platform-bible-utils';
 
 const sampleFootnotes: MarkerObject[] = [
   {
@@ -95,50 +96,29 @@ type Story = StoryObj<typeof FootnoteList>;
 export const Basic: Story = {
   args: {
     footnotes: sampleFootnotes,
+    listId: 'storybook-Basic',
+    showMarkers: false,
+  },
+};
+
+export const WithCustomCallerFormatting: Story = {
+  args: {
+    footnotes: sampleFootnotes,
+    listId: 'storybook-Basic',
     showMarkers: true,
+    formatCaller: getFormatCallerFunction(sampleFootnotes, ['c', 'd', 'e', 'f', 'g']),
   },
 };
 
 export const Raw: Story = {
   args: {
     footnotes: sampleFootnotes,
+    listId: 'storybook-Raw',
     showMarkers: true,
     onFootnoteSelected: undefined,
     formatCaller: (caller: string | undefined) => caller,
   },
 };
-
-function indexToLetters(index: number): string {
-  // 0 -> a, 1 -> b ... 25 -> z, 26 -> aa, 27 -> ab, etc.
-  let result = '';
-  let i = index;
-  while (i >= 0) {
-    result = String.fromCharCode(97 + (i % 26)) + result;
-    i = Math.floor(i / 26) - 1;
-  }
-  return result;
-}
-
-function createSmartFormatCaller(footnotes: MarkerObject[]) {
-  // Precompute a stable sequence for '+' callers
-  const plusSequenceMap = (() => {
-    const map = new Map<number, string>();
-    let letterCounter = 0;
-    footnotes.forEach((fn, idx) => {
-      if (fn.caller === '+') {
-        map.set(idx, indexToLetters(letterCounter));
-        letterCounter += 1;
-      }
-    });
-    return map;
-  })();
-
-  return (caller: string | undefined, index: number): string | undefined => {
-    if (caller === '+') return plusSequenceMap.get(index);
-    if (caller === '-') return undefined;
-    return caller;
-  };
-}
 
 export const Formatted: Story = {
   render: () => {
@@ -148,10 +128,10 @@ export const Formatted: Story = {
       <div>
         <FootnoteList
           footnotes={sampleFootnotes}
+          listId="storybook-Formatted"
           showMarkers={false}
           selectedFootnote={selectedFootnote}
           onFootnoteSelected={(footnote) => setSelectedFootnote(footnote)}
-          formatCaller={createSmartFormatCaller(sampleFootnotes)}
         />
       </div>
     );
@@ -166,10 +146,11 @@ export const ShowMarkers: Story = {
       <div>
         <FootnoteList
           footnotes={sampleFootnotes}
+          listId="storybook-ShowMarkers"
           showMarkers
           selectedFootnote={selectedFootnote}
           onFootnoteSelected={(footnote) => setSelectedFootnote(footnote)}
-          formatCaller={createSmartFormatCaller(sampleFootnotes)}
+          formatCaller={(caller) => caller}
         />
       </div>
     );

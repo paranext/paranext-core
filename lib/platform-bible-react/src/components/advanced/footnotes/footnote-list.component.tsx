@@ -1,36 +1,21 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Card } from '@/components/shadcn-ui/card';
+import { getFormatCallerFunction } from 'platform-bible-utils';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
 
-function indexToLetters(index: number): string {
-  // 0 -> a, 1 -> b ... 25 -> z, 26 -> aa, 27 -> ab, etc.
-  let result = '';
-  let i = index;
-  while (i >= 0) {
-    result = String.fromCharCode(97 + (i % 26)) + result;
-    i = Math.floor(i / 26) - 1;
-  }
-  return result;
-}
-
+/** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
   footnotes,
   showMarkers = true,
   formatCaller,
+  listId,
   selectedFootnote,
   onFootnoteSelected,
   className,
 }: FootnoteListProps) {
-  const handleFormatCaller =
-    formatCaller ??
-    ((caller: string | undefined, index: number) => {
-      if (caller === '+') return indexToLetters(index);
-      if (caller === '-') return undefined;
-      return caller;
-    });
-
+  const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
   const handleFootnoteClick = (footnote: MarkerObject) => {
     if (onFootnoteSelected) {
       onFootnoteSelected(footnote);
@@ -45,7 +30,7 @@ export function FootnoteList({
     >
       {footnotes.map((footnote, idx) => {
         const isSelected = footnote === selectedFootnote;
-        const key = footnote.sid ?? footnote.marker ?? `footnote-${idx}`;
+        const key = `${listId}-${idx}`;
         return (
           <Card
             role="option"

@@ -69,6 +69,7 @@ function renderMarkerObject(
   );
 }
 
+/** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export function FootnoteItem({
   className,
   footnote,
