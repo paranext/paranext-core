@@ -127,8 +127,8 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         if (_queuedCheckJobs.Contains(jobId) || job.Status != CheckJobStatus.Running)
             return true;
         // Poll until the job stops or the timeout expires
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (sw.ElapsedMilliseconds < timeoutMs.GetValueOrDefault())
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        while (stopwatch.ElapsedMilliseconds < timeoutMs.GetValueOrDefault())
         {
             if (job.Status != CheckJobStatus.Running)
                 return true;

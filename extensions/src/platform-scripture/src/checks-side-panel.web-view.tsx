@@ -38,6 +38,8 @@ const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
 
 const defaultJobStatusReport: CheckJobStatusReport = {
   jobId: '',
+  // Initializing to "completed" so that nothing tries to process this report any further (e.g., poll)
+  // "completed" is the only terminal status that doesn't imply something unusual happened
   status: 'completed',
   percentComplete: 0,
   totalResultsCount: 0,

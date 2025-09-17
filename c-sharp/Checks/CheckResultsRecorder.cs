@@ -129,10 +129,16 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
 
     public IEnumerable<CheckRunResult> GetResultsInRange(CheckInputRange range)
     {
-        foreach (var r in CheckRunResults)
+        foreach (var result in CheckRunResults)
         {
-            if (range.IsWithinRange(r.ProjectId, r.VerseRef.BookNum, r.VerseRef.ChapterNum))
-                yield return r;
+            if (
+                range.IsWithinRange(
+                    result.ProjectId,
+                    result.VerseRef.BookNum,
+                    result.VerseRef.ChapterNum
+                )
+            )
+                yield return result;
         }
     }
 
