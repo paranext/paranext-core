@@ -6,12 +6,12 @@ export function getDefaultCallerSequence(): string[] {
 }
 
 /**
- * Gets a caller to be displayed for a textual note. This is mostly useful as a helper function in
+ * Gets a caller to be displayed for a textual note. This is primarily useful as a helper function
+ * in {@link getFormatCallerFunction} , but it might be useful in stories, UI preview code, etc.
  *
  * @param callers Array of caller symbols, or `undefined` to use the default sequence, which is the
  *   lowercase Roman-script letters as sequenced in the English alphabet.
  * @param n Zero-based index into the caller list.
- * @see {getFormatCallerFunction} , but it might be useful in stories, UI preview code, etc.
  */
 export function getNthCaller(n: number, callers?: string[]): string {
   const callerList = callers && callers.length > 0 ? callers : getDefaultCallerSequence();
