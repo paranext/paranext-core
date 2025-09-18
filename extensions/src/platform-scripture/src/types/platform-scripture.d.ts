@@ -543,11 +543,9 @@ declare module 'platform-scripture' {
        * the provided scripture scopes. The operation runs asynchronously and can be monitored,
        * stopped, or have results retrieved using the returned job ID.
        *
-       * **Important:** All jobs should have {@link cleanUpFindJob} called after they finish to free
-       * resources and remove them from tracking. Not doing so will lead to memory leaks as jobs are
-       * not automatically cleaned up when they finish. If you no longer need a job that might be
-       * running, you can call {@link abandonFindJob} instead to have it automatically cleaned up
-       * once it finishes.
+       * **Important:** All jobs should have {@link abandonFindJob} called after you no longer need
+       * them to free resources and remove them from tracking. Not doing so will lead to memory
+       * leaks as jobs are not automatically cleaned up when they finish.
        *
        * @example
        *
@@ -572,11 +570,9 @@ declare module 'platform-scripture' {
        * within the specified timeout period. If the job doesn't stop within the timeout, it will
        * continue running but this method will return false.
        *
-       * **Important:** All jobs, even stopped jobs, should have {@link cleanUpFindJob} called after
-       * they finish to free resources and remove them from tracking. Not doing so will lead to
-       * memory leaks as jobs are not automatically cleaned up when they finish. If you no longer
-       * need a job that might be running, you can call {@link abandonFindJob} instead to have it
-       * automatically cleaned up once it finishes.
+       * **Important:** All jobs should have {@link abandonFindJob} called after you no longer need
+       * them to free resources and remove them from tracking. Not doing so will lead to memory
+       * leaks as jobs are not automatically cleaned up when they finish.
        *
        * @example
        *
@@ -588,7 +584,7 @@ declare module 'platform-scripture' {
        *     // Do something with the job, like call retrieveFindJobUpdate to get results
        *     ...
        *     // Clean up the job after we have all the results we need
-       *     cleanUpFindJob(jobId);
+       *     abandonFindJob(jobId);
        *   } else {
        *     console.log("Job didn't stop in time");
        *     // Decide what to do if the job didn't stop gracefully within the timeout period
@@ -604,26 +600,6 @@ declare module 'platform-scripture' {
        * @throws Error if the job ID doesn't exist
        */
       stopFindJob(jobId: string, timeoutMs?: number): Promise<boolean>;
-      /**
-       * Removes a find job from tracking and frees its resources.
-       *
-       * This method should be called after a find job has finished for any reason to clean up
-       * memory and remove the job from the internal tracking system.
-       *
-       * @example
-       *
-       * ```typescript
-       * const status = await engine.retrieveFindJobUpdate(jobId, 0);
-       * if (status.status !== 'running') {
-       *   await engine.cleanUpFindJob(jobId);
-       * }
-       * ```
-       *
-       * @param jobId - The unique identifier of the find job to clean up
-       * @throws Error if the job ID doesn't exist or if the job is still running. Running jobs must
-       *   finish before they can be cleaned up.
-       */
-      cleanUpFindJob(jobId: string): Promise<void>;
       /**
        * Abandons a find job, preventing any further interaction with it.
        *
