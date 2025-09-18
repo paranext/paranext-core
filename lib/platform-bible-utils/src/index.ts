@@ -50,6 +50,7 @@ export {
   wait,
   waitForDuration,
 } from './util';
+export { getDefaultCallerSequence, getNthCaller, getFormatCallerFunction } from './footnote-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,

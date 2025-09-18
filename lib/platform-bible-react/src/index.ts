@@ -41,6 +41,12 @@ export { MoreInfo } from './components/advanced/extension-marketplace/more-info.
 export type { VersionHistoryType } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as Filter } from './components/advanced/filter.component';
+export type {
+  FootnoteItemProps,
+  FootnoteListProps,
+} from './components/advanced/footnotes/footnotes.types';
+export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
+export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {
   default as Inventory,
   type InventoryItem,

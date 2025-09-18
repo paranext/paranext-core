@@ -1631,6 +1631,25 @@ export interface IUsjReaderWriter {
 	 */
 	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
 }
+/** Gets the default caller sequence to use to generate callers for textual notes. */
+export declare function getDefaultCallerSequence(): string[];
+/**
+ * Gets a caller to be displayed for a textual note. This is primarily useful as a helper function
+ * in {@link getFormatCallerFunction} , but it might be useful in stories, UI preview code, etc.
+ *
+ * @param callers Array of caller symbols, or `undefined` to use the default sequence, which is the
+ *   lowercase Roman-script letters as sequenced in the English alphabet.
+ * @param n Zero-based index into the caller list.
+ */
+export declare function getNthCaller(n: number, callers?: string[]): string;
+/**
+ * Gets a function that provides a (stable) caller based on a given sequence of textual notes.
+ *
+ * @param footnotes Sequence of footnotes, cross-references, and/or end-notes.
+ * @param callers Array of caller symbols, or `undefined` to use the default sequence, which is the
+ *   lowercase Roman-script letters as sequenced in the English alphabet.
+ */
+export declare function getFormatCallerFunction(footnotes: MarkerObject[], callers: string[] | undefined): (caller: string | undefined, index: number) => string | undefined;
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
  * Unicode code points instead of UTF-16 character codes.
