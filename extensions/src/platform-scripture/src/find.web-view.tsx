@@ -2,6 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
+  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
   useWebViewController,
@@ -492,6 +493,21 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const DefaultVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+  const verseRef: SerializedVerseRef =
+    (focusedResultIndex && results?.at(focusedResultIndex)?.verseRef) || DefaultVerseRef;
+  const [currentProjectVersePossiblyError] = useProjectData(
+    'platformScripture.USFM_Verse',
+    projectId ?? undefined,
+  ).VerseUSFM(verseRef, localizedStrings['%webView_find_loadingVerseText%']);
+
+  const currentVerseUsfm = useMemo(() => {
+    if (isPlatformError(currentProjectVersePossiblyError)) {
+      return getErrorMessage(currentProjectVersePossiblyError);
+    }
+    return currentProjectVersePossiblyError;
+  }, [currentProjectVersePossiblyError]);
+
   return (
     <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
       {/* Header with searchbar and filters */}
@@ -659,11 +675,12 @@ global.webViewComponent = function FindWebView({
                 searchResult={result}
                 globalResultsIndex={index}
                 isSelected={index === focusedResultIndex}
-                projectId={projectId}
+                currentVerseUsfm={currentVerseUsfm}
                 localizedBookData={localizedBookData}
                 occurrenceInVerseIndex={occurrenceInVerseIndex}
                 onResultClick={handleFocusedResultChange}
                 onHideResult={handleHideResult}
+                useLocalizedStrings={useLocalizedStrings}
               />
             );
           })}
