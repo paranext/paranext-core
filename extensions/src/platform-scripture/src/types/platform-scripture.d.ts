@@ -9,13 +9,7 @@ declare module 'platform-scripture' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import {
-    Dispose,
-    LocalizeKey,
-    PlatformError,
-    Unsubscriber,
-    UnsubscriberAsync,
-  } from 'platform-bible-utils';
+  import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
   import { InventoryItem } from 'platform-bible-react';
 
