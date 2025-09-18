@@ -126,14 +126,6 @@ export class ScriptureFinderProjectDataProviderEngine
     }
   }
 
-  async cleanUpFindJob(jobId: string): Promise<void> {
-    const job = this.#jobs.get(jobId);
-    if (!job) throw new Error(`Job with ID ${jobId} not found`);
-    if (job.status === 'running')
-      throw new Error(`Job with ID ${jobId} is running. It must be stopped before completing.`);
-    this.#jobs.delete(jobId);
-  }
-
   async abandonFindJob(jobId: string): Promise<void> {
     const job = this.#jobs.get(jobId);
     if (!job) throw new Error(`Job with ID ${jobId} not found`);
