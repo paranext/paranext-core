@@ -100,6 +100,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // #region Calculating the active ranges
 
   const checkInputRange: CheckInputRange = useMemo(() => {
@@ -172,12 +180,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const beginNewCheckJob = useCallback(
     async (jobScope: CheckJobScope) => {
       return aggregatorMutex.runExclusive(async () => {
-        if (!checkAggregator) return;
+        if (!checkAggregator || !isMountedRef.current) return;
 
         try {
           const newJobId = await checkAggregator.beginCheckJob(jobScope);
           logger.debug(`Started new check job with ID ${newJobId}`);
           activeJobIdRef.current = newJobId;
+          if (!isMountedRef.current) return;
           setActiveJobStatusReport({
             ...defaultJobStatusReport,
             jobId: newJobId,
@@ -185,6 +194,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
           });
         } catch (error) {
           logger.error(`Error starting check job: ${getErrorMessage(error)}`);
+          if (!isMountedRef.current) return;
           setActiveJobStatusReport(defaultJobStatusReport);
         }
       });
@@ -192,20 +202,24 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [checkAggregator],
   );
 
+  // This doesn't check if isMountedRef.current is true because it doesn't update React state
   const stopActiveJob = useCallback(async () => {
     return aggregatorMutex.runExclusive(async () => {
-      if (!checkAggregator || !activeJobIdRef.current) return;
+      if (!checkAggregator || !activeJobIdRef.current) return false;
 
       const jobId = activeJobIdRef.current;
       try {
-        await checkAggregator.stopCheckJob(jobId);
+        const retVal = await checkAggregator.stopCheckJob(jobId);
         logger.debug(`Stopped check job ID ${jobId}`);
+        return retVal;
       } catch (error) {
         logger.error(`Error stopping check job ${jobId}: ${getErrorMessage(error)}`);
+        return false;
       }
     });
   }, [checkAggregator]);
 
+  // This doesn't check if isMountedRef.current is true because it doesn't update React state
   const abandonActiveJob = useCallback(async () => {
     return aggregatorMutex.runExclusive(async () => {
       if (!checkAggregator) return;
@@ -213,14 +227,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
       const jobId = activeJobIdRef.current;
       if (!jobId) return;
 
-      // Invalidate the active job and cancel scheduled polls before abandoning to minimize race windows
-      activeJobIdRef.current = undefined;
-      if (pollingTimeoutRef.current) {
-        clearTimeout(pollingTimeoutRef.current);
-        pollingTimeoutRef.current = undefined;
-      }
-
       try {
+        // Invalidate the active job and cancel scheduled polls before abandoning to minimize race windows
+        activeJobIdRef.current = undefined;
+        if (pollingTimeoutRef.current) {
+          clearTimeout(pollingTimeoutRef.current);
+          pollingTimeoutRef.current = undefined;
+        }
+
         await checkAggregator.abandonCheckJob(jobId);
         logger.debug(`Abandoned check job ID ${jobId}`);
       } catch (error) {
@@ -233,13 +247,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
     CheckJobStatusReport | undefined
   > => {
     return aggregatorMutex.runExclusive(async () => {
-      if (!checkAggregator || !activeJobIdRef.current) return undefined;
+      if (!checkAggregator || !activeJobIdRef.current || !isMountedRef.current) return undefined;
 
       try {
         const update = await checkAggregator.retrieveCheckJobUpdate(
           activeJobIdRef.current,
           RESULTS_PAGE_SIZE,
         );
+        if (!isMountedRef.current) return undefined;
         if (update) setActiveJobStatusReport(update);
         return update;
       } catch (error) {
@@ -258,6 +273,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     const startNewJob = async () => {
       // Abandon the existing job before starting a new one
       await abandonActiveJob();
+      if (!isMountedRef.current) return;
       setActiveJobStatusReport(defaultJobStatusReport);
       setCheckResults(defaultCheckResults);
       setIsResultLoadingCancelled(false);
@@ -307,7 +323,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         if (isEffectCleanedUp || isResultLoadingCancelled) return;
 
         const update = await retrieveActiveJobUpdate();
-        if (!update) return;
+        if (!update || isEffectCleanedUp) return;
 
         // Add any new results to the results list
         if (update.nextResults && update.nextResults.length > 0) {
@@ -356,7 +372,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const invalidateResultsIfNecessary = useCallback(
     (details: CheckResultsInvalidated) => {
-      if (!checkAggregator) return;
+      if (!checkAggregator || !isMountedRef.current) return;
 
       // Clear any existing timeout
       if (invalidateTimeoutRef.current) {
@@ -366,6 +382,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
       // Set up a new debounced call
       invalidateTimeoutRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
+
         // Check if the invalidation applies to our current project and scope
         let applies =
           activeRanges.some((range) => range.projectId === details.projectId) &&
@@ -395,7 +413,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   useEffect(() => {
     return () => {
-      // Clear any pending debounce timeout
       if (invalidateTimeoutRef.current) {
         clearTimeout(invalidateTimeoutRef.current);
         invalidateTimeoutRef.current = undefined;
@@ -408,9 +425,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
       abandonActiveJob();
     };
-    // Empty dependency array - only run on unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [abandonActiveJob]);
 
   // #endregion
 
@@ -508,6 +523,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.itemText,
         result.checkResultUniqueId,
       );
+      if (!isMountedRef.current) return false;
       if (denyResultSuccess) setDeniedStatusForResult(result, true);
       else logger.debug(`Could not deny check result: ${JSON.stringify(result)}`);
       return denyResultSuccess;
@@ -527,6 +543,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.itemText,
         result.checkResultUniqueId,
       );
+      if (!isMountedRef.current) return false;
       if (allowResultStatus) setDeniedStatusForResult(result, false);
       else logger.debug(`Could not allow check result: ${JSON.stringify(result)}`);
       return allowResultStatus;
@@ -554,6 +571,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const handleCancelOperation = useCallback(async () => {
     await stopActiveJob();
+    if (!isMountedRef.current) return;
     setIsResultLoadingCancelled(true);
   }, [stopActiveJob]);
 

@@ -918,6 +918,10 @@ declare module 'platform-scripture' {
     AvailableChecks: DataProviderDataType<undefined, CheckRunnerCheckDetails[], never>;
   };
 
+  /**
+   * Defines which checks should run on which parts of which projects in a check job. The check job
+   * will run on the Cartesian product of all checks and all input ranges.
+   */
   export type CheckJobScope = {
     /** IDs of the check to run */
     checkIds: string[];
@@ -936,6 +940,12 @@ declare module 'platform-scripture' {
    */
   export type CheckJobStatus = 'queued' | 'running' | 'stopped' | 'errored' | 'completed';
 
+  /**
+   * Represents the current status of a potentially running check job, including the results found
+   * so far and any errors that occurred. Until a job has reached a terminal state (stopped,
+   * errored, or completed), the status of the job may change. It can be polled repeatedly to get
+   * updates and retrieve results incrementally.
+   */
   export type CheckJobStatusReport = {
     /** Unique ID of the check job */
     jobId: string;
@@ -957,17 +967,77 @@ declare module 'platform-scripture' {
     totalExecutionTimeMs: number;
   };
 
+  /** Functions to manage the lifecycle of check jobs */
   export type CheckJobRunner = {
+    /**
+     * Begin a new check job that will run asynchronously
+     *
+     * Creates and starts a new check job that will evaluate the specified checks across the
+     * provided input ranges. The operation runs asynchronously and can be monitored, stopped, or
+     * have results retrieved using the returned job ID.
+     *
+     * **Important:** All jobs should have {@link abandonCheckJob} called after you no longer need
+     * them to free resources and remove them from tracking. Not doing so will lead to memory leaks
+     * as jobs are not automatically cleaned up when they finish.
+     *
+     * @param jobScope - Configuration for the check job, see {@link CheckJobScope}
+     * @returns Promise that resolves to a unique job ID that can be used to interact with the check
+     *   operation (retrieve results, check status, stop, etc.)
+     */
     beginCheckJob: (jobScope: CheckJobScope) => Promise<string>;
+    /**
+     * Attempt to gracefully stop a running check job
+     *
+     * Requests the specified check job to stop processing and waits for it to finish gracefully
+     * within the specified timeout period. If the job doesn't stop within the timeout, it will
+     * continue running but this method will return false.
+     *
+     * **Important:** All jobs should have {@link abandonCheckJob} called after you no longer need
+     * them to free resources and remove them from tracking. Not doing so will lead to memory leaks
+     * as jobs are not automatically cleaned up when they finish.
+     *
+     * @param jobId ID of the job to stop
+     * @param timeoutMs Maximum time in milliseconds to wait for the job to stop gracefully.
+     *   Defaults to 2000ms (2 seconds).
+     * @returns True if the job stopped gracefully within the timeout period, false if the job is
+     *   still running after the timeout.
+     */
     stopCheckJob: (jobId: string, timeoutMs?: number) => Promise<boolean>;
-    cleanUpCheckJob: (jobId: string) => Promise<void>;
+    /**
+     * Clean up a check job that may or may not be running to free resources
+     *
+     * This prevents any further calls to retrieve results or interact with the job in any way. It
+     * is useful for jobs that are no longer needed and should not be tracked. Abandoned jobs will
+     * be cleaned up automatically once it is possible.
+     *
+     * @param jobId ID of the job to abandon
+     */
     abandonCheckJob: (jobId: string) => Promise<void>;
+    /**
+     * Retrieve the current status and results (if desired) of a check job.
+     *
+     * Once a set of results have been retrieved for a job, they cannot be retrieved again for this
+     * job. The results will need to be stored by the caller if they are to be retained. Subsequent
+     * calls to retrieve results will return the next set of results found so far.
+     *
+     * Note that results may become invalid if the underlying project data or settings change. It is
+     * the responsibility of the caller to ensure that results are still valid when they are used.
+     * To listen for notifications of invalidated check results, subscribe to the
+     * `checkResultsInvalidated` network event using `papi.network.getNetworkEvent()`. See
+     * {@link CheckResultsInvalidated} for details about that event.
+     *
+     * @param jobId ID of the job to check
+     * @param maxResultsToInclude Maximum number of results to include in the response. Use 0 to get
+     *   status without results, or a reasonable number to paginate through large result sets.
+     * @returns Status report for the job, including any new results found since the last call
+     */
     retrieveCheckJobUpdate: (
       jobId: string,
       maxResultsToInclude: number,
     ) => Promise<CheckJobStatusReport>;
   };
 
+  /** Functions to classify individual check results as "allowed" or "denied" */
   export type CheckResultClassifier = {
     /**
      * Mark one particular check result as "denied", meaning the user has marked it as incorrect for
@@ -992,6 +1062,7 @@ declare module 'platform-scripture' {
     ) => Promise<boolean>;
   };
 
+  /** Represents the ability to retrieve inventory data for one particular check on a project */
   export type InventoryDataRetriever = {
     retrieveInventoryData: (
       checkId: string,
@@ -1009,16 +1080,33 @@ declare module 'platform-scripture' {
     CheckResultClassifier &
     InventoryDataRetriever;
 
+  /**
+   * When something happens that would invalidate previously calculated check results, an event with
+   * an object of this type is emitted. To listen for notifications of invalidated check results,
+   * subscribe to the `checkResultsInvalidated` network event using
+   * `papi.network.getNetworkEvent()`.
+   */
   export type CheckResultsInvalidated = {
+    /** IDs of the checks whose results are now invalid */
     checkIds: string[];
+    /** ID of the project whose results are now invalid */
     projectId: string;
+    /** Scope of the invalidation */
     scope: 'all' | 'book';
+    /** If scope is 'book', then this is the ID of the book whose results are now invalid */
     bookId?: string;
   };
 
+  /**
+   * Service that aggregates all available {@link ICheckRunner} data providers and provides a single
+   * point of interaction for managing checks across all processes. This service itself is also an
+   * {@link ICheckRunner} so that consumers only need to interact with one data provider to manage
+   * checks everywhere.
+   *
+   * Use the "platformScripture.checkAggregator" data provider name to access the service.
+   */
   export type ICheckAggregatorService = ICheckRunner & {
     dataProviderName: string;
-    onCheckResultsInvalidated: (listener: (e: CheckResultsInvalidated) => void) => Unsubscriber;
   };
 
   // #endregion

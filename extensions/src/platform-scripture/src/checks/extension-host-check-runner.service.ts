@@ -33,7 +33,7 @@ import {
   ICheckRunner,
   InventoryDataRetriever,
 } from 'platform-scripture';
-import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
+import { CHECK_RUNNER_NETWORK_OBJECT_TYPE, CHECK_STOP_DEFAULT_TIMEOUT_MS } from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
 /** Details about a check that include a way to create the check */
@@ -55,6 +55,7 @@ const deniedDataScope: ExtensionDataScope = {
   dataQualifier: 'deniedResultsList',
 };
 
+/** This represents the internal state of a check job that is running within this ICheckRunner. */
 type CheckJob = Omit<CheckJobStatusReport, 'nextResults' | 'totalExecutionTimeMs'> & {
   jobScope: CheckJobScope;
   promise: Promise<void>;
@@ -199,7 +200,10 @@ class CheckRunnerEngine
     return jobId;
   }
 
-  async stopCheckJob(jobId: string, timeoutMs?: number): Promise<boolean> {
+  async stopCheckJob(
+    jobId: string,
+    timeoutMs: number = CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  ): Promise<boolean> {
     const job = this.#jobs.get(jobId);
     if (!job) throw new Error(`Job with ID ${jobId} not found`);
     job.stopRequested = true;
@@ -220,14 +224,6 @@ class CheckRunnerEngine
       );
       return false;
     }
-  }
-
-  async cleanUpCheckJob(jobId: string): Promise<void> {
-    const job = this.#jobs.get(jobId);
-    if (!job) throw new Error(`Job with ID ${jobId} not found`);
-    if (job.status === 'running')
-      throw new Error(`Job with ID ${jobId} is running. It must be stopped before completing.`);
-    this.#jobs.delete(jobId);
   }
 
   async abandonCheckJob(jobId: string): Promise<void> {
@@ -368,11 +364,13 @@ const unregisterCheck = async (checkId: string): Promise<boolean> => {
       logger.debug(`Trying to unregister checkId '${checkId}' that wasn't registered`);
       return;
     }
-
-    await initialize();
     registeredChecksById.delete(checkId);
+    logger.info(`Check unregistered: ${checkId}`);
     succeeded = true;
   });
+
+  await initialize();
+  checkRunnerEngine.notifyUpdate('AvailableChecks');
   return succeeded;
 };
 
@@ -387,13 +385,11 @@ const registerCheck = async (
   await registrationLock.runExclusive(async () => {
     if (registeredChecksById.has(checkId))
       throw new Error(`Check already registered with ID ${checkId}`);
-
     registeredChecksById.set(checkId, {
       ...checkDetails,
       checkId,
       createFunction: createCheck,
     });
-
     logger.info(
       `Check registered: ${checkId} (${JSON.stringify(checkDetails)}, ${typeof createCheck}})`,
     );

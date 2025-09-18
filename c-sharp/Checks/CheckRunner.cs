@@ -86,7 +86,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             ("abandonCheckJob", AbandonCheckJob),
             ("allowCheckResult", AllowCheckResult),
             ("beginCheckJob", BeginCheckJob),
-            ("cleanupCheckJob", CleanupCheckJob),
             ("denyCheckResult", DenyCheckResult),
             ("getAvailableChecks", GetAvailableChecks),
             ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
@@ -111,13 +110,14 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
     private string BeginCheckJob(CheckJobScope jobScope)
     {
-        var job = new CheckJobStatus() { JobScope = jobScope };
+        var job = new CheckJobStatus(jobScope);
         _activeCheckJobsByJobId[job.JobId] = job;
         _queuedCheckJobs.Enqueue(job.JobId);
         ThreadingUtils.RunTask(Task.Run(ProcessQueuedCheckJobs), "Process queued check jobs");
         return job.JobId;
     }
 
+    // Default timeout should match CHECK_STOP_DEFAULT_TIMEOUT_MS in check.model.ts
     private bool StopCheckJob(string jobId, int? timeoutMs = 2000)
     {
         var job =
@@ -134,19 +134,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 return true;
             Thread.Sleep(100);
         }
-        return false;
-    }
-
-    private void CleanupCheckJob(string jobId)
-    {
-        var job =
-            (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
-            ?? throw new Exception($"No active check job with ID {jobId} (cleanup)");
-        if (job.Status == CheckJobStatus.Running)
-            throw new Exception($"Cannot clean up check job {jobId} while it is still running");
-        job.StopRequested = true;
-        if (!_activeCheckJobsByJobId.TryRemove(jobId, out _))
-            Console.WriteLine($"Failed to remove check job {jobId} from active jobs");
+        return job.Status != CheckJobStatus.Running;
     }
 
     private void AbandonCheckJob(string jobId)
@@ -222,14 +210,11 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     )
     {
         var check = _checkCache.GetCheck(checkId, projectId);
-        lock (check.ModifyResultsLock)
-        {
-            var denials = GetOrCreateDenials(projectId);
-            denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
-            denials.Save();
-            check.GetResultsRecorder(vRef.BookNum).PostProcessResults(denials, null);
-            return true;
-        }
+        var denials = GetOrCreateDenials(projectId);
+        denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
+        denials.Save();
+        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials, null));
+        return true;
     }
 
     private bool AllowCheckResult(
@@ -242,14 +227,11 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     )
     {
         var check = _checkCache.GetCheck(checkId, projectId);
-        lock (check.ModifyResultsLock)
-        {
-            var denials = GetOrCreateDenials(projectId);
-            denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
-            denials.Save();
-            check.GetResultsRecorder(vRef.BookNum).PostProcessResults(denials, null);
-            return true;
-        }
+        var denials = GetOrCreateDenials(projectId);
+        denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
+        denials.Save();
+        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials, null));
+        return true;
     }
 
     private void ProcessQueuedCheckJobs()
@@ -305,13 +287,20 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                     if (check.SettingsChanged)
                         check.ClearResults();
 
-                    var resultsRecorder = check.GetResultsRecorder(range.Start.BookNum);
-                    if (resultsRecorder.ResultsReady)
-                    {
-                        job.AllResults.AddRange(resultsRecorder.GetResultsInRange(range));
-                        job.PercentComplete = 100 * ++completedItems / itemsToComplete;
-                    }
-                    else
+                    bool areResultsCached = false;
+                    check.AccessResults(
+                        range.Start.BookNum,
+                        recorder =>
+                        {
+                            areResultsCached = recorder.ResultsReady;
+                            if (areResultsCached)
+                            {
+                                job.AllResults.AddRange(recorder.GetResultsInRange(range));
+                                job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                            }
+                        }
+                    );
+                    if (!areResultsCached)
                         checkIdsToRun.Add(checkId);
                 }
 
@@ -325,11 +314,18 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 foreach (var checkId in checkIdsToRun)
                 {
                     var check = _checkCache.GetCheck(checkId, range.ProjectId);
-                    var resultsRecorder = check.GetResultsRecorder(range.Start.BookNum);
-                    if (!resultsRecorder.ResultsReady)
-                        throw new Exception($"Check {checkId} did not complete running properly.");
-                    job.AllResults.AddRange(resultsRecorder.GetResultsInRange(range));
-                    job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                    check.AccessResults(
+                        range.Start.BookNum,
+                        recorder =>
+                        {
+                            if (!recorder.ResultsReady)
+                                throw new Exception(
+                                    $"Check {checkId} did not complete running properly."
+                                );
+                            job.AllResults.AddRange(recorder.GetResultsInRange(range));
+                            job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        }
+                    );
                 }
             }
 
@@ -392,16 +388,18 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         UsfmBookIndexer indexer
     )
     {
-        CheckResultsRecorder recorder = checkForProject.GetResultsRecorder(range.Start.BookNum);
         ErrorMessageDenials denials = GetOrCreateDenials(range.ProjectId);
 
-        lock (checkForProject.ModifyResultsLock)
-        {
-            recorder.ClearResultsFromBook(range.Start.BookNum);
-            checkForProject.Check.Run(range.Start.BookNum, dataSource, recorder);
-            recorder.PostProcessResults(denials, indexer);
-            recorder.ResultsReady = true;
-        }
+        checkForProject.AccessResults(
+            range.Start.BookNum,
+            recorder =>
+            {
+                recorder.ClearResultsFromBook(range.Start.BookNum);
+                checkForProject.Check.Run(range.Start.BookNum, dataSource, recorder);
+                recorder.PostProcessResults(denials, indexer);
+                recorder.ResultsReady = true;
+            }
+        );
     }
 
     private ErrorMessageDenials GetOrCreateDenials(string projectId)

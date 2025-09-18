@@ -17,8 +17,17 @@ import {
   ICheckRunner,
   InventoryDataRetriever,
 } from 'platform-scripture';
-import { CHECK_RESULTS_INVALIDATED_EVENT, CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
+import {
+  CHECK_RESULTS_INVALIDATED_EVENT,
+  CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+  CHECK_STOP_DEFAULT_TIMEOUT_MS,
+} from './check.model';
 
+/**
+ * When a job is started, it may need to be split up and sent to multiple check runners depending on
+ * which checks are being run. This type represents the portion of a job that is assigned to one
+ * specific check runner.
+ */
 type PartitionedJobScope = {
   checkRunner: ICheckRunner;
   jobId: string;
@@ -131,22 +140,16 @@ class CheckAggregatorDataProviderEngine
     return aggregatorJobId;
   }
 
-  async stopCheckJob(jobId: string, timeoutMs?: number): Promise<boolean> {
+  async stopCheckJob(
+    jobId: string,
+    timeoutMs: number = CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  ): Promise<boolean> {
     const job = this.activeJobs.get(jobId);
     if (!job) throw new Error(`Job ID not found: ${jobId}`);
     const stopResults = await Promise.all(
       job.map((assignedJob) => assignedJob.checkRunner.stopCheckJob(assignedJob.jobId, timeoutMs)),
     );
     return stopResults.every((result) => result === true);
-  }
-
-  async cleanUpCheckJob(jobId: string): Promise<void> {
-    const job = this.activeJobs.get(jobId);
-    if (!job) throw new Error(`Job ID not found: ${jobId}`);
-    await Promise.all(
-      job.map((assignedJob) => assignedJob.checkRunner.cleanUpCheckJob(assignedJob.jobId)),
-    );
-    this.activeJobs.delete(jobId);
   }
 
   async abandonCheckJob(jobId: string): Promise<void> {
@@ -411,7 +414,6 @@ async function initialize(): Promise<void> {
 
 const resultsInvalidatedEventEmitter =
   papi.network.createNetworkEventEmitter<CheckResultsInvalidated>(CHECK_RESULTS_INVALIDATED_EVENT);
-const resultsInvalidatedEvent = resultsInvalidatedEventEmitter.event;
 
 /** Notify all listeners that check results have been invalidated and should be refreshed */
 export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
@@ -420,8 +422,6 @@ export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void 
 
 const checkAggregatorServiceObjectToProxy = Object.freeze({
   dataProviderName: checkAggregatorServiceProviderName,
-  onCheckResultsInvalidated: (listener: (e: CheckResultsInvalidated) => void) =>
-    resultsInvalidatedEvent((e) => listener(e)),
 });
 
 const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(async () => {
