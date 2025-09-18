@@ -1,0 +1,92 @@
+import{j as e}from"./jsx-runtime-4wK_0ZO4.js";import{B as b}from"./button-BklEqBlb.js";import{c as O,q as A,F as _}from"./index-DOKkQ3oI.js";import{U as z}from"./user-DPf69sKy.js";import{c as P}from"./createLucideIcon-D1oFpSf_.js";import{C as B}from"./circle-help-B97ECGcO.js";import{r as y}from"./iframe-BcYeWgcr.js";import{D as $,a as G,b as W,j as Y,c as J,l as K,m as Q,n as X,d as Z}from"./dropdown-menu-oTjsz9YM.js";import{F as ee}from"./filter-gUQtPoPv.js";import{C as te}from"./chevron-down-CT_Ph70R.js";import{T as ne}from"./theme-provider.component-Bum-YBGl.js";import"./index-BJ893FO-.js";import"./index-DNc3TkLQ.js";import"./index-BPbCuWFR.js";import"./shadcn-ui.util-DMJ19wEV.js";import"./menu.context-DzzKApc-.js";import"./index-B6gecgxP.js";import"./index-B1Guct03.js";import"./index-PhEMGCGr.js";import"./index-Dxmr7YCn.js";import"./index-DZhSYnG_.js";import"./index-DThCJ6FV.js";import"./index-CHtcClp9.js";import"./index-CiidgNRF.js";import"./index-xAGYJ6Tj.js";import"./index-BdtTgfff.js";import"./index-BDeDN-dv.js";import"./floating-ui.react-dom-BrelV8Hr.js";import"./floating-ui.dom-DCpBEVSC.js";import"./index-b4TQRt8l.js";import"./index-hI4Fiusr.js";import"./index-D7NlkAyc.js";import"./index-BTW_afRk.js";import"./index-D2kttkiv.js";import"./index-DBWqXr8V.js";import"./check-nBAr59iS.js";import"./circle-DQ3gVi4L.js";import"./chevron-right-BI3aT3bw.js";/**
+ * @license lucide-react v0.475.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const re=[["path",{d:"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71",key:"1cjeqo"}],["path",{d:"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",key:"19qd67"}]],oe=P("Link",re);function V({id:n,category:s,downloads:a,languages:l,moreInfoUrl:p,handleMoreInfoLinkClick:u,supportUrl:c,handleSupportLinkClick:d}){const m=new O("en",{notation:"compact",compactDisplay:"short"}).format(Object.values(a).reduce((t,o)=>t+o,0)),r=()=>{window.scrollTo(0,document.body.scrollHeight)};return e.jsxs("div",{id:n,className:"pr-twp tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center",children:[s&&e.jsxs("div",{className:"tw-flex tw-flex-col tw-items-center tw-gap-1",children:[e.jsx("div",{className:"tw-flex",children:e.jsx("span",{className:"tw-text-xs tw-font-semibold tw-text-foreground",children:s})}),e.jsx("span",{className:"tw-text-xs tw-text-foreground",children:"CATEGORY"})]}),e.jsxs("div",{className:"tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4",children:[e.jsxs("div",{className:"tw-flex tw-gap-1",children:[e.jsx(z,{className:"tw-h-4 tw-w-4"}),e.jsx("span",{className:"tw-text-xs tw-font-semibold tw-text-foreground",children:m})]}),e.jsx("span",{className:"tw-text-xs tw-text-foreground",children:"USERS"})]}),e.jsxs("div",{className:"tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4",children:[e.jsx("div",{className:"tw-flex tw-gap-2",children:l.slice(0,3).map(t=>e.jsx("span",{className:"tw-text-xs tw-font-semibold tw-text-foreground",children:t.toUpperCase()},t))}),l.length>3&&e.jsxs("button",{type:"button",onClick:()=>r(),className:"tw-text-xs tw-text-foreground tw-underline",children:["+",l.length-3," more languages"]})]}),(p||c)&&e.jsxs("div",{className:"tw-flex tw-flex-col tw-gap-1 tw-ps-4",children:[p&&e.jsx("div",{className:"tw-flex tw-gap-1",children:e.jsxs(b,{onClick:()=>u(),variant:"link",className:"tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground",children:["Website",e.jsx(oe,{className:"tw-h-4 tw-w-4"})]})}),c&&e.jsx("div",{className:"tw-flex tw-gap-1",children:e.jsxs(b,{onClick:()=>d(),variant:"link",className:"tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground",children:["Support",e.jsx(B,{className:"tw-h-4 tw-w-4"})]})})]})]})}V.__docgenInfo={description:`This component displays the more info section of the extension which includes the category,
+number of downloads, languages, and links to the website and support
+
+@param MoreInfoProps
+@returns The more info component that displays the category, number of downloads, languages, and
+  links to the website and support`,methods:[],displayName:"MoreInfo",props:{id:{required:!1,tsType:{name:"string"},description:"Optional unique identifier"},category:{required:!0,tsType:{name:"string"},description:"The category of the extension"},downloads:{required:!0,tsType:{name:"Record",elements:[{name:"string"},{name:"number"}],raw:"Record<string, number>"},description:"The number of downloads for the extension"},languages:{required:!0,tsType:{name:"Array",elements:[{name:"string"}],raw:"string[]"},description:"The languages supported by the extension"},moreInfoUrl:{required:!0,tsType:{name:"string"},description:"The URL to the more info page of the extension"},handleMoreInfoLinkClick:{required:!0,tsType:{name:"signature",type:"function",raw:"() => void",signature:{arguments:[],return:{name:"void"}}},description:"Handler function triggered when the more info (Website) link is clicked"},supportUrl:{required:!0,tsType:{name:"string"},description:"Optional URL to a website link to get support for the extension"},handleSupportLinkClick:{required:!0,tsType:{name:"signature",type:"function",raw:"() => void",signature:{arguments:[],return:{name:"void"}}},description:"Handler function triggered when the support link is clicked"}}};function v({id:n,versionHistory:s}){const[a,l]=y.useState(!1),p=new Date;function u(d){const m=new Date(d),r=new Date(p.getTime()-m.getTime()),t=r.getUTCFullYear()-1970,o=r.getUTCMonth(),i=r.getUTCDate()-1;let h="";return t>0?h=`${t.toString()} year${t===1?"":"s"} ago`:o>0?h=`${o.toString()} month${o===1?"":"s"} ago`:i===0?h="today":h=`${i.toString()} day${i===1?"":"s"} ago`,h}const c=Object.entries(s).sort((d,m)=>m[0].localeCompare(d[0]));return e.jsxs("div",{className:"pr-twp",id:n,children:[e.jsx("h3",{className:"tw-text-md tw-font-semibold",children:"What`s New"}),e.jsx("ul",{className:"tw-list-disc tw-pl-5 tw-pr-4 tw-text-xs tw-text-foreground",children:(a?c:c.slice(0,5)).map(d=>e.jsxs("div",{className:"tw-mt-3 tw-flex tw-justify-between",children:[e.jsx("div",{className:"tw-text-foreground",children:e.jsx("li",{className:"tw-prose tw-text-xs",children:e.jsx("span",{children:d[1].description})})}),e.jsxs("div",{className:"tw-justify-end tw-text-right",children:[e.jsxs("div",{children:["Version ",d[0]]}),e.jsx("div",{children:u(d[1].date)})]})]},d[0]))}),c.length>5&&e.jsx("button",{type:"button",onClick:()=>l(!a),className:"tw-text-xs tw-text-foreground tw-underline",children:a?"Show Less Version History":"Show All Version History"})]})}v.__docgenInfo={description:`Component to render the version history information shown in the footer component. Lists the 5
+most recent versions, with the options to show all versions by pressing a button.
+
+@param VersionHistoryProps
+@returns Rendered version history for the Footer component`,methods:[],displayName:"VersionHistory",props:{id:{required:!1,tsType:{name:"string"},description:"Optional unique identifier"},versionHistory:{required:!0,tsType:{name:"Record",elements:[{name:"string"},{name:"signature",type:"object",raw:`{
+  /** Date the version was published */
+  date: string;
+  /** Description of the changes in the version */
+  description: string;
+}`,signature:{properties:[{key:"date",value:{name:"string",required:!0},description:"Date the version was published"},{key:"description",value:{name:"string",required:!0},description:"Description of the changes in the version"}]}}],raw:"Record<string, VersionInformation>"},description:"Object containing the versions mapped with their information"}}};var j=(n=>(n[n.Check=0]="Check",n[n.Radio=1]="Radio",n))(j||{});function H({id:n,label:s,groups:a}){const[l,p]=y.useState(Object.fromEntries(a.map((r,t)=>r.itemType===0?[t,[]]:void 0).filter(r=>!!r))),[u,c]=y.useState({}),d=(r,t)=>{const o=!l[r][t];p(h=>(h[r][t]=o,{...h}));const i=a[r].items[t];i.onUpdate(i.id,o)},m=(r,t)=>{c(i=>(i[r]=t,{...i}));const o=a[r].items.find(i=>i.id===t);o?o.onUpdate(t):console.error(`Could not find dropdown radio item with id '${t}'!`)};return e.jsx("div",{id:n,children:e.jsxs($,{children:[e.jsx(G,{asChild:!0,children:e.jsxs(b,{variant:"default",children:[e.jsx(ee,{size:16,className:"tw-mr-2 tw-h-4 tw-w-4"}),s,e.jsx(te,{size:16,className:"tw-ml-2 tw-h-4 tw-w-4"})]})}),e.jsx(W,{children:a.map((r,t)=>e.jsxs("div",{children:[e.jsx(Y,{children:r.label}),e.jsx(J,{children:r.itemType===0?e.jsx(e.Fragment,{children:r.items.map((o,i)=>e.jsx("div",{children:e.jsx(K,{checked:l[t][i],onCheckedChange:()=>d(t,i),children:o.label})},o.id))}):e.jsx(Q,{value:u[t],onValueChange:o=>m(t,o),children:r.items.map(o=>e.jsx("div",{children:e.jsx(X,{value:o.id,children:o.label})},o.id))})}),e.jsx(Z,{})]},r.label))})]})})}H.__docgenInfo={description:`The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
+items that can be checkboxes or radio items.
+
+@param FilterDropdownProps
+@returns A filter dropdown.`,methods:[],displayName:"FilterDropdown",props:{id:{required:!1,tsType:{name:"string"},description:"Object unique identifier"},label:{required:!0,tsType:{name:"string"},description:"Label for the trigger button"},groups:{required:!0,tsType:{name:"Array",elements:[{name:"signature",type:"object",raw:`{
+  /**
+   * The label is the text that will be displayed on the dropdown group. It is used to categorize
+   * the items in the group.
+   */
+  label: string;
+  /** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
+  itemType: DropdownMenuItemType;
+  /** The items array contains the items that will be displayed in the dropdown group */
+  items: DropdownItem[];
+}`,signature:{properties:[{key:"label",value:{name:"string",required:!0},description:`The label is the text that will be displayed on the dropdown group. It is used to categorize
+the items in the group.`},{key:"itemType",value:{name:"DropdownMenuItemType",required:!0},description:"The itemType determines the DropdownMenuItemType type as either Check or Radio."},{key:"items",value:{name:"Array",elements:[{name:"signature",type:"object",raw:`{
+  /** Unique identifier for this dropdown */
+  id: string;
+  /** The label is the text that will be displayed on the dropdown item. */
+  label: string;
+  /** The onUpdate function is called when the state of a dropdown item is changed. */
+  onUpdate: (id: string, checked?: boolean) => void;
+}`,signature:{properties:[{key:"id",value:{name:"string",required:!0},description:"Unique identifier for this dropdown"},{key:"label",value:{name:"string",required:!0},description:"The label is the text that will be displayed on the dropdown item."},{key:"onUpdate",value:{name:"signature",type:"function",raw:"(id: string, checked?: boolean) => void",signature:{arguments:[{type:{name:"string"},name:"id"},{type:{name:"boolean"},name:"checked"}],return:{name:"void"}},required:!0},description:"The onUpdate function is called when the state of a dropdown item is changed."}]}}],raw:"DropdownItem[]",required:!0},description:"The items array contains the items that will be displayed in the dropdown group"}]}}],raw:"DropdownGroup[]"},description:"The groups array contains the groups that will be displayed in the dropdown"}}};function L({id:n,publisherDisplayName:s,fileSize:a,locales:l,versionHistory:p,currentVersion:u}){const c=y.useMemo(()=>A(a),[a]),m=(r=>{const t=new Intl.DisplayNames(_(),{type:"language"});return r.map(o=>t.of(o))})(l);return e.jsx("div",{id:n,className:"pr-twp tw-border-t tw-py-2",children:e.jsxs("div",{className:"tw-flex tw-flex-col tw-gap-2 tw-divide-y",children:[Object.entries(p).length>0&&e.jsx(v,{versionHistory:p}),e.jsxs("div",{className:"tw-flex tw-flex-col tw-gap-2 tw-py-2",children:[e.jsx("h2",{className:"tw-text-md tw-font-semibold",children:"Information"}),e.jsxs("div",{className:"tw-flex tw-items-start tw-justify-between tw-text-xs tw-text-foreground",children:[e.jsxs("p",{className:"tw-flex tw-flex-col tw-justify-start tw-gap-1",children:[e.jsx("span",{children:"Publisher"}),e.jsx("span",{className:"tw-font-semibold",children:s}),e.jsx("span",{children:"Size"}),e.jsx("span",{className:"tw-font-semibold",children:c})]}),e.jsx("div",{className:"tw-flex tw-w-3/4 tw-items-center tw-justify-between tw-text-xs tw-text-foreground",children:e.jsxs("p",{className:"tw-flex tw-flex-col tw-justify-start tw-gap-1",children:[e.jsx("span",{children:"Version"}),e.jsx("span",{className:"tw-font-semibold",children:u}),e.jsx("span",{children:"Languages"}),e.jsx("span",{className:"tw-font-semibold",children:m.join(", ")})]})})]})]})]})})}L.__docgenInfo={description:`Component to render the footer for the extension details which contains information on the
+publisher, version history, languages, and file size.
+
+@param FooterProps
+@returns The rendered Footer component`,methods:[],displayName:"Footer",props:{id:{required:!1,tsType:{name:"string"},description:"Optional unique identifier"},publisherDisplayName:{required:!0,tsType:{name:"string"},description:"Name of the publisher"},fileSize:{required:!0,tsType:{name:"number"},description:"Size of the extension file in bytes"},locales:{required:!0,tsType:{name:"Array",elements:[{name:"string"}],raw:"string[]"},description:"List of language codes supported by the extension"},versionHistory:{required:!0,tsType:{name:"Record",elements:[{name:"string"},{name:"signature",type:"object",raw:`{
+  /** Date the version was published */
+  date: string;
+  /** Description of the changes in the version */
+  description: string;
+}`,signature:{properties:[{key:"date",value:{name:"string",required:!0},description:"Date the version was published"},{key:"description",value:{name:"string",required:!0},description:"Description of the changes in the version"}]}}],raw:"Record<string, VersionInformation>"},description:"Object containing the version history mapped with their information"},currentVersion:{required:!0,tsType:{name:"string"},description:"Current version of the extension"}}};const R={"1.0.0":{date:"2024-01-15",description:"Initial release with basic greeting functionality and support for multiple languages"},"0.9.0":{date:"2024-01-01",description:"Beta release with core functionality implementation and basic UI components"},"0.8.0":{date:"2023-12-15",description:"Alpha release with proof of concept and initial framework setup"}},se=[{label:"Status",itemType:j.Check,items:[{id:"installed",label:"Installed",onUpdate:(n,s)=>console.log("Status filter updated:",n,s)},{id:"available",label:"Available",onUpdate:(n,s)=>console.log("Status filter updated:",n,s)}]},{label:"Category",itemType:j.Radio,items:[{id:"utility",label:"Utility",onUpdate:(n,s)=>console.log("Category filter updated:",n,s)},{id:"language",label:"Language Pack",onUpdate:(n,s)=>console.log("Category filter updated:",n,s)},{id:"commentary",label:"Commentary",onUpdate:(n,s)=>console.log("Category filter updated:",n,s)}]}],Be={title:"Advanced/Extension Marketplace",tags:["autodocs"],decorators:[n=>e.jsx(ne,{children:e.jsx("div",{className:"tw-p-4",children:e.jsx(n,{})})})]},w={render:()=>e.jsx(V,{category:"Utility",downloads:{total:1250,"last-week":150,"last-month":600},languages:["en","es","fr","de"],moreInfoUrl:"https://example.com/hello-world",handleMoreInfoLinkClick:()=>console.log("More info clicked"),supportUrl:"https://example.com/support",handleSupportLinkClick:()=>console.log("Support clicked")}),parameters:{docs:{description:{story:"Extension more info component showing details about an extension."}}}},f={render:()=>e.jsx(v,{versionHistory:R}),parameters:{docs:{description:{story:"Extension version history component showing release history."}}}},g={render:()=>e.jsx(H,{label:"Filter Extensions",groups:se}),parameters:{docs:{description:{story:"Filter dropdown component for extension marketplace."}}}},x={render:()=>e.jsx(L,{publisherDisplayName:"Platform.Bible Team",fileSize:2048576,locales:["en","es","fr","de"],versionHistory:R,currentVersion:"1.0.0"}),parameters:{docs:{description:{story:"Footer component showing extension marketplace information."}}}};var k,T,N;w.parameters={...w.parameters,docs:{...(k=w.parameters)==null?void 0:k.docs,source:{originalSource:`{
+  render: () => <MoreInfo category="Utility" downloads={{
+    total: 1250,
+    'last-week': 150,
+    'last-month': 600
+  }} languages={['en', 'es', 'fr', 'de']} moreInfoUrl="https://example.com/hello-world" handleMoreInfoLinkClick={() => console.log('More info clicked')} supportUrl="https://example.com/support" handleSupportLinkClick={() => console.log('Support clicked')} />,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Extension more info component showing details about an extension.'
+      }
+    }
+  }
+}`,...(N=(T=w.parameters)==null?void 0:T.docs)==null?void 0:N.source}}};var C,D,q;f.parameters={...f.parameters,docs:{...(C=f.parameters)==null?void 0:C.docs,source:{originalSource:`{
+  render: () => <VersionHistory versionHistory={mockVersionHistory} />,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Extension version history component showing release history.'
+      }
+    }
+  }
+}`,...(q=(D=f.parameters)==null?void 0:D.docs)==null?void 0:q.source}}};var S,U,F;g.parameters={...g.parameters,docs:{...(S=g.parameters)==null?void 0:S.docs,source:{originalSource:`{
+  render: () => <FilterDropdown label="Filter Extensions" groups={mockFilterGroups} />,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Filter dropdown component for extension marketplace.'
+      }
+    }
+  }
+}`,...(F=(U=g.parameters)==null?void 0:U.docs)==null?void 0:F.source}}};var M,I,E;x.parameters={...x.parameters,docs:{...(M=x.parameters)==null?void 0:M.docs,source:{originalSource:`{
+  render: () => <Footer publisherDisplayName="Platform.Bible Team" fileSize={2048576} // 2MB in bytes
+  locales={['en', 'es', 'fr', 'de']} versionHistory={mockVersionHistory} currentVersion="1.0.0" />,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Footer component showing extension marketplace information.'
+      }
+    }
+  }
+}`,...(E=(I=x.parameters)==null?void 0:I.docs)==null?void 0:E.source}}};const $e=["ExtensionMoreInfo","ExtensionVersionHistory","ExtensionFilterDropdown","ExtensionFooter"];export{g as ExtensionFilterDropdown,x as ExtensionFooter,w as ExtensionMoreInfo,f as ExtensionVersionHistory,$e as __namedExportsOrder,Be as default};

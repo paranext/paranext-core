@@ -1,0 +1,2 @@
+import{j as o}from"./jsx-runtime-4wK_0ZO4.js";import{c as n}from"./shadcn-ui.util-DMJ19wEV.js";function d({className:e,...t}){return o.jsx("div",{className:n("pr-twp tw-animate-pulse tw-rounded-md tw-bg-muted",e),...t})}d.__docgenInfo={description:`Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn
+UI documentation: https://ui.shadcn.com/docs/components/skeleton`,methods:[],displayName:"Skeleton"};export{d as S};
