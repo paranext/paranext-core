@@ -19,7 +19,7 @@ function renderContent(
     if (typeof footnotePart === 'string') {
       key += `-${footnotePart.slice(0, 10)}`; // first few chars of text
       if (allowUnmarkedText) {
-        return <span key={key}> {footnotePart}</span>;
+        return <span key={key}>{footnotePart}</span>;
       }
       return (
         <span
@@ -75,27 +75,53 @@ export function FootnoteItem({
   footnote,
   formatCaller,
   showMarkers = true,
-}: FootnoteItemProps & { showMarkers?: boolean }) {
+  useUsfmFallbackStyles = true,
+}: FootnoteItemProps) {
   const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
+  const isFormatted = caller !== footnote.caller;
 
   return (
-    <p
-      className={cn('footnote-item tw-text-sm', className)}
-      data-type={footnote.type}
-      data-marker={footnote.marker}
-    >
-      {showMarkers && <span className="tw-text-muted-foreground">{`\\${footnote.marker} `}</span>}
-
-      {caller && (
-        // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
-        // specific class name in case styling is needed.
-        <span className="footnote-caller tw-text-xs tw-font-medium">{caller} </span>
+    <>
+      {useUsfmFallbackStyles && (
+        <style>
+          {`
+            .usfm_fr { font-weight: bold; }
+            .usfm_xo { font-weight: bold; }
+            .usfm_fq { font-style: italic; }
+            .usfm_fqa { font-style: italic; }
+            .usfm_fv { vertical-align: super; font-size: smaller; }
+            .footnote-caller.formatted {
+              color: darkblue;
+              vertical-align: super;
+              font-size: smaller;
+            }
+          `}
+        </style>
       )}
+      <p
+        className={cn('footnote-item tw-text-sm', className)}
+        data-type={footnote.type}
+        data-marker={footnote.marker}
+      >
+        {showMarkers && <span className="tw-text-muted-foreground">{`\\${footnote.marker} `}</span>}
 
-      {renderContent(footnote.marker, footnote.content, showMarkers, false)}
+        {caller && (
+          // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
+          // specific class name in case styling is needed.
+          <span
+            className={cn('footnote-caller tw-text-xs tw-font-medium', { formatted: isFormatted })}
+          >
+            {caller}{' '}
+          </span>
+        )}
 
-      {showMarkers && <span className="tw-text-muted-foreground">{` \\${footnote.marker}*`}</span>}
-    </p>
+        {renderContent(footnote.marker, footnote.content, showMarkers, false)}
+
+        {showMarkers && (
+          <span className="tw-text-muted-foreground">{` \\${footnote.marker}*`}</span>
+        )}
+      </p>
+    </>
   );
 }
 
