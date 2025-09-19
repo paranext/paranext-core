@@ -40,6 +40,10 @@ class HelloCheck implements Check {
     return checkDetails;
   }
 
+  // NOTE: This is a hacky example that just demonstrates the API for a check. It just looks for
+  // the word "sheep" in the USFM text and returns a result for each occurrence. It doesn't properly
+  // handle USFM parsing, and it only understands chapter granularity, not verse granularity. A real
+  // check will require more work.
   async getCheckResults(range: ScriptureRange): Promise<CheckRunResult[]> {
     if (range.end && range.end.book !== range.start.book)
       throw new Error('This only supports checks within a single book right now');

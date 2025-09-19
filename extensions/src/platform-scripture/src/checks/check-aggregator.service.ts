@@ -420,9 +420,7 @@ export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void 
   resultsInvalidatedEventEmitter.emit(e);
 }
 
-const checkAggregatorServiceObjectToProxy = Object.freeze({
-  dataProviderName: checkAggregatorServiceProviderName,
-});
+const checkAggregatorServiceObjectToProxy = Object.freeze({});
 
 const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(async () => {
   await initialize();

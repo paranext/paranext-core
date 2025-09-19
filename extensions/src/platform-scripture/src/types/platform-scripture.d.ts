@@ -1099,9 +1099,7 @@ declare module 'platform-scripture' {
    *
    * Use the "platformScripture.checkAggregator" data provider name to access the service.
    */
-  export type ICheckAggregatorService = ICheckRunner & {
-    dataProviderName: string;
-  };
+  export type ICheckAggregatorService = ICheckRunner;
 
   // #endregion
 

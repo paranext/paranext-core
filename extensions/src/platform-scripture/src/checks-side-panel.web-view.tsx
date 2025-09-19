@@ -179,89 +179,107 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const beginNewCheckJob = useCallback(
     async (jobScope: CheckJobScope) => {
-      return aggregatorMutex.runExclusive(async () => {
-        if (!checkAggregator || !isMountedRef.current) return;
+      try {
+        return await aggregatorMutex.runExclusive(async () => {
+          if (!checkAggregator || !isMountedRef.current) return;
 
-        try {
-          const newJobId = await checkAggregator.beginCheckJob(jobScope);
-          logger.debug(`Started new check job with ID ${newJobId}`);
-          activeJobIdRef.current = newJobId;
-          if (!isMountedRef.current) return;
-          setActiveJobStatusReport({
-            ...defaultJobStatusReport,
-            jobId: newJobId,
-            status: 'queued',
-          });
-        } catch (error) {
-          logger.error(`Error starting check job: ${getErrorMessage(error)}`);
-          if (!isMountedRef.current) return;
-          setActiveJobStatusReport(defaultJobStatusReport);
-        }
-      });
+          try {
+            const newJobId = await checkAggregator.beginCheckJob(jobScope);
+            logger.debug(`Started new check job with ID ${newJobId}`);
+            activeJobIdRef.current = newJobId;
+            if (!isMountedRef.current) return;
+            setActiveJobStatusReport({
+              ...defaultJobStatusReport,
+              jobId: newJobId,
+              status: 'queued',
+            });
+          } catch (error) {
+            logger.error(`Error starting check job: ${getErrorMessage(error)}`);
+            if (!isMountedRef.current) return;
+            setActiveJobStatusReport(defaultJobStatusReport);
+          }
+        });
+      } catch (error) {
+        logger.error(`Error acquiring mutex to begin check job: ${getErrorMessage(error)}`);
+      }
     },
     [checkAggregator],
   );
 
   // This doesn't check if isMountedRef.current is true because it doesn't update React state
   const stopActiveJob = useCallback(async () => {
-    return aggregatorMutex.runExclusive(async () => {
-      if (!checkAggregator || !activeJobIdRef.current) return false;
+    try {
+      return await aggregatorMutex.runExclusive(async () => {
+        if (!checkAggregator || !activeJobIdRef.current) return false;
 
-      const jobId = activeJobIdRef.current;
-      try {
-        const retVal = await checkAggregator.stopCheckJob(jobId);
-        logger.debug(`Stopped check job ID ${jobId}`);
-        return retVal;
-      } catch (error) {
-        logger.error(`Error stopping check job ${jobId}: ${getErrorMessage(error)}`);
-        return false;
-      }
-    });
+        const jobId = activeJobIdRef.current;
+        try {
+          const retVal = await checkAggregator.stopCheckJob(jobId);
+          logger.debug(`Stopped check job ID ${jobId}`);
+          return retVal;
+        } catch (error) {
+          logger.error(`Error stopping check job ${jobId}: ${getErrorMessage(error)}`);
+          return false;
+        }
+      });
+    } catch (error) {
+      logger.error(`Error acquiring mutex to stop check job: ${getErrorMessage(error)}`);
+      return false;
+    }
   }, [checkAggregator]);
 
   // This doesn't check if isMountedRef.current is true because it doesn't update React state
   const abandonActiveJob = useCallback(async () => {
-    return aggregatorMutex.runExclusive(async () => {
-      if (!checkAggregator) return;
+    try {
+      return await aggregatorMutex.runExclusive(async () => {
+        if (!checkAggregator) return;
 
-      const jobId = activeJobIdRef.current;
-      if (!jobId) return;
+        const jobId = activeJobIdRef.current;
+        if (!jobId) return;
 
-      try {
-        // Invalidate the active job and cancel scheduled polls before abandoning to minimize race windows
-        activeJobIdRef.current = undefined;
-        if (pollingTimeoutRef.current) {
-          clearTimeout(pollingTimeoutRef.current);
-          pollingTimeoutRef.current = undefined;
+        try {
+          // Invalidate the active job and cancel scheduled polls before abandoning to minimize race windows
+          activeJobIdRef.current = undefined;
+          if (pollingTimeoutRef.current) {
+            clearTimeout(pollingTimeoutRef.current);
+            pollingTimeoutRef.current = undefined;
+          }
+
+          await checkAggregator.abandonCheckJob(jobId);
+          logger.debug(`Abandoned check job ID ${jobId}`);
+        } catch (error) {
+          logger.error(`Error abandoning check job: ${getErrorMessage(error)}`);
         }
-
-        await checkAggregator.abandonCheckJob(jobId);
-        logger.debug(`Abandoned check job ID ${jobId}`);
-      } catch (error) {
-        logger.error(`Error abandoning check job: ${getErrorMessage(error)}`);
-      }
-    });
+      });
+    } catch (error) {
+      logger.error(`Error acquiring mutex to abandon check job: ${getErrorMessage(error)}`);
+    }
   }, [checkAggregator]);
 
   const retrieveActiveJobUpdate = useCallback(async (): Promise<
     CheckJobStatusReport | undefined
   > => {
-    return aggregatorMutex.runExclusive(async () => {
-      if (!checkAggregator || !activeJobIdRef.current || !isMountedRef.current) return undefined;
+    try {
+      return await aggregatorMutex.runExclusive(async () => {
+        if (!checkAggregator || !activeJobIdRef.current || !isMountedRef.current) return undefined;
 
-      try {
-        const update = await checkAggregator.retrieveCheckJobUpdate(
-          activeJobIdRef.current,
-          RESULTS_PAGE_SIZE,
-        );
-        if (!isMountedRef.current) return undefined;
-        if (update) setActiveJobStatusReport(update);
-        return update;
-      } catch (error) {
-        logger.error(`Error retrieving check job update: ${getErrorMessage(error)}`);
-        return undefined;
-      }
-    });
+        try {
+          const update = await checkAggregator.retrieveCheckJobUpdate(
+            activeJobIdRef.current,
+            RESULTS_PAGE_SIZE,
+          );
+          if (!isMountedRef.current) return undefined;
+          if (update) setActiveJobStatusReport(update);
+          return update;
+        } catch (error) {
+          logger.error(`Error retrieving check job update: ${getErrorMessage(error)}`);
+          return undefined;
+        }
+      });
+    } catch (error) {
+      logger.error(`Error acquiring mutex to retrieve check job update: ${getErrorMessage(error)}`);
+      return undefined;
+    }
   }, [checkAggregator]);
 
   // #endregion
