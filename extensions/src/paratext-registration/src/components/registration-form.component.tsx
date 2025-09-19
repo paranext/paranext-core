@@ -16,6 +16,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 import { SaveState, scrollToRef } from '../utils';
 import { Grid } from './grid.component';
+import { time } from 'console';
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
@@ -157,7 +158,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const [showInvalidCode, setShowInvalidCode] = useState(false);
   const [registrationIsValid, setRegistrationIsValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [validationTimeout, setValidationTimeout] = useState<ReturnType<typeof setTimeout>>();
+  const validationTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   // If the app just got done with restarting, then changes the save state to `HasSaved`
   useEffect(() => {
@@ -260,7 +261,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const validateRegistration = (newRegistrationCode: string, newName: string) => {
     // Clears existing validation timeout
     if (validationTimeout) {
-      clearTimeout(validationTimeout);
+      clearTimeout(validationTimeout.current);
     }
 
     console.log('timeout is scheduled!');
@@ -308,7 +309,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
         setErrorDescription('');
       }
     }, REGISTRATION_CODE_VALIDATION_DEBOUNCE_MS);
-    setValidationTimeout(timeout);
+    validationTimeout.current = timeout;
   };
 
   const onRegistrationCodeChange = (event: ChangeEvent<HTMLInputElement>) => {
