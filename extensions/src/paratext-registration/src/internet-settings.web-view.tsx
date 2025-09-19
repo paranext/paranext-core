@@ -142,9 +142,6 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       hasUnsavedChanges &&
       isProxyHostValid
     ) {
-      setSaveState(SaveState.IsSaving);
-      setSaveError('');
-
       // If there is an existing timeout, cancels that timeout
       if (saveTimeout) {
         clearTimeout(saveTimeout);
@@ -153,6 +150,8 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       // Starts the save settings timeout
       const newSaveTimeout = setTimeout(async () => {
         try {
+          setSaveState(SaveState.IsSaving);
+          setSaveError('');
           await saveInternetSettings(internetSettings);
           setCurrentInternetSettings(internetSettings);
           setSaveState(SaveState.HasSaved);

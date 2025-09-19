@@ -11,7 +11,7 @@ import {
   Spinner,
   usePromise,
 } from 'platform-bible-react';
-import { debounce, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
+import { getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 import { SaveState, scrollToRef } from '../utils';
@@ -104,7 +104,6 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
 
   const [name, setName] = useState('');
   const [registrationCode, setRegistrationCode] = useState('');
-  const [validatedRegistrationCode, setValidatedRegistrationCode] = useState('');
   const [email, setEmail] = useState('');
   const [supporter, setSupporter] = useState('');
 
@@ -158,6 +157,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const [showInvalidCode, setShowInvalidCode] = useState(false);
   const [registrationIsValid, setRegistrationIsValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [validationTimeout, setValidationTimeout] = useState<ReturnType<typeof setTimeout>>();
 
   // If the app just got done with restarting, then changes the save state to `HasSaved`
   useEffect(() => {
@@ -257,46 +257,56 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     onEditingChange();
   };
 
-  const validateRegistration = debounce(async (newRegistrationCode: string, newName: string) => {
-    const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
-    setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
-
-    // If the new code is valid, then validates the code with the name on the backend
-    if (newCodeIsValid && newName && !isLoading) {
-      setIsLoading(true);
-      try {
-        const isValid = await papi.commands.sendCommand(
-          'paratextRegistration.validateParatextRegistrationData',
-          { name: newName, code: newRegistrationCode, email, supporterName: supporter },
-        );
-        setRegistrationIsValid(isValid);
-
-        if (isValid && error) {
-          setError('');
-          setErrorDescription('');
-        } else if (!isValid) {
-          setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
-          setErrorDescription(
-            localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
-          );
-        }
-      } catch (err: unknown) {
-        logger.warn(
-          'An error occurred while validating paratext registration:',
-          getErrorMessage(err),
-        );
-        setRegistrationIsValid(false);
-      } finally {
-        setIsLoading(false);
-      }
-    } else if (registrationIsValid) {
-      setRegistrationIsValid(false);
-    } else if (!registrationIsValid) {
-      setError('');
-      setErrorDescription('');
+  const validateRegistration = (newRegistrationCode: string, newName: string) => {
+    // Clears existing validation timeout
+    if (validationTimeout) {
+      clearTimeout(validationTimeout);
     }
-    setValidatedRegistrationCode(newRegistrationCode);
-  }, REGISTRATION_CODE_VALIDATION_DEBOUNCE_MS);
+
+    console.log('timeout is scheduled!');
+    // Sets a debounced timeout for the validation
+    const timeout = setTimeout(async () => {
+      const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
+      setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
+      console.log('timeout is running!');
+
+      // If the new code is valid, then validates the code with the name on the backend
+      if (newCodeIsValid && newName && !isLoading) {
+        setIsLoading(true);
+        try {
+          const isValid = await papi.commands.sendCommand(
+            'paratextRegistration.validateParatextRegistrationData',
+            { name: newName, code: newRegistrationCode, email, supporterName: supporter },
+          );
+          setRegistrationIsValid(isValid);
+
+          if (isValid && error) {
+            setError('');
+            setErrorDescription('');
+          } else if (!isValid) {
+            setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
+            setErrorDescription(
+              localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
+            );
+          }
+        } catch (err: unknown) {
+          logger.warn(
+            'An error occurred while validating paratext registration:',
+            getErrorMessage(err),
+          );
+          setRegistrationIsValid(false);
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (registrationIsValid) {
+        setRegistrationIsValid(false);
+      } else if (!registrationIsValid) {
+        setError('');
+        setErrorDescription('');
+      }
+    }, REGISTRATION_CODE_VALIDATION_DEBOUNCE_MS);
+    setValidationTimeout(timeout);
+  };
 
   const onRegistrationCodeChange = (event: ChangeEvent<HTMLInputElement>) => {
     let newRegistrationCode = event.target.value;
@@ -306,28 +316,25 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
       !registrationCode.endsWith('-')
     ) {
       newRegistrationCode += '-';
+      // Account for when trying to backspace
+    } else if (
+      registrationCode.endsWith('-') &&
+      newRegistrationCode.length < registrationCode.length
+    ) {
+      newRegistrationCode = newRegistrationCode.substring(0, registrationCode.length - 2);
     }
-    setRegistrationCode(newRegistrationCode);
 
-    validateRegistration(newRegistrationCode, name);
+    // Prevent user from entering in invalid characters
+    if (newRegistrationCode.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX)) {
+      setRegistrationCode(newRegistrationCode);
+      validateRegistration(newRegistrationCode, name);
+    }
   };
 
   const onNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     const newName = event.target.value;
     setName(newName);
     validateRegistration(registrationCode, newName);
-  };
-
-  const formatRegistrationCodeFormatError = () => {
-    if (validatedRegistrationCode.length < 34) {
-      return localizedStrings['%paratextRegistration_warning_invalid_registration_length%'];
-    }
-
-    if (!validatedRegistrationCode.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX)) {
-      return localizedStrings['%paratextRegistration_warning_invalid_registration_characters%'];
-    }
-
-    return localizedStrings['%paratextRegistration_warning_invalid_registration_format%'];
   };
 
   return (
@@ -361,9 +368,11 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           </span>
           {isEditing ? (
             <Input
-              className="tw-font-mono tw-box-content tw-h-6 tw-max-w-[350px] invalid:tw-border-destructive"
-              maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
+              className={cn('tw-font-mono tw-box-content tw-h-6 tw-max-w-[350px]', {
+                'invalid:tw-border-destructive': showInvalidCode,
+              })}
               pattern={REGISTRATION_CODE_REGEX_STRING}
+              maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
               placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
               required
               value={registrationCode}
@@ -374,8 +383,10 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             <span>{currentRegistrationData.code}</span>
           )}
           <span />
-          {registrationCode && showInvalidCode && (
-            <p className="tw-text-muted-foreground">{formatRegistrationCodeFormatError()}</p>
+          {showInvalidCode && (
+            <p className="tw-text-muted-foreground">
+              {localizedStrings['%paratextRegistration_warning_invalid_registration_length%']}
+            </p>
           )}
         </Grid>
         {/* UX said to remove supporter info until we are using it in P10S. Leaving here for uncommenting when the time is right */}
