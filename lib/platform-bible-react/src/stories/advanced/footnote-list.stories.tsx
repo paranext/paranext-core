@@ -12,6 +12,11 @@ const sampleFootnotes: MarkerObject[] = [
     caller: '+',
     content: [
       {
+        marker: 'fr',
+        type: 'text',
+        content: ['3.2 '],
+      },
+      {
         marker: 'ft',
         type: 'text',
         content: ['This is a simple footnote.'],
@@ -25,12 +30,22 @@ const sampleFootnotes: MarkerObject[] = [
     caller: '+',
     content: [
       {
+        marker: 'fr',
+        type: 'text',
+        content: ['3.9 '],
+      },
+      {
+        marker: 'fq',
+        type: 'text',
+        content: ['disciples '],
+      },
+      {
         marker: 'ft',
         type: 'text',
         content: [
-          'Another footnote with ',
-          { marker: 'it', type: 'italic', content: ['italic'] },
-          ' text.',
+          'Some manuscripts read ',
+          { marker: 'fqa', type: 'text', content: ['followers '] },
+          { marker: 'fqa*', type: 'text', content: ['and others just use a pronoun.'] },
         ],
       },
     ],
@@ -44,7 +59,7 @@ const sampleFootnotes: MarkerObject[] = [
       {
         marker: 'xo',
         type: 'text',
-        content: ['1:2'],
+        content: ['3:12 '],
       },
       {
         marker: 'xt',
@@ -62,7 +77,7 @@ const sampleFootnotes: MarkerObject[] = [
       {
         marker: 'fr',
         type: 'text',
-        content: ['6:7'],
+        content: ['3:17 '],
       },
       {
         marker: 'ft',
@@ -106,7 +121,7 @@ export const WithCustomCallerFormatting: Story = {
     footnotes: sampleFootnotes,
     listId: 'storybook-Basic',
     showMarkers: true,
-    formatCaller: getFormatCallerFunction(sampleFootnotes, ['c', 'd', 'e', 'f', 'g']),
+    formatCaller: getFormatCallerFunction(sampleFootnotes, ['†', '‡', '⁂', '★', '☆']),
   },
 };
 

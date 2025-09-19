@@ -34,6 +34,11 @@ export const Basic: Story = {
       caller: 'a',
       content: [
         {
+          marker: 'fr',
+          type: 'text',
+          content: ['6.8 '],
+        },
+        {
           marker: 'ft',
           type: 'text',
           content: ['This is a basic footnote.'],
@@ -53,7 +58,7 @@ export const CrossReferenceWithoutCaller: Story = {
         {
           marker: 'xo',
           type: 'text',
-          content: ['1:2'],
+          content: ['1:2 '],
         },
         {
           marker: 'xt',
@@ -65,7 +70,54 @@ export const CrossReferenceWithoutCaller: Story = {
   } satisfies FootnoteItemProps,
 };
 
-export const WithCallerFormatting: Story = {
+type FootnoteItemStoryProps = FootnoteItemProps & { callerSymbol: string };
+
+function FootnoteItemStory({ callerSymbol, ...rest }: FootnoteItemStoryProps) {
+  return (
+    <FootnoteItem
+      {...rest}
+      formatCaller={(c) => {
+        if (c === '+') return callerSymbol;
+        if (c === '-') return undefined;
+        return c;
+      }}
+    />
+  );
+}
+
+export const WithCallerFormatting: StoryObj<FootnoteItemStoryProps> = {
+  args: {
+    callerSymbol: '†',
+    footnote: {
+      type: 'note',
+      marker: 'f',
+      caller: '+',
+      content: [
+        { marker: 'fr', type: 'text', content: ['1:8 '] },
+        { marker: 'fq', type: 'text', content: ['quoted text '] },
+        { marker: 'ft', type: 'text', content: ['Footnote with a custom caller formatter.'] },
+      ],
+    },
+  },
+  argTypes: {
+    callerSymbol: { control: 'text' },
+  },
+  render: (args) => <FootnoteItemStory {...args} />,
+};
+
+export const FootnoteTextWithoutMarker: Story = {
+  args: {
+    footnote: {
+      type: 'note',
+      marker: 'f',
+      caller: 'a',
+      content: ['This text is not marked using a valid footnote character style.'],
+    },
+    useUsfmFallbackStyles: false,
+  } satisfies FootnoteItemProps,
+};
+
+export const SuppressDefaultUsfmStyles: Story = {
   args: {
     formatCaller: (c) => {
       if (c === '+') return 'a';
@@ -80,25 +132,30 @@ export const WithCallerFormatting: Story = {
         {
           marker: 'fr',
           type: 'text',
-          content: ['1:8'],
+          content: ['1:5 '],
         },
         {
           marker: 'ft',
           type: 'text',
-          content: ['Footnote with a custom caller formatter.'],
+          content: ['Or '],
+        },
+        {
+          marker: 'fqa',
+          type: 'text',
+          content: ['before him in love, '],
+        },
+        {
+          marker: 'fv',
+          type: 'text',
+          content: ['5'],
+        },
+        {
+          marker: 'fqa',
+          type: 'text',
+          content: ['having predestined us'],
         },
       ],
     },
-  } satisfies FootnoteItemProps,
-};
-
-export const FootnoteTextWithoutMarker: Story = {
-  args: {
-    footnote: {
-      type: 'note',
-      marker: 'f',
-      caller: 'a',
-      content: ['This text is not marked using a valid footnote character style.'],
-    },
+    useUsfmFallbackStyles: false,
   } satisfies FootnoteItemProps,
 };
