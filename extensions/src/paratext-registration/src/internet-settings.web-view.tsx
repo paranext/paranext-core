@@ -23,7 +23,7 @@ import { AlertCircle } from 'lucide-react';
 import { Grid } from './components/grid.component';
 import { scrollToRef, SaveState } from './utils';
 
-const SAVE_SETTINGS_DELAY_MS = 500;
+const SAVE_SETTINGS_DELAY_MS = 1000;
 
 const SERVER_TYPE_OPTIONS: ServerType[] = ['Production', 'QualityAssurance', 'Development', 'Test'];
 const INTERNET_USE_OPTIONS: InternetUse[] = ['Enabled', 'VpnRequired', 'Disabled', 'ProxyOnly'];
@@ -96,7 +96,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // How much progress the form has made in saving registration data
   const [saveState, setSaveState] = useState(SaveState.HasNotSaved);
   const [saveError, setSaveError] = useState('');
-  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | undefined>();
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>();
 
   // #region InternetSettings
 
@@ -144,7 +144,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     ) {
       // If there is an existing timeout, cancels that timeout
       if (saveTimeout) {
-        clearTimeout(saveTimeout);
+        clearTimeout(saveTimeout.current);
       }
 
       // Starts the save settings timeout
@@ -165,15 +165,15 @@ globalThis.webViewComponent = function InternetSettingsComponent({
           setSaveState(SaveState.HasNotSaved);
         }
 
-        setSaveTimeout(undefined);
+        saveTimeout.current = undefined;
       }, SAVE_SETTINGS_DELAY_MS);
-      setSaveTimeout(newSaveTimeout);
+      saveTimeout.current = newSaveTimeout;
     }
 
     // If the component unmounts early, clears the timeout if it exists
     return () => {
       if (saveTimeout) {
-        clearTimeout(saveTimeout);
+        clearTimeout(saveTimeout.current);
       }
     };
   }, [
