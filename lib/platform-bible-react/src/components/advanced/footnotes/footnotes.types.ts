@@ -14,6 +14,11 @@ export interface FootnoteItemProps {
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
   /**
+   * Flag indicating whether to apply hard-coded styles to make footnote fields look similar to the
+   * default styling used in USFM (as in Paratext 9).
+   */
+  useUsfmFallbackStyles?: boolean;
+  /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this
    * is being used.
@@ -31,16 +36,21 @@ export interface FootnoteListProps {
    * deletions or — unlikely — reordering) )
    */
   listId: string | number;
+  /** The currently selected footnote (or undefined if none) */
+  selectedFootnote?: MarkerObject;
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
+  /**
+   * Flag indicating whether to apply hard-coded styles to make footnote fields look similar to the
+   * default styling used in USFM (as in Paratext 9).
+   */
+  useUsfmFallbackStyles?: boolean;
   /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this
    * is being used.
    */
   formatCaller?: (caller: string | undefined, index: number) => string | undefined;
-  /** The currently selected footnote (or undefined if none) */
-  selectedFootnote?: MarkerObject;
   /** Callback to handle clicking/selecting a footnote in the list */
   onFootnoteSelected?: (footnote: MarkerObject) => void;
 }

@@ -7,13 +7,14 @@ import { FootnoteListProps } from './footnotes.types';
 
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
+  className,
   footnotes,
-  showMarkers = true,
-  formatCaller,
   listId,
   selectedFootnote,
+  showMarkers = true,
+  useUsfmFallbackStyles = true,
+  formatCaller,
   onFootnoteSelected,
-  className,
 }: FootnoteListProps) {
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
   const handleFootnoteClick = (footnote: MarkerObject) => {
@@ -44,10 +45,11 @@ export function FootnoteList({
             onClick={() => handleFootnoteClick(footnote)}
           >
             <FootnoteItem
+              className="tw-m-0" // remove any internal margin
               footnote={footnote}
               formatCaller={() => handleFormatCaller(footnote.caller, idx)}
               showMarkers={showMarkers}
-              className="tw-m-0" // remove any internal margin
+              useUsfmFallbackStyles={useUsfmFallbackStyles}
             />
           </Card>
         );
