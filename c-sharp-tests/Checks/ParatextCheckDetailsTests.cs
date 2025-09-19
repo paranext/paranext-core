@@ -10,11 +10,10 @@ public class ParatextCheckDetailsTests
     public void Serialization_Json_MatchesExpectations()
     {
         var checkDetails = new ParatextCheckDetails(CheckType.Capitalization);
-        checkDetails.EnabledProjectIds.Add("testProjectId");
         Assert.That(
             checkDetails.SerializeToJson(),
             Is.EqualTo(
-                """{"checkName":"Capitalization","checkDescription":"Capitalization","checkId":"Capitalization","enabledProjectIds":["testProjectId"]}"""
+                """{"checkName":"Capitalization","checkDescription":"Capitalization","checkId":"Capitalization"}"""
             )
         );
     }

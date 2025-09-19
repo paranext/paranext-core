@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -39,19 +38,16 @@ public sealed record CheckRunResult(
 
     public override int GetHashCode()
     {
-        // ItemText is intentionally omitted from the hash code calculation. Typically, ItemText is
-        // extracted from MessageFormatString, but if extraction fails, ItemText may be set to the entire
-        // message. Combine can only take up to 8 arguments.
         int hash = HashCode.Combine(
             CheckId,
             CheckResultType,
             ProjectId,
             MessageFormatString,
             VerseText,
+            ItemText,
             IsDenied,
-            VerseRef,
-            Start
+            VerseRef
         );
-        return HashCode.Combine(hash, End);
+        return HashCode.Combine(hash, Start, End);
     }
 }

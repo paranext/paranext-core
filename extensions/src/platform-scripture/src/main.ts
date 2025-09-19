@@ -1,12 +1,16 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+import { CheckResultsInvalidated } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
   ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
 } from './checks-side-panel.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
-import { checkAggregatorService } from './checks/check-aggregator.service';
+import {
+  checkAggregatorService,
+  notifyCheckResultsInvalidated,
+} from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
@@ -402,6 +406,33 @@ export async function activate(context: ExecutionActivationContext) {
     findWebViewProvider,
   );
 
+  const invalidateResultsPromise = papi.commands.registerCommand(
+    'platformScripture.invalidateCheckResults',
+    async (details: CheckResultsInvalidated) => {
+      notifyCheckResultsInvalidated(details);
+    },
+    {
+      method: {
+        summary: 'Invalidate check results for a specific check',
+        params: [
+          {
+            name: 'details',
+            required: true,
+            summary:
+              'Details about which check results have been invalidated and should be refreshed',
+            schema: { type: 'object' },
+            description: 'See CheckResultsInvalidated in the platformScripture API',
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
@@ -430,6 +461,7 @@ export async function activate(context: ExecutionActivationContext) {
     await showChecksSidePanelWebViewProviderPromise,
     await openFindPromise,
     await openFindWebViewProviderPromise,
+    await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
