@@ -278,16 +278,19 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             'paratextRegistration.validateParatextRegistrationData',
             { name: newName, code: newRegistrationCode, email, supporterName: supporter },
           );
-          setRegistrationIsValid(isValid);
 
-          if (isValid && error) {
-            setError('');
-            setErrorDescription('');
-          } else if (!isValid) {
-            setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
-            setErrorDescription(
-              localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
-            );
+          if (isMounted.current) {
+            setRegistrationIsValid(isValid);
+
+            if (isValid && error) {
+              setError('');
+              setErrorDescription('');
+            } else if (!isValid) {
+              setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
+              setErrorDescription(
+                localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
+              );
+            }
           }
         } catch (err: unknown) {
           logger.warn(

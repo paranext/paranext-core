@@ -153,8 +153,12 @@ globalThis.webViewComponent = function InternetSettingsComponent({
           setSaveState(SaveState.IsSaving);
           setSaveError('');
           await saveInternetSettings(internetSettings);
-          setCurrentInternetSettings(internetSettings);
-          setSaveState(SaveState.HasSaved);
+
+          if (isMounted.current) {
+            setCurrentInternetSettings(internetSettings);
+            setSaveState(SaveState.HasSaved);
+          }
+
           papi.notifications.send({
             severity: 'info',
             message: '%paratextRegistration_alert_updatedInternetSettings%',
