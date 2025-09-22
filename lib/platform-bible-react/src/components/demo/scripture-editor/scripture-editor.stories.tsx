@@ -2,6 +2,9 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
+  GENERATOR_NOTE_CALLER,
+  getDefaultViewOptions,
+  HIDDEN_NOTE_CALLER,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
@@ -150,6 +153,45 @@ export const Annotated: Story = {
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
+  },
+};
+
+const inlineNoteOptions: EditorOptions = {
+  view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
+  nodes: {
+    noteCallerOnClick: (_event, _noteNodeKey, isCollapsed, getCaller, setCaller) => {
+      if (isCollapsed) return;
+
+      if (getCaller() === GENERATOR_NOTE_CALLER) setCaller(HIDDEN_NOTE_CALLER);
+      else setCaller(GENERATOR_NOTE_CALLER);
+    },
+  },
+};
+
+export const InlineNoteEditing: Story = {
+  render: (args, context) => (
+    <CanvasWithDescription
+      viewMode={context.viewMode}
+      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
+    >
+      <Editorial {...args} />
+    </CanvasWithDescription>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story demonstrates editing notes inline. Move your cursor to a note caller and ' +
+          'the note will expand and can be edited. Move the cursor out of the note and it will ' +
+          'collapse. Click the expanded note caller to toggle between the auto-generated caller ' +
+          'and the hidden caller.',
+      },
+    },
+  },
+  args: {
+    defaultUsj: usjWeb,
+    scrRef: defaultScrRef,
+    options: inlineNoteOptions,
   },
 };
 

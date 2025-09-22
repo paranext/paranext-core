@@ -103,7 +103,7 @@
     "@babel/preset-react": "^7.26.3",
     "@babel/preset-typescript": "^7.26.0",
     "@chromatic-com/storybook": "^4.0.0",
-    "@eten-tech-foundation/platform-editor": "~0.8.1",
+    "@eten-tech-foundation/platform-editor": "~0.8.2",
     "@eten-tech-foundation/scripture-utilities": "~0.1.1",
     "@senojs/rollup-plugin-style-inject": "^0.2.3",
     "@storybook/addon-a11y": "9.0.17",
