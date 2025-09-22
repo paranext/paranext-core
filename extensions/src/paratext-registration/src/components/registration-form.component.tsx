@@ -16,7 +16,6 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CircleCheck, PenIcon } from 'lucide-react';
 import { SaveState, scrollToRef } from '../utils';
 import { Grid } from './grid.component';
-import { time } from 'console';
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
@@ -264,12 +263,10 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
       clearTimeout(validationTimeout.current);
     }
 
-    console.log('timeout is scheduled!');
     // Sets a debounced timeout for the validation
     const timeout = setTimeout(async () => {
       const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
       setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
-      console.log('timeout is running!');
 
       // If the new code is valid, then validates the code with the name on the backend
       if (newCodeIsValid && newName && !isLoading) {
