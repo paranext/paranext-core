@@ -26,6 +26,8 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
 
     public List<CheckRunResult> CheckRunResults { get; } = [];
 
+    public bool ResultsReady { get; set; } = false;
+
     /// <summary>
     /// This regex extracts the part of the message between ||...|| if present. The message is
     /// typically formatted as `Check name: ||item||` (e.g. `Repeated word: ||he||`).
@@ -101,62 +103,56 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
         );
     }
 
+    public void ClearResults()
+    {
+        ResultsReady = false;
+        CheckRunResults.Clear();
+    }
+
     /// <summary>
     /// Remove all results that are within the given book and return them
     /// </summary>
     /// <returns>All results that were removed</returns>
-    public List<CheckRunResult> TrimResultsFromBook(int bookNum)
+    public void ClearResultsFromBook(int bookNum)
     {
-        var retVal = new List<CheckRunResult>();
+        ResultsReady = false;
         for (int i = CheckRunResults.Count - 1; i >= 0; i--)
         {
             var result = CheckRunResults[i];
             var verseRef = result.Start.VerseRef;
             if (verseRef.BookNum == bookNum)
             {
-                retVal.Add(result);
                 CheckRunResults.RemoveAt(i);
             }
         }
-        return retVal;
+    }
+
+    public IEnumerable<CheckRunResult> GetResultsInRange(CheckInputRange range)
+    {
+        foreach (var result in CheckRunResults)
+        {
+            if (
+                range.IsWithinRange(
+                    result.ProjectId,
+                    result.VerseRef.BookNum,
+                    result.VerseRef.ChapterNum
+                )
+            )
+                yield return result;
+        }
     }
 
     /// <summary>
     /// After a check has finished running, filter and complete filling in data on the results found.
     /// This will:<br/>
-    /// 1. Remove all results that are not within the given ranges<br/>
-    /// 2. Lookup whether each check result was previously denied<br/>
-    /// 3. Calculate actual offsets for each result
+    /// 1. Lookup whether each check result was previously denied<br/>
+    /// 2. Calculate actual offsets for each result
     /// </summary>
-    public void PostProcessResults(
-        CheckInputRange[]? ranges,
-        ErrorMessageDenials? denials,
-        UsfmBookIndexer? indexer
-    )
+    public void PostProcessResults(ErrorMessageDenials? denials, UsfmBookIndexer? indexer)
     {
         for (int i = CheckRunResults.Count - 1; i >= 0; i--)
         {
             var result = CheckRunResults[i];
-
-            // Filter by ranges first to throw out whatever we can
-            if (ranges != null)
-            {
-                var vref = result.Start.VerseRef;
-                bool isWithinAnyRange = false;
-                foreach (var range in ranges)
-                {
-                    if (range.IsWithinRange(result.ProjectId, vref.BookNum, vref.ChapterNum))
-                    {
-                        isWithinAnyRange = true;
-                        break;
-                    }
-                }
-                if (!isWithinAnyRange)
-                {
-                    CheckRunResults.RemoveAt(i);
-                    continue;
-                }
-            }
 
             // Lookup whether a check was previously denied
             if (denials != null)

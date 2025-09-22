@@ -103,8 +103,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
+        scope.ProjectID = ProjectDetails.Metadata.Id;
+
         Stream? dataStream =
-            GetExtensionStream(scope, false)
+            GetExtensionStream(scope, true)
             ?? throw new InvalidDataException("Extension data not found");
         using (dataStream)
         {
@@ -118,6 +120,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
+
+        scope.ProjectID = ProjectDetails.Metadata.Id;
 
         Stream? dataStream =
             GetExtensionStream(scope, true)
