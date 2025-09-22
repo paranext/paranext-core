@@ -3,7 +3,7 @@
 // changed so they align.
 //----------------------------------------------------------------------------------------------
 
-import { LocalizeKey } from 'menus.model';
+import { LocalizeKey } from 'extension-contributions/menus.model';
 import { removeJsonToTypeScriptTypesStuff } from './settings.model';
 
 /** Localized string value associated with this key */

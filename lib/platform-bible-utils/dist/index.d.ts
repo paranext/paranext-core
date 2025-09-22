@@ -134,43 +134,6 @@ export declare class DateTimeFormat {
 	 */
 	resolvedOptions(): Intl.ResolvedDateTimeFormatOptions;
 }
-/** Function to run to dispose of something. Returns true if successfully unsubscribed */
-export type Unsubscriber = () => boolean;
-/**
- * Returns an Unsubscriber function that combines all the unsubscribers passed in.
- *
- * @param unsubscribers All unsubscribers to aggregate into one unsubscriber
- * @returns Function that unsubscribes from all passed in unsubscribers when run
- */
-export declare const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
-/**
- * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
- * successfully unsubscribed
- */
-export type UnsubscriberAsync = () => Promise<boolean>;
-/**
- * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
- *
- * @param unsubscribers - All unsubscribers to aggregate into one unsubscriber.
- * @returns Function that unsubscribes from all passed in unsubscribers when run
- */
-export declare const aggregateUnsubscriberAsyncs: (unsubscribers: (UnsubscriberAsync | Unsubscriber)[]) => UnsubscriberAsync;
-/** Callback function that accepts an event and should run when an event is emitted */
-export type PlatformEventHandler<T> = (event: T) => void;
-/**
- * Function that subscribes the provided callback to run when this event is emitted.
- *
- * @param callback Function to run with the event when it is emitted
- * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
- *   emitted
- */
-export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
-/**
- * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
- *
- * Note: The callback itself is not asynchronous.
- */
-export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
 export type JsonObjectLike = {
 	[key: string]: unknown;
 };
@@ -425,6 +388,43 @@ export declare class NumberFormat {
 	 */
 	resolvedOptions(): Intl.ResolvedNumberFormatOptions;
 }
+/** Function to run to dispose of something. Returns true if successfully unsubscribed */
+export type Unsubscriber = () => boolean;
+/**
+ * Returns an Unsubscriber function that combines all the unsubscribers passed in.
+ *
+ * @param unsubscribers All unsubscribers to aggregate into one unsubscriber
+ * @returns Function that unsubscribes from all passed in unsubscribers when run
+ */
+export declare const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
+/**
+ * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+ * successfully unsubscribed
+ */
+export type UnsubscriberAsync = () => Promise<boolean>;
+/**
+ * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
+ *
+ * @param unsubscribers - All unsubscribers to aggregate into one unsubscriber.
+ * @returns Function that unsubscribes from all passed in unsubscribers when run
+ */
+export declare const aggregateUnsubscriberAsyncs: (unsubscribers: (UnsubscriberAsync | Unsubscriber)[]) => UnsubscriberAsync;
+/** Callback function that accepts an event and should run when an event is emitted */
+export type PlatformEventHandler<T> = (event: T) => void;
+/**
+ * Function that subscribes the provided callback to run when this event is emitted.
+ *
+ * @param callback Function to run with the event when it is emitted
+ * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+ *   emitted
+ */
+export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+/**
+ * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ *
+ * Note: The callback itself is not asynchronous.
+ */
+export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
 /** Require a `dispose` function */
 export interface Dispose {
 	/** Release resources and notify dependent services when tearing down an object */

@@ -1,4 +1,4 @@
-import { ReplaceType } from './util';
+import { ReplaceType } from '../util';
 import { ThemeDefinition, ThemeFamiliesById, ThemeFamily } from './theme.model';
 
 /**

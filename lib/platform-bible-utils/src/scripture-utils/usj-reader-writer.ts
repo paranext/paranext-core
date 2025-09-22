@@ -17,7 +17,7 @@ import {
   VERSE_TYPE,
   VerseRefOffset,
 } from './usj-reader-writer.model';
-import { SortedNumberMap } from './sorted-number-map';
+import { SortedNumberMap } from '../sorted-number-map';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);

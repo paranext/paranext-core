@@ -1,18 +1,18 @@
 // Classes
-export { AsyncVariable } from './async-variable';
-export { Collator } from './intl-collator';
-export { DateTimeFormat } from './intl-date-time-format';
+export { AsyncVariable } from './promise-utils/async-variable';
+export { Collator } from './intl/intl-collator';
+export { DateTimeFormat } from './intl/intl-date-time-format';
 export { DocumentCombiner } from './document-combiner';
 export { EventRollingTimeCounter } from './event-rolling-time-counter';
-export { Mutex } from './mutex';
-export { MutexMap } from './mutex-map';
+export { Mutex } from './promise-utils/mutex';
+export { MutexMap } from './promise-utils/mutex-map';
 export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
-export { NumberFormat } from './intl-number-format';
-export { PlatformEventEmitter } from './platform-event-emitter.model';
-export { PromiseChainingMap } from './promise-chaining-map';
+export { NumberFormat } from './intl/intl-number-format';
+export { PlatformEventEmitter } from './event-utils/platform-event-emitter.model';
+export { PromiseChainingMap } from './promise-utils/promise-chaining-map';
 export { SortedNumberMap } from './sorted-number-map';
 export { SortedSet } from './sorted-set';
-export { UnsubscriberAsyncList } from './unsubscriber-async-list';
+export { UnsubscriberAsyncList } from './event-utils/unsubscriber-async-list';
 
 // Consts
 export { PLATFORM_ERROR_VERSION } from './platform-error';
@@ -28,12 +28,12 @@ export {
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
   defaultScrRef,
-} from './scripture-util';
-export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
-export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
+} from './scripture-utils/scripture-util';
+export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './event-utils/unsubscriber';
+export { CHAPTER_TYPE, VERSE_TYPE } from './scripture-utils/usj-reader-writer.model';
 
 // Enums
-export { Section } from './scripture-util';
+export { Section } from './scripture-utils/scripture-util';
 
 // Functions
 export {
@@ -50,7 +50,11 @@ export {
   wait,
   waitForDuration,
 } from './util';
-export { getDefaultCallerSequence, getNthCaller, getFormatCallerFunction } from './footnote-util';
+export {
+  getDefaultCallerSequence,
+  getNthCaller,
+  getFormatCallerFunction,
+} from './scripture-utils/footnote-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
@@ -60,7 +64,7 @@ export {
   normalizeScriptureSpaces,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
-} from './scripture-util';
+} from './scripture-utils/scripture-util';
 export {
   at,
   charAt,
@@ -92,7 +96,7 @@ export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
-export { default as getCurrentLocale } from './intl-util';
+export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
 export { default as formatTimeSpan } from './date-time-format-util';
@@ -105,17 +109,21 @@ export type {
   OnDidDispose,
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
-} from './disposal.model';
+} from './event-utils/disposal.model';
 export type { PlatformError } from './platform-error';
-export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
+export type {
+  PlatformEventHandler,
+  PlatformEvent,
+  PlatformEventAsync,
+} from './event-utils/platform-event';
 export type {
   BookInfo,
   ScrollGroupId,
   ScriptureNode,
   ScriptureSelection,
   ScriptureTextAnchor,
-} from './scripture.model';
-export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
+} from './scripture-utils/scripture.model';
+export type { Unsubscriber, UnsubscriberAsync } from './event-utils/unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {
   DateYYYYMMDD,
@@ -125,8 +133,8 @@ export type {
   LocalizedStringValue,
   StringMetadata,
   StringsMetadata,
-} from './localized-strings.model';
-export { localizedStringsDocumentSchema } from './localized-strings.model';
+} from './extension-contributions/localized-strings.model';
+export { localizedStringsDocumentSchema } from './extension-contributions/localized-strings.model';
 export type {
   LocalizeKey,
   ReferencedItem,
@@ -147,8 +155,8 @@ export type {
   WebViewMenus,
   PlatformMenus,
   Localized,
-} from './menus.model';
-export { menuDocumentSchema } from './menus.model';
+} from './extension-contributions/menus.model';
+export { menuDocumentSchema } from './extension-contributions/menus.model';
 export type { DblResourceData, ResourceType } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
@@ -170,14 +178,17 @@ export type {
   StateBase,
   UserState,
   UserStateContribution,
-} from './settings.model';
-export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';
-export * from './theme.model';
-export * from './theme.util';
+} from './extension-contributions/settings.model';
+export {
+  projectSettingsDocumentSchema,
+  settingsDocumentSchema,
+} from './extension-contributions/settings.model';
+export * from './extension-contributions/theme.model';
+export * from './extension-contributions/theme.util';
 export type {
   IUsjReaderWriter,
   UsjContentLocation,
   UsjSearchResult,
   VerseRefOffset,
-} from './usj-reader-writer.model';
-export { default as UsjReaderWriter } from './usj-reader-writer';
+} from './scripture-utils/usj-reader-writer.model';
+export { default as UsjReaderWriter } from './scripture-utils/usj-reader-writer';

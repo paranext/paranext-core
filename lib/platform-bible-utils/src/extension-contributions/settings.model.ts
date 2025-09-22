@@ -3,7 +3,7 @@
 // changed so they align.
 //----------------------------------------------------------------------------------------------
 
-import { LocalizeKey, ReferencedItem } from 'menus.model';
+import { LocalizeKey, ReferencedItem } from 'extension-contributions/menus.model';
 
 /** The data an extension provides to inform Platform.Bible of the settings it provides */
 export type SettingsContribution = SettingsGroup | SettingsGroup[];
