@@ -190,7 +190,7 @@ public class ConcurrentBatchCollectionTests
         var removedItems = new List<int>();
         var removeTask = Task.Run(() =>
         {
-            while (addTask.Status == TaskStatus.Running || _collection.Count > 0)
+            while (!addTask.IsCompleted || _collection.Count > 0)
             {
                 var items = _collection.DequeueRange(50);
                 removedItems.AddRange(items);
