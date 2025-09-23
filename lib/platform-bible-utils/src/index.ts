@@ -1,15 +1,15 @@
 // Classes
-export { AsyncVariable } from './promise/async-variable';
+export { AsyncVariable } from './promises/async-variable';
 export { Collator } from './intl/intl-collator';
 export { DateTimeFormat } from './intl/intl-date-time-format';
 export { DocumentCombiner } from './document-combiner';
 export { EventRollingTimeCounter } from './event-rolling-time-counter';
-export { Mutex } from './promise/mutex';
-export { MutexMap } from './promise/mutex-map';
+export { Mutex } from './promises/mutex';
+export { MutexMap } from './promises/mutex-map';
 export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
 export { NumberFormat } from './intl/intl-number-format';
-export { PlatformEventEmitter } from './event/platform-event-emitter.model';
-export { PromiseChainingMap } from './promise/promise-chaining-map';
+export { PlatformEventEmitter } from './events/platform-event-emitter.model';
+export { PromiseChainingMap } from './promises/promise-chaining-map';
 export { SortedNumberMap } from './sorted-number-map';
 export { SortedSet } from './sorted-set';
 export { UnsubscriberAsyncList } from './lifetime-management/unsubscriber-async-list';
@@ -118,7 +118,7 @@ export type {
   PlatformEventHandler,
   PlatformEvent,
   PlatformEventAsync,
-} from './event/platform-event';
+} from './events/platform-event';
 export type {
   BookInfo,
   ScrollGroupId,

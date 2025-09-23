@@ -1,5 +1,5 @@
 import { UnsubscriberAsync } from './unsubscriber';
-import { PlatformEvent } from '../event/platform-event';
+import { PlatformEvent } from '../events/platform-event';
 
 /** Require a `dispose` function */
 export interface Dispose {
