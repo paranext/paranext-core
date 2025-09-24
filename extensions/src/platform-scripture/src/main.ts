@@ -141,6 +141,30 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
+async function insertFootnote(editorWebViewId: string | undefined): Promise<void> {
+  let projectId: FindWebViewOptions['projectId'];
+
+  logger.debug('Opening find UI');
+
+  if (editorWebViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
+  // TODO: Once the footnote UI is created, make this command open that
+  papi.notifications.send({
+    message: `Insert footnote called for project '${projectId}'`,
+    severity: 'info',
+  });
+
+  return undefined;
+}
+
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
@@ -383,6 +407,28 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewType,
     checksSidePanelWebViewProvider,
   );
+  const insertFootnotePromise = papi.commands.registerCommand(
+    'platformScripture.insertFootnote',
+    insertFootnote,
+    {
+      method: {
+        summary: 'Insert a footnote into the project',
+        params: [
+          {
+            name: 'editorWebViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project that we are inserting the footnote',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -459,6 +505,7 @@ export async function activate(context: ExecutionActivationContext) {
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
+    await insertFootnotePromise,
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,

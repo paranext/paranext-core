@@ -1244,6 +1244,8 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    'platformScripture.insertFootnote': (editorWebViewId?: string | undefined) => Promise<void>;
   }
 
   export interface ProjectSettingTypes {
