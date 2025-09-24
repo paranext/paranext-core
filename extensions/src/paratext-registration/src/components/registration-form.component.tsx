@@ -222,7 +222,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     !isEditing;
 
   const isButtonDisabled =
-    isFormDisabled || !hasUnsavedChanges || isLoading || !registrationIsValid;
+    isFormDisabled || !hasUnsavedChanges || isLoading || !registrationIsValid || !!error;
 
   const formatSuccessAlertDescription = () => {
     if (saveState === SaveState.IsRestarting) {
@@ -265,6 +265,8 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
 
     // Sets a debounced timeout for the validation
     const timeout = setTimeout(async () => {
+      setError('');
+      setErrorDescription('');
       const newCodeIsValid = newRegistrationCode.match(REGISTRATION_CODE_REGEX_STRING);
       setShowInvalidCode(!!newRegistrationCode && !newCodeIsValid);
 
@@ -280,10 +282,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           if (isMounted.current) {
             setRegistrationIsValid(isValid);
 
-            if (isValid && error) {
-              setError('');
-              setErrorDescription('');
-            } else if (!isValid) {
+            if (!isValid) {
               setError(localizedStrings['%paratextRegistration_alert_invalidRegistration%']);
               setErrorDescription(
                 localizedStrings['%paratextRegistration_alert_invalidRegistration_description%'],
@@ -326,7 +325,15 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     }
 
     // Prevent user from entering in invalid characters
-    if (newRegistrationCode.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX)) {
+    if (
+      newRegistrationCode.split('-').every((val, index, arr) => {
+        const isLast = index === arr.length - 1;
+        return (
+          val.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX) &&
+          ((!isLast && val.length === 6) || isLast)
+        );
+      })
+    ) {
       setRegistrationCode(newRegistrationCode);
       validateRegistration(newRegistrationCode, name);
     }
