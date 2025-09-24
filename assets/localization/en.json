@@ -7,7 +7,7 @@
   "%ariaLabel_opensInBrowser%": "Opens externally in a browser window",
   "%data_loading_error_paratextData_auth_failure%": "Paratext Registration is not valid. Please update your registration information and try again.",
   "%data_loading_error_paratextData_internet_disabled%": "Internet access is disabled in “Paratext Registration Information”. Please enable it and try again.",
-  "%data_loading_error_paratextData_internet_disabled_2%": "Internet access is disabled in “Internet Settings”. Please enable it and try again.",
+  "%data_loading_error_internetAccess_disabled%": "Internet access is disabled in “Internet Settings”. Please enable it and try again.",
   "%downloadUpdateProjectTab_aria_downloadable%": "downloadable projects",
   "%downloadUpdateProjectTab_aria_downloaded%": "downloaded projects",
   "%downloadUpdateProjectTab_button_delete%": "Delete",

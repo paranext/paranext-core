@@ -153,7 +153,7 @@ globalThis.webViewComponent = function HomeWebView() {
         if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
           papi.notifications.send({
             severity: 'error',
-            message: '%data_loading_error_paratextData_internet_disabled_2%',
+            message: '%data_loading_error_internetAccess_disabled%',
             clickCommandLabel: '%general_open%',
             clickCommand: 'paratextRegistration.showInternetSettings',
             notificationId: sharedProjectErrorNotificationId,
