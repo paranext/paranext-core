@@ -68,5 +68,11 @@
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"
+  },
+  "%data_loading_error_paratextData_internet_disabled%": {
+    "deprecationInfo": {
+      "date": "2025-09-24",
+      "message": "We made the internet settings its own page so the locale needs to indicate that. The new locale is %data_loading_error_paratextData_internet_disabled%."
+    }
   }
 }
