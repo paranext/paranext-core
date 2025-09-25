@@ -51,6 +51,10 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             "command:paratextRegistration.setParatextDataInternetSettings",
             SetParatextDataInternetSettings
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.validateParatextRegistrationData",
+            ValidateParatextRegistrationData
+        );
 
         // Lookup localized strings where they may be needed by callers without access to PapiClient
         RegistrationRequiredException.ExceptionMessage = LocalizationService.GetLocalizedString(
@@ -97,6 +101,16 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     }
 
     /// <summary>
+    /// Checks whether the registration information is valid while updating the registration form
+    /// </summary>
+    /// <param name="registrationData">registration data object to validate</param>
+    /// <returns>Whether the registration data is valid</returns>
+    static private Boolean ValidateParatextRegistrationData(RegistrationData registrationData)
+    {
+        return RegistrationInfo.IsValidRegistration(registrationData.Code, registrationData.Name);
+    }
+
+    /// <summary>
     /// Sets information about user's current Paratext Registry user information in ParatextData.dll
     /// </summary>
     /// <param name="newRegistrationData">registration data object for updating registration</param>
@@ -133,8 +147,11 @@ internal class ParatextRegistrationService(PapiClient papiClient)
 
             // Adapted from `RegistrationForm.cmdOK_Click`
 
-            // Validate the registration information
-            if (!StringUtils.IsValidEmail(newRegistrationData.Email))
+            // Validate the email information if it has been specified
+            if (
+                !string.IsNullOrEmpty(newRegistrationData.Email)
+                && !StringUtils.IsValidEmail(newRegistrationData.Email)
+            )
             {
                 shouldSkipAppendingToExceptionMessage = true;
                 throw new Exception(

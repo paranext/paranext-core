@@ -1,20 +1,20 @@
 import { IWebViewProvider, SavedWebViewDefinition, WebViewDefinition } from '@papi/core';
 import papi from '@papi/backend';
-import paratextRegistrationListWebView from './paratext-registration.web-view?inline';
+import paratextRegistrationListWebView from './internet-settings.web-view?inline';
 import paratextRegistrationListStyles from './tailwind.css?inline';
 
-export const paratextRegistrationWebViewType = 'paratextRegistration.registrationView';
+export const internetSettingsWebViewType = 'paratextRegistration.internetSettingsView';
 
-const titleKey = '%paratextRegistrationProfile_webView_title%';
-const tooltipKey = '%paratextRegistrationProfile_webView_tooltip%';
+const titleKey = '%internetSettings_webView_title%';
+const tooltipKey = '%internetSettings_webView_tooltip%';
 
-export class ParatextRegistrationWebViewProvider implements IWebViewProvider {
+export class InternetSettingsWebViewProvider implements IWebViewProvider {
   // needs to be a class method, not static method
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== paratextRegistrationWebViewType)
+    if (savedWebView.webViewType !== internetSettingsWebViewType)
       throw new Error(
-        `${paratextRegistrationWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${internetSettingsWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     const { [titleKey]: title, [tooltipKey]: tooltip } =
@@ -29,7 +29,6 @@ export class ParatextRegistrationWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
       },
-      allowPopups: true,
     };
   }
 }

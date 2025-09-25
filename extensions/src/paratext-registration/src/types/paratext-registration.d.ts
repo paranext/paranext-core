@@ -64,6 +64,13 @@ declare module 'papi-shared-types' {
      */
     'paratextRegistration.showParatextRegistration': () => Promise<string | undefined>;
     /**
+     * Show the Paratext Registration Internet Settings window with which the user defines internet
+     * settings for connecting to the Paratext Registration
+     *
+     * @returns Id of the internet settings web view
+     */
+    'paratextRegistration.showInternetSettings': () => Promise<string | undefined>;
+    /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`
      *
@@ -113,6 +120,14 @@ declare module 'papi-shared-types' {
      * @returns True if the user has a valid Paratext registration, false otherwise
      */
     'paratextRegistration.doesUserHaveValidRegistration': () => Promise<boolean>;
+    /**
+     * Checks whether the given registration data, specifically the name and code, are valid
+     *
+     * @returns True if the registration data was valid, false otherwise
+     */
+    'paratextRegistration.validateParatextRegistrationData': (
+      registrationData: RegistrationData,
+    ) => Promise<boolean>;
   }
 
   export interface SettingTypes {

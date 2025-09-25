@@ -44,13 +44,43 @@
     },
     "%paratextRegistration_warning_invalid_email%": {
       "fallbackKey": "%Paratext.RegistrationForm.cmdOK_Click.&quot;Enter valid email address&quot;%"
+    },
+    "%paratextRegistration_warning_invalid_registration%": {
+      "deprecationInfo": {
+        "message": "The invalid registration warning became an alert with both a title and subtitle instead of just a one-line warning. The replacement keys are %paratextRegistration_alert_invalidRegistration% and %paratextRegistration_alert_invalidRegistration_description%.",
+        "date": "2025-09-09"
+      }
+    },
+    "%paratextRegistration_description_shared_with_paratext_9%": {
+      "deprecationInfo": {
+        "message": "The registration in Paratext 10 Studio is no longer shared with Paratext 9",
+        "date": "2025-09-10"
+      }
+    },
+    "%paratextRegistration_webView_title%": {
+      "deprecationInfo": {
+        "message": "Changed the value of this locale to just be \"Paratext Registration\". The new key is %paratextRegistration_webView_title_2%.",
+        "date": "2025-09-15"
+      }
     }
   },
   "localizedStrings": {
     "en": {
+      "%internetSettings_webView_title%": "Internet Settings",
+      "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
+      "%mainMenu_openInternetSettings%": "Internet Settings...",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
-      "%paratextRegistration_alert_updatedRegistration%": "Updated registration information",
+      "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
+      "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
+      "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
+      "%paratextRegistration_alert_unchangedRegistration_description%": "Registration name and code have not been changed.",
+      "%paratextRegistration_alert_updatedInternetSettings%": "Your changes to the internet settings were successfully applied!",
+      "%paratextRegistration_alert_updatedRegistration%": "Registration information updated",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
+      "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
+      "%paratextRegistration_alert_validRegistration%": "Registration information accepted",
+      "%paratextRegistration_alert_validRegistration_description%": "You can now save the changes and the app will restart to make them in effect.",
+      "%paratextRegistration_app_startup_description%": "Welcome to {%product_name%}! To get started, login with your registration information.",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
       "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
@@ -58,6 +88,7 @@
       "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
       "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Use a proxy",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Disable Internet use in sensitive locations",
+      "%paratextRegistration_description_is_registered%": "Your {%product_name%} is registered!",
       "%paratextRegistration_description_shared_with_paratext_9%": "These settings also apply to Paratext 9.",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
       "%paratextRegistration_label_emailAddress%": "Email address",
@@ -75,13 +106,19 @@
       "%paratextRegistration_label_serverType_option_Production%": "Production",
       "%paratextRegistration_label_serverType_option_QualityAssurance%": "Quality Assurance",
       "%paratextRegistration_label_serverType_option_Test%": "Test",
+      "%paratextRegistration_label_yourRegistration%": "Your registration",
+      "%paratextRegistration_registration_details%": "If you can't find your registration email, [__visit Paratext Registry__]({registryLink}) to generate a new code, or ask your Paratext support person for help.",
       "%paratextRegistration_section_internetSettings%": "Internet Settings",
       "%paratextRegistration_section_internetSettings_tooltip%": "These Internet settings only apply to some operations, not to the whole application",
       "%paratextRegistration_section_proxySettings%": "Proxy Settings",
       "%paratextRegistration_warning_invalid_email%": "Please enter a valid email address.",
       "%paratextRegistration_warning_invalid_registration%": "This registration code is not correct for this user.",
+      "%paratextRegistration_warning_invalid_registration_length%": "Registration codes are exactly 30 hexadecimal characters.",
       "%paratextRegistration_webView_title%": "Paratext Registration Information",
+      "%paratextRegistration_webView_title_2%": "Paratext Registration",
       "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",
+      "%paratextRegistrationProfile_webView_title%": "Account",
+      "%paratextRegistrationProfile_webView_tooltip%": "Adjust your Paratext Registration Account Information here.",
       "%settings_paratextRegistration_registration_internet_group_description%": "Settings related to the user's Paratext Registry connection and some Internet access controls",
       "%settings_paratextRegistration_registration_internet_group_label%": "Registration and Internet",
       "%settings_paratextRegistration_shouldShowOnStartup_description%": "Whether to show the form to enter Paratext Registration information when the application starts if it has not been entered previously",
