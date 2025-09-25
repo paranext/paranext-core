@@ -1,8 +1,8 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 
+export type FootnoteLayout = 'horizontal' | 'vertical';
+
 export interface FootnoteItemProps {
-  /** Optional additional class name for styling */
-  className?: string;
   /**
    * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
    * array of {@link MarkerObject}, in practice, for footnotes that array contains only one
@@ -11,13 +11,19 @@ export interface FootnoteItemProps {
    * text, etc.).
    */
   footnote: MarkerObject;
+  /**
+   * Determines how footnotes are displayed:
+   *
+   * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
+   *   second column (typically used in a wide pane below the text).
+   * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
+   *   beneath (typically used side-by-side with the text).
+   *
+   * @default 'horizontal'
+   */
+  layout?: FootnoteLayout;
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
-  /**
-   * Flag indicating whether to apply hard-coded styles to make footnote fields look similar to the
-   * default styling used in USFM (as in Paratext 9).
-   */
-  useUsfmFallbackStyles?: boolean;
   /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this
@@ -32,6 +38,17 @@ export interface FootnoteListProps {
   /** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
   footnotes: MarkerObject[];
   /**
+   * Determines how footnotes are displayed:
+   *
+   * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
+   *   second column (typically used in a wide pane below the text).
+   * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
+   *   beneath (typically used side-by-side with the text).
+   *
+   * @default 'horizontal'
+   */
+  layout?: FootnoteLayout;
+  /**
    * ID provided by the caller that should change whenever the list changes (due to additions,
    * deletions or — unlikely — reordering) )
    */
@@ -41,10 +58,11 @@ export interface FootnoteListProps {
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
   /**
-   * Flag indicating whether to apply hard-coded styles to make footnote fields look similar to the
-   * default styling used in USFM (as in Paratext 9).
+   * Flag indicating whether to suppress USFM-style formatting.
+   *
+   * @default false
    */
-  useUsfmFallbackStyles?: boolean;
+  suppressFormatting?: boolean;
   /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this

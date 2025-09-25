@@ -43,6 +43,7 @@ export { default as Footer } from './components/advanced/extension-marketplace/f
 export { default as Filter } from './components/advanced/filter.component';
 export type {
   FootnoteItemProps,
+  FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';

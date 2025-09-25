@@ -4,90 +4,8 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteList } from '@/components/advanced/footnotes/footnote-list.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { getFormatCallerFunction } from 'platform-bible-utils';
-
-const sampleFootnotes: MarkerObject[] = [
-  {
-    marker: 'f',
-    type: 'note',
-    caller: '+',
-    content: [
-      {
-        marker: 'fr',
-        type: 'text',
-        content: ['3.2 '],
-      },
-      {
-        marker: 'ft',
-        type: 'text',
-        content: ['This is a simple footnote.'],
-      },
-    ],
-    sid: 'f1',
-  },
-  {
-    marker: 'f',
-    type: 'note',
-    caller: '+',
-    content: [
-      {
-        marker: 'fr',
-        type: 'text',
-        content: ['3.9 '],
-      },
-      {
-        marker: 'fq',
-        type: 'text',
-        content: ['disciples '],
-      },
-      {
-        marker: 'ft',
-        type: 'text',
-        content: [
-          'Some manuscripts read ',
-          { marker: 'fqa', type: 'text', content: ['followers '] },
-          { marker: 'fqa*', type: 'text', content: ['and others just use a pronoun.'] },
-        ],
-      },
-    ],
-    sid: 'f2',
-  },
-  {
-    marker: 'x',
-    type: 'note',
-    caller: '-',
-    content: [
-      {
-        marker: 'xo',
-        type: 'text',
-        content: ['3:12 '],
-      },
-      {
-        marker: 'xt',
-        type: 'text',
-        content: ['Malachi 3:1'],
-      },
-    ],
-    sid: 'x1',
-  },
-  {
-    marker: 'f',
-    type: 'note',
-    caller: '+',
-    content: [
-      {
-        marker: 'fr',
-        type: 'text',
-        content: ['3:17 '],
-      },
-      {
-        marker: 'ft',
-        type: 'text',
-        content: ["The caller for this one should be 'c'"],
-      },
-    ],
-    sid: 'f2',
-  },
-];
+import '@/components/demo/scripture-editor/usj-nodes.css';
+import { usjFootnotes } from './footnotes.usj.data';
 
 const meta: Meta<typeof FootnoteList> = {
   title: 'Advanced/FootnoteList',
@@ -102,72 +20,96 @@ const meta: Meta<typeof FootnoteList> = {
       </ThemeProvider>
     ),
   ],
+  argTypes: {
+    layout: {
+      control: { type: 'radio' },
+      options: ['horizontal', 'vertical'],
+    },
+  },
 };
-
 export default meta;
 
 type Story = StoryObj<typeof FootnoteList>;
 
+// Shared template with selection state
+function Template({ footnotes = [], listId = 'default-list-id', ...restArgs }: Story['args'] = {}) {
+  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>(undefined);
+
+  return (
+    <FootnoteList
+      {...restArgs}
+      footnotes={footnotes}
+      listId={listId}
+      selectedFootnote={selectedFootnote}
+      onFootnoteSelected={setSelectedFootnote}
+    />
+  );
+}
+
 export const Basic: Story = {
+  render: Template,
   args: {
-    footnotes: sampleFootnotes,
+    footnotes: usjFootnotes,
     listId: 'storybook-Basic',
     showMarkers: false,
+    layout: 'horizontal',
+    localizedStrings: {
+      '%webView_footnoteList_header%': 'Footnotes',
+    },
   },
 };
 
 export const WithCustomCallerFormatting: Story = {
+  render: Template,
   args: {
-    footnotes: sampleFootnotes,
-    listId: 'storybook-Basic',
+    footnotes: usjFootnotes,
+    listId: 'storybook-WithCustomCallerFormatting',
     showMarkers: true,
-    formatCaller: getFormatCallerFunction(sampleFootnotes, ['†', '‡', '⁂', '★', '☆']),
+    layout: 'horizontal',
+    formatCaller: getFormatCallerFunction(usjFootnotes, ['†', '‡', '⁂', '★', '☆']),
+    localizedStrings: {
+      '%webView_footnoteList_header%': 'Footnotes',
+    },
   },
 };
 
 export const Raw: Story = {
+  render: Template,
   args: {
-    footnotes: sampleFootnotes,
+    footnotes: usjFootnotes,
     listId: 'storybook-Raw',
     showMarkers: true,
-    onFootnoteSelected: undefined,
-    formatCaller: (caller: string | undefined) => caller,
+    layout: 'horizontal',
+    formatCaller: (caller) => caller,
+    localizedStrings: {
+      '%webView_footnoteList_header%': 'Footnotes',
+    },
   },
 };
 
 export const Formatted: Story = {
-  render: () => {
-    const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>(undefined);
-
-    return (
-      <div>
-        <FootnoteList
-          footnotes={sampleFootnotes}
-          listId="storybook-Formatted"
-          showMarkers={false}
-          selectedFootnote={selectedFootnote}
-          onFootnoteSelected={(footnote) => setSelectedFootnote(footnote)}
-        />
-      </div>
-    );
+  render: Template,
+  args: {
+    footnotes: usjFootnotes,
+    listId: 'storybook-Formatted',
+    showMarkers: false,
+    layout: 'vertical',
+    localizedStrings: {
+      '%webView_footnoteList_header%': 'Footnotes',
+    },
   },
 };
 
 export const ShowMarkers: Story = {
-  render: () => {
-    const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>(undefined);
-
-    return (
-      <div>
-        <FootnoteList
-          footnotes={sampleFootnotes}
-          listId="storybook-ShowMarkers"
-          showMarkers
-          selectedFootnote={selectedFootnote}
-          onFootnoteSelected={(footnote) => setSelectedFootnote(footnote)}
-          formatCaller={(caller) => caller}
-        />
-      </div>
-    );
+  render: Template,
+  args: {
+    footnotes: usjFootnotes,
+    listId: 'storybook-ShowMarkers',
+    showMarkers: true,
+    layout: 'vertical',
+    formatCaller: (caller) => caller,
+    localizedStrings: {
+      '%webView_footnoteList_header%': 'Footnotes',
+    },
   },
 };

@@ -2,6 +2,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FootnoteItem } from '@/components/advanced/footnotes/footnote-item.component';
 import { FootnoteItemProps } from '@/components/advanced/footnotes/footnotes.types';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
+import '@/components/demo/scripture-editor/usj-nodes.css';
+import { cn } from '@/utils/shadcn-ui.util';
+import { usjFootnotes } from './footnotes.usj.data';
 
 const meta: Meta<typeof FootnoteItem> = {
   title: 'Advanced/FootnoteItem',
@@ -10,14 +13,13 @@ const meta: Meta<typeof FootnoteItem> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className={cn('formatted-font', 'tw-p-4')}>
           <Story />
         </div>
       </ThemeProvider>
     ),
   ],
   args: {
-    className: '',
     formatCaller: undefined,
     showMarkers: true,
   },
@@ -28,51 +30,22 @@ type Story = StoryObj<typeof FootnoteItem>;
 
 export const Basic: Story = {
   args: {
-    footnote: {
-      type: 'note',
-      marker: 'f',
-      caller: 'a',
-      content: [
-        {
-          marker: 'fr',
-          type: 'text',
-          content: ['6.8 '],
-        },
-        {
-          marker: 'ft',
-          type: 'text',
-          content: ['This is a basic footnote.'],
-        },
-      ],
-    },
+    footnote: usjFootnotes[0],
   } satisfies FootnoteItemProps,
 };
 
 export const CrossReferenceWithoutCaller: Story = {
   args: {
-    footnote: {
-      type: 'note',
-      marker: 'x',
-      caller: undefined,
-      content: [
-        {
-          marker: 'xo',
-          type: 'text',
-          content: ['1:2 '],
-        },
-        {
-          marker: 'xt',
-          type: 'text',
-          content: ['Malachi 3:1'],
-        },
-      ],
-    },
+    footnote: usjFootnotes[2],
   } satisfies FootnoteItemProps,
 };
 
-type FootnoteItemStoryProps = FootnoteItemProps & { callerSymbol: string };
+type FootnoteItemWithFormatCallerStoryProps = FootnoteItemProps & { callerSymbol: string };
 
-function FootnoteItemStory({ callerSymbol, ...rest }: FootnoteItemStoryProps) {
+function FootnoteItemWithFormatCallerStory({
+  callerSymbol,
+  ...rest
+}: FootnoteItemWithFormatCallerStoryProps) {
   return (
     <FootnoteItem
       {...rest}
@@ -85,77 +58,30 @@ function FootnoteItemStory({ callerSymbol, ...rest }: FootnoteItemStoryProps) {
   );
 }
 
-export const WithCallerFormatting: StoryObj<FootnoteItemStoryProps> = {
+export const WithCallerFormatting: StoryObj<FootnoteItemWithFormatCallerStoryProps> = {
   args: {
     callerSymbol: '†',
-    footnote: {
-      type: 'note',
-      marker: 'f',
-      caller: '+',
-      content: [
-        { marker: 'fr', type: 'text', content: ['1:8 '] },
-        { marker: 'fq', type: 'text', content: ['quoted text '] },
-        { marker: 'ft', type: 'text', content: ['Footnote with a custom caller formatter.'] },
-      ],
-    },
+    footnote: usjFootnotes[1],
   },
   argTypes: {
     callerSymbol: { control: 'text' },
   },
-  render: (args) => <FootnoteItemStory {...args} />,
+  render: (args) => <FootnoteItemWithFormatCallerStory {...args} />,
 };
 
-export const FootnoteTextWithoutMarker: Story = {
+export const UnmarkedFootnoteText: Story = {
   args: {
-    footnote: {
-      type: 'note',
-      marker: 'f',
-      caller: 'a',
-      content: ['This text is not marked using a valid footnote character style.'],
-    },
-    useUsfmFallbackStyles: false,
+    footnote: usjFootnotes[5],
   } satisfies FootnoteItemProps,
 };
 
-export const SuppressDefaultUsfmStyles: Story = {
+export const Complex: Story = {
   args: {
     formatCaller: (c) => {
       if (c === '+') return 'a';
       if (c === '-') return undefined;
       return c;
     },
-    footnote: {
-      type: 'note',
-      marker: 'f',
-      caller: '+',
-      content: [
-        {
-          marker: 'fr',
-          type: 'text',
-          content: ['1:5 '],
-        },
-        {
-          marker: 'ft',
-          type: 'text',
-          content: ['Or '],
-        },
-        {
-          marker: 'fqa',
-          type: 'text',
-          content: ['before him in love, '],
-        },
-        {
-          marker: 'fv',
-          type: 'text',
-          content: ['5'],
-        },
-        {
-          marker: 'fqa',
-          type: 'text',
-          content: ['having predestined us'],
-        },
-      ],
-    },
-    useUsfmFallbackStyles: false,
+    footnote: usjFootnotes[4],
   } satisfies FootnoteItemProps,
 };
