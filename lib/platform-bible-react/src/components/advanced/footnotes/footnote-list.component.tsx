@@ -74,7 +74,6 @@ export function FootnoteList({
               role="option"
               aria-selected={isSelected}
               key={key}
-              data-type={footnote.type}
               data-marker={footnote.marker}
               className={cn(
                 onFootnoteSelected && 'tw-cursor-pointer',
