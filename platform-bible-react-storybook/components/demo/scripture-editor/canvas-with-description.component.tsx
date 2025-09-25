@@ -1,4 +1,4 @@
-import MarkdownRenderer from '@/components/advanced/extension-marketplace/markdown-renderer.component';
+import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shadcn-ui/card';
 import { memo, ReactNode, useMemo } from 'react';
 

@@ -13,6 +13,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
+import ExternalToolbar from '@/components/demo/scripture-editor/ExternalToolbar';
 import {
   annotationRangeWeb1,
   annotationRangeWeb2,
@@ -192,6 +193,44 @@ export const InlineNoteEditing: Story = {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
     options: inlineNoteOptions,
+  },
+};
+
+const insertNoteOptions: EditorOptions = {
+  view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
+};
+
+export const InsertNote: Story = {
+  render: (args, context) => {
+    // eslint-disable-next-line no-null/no-null
+    const editorRef = useRef<EditorRef | null>(null);
+
+    return (
+      <CanvasWithDescription
+        viewMode={context.viewMode}
+        description={
+          context.parameters?.docs?.description?.story ?? context.parameters?.description
+        }
+      >
+        <ExternalToolbar editorRef={editorRef} />
+        <Editorial {...args} ref={editorRef} />
+      </CanvasWithDescription>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story demonstrates inserting notes. Use the buttons above the editor to insert ' +
+          'footnotes, cross-references, and endnotes at the current cursor position. Selecting ' +
+          'text before inserting a footnote will use that text as the footnote quote.',
+      },
+    },
+  },
+  args: {
+    defaultUsj: usjWeb,
+    scrRef: defaultScrRef,
+    options: insertNoteOptions,
   },
 };
 
