@@ -61,9 +61,7 @@ export function FootnoteList({
         role="listbox"
         aria-label="Footnotes"
         className={cn(
-          layout === 'horizontal'
-            ? 'tw-table tw-w-full tw-border-collapse'
-            : 'tw-flex tw-flex-col tw-gap-1',
+          layout === 'horizontal' ? 'tw-table tw-border-collapse' : 'tw-flex tw-flex-col tw-gap-1',
           !suppressFormatting && 'formatted-font',
           className,
         )}
