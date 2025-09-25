@@ -1,6 +1,6 @@
 /** Interfaces, classes, and functions related to events and event emitters */
 
-import { Dispose } from './disposal.model';
+import { Dispose } from '../lifetime-management/disposal.model';
 import { PlatformEvent, PlatformEventHandler } from './platform-event';
 
 /**

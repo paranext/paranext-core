@@ -2,6 +2,9 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
+  GENERATOR_NOTE_CALLER,
+  getDefaultViewOptions,
+  HIDDEN_NOTE_CALLER,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
@@ -10,6 +13,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
+import ExternalToolbar from '@/components/demo/scripture-editor/ExternalToolbar';
 import {
   annotationRangeWeb1,
   annotationRangeWeb2,
@@ -150,6 +154,83 @@ export const Annotated: Story = {
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
+  },
+};
+
+const inlineNoteOptions: EditorOptions = {
+  view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
+  nodes: {
+    noteCallerOnClick: (_event, _noteNodeKey, isCollapsed, getCaller, setCaller) => {
+      if (isCollapsed) return;
+
+      if (getCaller() === GENERATOR_NOTE_CALLER) setCaller(HIDDEN_NOTE_CALLER);
+      else setCaller(GENERATOR_NOTE_CALLER);
+    },
+  },
+};
+
+export const InlineNoteEditing: Story = {
+  render: (args, context) => (
+    <CanvasWithDescription
+      viewMode={context.viewMode}
+      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
+    >
+      <Editorial {...args} />
+    </CanvasWithDescription>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story demonstrates editing notes inline. Move your cursor to a note caller and ' +
+          'the note will expand and can be edited. Move the cursor out of the note and it will ' +
+          'collapse. Click the expanded note caller to toggle between the auto-generated caller ' +
+          'and the hidden caller.',
+      },
+    },
+  },
+  args: {
+    defaultUsj: usjWeb,
+    scrRef: defaultScrRef,
+    options: inlineNoteOptions,
+  },
+};
+
+const insertNoteOptions: EditorOptions = {
+  view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
+};
+
+export const InsertNote: Story = {
+  render: (args, context) => {
+    // eslint-disable-next-line no-null/no-null
+    const editorRef = useRef<EditorRef | null>(null);
+
+    return (
+      <CanvasWithDescription
+        viewMode={context.viewMode}
+        description={
+          context.parameters?.docs?.description?.story ?? context.parameters?.description
+        }
+      >
+        <ExternalToolbar editorRef={editorRef} />
+        <Editorial {...args} ref={editorRef} />
+      </CanvasWithDescription>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story demonstrates inserting notes. Use the buttons above the editor to insert ' +
+          'footnotes, cross-references, and endnotes at the current cursor position. Selecting ' +
+          'text before inserting a footnote will use that text as the footnote quote.',
+      },
+    },
+  },
+  args: {
+    defaultUsj: usjWeb,
+    scrRef: defaultScrRef,
+    options: insertNoteOptions,
   },
 };
 

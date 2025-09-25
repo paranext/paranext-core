@@ -3,7 +3,7 @@
 // changed so they align.
 //----------------------------------------------------------------------------------------------
 
-import { ReplaceType } from './util';
+import { ReplaceType } from '../util';
 
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;

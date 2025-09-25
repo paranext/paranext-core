@@ -31,6 +31,7 @@ public static class CheckFactory
             { CheckType.QuotedText.InternalValue, () => new QuotedTextCheck() },
             { CheckType.Reference.InternalValue, () => new CrossReferencesCheck() },
             { CheckType.RepeatedWord.InternalValue, () => new RepeatedWordsCheck() },
+            { CheckType.Schema.InternalValue, () => new UsxSchemaCheck() },
         };
 
     public static ScriptureCheckBase CreateCheck(string checkId, ChecksDataSource dataSource)

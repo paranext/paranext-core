@@ -6,6 +6,8 @@ import {
   Marginal,
   MarginalRef,
   SelectionRange,
+  ViewOptions,
+  getDefaultViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
@@ -74,6 +76,8 @@ const defaultEditorDecorations: EditorDecorations = {};
 const defaultProjectName = '';
 
 const defaultTextDirection = 'ltr';
+
+const formattedView: ViewOptions = { ...getDefaultViewOptions(), noteMode: 'expandInline' };
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -598,6 +602,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
       textDirection: textDirectionEffective,
+      view: formattedView,
     }),
     [isReadOnly, textDirectionEffective],
   );

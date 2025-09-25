@@ -1,4 +1,4 @@
-import { LocalizeKey } from 'menus.model';
+import { LocalizeKey } from 'extension-contributions/menus.model';
 import {
   indexOf as stringzIndexOf,
   length as stringzLength,
