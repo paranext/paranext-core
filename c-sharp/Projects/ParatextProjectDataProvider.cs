@@ -203,6 +203,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (!CommentsEnabled)
             return false;
 
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         bool madeChange = false;
         foreach (var ic in incomingComments)
         {
@@ -217,6 +218,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 );
             if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
                 continue;
+            // Override the user name with the value from ParatextData
+            ic.User = scrText.User.Name;
             _commentManager.AddComment(ic);
             _commentManager.SaveUser(ic.User, false);
             madeChange = true;
