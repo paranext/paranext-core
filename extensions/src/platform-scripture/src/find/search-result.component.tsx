@@ -1,15 +1,7 @@
 import { useLocalizedStrings, useProjectData } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Copy, MoreVertical, X } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardContent,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from 'platform-bible-react';
+import { Copy, X } from 'lucide-react';
+import { DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useMemo } from 'react';
@@ -178,14 +170,48 @@ export default function SearchResult({
     onHideResult(globalResultsIndex);
   };
 
+  const dropdownContent = (
+    <>
+      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
+        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+        <span>{localizedStrings['%webView_find_copyReference%']}</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyVerseText}>
+        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+        <span>{localizedStrings['%webView_find_copyVerseText%']}</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReferenceAndVerseText}>
+        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+        <span>{localizedStrings['%webView_find_copyReferenceAndVerseText%']}</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleDismiss}>
+        <X className="tw-mr-2 tw-h-4 tw-w-4" />
+        <span>{localizedStrings['%webView_find_dismiss%']}</span>
+      </DropdownMenuItem>
+    </>
+  );
+
+  const cardContent = (
+    <div className="tw-text-xs tw-font-medium">
+      {localizedBookData.get(searchResult.verseRef.book)?.localizedId ?? searchResult.verseRef.book}{' '}
+      {searchResult.verseRef.chapterNum}:{searchResult.verseRef.verseNum} {searchResult.text ?? ''}
+    </div>
+  );
+
+  const additionalSelectedContent = (
+    <div className="tw-text-xs tw-font-normal tw-text-muted-foreground">
+      {getFocusedVerseText()}
+    </div>
+  );
+
   return (
-    <Card
-      hidden={searchResult.isHidden}
-      key={`${searchResult.verseRef.book + searchResult.verseRef.chapterNum}:${
+    <ResultsCard
+      cardKey={`${searchResult.verseRef.book + searchResult.verseRef.chapterNum}:${
         searchResult.verseRef.verseNum
       }${searchResult.text}${globalResultsIndex}`}
-      className={`tw-cursor-pointer ${isSelected ? 'tw-bg-primary-foreground' : 'tw-bg-primary-foreground/10'}`}
-      onClick={() =>
+      isHidden={searchResult.isHidden}
+      isSelected={isSelected}
+      onSelect={() =>
         onResultClick(
           searchResult.verseRef,
           globalResultsIndex,
@@ -193,51 +219,10 @@ export default function SearchResult({
           occurrenceTextPosition?.end,
         )
       }
+      dropdownContent={dropdownContent}
+      additionalSelectedContent={additionalSelectedContent}
     >
-      <CardContent className="tw-p-4">
-        <div className="tw-flex tw-items-start tw-justify-between">
-          <div className="tw-font-medium tw-truncate tw-overflow-hidden tw-whitespace-nowrap tw-flex-1 tw-min-w-0">
-            {localizedBookData.get(searchResult.verseRef.book)?.localizedId ??
-              searchResult.verseRef.book}{' '}
-            {searchResult.verseRef.chapterNum}:{searchResult.verseRef.verseNum}{' '}
-            {searchResult.text ?? ''}
-          </div>
-          {isSelected && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="tw-h-8 tw-w-8">
-                  <MoreVertical className="tw-h-4 tw-w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
-                  <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
-                  <span>{localizedStrings['%webView_find_copyReference%']}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyVerseText}>
-                  <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
-                  <span>{localizedStrings['%webView_find_copyVerseText%']}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="tw-flex tw-flex-row"
-                  onClick={handleCopyReferenceAndVerseText}
-                >
-                  <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
-                  <span>{localizedStrings['%webView_find_copyReferenceAndVerseText%']}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleDismiss}>
-                  <X className="tw-mr-2 tw-h-4 tw-w-4" />
-                  <span>{localizedStrings['%webView_find_dismiss%']}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        {isSelected && (
-          <div className="tw-mt-2 tw-text-sm tw-text-muted-foreground">{getFocusedVerseText()}</div>
-        )}
-      </CardContent>
-    </Card>
+      {cardContent}
+    </ResultsCard>
   );
 }
