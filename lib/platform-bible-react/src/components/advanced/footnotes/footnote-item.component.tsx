@@ -121,10 +121,8 @@ export function FootnoteItem({
     <>
       <div
         className={cn(
-          'textual-note-header tw-text-nowrap',
-          layout === 'horizontal' ? 'horizontal tw-table-cell tw-pr-1' : 'vertical',
-          // REVIEW: Checking with UX to see if they actually want different padding when markers are shown, as seen in Figma design
-          showMarkers ? 'tw-pr-[10px]' : 'tw-pr-[22px]',
+          'textual-note-header tw-text-nowrap tw-pr-2',
+          layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical',
         )}
       >
         {footnoteOpening}
