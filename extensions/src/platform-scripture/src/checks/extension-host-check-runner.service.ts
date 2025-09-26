@@ -31,7 +31,7 @@ import {
   CheckRunnerDataTypes,
   ICheckHostingService,
   ICheckRunner,
-  InventoryDataRetriever,
+  CheckConfigurationProvider,
 } from 'platform-scripture';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE, CHECK_STOP_DEFAULT_TIMEOUT_MS } from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
@@ -67,7 +67,7 @@ type CheckJob = Omit<CheckJobStatusReport, 'nextResults' | 'totalExecutionTimeMs
 
 class CheckRunnerEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
-  implements CheckJobRunner, CheckResultClassifier, InventoryDataRetriever
+  implements CheckJobRunner, CheckResultClassifier, CheckConfigurationProvider
 {
   #deniedCheckResultsByProjectId = new Map<string, PersistedCheckRunResults>();
   #jobs = new Map<string, CheckJob>();
@@ -160,7 +160,7 @@ class CheckRunnerEngine
 
   // #endregion
 
-  // #region Inventory data
+  // #region Check Configuration Provider
 
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async retrieveInventoryData(
@@ -172,6 +172,17 @@ class CheckRunnerEngine
     _checkInputRange: CheckInputRange,
   ): Promise<InventoryItem[]> {
     throw new Error(`retrieveInventoryData is not implemented for the extensionHostCheckRunner.
+        Did you mean to call the checkAggregator?`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async isCheckSetupForProject(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _checkId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _projectId: string,
+  ): Promise<boolean> {
+    throw new Error(`isCheckSetupForProject is not implemented for the extensionHostCheckRunner.
         Did you mean to call the checkAggregator?`);
   }
 

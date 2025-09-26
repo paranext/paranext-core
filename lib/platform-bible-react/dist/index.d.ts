@@ -454,45 +454,88 @@ interface FooterProps {
  * @returns The rendered Footer component
  */
 export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, currentVersion, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
+	secondaryLabel?: string;
 	starred?: boolean;
 };
 interface MultiSelectComboBoxProps {
+	/** The list of entries to select from. */
 	entries: MultiSelectComboBoxEntry[];
-	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
+	/** The currently selected values. */
 	selected: string[];
+	/** Callback function to handle changes in selection. */
 	onChange: (values: string[]) => void;
+	/** Placeholder text when no items are selected. */
 	placeholder: string;
+	/** Whether to show select all/clear all buttons. */
+	hasToggleAllFeature?: boolean;
+	/** Text for the select all button. */
+	selectAllText?: string;
+	/** Text for the clear all button. */
+	clearAllText?: string;
+	/** Message displayed when no entries are found. */
 	commandEmptyMessage?: string;
+	/** Custom text to display when items are selected. */
 	customSelectedText?: string;
+	/** Whether the dropdown is open (for controlled usage). */
+	isOpen?: boolean;
+	/** Handler that is called when the dropdown's open state changes. */
+	onOpenChange?: (open: boolean) => void;
+	/** Flag to disable the component. */
 	isDisabled?: boolean;
+	/** Flag to sort selected items. */
 	sortSelected?: boolean;
+	/** Optional icon to display in the button. */
 	icon?: React$1.ReactNode;
+	/** Additional class names for styling. */
 	className?: string;
+	/** Button variant to use for the trigger button. */
+	variant?: VariantProps<typeof buttonVariants>["variant"];
+	/** Optional ID for the component. */
 	id?: string;
 }
-/**
- * MultiSelectComboBox is a component that provides a UI for selecting multiple items from a list.
- * It supports displaying a placeholder, custom selected text, and an optional icon. Users can
- * search through options and view starred items prominently.
- *
- * @param {MultiSelectComboBoxProps} props
- * @param {MultiSelectComboBoxEntry[]} props.entries - The list of entries to select from.
- * @param {function} [props.getEntriesCount] - Optional function to get the count of entries.
- * @param {string[]} props.selected - The currently selected values.
- * @param {function} props.onChange - Callback function to handle changes in selection.
- * @param {string} props.placeholder - Placeholder text when no items are selected.
- * @param {string} [props.commandEmptyMessage] - Message displayed when no entries are found.
- * @param {string} [props.customSelectedText] - Custom text to display when items are selected.
- * @param {boolean} [props.isDisabled] - Flag to disable the component.
- * @param {boolean} [props.sortSelected] - Flag to sort selected items.
- * @param {ReactNode} [props.icon] - Optional icon to display in the button.
- * @param {string} [props.className] - Additional class names for styling.
- * @param {string} [props.id] - Optional ID for the component.
- */
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+/** MultiSelectComboBox component for selecting multiple items from a list. */
+export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
@@ -508,7 +551,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
 export interface FootnoteItemProps {
 	/**
@@ -1383,44 +1426,6 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
-type ClassValue$1 = ClassValue;
-type ClassProp = {
-	class: ClassValue$1;
-	className?: never;
-} | {
-	class?: never;
-	className: ClassValue$1;
-} | {
-	class?: never;
-	className?: never;
-};
-type OmitUndefined<T> = T extends undefined ? never : T;
-type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-	asChild?: boolean;
-}
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ComboBoxLabelOption = {
 	label: string;
 };
