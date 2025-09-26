@@ -31,6 +31,7 @@ import {
   deepClone,
   getErrorMessage,
   isPlatformError,
+  LocalizeKey,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -40,6 +41,7 @@ import {
   AlertTitle,
   Button,
   MarkdownRenderer,
+  Spinner,
 } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
@@ -67,6 +69,10 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
  */
 const EDITOR_LOAD_DELAY_TIME = 200;
 
+const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
+  '%webView_platformScriptureEditor_error_bookNotFound%',
+];
+
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
 const defaultLegacyComments: LegacyComment[] = [];
@@ -78,6 +84,9 @@ const defaultProjectName = '';
 const defaultTextDirection = 'ltr';
 
 const formattedView: ViewOptions = { ...getDefaultViewOptions(), noteMode: 'expandInline' };
+
+// This regex is connected directly to the exception message within MissingBookException.cs
+const bookNotFoundRegex = /Book number \d+ not found in project/;
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -97,6 +106,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
+
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
@@ -250,6 +261,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
+  const bookExistsRef = useRef(true);
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
@@ -270,9 +282,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Handle a PlatformError if one comes in instead of project text
   const usjFromPdp = useMemo(() => {
     if (isPlatformError(usjFromPdpPossiblyError)) {
-      logger.error(`Error getting USJ from PDP: ${getErrorMessage(usjFromPdpPossiblyError)}`);
+      const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
+      bookExistsRef.current = !bookNotFoundRegex.test(errorMessage);
+      logger.error(`Error getting USJ from PDP: ${errorMessage}`);
       return defaultUsj;
     }
+    bookExistsRef.current = true;
     return usjFromPdpPossiblyError;
   }, [usjFromPdpPossiblyError]);
   const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
@@ -330,7 +345,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
-        logger.error(`Error saving USJ to PDP: ${e}`);
+        logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
         currentlyWritingUsjToPdp.current = false;
       }
     }
@@ -619,6 +634,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
 
+    if (!bookExistsRef.current) {
+      return (
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
+          {workaround}
+          {localizedStrings['%webView_platformScriptureEditor_error_bookNotFound%']}
+        </div>
+      );
+    }
+    if (!usjFromPdp || usjFromPdp === defaultUsj) {
+      return (
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full">
+          <Spinner />
+        </div>
+      );
+    }
     if (commentsEnabled && !isReadOnly) {
       return (
         <>
