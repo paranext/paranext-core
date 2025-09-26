@@ -15,7 +15,7 @@ import {
   CheckRunnerDataTypes,
   ICheckAggregatorService,
   ICheckRunner,
-  InventoryDataRetriever,
+  CheckConfigurationProvider,
 } from 'platform-scripture';
 import {
   CHECK_RESULTS_INVALIDATED_EVENT,
@@ -36,7 +36,7 @@ type PartitionedJobScope = {
 
 class CheckAggregatorDataProviderEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
-  implements CheckJobRunner, CheckResultClassifier, InventoryDataRetriever
+  implements CheckJobRunner, CheckResultClassifier, CheckConfigurationProvider
 {
   // Maps check runner IDs to their ICheckRunner objects
   private checkRunners = new Map<string, ICheckRunner>();
@@ -255,7 +255,7 @@ class CheckAggregatorDataProviderEngine
 
   // #endregion
 
-  // #region Inventory Data
+  // #region Check Configuration Provider
 
   async retrieveInventoryData(
     checkId: string,
@@ -265,6 +265,12 @@ class CheckAggregatorDataProviderEngine
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
     return checkRunner.retrieveInventoryData(checkId, projectId, checkInputRange);
+  }
+
+  async isCheckSetupForProject(checkId: string, projectId: string): Promise<boolean> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+    return checkRunner.isCheckSetupForProject(checkId, projectId);
   }
 
   // #endregion

@@ -13,6 +13,8 @@ import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/re
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   deepEqual,
+  formatReplacementString,
+  formatReplacementStringToArray,
   getChaptersForBook,
   getErrorMessage,
   isPlatformError,
@@ -20,15 +22,73 @@ import {
   LocalizeKey,
   Mutex,
 } from 'platform-bible-utils';
-import { Button, Progress, Spinner, useEvent } from 'platform-bible-react';
-import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
 import {
-  ChecksScopeFilter,
-  CheckScopes,
-} from './checks/configure-checks/checks-scope-filter.component';
-import { ChecksProjectFilter } from './checks/configure-checks/checks-project-filter.component';
-import ChecksCheckTypeFilter from './checks/configure-checks/checks-check-type-filter.component';
+  Button,
+  MultiSelectComboBox,
+  MultiSelectComboBoxEntry,
+  Progress,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Spinner,
+  useEvent,
+  usePromise,
+} from 'platform-bible-react';
+import papi, { projectDataProviders } from '@papi/frontend';
+import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
+
+/**
+ * Enum representing the different scopes that can be selected for checks.
+ *
+ * - `Chapter`: Scope of a single chapter.
+ * - `Book`: Scope of an entire book.
+ * - `All`: Scope of the entire project.
+ */
+export enum CheckScopes {
+  Chapter = 'Chapter',
+  Book = 'Book',
+  All = 'All',
+}
+
+/** Object containing strings for the project full and short names */
+type ProjectOption = {
+  fullName: string;
+  shortName: string;
+};
+
+/**
+ * Gets the short and full names of a project from its ID.
+ *
+ * @param projectId The ID of the project to get the names of.
+ * @returns An object with the short and full names of the project, or undefined if the project is
+ *   not editable.
+ */
+async function getProjectNames(projectId: string): Promise<ProjectOption | undefined> {
+  const pdp = await projectDataProviders.get('platform.base', projectId);
+
+  if (!(await pdp.getSetting('platform.isEditable'))) return undefined;
+
+  const projectShortName = await pdp.getSetting('platform.name');
+  const projectFullName = await pdp.getSetting('platform.fullName');
+
+  return { shortName: projectShortName, fullName: projectFullName };
+}
+
+export type CheckInfo = {
+  /** Unique identifier of the check */
+  checkId: string;
+  /** Localized display name of the check */
+  checkName: string;
+  /** Whether the check has been properly set up */
+  isSetup: boolean;
+  // TODO: Might need to change this to a command that we call when it is clicked on, but not sure
+  // until we implement this more as part of https://paratextstudio.atlassian.net/browse/PT-2279
+  /** Optional link to the relevant settings/inventories to set up */
+  setUpLink?: string;
+};
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -49,6 +109,12 @@ const defaultJobStatusReport: CheckJobStatusReport = {
 
 const defaultCheckResults: CheckRunResult[] = [];
 
+const CHECK_SCOPE_FILTER_STRINGS: { [key in CheckScopes]: LocalizeKey } = {
+  Chapter: '%webView_checksSidePanel_scopeFilter_chapter%',
+  Book: '%webView_checksSidePanel_scopeFilter_book%',
+  All: '%webView_checksSidePanel_scopeFilter_all%',
+};
+
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%general_cancel%',
   '%webView_checksSidePanel_fixedBadge_title%',
@@ -60,6 +126,20 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_noCheckResults%',
   '%webView_checksSidePanel_noChecksSelected%',
   '%webView_checksSidePanel_selectChecks%',
+  // Project filter strings
+  '%webView_checksSidePanel_projectFilter_noProjectSelected%',
+  '%webView_checksSidePanel_projectFilter_noProjectsFound%',
+  '%webView_checksSidePanel_projectFilter_label%',
+  '%webView_checksSidePanel_projectFilter_projectName_format%',
+  // Scope filter strings
+  '%webView_checksSidePanel_scopeFilter_label%',
+  ...Object.values(CHECK_SCOPE_FILTER_STRINGS),
+  // Check type filter strings
+  '%webView_checksSidePanel_checkTypeFilter_countLabel%',
+  '%webview_checksSidePanel_checkTypeFilter_deselectAll%',
+  '%webView_checksSidePanel_checkTypeFilter_label%',
+  '%webview_checksSidePanel_checkTypeFilter_selectAll%',
+  '%webview_checksSidePanel_checkTypeFilter_setUp%',
 ];
 
 const RESULTS_PAGE_SIZE = 500;
@@ -96,6 +176,28 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+
+  // Project data loading
+  const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
+    useCallback(async () => {
+      const projectDict: { [projectId: string]: ProjectOption } = {};
+
+      // Fetch projects metadata to get ids
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects();
+
+      // Map through all metadata to get ids and names
+      await Promise.all(
+        allMetadata.map(async (metadata) => {
+          const names = await getProjectNames(metadata.id);
+          if (!names) return;
+          projectDict[metadata.id] = names;
+        }),
+      );
+
+      return projectDict;
+    }, []),
+    useMemo(() => ({}), []),
+  );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -471,15 +573,30 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [availableChecks],
   );
 
-  const checkNamesAndIds = useMemo(() => {
-    if (!Array.isArray(availableChecks)) {
-      // This means availableChecks has type PlatformError
-      return [];
+  const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
+
+  useEffect(() => {
+    if (!checkAggregator || !projectId || isPlatformError(availableChecks)) {
+      setChecksInfo([]);
+      return;
     }
-    return availableChecks.map(
-      (check) => `${getLocalizedCheckDescription(check.checkId)},${check.checkId}`,
-    );
-  }, [availableChecks, getLocalizedCheckDescription]);
+
+    const fetchChecksInfo = async () => {
+      const promises = availableChecks.map(async (check) => {
+        const isSetup = await checkAggregator.isCheckSetupForProject(check.checkId, projectId);
+        return {
+          checkId: check.checkId,
+          checkName: getLocalizedCheckDescription(check.checkId),
+          isSetup,
+          setUpLink: undefined, // TODO: Add setUpLink when available from backend
+        };
+      });
+      const results = await Promise.all(promises);
+      setChecksInfo(results);
+    };
+
+    fetchChecksInfo();
+  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
 
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
@@ -587,6 +704,56 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setSelectedCheckTypeIds(updatedCheckIds);
   };
 
+  // Helper functions for project and scope filters
+  const writeProjectName = useCallback(
+    (fullName: string, shortName: string) => {
+      return formatReplacementStringToArray(
+        localizedStrings['%webView_checksSidePanel_projectFilter_projectName_format%'],
+        { fullName, shortName },
+      );
+    },
+    [localizedStrings],
+  );
+
+  const getProjectShortNameLabel = useCallback(() => {
+    return (
+      projectIdsAndNames[projectId ?? '']?.shortName ??
+      localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
+    );
+  }, [localizedStrings, projectIdsAndNames, projectId]);
+
+  const getScopeLabel = useCallback(
+    (scopeValue: string) => {
+      // The scope is a string but we are using tighter types in this component
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return localizedStrings[CHECK_SCOPE_FILTER_STRINGS[scopeValue as CheckScopes]];
+    },
+    [localizedStrings],
+  );
+
+  // Helper functions for check type filter
+  const checkTypeEntries: MultiSelectComboBoxEntry[] = useMemo(
+    () =>
+      checksInfo.map((check) => ({
+        value: check.checkId,
+        label: check.checkName,
+        secondaryLabel: check.isSetup ? undefined : 'Setup required',
+        starred: false,
+      })),
+    [checksInfo],
+  );
+
+  const selectedChecksCountLabel = useMemo(
+    () =>
+      formatReplacementString(
+        localizedStrings['%webView_checksSidePanel_checkTypeFilter_countLabel%'],
+        {
+          resultsCount: selectedCheckTypeIds.length,
+        },
+      ),
+    [localizedStrings, selectedCheckTypeIds],
+  );
+
   const handleCancelOperation = useCallback(async () => {
     await stopActiveJob();
     if (!isMountedRef.current) return;
@@ -610,17 +777,65 @@ global.webViewComponent = function ChecksSidePanelWebView({
     <div className="pr-twp tw-flex tw-flex-col tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen tw-min-w-[10rem]">
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
-        <ChecksProjectFilter
-          handleSelectProject={handleSelectProject}
-          selectedProjectId={projectId ?? ''}
-        />
-        <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
-        <ChecksCheckTypeFilter
-          filterItems={checkNamesAndIds}
-          selectedCheckTypeIds={selectedCheckTypeIds}
-          handleSelectCheckTypeToggle={handleSelectCheckType}
-          open={isCheckTypesOpen}
-          onOpenChange={(open) => setIsCheckTypesOpen(open)}
+        {/* Project Filter */}
+        <Select value={projectId ?? ''} onValueChange={handleSelectProject}>
+          <SelectTrigger className="tw-shadow-sm tw-inline-flex tw-items-center tw-justify-between tw-flex-1 tw-min-w-32">
+            <SelectValue
+              placeholder={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
+            >
+              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+                {getProjectShortNameLabel()}
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="tw-max-w-sm" align="start">
+            {Object.entries(projectIdsAndNames).length === 0
+              ? localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
+              : Object.entries(projectIdsAndNames).map(([projectIdOption, project]) => (
+                  <SelectItem key={projectIdOption} value={projectIdOption}>
+                    <div className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
+                      {writeProjectName(project.fullName, project.shortName)}
+                    </div>
+                  </SelectItem>
+                ))}
+          </SelectContent>
+        </Select>
+
+        {/* Scope Filter */}
+        <Select value={scope} onValueChange={(value) => handleSelectScope(value as CheckScopes)}>
+          <SelectTrigger className="tw-shadow-sm tw-inline-flex tw-items-center tw-justify-between tw-flex-1 tw-min-w-32">
+            <SelectValue
+              placeholder={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
+            >
+              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+                {getScopeLabel(scope)}
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="tw-max-w-sm" align="start">
+            {Object.values(CheckScopes).map((scopeOption) => (
+              <SelectItem key={scopeOption} value={scopeOption}>
+                {getScopeLabel(scopeOption)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* Check Type Filter */}
+        <MultiSelectComboBox
+          entries={checkTypeEntries}
+          selected={selectedCheckTypeIds}
+          onChange={handleSelectCheckType}
+          placeholder={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
+          hasToggleAllFeature
+          selectAllText="Select All"
+          clearAllText="Clear All"
+          customSelectedText={selectedChecksCountLabel}
+          commandEmptyMessage="No checks found"
+          isOpen={isCheckTypesOpen}
+          onOpenChange={setIsCheckTypesOpen}
+          sortSelected={false}
+          className="tw-shadow-sm tw-inline-flex tw-items-center tw-justify-between tw-flex-[2] tw-min-w-32"
+          variant="outline"
         />
       </div>
       {/* Check results */}
@@ -633,12 +848,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
                 : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
             </div>
-            <Button onClick={() => setIsCheckTypesOpen(!isCheckTypesOpen)}>
+            <Button onClick={() => setIsCheckTypesOpen(true)}>
               {localizedStrings['%webView_checksSidePanel_selectChecks%']}
             </Button>
           </div>
         ) : (
-          <div className="tw-min-h-48 tw-flex-1 tw-flex tw-flex-col tw-justify-start tw-items-start tw-p-0 tw-gap-3 tw-pb-3 tw-overflow-y-auto">
+          <div className="tw-min-h-48 tw-flex-1 tw-flex tw-flex-col tw-justify-start tw-items-start tw-p-0 tw-gap-3 tw-pb-3 tw-pe-3 tw-overflow-y-auto">
             {checkResults.map((result, index) => (
               <CheckCard
                 key={writeCheckId(result, index)}
@@ -653,6 +868,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 handleOpenSettingsAndInventories={openSettingsAndInventories}
                 showBadge
                 checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
+                checkCardDescription={result.messageFormatString}
               />
             ))}
           </div>
