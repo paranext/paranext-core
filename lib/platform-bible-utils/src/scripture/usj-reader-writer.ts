@@ -10,8 +10,10 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { JSONPath } from 'jsonpath-plus';
 import {
   CHAPTER_TYPE,
+  ClosingMarker,
   ContentJsonPath,
   IUsjReaderWriter,
+  MarkerToken,
   UsjContentLocation,
   UsjSearchResult,
   VERSE_TYPE,
@@ -19,6 +21,7 @@ import {
 } from './usj-reader-writer.model';
 import { SortedNumberMap } from '../sorted-number-map';
 import { extractFootnotesFromUsjContent } from './footnote-util';
+import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-map-3.1.model';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
@@ -103,6 +106,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   // #endregion
+
+  // #region marker helper methods
+
+  static isUsjMarker(marker: Usj | MarkerContent): marker is Usj {
+    return typeof marker === 'object' && marker.type === USJ_TYPE;
+  }
 
   // #region Parent Maps
 
@@ -286,14 +295,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return { node, parent };
   }
 
-  private static findNextMatchingNodeUsingWorkingStack(
-    node: MarkerContent,
+  private static findNextMatchingTokenUsingWorkingStack(
+    node: MarkerToken,
     workingStack: WorkingStack,
     skipTypes: string[],
-    searchFunction: (potentiallyMatchingNode: MarkerContent, workingStack: WorkingStack) => boolean,
-  ): MarkerContent | undefined {
+    searchFunction: (potentiallyMatchingNode: MarkerToken, workingStack: WorkingStack) => boolean,
+  ) {
+    // TODO: handle if they pass in a closing marker?
+    if (typeof node === 'object' && 'isClosingMarker' in node) return;
+
     // Walk the nodes in a depth-first, left-to-right manner until the search function returns true
-    let nextNode: MarkerContent | undefined = node;
+    let nextNode: MarkerContent | Usj | undefined = node;
     while (nextNode !== undefined) {
       const skipNextNode = typeof nextNode === 'object' && skipTypes.includes(nextNode.type);
 
@@ -305,21 +317,49 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         workingStack.push({ parent: nextNode, index: 0 });
         // Same as `nextNode = nextNode.content[0];` without triggering 2 different eslint errors
         [nextNode] = nextNode.content;
-      }
-      // The node has no children, so look at the next sibling, or the parent's next sibling, etc. up the stack
-      else {
+      } else {
+        // The node has no children, so check the closing marker for this node
+        const nextNodeClosingMarker: ClosingMarker | undefined =
+          typeof nextNode === 'object' ? { isClosingMarker: true, forMarker: nextNode } : undefined;
+        if (
+          !skipNextNode &&
+          nextNodeClosingMarker &&
+          searchFunction(nextNodeClosingMarker, workingStack)
+        )
+          return nextNodeClosingMarker;
+
+        // Then look at the next sibling, or the parent's next sibling, or the parent's closing
+        // marker, etc. up the stack
         nextNode = undefined;
         while (workingStack.length > 0) {
           const nextLevel = workingStack.pop();
-          // We know that `content` exists due to its presence in this data structure
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          if (nextLevel && nextLevel.index + 1 < nextLevel.parent.content!.length) {
-            nextLevel.index += 1;
-            workingStack.push(nextLevel);
+          if (nextLevel) {
             // We know that `content` exists due to its presence in this data structure
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            nextNode = nextLevel.parent.content![nextLevel.index];
-            break;
+            if (nextLevel.index + 1 < nextLevel.parent.content!.length) {
+              // Check the next sibling
+              nextLevel.index += 1;
+              workingStack.push(nextLevel);
+              // We know that `content` exists due to its presence in this data structure
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              nextNode = nextLevel.parent.content![nextLevel.index];
+              break;
+            } else {
+              // There is no next sibling, so check the closing marker for the parent before we continue
+              // to look at the parent's next sibling and etc.
+              const parentClosingMarker: ClosingMarker = {
+                isClosingMarker: true,
+                forMarker: nextLevel.parent,
+              };
+              // Need to check if parent is skipped because we could have started in the middle of a
+              // skipped marker
+              // TODO: Does this make sense? Or should we not skip parent closing markers?
+              if (
+                !skipTypes.includes(parentClosingMarker.forMarker.type) &&
+                searchFunction(parentClosingMarker, workingStack)
+              )
+                return parentClosingMarker;
+            }
           }
         }
       }
@@ -327,6 +367,36 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // We've looked everywhere, so there must not be an appropriate node anywhere
     return undefined;
+  }
+
+  private static findNextMatchingNodeUsingWorkingStack(
+    node: MarkerContent,
+    workingStack: WorkingStack,
+    skipTypes: string[],
+    searchFunction: (potentiallyMatchingNode: MarkerContent, workingStack: WorkingStack) => boolean,
+  ): MarkerContent | undefined {
+    // We are filtering out closing markers in our search function
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const result = this.findNextMatchingTokenUsingWorkingStack(
+      node,
+      workingStack,
+      skipTypes,
+      (potentiallyMatchingNode, currentWorkingStack) => {
+        if (typeof potentiallyMatchingNode === 'object') {
+          // Skip closing markers
+          if ('isClosingMarker' in potentiallyMatchingNode) return false;
+
+          // Skip Usj (presumably this will not ever hit because you are not providing Usj, and the
+          // Usj object should not occur below top level)
+          if (!UsjReaderWriter.isUsjMarker(potentiallyMatchingNode)) return false;
+        }
+
+        // Just search normal markers and text as appropriate for this method
+        return searchFunction(potentiallyMatchingNode, currentWorkingStack);
+      },
+    ) as MarkerContent | undefined;
+
+    return result;
   }
 
   /**
@@ -868,6 +938,78 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const retVal = UsjReaderWriter.removeContentNodesFromArray(this.usj.content, searchFunction);
     this.usjChanged();
     return retVal;
+  }
+
+  // #endregion
+
+  // #region transform USJ to USFM
+
+  // TODO: make not static, use passed in version to determine markers map
+  static openingMarkerToUsfm(marker: MarkerObject | Usj) {
+    let usfm = '';
+    const markerName = UsjReaderWriter.isUsjMarker(marker)
+      ? marker.type
+      : (marker.marker ?? marker.type);
+    const markerInfo = USFM_MARKERS_MAP_3_1.markers[markerName];
+
+    // TODO: markersRegExp
+
+    // TODO: unknown markers
+    if (!markerInfo) throw new Error(`Unknown marker ${markerName}`);
+
+    if (marker.type !== markerInfo.type)
+      throw new Error(
+        `Mismatching marker type in the USJ content ${marker.type} vs marker type in the marker info ${markerInfo.type}`,
+      );
+
+    const markerType = markerInfo.type;
+
+    const markerTypeInfo = USFM_MARKERS_MAP_3_1.markerTypes[markerType];
+
+    // TODO: unknown marker types
+    if (!markerTypeInfo) throw new Error(`Unknown marker type ${markerType}`);
+
+    // Add the marker name
+    // Special case with USJ marker - transform to usfm marker
+    const markerNameOutput = markerName === USJ_TYPE ? 'usfm' : markerName;
+
+    usfm += markerType === 'optbreak' ? '//' : `\\${markerNameOutput} `;
+
+    return usfm;
+  }
+
+  static closingMarkerToUsfm(marker: MarkerObject | Usj) {
+    // TODO:
+    return `\\${marker.type}*`;
+  }
+
+  toUsfm() {
+    // Build the USFM up from the USJ content
+    let usfm = '';
+
+    UsjReaderWriter.findNextMatchingTokenUsingWorkingStack(
+      this.usj,
+      // Working stack is empty since the top-level object doesn't have any parents
+      [],
+      // Don't skip anything
+      [],
+      (token) => {
+        if (typeof token !== 'object') {
+          usfm += token;
+          return false;
+        }
+        if ('isClosingMarker' in token) {
+          usfm += UsjReaderWriter.closingMarkerToUsfm(token.forMarker);
+          return false;
+        }
+
+        usfm += UsjReaderWriter.openingMarkerToUsfm(token);
+        // Keep going through the whole document
+        return false;
+      },
+    );
+
+    return usfm;
   }
 
   // #endregion
