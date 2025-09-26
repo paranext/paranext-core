@@ -1,4 +1,8 @@
-import { type MarkerContent, type MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import {
+  Usj,
+  type MarkerContent,
+  type MarkerObject,
+} from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** USJ content node type for a chapter */
@@ -35,6 +39,15 @@ export type UsjSearchResult = {
   /** The matching text that was found at the location */
   text: string;
 };
+
+/** Token indicating a marker closed */
+export type ClosingMarker = { isClosingMarker: true; forMarker: MarkerObject | Usj };
+
+/**
+ * A string found in the USJ document, a marker (including top-level USJ marker), or a closing
+ * marker indicator
+ */
+export type MarkerToken = MarkerContent | ClosingMarker | Usj;
 
 /** Utilities for reading from and writing to `Usj` objects */
 export interface IUsjReaderWriter {

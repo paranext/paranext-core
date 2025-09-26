@@ -1381,3 +1381,13 @@ describe('findAllNotes', () => {
     });
   });
 });
+
+describe('Transform USJ to USFM', () => {
+  test('toUsfm properly transforms Matthew 1-2 WEB', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // Start from a verse node
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(matthew1And2Usfm);
+  });
+});
