@@ -119,6 +119,8 @@ export function convertEditorCommentsToLegacyComments(
   comments.forEach((editorComment) => {
     const commentDetails = getCommentDetails(usjRW, editorComment.id, verseLocation.book);
     if (!commentDetails) return;
+    const startVerseRef = commentDetails.start.verseRef;
+    const verseRef = `${startVerseRef.book} ${startVerseRef.chapterNum}:${startVerseRef.verse ?? startVerseRef.verseNum}`;
     if (editorComment.type === 'comment') {
       legacyComments.push({
         contents: editorComment.content,
@@ -132,7 +134,7 @@ export function convertEditorCommentsToLegacyComments(
         startPosition: commentDetails.start.offset,
         thread: editorComment.id,
         user: editorComment.author,
-        verseRef: commentDetails.start.verseRef.toString(),
+        verseRef,
       });
     } else {
       editorComment.comments.forEach((editorThreadComment) => {
@@ -148,7 +150,7 @@ export function convertEditorCommentsToLegacyComments(
           startPosition: commentDetails.start.offset,
           thread: editorComment.id,
           user: editorThreadComment.author,
-          verseRef: commentDetails.start.verseRef.toString(),
+          verseRef,
         });
       });
     }
