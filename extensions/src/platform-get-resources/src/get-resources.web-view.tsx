@@ -41,7 +41,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
@@ -116,7 +116,13 @@ const getLanguageOptions = (
   });
 
   return sortedLanguages.map((language) => {
-    return { label: language, value: language, starred: starredLanguages.has(language) };
+    const count = resources.filter((resource) => resource.bestLanguageName === language).length;
+    return {
+      label: language,
+      value: language,
+      starred: starredLanguages.has(language),
+      secondaryLabel: count.toString(),
+    };
   });
 };
 
@@ -211,8 +217,11 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
-  const openResource = (projectId: string) =>
-    papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
+  const openResource = useCallback(
+    (projectId: string) =>
+      papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId),
+    [],
+  );
 
   // When no languages are selected on the first render of this component, set default selection to
   // languages that have resources installed
@@ -238,21 +247,24 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
-  const installOrRemoveResource = (dblEntryUid: string, action: 'install' | 'remove'): void => {
-    if (!installResource || !uninstallResource) return;
-    const newInstallInfo: InstallInfo = {
-      dblEntryUid,
-      action: action === 'install' ? 'installing' : 'removing',
-    };
+  const installOrRemoveResource = useCallback(
+    (dblEntryUid: string, action: 'install' | 'remove'): void => {
+      if (!installResource || !uninstallResource) return;
+      const newInstallInfo: InstallInfo = {
+        dblEntryUid,
+        action: action === 'install' ? 'installing' : 'removing',
+      };
 
-    setInstallInfo((prevInfo) => [...prevInfo, newInstallInfo]);
+      setInstallInfo((prevInfo) => [...prevInfo, newInstallInfo]);
 
-    const actionFunction = action === 'install' ? installResource : uninstallResource;
+      const actionFunction = action === 'install' ? installResource : uninstallResource;
 
-    actionFunction(dblEntryUid).catch((error) => {
-      logger.debug(getErrorMessage(error));
-    });
-  };
+      actionFunction(dblEntryUid).catch((error) => {
+        logger.debug(getErrorMessage(error));
+      });
+    },
+    [installResource, uninstallResource],
+  );
 
   /** Removes resources from array of resources that are currently being handled */
   useEffect(() => {
@@ -286,13 +298,34 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   }, [resources, textFilter]);
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
+    const getTypeCount = (type: string): string => {
+      if (isPlatformError(resources)) return '0';
+      return (resources.filter((resource) => resource.type === type).length ?? 0).toString();
+    };
+
     return [
-      { value: 'ScriptureResource', label: typeScriptureText },
-      { value: 'EnhancedResource', label: typeErText },
-      { value: 'SourceLanguageResource', label: typeSlrText },
-      { value: 'XmlResource', label: typeXrText },
+      {
+        value: 'ScriptureResource',
+        label: typeScriptureText,
+        secondaryLabel: getTypeCount('ScriptureResource'),
+      },
+      {
+        value: 'EnhancedResource',
+        label: typeErText,
+        secondaryLabel: getTypeCount('EnhancedResource'),
+      },
+      {
+        value: 'SourceLanguageResource',
+        label: typeSlrText,
+        secondaryLabel: getTypeCount('SourceLanguageResource'),
+      },
+      {
+        value: 'XmlResource',
+        label: typeXrText,
+        secondaryLabel: getTypeCount('XmlResource'),
+      },
     ];
-  }, [typeScriptureText, typeErText, typeSlrText, typeXrText]);
+  }, [typeScriptureText, typeErText, typeSlrText, typeXrText, resources]);
 
   const textAndTypeFilteredResources = useMemo(() => {
     if (selectedTypes.length === 0) return textFilteredResources;
@@ -307,6 +340,8 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       return selectedLanguages.includes(resource.bestLanguageName);
     });
   }, [selectedLanguages, textAndTypeFilteredResources]);
+
+  const idsBeingHandled = useMemo(() => installInfo.map((info) => info.dblEntryUid), [installInfo]);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'bestLanguageName',
@@ -335,38 +370,34 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     });
   }, [sortConfig.direction, sortConfig.key, textAndTypeAndLanguageFilteredResources]);
 
-  const handleSort = (key: SortConfig['key']) => {
-    const newSortConfig: SortConfig = { key, direction: 'ascending' };
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      newSortConfig.direction = 'descending';
-    }
-    setSortConfig(newSortConfig);
-  };
-
-  const buildTableHead = (key: SortConfig['key'], label: string) => (
-    <TableHead onClick={() => handleSort(key)}>
-      <div className="tw-flex tw-items-center">
-        <div className="tw-font-normal">{label}</div>
-        {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
-        {sortConfig.key === key &&
-          (sortConfig.direction === 'ascending' ? (
-            <ChevronUp className="tw-pl-1" size={16} />
-          ) : (
-            <ChevronDown className="tw-pl-1" size={16} />
-          ))}
-      </div>
-    </TableHead>
+  const handleSort = useCallback(
+    (key: SortConfig['key']) => {
+      const newSortConfig: SortConfig = { key, direction: 'ascending' };
+      if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+        newSortConfig.direction = 'descending';
+      }
+      setSortConfig(newSortConfig);
+    },
+    [sortConfig],
   );
 
-  const getTypeCount = (option: MultiSelectComboBoxEntry): number => {
-    if (isPlatformError(resources)) return 0;
-    return resources.filter((resource) => resource.type === option.value).length ?? 0;
-  };
-
-  const getLanguageCount = (option: MultiSelectComboBoxEntry): number => {
-    if (isPlatformError(resources)) return 0;
-    return resources.filter((resource) => resource.bestLanguageName === option.value).length ?? 0;
-  };
+  const buildTableHead = useCallback(
+    (key: SortConfig['key'], label: string) => (
+      <TableHead onClick={() => handleSort(key)}>
+        <div className="tw-flex tw-items-center">
+          <div className="tw-font-normal">{label}</div>
+          {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
+          {sortConfig.key === key &&
+            (sortConfig.direction === 'ascending' ? (
+              <ChevronUp className="tw-pl-1" size={16} />
+            ) : (
+              <ChevronDown className="tw-pl-1" size={16} />
+            ))}
+        </div>
+      </TableHead>
+    ),
+    [handleSort, sortConfig],
+  );
 
   return (
     <div>
@@ -390,7 +421,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
               <Label className="tw-mb-2 tw-text-muted-foreground">{filterByText}</Label>
               <Filter
                 entries={typeOptions}
-                getEntriesCount={getTypeCount}
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
                 placeholder={typesText}
@@ -404,7 +434,6 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                   isPlatformError(resources) ? emptyArray : resources,
                   selectedLanguages,
                 )}
-                getEntriesCount={getLanguageCount}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
                 placeholder={languagesText}
@@ -470,7 +499,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                           <div className="tw-flex tw-justify-between">
                             {getActionContent(
                               resource,
-                              installInfo.map((info) => info.dblEntryUid),
+                              idsBeingHandled,
                               getText,
                               updateText,
                               installedText,

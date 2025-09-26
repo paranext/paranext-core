@@ -131,6 +131,7 @@ export type {
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
+export { default as ResultsCard } from './components/basics/results-card.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
