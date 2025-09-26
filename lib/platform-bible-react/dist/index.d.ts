@@ -509,20 +509,34 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * displayed if no items are selected,
  */
 export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export type FootnoteLayout = "horizontal" | "vertical";
 export interface FootnoteItemProps {
-	/** Optional additional class name for styling */
-	className?: string;
-	/** The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is
-	 * an array of {@link MarkerObject}, in practice, for footnotes that array contains only one
+	/**
+	 * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
+	 * array of {@link MarkerObject}, in practice, for footnotes that array contains only one
 	 * additional level of `MarkerObject` objects. The `content` of those nested objects will be plain
 	 * strings, containing the text of the individual footnote data (reference, quoted text, footnote
-	 * text, etc.).  */
+	 * text, etc.).
+	 */
 	footnote: MarkerObject;
+	/**
+	 * Determines how footnotes are displayed:
+	 *
+	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
+	 *   second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
+	 *   beneath (typically used side-by-side with the text).
+	 *
+	 * @default 'horizontal'
+	 */
+	layout?: FootnoteLayout;
 	/** Flag indicating whether to display USFM-style markers */
 	showMarkers?: boolean;
-	/** A function that can interpret the two special footnote caller codes defined by USFM, `+` and
-	 *  `-` in order to display (or suppress display of) a meaningful caller in the context where this
-	 * is being used. */
+	/**
+	 * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
+	 * `-` in order to display (or suppress display of) a meaningful caller in the context where this
+	 * is being used.
+	 */
 	formatCaller?: (caller: string | undefined) => string | undefined;
 }
 export interface FootnoteListProps {
@@ -530,27 +544,53 @@ export interface FootnoteListProps {
 	className?: string;
 	/** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
 	footnotes: MarkerObject[];
-	/** ID provided by the caller that should change whenever the list changes (due to additions,
-	 * deletions or — unlikely — reordering)
-	) */
+	/**
+	 * Determines how footnotes are displayed:
+	 *
+	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
+	 *   second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
+	 *   beneath (typically used side-by-side with the text).
+	 *
+	 * @default 'horizontal'
+	 */
+	layout?: FootnoteLayout;
+	/**
+	 * ID provided by the caller that should change whenever the list changes (due to additions,
+	 * deletions or — unlikely — reordering) )
+	 */
 	listId: string | number;
-	/** Flag indicating whether to display USFM-style markers */
-	showMarkers?: boolean;
-	/** A function that can interpret the two special footnote caller codes defined by USFM, `+` and
-	 *  `-` in order to display (or suppress display of) a meaningful caller in the context where this
-	 * is being used. */
-	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** The currently selected footnote (or undefined if none) */
 	selectedFootnote?: MarkerObject;
+	/** Flag indicating whether to display USFM-style markers */
+	showMarkers?: boolean;
+	/**
+	 * Flag indicating whether to suppress USFM-style formatting.
+	 *
+	 * @default false
+	 */
+	suppressFormatting?: boolean;
+	/**
+	 * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
+	 * `-` in order to display (or suppress display of) a meaningful caller in the context where this
+	 * is being used.
+	 */
+	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** Callback to handle clicking/selecting a footnote in the list */
 	onFootnoteSelected?: (footnote: MarkerObject) => void;
 }
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
-export declare function FootnoteItem({ className, footnote, formatCaller, showMarkers, }: FootnoteItemProps & {
-	showMarkers?: boolean;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
+declare const FOOTNOTE_LIST_STRING_KEYS: readonly [
+	"%webView_footnoteList_header%"
+];
+type FootnoteListLocalizedStrings = {
+	[localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ footnotes, showMarkers, formatCaller, listId, selectedFootnote, onFootnoteSelected, className, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ className, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
+	localizedStrings?: FootnoteListLocalizedStrings;
+}): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
