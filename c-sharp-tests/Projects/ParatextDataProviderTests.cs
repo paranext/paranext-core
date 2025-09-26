@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
-using Paranext.DataProvider.Services;
 using Paratext.Data;
 using SIL.Scripture;
 
@@ -44,8 +43,9 @@ namespace TestParanextDataProvider.Projects
             string expectedResult
         )
         {
+            const int KNOWN_BOOK_NUMBER = 1;
             _scrText.PutText(
-                1,
+                KNOWN_BOOK_NUMBER,
                 0,
                 false,
                 @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla",
@@ -60,7 +60,14 @@ namespace TestParanextDataProvider.Projects
                 TimeSpan.FromSeconds(1)
             );
 
-            var result = provider.GetVerseUsfm(new VerseRef(bookNum, chapterNum, verseNum));
+            var verseRef = new VerseRef(bookNum, chapterNum, verseNum);
+            if (bookNum != KNOWN_BOOK_NUMBER)
+            {
+                Assert.Throws<MissingBookException>(() => provider.GetBookUsfm(verseRef));
+                return;
+            }
+
+            var result = provider.GetVerseUsfm(verseRef);
             VerifyUsfmSame(result, expectedResult, _scrText, bookNum);
         }
 
@@ -76,8 +83,9 @@ namespace TestParanextDataProvider.Projects
             string expectedResult
         )
         {
+            const int KNOWN_BOOK_NUMBER = 1;
             _scrText.PutText(
-                1,
+                KNOWN_BOOK_NUMBER,
                 0,
                 false,
                 @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla",
@@ -92,7 +100,14 @@ namespace TestParanextDataProvider.Projects
                 TimeSpan.FromSeconds(1)
             );
 
-            var result = provider.GetChapterUsfm(new VerseRef(bookNum, chapterNum, verseNum));
+            var verseRef = new VerseRef(bookNum, chapterNum, verseNum);
+            if (bookNum != KNOWN_BOOK_NUMBER)
+            {
+                Assert.Throws<MissingBookException>(() => provider.GetBookUsfm(verseRef));
+                return;
+            }
+
+            var result = provider.GetChapterUsfm(verseRef);
             VerifyUsfmSame(result, expectedResult, _scrText, bookNum);
         }
 
@@ -110,8 +125,9 @@ namespace TestParanextDataProvider.Projects
             string expectedResult
         )
         {
+            const int KNOWN_BOOK_NUMBER = 1;
             _scrText.PutText(
-                1,
+                KNOWN_BOOK_NUMBER,
                 0,
                 false,
                 @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla",
@@ -126,7 +142,14 @@ namespace TestParanextDataProvider.Projects
                 TimeSpan.FromSeconds(1)
             );
 
-            var result = provider.GetBookUsfm(new VerseRef(bookNum, chapterNum, verseNum));
+            var verseRef = new VerseRef(bookNum, chapterNum, verseNum);
+            if (bookNum != KNOWN_BOOK_NUMBER)
+            {
+                Assert.Throws<MissingBookException>(() => provider.GetBookUsfm(verseRef));
+                return;
+            }
+
+            var result = provider.GetBookUsfm(verseRef);
             VerifyUsfmSame(result, expectedResult, _scrText, bookNum);
         }
 
