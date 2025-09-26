@@ -1,0 +1,1444 @@
+/**
+ * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
+ * other kinds of markers.
+ *
+ * An attribute marker is a marker that adds information to a previous marker in USFM and is an
+ * attribute on that previous marker instead in USX/USJ.
+ *
+ * For example, `ca` and `cp` are attribute markers for `c`. `va` and `vp` are attribute markers for
+ * `v`. `cat` is an attribute marker for `f`, `esb`, and more.
+ *
+ * Following is an example of using the `ca` and `cp` attribute markers in USFM:
+ *
+ * ```usfm
+ * \c 1 \ca 2\ca*
+ * \cp A
+ * \s1 This is a section header
+ * ```
+ *
+ * The equivalent in USX would be:
+ *
+ * ```xml
+ * <chapter number="1" style="c" altnumber="2" pubnumber="A" sid="GEN 1" />
+ * <para style="s1">This is a section header</para>
+ * ```
+ */
+export type AttributeMarkerInfo = NormalMarkerInfo & {
+  /**
+   * List of normal marker names for which this marker is an attribute marker.
+   *
+   * For example, `ca` and `cp` are attribute markers for `c`. `isAttributeMarkerFor` would be
+   * `['c']` for both `ca` and `cp`.
+   */
+  isAttributeMarkerFor?: string[];
+  /**
+   * List of RegExp patterns matching marker names for which this marker is an attribute marker.
+   *
+   * For example, pretend `ex1` and `ex2` are attribute markers for markers matching RegExp
+   * `/test/`. `isAttributeMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
+   */
+  isAttributeMarkerForRegExp?: string[];
+  /**
+   * The name of the USX/USJ attribute this attribute marker represents.
+   *
+   * For example, `ca` is an attribute marker for `c` and represents the `altnumber` attribute on
+   * the `c` marker in USX/USJ. `attributeMarkerAttributeName` would be `altnumber` for the `ca`
+   * marker.
+   */
+  attributeMarkerAttributeName: string;
+};
+
+/**
+ * Information about a regular USFM/USX/USJ marker. See {@link MarkerInfo} for other kinds of
+ * markers.
+ */
+export type NormalMarkerInfo = {
+  /**
+   * Which marker type the marker is. Determines how the marker is structured in the data such as
+   * what kind of mandatory whitespace is around the marker in USFM. See {@link MarkerTypeInfoBase}
+   * for information.
+   */
+  type: string;
+  /** Explanation of the meaning of this marker */
+  description?: string;
+  /**
+   * Which attribute can be provided without specifying the attribute name in USFM.
+   *
+   * A marker can have a default attribute only if it has zero or one non-optional attributes.
+   *
+   * An attribute can be provided with default syntax in the USFM only if it is the only attribute
+   * provided for the marker.
+   *
+   * Following is an example of a marker with a default attribute:
+   *
+   * ```usfm
+   * \w stuff|thisIsTheLemmaDefaultAttribute\w*
+   * ```
+   *
+   * Following is an example of a marker with multiple attributes (cannot use default attribute
+   * syntax):
+   *
+   * ```usfm
+   * \w stuff|lemma="thisIsTheLemma" strong="H1234,G1234"\w*
+   * ```
+   */
+  defaultAttribute?: string;
+  /**
+   * The name of the text content attribute that is present on this marker if this marker has text
+   * content in USFM.
+   *
+   * Text content attributes are attributes in USX/USJ that are represented in USFM as the actual
+   * text content of the marker.
+   *
+   * For example, `alt` is a text content attribute on the `periph` marker. This value would be
+   * `alt` for the `periph` marker.
+   *
+   * Following is an example of a `periph` marker in USFM:
+   *
+   * ```usfm
+   * \periph Example Peripheral|id="x-example"
+   * \p Some contents of the example peripheral
+   * ```
+   *
+   * The equivalent in USX would be:
+   *
+   * ```xml
+   * <periph alt="Title Page" id="title">
+   *   <para style="p">Some contents of the example peripheral</para>
+   * </periph>;
+   * ```
+   */
+  textContentAttribute?: string;
+  /**
+   * List of leading attributes that must be present on this marker. This list is ordered by the
+   * order in which the attributes should appear.
+   *
+   * Leading attributes are attributes in USJ/USX that are listed in USFM directly after the marker
+   * and separated only by a space.
+   *
+   * For example, `code` is a leading attribute on the `id` marker. This value would be `['code']`
+   * for the `id` marker.
+   *
+   * Following is an example of an `id` marker in USFM:
+   *
+   * ```usfm
+   * \id MAT 41MATEX.SFM, Example Translation, September 2025
+   * ```
+   *
+   * The equivalent in USX would be:
+   *
+   * ```xml
+   * <book code="MAT" style="id">
+   *   41MATEX.SFM, Example Translation, September 2025
+   * </book>;
+   * ```
+   */
+  leadingAttributes?: string[];
+  /**
+   * List of attribute markers that may be present on this marker. This list is ordered by the order
+   * in which the markers should appear.
+   *
+   * An attribute marker is a marker that adds information to a previous marker in USFM and is an
+   * attribute on that previous marker in USX/USJ.
+   *
+   * For example, `ca` and `cp` are attribute markers for `c`. This value would be `['ca', 'cp']`
+   * for `c`.
+   *
+   * Note: the attribute names for attribute markers may be different than the marker names. See
+   * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
+   */
+  attributeMarkers?: string[];
+  /**
+   * Whether the closing marker for this marker is explicitly considered optional in USFM. This
+   * should always be not present or `false` if there is no closing marker for the marker type of
+   * this marker.
+   *
+   * If this is `false` and a closing marker for this marker in USFM is _not_ present, the USX/USJ
+   * for this marker should have the attribute `closed` set to `false`.
+   *
+   * If this is `true` and a closing marker for this marker in USFM _is_ present, the USX/USJ for
+   * this marker should have the `closed` attribute set to `true`.
+   *
+   * Disclaimer: Currently, this is only determined for 3.1+. It is not very important for 3.0.x- as
+   * most or maybe all closing markers are optional in 3.0.x-.
+   *
+   * Disclaimer: The implications of this value regarding when the `closed` attribute should be
+   * present are interpreted from the contents of `usx.rng`. It is possible this has never been
+   * implemented, and this may need to be adjusted if the eventual implementation differs from these
+   * statements.
+   *
+   * If not present, defaults to `false`
+   */
+  isClosingMarkerOptional?: boolean;
+};
+
+/** Information about a USFM/USX/USJ marker that is essential for proper translation between formats */
+export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
+
+/**
+ * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
+ * {@link MarkerInfo} for other kinds of marker types.
+ *
+ * For example, `char` marker types such as `nd` markers have closing markers, but `para` markers
+ * such as `p` do not:
+ *
+ * ```usfm
+ * \p This is a plain paragraph.
+ * \p This is a paragraph \nd with some special text\nd* in it.
+ * ```
+ *
+ * If the marker type has a closing marker but the closing marker is not present in the USFM for a
+ * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
+ * `false` unless {@link CloseableMarkerTypeInfo.isClosingMarkerOptional} is `true`.
+ */
+export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
+  /**
+   * Whether markers of this type have a closing marker in USFM.
+   *
+   * If not present, defaults to `false`
+   */
+  hasClosingMarker: true;
+  /**
+   * Whether the closing marker for markers of this type is "empty" in USFM, meaning the marker name
+   * is absent from the closing marker.
+   *
+   * For example, markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
+   *
+   * ```usfm
+   * \qt1-s\*
+   * ...
+   * \qt1-e\*
+   * ```
+   *
+   * The closing marker for `qt1-s` is `\*` as opposed to the closing marker for `nd` which is
+   * `\nd*`.
+   *
+   * If not present, defaults to `false`
+   */
+  isClosingMarkerEmpty?: boolean;
+};
+
+/**
+ * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
+ * {@link MarkerInfo} for other kinds of marker types.
+ *
+ * For example, `char` marker types such as `nd` markers have closing markers, but `para` marker
+ * types such as `p` do not:
+ *
+ * ```usfm
+ * \p This is a plain paragraph.
+ * \p This is a paragraph \nd with some special text\nd* in it.
+ * ```
+ *
+ * If the marker type has a closing marker but the closing marker is not present in the USFM for a
+ * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
+ * `false` unless {@link CloseableMarkerTypeInfo.isClosingMarkerOptional} is `true`.
+ */
+export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
+  /**
+   * Whether markers of this type need a closing marker in USFM.
+   *
+   * If not present, defaults to `false`
+   */
+  hasClosingMarker?: false;
+};
+
+/**
+ * Information about a USFM/USX/USJ marker type that is common to all marker types. See
+ * {@link MarkerTypeInfo} for various kinds of marker types.
+ */
+export type MarkerTypeInfoBase = {
+  /**
+   * Whether markers of this type should have a `style` attribute in USX/USJ.
+   *
+   * If this is `false`, it also means the marker type is the same as the marker name.
+   *
+   * If not present, defaults to `true`.
+   */
+  hasStyleAttribute?: boolean;
+  /**
+   * List of attributes that should not be output to USFM on markers of this type.
+   *
+   * This is used for attributes that are not present in USFM. For example, the `sid` attribute on
+   * the `verse` type marker is not present in USFM because it is derived metadata in USX/USJ and is
+   * not present in USFM.
+   *
+   * This property is not used when converting to USX or USJ.
+   */
+  skipOutputAttributeToUsfm?: string[];
+  /**
+   * List of attributes indicating whether to skip outputting this marker to USFM. If any of the
+   * listed attributes is present on the marker, skip outputting this marker when converting to
+   * USFM.
+   *
+   * This is used for markers with attributes that are not present in USFM. For example, if the
+   * `verse` marker has an `eid` attribute, it indicates it is a closing marker that is derived
+   * metadata in USX/USJ and is not present in USFM. Note that the `verse` marker does not have the
+   * `style="v"` attribute in this situation, so this list of attributes is on the marker type.
+   *
+   * This property is not used when converting to USX or USJ.
+   */
+  skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
+  /**
+   * Whether markers of this type need a newline before them in USFM.
+   *
+   * For example, `para` marker types such as `p` require a newline, but `char` marker types such as
+   * `nd` markers do not:
+   *
+   * ```usfm
+   * \p This is a plain paragraph.
+   * \p This is a paragraph \nd with some special text\nd* in it.
+   * ```
+   *
+   * Note that the newline is not necessarily present for the very first marker in examples such as
+   * this one. This is just a shortcut to make examples like this easier to read and write.
+   *
+   * If not present, defaults to `false`
+   */
+  hasNewlineBefore?: boolean;
+};
+
+/**
+ * Information about a USFM/USX/USJ marker type that is essential for proper translation between
+ * formats
+ */
+export type MarkerTypeInfo = CloseableMarkerTypeInfo | NonCloseableMarkerTypeInfo;
+
+/** A map of all USFM/USX/USJ markers and some information about them */
+export type MarkersMap = {
+  /** Which version of USFM/USX/USJ this map represents */
+  version: string;
+  /**
+   * Which commit this map came from. This is necessary because the schema file seems to be
+   * distributed multiple times in one release version. As such, this specifies the exact version of
+   * the schema file.
+   */
+  commit: string;
+  /**
+   * Which tag or commit of `usfm-tools` repo this map is generated from.
+   *
+   * Contains the output from `git tag --points-at HEAD` or `git rev-parse HEAD`
+   *
+   * Will also have a `+` at the end if there were working changes outside the `src/test-data`
+   * folder when this was generated.
+   */
+  usfmToolsVersion: string;
+  /**
+   * Map whose keys are the marker names and whose values are information about that marker
+   *
+   * If you find the marker name in this map, you do not need to search the `markersRegExp` map.
+   */
+  markers: Record<string, MarkerInfo | undefined>;
+  /**
+   * Map whose keys are string representations of `RegExp` patterns to match against marker names
+   * (using the
+   * [test](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+   * function) and whose values are information about that marker
+   *
+   * You do not need to search this map if you found the marker name in the `markers` map.
+   */
+  markersRegExp: Record<string, MarkerInfo | undefined>;
+  /** Map whose keys are the marker types and whose values are information about that marker type */
+  markerTypes: Record<string, MarkerTypeInfo | undefined>;
+};
+
+/**
+ * A map of all USFM/USX/USJ markers and some information about them. Generated from a `usx.rng`
+ * file
+ */
+export const USFM_MARKERS_MAP: MarkersMap = {
+  version: '3.1',
+  commit: '50f2a6ac3fc1d867d906df28bc00fcff729a7b76',
+  usfmToolsVersion: 'ed48bc011e1b9f1a402d23e49edf2db6c6d69728+',
+  markers: {
+    add: {
+      type: 'char',
+      description: 'For a translational addition to the text',
+    },
+    addpn: {
+      type: 'char',
+      description:
+        'For chinese words to be dot underline & underline (DEPRECATED - used nested char@style pn)',
+    },
+    b: {
+      type: 'para',
+      description: 'Poetry text stanza break (e.g. stanza break)',
+    },
+    bd: {
+      type: 'char',
+      description: 'A character style, use bold text',
+    },
+    bdit: {
+      type: 'char',
+      description: 'A character style, use bold + italic text',
+    },
+    bk: {
+      type: 'char',
+      description: 'For the quoted name of a book',
+    },
+    c: {
+      type: 'chapter',
+      leadingAttributes: ['number'],
+      attributeMarkers: ['ca', 'cp'],
+    },
+    ca: {
+      type: 'char',
+      attributeMarkerAttributeName: 'altnumber',
+      isAttributeMarkerFor: ['c'],
+    },
+    cat: {
+      type: 'char',
+      attributeMarkerAttributeName: 'category',
+      isAttributeMarkerFor: ['ef', 'efe', 'esb', 'ex', 'f', 'fe', 'x'],
+    },
+    cd: {
+      type: 'para',
+      description: 'Chapter Description (Publishing option D, e.g. in Russian Bibles)',
+    },
+    cl: {
+      type: 'para',
+      description: 'Chapter label used for translations that add a word such as "Chapter"',
+    },
+    cls: {
+      type: 'para',
+      description: 'Closure of an Epistle',
+    },
+    cp: {
+      type: 'para',
+      description: 'Chapter published style',
+      attributeMarkerAttributeName: 'pubnumber',
+      isAttributeMarkerFor: ['c'],
+    },
+    d: {
+      type: 'para',
+      description: 'A Hebrew text heading, to provide description (e.g. Psalms)',
+    },
+    dc: {
+      type: 'char',
+      description: 'Deuterocanonical/LXX additions or insertions in the Protocanonical text',
+    },
+    ef: {
+      type: 'note',
+      description: 'Study note',
+      leadingAttributes: ['caller'],
+      attributeMarkers: ['cat'],
+    },
+    efe: {
+      type: 'note',
+      description: 'Extended study endnote',
+      leadingAttributes: ['caller'],
+      attributeMarkers: ['cat'],
+    },
+    efm: {
+      type: 'char',
+      description: 'Reference to caller of previous footnote in a study Bible',
+    },
+    em: {
+      type: 'char',
+      description: 'A character style, use emphasized text style',
+    },
+    esb: {
+      type: 'sidebar',
+      attributeMarkers: ['cat'],
+    },
+    esbe: {
+      type: 'sidebar',
+    },
+    ex: {
+      type: 'note',
+      description: 'Extended cross reference',
+      leadingAttributes: ['caller'],
+      attributeMarkers: ['cat'],
+    },
+    f: {
+      type: 'note',
+      description: 'Footnote',
+      leadingAttributes: ['caller'],
+      attributeMarkers: ['cat'],
+    },
+    fdc: {
+      type: 'char',
+      description: 'Footnote text, applies to Deuterocanon only (DEPRECATED - use char@style dc)',
+      isClosingMarkerOptional: true,
+    },
+    fe: {
+      type: 'note',
+      description: 'Endnote',
+      leadingAttributes: ['caller'],
+      attributeMarkers: ['cat'],
+    },
+    fig: {
+      type: 'figure',
+    },
+    fk: {
+      type: 'char',
+      description: 'A footnote keyword',
+      isClosingMarkerOptional: true,
+    },
+    fl: {
+      type: 'char',
+      description:
+        'A footnote label text item, for marking or "labelling" the type or alternate translation being provided in the note.',
+      isClosingMarkerOptional: true,
+    },
+    fm: {
+      type: 'char',
+      description: 'Reference to caller of previous footnote',
+    },
+    fp: {
+      type: 'char',
+      description: 'A Footnote additional paragraph marker',
+      isClosingMarkerOptional: true,
+    },
+    fq: {
+      type: 'char',
+      description: 'A footnote scripture quote or alternate rendering',
+      isClosingMarkerOptional: true,
+    },
+    fqa: {
+      type: 'char',
+      description: 'A footnote alternate rendering for a portion of scripture text',
+      isClosingMarkerOptional: true,
+    },
+    fr: {
+      type: 'char',
+      description: 'The origin reference for the footnote',
+      isClosingMarkerOptional: true,
+    },
+    ft: {
+      type: 'char',
+      description: 'Footnote text, Protocanon',
+      isClosingMarkerOptional: true,
+    },
+    fv: {
+      type: 'char',
+      description: 'A verse number within the footnote text',
+    },
+    fw: {
+      type: 'char',
+      description:
+        'A footnote witness list, for distinguishing a list of sigla representing witnesses in critical editions.',
+      isClosingMarkerOptional: true,
+    },
+    h: {
+      type: 'para',
+      description: 'Running header text for a book',
+    },
+    h1: {
+      type: 'para',
+      description: 'Running header text',
+    },
+    h2: {
+      type: 'para',
+      description: 'Running header text, left side of page (DEPRECATED)',
+    },
+    h3: {
+      type: 'para',
+      description: 'Running header text, right side of page (DEPRECATED)',
+    },
+    ib: {
+      type: 'para',
+      description: 'Introduction blank line',
+    },
+    id: {
+      type: 'book',
+      leadingAttributes: ['code'],
+    },
+    ide: {
+      type: 'para',
+      description: 'File encoding information (DEPRECATED)',
+    },
+    ie: {
+      type: 'para',
+      description: 'Introduction ending marker',
+    },
+    iex: {
+      type: 'para',
+      description:
+        'Introduction explanatory or bridge text (e.g. explanation of missing book in Short Old Testament)',
+    },
+    ili: {
+      type: 'para',
+      description: 'A list entry, level 1 (if single level)',
+    },
+    ili1: {
+      type: 'para',
+      description: 'A list entry, level 1 (if multiple levels)',
+    },
+    ili2: {
+      type: 'para',
+      description: 'A list entry, level 2',
+    },
+    im: {
+      type: 'para',
+      description:
+        'Introduction prose paragraph, with no first line indent (may occur after poetry)',
+    },
+    imi: {
+      type: 'para',
+      description: 'Introduction prose paragraph text, indented, with no first line indent',
+    },
+    imq: {
+      type: 'para',
+      description:
+        'Introduction prose paragraph, quote from the body text, with no first line indent',
+    },
+    imt: {
+      type: 'para',
+      description: 'Introduction major title, level 1 - (if single level)',
+    },
+    imt1: {
+      type: 'para',
+      description: 'Introduction major title, level 1 (if multiple levels)',
+    },
+    imt2: {
+      type: 'para',
+      description: 'Introduction major title, level 2',
+    },
+    imt3: {
+      type: 'para',
+      description: 'Introduction major title, level 3',
+    },
+    imt4: {
+      type: 'para',
+      description: 'Introduction major title, level 4 (usually within parenthesis)',
+    },
+    imte: {
+      type: 'para',
+      description: 'Introduction major title at introduction end, level 1 (if single level)',
+    },
+    imte1: {
+      type: 'para',
+      description: 'Introduction major title at introduction end, level 1 (if multiple levels)',
+    },
+    imte2: {
+      type: 'para',
+      description: 'Introduction major title at introduction end, level 2',
+    },
+    io: {
+      type: 'para',
+      description: 'Introduction outline text, level 1 (if single level)',
+    },
+    io1: {
+      type: 'para',
+      description: 'Introduction outline text, level 1 (if multiple levels)',
+    },
+    io2: {
+      type: 'para',
+      description: 'Introduction outline text, level 2',
+    },
+    io3: {
+      type: 'para',
+      description: 'Introduction outline text, level 3',
+    },
+    io4: {
+      type: 'para',
+      description: 'Introduction outline text, level 4',
+    },
+    ior: {
+      type: 'char',
+    },
+    iot: {
+      type: 'para',
+      description: 'Introduction outline title',
+    },
+    ip: {
+      type: 'para',
+      description:
+        'Introduction prose paragraph\nDivision or Section introductory paragraph (study Bible)',
+    },
+    ipi: {
+      type: 'para',
+      description: 'Introduction prose paragraph, indented, with first line indent',
+    },
+    ipq: {
+      type: 'para',
+      description: 'Introduction prose paragraph, quote from the body text',
+    },
+    ipr: {
+      type: 'para',
+      description: 'Introduction prose paragraph, right aligned',
+    },
+    iq: {
+      type: 'para',
+      description: 'Introduction poetry text, level 1 (if single level)',
+    },
+    iq1: {
+      type: 'para',
+      description: 'Introduction poetry text, level 1 (if multiple levels)',
+    },
+    iq2: {
+      type: 'para',
+      description: 'Introduction poetry text, level 2',
+    },
+    iq3: {
+      type: 'para',
+      description: 'Introduction poetry text, level 3',
+    },
+    iqt: {
+      type: 'char',
+    },
+    is: {
+      type: 'para',
+      description: 'Introduction section heading, level 1 (if single level)',
+    },
+    is1: {
+      type: 'para',
+      description: 'Introduction section heading, level 1 (if multiple levels)',
+    },
+    is2: {
+      type: 'para',
+      description: 'Introduction section heading, level 2',
+    },
+    it: {
+      type: 'char',
+      description: 'A character style, use italic text',
+    },
+    jmp: {
+      type: 'char',
+      defaultAttribute: 'href',
+      description: 'For associating linking attributes to a span of text',
+    },
+    k: {
+      type: 'char',
+      defaultAttribute: 'key',
+      description: 'For a keyword',
+    },
+    k1: {
+      type: 'para',
+      description: 'Concordance main entry text or keyword, level 1',
+    },
+    k2: {
+      type: 'para',
+      description: 'Concordance main entry text or keyword, level 2',
+    },
+    lf: {
+      type: 'para',
+      description: 'List footer (introductory remark)',
+    },
+    lh: {
+      type: 'para',
+      description: 'List header (introductory remark)',
+    },
+    li: {
+      type: 'para',
+      description: 'A list entry, level 1 (if single level)',
+    },
+    li1: {
+      type: 'para',
+      description: 'A list entry, level 1 (if multiple levels)',
+    },
+    li2: {
+      type: 'para',
+      description: 'A list entry, level 2',
+    },
+    li3: {
+      type: 'para',
+      description: 'A list entry, level 3',
+    },
+    li4: {
+      type: 'para',
+      description: 'A list entry, level 4',
+    },
+    lik: {
+      type: 'char',
+      description: 'Structured list entry key text',
+    },
+    lim: {
+      type: 'para',
+      description: 'An embedded list entry, level 1 (if single level)',
+    },
+    lim1: {
+      type: 'para',
+      description: 'An embedded list entry, level 1 (if multiple levels)',
+    },
+    lim2: {
+      type: 'para',
+      description: 'An embedded list entry, level 2',
+    },
+    lim3: {
+      type: 'para',
+      description: 'An embedded list entry, level 3',
+    },
+    lim4: {
+      type: 'para',
+      description: 'An embedded list entry, level 4',
+    },
+    lit: {
+      type: 'para',
+      description: 'For a comment or note inserted for liturgical use',
+    },
+    litl: {
+      type: 'char',
+      description: 'List entry total text',
+    },
+    liv: {
+      type: 'char',
+      description: 'Structured list entry value 1 content (if single value)',
+    },
+    liv1: {
+      type: 'char',
+      description: 'Structured list entrt value 1 content (if multiple values)',
+    },
+    liv2: {
+      type: 'char',
+      description: 'Structured list entry value 2 content',
+    },
+    liv3: {
+      type: 'char',
+      description: 'Structured list entry value 3 content',
+    },
+    liv4: {
+      type: 'char',
+      description: 'Structured list entry value 4 content',
+    },
+    liv5: {
+      type: 'char',
+      description: 'Structured list entry value 5 content',
+    },
+    m: {
+      type: 'para',
+      description:
+        'Paragraph text, with no first line indent (may occur after poetry) aka: Paragraph Continuation',
+    },
+    mi: {
+      type: 'para',
+      description: 'Paragraph text, indented, with no first line indent; often used for discourse',
+    },
+    mi1: {
+      type: 'para',
+      description:
+        'Paragraph text, level 1 indented, with no first line indent; often used for discourse',
+    },
+    mi2: {
+      type: 'para',
+      description:
+        'Paragraph text, level 2 indented, with no first line indent; often used for discourse',
+    },
+    mi3: {
+      type: 'para',
+      description:
+        'Paragraph text, level 3 indented, with no first line indent; often used for discourse',
+    },
+    mi4: {
+      type: 'para',
+      description:
+        'Paragraph text, level 4 indented, with no first line indent; often used for discourse',
+    },
+    mr: {
+      type: 'para',
+      description: 'A major section division references range heading',
+    },
+    ms: {
+      type: 'para',
+      description: 'A major section division heading, level 1 (if single level)',
+    },
+    ms1: {
+      type: 'para',
+      description: 'A major section division heading, level 1 (if multiple levels)',
+    },
+    ms2: {
+      type: 'para',
+      description: 'A major section division heading, level 2',
+    },
+    ms3: {
+      type: 'para',
+      description: 'A major section division heading, level 3',
+    },
+    mt: {
+      type: 'para',
+      description: 'The main title of the book (if single level)',
+    },
+    mt1: {
+      type: 'para',
+      description: 'The main title of the book (if multiple levels)',
+    },
+    mt2: {
+      type: 'para',
+      description: 'A secondary title usually occurring before the main title',
+    },
+    mt3: {
+      type: 'para',
+      description: 'A tertiary title occurring after the main title',
+    },
+    mt4: {
+      type: 'para',
+      description: 'The main title of the book (if single level)',
+    },
+    mte: {
+      type: 'para',
+      description:
+        'The main title of the book repeated at the end of the book, level 1 (if single level)',
+    },
+    mte1: {
+      type: 'para',
+      description:
+        'The main title of the book repeat /ed at the end of the book, level 1 (if multiple levels)',
+    },
+    mte2: {
+      type: 'para',
+      description: "A secondary title occurring before or after the 'ending' main title",
+    },
+    nb: {
+      type: 'para',
+      description:
+        'Paragraph text, with no break from previous paragraph text (at chapter boundary)',
+    },
+    nd: {
+      type: 'char',
+      description: 'For name of deity',
+    },
+    ndx: {
+      type: 'char',
+      description: 'A subject index text item',
+    },
+    no: {
+      type: 'char',
+      description: 'A character style, use normal text',
+    },
+    optbreak: {
+      type: 'optbreak',
+    },
+    ord: {
+      type: 'char',
+      description: 'For the text portion of an ordinal number',
+    },
+    p: {
+      type: 'para',
+      description: 'Paragraph text, with first line indent',
+    },
+    p1: {
+      type: 'para',
+      description: 'Front or back matter text paragraph, level 1 (if multiple levels)',
+    },
+    p2: {
+      type: 'para',
+      description: 'Front or back matter text paragraph, level 2 (if multiple levels)',
+    },
+    pb: {
+      type: 'para',
+      description:
+        "Page Break used for new reader portions and children's bibles where content is controlled by the page",
+    },
+    pc: {
+      type: 'para',
+      description: 'Inscription (paragraph text centered)',
+    },
+    periph: {
+      type: 'periph',
+      textContentAttribute: 'alt',
+    },
+    ph: {
+      type: 'para',
+      description:
+        'Paragraph text, with level 1 hanging indent (if single level) (DEPRECATED - use para@style li#)',
+    },
+    ph1: {
+      type: 'para',
+      description: 'Paragraph text, with level 1 hanging indent (if multiple levels)',
+    },
+    ph2: {
+      type: 'para',
+      description: 'Paragraph text, with level 2 hanging indent',
+    },
+    ph3: {
+      type: 'para',
+      description: 'Paragraph text, with level 3 hanging indent',
+    },
+    pi: {
+      type: 'para',
+      description:
+        'Paragraph text, level 1 indent (if single level), with first line indent; often used for discourse',
+    },
+    pi1: {
+      type: 'para',
+      description:
+        'Paragraph text, level 1 indent (if multiple levels), with first line indent; often used for discourse',
+    },
+    pi2: {
+      type: 'para',
+      description:
+        'Paragraph text, level 2 indent, with first line indent; often used for discourse',
+    },
+    pi3: {
+      type: 'para',
+      description:
+        'Paragraph text, level 3 indent, with first line indent; often used for discourse',
+    },
+    pm: {
+      type: 'para',
+      description: 'Embedded text paragraph',
+    },
+    pmc: {
+      type: 'para',
+      description: 'Embedded text closing',
+    },
+    pmo: {
+      type: 'para',
+      description: 'Embedded text opening',
+    },
+    pmr: {
+      type: 'para',
+      description: 'Embedded text refrain',
+    },
+    pn: {
+      type: 'char',
+      description: 'For a proper name',
+    },
+    png: {
+      type: 'char',
+      description: 'For a geographic proper name',
+    },
+    po: {
+      type: 'para',
+      description: 'Letter opening',
+    },
+    pr: {
+      type: 'para',
+      description: 'Text refrain (paragraph right-aligned)',
+    },
+    pro: {
+      type: 'char',
+      description: 'For indicating pronunciation in CJK texts (DEPRECATED - used char@style rb)',
+    },
+    q: {
+      type: 'para',
+      description: 'Poetry text, level 1 indent (if single level)',
+    },
+    q1: {
+      type: 'para',
+      description: 'Poetry text, level 1 indent (if multiple levels)',
+    },
+    q2: {
+      type: 'para',
+      description: 'Poetry text, level 2 indent',
+    },
+    q3: {
+      type: 'para',
+      description: 'Poetry text, level 3 indent',
+    },
+    q4: {
+      type: 'para',
+      description: 'Poetry text, level 4 indent',
+    },
+    qa: {
+      type: 'para',
+      description: 'Poetry text, Acrostic marker/heading',
+    },
+    qac: {
+      type: 'char',
+      description:
+        'Poetry text, Acrostic markup of the first character of a line of acrostic poetry',
+    },
+    qc: {
+      type: 'para',
+      description: 'Poetry text, centered',
+    },
+    qd: {
+      type: 'para',
+      description:
+        'A Hebrew musical performance annotation, similar in content to Hebrew descriptive title.',
+    },
+    qm: {
+      type: 'para',
+      description: 'Poetry text, embedded, level 1 indent (if single level)',
+    },
+    qm1: {
+      type: 'para',
+      description: 'Poetry text, embedded, level 1 indent (if multiple levels)',
+    },
+    qm2: {
+      type: 'para',
+      description: 'Poetry text, embedded, level 2 indent',
+    },
+    qm3: {
+      type: 'para',
+      description: 'Poetry text, embedded, level 3 indent',
+    },
+    qr: {
+      type: 'para',
+      description: 'Poetry text, Right Aligned',
+    },
+    qs: {
+      type: 'char',
+      description: 'Poetry text, Selah',
+    },
+    qt: {
+      type: 'char',
+      description: 'For Old Testament quoted text appearing in the New Testament',
+    },
+    'qt-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'qt-s': {
+      type: 'ms',
+      defaultAttribute: 'who',
+    },
+    'qt1-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'qt1-s': {
+      type: 'ms',
+      defaultAttribute: 'who',
+    },
+    'qt2-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'qt2-s': {
+      type: 'ms',
+      defaultAttribute: 'who',
+    },
+    'qt3-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'qt3-s': {
+      type: 'ms',
+      defaultAttribute: 'who',
+    },
+    'qt4-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'qt4-s': {
+      type: 'ms',
+      defaultAttribute: 'who',
+    },
+    'qt5-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'qt5-s': {
+      type: 'ms',
+      defaultAttribute: 'who',
+    },
+    r: {
+      type: 'para',
+      description: 'Parallel reference(s)',
+    },
+    rb: {
+      type: 'char',
+      defaultAttribute: 'gloss',
+    },
+    ref: {
+      type: 'ref',
+      defaultAttribute: 'loc',
+    },
+    rem: {
+      type: 'para',
+      description: 'Remark',
+    },
+    restore: {
+      type: 'para',
+      description: 'Comment about when text was restored',
+    },
+    rq: {
+      type: 'char',
+      description: 'A cross-reference indicating the source text for the preceding quotation.',
+    },
+    s: {
+      type: 'para',
+      description: 'A section heading, level 1 (if single level)',
+    },
+    s1: {
+      type: 'para',
+      description: 'A section heading, level 1 (if multiple levels)',
+    },
+    s2: {
+      type: 'para',
+      description: 'A section heading, level 2 (e.g. Proverbs 22-24)',
+    },
+    s3: {
+      type: 'para',
+      description:
+        'A section heading, level 3 (e.g. Genesis "The First Day") (\\s3 can take a \\v!)',
+    },
+    s4: {
+      type: 'para',
+      description: 'A section heading, level 4',
+    },
+    sc: {
+      type: 'char',
+      description: 'A character style, for small capitalization text',
+    },
+    sd: {
+      type: 'para',
+      description:
+        'Vertical space used to divide the text into sections, level 1 (if single level)',
+    },
+    sd1: {
+      type: 'para',
+      description:
+        'Semantic division location (vertical space used to divide the text into sections), level 1 (if multiple levels)',
+    },
+    sd2: {
+      type: 'para',
+      description:
+        'Semantic division location (vertical space used to divide the text into sections), level 2',
+    },
+    sd3: {
+      type: 'para',
+      description:
+        'Semantic division location (vertical space used to divide the text into sections), level 3',
+    },
+    sd4: {
+      type: 'para',
+      description:
+        'Semantic division location (vertical space used to divide the text into sections), level 4',
+    },
+    sig: {
+      type: 'char',
+      description: 'For the signature of the author of an Epistle',
+    },
+    sls: {
+      type: 'char',
+      description:
+        'To represent where the original text is in a secondary language or from an alternate text source',
+    },
+    sp: {
+      type: 'para',
+      description: 'A heading, to identify the speaker (e.g. Job)',
+    },
+    sr: {
+      type: 'para',
+      description: 'A section division references range heading',
+    },
+    sts: {
+      type: 'para',
+      description: 'Status\nRemark',
+    },
+    sup: {
+      type: 'char',
+      description:
+        'A character style, for superscript text. Typically for use in critical edition footnotes.',
+    },
+    't-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    't-s': {
+      type: 'ms',
+      defaultAttribute: 'sid',
+    },
+    table: {
+      type: 'table',
+    },
+    tl: {
+      type: 'char',
+      description: 'For transliterated words',
+    },
+    toc1: {
+      type: 'para',
+      description: 'Long table of contents text',
+    },
+    toc2: {
+      type: 'para',
+      description: 'Short table of contents text',
+    },
+    toc3: {
+      type: 'para',
+      description: 'Book Abbreviation',
+    },
+    toca1: {
+      type: 'para',
+      description: 'Alternative language long table of contents text',
+    },
+    toca2: {
+      type: 'para',
+      description: 'Alternative language short table of contents text',
+    },
+    toca3: {
+      type: 'para',
+      description: 'Alternative language book Abbreviation',
+    },
+    tr: {
+      type: 'row',
+    },
+    ts: {
+      type: 'ms',
+    },
+    'ts-e': {
+      type: 'ms',
+      defaultAttribute: 'eid',
+    },
+    'ts-s': {
+      type: 'ms',
+      defaultAttribute: 'sid',
+    },
+    usfm: {
+      type: 'para',
+      textContentAttribute: 'version',
+    },
+    USJ: {
+      type: 'USJ',
+      textContentAttribute: 'version',
+    },
+    usx: {
+      type: 'usx',
+      textContentAttribute: 'version',
+    },
+    v: {
+      type: 'verse',
+      leadingAttributes: ['number'],
+      attributeMarkers: ['va', 'vp'],
+    },
+    va: {
+      type: 'char',
+      attributeMarkerAttributeName: 'altnumber',
+      isAttributeMarkerFor: ['v'],
+    },
+    vp: {
+      type: 'char',
+      description:
+        'Published verse marker - this is a verse marking that would be used in the published text',
+      attributeMarkerAttributeName: 'pubnumber',
+      isAttributeMarkerFor: ['v'],
+    },
+    w: {
+      type: 'char',
+      defaultAttribute: 'lemma',
+    },
+    wa: {
+      type: 'char',
+      description: 'An Aramaic wordlist text item',
+    },
+    wg: {
+      type: 'char',
+      description: 'A Greek Wordlist text item',
+    },
+    wh: {
+      type: 'char',
+      description: 'A Hebrew wordlist text item',
+    },
+    wj: {
+      type: 'char',
+      description: 'For marking the words of Jesus',
+    },
+    x: {
+      type: 'note',
+      description: 'Cross reference',
+      leadingAttributes: ['caller'],
+      attributeMarkers: ['cat'],
+    },
+    xdc: {
+      type: 'char',
+      description:
+        'Cross-reference target reference(s), Deuterocanon only (DEPRECATED - use char@style dc)',
+      isClosingMarkerOptional: true,
+    },
+    xk: {
+      type: 'char',
+      description: 'A cross reference keyword',
+      isClosingMarkerOptional: true,
+    },
+    xnt: {
+      type: 'char',
+      description: 'Cross-reference target reference(s), New Testament only',
+      isClosingMarkerOptional: true,
+    },
+    xo: {
+      type: 'char',
+      description: 'The cross reference origin reference',
+      isClosingMarkerOptional: true,
+    },
+    xop: {
+      type: 'char',
+      description:
+        'Published cross reference origin text (origin reference that should appear in the published text)',
+      isClosingMarkerOptional: true,
+    },
+    xot: {
+      type: 'char',
+      description: 'Cross-reference target reference(s), Old Testament only',
+      isClosingMarkerOptional: true,
+    },
+    xq: {
+      type: 'char',
+      description: 'A cross-reference quotation from the scripture text',
+      isClosingMarkerOptional: true,
+    },
+    xt: {
+      type: 'char',
+      defaultAttribute: 'href',
+      description:
+        'Inline scripture reference formatting.\nThe cross reference target reference(s), protocanon only',
+      isClosingMarkerOptional: true,
+    },
+    xta: {
+      type: 'char',
+      description: 'Cross reference target references added text',
+      isClosingMarkerOptional: true,
+    },
+  },
+  markersRegExp: {
+    't[hc][rc]?\\d+(-\\d+)?': {
+      type: 'cell',
+    },
+  },
+  markerTypes: {
+    book: {},
+    cell: {
+      hasNewlineBefore: true,
+      skipOutputAttributeToUsfm: ['align'],
+    },
+    chapter: {
+      hasNewlineBefore: true,
+      skipOutputAttributeToUsfm: ['sid'],
+      skipOutputMarkerToUsfmIfAttributeIsPresent: ['eid'],
+    },
+    char: {
+      hasClosingMarker: true,
+    },
+    figure: {
+      hasClosingMarker: true,
+    },
+    ms: {
+      hasClosingMarker: true,
+      isClosingMarkerEmpty: true,
+    },
+    note: {
+      hasClosingMarker: true,
+    },
+    optbreak: {
+      hasStyleAttribute: false,
+    },
+    para: {
+      hasNewlineBefore: true,
+      skipOutputAttributeToUsfm: ['vid'],
+    },
+    periph: {
+      hasNewlineBefore: true,
+      hasStyleAttribute: false,
+    },
+    ref: {
+      hasClosingMarker: true,
+      hasStyleAttribute: false,
+      skipOutputAttributeToUsfm: ['gen'],
+    },
+    row: {
+      hasNewlineBefore: true,
+    },
+    sidebar: {
+      hasNewlineBefore: true,
+    },
+    table: {
+      hasStyleAttribute: false,
+      skipOutputAttributeToUsfm: ['vid'],
+    },
+    USJ: {
+      hasStyleAttribute: false,
+    },
+    usx: {
+      hasStyleAttribute: false,
+      skipOutputAttributeToUsfm: ['noNamespaceSchemaLocation'],
+    },
+    verse: {
+      hasNewlineBefore: true,
+      skipOutputAttributeToUsfm: ['sid'],
+      skipOutputMarkerToUsfmIfAttributeIsPresent: ['eid'],
+    },
+  },
+};
