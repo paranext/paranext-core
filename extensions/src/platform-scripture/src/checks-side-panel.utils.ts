@@ -22,7 +22,7 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   // Project filter strings
   '%webView_checksSidePanel_projectFilter_noProjectSelected%',
   '%webView_checksSidePanel_projectFilter_noProjectsFound%',
-  '%webView_checksSidePanel_projectFilter_label%',
+  '%webView_checksSidePanel_projectFilter_projectsAndResources%',
   '%webView_checksSidePanel_projectFilter_projectName_format%',
   // Scope filter strings
   '%webView_checksSidePanel_scopeFilter_label%',
