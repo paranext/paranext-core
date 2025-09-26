@@ -5,14 +5,6 @@ import { Blocks } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
-const types: MultiSelectComboBoxEntry[] = [
-  { value: 'resources', label: 'Resource', starred: true },
-  { value: 'enhanced-resources', label: 'Enhanced Resource' },
-  { value: 'source-language-texts', label: 'Source Language Text' },
-  { value: 'dictionaries', label: 'Dictionary' },
-  { value: 'consultant-notes', label: 'Consultant Note' },
-];
-
 const resources = [
   {
     id: 1,
@@ -80,9 +72,38 @@ const resources = [
   },
 ];
 
-const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
-  return resources.filter((resource) => resource.type === option.value).length ?? 0;
+const getResourceCountByType = (type: string): string => {
+  return (resources.filter((resource) => resource.type === type).length ?? 0).toString();
 };
+
+const types: MultiSelectComboBoxEntry[] = [
+  {
+    value: 'resources',
+    secondaryLabel: getResourceCountByType('resources'),
+    label: 'Resource',
+    starred: true,
+  },
+  {
+    value: 'enhanced-resources',
+    secondaryLabel: getResourceCountByType('enhanced-resources'),
+    label: 'Enhanced Resource',
+  },
+  {
+    value: 'source-language-texts',
+    secondaryLabel: getResourceCountByType('source-language-texts'),
+    label: 'Source Language Text',
+  },
+  {
+    value: 'dictionaries',
+    secondaryLabel: getResourceCountByType('dictionaries'),
+    label: 'Dictionary',
+  },
+  {
+    value: 'consultant-notes',
+    secondaryLabel: getResourceCountByType('consultant-notes'),
+    label: 'Consultant Note',
+  },
+];
 
 const meta: Meta<typeof Filter> = {
   title: 'Advanced/Filter',
@@ -125,7 +146,6 @@ export const Default: Story = {
         <div className="tw-w-[500px]">
           <Filter
             entries={types}
-            getEntriesCount={getOptionsCount}
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="Filter by type"
@@ -177,7 +197,6 @@ export const MultipleBadges: Story = {
       <div className="tw-w-[600px]">
         <Filter
           entries={types}
-          getEntriesCount={getOptionsCount}
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Select types"
@@ -205,7 +224,6 @@ export const EmptyState: Story = {
       <div className="tw-w-[400px]">
         <Filter
           entries={types}
-          getEntriesCount={getOptionsCount}
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Filter by type"
