@@ -13,7 +13,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
-import ExternalToolbar from '@/components/demo/scripture-editor/ExternalToolbar';
+import { PlatformToolbar } from '@/components/demo/scripture-editor/PlatformToolbar';
 import {
   annotationRangeWeb1,
   annotationRangeWeb2,
@@ -204,6 +204,7 @@ export const InsertNote: Story = {
   render: (args, context) => {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
+    const [scrRef, setScrRef] = useState(defaultScrRef);
 
     return (
       <CanvasWithDescription
@@ -212,8 +213,8 @@ export const InsertNote: Story = {
           context.parameters?.docs?.description?.story ?? context.parameters?.description
         }
       >
-        <ExternalToolbar editorRef={editorRef} />
-        <Editorial {...args} ref={editorRef} />
+        <PlatformToolbar editorRef={editorRef} scrRef={scrRef} onScrRefChange={setScrRef} />
+        <Editorial {...args} ref={editorRef} scrRef={scrRef} onScrRefChange={setScrRef} />
       </CanvasWithDescription>
     );
   },
@@ -221,15 +222,15 @@ export const InsertNote: Story = {
     docs: {
       description: {
         story:
-          'This story demonstrates inserting notes. Use the buttons above the editor to insert ' +
-          'footnotes, cross-references, and endnotes at the current cursor position. Selecting ' +
-          'text before inserting a footnote will use that text as the footnote quote.',
+          'This story demonstrates inserting notes. Use the Project menu (hamburger) or the ' +
+          'toolbar buttons above the editor to insert footnotes, cross-references, and endnotes ' +
+          'at the current cursor position. Selecting text before inserting a footnote will use ' +
+          'that text as the footnote quote. You can also insert by typing "\\f", "\\x", or "\\fe".',
       },
     },
   },
   args: {
     defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
     options: insertNoteOptions,
   },
 };

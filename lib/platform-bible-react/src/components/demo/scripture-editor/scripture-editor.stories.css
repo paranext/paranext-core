@@ -30,6 +30,10 @@ body {
   }
 }
 
+.toolbar {
+  height: initial;
+}
+
 .editor-container .highlighted {
   position: relative;
 }
