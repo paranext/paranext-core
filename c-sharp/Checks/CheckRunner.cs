@@ -90,6 +90,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             ("getAvailableChecks", GetAvailableChecks),
             ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
             ("retrieveInventoryData", RetrieveInventoryData),
+            ("isCheckSetupForProject", IsCheckSetupForProject),
             ("stopCheckJob", StopCheckJob),
         ];
     }
@@ -198,6 +199,16 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 reference.Offset
             )),
         ];
+    }
+
+    private bool IsCheckSetupForProject(string checkId, string projectId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(checkId);
+        ArgumentException.ThrowIfNullOrEmpty(projectId);
+
+        var dataSource = _checkCache.GetChecksDataSource(projectId);
+        var check = CheckFactory.CreateCheck(checkId, dataSource);
+        return check.SetupComplete;
     }
 
     private bool DenyCheckResult(

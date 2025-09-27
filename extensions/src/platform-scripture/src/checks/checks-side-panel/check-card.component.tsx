@@ -177,6 +177,7 @@ function CheckTypeIndicator({ isMuted, checkType }: CheckTypeIndicatorProps) {
     <div className="pr-twp tw-flex tw-flex-row tw-items-center tw-gap-2">
       <Badge variant={isMuted ? 'mutedIndicator' : 'blueIndicator'} />
       <span className="tw-text-xs tw-text-muted-foreground">{checkType}</span>
+      <Badge variant="destructive">Setup required</Badge>
     </div>
   );
 }
