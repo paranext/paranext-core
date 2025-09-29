@@ -21,7 +21,12 @@ import {
 } from './usj-reader-writer.model';
 import { SortedNumberMap } from '../sorted-number-map';
 import { extractFootnotesFromUsjContent } from './footnote-util';
-import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-map-3.1.model';
+import {
+  MarkerInfo,
+  MarkersMap,
+  MarkerTypeInfo,
+  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1,
+} from './markers-map-3.1.model';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
@@ -59,10 +64,17 @@ type ChapterVerseNode = {
 /** Represents USJ formatted scripture with helpful utilities for working with it */
 export class UsjReaderWriter implements IUsjReaderWriter {
   private readonly usj: Usj;
+  private readonly markersMap: MarkersMap;
   private parentMapInternal: UsjParentMap | undefined;
 
-  constructor(usj: Usj) {
+  constructor(usj: Usj, providedMarkersMap?: MarkersMap) {
     this.usj = usj;
+
+    if (providedMarkersMap) this.markersMap = providedMarkersMap;
+    else if (this.usj.version !== '3.1')
+      throw new Error('USJ version is not 3.1! Not equipped to handle yet');
+    // TODO: Handle not 3.1
+    this.markersMap = USFM_MARKERS_MAP_3_1;
   }
 
   // If new variables are created to speed up queries, they should be reset here
@@ -109,6 +121,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region marker helper methods
 
+  /**
+   * Determine if the passed in marker is the USJ marker (should be the top-level marker)
+   *
+   * @param marker Marker to test if it is USJ marker
+   * @returns `true` if it is a USJ marker; false otherwise
+   */
   static isUsjMarker(marker: Usj | MarkerContent): marker is Usj {
     return typeof marker === 'object' && marker.type === USJ_TYPE;
   }
@@ -295,17 +313,27 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return { node, parent };
   }
 
+  /**
+   * Look through the USJ document for a token matching some condition
+   *
+   * @param token Token from which to start looking
+   * @param workingStack Working stack pointing to this token (should not include this token)
+   * @param skipTypes List of marker types to skip
+   * @param searchFunction Function that tokens will be passed into to determine if they are the
+   *   correct token. Stops searching and returns the token if this function returns `true`
+   * @returns Token matching condition tested by the search function
+   */
   private static findNextMatchingTokenUsingWorkingStack(
-    node: MarkerToken,
+    token: MarkerToken,
     workingStack: WorkingStack,
     skipTypes: string[],
-    searchFunction: (potentiallyMatchingNode: MarkerToken, workingStack: WorkingStack) => boolean,
+    searchFunction: (potentiallyMatchingToken: MarkerToken, workingStack: WorkingStack) => boolean,
   ) {
     // TODO: handle if they pass in a closing marker?
-    if (typeof node === 'object' && 'isClosingMarker' in node) return;
+    if (typeof token === 'object' && 'isClosingMarker' in token) return;
 
     // Walk the nodes in a depth-first, left-to-right manner until the search function returns true
-    let nextNode: MarkerContent | Usj | undefined = node;
+    let nextNode: MarkerContent | Usj | undefined = token;
     while (nextNode !== undefined) {
       const skipNextNode = typeof nextNode === 'object' && skipTypes.includes(nextNode.type);
 
@@ -369,6 +397,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return undefined;
   }
 
+  /**
+   * Look through the USJ document for a node matching some condition
+   *
+   * @param node Node from which to start looking
+   * @param workingStack Working stack pointing to this node (should not include this node)
+   * @param skipTypes List of marker types to skip
+   * @param searchFunction Function that nodes will be passed into to determine if they are the
+   *   correct node. Stops searching and returns the node if this function returns `true`
+   * @returns Node matching condition tested by the search function
+   */
   private static findNextMatchingNodeUsingWorkingStack(
     node: MarkerContent,
     workingStack: WorkingStack,
@@ -381,18 +419,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       node,
       workingStack,
       skipTypes,
-      (potentiallyMatchingNode, currentWorkingStack) => {
-        if (typeof potentiallyMatchingNode === 'object') {
+      (potentiallyMatchingToken, currentWorkingStack) => {
+        if (typeof potentiallyMatchingToken === 'object') {
           // Skip closing markers
-          if ('isClosingMarker' in potentiallyMatchingNode) return false;
+          if ('isClosingMarker' in potentiallyMatchingToken) return false;
 
           // Skip Usj (presumably this will not ever hit because you are not providing Usj, and the
           // Usj object should not occur below top level)
-          if (!UsjReaderWriter.isUsjMarker(potentiallyMatchingNode)) return false;
+          if (!UsjReaderWriter.isUsjMarker(potentiallyMatchingToken)) return false;
         }
 
         // Just search normal markers and text as appropriate for this method
-        return searchFunction(potentiallyMatchingNode, currentWorkingStack);
+        return searchFunction(potentiallyMatchingToken, currentWorkingStack);
       },
     ) as MarkerContent | undefined;
 
@@ -944,13 +982,28 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region transform USJ to USFM
 
-  // TODO: make not static, use passed in version to determine markers map
-  static openingMarkerToUsfm(marker: MarkerObject | Usj) {
-    let usfm = '';
+  /**
+   * Gathers various pieces of information about a marker that are helpful for transforming the
+   * marker to USFM
+   *
+   * @param marker A USJ marker (can be USJ type)
+   * @param markersMap The markers map from which to gather info
+   * @returns Various pieces of info about the marker
+   */
+  private static getInfoForMarker(
+    marker: MarkerObject | Usj,
+    markersMap: MarkersMap,
+  ): {
+    markerName: string;
+    markerNameUsfm: string;
+    markerInfo: MarkerInfo;
+    markerType: string;
+    markerTypeInfo: MarkerTypeInfo;
+  } {
     const markerName = UsjReaderWriter.isUsjMarker(marker)
       ? marker.type
       : (marker.marker ?? marker.type);
-    const markerInfo = USFM_MARKERS_MAP_3_1.markers[markerName];
+    const markerInfo = markersMap.markers[markerName];
 
     // TODO: markersRegExp
 
@@ -964,23 +1017,67 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     const markerType = markerInfo.type;
 
-    const markerTypeInfo = USFM_MARKERS_MAP_3_1.markerTypes[markerType];
+    const markerTypeInfo = markersMap.markerTypes[markerType];
 
     // TODO: unknown marker types
     if (!markerTypeInfo) throw new Error(`Unknown marker type ${markerType}`);
 
     // Add the marker name
     // Special case with USJ marker - transform to usfm marker
-    const markerNameOutput = markerName === USJ_TYPE ? 'usfm' : markerName;
+    const markerNameUsfm = markerName === USJ_TYPE ? 'usfm' : markerName;
 
-    usfm += markerType === 'optbreak' ? '//' : `\\${markerNameOutput} `;
+    return { markerName, markerNameUsfm, markerInfo, markerType, markerTypeInfo };
+  }
+
+  /**
+   * Transforms the provided USJ marker into its opening marker representation in USFM
+   *
+   * @param marker The marker to transform
+   * @returns String containing the marker information that should come before the contents of the
+   *   marker in USFM
+   */
+  private openingMarkerToUsfm(
+    marker: MarkerObject | Usj,
+    infoForMarker?: ReturnType<typeof UsjReaderWriter.getInfoForMarker>,
+  ) {
+    let usfm = '';
+
+    const { markerName, markerNameUsfm, markerInfo, markerType, markerTypeInfo } =
+      infoForMarker ?? UsjReaderWriter.getInfoForMarker(marker, this.markersMap);
+
+    // Special case with `optbreak` - transform to `//`
+    usfm += markerType === 'optbreak' ? '//' : `\\${markerNameUsfm} `;
 
     return usfm;
   }
 
-  static closingMarkerToUsfm(marker: MarkerObject | Usj) {
-    // TODO:
-    return `\\${marker.type}*`;
+  /**
+   * Transforms the provided USJ marker into its closing marker representation in USFM
+   *
+   * @param marker The marker to transform
+   * @returns String containing the marker information that should come after the contents of the
+   *   marker in USFM
+   */
+  private closingMarkerToUsfm(marker: MarkerObject | Usj) {
+    const { markerNameUsfm, markerTypeInfo } = UsjReaderWriter.getInfoForMarker(
+      marker,
+      this.markersMap,
+    );
+
+    // TODO: list non-special attributes
+
+    if (!markerTypeInfo.hasClosingMarker) return '';
+
+    // Markers can have any properties. All are strings. Only exception is content, so don't use
+    // it here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const markerWithAnyAttributes = marker as unknown as Record<string, string>;
+
+    if (markerWithAnyAttributes.closed === 'false') return '';
+
+    const closingMarkerName = markerTypeInfo.isClosingMarkerEmpty ? '' : markerNameUsfm;
+
+    return `\\${closingMarkerName}*`;
   }
 
   toUsfm() {
@@ -999,11 +1096,22 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           return false;
         }
         if ('isClosingMarker' in token) {
-          usfm += UsjReaderWriter.closingMarkerToUsfm(token.forMarker);
+          usfm += this.closingMarkerToUsfm(token.forMarker);
           return false;
         }
 
-        usfm += UsjReaderWriter.openingMarkerToUsfm(token);
+        // Add the opening marker
+        const infoForMarker = UsjReaderWriter.getInfoForMarker(token, this.markersMap);
+
+        // If there's supposed to be a newline before the marker, it should eat the last space if
+        // there is one (that last space gets turned into the newline in this format)
+        if (infoForMarker.markerTypeInfo.hasNewlineBefore) {
+          // TODO: should this use the surrogate-aware versions?
+          if (usfm.at(-1) === ' ') usfm = usfm.slice(0, -1);
+          usfm += '\n';
+        }
+
+        usfm += this.openingMarkerToUsfm(token, infoForMarker);
         // Keep going through the whole document
         return false;
       },
