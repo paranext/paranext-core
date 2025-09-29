@@ -261,7 +261,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const bookExistsRef = useRef(true);
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
@@ -280,15 +279,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
   // Handle a PlatformError if one comes in instead of project text
-  const usjFromPdp = useMemo(() => {
-    if (isPlatformError(usjFromPdpPossiblyError)) {
-      const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-      bookExistsRef.current = !bookNotFoundRegex.test(errorMessage);
-      logger.error(`Error getting USJ from PDP: ${errorMessage}`);
-      return defaultUsj;
-    }
-    bookExistsRef.current = true;
-    return usjFromPdpPossiblyError;
+  const [usjFromPdp, bookExists] = useMemo(() => {
+    if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
+
+    const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
+    logger.error(`Error getting USJ from PDP: ${errorMessage}`);
+    return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
   }, [usjFromPdpPossiblyError]);
   const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
   useEffect(() => {
@@ -634,7 +630,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
 
-    if (!bookExistsRef.current) {
+    if (!bookExists) {
       return (
         <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
           {workaround}
