@@ -148,13 +148,17 @@ global.webViewComponent = function ChecksSidePanelWebView({
     });
   }, [projectId]);
 
+  const previousProjectId = useRef<string | undefined>(undefined);
   const previousScope = useRef<CheckScopes>(undefined);
   const previousScrRef = useRef<SerializedVerseRef>(scrRef);
 
   // Effect to determine if the range used by the check job has changed
   useEffect(() => {
     // If the scope hasn't changed, determine if the scrRef change actually affects the ranges
-    if (previousScope.current === scope) {
+    if (
+      previousProjectId.current === checkInputRange.projectId &&
+      previousScope.current === scope
+    ) {
       // For "All" scope, scrRef changes do not impact the ranges; avoid resetting them
       if (scope === CheckScopes.All) return;
       // For "Book" scope, only changes to the book matter
@@ -168,6 +172,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         return;
     }
 
+    previousProjectId.current = checkInputRange.projectId;
     previousScope.current = scope;
     previousScrRef.current = scrRef;
     setActiveRanges(scope === CheckScopes.All ? getInputRangesForScopeAll() : [checkInputRange]);
