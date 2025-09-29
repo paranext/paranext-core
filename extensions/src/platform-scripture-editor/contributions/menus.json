@@ -22,9 +22,13 @@
             "label": "%webView_platformScriptureEditor_tools%",
             "order": 4
           },
+          "platformScriptureEditor.insert": {
+            "label": "%webView_platformScriptureEditor_insert%",
+            "order": 6
+          },
           "platformScriptureEditor.info": {
             "label": "%webView_platformScriptureEditor_info%",
-            "order": 6
+            "order": 7
           }
         },
         "groups": {
@@ -41,8 +45,8 @@
             "order": 2
           },
           "platformScriptureEditor.footnotes": {
-            "column": "platformScriptureEditor.options",
-            "order": 3
+            "column": "platformScriptureEditor.insert",
+            "order": 1
           },
           "platformScriptureEditor.general": {
             "column": "platformScriptureEditor.info",
