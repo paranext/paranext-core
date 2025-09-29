@@ -172,4 +172,6 @@ export interface IUsjReaderWriter {
    * @throws Error if `verseRef` does not point to a valid verse in this USJ data
    */
   verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
+  /** Transforms the USJ document into USFM */
+  toUsfm(): string;
 }
