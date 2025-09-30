@@ -100,13 +100,14 @@ const matthew1And2Usfm = `\\id MAT 40-MAT-web.sfm World English Bible (WEB)
 `;
 
 /**
- * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0.
+ * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 (version 3.1 replaced with 3.0
+ * in the USJ marker because that is more accurate. The USJ version handling isn't great yet).
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  */
 const matthew1And2Usj: Usj = JSON.parse(`{
   "type": "USJ",
-  "version": "3.1",
+  "version": "3.0",
   "content": [
     {
       "type": "book",
