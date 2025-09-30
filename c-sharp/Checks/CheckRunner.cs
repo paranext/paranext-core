@@ -31,9 +31,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
     #region Consts and member variables
 
-    // See platform-scripture.d.ts for the TypeScript definition
-    const string CHECK_RESULTS_INVALIDATE_COMMAND = "platformScripture.invalidateCheckResults";
-
     private readonly Dictionary<string, ParatextCheckDetails> _checkDetailsByCheckId =
         new()
         {
@@ -189,6 +186,16 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
         var references = new List<TextTokenSubstring>();
         references.AddRange(newReferences);
+
+        // HACK: We should use TextInventory here which will filter this out for us. This is
+        // just a temporary workaround until we get that in place.
+        if (checkId == CheckType.Character.InternalValue)
+        {
+            const string ALWAYS_VALID_CHARACTERS = " \r\n";
+            references = references
+                .Where(r => !ALWAYS_VALID_CHARACTERS.Contains(r.InventoryText))
+                .ToList();
+        }
 
         return
         [
