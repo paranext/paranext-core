@@ -170,7 +170,6 @@ export function UiLanguageSelector({
           <div className="tw-ms-3">
             {/* Do not localize or "improve". This label is temporary. */}
             <Label>
-              Currently:{'\u00A0'}
               {fallbackLanguages?.length > 0
                 ? `${fallbackLanguages
                     .map((f) => getLanguageDisplayName(f, primaryLanguage))
