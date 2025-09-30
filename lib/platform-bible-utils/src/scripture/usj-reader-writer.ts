@@ -80,10 +80,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const { markersMap: providedMarkersMap, shouldAllowInvisibleCharacters } = options ?? {};
 
     if (providedMarkersMap) this.markersMap = providedMarkersMap;
-    else if (this.usj.version !== '3.1')
-      throw new Error('USJ version is not 3.1! Not equipped to handle yet');
-    // TODO: Handle not 3.1
-    this.markersMap = USFM_MARKERS_MAP_3_1;
+    else {
+      if (this.usj.version !== '3.1' && this.usj.version !== '3.0')
+        throw new Error('USJ version is not 3.1 or 3.0! Not equipped to handle yet');
+      // TODO: Handle 3.0 properly when we get a better markers map
+      // TODO: Handle other than 3.1/0
+      this.markersMap = USFM_MARKERS_MAP_3_1;
+    }
+
+    if (this.usj.version !== this.markersMap.version)
+      console.warn(
+        `Warning: USJ provided has version ${this.usj.version}, but markers map has version ${this.markersMap.version}. This may cause unexpected issues when transforming between formats.`,
+      );
 
     this.shouldAllowInvisibleCharacters = shouldAllowInvisibleCharacters ?? false;
   }
@@ -1112,7 +1120,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const markerWithAnyAttributes = marker as unknown as Record<string, string>;
 
     // Add newline before the marker if there's supposed to be one
-    if (markerTypeInfo.hasNewlineBefore) usfm += `\n`;
+    // Special case: `USJ` marker should have a newline before
+    if (markerTypeInfo.hasNewlineBefore || UsjReaderWriter.isUsjMarker(marker)) usfm += `\n`;
 
     // Add the marker name
     // Special case with `optbreak` - transform to `//`
@@ -1258,6 +1267,26 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return usfm;
   }
 
+  /**
+   * Determines whether this marker and all its content should be skipped entirely when outputting
+   * to USFM
+   *
+   * @param marker Marker to check
+   * @returns `true` if this marker should be skipped; `false` otherwise
+   */
+  private shouldSkipOutputMarkerToUsfm(marker: MarkerObject) {
+    const { markerTypeInfo } = this.getInfoForMarker(marker);
+
+    if (
+      markerTypeInfo.skipOutputMarkerToUsfmIfAttributeIsPresent?.some(
+        (attributeName) => attributeName in marker,
+      )
+    )
+      return true;
+
+    return false;
+  }
+
   /** Removes one space at the end of the string if present */
   private static removeEndSpace(value: string) {
     // TODO: should this use the surrogate-aware functions?
@@ -1269,6 +1298,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Build the USFM up from the USJ content
     let usfm = '';
 
+    // Opening marker USFM representation of the `USJ` marker - needs to go after `id` closes in
+    // USFM even though it is before it in USJ
+    let usjOpeningMarkerUsfm = '';
+    // Whether we have already passed the `id` marker; leave USJ markers alone after this
+    let hasPassedIdMarker = false;
+    // The marker object we're currently skipping - if this is defined, it means we are walking
+    // through tokens of this marker object that we should skip outputting to USFM
+    let markerToSkipOutput: MarkerObject | undefined;
+
     UsjReaderWriter.findNextMatchingTokenUsingWorkingStack(
       this.usj,
       // Working stack is empty since the top-level object doesn't have any parents
@@ -1277,18 +1315,59 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       [],
       (token) => {
         if (typeof token !== 'object') {
-          // Add the text contents
+          if (markerToSkipOutput) return false;
+
+          // Add the text contents USFM representation
           usfm += this.textContentToUsfm(token);
           return false;
         }
         if ('isClosingMarker' in token) {
-          // Add the closing marker
+          if (markerToSkipOutput) {
+            // Indicate the skipped marker has now closed
+            if (markerToSkipOutput === token.forMarker) markerToSkipOutput = undefined;
+            return false;
+          }
+
+          // Add the closing marker USFM representation
           usfm += this.closingMarkerToUsfm(token.forMarker);
+
+          // If this is closing the `id` marker (the only marker whose type is `book`), add the
+          // top-level USJ opening marker after it
+          if (token.forMarker.type === 'book' && !hasPassedIdMarker) {
+            if (usjOpeningMarkerUsfm) {
+              // If there's supposed to be a newline before the marker, it should eat the last space if
+              // there is one (that last space gets turned into the newline in this format)
+              if (usjOpeningMarkerUsfm.startsWith('\n'))
+                usfm = UsjReaderWriter.removeEndSpace(usfm);
+
+              usfm += usjOpeningMarkerUsfm;
+            }
+
+            hasPassedIdMarker = true;
+          }
+
           return false;
         }
 
-        // Add the opening marker
+        // If we are supposed to skip this marker in USFM, skip it
+        if (this.shouldSkipOutputMarkerToUsfm(token)) {
+          markerToSkipOutput = token;
+          return false;
+        }
+
+        // Get the opening marker USFM representation
         const openingMarkerUsfm = this.openingMarkerToUsfm(token);
+
+        // If this is the USJ marker at the start of the doc, save it until after `id` marker closes
+        if (!hasPassedIdMarker && UsjReaderWriter.isUsjMarker(token) && !usjOpeningMarkerUsfm) {
+          // The USJ types aren't set up to know about 3.0 right now, but we should handle it anyway
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          if ((token.version as string) !== '3.0') {
+            // Don't output the USJ marker if it is 3.0 (3.0 is assumed and should not appear in the USFM)
+            usjOpeningMarkerUsfm = openingMarkerUsfm;
+          }
+          return false;
+        }
 
         // If there's supposed to be a newline before the marker, it should eat the last space if
         // there is one (that last space gets turned into the newline in this format)
