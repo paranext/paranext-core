@@ -70,7 +70,8 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
-  '%webView_platformScriptureEditor_error_bookNotFound%',
+  '%webView_platformScriptureEditor_error_bookNotFoundProject%',
+  '%webView_platformScriptureEditor_error_bookNotFoundResource%',
 ];
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
@@ -634,7 +635,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return (
         <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
           {workaround}
-          {localizedStrings['%webView_platformScriptureEditor_error_bookNotFound%']}
+          {isReadOnly
+            ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
+            : localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundProject%']}
         </div>
       );
     }
