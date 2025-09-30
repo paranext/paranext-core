@@ -4,6 +4,7 @@ import {
   type MarkerObject,
 } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { MarkersMap } from './markers-map-3.1.model';
 
 /** USJ content node type for a chapter */
 export const CHAPTER_TYPE = 'chapter';
@@ -48,6 +49,25 @@ export type ClosingMarker = { isClosingMarker: true; forMarker: MarkerObject | U
  * marker indicator
  */
 export type MarkerToken = MarkerContent | ClosingMarker | Usj;
+
+/**
+ * Set of options to provide to `UsjReaderWriter`'s constructor to customize how the reading and
+ * writing works
+ */
+export type UsjReaderWriterOptions = {
+  /**
+   * A map of all USFM/USX/USJ markers and some information about them. Used for translating between
+   * the formats
+   */
+  markersMap?: MarkersMap;
+  /**
+   * Whether the transformations should preserve invisible characters as in Paratext 9
+   * (`ScrText.Settings.AllowInvisibleChars`).
+   *
+   * Defaults to `false`
+   */
+  shouldAllowInvisibleCharacters?: boolean;
+};
 
 /** Utilities for reading from and writing to `Usj` objects */
 export interface IUsjReaderWriter {
