@@ -162,6 +162,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
+        case 'insertFootnote': {
+          editorRef.current?.insertNote('f');
+          break;
+        }
         default:
           // Unknown method name
           logger.debug(

@@ -22,9 +22,13 @@
             "label": "%webView_platformScriptureEditor_tools%",
             "order": 4
           },
+          "platformScriptureEditor.insert": {
+            "label": "%webView_platformScriptureEditor_insert%",
+            "order": 6
+          },
           "platformScriptureEditor.info": {
             "label": "%webView_platformScriptureEditor_info%",
-            "order": 5
+            "order": 7
           }
         },
         "groups": {
@@ -39,6 +43,10 @@
           "platformScriptureEditor.layout": {
             "column": "platformScriptureEditor.options",
             "order": 2
+          },
+          "platformScriptureEditor.footnotes": {
+            "column": "platformScriptureEditor.insert",
+            "order": 1
           },
           "platformScriptureEditor.general": {
             "column": "platformScriptureEditor.info",
@@ -89,6 +97,12 @@
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertFootnote%",
+            "group": "platformScriptureEditor.footnotes",
+            "order": 1,
+            "command": "platformScripture.insertFootnote"
           }
         ]
       },

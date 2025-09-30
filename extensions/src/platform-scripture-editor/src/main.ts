@@ -76,6 +76,27 @@ async function openPlatformResourceViewer(
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
+async function insertFootnote(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting footnote...');
+
+  if (webViewId) {
+    const webViewController = await papi.webViews.getWebViewController(
+      scriptureEditorWebViewType,
+      webViewId,
+    );
+
+    if (webViewController) {
+      await webViewController.insertFootnote();
+    } else {
+      logger.debug('No web view controller found!');
+    }
+  } else {
+    logger.debug('No web view!');
+  }
+
+  return undefined;
+}
+
 /** Function to prompt for a project and open it in the editor */
 async function open(
   isReadOnly: boolean,
@@ -386,6 +407,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           throw new Error(message);
         }
       },
+      async insertFootnote() {
+        const message: EditorWebViewMessage = {
+          method: 'insertFootnote',
+        };
+        await papi.webViewProviders.postMessageToWebView(
+          currentWebViewDefinition.id,
+          webViewNonce,
+          message,
+        );
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -421,6 +452,28 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
           name: 'return value',
           summary: 'The ID of the opened web view',
           schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const insertFootnotePromise = papi.commands.registerCommand(
+    'platformScripture.insertFootnote',
+    insertFootnote,
+    {
+      method: {
+        summary: 'Insert a footnote into the project',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project that we are inserting the footnote',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
         },
       },
     },
@@ -465,6 +518,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
+    await insertFootnotePromise,
   );
 
   logger.debug('Scripture editor is finished activating!');

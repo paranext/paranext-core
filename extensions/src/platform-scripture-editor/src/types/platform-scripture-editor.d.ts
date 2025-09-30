@@ -36,8 +36,16 @@ declare module 'platform-scripture-editor' {
     decorationsToRemove?: string[];
   };
 
+  /** Tell the editor to insert a footnote */
+  export type EditorMessageInsertFootnote = {
+    method: 'insertFootnote';
+  };
+
   /** Messages sent to the editor web view */
-  export type EditorWebViewMessage = EditorMessageSelectRange | EditorMessageUpdateDecorations;
+  export type EditorWebViewMessage =
+    | EditorMessageSelectRange
+    | EditorMessageUpdateDecorations
+    | EditorMessageInsertFootnote;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -157,6 +165,8 @@ declare module 'platform-scripture-editor' {
       decorationsToAdd: EditorDecorations | undefined,
       decorationsToRemove?: string[],
     ): Promise<void>;
+    /** Function to insert a footnote in the editor at the given location of the cursor */
+    insertFootnote(): Promise<void>;
   }>;
 }
 
@@ -200,6 +210,14 @@ declare module 'papi-shared-types' {
       options?: OpenEditorOptions,
       existingTabIdToReplace?: string,
     ) => Promise<string | undefined>;
+
+    /**
+     * Command to insert a foot note into a given editor web view.
+     *
+     * @param editorWebViewId The id of the web view to insert the footnote for
+     * @returns
+     */
+    'platformScripture.insertFootnote': (editorWebViewId?: string | undefined) => Promise<void>;
   }
 
   export interface WebViewControllers {
