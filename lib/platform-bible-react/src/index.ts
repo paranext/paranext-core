@@ -163,8 +163,6 @@ export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
-export { PersistedSplitPanels } from './components/basics/persisted-split-panels.component';
-export type { PersistedSplitPanelsProps } from './components/basics/persisted-split-panels.component';
 export * from './components/shadcn-ui/popover';
 export { Progress } from './components/shadcn-ui/progress';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
