@@ -76,7 +76,7 @@ async function openPlatformResourceViewer(
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
-async function insertFootnote(webViewId: string | undefined): Promise<void> {
+async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
   logger.debug('Inserting footnote...');
 
   if (webViewId) {
@@ -86,12 +86,12 @@ async function insertFootnote(webViewId: string | undefined): Promise<void> {
     );
 
     if (webViewController) {
-      await webViewController.insertFootnote();
+      await webViewController.insertFootnoteAtSelection();
     } else {
-      logger.debug('No web view controller found!');
+      throw new Error('No web view controller found!');
     }
   } else {
-    logger.debug('No web view!');
+    throw new Error('No WebView ID provided!');
   }
 
   return undefined;
@@ -407,9 +407,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           throw new Error(message);
         }
       },
-      async insertFootnote() {
+      async insertFootnoteAtSelection() {
         const message: EditorWebViewMessage = {
-          method: 'insertFootnote',
+          method: 'insertFootnoteAtSelection',
         };
         await papi.webViewProviders.postMessageToWebView(
           currentWebViewDefinition.id,
@@ -457,11 +457,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
   const insertFootnotePromise = papi.commands.registerCommand(
-    'platformScripture.insertFootnote',
-    insertFootnote,
+    'platformScriptureEditor.insertFootnoteAtSelection',
+    insertFootnoteAtSelection,
     {
       method: {
-        summary: 'Insert a footnote into the project',
+        summary: 'Insert a footnote into the project at the given selection in the editor',
         params: [
           {
             name: 'webViewId',

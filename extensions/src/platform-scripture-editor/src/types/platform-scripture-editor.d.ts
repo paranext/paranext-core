@@ -37,15 +37,15 @@ declare module 'platform-scripture-editor' {
   };
 
   /** Tell the editor to insert a footnote */
-  export type EditorMessageInsertFootnote = {
-    method: 'insertFootnote';
+  export type EditorMessageInsertFootnoteAtSelection = {
+    method: 'insertFootnoteAtSelection';
   };
 
   /** Messages sent to the editor web view */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
-    | EditorMessageInsertFootnote;
+    | EditorMessageInsertFootnoteAtSelection;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -166,7 +166,7 @@ declare module 'platform-scripture-editor' {
       decorationsToRemove?: string[],
     ): Promise<void>;
     /** Function to insert a footnote in the editor at the given location of the cursor */
-    insertFootnote(): Promise<void>;
+    insertFootnoteAtSelection(): Promise<void>;
   }>;
 }
 
@@ -217,7 +217,9 @@ declare module 'papi-shared-types' {
      * @param editorWebViewId The id of the web view to insert the footnote for
      * @returns
      */
-    'platformScripture.insertFootnote': (editorWebViewId?: string | undefined) => Promise<void>;
+    'platformScriptureEditor.insertFootnoteAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
   }
 
   export interface WebViewControllers {

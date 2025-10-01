@@ -99,10 +99,10 @@
             "command": "platformScripture.openChecksSidePanel"
           },
           {
-            "label": "%webView_platformScriptureEditor_insertFootnote%",
+            "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
             "group": "platformScriptureEditor.footnotes",
             "order": 1,
-            "command": "platformScripture.insertFootnote"
+            "command": "platformScriptureEditor.insertFootnoteAtSelection"
           }
         ]
       },

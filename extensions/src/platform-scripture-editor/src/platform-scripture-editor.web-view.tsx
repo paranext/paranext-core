@@ -162,7 +162,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
-        case 'insertFootnote': {
+        case 'insertFootnoteAtSelection': {
           editorRef.current?.insertNote('f');
           break;
         }
