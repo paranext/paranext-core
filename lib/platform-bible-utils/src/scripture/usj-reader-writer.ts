@@ -445,7 +445,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
           // Skip Usj (presumably this will not ever hit because you are not providing Usj, and the
           // Usj object should not occur below top level)
-          if (!UsjReaderWriter.isUsjMarker(potentiallyMatchingToken)) return false;
+          if (UsjReaderWriter.isUsjMarker(potentiallyMatchingToken)) return false;
         }
 
         // Just search normal markers and text as appropriate for this method
@@ -1158,12 +1158,22 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         };
 
         // Build the USFM for the attribute marker
-        let attributeMarkerUsfm = this.openingMarkerToUsfm(attributeMarker);
+        let attributeMarkerUsfm = UsjReaderWriter.addMarkerUsfmToString(
+          '',
+          this.openingMarkerToUsfm(attributeMarker),
+        );
         attributeMarkerUsfm += this.textContentToUsfm(attributeValue);
-        attributeMarkerUsfm += this.closingMarkerToUsfm(attributeMarker);
+        attributeMarkerUsfm = UsjReaderWriter.addMarkerUsfmToString(
+          attributeMarkerUsfm,
+          this.closingMarkerToUsfm(attributeMarker),
+        );
+
+        // Add the optional structural space after the attribute marker according to spec
+        // Special case: `cat` marker doesn't have this optional structural space
+        if (attributeMarkerName !== 'cat') attributeMarkerUsfm += ' ';
 
         // Add the attribute marker USFM to the document
-        usfm += attributeMarkerUsfm;
+        usfm = UsjReaderWriter.addMarkerUsfmToString(usfm, attributeMarkerUsfm);
       });
     }
 
@@ -1294,6 +1304,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return value.slice(0, -1);
   }
 
+  /**
+   * Add an opening or closing marker USFM representation to the end of a string of USFM
+   *
+   * @param usfm The USFM string to add the marker to
+   * @param markerUsfm The opening or closing marker USFM representation to add
+   * @returns Final USFM string with the marker added
+   */
+  private static addMarkerUsfmToString(usfm: string, markerUsfm: string) {
+    let usfmOutput = usfm;
+    // If there's supposed to be a newline before the marker, it should eat the last space if
+    // there is one (that last space gets turned into the newline in this format)
+    if (markerUsfm.startsWith('\n')) usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
+
+    usfmOutput += markerUsfm;
+
+    return usfmOutput;
+  }
+
   toUsfm() {
     // Build the USFM up from the USJ content
     let usfm = '';
@@ -1329,19 +1357,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           }
 
           // Add the closing marker USFM representation
-          usfm += this.closingMarkerToUsfm(token.forMarker);
+          usfm = UsjReaderWriter.addMarkerUsfmToString(
+            usfm,
+            this.closingMarkerToUsfm(token.forMarker),
+          );
 
           // If this is closing the `id` marker (the only marker whose type is `book`), add the
           // top-level USJ opening marker after it
           if (token.forMarker.type === 'book' && !hasPassedIdMarker) {
-            if (usjOpeningMarkerUsfm) {
-              // If there's supposed to be a newline before the marker, it should eat the last space if
-              // there is one (that last space gets turned into the newline in this format)
-              if (usjOpeningMarkerUsfm.startsWith('\n'))
-                usfm = UsjReaderWriter.removeEndSpace(usfm);
-
-              usfm += usjOpeningMarkerUsfm;
-            }
+            if (usjOpeningMarkerUsfm)
+              usfm = UsjReaderWriter.addMarkerUsfmToString(usfm, usjOpeningMarkerUsfm);
 
             hasPassedIdMarker = true;
           }
@@ -1369,11 +1394,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           return false;
         }
 
-        // If there's supposed to be a newline before the marker, it should eat the last space if
-        // there is one (that last space gets turned into the newline in this format)
-        if (openingMarkerUsfm.startsWith('\n')) usfm = UsjReaderWriter.removeEndSpace(usfm);
-
-        usfm += openingMarkerUsfm;
+        usfm = UsjReaderWriter.addMarkerUsfmToString(usfm, openingMarkerUsfm);
 
         // Keep going through the whole document
         return false;
