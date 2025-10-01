@@ -22,7 +22,6 @@ interface FilterProps extends MultiSelectComboBoxProps {
  */
 export function Filter({
   entries,
-  getEntriesCount,
   selected,
   onChange,
   placeholder,
@@ -39,7 +38,6 @@ export function Filter({
     <div id={id} className="tw-flex tw-items-center tw-gap-2">
       <MultiSelectComboBox
         entries={entries}
-        getEntriesCount={getEntriesCount}
         selected={selected}
         onChange={onChange}
         placeholder={placeholder}
