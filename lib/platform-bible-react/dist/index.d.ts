@@ -23,6 +23,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
@@ -1911,6 +1912,53 @@ export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
 export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+export type PersistedSplitPanelsProps = {
+	/** Additional CSS classes to help with unique styling of the group containing the panels */
+	className?: string;
+	/**
+	 * A value indicating how the two panels will be laid out relative to each other:
+	 *
+	 * - 'horizontal' (default): panels are side-by-side, separated by a vertical handle.
+	 * - 'vertical': panels are stacked, separated by a horizontal handle.
+	 *
+	 * @default 'horizontal'
+	 */
+	direction?: "horizontal" | "vertical";
+	/**
+	 * A flag indicating whether to show a "handle" to make it obvious to the use that the splitter
+	 * can be moved to resize the panels.
+	 *
+	 * @default true
+	 */
+	showHandle?: boolean;
+	/** Additional CSS classes to help with unique styling of the resizable handle */
+	handleClassName?: string;
+	/** A unique key used to persist the first panel's size in `localStorage`. */
+	storageKey: string;
+	/**
+	 * The initial percentage of the total available space the first panel should occupy if no
+	 * persisted value exists. This should be in the range [0-100], as it will be interpreted as a
+	 * percentage.
+	 *
+	 * @default 50
+	 */
+	defaultSize?: number;
+	/**
+	 * Exactly two children:
+	 *
+	 * - `children[0]` → content for the first (persisted-size) panel.
+	 * - `children[1]` → content for the second panel, which automatically fills the remaining space.
+	 */
+	children: [
+		React$1.ReactNode,
+		React$1.ReactNode
+	];
+};
+/**
+ * This component renders a two-panel resizable group, where the size of the first panel is
+ * persisted across page reloads.
+ */
+export declare function PersistedSplitPanels({ storageKey, className, handleClassName, defaultSize, direction, showHandle, children, }: PersistedSplitPanelsProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This popover is
  * built on Radix UI's Popover component and styled by Shadcn UI.
@@ -1983,6 +2031,27 @@ export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectP
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Select */
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
+	className?: string;
+	collapsedSize?: number | undefined;
+	collapsible?: boolean | undefined;
+	defaultSize?: number | undefined;
+	id?: string;
+	maxSize?: number | undefined;
+	minSize?: number | undefined;
+	onCollapse?: ResizablePrimitive.PanelOnCollapse;
+	onExpand?: ResizablePrimitive.PanelOnExpand;
+	onResize?: ResizablePrimitive.PanelOnResize;
+	order?: number;
+	style?: object;
+	tagName?: keyof HTMLElementTagNameMap | undefined;
+} & {
+	children?: import("react").ReactNode | undefined;
+} & React$1.RefAttributes<ResizablePrimitive.ImperativePanelHandle>>;
+export declare function ResizableHandle({ withHandle, className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle> & {
+	withHandle?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
 /**
  * The Separator component visually or semantically separates content. This component is built on
  * Radix UI primitives and styled with Shadcn UI.
