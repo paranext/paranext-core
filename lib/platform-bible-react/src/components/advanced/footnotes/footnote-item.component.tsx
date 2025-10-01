@@ -6,6 +6,58 @@ import { FootnoteItemProps } from './footnotes.types';
 
 const markerClasses = cn('marker', `marker-visible'}`);
 
+function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {
+  if (!content || content.length === 0) return parentMarker ?? 'empty';
+
+  const firstString = content.find((part) => typeof part === 'string');
+  if (firstString) {
+    return `key-${parentMarker ?? 'unknown'}-${firstString.slice(0, 10)}`;
+  }
+
+  // Fallback: combine markers
+  const firstMarker =
+    typeof content[0] === 'string' ? 'impossible' : (content[0].marker ?? 'unknown');
+  return `key-${parentMarker ?? 'unknown'}-${firstMarker}`;
+}
+
+function renderParagraphs(
+  parentMarker: string | undefined,
+  content?: MarkerContent[],
+  showMarkers = true,
+  footnoteClosing: React.ReactNode | undefined = undefined,
+): React.ReactNode {
+  if (!content || content.length === 0) return undefined;
+
+  const markerHierarchy: string[] = [];
+
+  const paragraphs: MarkerContent[][] = [];
+  let current: MarkerContent[] = [];
+
+  content.forEach((part) => {
+    if (typeof part !== 'string' && part.marker === 'fp') {
+      // End current paragraph before starting new one
+      if (current.length > 0) paragraphs.push(current);
+
+      // Start new paragraph that *includes* the fp marker itself
+      current = [part];
+    } else {
+      current.push(part);
+    }
+  });
+
+  if (current.length > 0) paragraphs.push(current);
+
+  return paragraphs.map((para, i) => {
+    const isLast = i === paragraphs.length - 1;
+    return (
+      <p key={makeKey(parentMarker, para)} className="tw-mb-2">
+        {renderContent(parentMarker, para, showMarkers, true, markerHierarchy)}
+        {isLast && footnoteClosing}
+      </p>
+    );
+  });
+}
+
 function renderContent(
   parentMarker: string | undefined,
   content?: MarkerContent[],
@@ -15,11 +67,11 @@ function renderContent(
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
 
+  const key = makeKey(parentMarker, content);
+
   return content.map((footnotePart) => {
     // Build a key based on the hierarchy and marker/text
-    let key = markerHierarchy.join('-');
     if (typeof footnotePart === 'string') {
-      key += `-${footnotePart.slice(0, 10)}`; // first few chars of text
       if (allowUnmarkedText) {
         const classes = cn(`usfm_${parentMarker}`);
         return (
@@ -40,8 +92,6 @@ function renderContent(
       );
     }
 
-    // For MarkerObjects, include marker in the key and pass updated hierarchy
-    key += `-${footnotePart.marker ?? 'unknown'}`;
     return renderMarkerObject(footnotePart, key, showMarkers, [
       ...markerHierarchy,
       parentMarker ?? 'unknown',
@@ -137,10 +187,7 @@ export function FootnoteItem({
         )}
       >
         {remainingContent && remainingContent.length > 0 && (
-          <>
-            {renderContent(footnote.marker, remainingContent, showMarkers, true)}
-            {footnoteClosing}
-          </>
+          <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}
       </div>
     </>
