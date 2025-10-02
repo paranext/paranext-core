@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { getDefaultCallerSequence, getNthCaller, getFormatCallerFunction } from './footnote-util';
+import { MarkerContent, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import {
+  getDefaultCallerSequence,
+  getNthCaller,
+  getFormatCallerFunction,
+  extractFootnotesFromUsjContent,
+  extractFootnotesFromUsj,
+} from './footnote-util';
+import { usjMat1 } from './footnote-util-test.usj.data';
 
 describe('Caller Utilities', () => {
   describe('getDefaultCallerSequence', () => {
@@ -64,6 +71,105 @@ describe('Caller Utilities', () => {
       const fn = getFormatCallerFunction(footnotes, undefined);
       expect(fn('-', 0)).toBeUndefined();
       expect(fn('x', 0)).toBe('x');
+    });
+  });
+});
+
+describe('extractFootnotesFromUsjContent', () => {
+  it('should return an empty array if there are no notes', () => {
+    const content: MarkerContent = { type: 'text', marker: 'p', content: ['Some text'] };
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([]);
+  });
+
+  it('should handle nodes with undefined or string content', () => {
+    const note: MarkerObject = { type: 'note', marker: 'f', content: undefined };
+    const content: MarkerContent = {
+      type: 'paragraph',
+      marker: 'q',
+      content: ['Evil men seek my life', { type: 'text', marker: 'add', content: undefined }, note],
+    };
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([note]);
+  });
+
+  it('should extract a single note at the top level', () => {
+    const note: MarkerObject = { type: 'note', marker: 'x', content: [] };
+    const content: MarkerContent = note;
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([note]);
+  });
+
+  it('should extract nested notes', () => {
+    const note1: MarkerObject = { type: 'note', marker: 'fe', content: [] };
+    const note2: MarkerObject = { type: 'note', marker: 'f', content: [] };
+    const content: MarkerContent = {
+      type: 'para',
+      marker: 'p',
+      content: [
+        {
+          type: 'verse',
+          marker: 'v',
+          number: '1',
+          content: [
+            { type: 'text', marker: 't', content: ['Hello '] },
+            note1,
+            {
+              type: 'wj',
+              marker: 'wj',
+              content: [note2],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([note1, note2]);
+  });
+
+  it('should ignore non-note markers', () => {
+    const paraWithVerse12 = usjMat1.content.find(
+      (node) =>
+        typeof node === 'object' &&
+        node.type === 'para' &&
+        node.content?.some(
+          (c) =>
+            typeof c === 'object' && c.type === 'verse' && c.marker === 'v' && c.number === '12',
+        ),
+    );
+
+    if (!paraWithVerse12) throw new Error('Paragraph with verse 12 not found');
+
+    const result = extractFootnotesFromUsjContent([paraWithVerse12]);
+    expect(result).toEqual([]);
+  });
+});
+
+describe('extractFootnotesFromUsj', () => {
+  it('should extract multiple notes from real-life data', () => {
+    const data = usjMat1;
+    const result = extractFootnotesFromUsj(data);
+    expect(result.length).toEqual(10);
+
+    // Spot-check some known markers
+    expect(result[0].marker).toBe('x'); // first one is cross-ref
+    expect(result[1].marker).toBe('f'); // second is footnote
+    expect(result[2].marker).toBe('fe'); // second is footnote
+    expect(result[result.length - 1].marker).toBe('x'); // last is also cross-ref
+
+    expect(result.every((n) => n.type === 'note')).toBe(true);
+
+    // e.g., All notes in this test data should start with a `MarkerObject` whose type is `char`
+    result.forEach((note) => {
+      expect(note.type).toBe('note');
+      const firstChild = note.content?.[0];
+      if (firstChild === undefined) throw new Error('Expected first child to be defined');
+      if (typeof firstChild === 'string') throw new Error('Expected MarkerObject, got string');
+      expect(firstChild.type).toBe('char');
     });
   });
 });
