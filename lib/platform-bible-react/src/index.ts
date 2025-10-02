@@ -167,6 +167,7 @@ export * from './components/shadcn-ui/popover';
 export { Progress } from './components/shadcn-ui/progress';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
+export * from './components/shadcn-ui/resizable';
 export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sidebar';
 export * from './components/shadcn-ui/sonner';

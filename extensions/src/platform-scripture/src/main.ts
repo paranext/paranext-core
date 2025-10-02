@@ -38,8 +38,15 @@ const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPre
 
 // There are 7 options in the enum
 const versificationValidator: ProjectSettingValidator<'platformScripture.versification'> = async (
-  newValue,
-) => typeof newValue === 'number' && newValue >= 0 && newValue <= 6 && Number.isInteger(newValue);
+  newValue: unknown,
+) => {
+  // Settings UI might send over numbers as strings
+  if (typeof newValue !== 'number' && typeof newValue !== 'string') return false;
+  // Only convert 1 character strings to numbers to avoid saving garbage values like "NaN" and "1."
+  if (typeof newValue === 'string' && newValue.length > 1) return false;
+  const valueAsNumber = Number(newValue);
+  return valueAsNumber >= 0 && valueAsNumber <= 6 && Number.isInteger(valueAsNumber);
+};
 
 // A character can be any string value
 const charactersValidator: ProjectSettingValidator<
