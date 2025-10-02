@@ -64,7 +64,7 @@ const createColumns = (
 ];
 
 type CharacterInventoryProps = {
-  inventoryItems: InventoryItem[];
+  inventoryItems: InventoryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
@@ -73,6 +73,7 @@ type CharacterInventoryProps = {
   onUnapprovedItemsChange: (items: string[]) => void;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
+  areInventoryItemsLoading?: boolean;
 };
 
 export function CharacterInventory({
@@ -85,6 +86,7 @@ export function CharacterInventory({
   onUnapprovedItemsChange,
   scope,
   onScopeChange,
+  areInventoryItemsLoading,
 }: CharacterInventoryProps) {
   const [characterInventoryStrings] = useLocalizedStrings(CHARACTER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -138,6 +140,7 @@ export function CharacterInventory({
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}
+      areInventoryItemsLoading={areInventoryItemsLoading}
     />
   );
 }

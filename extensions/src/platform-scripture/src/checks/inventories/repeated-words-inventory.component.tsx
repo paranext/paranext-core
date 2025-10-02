@@ -52,7 +52,7 @@ const createColumns = (
 ];
 
 interface RepeatedWordsInventoryProps {
-  inventoryItems: InventoryItem[];
+  inventoryItems: InventoryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];

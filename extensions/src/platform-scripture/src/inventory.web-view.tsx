@@ -90,7 +90,7 @@ global.webViewComponent = function InventoryWebView({
 
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
-  const [inventoryItems] = usePromise(
+  const [inventoryItems, isLoadingInventoryItems] = usePromise(
     useCallback(async () => {
       if (checkAggregator && projectId) {
         const newInventoryItems = await checkAggregator.retrieveInventoryData(
@@ -105,7 +105,7 @@ global.webViewComponent = function InventoryWebView({
       }
       return [];
     }, [checkAggregator, projectId, checkId, checkInputRange, scope, verseRef.verseNum]),
-    [],
+    undefined,
   );
 
   const [validItemsPossiblyError, setValidItems] = useProjectSetting(
@@ -152,6 +152,7 @@ global.webViewComponent = function InventoryWebView({
       scope={scope}
       onScopeChange={(newScope: Scope) => setScope(newScope)}
       projectId={projectId}
+      areInventoryItemsLoading={inventoryItems === undefined || isLoadingInventoryItems}
     />
   );
 };
