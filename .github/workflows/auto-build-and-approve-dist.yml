@@ -1,8 +1,14 @@
 name: Auto-approve dist-only changes
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/platform-bible-react/**'
+      - '!lib/platform-bible-react/dist/**'
+      - 'lib/platform-bible-utils/**'
+      - '!lib/platform-bible-utils/dist/**'
 
 jobs:
   build-dist:

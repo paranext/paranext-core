@@ -127,6 +127,27 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      # If this change involved library files, ensure the `dist` files are updated before running tests.
+      - name: Get changed files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          else
+            files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          fi
+          # convert to JSON array
+          json_files=$(echo "$files" | jq -R -s -c 'split("\n")[:-1]')
+          echo "files=$json_files" >> $GITHUB_OUTPUT
+
+      - name: Build platform-bible-react
+        if: ${{ steps.changed.outputs.files && contains(fromJSON(steps.changed.outputs.files), 'lib/platform-bible-react/') }}
+        run: npm run build:platform-bible-react
+
+      - name: Build platform-bible-utils
+        if: ${{ steps.changed.outputs.files && contains(fromJSON(steps.changed.outputs.files), 'lib/platform-bible-utils/') }}
+        run: npm run build:platform-bible-utils
+
       # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
       - name: type checking
         run: |
@@ -139,6 +160,10 @@ jobs:
       - name: Verify no files changed after build
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v20
+        with:
+          exclude: |
+            lib/platform-bible-react/dist/**
+            lib/platform-bible-utils/dist/**
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
