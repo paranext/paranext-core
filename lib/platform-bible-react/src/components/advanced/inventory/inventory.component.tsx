@@ -185,7 +185,7 @@ const localizeString = (
 /** Props for the Inventory component */
 type InventoryProps = {
   /** The inventory items that the inventory should be populated with */
-  inventoryItems: InventoryItem[];
+  inventoryItems: InventoryItem[] | undefined;
   /** Callback function that is executed when the scripture reference is changed */
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   /**
@@ -217,6 +217,8 @@ type InventoryProps = {
   columns: ColumnDef<InventoryTableData>[];
   /** Unique identifier for the Inventory component */
   id?: string;
+  /** Whether the inventory items are still loading */
+  areInventoryItemsLoading?: boolean;
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -231,6 +233,7 @@ export function Inventory({
   onScopeChange,
   columns,
   id,
+  areInventoryItemsLoading = false,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -251,8 +254,9 @@ export function Inventory({
   const [selectedItem, setSelectedItem] = useState<string[]>([]);
 
   const tableData: InventoryTableData[] = useMemo(() => {
-    if (inventoryItems.length === 0) return [];
-    return processInventoryItems(inventoryItems, approvedItems, unapprovedItems);
+    const safeInventoryItems = inventoryItems ?? [];
+    if (safeInventoryItems.length === 0) return [];
+    return processInventoryItems(safeInventoryItems, approvedItems, unapprovedItems);
   }, [inventoryItems, approvedItems, unapprovedItems]);
 
   const reducedTableData: InventoryTableData[] = useMemo(() => {
@@ -284,6 +288,7 @@ export function Inventory({
   }, [showAdditionalItems, tableData]);
 
   const filteredTableData: InventoryTableData[] = useMemo(() => {
+    if (reducedTableData.length === 0) return [];
     return filterItemData(reducedTableData, statusFilter, textFilter);
   }, [reducedTableData, statusFilter, textFilter]);
 
@@ -413,6 +418,7 @@ export function Inventory({
           data={filteredTableData}
           onRowClickHandler={rowClickHandler}
           stickyHeader
+          isLoading={areInventoryItemsLoading}
         />
       </div>
       {occurrenceData.length > 0 && (

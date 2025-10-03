@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import {
   ColumnFiltersState,
@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
+import { Skeleton } from '@/components/shadcn-ui/skeleton';
 
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
@@ -37,13 +38,14 @@ export type RowSelectionState = TSRowSelectionState;
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
-  data: TData[];
+  data: TData[] | undefined;
   enablePagination?: boolean;
   showPaginationControls?: boolean;
   showColumnVisibilityControls?: boolean;
   stickyHeader?: boolean;
   onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
   id?: string;
+  isLoading?: boolean;
 }
 
 /**
@@ -59,14 +61,18 @@ export function DataTable<TData, TValue>({
   stickyHeader = false,
   onRowClickHandler = () => {},
   id,
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
 
+  const normalizedData = useMemo(() => data ?? [], [data]);
+  const shouldRenderSkeletons = useMemo(() => isLoading ?? data === undefined, [isLoading, data]);
+
   const table = useReactTable({
-    data,
+    data: normalizedData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     ...(enablePagination && { getPaginationRowModel: getPaginationRowModel() }),
@@ -83,6 +89,45 @@ export function DataTable<TData, TValue>({
       rowSelection,
     },
   });
+
+  const visibleColumns = table.getVisibleFlatColumns();
+  let bodyContent: React.ReactNode;
+
+  if (shouldRenderSkeletons) {
+    const rowCount = 10;
+    const skeletonRowIds = Array.from({ length: rowCount }).map((_, idx) => `skeleton-row-${idx}`);
+    bodyContent = skeletonRowIds.map((rowId) => (
+      <TableRow key={rowId}>
+        {visibleColumns.map((col) => (
+          <TableCell key={`skeleton-cell-${col.id}-${rowId}`}>
+            <Skeleton className="tw-h-16 tw-w-full" />
+          </TableCell>
+        ))}
+      </TableRow>
+    ));
+  } else if (table.getRowModel().rows?.length > 0) {
+    bodyContent = table.getRowModel().rows.map((row) => (
+      <TableRow
+        onClick={() => onRowClickHandler(row, table)}
+        key={row.id}
+        data-state={row.getIsSelected() && 'selected'}
+      >
+        {row.getVisibleCells().map((cell) => (
+          <TableCell key={cell.id}>
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </TableCell>
+        ))}
+      </TableRow>
+    ));
+  } else {
+    bodyContent = (
+      <TableRow>
+        <TableCell colSpan={columns.length} className="tw-h-24 tw-text-center">
+          No results.
+        </TableCell>
+      </TableRow>
+    );
+  }
 
   return (
     <div className="pr-twp" id={id}>
@@ -103,29 +148,7 @@ export function DataTable<TData, TValue>({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                onClick={() => onRowClickHandler(row, table)}
-                key={row.id}
-                data-state={row.getIsSelected() && 'selected'}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="tw-h-24 tw-text-center">
-                No results.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
+        <TableBody>{bodyContent}</TableBody>
       </Table>
       {enablePagination && (
         <div className="tw-flex tw-items-center tw-justify-end tw-space-x-2 tw-py-4">

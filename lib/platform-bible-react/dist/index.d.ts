@@ -270,19 +270,20 @@ export type TableContents<TData> = TSTable<TData>;
 export type SortDirection = TSSortDirection;
 interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
-	data: TData[];
+	data: TData[] | undefined;
 	enablePagination?: boolean;
 	showPaginationControls?: boolean;
 	showColumnVisibilityControls?: boolean;
 	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 	id?: string;
+	isLoading?: boolean;
 }
 /**
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -696,7 +697,7 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The inventory items that the inventory should be populated with */
-	inventoryItems: InventoryItem[];
+	inventoryItems: InventoryItem[] | undefined;
 	/** Callback function that is executed when the scripture reference is changed */
 	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
@@ -728,9 +729,11 @@ type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 	/** Unique identifier for the Inventory component */
 	id?: string;
+	/** Whether the inventory items are still loading */
+	areInventoryItemsLoading?: boolean;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

@@ -75,7 +75,7 @@ const createColumns = (
 };
 
 type PunctuationInventoryProps = {
-  inventoryItems: InventoryItem[];
+  inventoryItems: InventoryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];

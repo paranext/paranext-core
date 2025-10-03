@@ -528,3 +528,14 @@ export const EmptyTable: Story = {
     },
   },
 };
+
+export const LoadingTable: Story = {
+  render: () => <DataTable<User, unknown> columns={userColumns} data={undefined} isLoading />,
+  parameters: {
+    docs: {
+      description: {
+        story: 'Table with loading data to show the loading state.',
+      },
+    },
+  },
+};
