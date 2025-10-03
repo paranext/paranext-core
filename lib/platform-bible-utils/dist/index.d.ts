@@ -1651,6 +1651,20 @@ export declare function getNthCaller(n: number, callers?: string[]): string;
  */
 export declare function getFormatCallerFunction(footnotes: MarkerObject[], callers: string[] | undefined): (caller: string | undefined, index: number) => string | undefined;
 /**
+ * Extract footnotes from an array of `MarkerContent` objects.
+ *
+ * @param contents - An array of `MarkerContent` objects
+ * @returns An array of MarkerObjects representing all textual notes found in the contents.
+ */
+export declare function extractFootnotesFromUsjContent(contents?: MarkerContent[]): MarkerObject[];
+/**
+ * Extract footnotes from a full USJ object.
+ *
+ * @param usj - The USJ object
+ * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
+ */
+export declare function extractFootnotesFromUsj(usj: Usj): MarkerObject[];
+/**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
  * Unicode code points instead of UTF-16 character codes.
  *

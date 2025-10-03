@@ -1,4 +1,4 @@
-import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import { MarkerObject, MarkerContent, Usj } from '@eten-tech-foundation/scripture-utilities';
 
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export function getDefaultCallerSequence(): string[] {
@@ -52,4 +52,40 @@ export function getFormatCallerFunction(footnotes: MarkerObject[], callers: stri
     if (caller === '-') return undefined;
     return caller;
   };
+}
+
+/**
+ * Extract footnotes from an array of `MarkerContent` objects.
+ *
+ * @param contents - An array of `MarkerContent` objects
+ * @returns An array of MarkerObjects representing all textual notes found in the contents.
+ */
+export function extractFootnotesFromUsjContent(contents?: MarkerContent[]): MarkerObject[] {
+  const footnotes: MarkerObject[] = [];
+  if (!contents || contents.length === 0) return footnotes;
+
+  function traverse(item: MarkerContent) {
+    if (typeof item === 'string') return; // plain text node, ignore
+
+    // item is a MarkerObject
+    if (item.type === 'note') {
+      footnotes.push(item);
+    } else if (Array.isArray(item.content) && item.content.length > 0) {
+      item.content.forEach(traverse);
+    }
+  }
+
+  contents.forEach(traverse);
+  return footnotes;
+}
+
+/**
+ * Extract footnotes from a full USJ object.
+ *
+ * @param usj - The USJ object
+ * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
+ */
+export function extractFootnotesFromUsj(usj: Usj): MarkerObject[] {
+  // ENHANCE: deal with different USJ type and versions.
+  return extractFootnotesFromUsjContent(usj?.content);
 }
