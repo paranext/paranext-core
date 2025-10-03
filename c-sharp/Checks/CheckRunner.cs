@@ -187,8 +187,9 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         var references = new List<TextTokenSubstring>();
         references.AddRange(newReferences);
 
-        // HACK: We should use TextInventory here which will filter this out for us. This is
-        // just a temporary workaround until we get that in place.
+        // HACK: This function will be split into 2 separate ones when
+        // https://paratextstudio.atlassian.net/browse/PT-3561 is done. At that point, filtering of
+        // "always valid characters" will be handled by the existing TextInventory class.
         if (checkId == CheckType.Character.InternalValue)
         {
             const string ALWAYS_VALID_CHARACTERS = " \r\n";
