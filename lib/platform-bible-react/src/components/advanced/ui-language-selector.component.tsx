@@ -10,7 +10,7 @@ import { Label } from '../shadcn-ui/label';
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export const UI_LANGUAGE_SELECTOR_STRING_KEYS = Object.freeze([
-  '%settings_uiLanguageSelector_selectFallbackLanguages%',
+  '%settings_uiLanguageSelector_fallbackLanguages%',
 ] as const);
 
 export type UiLanguageSelectorLocalizedStrings = {
@@ -101,7 +101,7 @@ export function UiLanguageSelector({
 }: UiLanguageSelectorProps) {
   const selectFallbackLanguagesText = localizeString(
     localizedStrings,
-    '%settings_uiLanguageSelector_selectFallbackLanguages%',
+    '%settings_uiLanguageSelector_fallbackLanguages%',
   );
   const [isOpen, setIsOpen] = useState(false);
 
@@ -166,8 +166,10 @@ export function UiLanguageSelector({
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
         <>
-          <Label className="tw-ms-3">{selectFallbackLanguagesText}</Label>
-          <div className="tw-ms-3">
+          <Label className="tw-ms-3 tw-pt-4 tw-text-muted-foreground">
+            {selectFallbackLanguagesText}
+          </Label>
+          <div className="tw-ms-3 tw-text-muted-foreground">
             {/* Do not localize or "improve". This label is temporary. */}
             <Label>
               {fallbackLanguages?.length > 0
