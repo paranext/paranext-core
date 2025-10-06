@@ -29,22 +29,34 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
     public bool ResultsReady { get; set; } = false;
 
     /// <summary>
-    /// This regex extracts the part of the message between ||...|| if present. The message is
-    /// typically formatted as `Check name: ||item||` (e.g. `Repeated word: ||he||`).
-    /// If the extracted item text is empty, a warning is logged and the entire message is returned.
+    /// Parses and normalizes check messages to a consistent format, and separates out item text if present.
     /// </summary>
-    /// <returns>The extracted item text. When extraction fails returns the entire message</returns>
-    private static string GetItemTextFromMessage(string message)
+    /// <param name="message">The raw message to parse</param>
+    /// <returns>A tuple containing the normalized message and the extracted item text (if any)</returns>
+    private static (string normalizedMessage, string itemText) ParseAndNormalizeMessage(
+        string message
+    )
     {
-        var itemText = ItemTextRegex().Match(message).Groups[1]?.Value;
-        if (string.IsNullOrEmpty(itemText))
+        if (string.IsNullOrWhiteSpace(message))
+            return (string.Empty, string.Empty);
+
+        string normalized = message.Trim();
+
+        if (normalized.StartsWith("#"))
+            normalized = normalized.Substring(1).Trim();
+
+        string[] parts = normalized.Split(':', 2);
+        string messageText = parts[0].Trim();
+        string? itemText = parts.Length > 1 ? parts[1].Trim() : null;
+
+        if (!string.IsNullOrWhiteSpace(itemText))
         {
-            Console.WriteLine(
-                $"Empty itemText in CheckResultsRecorder.RecordError, replacing with message: {message}"
-            );
-            return message;
+            // Remove all pairs of vertical bars (||) from the string
+            itemText = itemText.Replace("||", "");
+            return ($"{messageText}: {itemText}", itemText);
         }
-        return itemText;
+
+        return (messageText, string.Empty);
     }
 
     public void RecordError(
@@ -57,15 +69,16 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
         VerseListItemType type = VerseListItemType.Error
     )
     {
+        (string normalizedMessage, string itemText) = ParseAndNormalizeMessage(message);
         CheckRunResults.Add(
             new CheckRunResult(
                 checkId,
                 messageId.InternalValue,
                 projectId,
-                message,
+                normalizedMessage,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 token.Text.TrimEnd(),
-                GetItemTextFromMessage(message),
+                itemText,
                 false,
                 token.VerseRef,
                 // Actual offsets will be calculated below after results have been filtered
@@ -85,15 +98,16 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
         VerseListItemType type = VerseListItemType.Error
     )
     {
+        (string normalizedMessage, string itemText) = ParseAndNormalizeMessage(message);
         CheckRunResults.Add(
             new CheckRunResult(
                 checkId,
                 messageId.InternalValue,
                 projectId,
-                message,
+                normalizedMessage,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 text.TrimEnd(),
-                GetItemTextFromMessage(message),
+                itemText,
                 false,
                 vref,
                 // Actual offsets will be calculated below after results have been filtered

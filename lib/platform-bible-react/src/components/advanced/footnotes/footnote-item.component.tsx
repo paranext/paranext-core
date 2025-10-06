@@ -166,26 +166,17 @@ export function FootnoteItem({
     </>
   );
 
+  const layoutClass = layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical';
+  const markerClass = showMarkers ? 'marker-visible' : '';
+  const baseClasses = cn(layoutClass, markerClass);
+
   return (
     <>
-      <div
-        className={cn(
-          'textual-note-header tw-text-nowrap',
-          layout === 'horizontal' ? 'horizontal tw-table-cell tw-pr-1' : 'vertical',
-          // REVIEW: Checking with UX to see if they actually want different padding when markers are shown, as seen in Figma design
-          showMarkers ? 'marker-visible tw-pr-[10px]' : 'tw-pr-[22px]',
-        )}
-      >
+      <div className={cn('textual-note-header tw-text-nowrap tw-pr-2', baseClasses)}>
         {footnoteOpening}
         {header}
       </div>
-      <div
-        className={cn(
-          'textual-note-body',
-          layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical',
-          showMarkers ? 'marker-visible' : '',
-        )}
-      >
+      <div className={cn('textual-note-body', baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (
           <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}
