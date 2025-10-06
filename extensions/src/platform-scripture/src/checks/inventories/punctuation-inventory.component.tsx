@@ -84,6 +84,7 @@ type PunctuationInventoryProps = {
   onUnapprovedItemsChange: (items: string[]) => void;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
+  areInventoryItemsLoading: boolean;
 };
 
 export function PunctuationInventory({
@@ -96,6 +97,7 @@ export function PunctuationInventory({
   onUnapprovedItemsChange,
   scope,
   onScopeChange,
+  areInventoryItemsLoading,
 }: PunctuationInventoryProps) {
   const [punctuationInventoryStrings] = useLocalizedStrings(PUNCTUATION_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -149,6 +151,7 @@ export function PunctuationInventory({
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}
+      areInventoryItemsLoading={areInventoryItemsLoading}
     />
   );
 }

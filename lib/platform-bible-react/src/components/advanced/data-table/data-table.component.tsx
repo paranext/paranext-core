@@ -69,7 +69,6 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = useState({});
 
   const normalizedData = useMemo(() => data ?? [], [data]);
-  const shouldRenderSkeletons = useMemo(() => isLoading ?? data === undefined, [isLoading, data]);
 
   const table = useReactTable({
     data: normalizedData,
@@ -93,7 +92,7 @@ export function DataTable<TData, TValue>({
   const visibleColumns = table.getVisibleFlatColumns();
   let bodyContent: React.ReactNode;
 
-  if (shouldRenderSkeletons) {
+  if (isLoading) {
     const rowCount = 10;
     const skeletonRowIds = Array.from({ length: rowCount }).map((_, idx) => `skeleton-row-${idx}`);
     bodyContent = skeletonRowIds.map((rowId) => (

@@ -61,6 +61,7 @@ interface RepeatedWordsInventoryProps {
   onUnapprovedItemsChange: (items: string[]) => void;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
+  areInventoryItemsLoading: boolean;
 }
 
 export function RepeatedWordsInventory({
@@ -73,6 +74,7 @@ export function RepeatedWordsInventory({
   onUnapprovedItemsChange,
   scope,
   onScopeChange,
+  areInventoryItemsLoading,
 }: RepeatedWordsInventoryProps) {
   const [repeatedWordsInventoryStrings] = useLocalizedStrings(REPEATED_WORDS_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -120,6 +122,7 @@ export function RepeatedWordsInventory({
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}
+      areInventoryItemsLoading={areInventoryItemsLoading}
     />
   );
 }

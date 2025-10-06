@@ -96,6 +96,7 @@ type MarkerInventoryProps = {
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
   projectId?: string;
+  areInventoryItemsLoading: boolean;
 };
 
 export function MarkerInventory({
@@ -110,6 +111,7 @@ export function MarkerInventory({
   scope,
   onScopeChange,
   projectId,
+  areInventoryItemsLoading,
 }: MarkerInventoryProps) {
   const [markerNamesPossiblyError] = useProjectData(
     'platformScripture.MarkerNames',
@@ -207,6 +209,7 @@ export function MarkerInventory({
         checkboxText: showPrecedingMarkerLabel,
         tableHeaders: [precedingMarkerLabel],
       }}
+      areInventoryItemsLoading={areInventoryItemsLoading}
     />
   );
 }
