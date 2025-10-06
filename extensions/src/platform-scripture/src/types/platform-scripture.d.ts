@@ -874,15 +874,6 @@ declare module 'platform-scripture' {
   /** Details about a check provided by a {@link ICheckRunner} */
   export type CheckRunnerCheckDetails = CheckDetailsWithCheckId;
 
-  /**
-   * Details about a check (as identified by its checkId) that can be set on a subscription by the
-   * subscription owner
-   */
-  export type SettableCheckDetails = Omit<
-    CheckRunnerCheckDetails,
-    'checkName' | 'checkDescription'
-  >;
-
   /** Data types provided by a service that runs checks */
   export type CheckRunnerDataTypes = {
     AvailableChecks: DataProviderDataType<undefined, CheckRunnerCheckDetails[], never>;
