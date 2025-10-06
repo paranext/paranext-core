@@ -278,12 +278,13 @@ interface DataTableProps<TData, TValue> {
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 	id?: string;
 	isLoading?: boolean;
+	noResultsMessage?: string;
 }
 /**
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, noResultsMessage, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -686,7 +687,8 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_filter_text%",
 	"%webView_inventory_show_additional_items%",
 	"%webView_inventory_occurrences_table_header_reference%",
-	"%webView_inventory_occurrences_table_header_occurrence%"
+	"%webView_inventory_occurrences_table_header_occurrence%",
+	"%webView_inventory_no_results%"
 ];
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;

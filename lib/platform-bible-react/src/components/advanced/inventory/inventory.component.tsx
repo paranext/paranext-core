@@ -66,6 +66,7 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_show_additional_items%',
   '%webView_inventory_occurrences_table_header_reference%',
   '%webView_inventory_occurrences_table_header_occurrence%',
+  '%webView_inventory_no_results%',
 ] as const);
 
 export type InventoryLocalizedStrings = {
@@ -247,6 +248,7 @@ export function Inventory({
     localizedStrings,
     '%webView_inventory_show_additional_items%',
   );
+  const noResultsText = localizeString(localizedStrings, '%webView_inventory_no_results%');
 
   const [showAdditionalItems, setShowAdditionalItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -419,6 +421,7 @@ export function Inventory({
           onRowClickHandler={rowClickHandler}
           stickyHeader
           isLoading={areInventoryItemsLoading}
+          noResultsMessage={noResultsText}
         />
       </div>
       {occurrenceData.length > 0 && (
