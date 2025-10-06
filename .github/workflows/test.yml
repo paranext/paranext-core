@@ -128,11 +128,11 @@ jobs:
         run: npm ci
 
       # Ensure the `dist` files are updated before running tests.
-      - name: Build platform-bible-react
-        run: npm run build:platform-bible-react
-
       - name: Build platform-bible-utils
         run: npm run build:platform-bible-utils
+
+      - name: Build platform-bible-react
+        run: npm run build:platform-bible-react
 
       # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
       - name: type checking
