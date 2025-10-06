@@ -13,6 +13,10 @@ on:
 jobs:
   build-dist:
     runs-on: ubuntu-latest
+    # To avoid race conditions, prevent concurrent builds
+    concurrency:
+      group: auto-build-dist
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v3
