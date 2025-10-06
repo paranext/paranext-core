@@ -4,8 +4,6 @@ import { AlertCircle } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { FootnoteItemProps } from './footnotes.types';
 
-const markerClasses = cn('marker', `marker-visible'}`);
-
 function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {
   if (!content || content.length === 0) return parentMarker ?? 'empty';
 
@@ -67,11 +65,10 @@ function renderContent(
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
 
-  const key = makeKey(parentMarker, content);
-
   return content.map((footnotePart) => {
-    // Build a key based on the hierarchy and marker/text
     if (typeof footnotePart === 'string') {
+      // Build a key based on the hierarchy and text
+      const key = `${parentMarker}-text-${footnotePart.slice(0, 10)}`;
       if (allowUnmarkedText) {
         const classes = cn(`usfm_${parentMarker}`);
         return (
@@ -92,10 +89,12 @@ function renderContent(
       );
     }
 
-    return renderMarkerObject(footnotePart, key, showMarkers, [
-      ...markerHierarchy,
-      parentMarker ?? 'unknown',
-    ]);
+    return renderMarkerObject(
+      footnotePart,
+      makeKey(`${parentMarker}\\${footnotePart.marker}`, [footnotePart]),
+      showMarkers,
+      [...markerHierarchy, parentMarker ?? 'unknown'],
+    );
   });
 }
 
@@ -110,7 +109,7 @@ function renderMarkerObject(
   return (
     <span key={key}>
       {marker ? (
-        showMarkers && <span className={markerClasses}>{`\\${marker} `}</span>
+        showMarkers && <span className="marker">{`\\${marker} `}</span>
       ) : (
         <AlertCircle
           className="tw-text-error tw-mr-1 tw-inline-block tw-h-4 tw-w-4"
@@ -149,11 +148,11 @@ export function FootnoteItem({
   }
 
   const footnoteOpening = showMarkers ? (
-    <span className={markerClasses}>{`\\${footnote.marker} `}</span>
+    <span className="marker">{`\\${footnote.marker} `}</span>
   ) : undefined;
 
   const footnoteClosing = showMarkers ? (
-    <span className={markerClasses}>{` \\${footnote.marker}*`}</span>
+    <span className="marker">{` \\${footnote.marker}*`}</span>
   ) : undefined;
 
   const header = (
@@ -174,7 +173,7 @@ export function FootnoteItem({
           'textual-note-header tw-text-nowrap',
           layout === 'horizontal' ? 'horizontal tw-table-cell tw-pr-1' : 'vertical',
           // REVIEW: Checking with UX to see if they actually want different padding when markers are shown, as seen in Figma design
-          showMarkers ? 'tw-pr-[10px]' : 'tw-pr-[22px]',
+          showMarkers ? 'marker-visible tw-pr-[10px]' : 'tw-pr-[22px]',
         )}
       >
         {footnoteOpening}
@@ -184,6 +183,7 @@ export function FootnoteItem({
         className={cn(
           'textual-note-body',
           layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical',
+          showMarkers ? 'marker-visible' : '',
         )}
       >
         {remainingContent && remainingContent.length > 0 && (
