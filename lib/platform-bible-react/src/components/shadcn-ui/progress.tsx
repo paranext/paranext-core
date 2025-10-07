@@ -1,14 +1,10 @@
-import React from 'react';
-import * as ProgressPrimitive from '@radix-ui/react-progress';
+"use client"
 
-import { cn } from '@/utils/shadcn-ui.util';
+import * as React from "react"
+import * as ProgressPrimitive from "@radix-ui/react-progress"
 
-/**
- * Displays an indicator showing the completion progress of a task, typically displayed as a
- * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI. See
- * Shadcn UI documentation: https://ui.shadcn.com/docs/components/progress See Radix UI
- * documentation: https://www.radix-ui.com/primitives/docs/components/progress#api-reference
- */
+import { cn } from "@/utils/shadcn-ui.util"
+
 const Progress = React.forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>
@@ -16,8 +12,8 @@ const Progress = React.forwardRef<
   <ProgressPrimitive.Root
     ref={ref}
     className={cn(
-      'pr-twp tw-relative tw-h-4 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-secondary',
-      className,
+      "tw-relative tw-h-4 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-secondary",
+      className
     )}
     {...props}
   >
@@ -26,7 +22,7 @@ const Progress = React.forwardRef<
       style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
     />
   </ProgressPrimitive.Root>
-));
-Progress.displayName = ProgressPrimitive.Root.displayName;
+))
+Progress.displayName = ProgressPrimitive.Root.displayName
 
-export { Progress };
+export { Progress }
