@@ -874,15 +874,6 @@ declare module 'platform-scripture' {
   /** Details about a check provided by a {@link ICheckRunner} */
   export type CheckRunnerCheckDetails = CheckDetailsWithCheckId;
 
-  /**
-   * Details about a check (as identified by its checkId) that can be set on a subscription by the
-   * subscription owner
-   */
-  export type SettableCheckDetails = Omit<
-    CheckRunnerCheckDetails,
-    'checkName' | 'checkDescription'
-  >;
-
   /** Data types provided by a service that runs checks */
   export type CheckRunnerDataTypes = {
     AvailableChecks: DataProviderDataType<undefined, CheckRunnerCheckDetails[], never>;
@@ -1032,13 +1023,17 @@ declare module 'platform-scripture' {
     ) => Promise<boolean>;
   };
 
-  /** Represents the ability to retrieve inventory data for one particular check on a project */
-  export type InventoryDataRetriever = {
+  /** Functions that provide configuration data for a specific check */
+  export type CheckConfigurationProvider = {
+    /** Represents the ability to retrieve inventory data for one particular check on a project */
     retrieveInventoryData: (
       checkId: string,
       projectId: string,
       checkInputRange: CheckInputRange,
     ) => Promise<InventoryItem[]>;
+
+    /** Returns if setup/configuration for the check has been completed */
+    isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
   };
 
   /**
@@ -1048,7 +1043,7 @@ declare module 'platform-scripture' {
   export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
     CheckJobRunner &
     CheckResultClassifier &
-    InventoryDataRetriever;
+    CheckConfigurationProvider;
 
   /**
    * When something happens that would invalidate previously calculated check results, an event with

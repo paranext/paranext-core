@@ -23,6 +23,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
@@ -1983,6 +1984,27 @@ export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectP
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Select */
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
+	className?: string;
+	collapsedSize?: number | undefined;
+	collapsible?: boolean | undefined;
+	defaultSize?: number | undefined;
+	id?: string;
+	maxSize?: number | undefined;
+	minSize?: number | undefined;
+	onCollapse?: ResizablePrimitive.PanelOnCollapse;
+	onExpand?: ResizablePrimitive.PanelOnExpand;
+	onResize?: ResizablePrimitive.PanelOnResize;
+	order?: number;
+	style?: object;
+	tagName?: keyof HTMLElementTagNameMap | undefined;
+} & {
+	children?: import("react").ReactNode | undefined;
+} & React$1.RefAttributes<ResizablePrimitive.ImperativePanelHandle>>;
+export declare function ResizableHandle({ withHandle, className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle> & {
+	withHandle?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
 /**
  * The Separator component visually or semantically separates content. This component is built on
  * Radix UI primitives and styled with Shadcn UI.
