@@ -1651,13 +1651,6 @@ export declare function getNthCaller(n: number, callers?: string[]): string;
  */
 export declare function getFormatCallerFunction(footnotes: MarkerObject[], callers: string[] | undefined): (caller: string | undefined, index: number) => string | undefined;
 /**
- * Extract footnotes from an array of `MarkerContent` objects.
- *
- * @param contents - An array of `MarkerContent` objects
- * @returns An array of MarkerObjects representing all textual notes found in the contents.
- */
-export declare function extractFootnotesFromUsjContent(contents?: MarkerContent[]): MarkerObject[];
-/**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
  * Unicode code points instead of UTF-16 character codes.
  *
@@ -3480,12 +3473,6 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	constructor(usj: Usj);
 	usjChanged(): void;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
-	/**
-	 * Extract textual notes (aka, "footnotes") from a full USJ object.
-	 *
-	 * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
-	 */
-	findAllNotes(): MarkerObject[];
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	private findBookId;
 	private findChapterNode;
@@ -3506,6 +3493,12 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private createWorkingStack;
 	private static convertWorkingStackToJsonPath;
 	private convertJsonPathToWorkingStack;
+	/**
+	 * Extract textual notes (aka, "footnotes") from a full USJ object.
+	 *
+	 * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
+	 */
+	findAllNotes(): MarkerObject[];
 	/**
 	 * Given the starting point of a tree to consider (`node`), find the rightmost MarkerObject from
 	 * the array of `content`. In the following example, this would be "J".
