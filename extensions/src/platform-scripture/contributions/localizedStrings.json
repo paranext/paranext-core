@@ -91,6 +91,7 @@
       "%webView_inventory_all%": "All items",
       "%webView_inventory_approved%": "Approved items",
       "%webView_inventory_filter_text%": "Filter text...",
+      "%webView_inventory_no_results%": "No results.",
       "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence",
       "%webView_inventory_occurrences_table_header_reference%": "Reference",
       "%webView_inventory_scope_chapter%": "Current chapter",

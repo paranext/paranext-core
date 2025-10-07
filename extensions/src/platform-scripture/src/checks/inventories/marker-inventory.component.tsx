@@ -85,7 +85,7 @@ const createColumns = (
 ];
 
 type MarkerInventoryProps = {
-  inventoryItems: InventoryItem[];
+  inventoryItems: InventoryItem[] | undefined;
   verseRef: SerializedVerseRef;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
@@ -96,6 +96,7 @@ type MarkerInventoryProps = {
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
   projectId?: string;
+  areInventoryItemsLoading: boolean;
 };
 
 export function MarkerInventory({
@@ -110,6 +111,7 @@ export function MarkerInventory({
   scope,
   onScopeChange,
   projectId,
+  areInventoryItemsLoading,
 }: MarkerInventoryProps) {
   const [markerNamesPossiblyError] = useProjectData(
     'platformScripture.MarkerNames',
@@ -154,7 +156,8 @@ export function MarkerInventory({
     [markerInventoryStrings],
   );
 
-  const newInventoryItems: InventoryItem[] = useMemo(() => {
+  const newInventoryItems: InventoryItem[] | undefined = useMemo(() => {
+    if (!inventoryItems) return undefined;
     return inventoryItems.map((item, index) => ({
       ...item,
       inventoryText: [
@@ -206,6 +209,7 @@ export function MarkerInventory({
         checkboxText: showPrecedingMarkerLabel,
         tableHeaders: [precedingMarkerLabel],
       }}
+      areInventoryItemsLoading={areInventoryItemsLoading}
     />
   );
 }
