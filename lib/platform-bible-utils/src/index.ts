@@ -54,7 +54,6 @@ export {
   waitForDuration,
 } from './util';
 export {
-  extractFootnotesFromUsjContent,
   getDefaultCallerSequence,
   getNthCaller,
   getFormatCallerFunction,

@@ -1218,10 +1218,10 @@ test('Correct USJ details are found using search', () => {
 
 describe('findAllNotes', () => {
   it('should extract multiple notes from real-life data', () => {
-    console.time('findAllNotes');
+    // console.time('findAllNotes');
     const usjDoc = new UsjReaderWriter(usjMat1);
     const result = usjDoc.findAllNotes();
-    console.timeEnd('findAllNotes');
+    // console.timeEnd('findAllNotes');
 
     expect(result.length).toEqual(10);
 
