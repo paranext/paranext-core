@@ -133,7 +133,7 @@
   "%settings_title%": "Settings",
   "%settings_title_projectSettings%": "Project Settings",
   "%settings_uiLanguageSelector_selectFallbackLanguages%": "Select Fallback Language",
-  "%settings_uiLanguageSelector_fallbackLanguages%": "Fallback Languages",
+  "%settings_uiLanguageSelector_fallbackLanguages%": "Fallback Languages: {fallbackLanguages}",
   "%some_localization_key%": "This is the English text for %some_localization_key%.",
   "%submitButton%": "Submit",
   "%tab_aria_tab%": "Tab",

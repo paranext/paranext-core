@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LocalizedStringValue } from 'platform-bible-utils';
+import { LocalizedStringValue, formatReplacementString } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';
@@ -99,7 +99,7 @@ export function UiLanguageSelector({
   className,
   id,
 }: UiLanguageSelectorProps) {
-  const selectFallbackLanguagesText = localizeString(
+  const fallbackLanguagesText = localizeString(
     localizedStrings,
     '%settings_uiLanguageSelector_fallbackLanguages%',
   );
@@ -165,24 +165,25 @@ export function UiLanguageSelector({
 
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
-        <>
-          <Label className="tw-ms-3 tw-pt-4 tw-text-muted-foreground">
-            {selectFallbackLanguagesText}
+        <div className="tw-pt-3">
+          <Label className="tw-text-muted-foreground">
+            {formatReplacementString(fallbackLanguagesText, {
+              fallbackLanguages:
+                fallbackLanguages?.length > 0
+                  ? fallbackLanguages
+                      .map((f) => getLanguageDisplayName(f, primaryLanguage))
+                      .join(', ')
+                  : knownUiLanguages.en.autonym,
+            })}
           </Label>
-          <div className="tw-ms-3 tw-text-muted-foreground">
-            {/* Do not localize or "improve". This label is temporary. */}
-            <Label>
-              {fallbackLanguages?.length > 0
-                ? `${fallbackLanguages
-                    .map((f) => getLanguageDisplayName(f, primaryLanguage))
-                    .join(', ')}`
-                : `default (${knownUiLanguages.en.autonym})`}
-            </Label>
-            {/* <MultiSelector>
+          {/* NOTE(mattg): I thought I would leave this here, even though the
+            layout has changed significantly since then */}
+          {/* <div className="tw-ms-3 tw-text-muted-foreground">
+            { <MultiSelector>
               Something like this will be added once UX decides exactly what they want.
-          </MultiSelector> */}
-          </div>
-        </>
+          </MultiSelector> }
+          </div> */}
+        </div>
       )}
     </div>
   );

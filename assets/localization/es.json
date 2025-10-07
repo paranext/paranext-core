@@ -256,7 +256,7 @@
   "%settings_title%": "Configuración",
   "%settings_title_projectSettings%": "Configuración del Proyecto",
   "%settings_uiLanguageSelector_selectFallbackLanguages%": "Seleccionar Idiomas de respaldo de Interfaz",
-  "%settings_uiLanguageSelector_fallbackLanguages%": "Idiomas de respaldo de Interfaz",
+  "%settings_uiLanguageSelector_fallbackLanguages%": "Idiomas de respaldo de Interfaz: {fallbackLanguages}",
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",
   "%submitButton%": "Enviar",
   "%tab_aria_tab%": "Pestaña",
