@@ -4,7 +4,57 @@ import { AlertCircle } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { FootnoteItemProps } from './footnotes.types';
 
-const markerClasses = cn('marker', `marker-visible'}`);
+function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {
+  if (!content || content.length === 0) return parentMarker ?? 'empty';
+
+  const firstString = content.find((part) => typeof part === 'string');
+  if (firstString) {
+    return `key-${parentMarker ?? 'unknown'}-${firstString.slice(0, 10)}`;
+  }
+
+  // Fallback: combine markers
+  const firstMarker =
+    typeof content[0] === 'string' ? 'impossible' : (content[0].marker ?? 'unknown');
+  return `key-${parentMarker ?? 'unknown'}-${firstMarker}`;
+}
+
+function renderParagraphs(
+  parentMarker: string | undefined,
+  content?: MarkerContent[],
+  showMarkers = true,
+  footnoteClosing: React.ReactNode | undefined = undefined,
+): React.ReactNode {
+  if (!content || content.length === 0) return undefined;
+
+  const markerHierarchy: string[] = [];
+
+  const paragraphs: MarkerContent[][] = [];
+  let current: MarkerContent[] = [];
+
+  content.forEach((part) => {
+    if (typeof part !== 'string' && part.marker === 'fp') {
+      // End current paragraph before starting new one
+      if (current.length > 0) paragraphs.push(current);
+
+      // Start new paragraph that *includes* the fp marker itself
+      current = [part];
+    } else {
+      current.push(part);
+    }
+  });
+
+  if (current.length > 0) paragraphs.push(current);
+
+  return paragraphs.map((para, i) => {
+    const isLast = i === paragraphs.length - 1;
+    return (
+      <p key={makeKey(parentMarker, para)} className="tw-mb-2">
+        {renderContent(parentMarker, para, showMarkers, true, markerHierarchy)}
+        {isLast && footnoteClosing}
+      </p>
+    );
+  });
+}
 
 function renderContent(
   parentMarker: string | undefined,
@@ -16,10 +66,9 @@ function renderContent(
   if (!content || content.length === 0) return undefined;
 
   return content.map((footnotePart) => {
-    // Build a key based on the hierarchy and marker/text
-    let key = markerHierarchy.join('-');
     if (typeof footnotePart === 'string') {
-      key += `-${footnotePart.slice(0, 10)}`; // first few chars of text
+      // Build a key based on the hierarchy and text
+      const key = `${parentMarker}-text-${footnotePart.slice(0, 10)}`;
       if (allowUnmarkedText) {
         const classes = cn(`usfm_${parentMarker}`);
         return (
@@ -40,12 +89,12 @@ function renderContent(
       );
     }
 
-    // For MarkerObjects, include marker in the key and pass updated hierarchy
-    key += `-${footnotePart.marker ?? 'unknown'}`;
-    return renderMarkerObject(footnotePart, key, showMarkers, [
-      ...markerHierarchy,
-      parentMarker ?? 'unknown',
-    ]);
+    return renderMarkerObject(
+      footnotePart,
+      makeKey(`${parentMarker}\\${footnotePart.marker}`, [footnotePart]),
+      showMarkers,
+      [...markerHierarchy, parentMarker ?? 'unknown'],
+    );
   });
 }
 
@@ -60,7 +109,7 @@ function renderMarkerObject(
   return (
     <span key={key}>
       {marker ? (
-        showMarkers && <span className={markerClasses}>{`\\${marker} `}</span>
+        showMarkers && <span className="marker">{`\\${marker} `}</span>
       ) : (
         <AlertCircle
           className="tw-text-error tw-mr-1 tw-inline-block tw-h-4 tw-w-4"
@@ -99,11 +148,11 @@ export function FootnoteItem({
   }
 
   const footnoteOpening = showMarkers ? (
-    <span className={markerClasses}>{`\\${footnote.marker} `}</span>
+    <span className="marker">{`\\${footnote.marker} `}</span>
   ) : undefined;
 
   const footnoteClosing = showMarkers ? (
-    <span className={markerClasses}>{` \\${footnote.marker}*`}</span>
+    <span className="marker">{` \\${footnote.marker}*`}</span>
   ) : undefined;
 
   const header = (
@@ -117,28 +166,19 @@ export function FootnoteItem({
     </>
   );
 
+  const layoutClass = layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical';
+  const markerClass = showMarkers ? 'marker-visible' : '';
+  const baseClasses = cn(layoutClass, markerClass);
+
   return (
     <>
-      <div
-        className={cn(
-          'textual-note-header tw-text-nowrap tw-pr-2',
-          layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical',
-        )}
-      >
+      <div className={cn('textual-note-header tw-text-nowrap tw-pr-2', baseClasses)}>
         {footnoteOpening}
         {header}
       </div>
-      <div
-        className={cn(
-          'textual-note-body',
-          layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical',
-        )}
-      >
+      <div className={cn('textual-note-body', baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (
-          <>
-            {renderContent(footnote.marker, remainingContent, showMarkers, true)}
-            {footnoteClosing}
-          </>
+          <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}
       </div>
     </>
