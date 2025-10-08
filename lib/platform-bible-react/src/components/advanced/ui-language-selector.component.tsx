@@ -166,7 +166,7 @@ export function UiLanguageSelector({
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
         <div className="tw-pt-3">
-          <Label className="tw-text-muted-foreground">
+          <Label className="tw-font-normal tw-text-muted-foreground">
             {formatReplacementString(fallbackLanguagesText, {
               fallbackLanguages:
                 fallbackLanguages?.length > 0
@@ -176,13 +176,6 @@ export function UiLanguageSelector({
                   : knownUiLanguages.en.autonym,
             })}
           </Label>
-          {/* NOTE(mattg): I thought I would leave this here, even though the
-            layout has changed significantly since then */}
-          {/* <div className="tw-ms-3 tw-text-muted-foreground">
-            { <MultiSelector>
-              Something like this will be added once UX decides exactly what they want.
-          </MultiSelector> }
-          </div> */}
         </div>
       )}
     </div>
