@@ -18,13 +18,13 @@ Make sure to use a proper ellipsis character, not three consecutive periods.
 
 
 ## What an ellipsis means
-Conventionally and most simply, an ellipsis means an action will be interrupted by a choice and not done immediately.
+Conventionally, an ellipsis means an action will be interrupted by a choice and not done immediately.
 
-| Label end with       | No Ellipsis                                                                                               | Ellipsis                                                                                                                                           |
+|        | Label without an ellipsis                                                                                               | Label ending with an ellipsis                                                                                                                                           |
 | -------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Means                | Do immediately.                                                                                           | Do after a choice. You'll have a chance to back out.                                                                                           |
-| Example              | New tab                                                                                                   | Open…                                                                                                                                              |
-| Clicking the example | Immediately opens a new tab. There will be choices to make, but the tab will already exist at that point. | Opens a dialog to choose a file. **Cancel** will result in no action. Choosing a file clicking **Open** will result in opening a file immediately. |
+| **Means**                | Do immediately.                                                                                           | Do after a choice. You'll have a chance to back out.                                                                                           |
+| **Example**              | **New tab**                                                                                                   | **Open…**                                                                                                                                              |
+| **On click** | Immediately opens a new tab. There will be choices to make, but the tab will already exist at that point. | Opens a dialog to choose a file. **Cancel** will result in no action. Choosing a file and clicking **Open** will result in opening a file immediately. |
 
 The grey area is that a great number of actions, especially navigation, are met by choices on the other end. In the above example, when a user makes a **New tab**, the tab is populated with choices for what to view. But at that point, the tab already exists, and there is no way to cancel the action, so the menu item's label doesn't end with an ellipsis.
 
@@ -35,18 +35,17 @@ To remember, lean strongly into the idea of "needs additional information" in a 
 In these examples, *nothing* can be done until the user provides an object to fill in the ellipsis.
 
 In contrast, the following examples do **not** need ellipses
-* Paratext 10
-  Help > About Paratext 10 Studio
-* In Figma 
-  **File > Open File Browser** 
+* Paratext 10 \
+  **Help** > **About Paratext 10 Studio**
+* In Figma \
+  **File** > **Open File Browser** \
   Opening the file browser completes the action, so there's no missing info and no ellipsis needed.
-* On macOS
-  **Apple > System Settings**
-* In Arc browser
-  **File > Capture Full Page**
+* On macOS \
+  **Apple** > **System Settings**
+* In Arc browser \
+  **File** > **Capture Full Page** \
   Notice that **Capture Full Page** provides the object of "capture" but "Capture…" has no object to complete the verbal phrase, so it needs an ellipsis.
-
-![File menu from Arc browser](../../../assets/arc-file-menu.png)
+  ![File menu from Arc browser](../../../assets/arc-file-menu.png)
 
 
 ### Historical context of ellipsis
@@ -68,4 +67,4 @@ At the time of writing this article, while the English localization of "Settings
 + "%mainMenu_settings%": "Settings", // fits policy
 ```
 
-The ellipsis after Settings is so pervasive that in an audit of 20 macOS applications, every app used "Settings…" with an ellipsis. This would be a good reason to make an exception, and we may choose to do so in the future.
+The ellipsis after **Settings** is so pervasive that in an audit of 20 macOS applications, every app used "Settings…" with an ellipsis. This convention is standardized by the [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/the-menu-bar#App-menu).This would be a good reason to make an exception, and we may choose to do so in the future.
