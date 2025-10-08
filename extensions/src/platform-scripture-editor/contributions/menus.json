@@ -40,6 +40,10 @@
             "column": "platformScriptureEditor.options",
             "order": 2
           },
+          "platformScriptureEditor.footnotes": {
+            "column": "platformScriptureEditor.options",
+            "order": 3
+          },
           "platformScriptureEditor.general": {
             "column": "platformScriptureEditor.info",
             "order": 2
@@ -59,6 +63,12 @@
             "group": "platformScriptureEditor.find",
             "order": 3,
             "command": "platformScripture.openFind"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_showFootnotes%",
+            "group": "platformScriptureEditor.footnotes",
+            "order": 1,
+            "command": "platformScripture.showTextualNotes"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",

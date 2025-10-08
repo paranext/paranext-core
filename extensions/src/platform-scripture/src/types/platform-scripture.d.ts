@@ -1238,6 +1238,10 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
+    'platformScripture.showTextualNotes': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
   }
 
