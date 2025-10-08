@@ -1218,17 +1218,15 @@ test('Correct USJ details are found using search', () => {
 
 describe('findAllNotes', () => {
   it('should extract multiple notes from real-life data', () => {
-    // console.time('findAllNotes');
     const usjDoc = new UsjReaderWriter(usjMat1);
     const result = usjDoc.findAllNotes();
-    // console.timeEnd('findAllNotes');
 
     expect(result.length).toEqual(10);
 
     // Spot-check some known markers
     expect(result[0].marker).toBe('x'); // first one is cross-ref
     expect(result[1].marker).toBe('f'); // second is footnote
-    expect(result[2].marker).toBe('fe'); // second is footnote
+    expect(result[2].marker).toBe('fe'); // third is endnote
     expect(result[result.length - 1].marker).toBe('x'); // last is also cross-ref
 
     expect(result.every((n) => n.type === 'note')).toBe(true);
