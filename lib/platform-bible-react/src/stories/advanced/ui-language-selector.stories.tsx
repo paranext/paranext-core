@@ -122,7 +122,7 @@ export const Default: Story = {
     <UiLanguageSelectorWithState
       knownUiLanguages={mockKnownLanguages}
       localizedStrings={{
-        '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Select fallback languages',
+        '%settings_uiLanguageSelector_fallbackLanguages%': 'Fallback languages',
       }}
     />
   ),
@@ -142,7 +142,7 @@ export const WithFallbackLanguages: Story = {
       initialPrimaryLanguage="es"
       initialFallbackLanguages={['en', 'pt']}
       localizedStrings={{
-        '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Seleccionar idiomas de respaldo',
+        '%settings_uiLanguageSelector_fallbackLanguages%': 'Idiomas de respaldo de Interfaz',
       }}
     />
   ),
@@ -163,7 +163,7 @@ export const LimitedLanguages: Story = {
       <UiLanguageSelectorWithState
         knownUiLanguages={limitedLanguages}
         localizedStrings={{
-          '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Select fallback languages',
+          '%settings_uiLanguageSelector_fallbackLanguages%': 'Fallback Languages',
         }}
       />
     );
@@ -193,7 +193,7 @@ export const AsianLanguages: Story = {
         initialPrimaryLanguage="zh-hans"
         initialFallbackLanguages={['en']}
         localizedStrings={{
-          '%settings_uiLanguageSelector_selectFallbackLanguages%': '选择后备语言',
+          '%settings_uiLanguageSelector_fallbackLanguages%': '后备语言',
         }}
       />
     );

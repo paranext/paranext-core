@@ -119,7 +119,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_invalidValue%',
   '%settings_errorMessages_errorOccurred%',
   '%settings_errorMessages_viewError%',
-  '%settings_uiLanguageSelector_selectFallbackLanguages%',
+  '%settings_uiLanguageSelector_fallbackLanguages%',
   ...ERROR_POPOVER_STRING_KEYS,
 ];
 
