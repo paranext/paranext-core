@@ -68,7 +68,7 @@
             "label": "%webView_platformScriptureEditor_showFootnotes%",
             "group": "platformScriptureEditor.footnotes",
             "order": 1,
-            "command": "platformScripture.showTextualNotes"
+            "command": "platformScripture.toggleFootnotes"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",

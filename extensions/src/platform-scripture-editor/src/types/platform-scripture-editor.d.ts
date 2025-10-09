@@ -36,8 +36,16 @@ declare module 'platform-scripture-editor' {
     decorationsToRemove?: string[];
   };
 
+  /** Tell the editor to toggle footnotes pane visibility */
+  export type EditorMessageToggleFootnotesPaneVisibility = {
+    method: 'toggleFootnotesPaneVisibility';
+  };
+
   /** Messages sent to the editor web view */
-  export type EditorWebViewMessage = EditorMessageSelectRange | EditorMessageUpdateDecorations;
+  export type EditorWebViewMessage =
+    | EditorMessageSelectRange
+    | EditorMessageUpdateDecorations
+    | EditorMessageToggleFootnotesPaneVisibility;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -129,6 +137,18 @@ declare module 'platform-scripture-editor' {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
     /**
+     * When the footnote pane is shown, where it should be positioned
+     *
+     * Defaults to 'bottom'.
+     */
+    footnotesPanePosition?: 'bottom' | 'trailing';
+    /**
+     * Flag indicating whether the footnote pane should be displayed
+     *
+     * Defaults to false.
+     */
+    footnotesPaneVisible?: boolean;
+    /**
      * Url of image to show on the title bar of the tab
      *
      * Defaults to the software's standard logo.
@@ -146,6 +166,8 @@ declare module 'platform-scripture-editor' {
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
     /** Set the current selection on the editor */
     selectRange(range: ScriptureRange): Promise<void>;
+    /** Toggle the visibility of the footnotes pane in the editor */
+    toggleFootnotesPaneVisibility(): Promise<void>;
     /**
      * Add or update decorations in the editor. New decoration definitions with the same id
      * overwrite existing decorations
@@ -199,6 +221,10 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
       options?: OpenEditorOptions,
       existingTabIdToReplace?: string,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.toggleFootnotes': (
+      webViewId?: string | undefined,
     ) => Promise<string | undefined>;
   }
 

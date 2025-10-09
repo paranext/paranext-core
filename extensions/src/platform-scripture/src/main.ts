@@ -148,29 +148,6 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
-async function showTextualNotesPanel(editorWebViewId: string | undefined): Promise<undefined> {
-  if (!editorWebViewId) {
-    logger.debug('No editor web view ID!');
-    return undefined;
-  }
-
-  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
-  if (!webViewDefinition) {
-    logger.debug(`No webViewDefinition found for ${editorWebViewId}!`);
-    return undefined;
-  }
-
-  if (!webViewDefinition.state) {
-    logger.debug('No WebView state!');
-    return undefined;
-  }
-
-  logger.debug('Setting footnotesPaneVisible');
-  webViewDefinition.state['footnotesPaneVisible'] = true;
-
-  return undefined;
-}
-
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
@@ -413,28 +390,7 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewType,
     checksSidePanelWebViewProvider,
   );
-  const showTextualNotesPanelPromise = papi.commands.registerCommand(
-    'platformScripture.showTextualNotes',
-    showTextualNotesPanel,
-    {
-      method: {
-        summary: 'Show the textual notes panel',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary: 'The ID of the web view tied to the project that the checks are for',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'Void',
-          schema: { type: 'null' },
-        },
-      },
-    },
-  );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -511,7 +467,6 @@ export async function activate(context: ExecutionActivationContext) {
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
-    await showTextualNotesPanelPromise,
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,

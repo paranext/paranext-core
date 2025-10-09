@@ -115,6 +115,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     defaultEditorDecorations,
   );
 
+  const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
+    'footnotesPaneVisible',
+    false,
+  );
+
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
@@ -172,6 +177,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           removeDecorations(updatedDecorations, decorationsToRemove);
 
           setDecorations(updatedDecorations);
+          break;
+        }
+        case 'toggleFootnotesPaneVisibility': {
+          logger.debug(
+            `Changing footnotesPaneVisible from ${footnotesPaneVisible} to ${!footnotesPaneVisible}`,
+          );
+          setFootnotesPaneVisible(!footnotesPaneVisible);
           break;
         }
         default:
