@@ -127,6 +127,13 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      # Ensure the `dist` files are updated before running tests.
+      - name: Build platform-bible-utils
+        run: npm run build:platform-bible-utils
+
+      - name: Build platform-bible-react
+        run: npm run build:platform-bible-react
+
       # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
       - name: type checking
         run: |
@@ -139,6 +146,10 @@ jobs:
       - name: Verify no files changed after build
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v20
+        with:
+          exclude: |
+            lib/platform-bible-react/dist/**
+            lib/platform-bible-utils/dist/**
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
