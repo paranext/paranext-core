@@ -1,164 +1,106 @@
-import React from 'react';
-import { Drawer as DrawerPrimitive } from 'vaul';
+import * as React from "react"
+import { Drawer as DrawerPrimitive } from "vaul"
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from "@/utils/shadcn-ui.util"
 
-// CUSTOM: Added context to manage drawer direction
-const DrawerContext = React.createContext<{
-  direction?: 'top' | 'bottom' | 'left' | 'right';
-}>({
-  direction: 'bottom',
-});
-
-/**
- * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
- * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
- * https://vaul.emilkowal.ski/getting-started
- */
-function Drawer({
+const Drawer = ({
   shouldScaleBackground = true,
-  direction = 'bottom',
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  // CUSTOM: Use context to provide direction to child components
-  const contextValue = React.useMemo(() => ({ direction }), [direction]);
-  return (
-    <DrawerContext.Provider value={contextValue}>
-      <DrawerPrimitive.Root
-        shouldScaleBackground={shouldScaleBackground}
-        direction={direction}
-        {...props}
-      />
-    </DrawerContext.Provider>
-  );
-}
-Drawer.displayName = 'Drawer';
+}: React.ComponentProps<typeof DrawerPrimitive.Root>) => (
+  <DrawerPrimitive.Root
+    shouldScaleBackground={shouldScaleBackground}
+    {...props}
+  />
+)
+Drawer.displayName = "Drawer"
 
-/** @inheritdoc Drawer */
-const DrawerTrigger = DrawerPrimitive.Trigger;
+const DrawerTrigger = DrawerPrimitive.Trigger
 
-/** @inheritdoc Drawer */
-const DrawerPortal = DrawerPrimitive.Portal;
+const DrawerPortal = DrawerPrimitive.Portal
 
-/** @inheritdoc Drawer */
-const DrawerClose = DrawerPrimitive.Close;
+const DrawerClose = DrawerPrimitive.Close
 
-/** @inheritdoc Drawer */
 const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn('tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80', className)}
+    className={cn("tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80", className)}
     {...props}
   />
-));
-DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
+))
+DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
-/* CUSTOM: Extend DrawerPrimitive.Content with additional props */
-interface DrawerContentProps
-  extends React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
-  /** Optionally hide the drawer handle */
-  hideDrawerHandle?: boolean;
-}
-
-/** @inheritdoc Drawer */
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  DrawerContentProps
->(({ className, children, hideDrawerHandle = false, ...props }, ref) => {
-  // CUSTOM: Use context to provide direction to child components
-  const { direction = 'bottom' } = React.useContext(DrawerContext);
-
-  // CUSTOM: Define positioning and styling based on direction
-  const directionStyles = {
-    bottom: 'tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px]',
-    top: 'tw-inset-x-0 tw-top-0 tw-mb-24 tw-rounded-b-[10px]',
-    left: 'tw-inset-y-0 tw-start-0 tw-me-24 tw-rounded-e-[10px] tw-w-auto tw-max-w-sm',
-    right: 'tw-inset-y-0 tw-end-0 tw-ms-24 tw-rounded-s-[10px] tw-w-auto tw-max-w-sm',
-  };
-
-  // CUSTOM: Define handle styles for each direction
-  const handleStyles = {
-    bottom: 'tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted', // same as shadcn default
-    top: 'tw-mx-auto tw-mb-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
-    left: 'tw-my-auto tw-me-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
-    right: 'tw-my-auto tw-ms-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
-  };
-
-  return (
-    <DrawerPortal>
-      <DrawerOverlay />
-      <DrawerPrimitive.Content
-        ref={ref}
-        className={cn(
-          // CUSTOM: Removed tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px] tw-flex-col
-          'tw-fixed tw-z-50 tw-flex tw-h-auto tw-rounded-t-[10px] tw-border tw-bg-background',
-          direction === 'bottom' || direction === 'top' ? 'tw-flex-col' : 'tw-flex-row', // CUSTOM
-          directionStyles[direction], // CUSTOM
-          className,
-        )}
-        {...props}
-      >
-        {/* CUSTOM: Render handles and children based on direction and if the drawer handle is hidden */}
-        {!hideDrawerHandle && (direction === 'bottom' || direction === 'right') && (
-          <div className={handleStyles[direction]} />
-        )}
-        <div className="tw-flex tw-flex-col">{children}</div>
-        {!hideDrawerHandle && (direction === 'top' || direction === 'left') && (
-          <div className={handleStyles[direction]} />
-        )}
-      </DrawerPrimitive.Content>
-    </DrawerPortal>
-  );
-});
-DrawerContent.displayName = 'DrawerContent';
-
-/** @inheritdoc Drawer */
-function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn('tw-grid tw-gap-1.5 tw-p-4 tw-text-center sm:tw-text-left', className)}
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DrawerPortal>
+    <DrawerOverlay />
+    <DrawerPrimitive.Content
+      ref={ref}
+      className={cn(
+        "tw-fixed tw-inset-x-0 tw-bottom-0 tw-z-50 tw-mt-24 tw-flex tw-h-auto tw-flex-col tw-rounded-t-[10px] tw-border tw-bg-background",
+        className
+      )}
       {...props}
-    />
-  );
-}
-DrawerHeader.displayName = 'DrawerHeader';
+    >
+      <div className="tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted" />
+      {children}
+    </DrawerPrimitive.Content>
+  </DrawerPortal>
+))
+DrawerContent.displayName = "DrawerContent"
 
-/** @inheritdoc Drawer */
-function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div className={cn('tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4', className)} {...props} />
-  );
-}
-DrawerFooter.displayName = 'DrawerFooter';
+const DrawerHeader = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("tw-grid tw-gap-1.5 tw-p-4 tw-text-center sm:tw-text-left", className)}
+    {...props}
+  />
+)
+DrawerHeader.displayName = "DrawerHeader"
 
-/** @inheritdoc Drawer */
+const DrawerFooter = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4", className)}
+    {...props}
+  />
+)
+DrawerFooter.displayName = "DrawerFooter"
+
 const DrawerTitle = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title>
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Title
     ref={ref}
-    className={cn('tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight', className)}
+    className={cn(
+      "tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight",
+      className
+    )}
     {...props}
   />
-));
-DrawerTitle.displayName = DrawerPrimitive.Title.displayName;
+))
+DrawerTitle.displayName = DrawerPrimitive.Title.displayName
 
-/** @inheritdoc Drawer */
 const DrawerDescription = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description>
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Description
     ref={ref}
-    className={cn('tw-text-sm tw-text-muted-foreground', className)}
+    className={cn("tw-text-sm tw-text-muted-foreground", className)}
     {...props}
   />
-));
-DrawerDescription.displayName = DrawerPrimitive.Description.displayName;
+))
+DrawerDescription.displayName = DrawerPrimitive.Description.displayName
 
 export {
   Drawer,
@@ -171,4 +113,4 @@ export {
   DrawerFooter,
   DrawerTitle,
   DrawerDescription,
-};
+}
