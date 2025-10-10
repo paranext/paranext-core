@@ -5,7 +5,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 
 const alertVariants = cva(
   cn(
-    'tw-relative tw-w-full tw-rounded-lg tw-border tw-p-4 [&>svg~*]:tw-pl-7 [&>svg+div]:tw-translate-y-[-3px] [&>svg]:tw-absolute [&>svg]:tw-left-4 [&>svg]:tw-top-4 [&>svg]:tw-text-foreground',
+    'tw-relative tw-w-full tw-rounded-lg tw-border tw-px-4 tw-py-3 tw-text-sm [&>svg+div]:tw-translate-y-[-3px] [&>svg]:tw-absolute [&>svg]:tw-left-4 [&>svg]:tw-top-4 [&>svg]:tw-text-foreground [&>svg~*]:tw-pl-7',
     // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can use
     // images (or svgs from file) as icons
     // Implemented by TJ Couch

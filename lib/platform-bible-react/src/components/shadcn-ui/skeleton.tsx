@@ -10,7 +10,7 @@ function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
     <div
       className={cn(
         'pr-twp', // CUSTOM
-        'tw-animate-pulse tw-rounded-md tw-bg-muted',
+        'tw-animate-pulse tw-rounded-md tw-bg-primary/10',
         className,
       )}
       {...props}

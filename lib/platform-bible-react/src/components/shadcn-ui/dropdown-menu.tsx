@@ -11,9 +11,8 @@ import {
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import { Check, ChevronRight, Circle } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
+import { CheckIcon, ChevronRightIcon, DotFilledIcon } from '@radix-ui/react-icons';
 
 /**
  * Dropdown Menu components providing accessible dropdown menus and submenus. These components are
@@ -87,7 +86,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <ChevronRight className="tw-ms-auto" /> {/* CUSTOM: Support RTL (was tw-ml-auto) */}
+      <ChevronRightIcon className="tw-ms-auto" /> {/* CUSTOM: Support RTL (was tw-ml-auto) */}
     </DropdownMenuPrimitive.SubTrigger>
   );
 });
@@ -125,7 +124,8 @@ const DropdownMenuContent = React.forwardRef<
         sideOffset={sideOffset}
         className={cn(
           'pr-twp', // CUSTOM adding pr twp because the dropdown content is added to the dom as a sibling to the app root
-          'tw-z-50 tw-max-h-[var(--radix-dropdown-menu-content-available-height)] tw-min-w-[8rem] tw-origin-[--radix-dropdown-menu-content-transform-origin] tw-overflow-y-auto tw-overflow-x-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-md data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+          'tw-z-50 tw-max-h-[var(--radix-dropdown-menu-content-available-height)] tw-min-w-[8rem] tw-overflow-y-auto tw-overflow-x-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-md',
+          'tw-origin-[--radix-dropdown-menu-content-transform-origin] data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
           className,
         )}
         {...props}
@@ -151,7 +151,7 @@ const DropdownMenuItem = React.forwardRef<
       ref={ref}
       className={cn(
         // CUSTOM: removed tw-relative focus:tw-text-accent-foreground
-        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-gap-2 tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0',
+        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-gap-2 tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50 [&>svg]:tw-size-4 [&>svg]:tw-shrink-0',
         inset && 'tw-ps-8', // CUSTOM: Support RTL (was inset && tw-pl-8)
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
@@ -188,7 +188,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
         )}
       >
         <DropdownMenuPrimitive.ItemIndicator>
-          <Check className="tw-h-4 tw-w-4" />
+          <CheckIcon className="tw-h-4 tw-w-4" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -221,7 +221,7 @@ const DropdownMenuRadioItem = React.forwardRef<
         )}
       >
         <DropdownMenuPrimitive.ItemIndicator>
-          <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
+          <DotFilledIcon className="tw-h-2 tw-w-2 tw-fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

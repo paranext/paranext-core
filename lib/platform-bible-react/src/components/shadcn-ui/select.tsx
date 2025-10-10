@@ -2,9 +2,8 @@
 
 import React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cva, VariantProps } from 'class-variance-authority';
 
@@ -40,7 +39,7 @@ const SelectValue = SelectPrimitive.Value;
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export const selectTriggerVariants = cva(
-  'tw-flex tw-h-10 tw-w-full tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background placeholder:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1',
+  'tw-flex tw-h-9 tw-w-full tw-items-center tw-justify-between tw-whitespace-nowrap tw-rounded-md tw-border tw-border-input tw-bg-transparent tw-px-3 tw-py-2 tw-text-sm tw-shadow-sm tw-ring-offset-background data-[placeholder]:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1',
   {
     variants: {
       size: {
@@ -71,7 +70,7 @@ const SelectTrigger = React.forwardRef<
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="tw-h-4 tw-w-4 tw-opacity-50" />
+        <ChevronDownIcon className="tw-h-4 tw-w-4 tw-opacity-50" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -88,7 +87,7 @@ const SelectScrollUpButton = React.forwardRef<
     className={cn('tw-flex tw-cursor-default tw-items-center tw-justify-center tw-py-1', className)}
     {...props}
   >
-    <ChevronUp className="tw-h-4 tw-w-4" />
+    <ChevronUpIcon className="tw-h-4 tw-w-4" />
   </SelectPrimitive.ScrollUpButton>
 ));
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
@@ -103,7 +102,7 @@ const SelectScrollDownButton = React.forwardRef<
     className={cn('tw-flex tw-cursor-default tw-items-center tw-justify-center tw-py-1', className)}
     {...props}
   >
-    <ChevronDown className="tw-h-4 tw-w-4" />
+    <ChevronDownIcon className="tw-h-4 tw-w-4" />
   </SelectPrimitive.ScrollDownButton>
 ));
 SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
@@ -152,7 +151,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn('tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-font-semibold', className)}
+    className={cn('tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold', className)}
     {...props}
   />
 ));
@@ -166,16 +165,17 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
+      // CUSTOM: removed tw-pl-2 tw-pr-8
       'tw-relative tw-flex tw-w-full tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-      'tw-pe-2 tw-ps-8', // CUSTOM: Support RTL
+      'tw-pe-8 tw-ps-2', // CUSTOM: Support RTL
       className,
     )}
     {...props}
   >
-    {/* CUSTOM: tw-start-2 to support RTL */}
-    <span className="tw-absolute tw-start-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
+    {/* CUSTOM: RTL support: replaced tw-right-2 by tw-end-2 */}
+    <span className="tw-absolute tw-end-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="tw-h-4 tw-w-4" />
+        <CheckIcon className="tw-h-4 tw-w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
 
