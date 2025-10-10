@@ -24,7 +24,7 @@ import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
-import { Toaster, toast as sonner } from 'sonner';
+import { Toaster as Sonner, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
 type Unsubscriber = () => boolean;
@@ -1644,7 +1644,7 @@ export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, Vari
  * @param BadgeProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
-export declare const Badge: React$1.ForwardRefExoticComponent<BadgeProps & React$1.RefAttributes<HTMLDivElement>>;
+export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Card component displays a card with header, content, and footer. This component is built and
  * styled with Shadcn UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/card
@@ -1653,9 +1653,9 @@ export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttribu
 /** @inheritdoc Card */
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Card */
-export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Card */
-export declare const CardDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const CardDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Card */
 export declare const CardContent: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Card */
@@ -1838,6 +1838,8 @@ export type DropdownMenuProps = React$1.ComponentPropsWithoutRef<typeof Dropdown
 	variant?: MenuContextProps["variant"];
 };
 /** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuTrigger: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
@@ -1848,85 +1850,31 @@ export declare const DropdownMenuSub: React$1.FC<DropdownMenuPrimitive.DropdownM
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuRadioGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSubTriggerProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
-	className?: string;
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSubContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> & {
-	className?: string;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
-	className?: string;
-	sideOffset?: number;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
-	className?: string;
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuCheckboxItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
-	className?: string;
-	checked?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuRadioItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
-	className?: string;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuLabelProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
-	className?: string;
-	inset?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSeparatorProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator> & {
-	className?: string;
-};
-/** @inheritdoc DropdownMenuProps */
 export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> & {
 	className?: string;
 };
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
 	inset?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	sideOffset?: number;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
 	inset?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	checked?: boolean;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
 	inset?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
 export declare namespace DropdownMenuShortcut {
@@ -1961,6 +1909,8 @@ export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
 /** @inheritdoc Popover */
 export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Popover */
+export declare const PopoverAnchor: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverAnchorProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Popover */
 export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Displays an indicator showing the completion progress of a task, typically displayed as a
@@ -1981,7 +1931,7 @@ export declare const RadioGroup: React$1.ForwardRefExoticComponent<Omit<RadioGro
 /** @inheritdoc RadioGroup */
 export declare const RadioGroupItem: React$1.ForwardRefExoticComponent<Omit<RadioGroupPrimitive.RadioGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 /**
- * Props for Select component
+ * CUSTOM: Props for Select component
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
  */
@@ -2001,7 +1951,7 @@ export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimit
 /** @inheritdoc Select */
 export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
 /**
- * Style variants for the Select Trigger component.
+ * CUSTOM: Style variants for the Select Trigger component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
@@ -2152,16 +2102,16 @@ export declare const SidebarMenuSubButton: React$1.ForwardRefExoticComponent<Omi
 	size?: "sm" | "md";
 	isActive?: boolean;
 }, "ref"> & React$1.RefAttributes<HTMLAnchorElement>>;
-type SonnerProps = React$1.ComponentProps<typeof Toaster>;
+type ToasterProps = React$1.ComponentProps<typeof Sonner>;
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
  * styled with Shadcn UI.
  *
- * @param SonnerProps
+ * @param ToasterProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
+declare function Toaster({ ...props }: ToasterProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn
  * UI documentation: https://ui.shadcn.com/docs/components/skeleton
@@ -2198,7 +2148,6 @@ export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTML
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 /** @inheritdoc Table */
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
-/** @inheritdoc Table */
 export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & {
 	setFocusAlsoRunsSelect?: boolean;
 } & React$1.RefAttributes<HTMLTableRowElement>>;
@@ -2215,21 +2164,15 @@ export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTM
  * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
  */
 export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
 	className?: string;
 };
-/** @inheritdoc Tabs */
-export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc Tabs */
-export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Tabs */
-export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
 type LeftTabsTriggerProps = TabsTriggerProps & {
 	value: string;
 	ref?: React$1.Ref<HTMLButtonElement>;
@@ -2268,7 +2211,6 @@ export declare const ToggleGroup: React$1.ForwardRefExoticComponent<((Omit<Toggl
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string>) & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc ToggleGroup */
 export declare const ToggleGroupItem: React$1.ForwardRefExoticComponent<Omit<ToggleGroupPrimitive.ToggleGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & VariantProps<(props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
@@ -2439,6 +2381,7 @@ export declare function cn(...inputs: ClassValue[]): string;
 
 export {
 	TabNavigationContentSearch as NavigationContentSearch,
+	Toaster as Sonner,
 	sonner,
 };
 
