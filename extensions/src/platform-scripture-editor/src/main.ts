@@ -62,7 +62,7 @@ async function openPlatformScriptureEditor(
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
-  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(false, projectId, existingTabIdToReplace, options);
 }
 
@@ -72,7 +72,7 @@ async function openPlatformResourceViewer(
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
-  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
@@ -146,7 +146,39 @@ async function open(
   return undefined;
 }
 
-/** Simple web view provider that provides Resource web views when papi requests them */
+async function toggleFootnotesPane(webViewId: string | undefined): Promise<undefined> {
+  if (!webViewId) {
+    logger.debug('No editor web view ID!');
+    return undefined;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return undefined;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return undefined;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return undefined;
+  }
+
+  await controller.toggleFootnotesPaneVisibility();
+
+  return undefined;
+}
+
+/** Simple web view provider that provides Scripture web views when papi requests them */
 class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
   constructor() {
     super(scriptureEditorWebViewType);
@@ -386,6 +418,28 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           throw new Error(message);
         }
       },
+      async toggleFootnotesPaneVisibility() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to toggleFootnotesPaneVisibility`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'toggleFootnotesPaneVisibility',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -460,11 +514,35 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     scriptureEditorWebViewProvider,
   );
 
+  const toggleFootnotesPanePromise = papi.commands.registerCommand(
+    'platformScripture.toggleFootnotes',
+    toggleFootnotesPane,
+    {
+      method: {
+        summary: 'Toggle the visibility of the footnotes panel',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view to toggle the footnotes panel for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
+    await toggleFootnotesPanePromise,
   );
 
   logger.debug('Scripture editor is finished activating!');
