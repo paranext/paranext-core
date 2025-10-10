@@ -30,8 +30,8 @@ const Switch = React.forwardRef<
           'pr-twp', // CUSTOM
           'tw-pointer-events-none tw-block tw-h-4 tw-w-4 tw-rounded-full tw-bg-background tw-shadow-lg tw-ring-0 tw-transition-transform data-[state=checked]:tw-translate-x-4 data-[state=unchecked]:tw-translate-x-0',
           {
-            // CUSTOM: Support RTL - TODO: need to check shadcn changed data-[state=checked]:tw-translate-x-5 to data-[state=checked]:tw-translate-x-4
-            'data-[state=checked]:tw-translate-x-[-20px] data-[state=unchecked]:tw-translate-x-0':
+            // CUSTOM: Support RTL
+            'data-[state=checked]:tw-translate-x-[-16px] data-[state=unchecked]:tw-translate-x-0':
               dir === 'rtl',
           },
         )}
