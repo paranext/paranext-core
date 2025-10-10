@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import * as SeparatorPrimitive from '@radix-ui/react-separator';
 
 import { cn } from '@/utils/shadcn-ui.util';
@@ -19,7 +19,8 @@ const Separator = React.forwardRef<
     decorative={decorative}
     orientation={orientation}
     className={cn(
-      'pr-twp tw-shrink-0 tw-bg-border',
+      'pr-twp', // CUSTOM
+      'tw-shrink-0 tw-bg-border',
       orientation === 'horizontal' ? 'tw-h-[1px] tw-w-full' : 'tw-h-full tw-w-[1px]',
       className,
     )}

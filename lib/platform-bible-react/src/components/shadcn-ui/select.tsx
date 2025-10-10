@@ -1,13 +1,14 @@
+'use client';
+
 import React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { Check, ChevronDown, ChevronUp } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from '@radix-ui/react-icons';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cva, VariantProps } from 'class-variance-authority';
 
 /**
- * Props for Select component
+ * CUSTOM: Props for Select component
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
  */
@@ -33,12 +34,12 @@ const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
 /**
- * Style variants for the Select Trigger component.
+ * CUSTOM: Style variants for the Select Trigger component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export const selectTriggerVariants = cva(
-  'tw-flex tw-h-10 tw-w-full tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background placeholder:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1',
+  'tw-flex tw-h-9 tw-w-full tw-items-center tw-justify-between tw-whitespace-nowrap tw-rounded-md tw-border tw-border-input tw-bg-transparent tw-px-3 tw-py-2 tw-text-sm tw-shadow-sm tw-ring-offset-background data-[placeholder]:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1',
   {
     variants: {
       size: {
@@ -62,14 +63,14 @@ const SelectTrigger = React.forwardRef<
   const dir: Direction = readDirection();
   return (
     <SelectPrimitive.Trigger
-      className={cn(selectTriggerVariants({ size, className }))}
+      className={cn(selectTriggerVariants({ size, className })) /* CUSTOM */}
       ref={ref}
       {...props}
       dir={dir}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="tw-h-4 tw-w-4 tw-opacity-50" />
+        <ChevronDownIcon className="tw-h-4 tw-w-4 tw-opacity-50" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -86,7 +87,7 @@ const SelectScrollUpButton = React.forwardRef<
     className={cn('tw-flex tw-cursor-default tw-items-center tw-justify-center tw-py-1', className)}
     {...props}
   >
-    <ChevronUp className="tw-h-4 tw-w-4" />
+    <ChevronUpIcon className="tw-h-4 tw-w-4" />
   </SelectPrimitive.ScrollUpButton>
 ));
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
@@ -101,7 +102,7 @@ const SelectScrollDownButton = React.forwardRef<
     className={cn('tw-flex tw-cursor-default tw-items-center tw-justify-center tw-py-1', className)}
     {...props}
   >
-    <ChevronDown className="tw-h-4 tw-w-4" />
+    <ChevronDownIcon className="tw-h-4 tw-w-4" />
   </SelectPrimitive.ScrollDownButton>
 ));
 SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
@@ -117,7 +118,8 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Content
         ref={ref}
         className={cn(
-          'pr-twp tw-relative tw-z-50 tw-max-h-96 tw-min-w-[8rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-text-popover-foreground tw-shadow-md data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+          'pr-twp', // CUSTOM
+          'tw-relative tw-z-50 tw-max-h-[--radix-select-content-available-height] tw-min-w-[8rem] tw-origin-[--radix-select-content-transform-origin] tw-overflow-y-auto tw-overflow-x-hidden tw-rounded-md tw-border tw-bg-popover tw-text-popover-foreground tw-shadow-md data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
           position === 'popper' &&
             'data-[side=bottom]:tw-translate-y-1 data-[side=left]:tw--translate-x-1 data-[side=right]:tw-translate-x-1 data-[side=top]:tw--translate-y-1',
           className,
@@ -133,7 +135,7 @@ const SelectContent = React.forwardRef<
               'tw-h-[var(--radix-select-trigger-height)] tw-w-full tw-min-w-[var(--radix-select-trigger-width)]',
           )}
         >
-          <div dir={dir}>{children}</div>
+          <div dir={dir}>{children}</div> {/* CUSTOM: Support RTL */}
         </SelectPrimitive.Viewport>
         <SelectScrollDownButton />
       </SelectPrimitive.Content>
@@ -149,7 +151,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn('tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-font-semibold', className)}
+    className={cn('tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold', className)}
     {...props}
   />
 ));
@@ -163,14 +165,17 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'tw-relative tw-flex tw-w-full tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pe-2 tw-ps-8 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
+      // CUSTOM: removed tw-pl-2 tw-pr-8
+      'tw-relative tw-flex tw-w-full tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
+      'tw-pe-8 tw-ps-2', // CUSTOM: Support RTL
       className,
     )}
     {...props}
   >
-    <span className="tw-absolute tw-start-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
+    {/* CUSTOM: RTL support: replaced tw-right-2 by tw-end-2 */}
+    <span className="tw-absolute tw-end-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="tw-h-4 tw-w-4" />
+        <CheckIcon className="tw-h-4 tw-w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
 

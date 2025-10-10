@@ -74,7 +74,13 @@ const Table = React.forwardRef<
   };
 
   return (
-    <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-p-1': stickyHeader })}>
+    <div
+      className={cn(
+        'pr-twp', // CUSTOM
+        'tw-relative tw-w-full tw-overflow-auto',
+        { 'tw-p-1': stickyHeader }, // CUSTOM
+      )}
+    >
       {/* Table element is not interactive by default but we need to add a keydown handler */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <table
@@ -84,7 +90,8 @@ const Table = React.forwardRef<
         onKeyDown={handleKeyDownInTable} // CUSTOM: Enable keyboard behavior
         ref={tableRef} // CUSTOM: Use internal ref to manage keyboard navigation
         className={cn(
-          'tw-w-full tw-caption-bottom tw-text-sm tw-outline-none', // CUSTOM: Add outline-none to remove duplicate outline
+          'tw-w-full tw-caption-bottom tw-text-sm',
+          'tw-outline-none', // CUSTOM: Add outline-none to remove duplicate outline
           'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background', // CUSTOM: Add focus styles
           className,
         )}
@@ -105,10 +112,10 @@ const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      {
-        'tw-sticky tw-top-[-1px] tw-z-20 tw-bg-background tw-drop-shadow-sm': stickyHeader,
-      },
       '[&_tr]:tw-border-b',
+      {
+        'tw-sticky tw-top-[-1px] tw-z-20 tw-bg-background tw-drop-shadow-sm': stickyHeader, // CUSTOM
+      },
       className,
     )}
     {...props}
@@ -214,19 +221,20 @@ function focusAdjacentRow(
     return true;
   }
   return false;
-}
 
-/** @inheritdoc Table */
+  /** @inheritdoc Table */
+}
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement> & { setFocusAlsoRunsSelect?: boolean }
 >(({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect = false, ...props }, ref) => {
-  // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
+  // #region CUSTOM
+  // Use internal ref to manage keyboard navigation and Enter key behavior
   // This ref gets passed into the table row ref property which expects null and not undefined
   // eslint-disable-next-line no-null/no-null
   const rowRef = React.useRef<HTMLTableRowElement>(null);
 
-  // CUSTOM: Assign internal ref to external ref if provided
+  // Assign internal ref to external ref if provided
   React.useEffect(() => {
     if (typeof ref === 'function') {
       ref(rowRef.current);
@@ -235,16 +243,16 @@ const TableRow = React.forwardRef<
     }
   }, [ref]);
 
-  // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
+  // Use internal ref to manage keyboard navigation and Enter key behavior
   useFocusableInRowKeyboardNavigation(rowRef);
 
-  // CUSTOM: Get all focusable elements in the current row
+  // Get all focusable elements in the current row
   const focusablesInRow = React.useMemo(
     () => (rowRef.current ? getFocusableElements(rowRef.current) : []),
     [rowRef],
   );
 
-  // CUSTOM: Handle keydown events for keyboard navigation
+  // Handle keydown events for keyboard navigation
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTableRowElement>) => {
       const { current: currentRow } = rowRef;
@@ -292,6 +300,8 @@ const TableRow = React.forwardRef<
     [setFocusAlsoRunsSelect, onSelect],
   );
 
+  // #endregion CUSTOM
+
   return (
     <tr
       ref={rowRef}
@@ -299,10 +309,9 @@ const TableRow = React.forwardRef<
       onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
       onFocus={handleFocus} // CUSTOM: Handle focus event
       className={cn(
-        // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
-        'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50',
-        'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
-        'data-[state=selected]:tw-bg-muted',
+        'tw-border-b tw-transition-colors hover:tw-bg-muted/50 data-[state=selected]:tw-bg-muted',
+        'tw-outline-none', // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
+        'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background', // CUSTOM: Add focus styles
         className,
       )}
       {...props}
@@ -319,7 +328,8 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'tw-h-12 tw-px-4 tw-text-start tw-align-middle tw-font-medium tw-text-muted-foreground [&:has([role=checkbox])]:tw-pe-0',
+      // CUSTOM: start instead of left, pe instead of pr to support RTL
+      'tw-h-10 tw-px-2 tw-text-left tw-align-middle tw-font-medium tw-text-muted-foreground [&:has([role=checkbox])]:tw-pr-0 [&>[role=checkbox]]:tw-translate-y-[2px]',
       className,
     )}
     {...props}
@@ -334,7 +344,11 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn('tw-p-4 tw-align-middle [&:has([role=checkbox])]:tw-pe-0', className)}
+    // CUSTOM: pe instead of pr to support RTL
+    className={cn(
+      'tw-p-2 tw-align-middle [&:has([role=checkbox])]:tw-pr-0 [&>[role=checkbox]]:tw-translate-y-[2px]',
+      className,
+    )}
     {...props}
   />
 ));

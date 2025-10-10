@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import { type VariantProps } from 'class-variance-authority';
@@ -27,12 +29,16 @@ const ToggleGroup = React.forwardRef<
   return (
     <ToggleGroupPrimitive.Root
       ref={ref}
-      className={cn('pr-twp tw-flex tw-items-center tw-justify-center tw-gap-1', className)}
+      className={cn(
+        'pr-twp', // CUSTOM
+        'tw-flex tw-items-center tw-justify-center tw-gap-1',
+        className,
+      )}
       {...props}
       dir={dir}
     >
       <ToggleGroupContext.Provider
-        // Suppress warning produced by imported shadcn code
+        // CUSTOM: Suppress warning produced by imported shadcn code
         // eslint-disable-next-line react/jsx-no-constructed-context-values
         value={{ variant, size }}
       >
@@ -44,7 +50,6 @@ const ToggleGroup = React.forwardRef<
 
 ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
 
-/** @inheritdoc ToggleGroup */
 const ToggleGroupItem = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &
