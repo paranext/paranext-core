@@ -37,6 +37,17 @@ Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
 /** RegExp that matches all NBSP characters in a string. Used to convert NBSP in USJ to ~ in USFM */
 const TEXT_CONTENT_NBSP_REGEXP = /\u00A0/g;
 
+/**
+ * RegExp that matches a USX/USJ table marker to get the number out of it. Used to figure out the
+ * USFM cell range for table markers with `colspan` attribute in USX/USJ
+ *
+ * Matches:
+ *
+ * - 0: the whole string
+ * - 1: the number portion of the marker (the starting column of this cell)
+ */
+const TABLE_MARKER_NUMBER_REGEXP = /\w+(\d+)/;
+
 /** Map of USJ content arrays and objects inside content arrays to the content array owner */
 type UsjParentMap = Map<MarkerObject | MarkerContent[], MarkerObject | Usj>;
 
@@ -1001,15 +1012,28 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region transform USJ to USFM
 
-  /** Get `MarkerInfo` by marker name */
-  private getMarkerInfo(markerName: string) {
-    const markerInfo = this.markersMap.markers[markerName];
+  /**
+   * Get `MarkerInfo` by marker name
+   *
+   * @param markerName Name of the marker for which to get `MarkerInfo`
+   * @returns `MarkerInfo` for the marker by name if the marker is in the markers map. `undefined`
+   *   if the marker is not in the markers map. If you have the marker type, you can build a fake
+   *   `MarkerInfo` for an unknown marker by making an object with just the type. If not, might be
+   *   best to throw an error since there probably isn't enough information available to do anything
+   *   with that marker.
+   */
+  private getMarkerInfo(markerName: string): MarkerInfo | undefined {
+    // Try to get by exact marker name first
+    let markerInfo = this.markersMap.markers[markerName];
 
-    // TODO: markersRegExp
+    // If not found by exact name, try to match the RegExp marker names
+    if (!markerInfo)
+      [, markerInfo] =
+        Object.entries(this.markersMap.markersRegExp).find(([markerRegExp]) =>
+          new RegExp(markerRegExp).test(markerName),
+        ) ?? [];
 
-    // TODO: unknown markers
-    if (!markerInfo) throw new Error(`Unknown marker ${markerName}`);
-
+    // Didn't find the marker, so just return `undefined
     return markerInfo;
   }
 
@@ -1044,19 +1068,63 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     else if (UsjReaderWriter.isUsjMarker(marker)) markerName = marker.type;
     else markerName = marker.marker ?? marker.type;
 
-    const markerInfo = this.getMarkerInfo(markerName);
+    // If we don't have marker info for the marker or the marker type doesn't match the type in the
+    // marker info, this marker is considered unknown. Do some special handling.
+    let markerIsUnknown = false;
 
-    if (!isString(marker) && marker.type !== markerInfo.type)
-      throw new Error(
-        `Mismatching marker type in the USJ content ${marker.type} vs marker type in the marker info ${markerInfo.type}`,
+    let markerInfo = this.getMarkerInfo(markerName);
+
+    // Didn't find the marker, so create `MarkerInfo` with the marker type if possible
+    if (!markerInfo) {
+      if (isString(marker))
+        throw new Error(`Unknown marker ${markerName} and no marker type provided`);
+
+      markerInfo = { type: marker.type };
+      markerIsUnknown = true;
+
+      console.warn(
+        `Unknown marker ${markerName}. Creating MarkerInfo to use: ${JSON.stringify(markerInfo)}`,
       );
+    }
 
-    const markerType = markerInfo.type;
+    let markerType = markerInfo.type;
 
-    const markerTypeInfo = this.markersMap.markerTypes[markerType];
+    // Special case: If the marker is a table marker, remove "table:" from the start because that is
+    // present in USJ but not in the markers map or the other formats
+    const isTableMarker = !isString(marker) && marker.type.startsWith('table:');
 
-    // TODO: unknown marker types
-    if (!markerTypeInfo) throw new Error(`Unknown marker type ${markerType}`);
+    if (
+      !isString(marker) &&
+      ((isTableMarker && marker.type.substring('table:'.length) !== markerInfo.type) ||
+        (!isTableMarker && marker.type !== markerInfo.type))
+    ) {
+      console.warn(
+        `Warning: Mismatching marker type in the USJ content ${marker.type} vs marker type in the marker info ${markerInfo.type} for marker ${markerName}. Using the type from the USJ content.`,
+      );
+      markerType = isTableMarker ? marker.type.substring('table:'.length) : marker.type;
+      markerIsUnknown = true;
+    }
+
+    let markerTypeInfo = this.markersMap.markerTypes[markerType];
+
+    // Special case: If the marker type is para and it is unknown, do not add a newline before
+    // the marker to match Paratext 9
+    if (markerIsUnknown && markerType === 'para' && markerTypeInfo)
+      markerTypeInfo = { ...markerTypeInfo, hasNewlineBefore: false };
+
+    // Special case: If the marker type is `unmatched`, use empty marker type info
+    if (!markerTypeInfo && markerType === 'unmatched') markerTypeInfo = {};
+
+    // Couldn't find the marker type info, so fall back to "para" for unknown marker types (matches Paratext 9)
+    // TODO: Test! Not sure if I have tried importing USX with an actually unknown marker type in Paratext 9
+    if (!markerTypeInfo) {
+      markerTypeInfo = this.markersMap.markerTypes.para;
+      if (!markerTypeInfo)
+        throw new Error(
+          `Unknown marker type ${markerType} and could not find marker type "para". Cannot proceed.`,
+        );
+      console.warn(`Warning: Unknown marker type ${markerType}. Using marker type "para".`);
+    }
 
     // Figure out attribute marker attribute names
     const attributeMarkerInfoEntries: [string, AttributeMarkerInfo][] = [];
@@ -1064,7 +1132,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       markerInfo.attributeMarkers.forEach((attributeMarkerName) => {
         const attributeMarkerInfo = this.getMarkerInfo(attributeMarkerName);
 
-        // Markers map lists an attribute marker that doesn't seem right. Just skip this attribute
+        // Markers map lists an attribute marker that doesn't exist. Just skip this attribute
+        if (!attributeMarkerInfo) return;
+
+        // Markers map lists an attribute marker that doesn't seem to be an attribute marker.
+        // Just skip this attribute
         if (!('attributeMarkerAttributeName' in attributeMarkerInfo)) return;
 
         attributeMarkerInfoEntries.push([attributeMarkerName, attributeMarkerInfo]);
@@ -1073,7 +1145,37 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // Add the marker name
     // Special case with USJ marker - transform to usfm marker
-    const markerNameUsfm = markerName === USJ_TYPE ? 'usfm' : markerName;
+    let markerNameUsfm = markerName === USJ_TYPE ? 'usfm' : markerName;
+
+    // Markers can have any properties. All are strings. Only exception is content, so don't use
+    // it here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const markerWithAnyAttributes = marker as unknown as Record<string, string>;
+
+    // Special case: cell-type markers with `colspan` need to be cell range marker
+    if (markerType === 'cell' && markerWithAnyAttributes.colspan) {
+      // Get the number of columns that this cell spans
+      const columnsSpanned = parseInt(markerWithAnyAttributes.colspan, 10);
+
+      const tableMarkerMatches = TABLE_MARKER_NUMBER_REGEXP.exec(markerName);
+
+      if (tableMarkerMatches?.[1]) {
+        // Get the starting cell column number
+        const startingColumn = parseInt(tableMarkerMatches[1], 10);
+        if (!Number.isNaN(startingColumn) && !Number.isNaN(columnsSpanned)) {
+          // Create cell range marker like `tc1-3`
+          markerNameUsfm = `${markerName}-${startingColumn + columnsSpanned - 1}`;
+          // Set `colspan` so it is not output to USFM since it was just incorporated properly
+          markerTypeInfo = {
+            ...markerTypeInfo,
+            skipOutputAttributeToUsfm: [
+              ...(markerTypeInfo.skipOutputAttributeToUsfm ?? []),
+              'colspan',
+            ],
+          };
+        }
+      }
+    }
 
     return {
       markerName,
@@ -1105,10 +1207,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * ```
    *
    * @param marker The marker to transform
+   * @param isInsideMarkerWithSameType `true` if this marker is inside another marker of the same
+   *   type. This is used to determine if a prefix should be added before the marker name.
    * @returns String containing the marker information that should come before the contents of the
    *   marker in USFM
    */
-  private openingMarkerToUsfm(marker: MarkerObject | Usj) {
+  private openingMarkerToUsfm(marker: MarkerObject | Usj, isInsideMarkerWithSameType: boolean) {
     let usfm = '';
 
     const { markerNameUsfm, markerInfo, markerType, markerTypeInfo, attributeMarkerInfoEntries } =
@@ -1123,9 +1227,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Special case: `USJ` marker should have a newline before
     if (markerTypeInfo.hasNewlineBefore || UsjReaderWriter.isUsjMarker(marker)) usfm += `\n`;
 
+    // Special case with `char` markers - prefix with `+` if inside another `char` marker
+    const markerPrefix = markerType === 'char' && isInsideMarkerWithSameType ? '+' : '';
+
     // Add the marker name
     // Special case with `optbreak` - transform to `//`
-    usfm += markerType === 'optbreak' ? '//' : `\\${markerNameUsfm} `;
+    // Special case with `unmatched` - no space after the marker name because it is basically a closing marker
+    usfm +=
+      markerType === 'optbreak'
+        ? '//'
+        : `\\${markerPrefix}${markerNameUsfm}${markerType === 'unmatched' ? '' : ' '}`;
 
     // Add leading attributes in listed order
     if (markerInfo.leadingAttributes) {
@@ -1157,23 +1268,30 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           content: [attributeValue],
         };
 
-        // Build the USFM for the attribute marker
-        let attributeMarkerUsfm = UsjReaderWriter.addMarkerUsfmToString(
-          '',
-          this.openingMarkerToUsfm(attributeMarker),
-        );
-        attributeMarkerUsfm += this.textContentToUsfm(attributeValue);
-        attributeMarkerUsfm = UsjReaderWriter.addMarkerUsfmToString(
-          attributeMarkerUsfm,
-          this.closingMarkerToUsfm(attributeMarker),
-        );
-
-        // Add the optional structural space after the attribute marker according to spec
-        // Special case: `cat` marker doesn't have this optional structural space
-        if (attributeMarkerName !== 'cat') attributeMarkerUsfm += ' ';
-
         // Add the attribute marker USFM to the document
-        usfm = UsjReaderWriter.addMarkerUsfmToString(usfm, attributeMarkerUsfm);
+        // Caveat: it's not technically always true that this marker is the parent of the attribute
+        // markers, but there is currently no known case where it matters because there are no
+        // attribute markers that have the same marker type as the marker on which they are
+        // attributes. It likely will never matter as this is a very strange concept and it seems
+        // the USFM committee doesn't want to create more attribute markers.
+
+        usfm = this.addMarkerUsfmToString(usfm, attributeMarker, marker);
+        usfm += this.textContentToUsfm(attributeValue);
+        usfm = this.addMarkerUsfmToString(
+          usfm,
+          {
+            isClosingMarker: true,
+            forMarker: attributeMarker,
+          },
+          marker,
+        );
+
+        if (
+          !this.markersMap.isSpaceAfterAttributeMarkersContent &&
+          attributeMarkerInfo.hasStructuralSpaceAfterCloseAttributeMarker
+        )
+          // Add the optional structural space after the attribute marker according to spec
+          usfm += ' ';
       });
     }
 
@@ -1201,14 +1319,20 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * ```
    *
    * @param marker The marker to transform
+   * @param isInsideMarkerWithSameType `true` if this marker is inside another marker of the same
+   *   type. This is used to determine if a prefix should be added before the marker name.
    * @returns String containing the marker information that should come after the contents of the
    *   marker in USFM
    */
-  private closingMarkerToUsfm(marker: MarkerObject | Usj) {
-    let usfm = '';
-
-    const { markerNameUsfm, markerInfo, markerTypeInfo, attributeMarkerInfoEntries } =
-      this.getInfoForMarker(marker);
+  private closingMarkerToUsfm(marker: MarkerObject | Usj, isInsideMarkerWithSameType: boolean) {
+    const {
+      markerName,
+      markerNameUsfm,
+      markerInfo,
+      markerType,
+      markerTypeInfo,
+      attributeMarkerInfoEntries,
+    } = this.getInfoForMarker(marker);
 
     // Gather attributes that are not listed as part of the opening marker and not skipped in USFM
     const closingMarkerAttributeNames = Object.keys(marker).filter((attributeName) => {
@@ -1248,6 +1372,58 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const markerWithAnyAttributes = marker as unknown as Record<string, string>;
 
+    // We don't have examples of markers that have both normal closing markers and independent
+    // closing markers, so just throw an error if we encounter this situation
+    if (
+      markerTypeInfo.hasClosingMarker &&
+      markerInfo.independentClosingMarkers &&
+      markerInfo.independentClosingMarkers.length > 0
+    )
+      throw new Error(
+        `Marker ${
+          markerNameUsfm
+        } is intended to have a normal closing marker and independent closing markers. As of writing this code, there is no known syntax for this situation in USFM. Cannot proceed.`,
+      );
+
+    // If this marker has an independent closing marker, create that
+    if (
+      markerInfo.independentClosingMarkers &&
+      markerInfo.independentClosingMarkers.length > 0 &&
+      markerWithAnyAttributes.closed !== 'false'
+    ) {
+      // Create a marker that represents this independent closing marker so we can make the USFM
+      const independentClosingMarker: MarkerObject = {
+        type: markerType,
+        marker: markerInfo.independentClosingMarkers[0],
+        // Put all the closing marker attributes on here since we don't really have a better place
+        // to put them and might as well
+        ...Object.fromEntries(
+          closingMarkerAttributeNames.map((attributeName) => [
+            attributeName,
+            markerWithAnyAttributes[attributeName],
+          ]),
+        ),
+      };
+
+      let usfm = this.openingMarkerToUsfm(independentClosingMarker, isInsideMarkerWithSameType);
+      // Only add the independent closing marker if it does not have the same name as the marker we
+      // are closing so we don't get in an infinite loop
+      if (markerName !== independentClosingMarker.marker)
+        usfm = this.addMarkerUsfmToString(
+          usfm,
+          {
+            isClosingMarker: true,
+            forMarker: independentClosingMarker,
+          },
+          isInsideMarkerWithSameType,
+        );
+
+      return usfm;
+    }
+
+    // This marker doesn't have an independent closing marker, so create a normal closing marker
+    let usfm = '';
+
     // Add attributes to the closing marker USFM
     if (closingMarkerAttributeNames.length > 0) {
       // Default attribute syntax if it is the only attribute present
@@ -1258,20 +1434,25 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         usfm += `|${markerWithAnyAttributes[markerInfo.defaultAttribute]}`;
       } else {
         // List all attributes
-        usfm += closingMarkerAttributeNames.reduce(
-          (attributesUsfm, attributeName, index) =>
-            // Add to the accumulated usfm (starting with a bar): a space if this is after the first
-            // attribute, then the attribute name, then =, then "the attribute value"
-            `${attributesUsfm}${index > 0 ? ' ' : ''}${attributeName}="${markerWithAnyAttributes[attributeName]}"`,
-          '|',
-        );
+        usfm += closingMarkerAttributeNames.reduce((attributesUsfm, attributeName, index) => {
+          // Special case: fig's file attribute is src in USFM
+          const attributeNameUsfm =
+            markerName === 'fig' && attributeName === 'file' ? 'src' : attributeName;
+          // Add to the accumulated usfm (starting with a bar): a space if this is after the first
+          // attribute, then the attribute name, then =, then "the attribute value"
+          return `${attributesUsfm}${index > 0 ? ' ' : ''}${attributeNameUsfm}="${markerWithAnyAttributes[attributeName]}"`;
+        }, '|');
       }
     }
 
+    // Add the normal closing marker
     if (markerTypeInfo.hasClosingMarker && markerWithAnyAttributes.closed !== 'false') {
       const closingMarkerName = markerTypeInfo.isClosingMarkerEmpty ? '' : markerNameUsfm;
 
-      usfm += `\\${closingMarkerName}*`;
+      // Special case with `char` markers - prefix with `+` if inside another `char` marker
+      const markerPrefix = markerType === 'char' && isInsideMarkerWithSameType ? '+' : '';
+
+      usfm += `\\${markerPrefix}${closingMarkerName}*`;
     }
 
     return usfm;
@@ -1285,7 +1466,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @returns `true` if this marker should be skipped; `false` otherwise
    */
   private shouldSkipOutputMarkerToUsfm(marker: MarkerObject) {
-    const { markerTypeInfo } = this.getInfoForMarker(marker);
+    const { markerType, markerTypeInfo } = this.getInfoForMarker(marker);
+
+    // Special case: `table`-type marker doesn't exist in USFM
+    if (markerType === 'table') return true;
 
     if (
       markerTypeInfo.skipOutputMarkerToUsfmIfAttributeIsPresent?.some(
@@ -1308,16 +1492,107 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * Add an opening or closing marker USFM representation to the end of a string of USFM
    *
    * @param usfm The USFM string to add the marker to
-   * @param markerUsfm The opening or closing marker USFM representation to add
+   * @param marker The opening or closing marker to add to the USFM
+   * @param tokenParent Parent of the marker being added. Used to determine if this marker is nested
+   *   within another marker of the same type
    * @returns Final USFM string with the marker added
    */
-  private static addMarkerUsfmToString(usfm: string, markerUsfm: string) {
+  private addMarkerUsfmToString(
+    usfm: string,
+    marker: MarkerObject | ClosingMarker,
+    tokenParent: MarkerObject | Usj | undefined,
+  ): string;
+  /**
+   * Add an opening or closing marker USFM representation to the end of a string of USFM
+   *
+   * @param usfm The USFM string to add the marker to
+   * @param marker The opening or closing marker to add to the USFM
+   * @param isInsideMarkerWithSameType `true` if this marker is inside another marker of the same
+   *   type. This is used to determine if a prefix should be added before the marker name.
+   * @returns Final USFM string with the marker added
+   */
+  private addMarkerUsfmToString(
+    usfm: string,
+    marker: MarkerObject | ClosingMarker,
+    isInsideMarkerWithSameType: boolean,
+  ): string;
+  private addMarkerUsfmToString(
+    usfm: string,
+    marker: MarkerObject | ClosingMarker,
+    tokenParentOrIsInsideMarkerWithSameType: MarkerObject | Usj | boolean | undefined,
+  ): string {
     let usfmOutput = usfm;
-    // If there's supposed to be a newline before the marker, it should eat the last space if
-    // there is one (that last space gets turned into the newline in this format)
-    if (markerUsfm.startsWith('\n')) usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
+    let markerUsfmOutput: string;
 
-    usfmOutput += markerUsfm;
+    const { markerName, markerType, markerTypeInfo } = this.getInfoForMarker(
+      'isClosingMarker' in marker ? marker.forMarker : marker,
+    );
+
+    // Determine if this marker is a direct child of another marker of the same type
+    let isParentSameType = false;
+    if (typeof tokenParentOrIsInsideMarkerWithSameType === 'boolean')
+      isParentSameType = tokenParentOrIsInsideMarkerWithSameType;
+    else if (tokenParentOrIsInsideMarkerWithSameType) {
+      const { markerType: parentMarkerType } = this.getInfoForMarker(
+        tokenParentOrIsInsideMarkerWithSameType,
+      );
+      if (parentMarkerType === markerType) {
+        isParentSameType = true;
+      }
+    }
+
+    if ('isClosingMarker' in marker) {
+      markerUsfmOutput = this.closingMarkerToUsfm(marker.forMarker, isParentSameType);
+
+      // If the closing marker is supposed to be empty, there was nothing in the marker content, and
+      // there are no closing marker attributes present, we need to remove the structural space after
+      // the opening marker
+      if (
+        markerTypeInfo.hasClosingMarker &&
+        markerTypeInfo.isClosingMarkerEmpty &&
+        // No contents
+        (!marker.forMarker.content || marker.forMarker.content.length === 0) &&
+        // No closing marker attributes
+        !markerUsfmOutput.startsWith('|')
+      ) {
+        usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
+      }
+    } else {
+      markerUsfmOutput = this.openingMarkerToUsfm(marker, isParentSameType);
+    }
+
+    if (markerUsfmOutput.startsWith('\n')) {
+      if (usfmOutput.length === 0) {
+        // If the USFM is empty, don't add a newline at the start
+        markerUsfmOutput = markerUsfmOutput.substring(1);
+      } else {
+        // If there's supposed to be a newline before the marker, it should eat the last space if
+        // there is one (that last space gets turned into the newline in this format)
+        usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
+      }
+    }
+
+    // Special case: `ca` after chapter marker needs a newline and space before in Paratext USFM for
+    // some reason
+    // Note that there is not a newline and space before `ca` after importing from USX in Paratext,
+    // so maybe we should just remove the newline and space in the PDP
+    if (this.markersMap.isSpaceAfterAttributeMarkersContent && markerName === 'ca') {
+      // Find the last marker in the current USFM output
+      const lastMarkerBackslashIndex = usfmOutput.lastIndexOf('\\');
+      if (lastMarkerBackslashIndex >= 0) {
+        // We just want to know if it's a chapter marker, so we can just get two characters, c and space
+        const lastMarker = usfm.substring(
+          lastMarkerBackslashIndex + 1,
+          lastMarkerBackslashIndex + 3,
+        );
+        if (lastMarker === 'c ') {
+          usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
+          usfmOutput += '\n ';
+        }
+      }
+    }
+
+    usfmOutput += markerUsfmOutput;
 
     return usfmOutput;
   }
@@ -1326,14 +1601,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Build the USFM up from the USJ content
     let usfm = '';
 
-    // Opening marker USFM representation of the `USJ` marker - needs to go after `id` closes in
-    // USFM even though it is before it in USJ
-    let usjOpeningMarkerUsfm = '';
+    // Special case: Opening marker of the `USJ` marker - needs to go after `id` closes in USFM even
+    // though it is before it in USJ
+    let usjOpeningMarker: MarkerObject | undefined;
     // Whether we have already passed the `id` marker; leave USJ markers alone after this
     let hasPassedIdMarker = false;
-    // The marker object we're currently skipping - if this is defined, it means we are walking
-    // through tokens of this marker object that we should skip outputting to USFM
-    let markerToSkipOutput: MarkerObject | undefined;
+    // The marker objects we're currently skipping ordered as a stack (last entry is the deepest
+    // marker we are skipping and therefore will be the next to close). If this has entries, it
+    // means we are walking through tokens of marker objects whose opening marker we already skipped
+    // and whose closing marker we should also skip outputting to USFM
+    const markersToSkipOutput: MarkerObject[] = [];
 
     UsjReaderWriter.findNextMatchingTokenUsingWorkingStack(
       this.usj,
@@ -1341,32 +1618,38 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       [],
       // Don't skip anything
       [],
-      (token) => {
+      (token, workingStack) => {
         if (typeof token !== 'object') {
-          if (markerToSkipOutput) return false;
-
           // Add the text contents USFM representation
           usfm += this.textContentToUsfm(token);
           return false;
         }
+
+        // Determine this marker's parent
+        let tokenParent: MarkerObject | Usj | undefined;
+        if (workingStack.length > 0) {
+          tokenParent = workingStack[workingStack.length - 1].parent;
+        }
+
         if ('isClosingMarker' in token) {
-          if (markerToSkipOutput) {
-            // Indicate the skipped marker has now closed
-            if (markerToSkipOutput === token.forMarker) markerToSkipOutput = undefined;
+          // If we are supposed to skip this marker in USFM, skip its closing marker
+          if (
+            markersToSkipOutput.length > 0 &&
+            markersToSkipOutput[markersToSkipOutput.length - 1] === token.forMarker
+          ) {
+            // Indicate the skipped marker has now closed by removing it from the stack
+            markersToSkipOutput.pop();
             return false;
           }
 
           // Add the closing marker USFM representation
-          usfm = UsjReaderWriter.addMarkerUsfmToString(
-            usfm,
-            this.closingMarkerToUsfm(token.forMarker),
-          );
+          usfm = this.addMarkerUsfmToString(usfm, token, tokenParent);
 
           // If this is closing the `id` marker (the only marker whose type is `book`), add the
           // top-level USJ opening marker after it
           if (token.forMarker.type === 'book' && !hasPassedIdMarker) {
-            if (usjOpeningMarkerUsfm)
-              usfm = UsjReaderWriter.addMarkerUsfmToString(usfm, usjOpeningMarkerUsfm);
+            if (usjOpeningMarker)
+              usfm = this.addMarkerUsfmToString(usfm, usjOpeningMarker, tokenParent);
 
             hasPassedIdMarker = true;
           }
@@ -1374,27 +1657,26 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           return false;
         }
 
-        // If we are supposed to skip this marker in USFM, skip it
+        // If we are supposed to skip this marker in USFM, skip its opening marker
         if (this.shouldSkipOutputMarkerToUsfm(token)) {
-          markerToSkipOutput = token;
+          markersToSkipOutput.push(token);
           return false;
         }
 
-        // Get the opening marker USFM representation
-        const openingMarkerUsfm = this.openingMarkerToUsfm(token);
-
         // If this is the USJ marker at the start of the doc, save it until after `id` marker closes
-        if (!hasPassedIdMarker && UsjReaderWriter.isUsjMarker(token) && !usjOpeningMarkerUsfm) {
+        if (!hasPassedIdMarker && UsjReaderWriter.isUsjMarker(token) && !usjOpeningMarker) {
           // The USJ types aren't set up to know about 3.0 right now, but we should handle it anyway
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           if ((token.version as string) !== '3.0') {
-            // Don't output the USJ marker if it is 3.0 (3.0 is assumed and should not appear in the USFM)
-            usjOpeningMarkerUsfm = openingMarkerUsfm;
+            // Special case: don't output the USJ marker if it is 3.0 (3.0 is assumed and should not
+            // appear in the USFM)
+            usjOpeningMarker = token;
           }
           return false;
         }
 
-        usfm = UsjReaderWriter.addMarkerUsfmToString(usfm, openingMarkerUsfm);
+        // Add the opening marker USFM representation
+        usfm = this.addMarkerUsfmToString(usfm, token, tokenParent);
 
         // Keep going through the whole document
         return false;
