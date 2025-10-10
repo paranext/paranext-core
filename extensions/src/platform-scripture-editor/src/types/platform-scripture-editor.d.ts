@@ -143,6 +143,14 @@ declare module 'platform-scripture-editor' {
      */
     footnotesPanePosition?: 'bottom' | 'trailing';
     /**
+     * Percentage of the available space that the footnote pane should take up when it is shown.
+     * This should be a number between 3 and 97. (0-100 are "legal" values for the components but
+     * nonsensical from a UX perspective.)
+     *
+     * Defaults to 20.
+     */
+    footnotesPaneSize?: number;
+    /**
      * Flag indicating whether the footnote pane should be displayed
      *
      * Defaults to false.
