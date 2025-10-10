@@ -48,6 +48,8 @@ const CommandInput = React.forwardRef<
 >(({ className, ...props }, ref) => {
   const dir: Direction = readDirection();
   return (
+    // CUSTOM: Suppress warning produced by imported shadcn code
+    // eslint-disable-next-line react/no-unknown-property
     <div className="tw-flex tw-items-center tw-border-b tw-px-3" cmdk-input-wrapper="" dir={dir}>
       {/* CUSTOM: RTL support: replaced tw-mr-2 by tw-me-2 */}
       <MagnifyingGlassIcon className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />

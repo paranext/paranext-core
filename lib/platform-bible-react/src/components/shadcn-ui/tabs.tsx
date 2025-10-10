@@ -67,4 +67,21 @@ const TabsContent = React.forwardRef<
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
+/* #region CUSTOM export for tabs-vertical */
+/** @inheritdoc Tabs */
+export type TabsListProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
+  className?: string;
+};
+
+/** @inheritdoc Tabs */
+export type TabsTriggerProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+  className?: string;
+};
+
+/** @inheritdoc Tabs */
+export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content> & {
+  className?: string;
+};
+/* #endregion CUSTOM export for tabs-vertical */
+
 export { Tabs, TabsList, TabsTrigger, TabsContent };
