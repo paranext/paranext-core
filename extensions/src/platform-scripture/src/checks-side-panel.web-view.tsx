@@ -2,10 +2,20 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger, network, projectDataProviders } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { ChevronDown } from 'lucide-react';
 import {
   Button,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Progress,
   Select,
   SelectContent,
@@ -67,8 +77,6 @@ type ProjectOption = {
  */
 async function getProjectNames(projectId: string): Promise<ProjectOption | undefined> {
   const pdp = await projectDataProviders.get('platform.base', projectId);
-
-  if (!(await pdp.getSetting('platform.isEditable'))) return undefined;
 
   const projectShortName = await pdp.getSetting('platform.name');
   const projectFullName = await pdp.getSetting('platform.fullName');
@@ -158,6 +166,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'selectedCheckTypes',
     [],
   );
+  const [isSelectProjectsOpen, setIsSelectProjectsOpen] = useState(false);
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [activeRanges, setActiveRanges] = useState<CheckInputRange[]>(() => []);
@@ -733,6 +742,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
     );
   }, [localizedStrings, projectIdsAndNames, projectId]);
 
+  const sortedProjectEntries = useMemo(() => {
+    return Object.entries(projectIdsAndNames).sort(([, a], [, b]) =>
+      a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+    );
+  }, [projectIdsAndNames]);
+
   const getScopeLabel = useCallback(
     (scopeValue: string) => {
       if (isValidCheckScope(scopeValue)) {
@@ -792,28 +807,48 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
-        <Select value={projectId ?? ''} onValueChange={handleSelectProject}>
-          <SelectTrigger className="tw-flex-1 tw-min-w-32">
-            <SelectValue
-              placeholder={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
+        <Popover open={isSelectProjectsOpen} onOpenChange={setIsSelectProjectsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="tw-flex-1 tw-min-w-32 tw-font-normal"
+              aria-label={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
             >
-              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+              <div className="tw-flex tw-w-full tw-items-center tw-justify-between">
                 {getProjectShortNameLabel()}
+                <ChevronDown className="tw-opacity-50" />
               </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw-max-w-sm" align="start">
-            {Object.entries(projectIdsAndNames).length === 0
-              ? localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-              : Object.entries(projectIdsAndNames).map(([projectIdOption, project]) => (
-                  <SelectItem key={projectIdOption} value={projectIdOption}>
-                    <div className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
-                      {writeProjectName(project.fullName, project.shortName)}
-                    </div>
-                  </SelectItem>
-                ))}
-          </SelectContent>
-        </Select>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="tw-max-w-sm tw-p-0" align="start">
+            <Command>
+              <CommandInput />
+              <CommandList>
+                <CommandEmpty>
+                  {localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']}
+                </CommandEmpty>
+                <CommandGroup
+                  heading={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
+                >
+                  {sortedProjectEntries.map(([projectIdOption, project]) => (
+                    <CommandItem
+                      key={projectIdOption}
+                      onSelect={() => {
+                        handleSelectProject(projectIdOption);
+                        setIsSelectProjectsOpen(false);
+                      }}
+                      className="tw-flex tw-items-center"
+                    >
+                      <span className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
+                        {writeProjectName(project.fullName, project.shortName)}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>
@@ -892,7 +927,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         )
       }
       {/* Status bar */}
-      {activeJobStatusReport && checkResults && (
+      {activeJobStatusReport && checkResults.length > 0 && (
         <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
           {/* The job is active */}
           {activeJobStatusReport.status === 'queued' ||
