@@ -24,9 +24,11 @@ const badgeVariants = cva(
           'tw-border-transparent tw-bg-destructive tw-text-destructive-foreground tw-shadow hover:tw-bg-destructive/80',
         outline: 'tw-text-foreground',
         /*  CUSTOM VARIANTS  */
+        muted:
+          'tw-border-transparent tw-bg-muted tw-text-muted-foreground tw-shadow hover:tw-bg-muted/80',
+        ghost: 'hover:tw-bg-accent hover:tw-text-accent-foreground',
         blueIndicator: 'tw-w-[5px] tw-h-[5px] tw-bg-blue-400 tw-px-0',
         mutedIndicator: 'tw-w-[5px] tw-h-[5px] tw-bg-zinc-400 tw-px-0',
-        ghost: 'hover:tw-bg-accent hover:tw-text-accent-foreground tw-text-mu', // TODO: this looks like a typo
       },
     },
     defaultVariants: {
