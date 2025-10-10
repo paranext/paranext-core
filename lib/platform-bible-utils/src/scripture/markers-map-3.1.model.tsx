@@ -46,6 +46,50 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
    * marker.
    */
   attributeMarkerAttributeName: string;
+  /**
+   * Whether there should be a structural space after the closing marker in output USFM if this
+   * marker is an attribute marker. If this marker is not an attribute marker, it should not have a
+   * structural space after the closing marker.
+   *
+   * This field should be ignored if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `true`
+   * because this space is only supposed to be added in contexts in which the space here is
+   * structural. Otherwise we would be mistakenly adding content to the USFM.
+   *
+   * Note that, if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `true` (which is the
+   * case according to spec), horizontal spaces after attribute markers are always considered
+   * structural. This property only indicates whether there should be a space after the attribute
+   * marker when outputting USFM.
+   *
+   * For example, according to specification, the `va` and `vp` attribute markers have a space after
+   * their closing markers:
+   *
+   * ```usfm
+   * \p \v 10 \va 10 va\va* \vp 10 vp\vp* Some verse text
+   * ```
+   *
+   * The verse text in this example is just "Some verse text" without a space at the start.
+   *
+   * However, when the `vp` marker is not an attribute marker, such as when it has markers in its
+   * contents, there should not be a structural space after the closing marker, and any space should
+   * be considered content:
+   *
+   * ```usfm
+   * \p \v 10 \va 10 va\va* \vp \+wj 10 vp\+wj*\vp* Some verse text.
+   * ```
+   *
+   * The verse text in this example is " Some verse text" including a space at the start.
+   *
+   * The `cat` attribute marker does not have a structural space after its closing marker:
+   *
+   * ```usfm
+   * \f + \cat category here\cat*\fr 1:2 \ft Some footnote text\f*
+   * ```
+   *
+   * The verse text in this example is just "Some verse text" without a space at the start.
+   *
+   * If not present, defaults to `false`.
+   */
+  hasStructuralSpaceAfterCloseAttributeMarker?: boolean;
 };
 
 /**
@@ -170,6 +214,47 @@ export type NormalMarkerInfo = {
    * If not present, defaults to `false`
    */
   isClosingMarkerOptional?: boolean;
+  /**
+   * List of independent closing marker names for this marker in USFM if it has any. If this is
+   * defined, this marker does not have a normal closing marker but rather is closed by a completely
+   * separate marker in USFM. All contents between this marker and the independent closing marker
+   * are contents of this marker. In USX and USJ, this marker is closed normally like any other
+   * object because USX and USJ have clear hierarchical structure.
+   *
+   * For example, `esb` (a sidebar) is closed by the independent closing marker `esbe`.
+   * `independentClosingMarkers` would be `['esbe']` for `esb`. Following is an example of a
+   * sidebar:
+   *
+   * ```usfm
+   * \esb
+   * \p This paragraph is in a \bd sidebar\bd*.
+   * \p The sidebar can contain multiple paragraphs.
+   * \esbe
+   * ```
+   *
+   * Note that the independent closing marker does not have a `*` at the end because it is not a
+   * closing marker for `esb` but rather a completely separate marker that closes the `esb` marker.
+   */
+  independentClosingMarkers?: string[];
+  /**
+   * List of marker names for which this marker is an independent closing marker. See
+   * {@link NormalMarkerInfo.independentClosingMarker} for more information on independent closing
+   * markers and their syntax.
+   *
+   * For example, `esbe` is an independent closing marker for `esb`. `isIndependentClosingMarkerFor`
+   * would be `['esb']` for `esbe`.
+   */
+  isIndependentClosingMarkerFor?: string[];
+  /**
+   * List of RegExp patterns matching marker names for which this marker is an independent closing
+   * marker. See {@link NormalMarkerInfo.independentClosingMarker} for more information on
+   * independent closing markers and their syntax.
+   *
+   * For example, pretend `ex1` and `ex2` are independent closing markers for markers matching
+   * RegExp `/test/`. `isIndependentClosingMarkerForRegExp` would be `['test']` for both `ex1` and
+   * `ex2`.
+   */
+  isIndependentClosingMarkerForRegExp?: string[];
 };
 
 /** Information about a USFM/USX/USJ marker that is essential for proper translation between formats */
@@ -193,14 +278,18 @@ export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
  */
 export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
   /**
-   * Whether markers of this type have a closing marker in USFM.
+   * Whether markers of this type have a closing marker in USFM. This property concerns normal
+   * closing markers like `\wj*`, not independent closing markers like
+   * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
    *
    * If not present, defaults to `false`
    */
   hasClosingMarker: true;
   /**
    * Whether the closing marker for markers of this type is "empty" in USFM, meaning the marker name
-   * is absent from the closing marker.
+   * is absent from the closing marker. This also means that there should not be a structural space
+   * between the opening and the closing markers in USFM if there are no attributes listed on the
+   * marker.
    *
    * For example, markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
    *
@@ -212,6 +301,15 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
    *
    * The closing marker for `qt1-s` is `\*` as opposed to the closing marker for `nd` which is
    * `\nd*`.
+   *
+   * Note that there is still a structural space after the opening marker if there are attributes
+   * present:
+   *
+   * ```usfm
+   * \qt1-s |Someone\*
+   * ...
+   * \qt1-e\*
+   * ```
    *
    * If not present, defaults to `false`
    */
@@ -280,18 +378,18 @@ export type MarkerTypeInfoBase = {
    */
   skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
   /**
-   * Whether markers of this type need a newline before them in USFM.
+   * Whether markers of this type should have a newline before them in USFM.
    *
-   * For example, `para` marker types such as `p` require a newline, but `char` marker types such as
-   * `nd` markers do not:
+   * For example, `para` marker types such as `p` should have a newline, but `char` marker types
+   * such as `nd` markers should not:
    *
    * ```usfm
    * \p This is a plain paragraph.
    * \p This is a paragraph \nd with some special text\nd* in it.
    * ```
    *
-   * Note that the newline is not necessarily present for the very first marker in examples such as
-   * this one. This is just a shortcut to make examples like this easier to read and write.
+   * Note that the newline is never strictly necessary, and it is not usually present if the very
+   * first marker in the file (or in examples such as this) should have a newline.
    *
    * If not present, defaults to `false`
    */
@@ -323,6 +421,21 @@ export type MarkersMap = {
    * folder when this was generated.
    */
   usfmToolsVersion: string;
+  /**
+   * Whether any whitespace after attribute markers and before the next content is not just
+   * structural but should actually be considered part of the content of the marker.
+   *
+   * According to specification, whitespace after attribute markers is not content but is just
+   * structural.
+   *
+   * According to Paratext 9.4, whitespace after attribute markers is content and is not just
+   * structural.
+   *
+   * This setting determines which interpretation to use when converting from USFM to USX/USJ.
+   *
+   * If not present, defaults to `false`.
+   */
+  isSpaceAfterAttributeMarkersContent?: boolean;
   /**
    * Map whose keys are the marker names and whose values are information about that marker
    *
@@ -385,6 +498,7 @@ export const USFM_MARKERS_MAP: MarkersMap = {
       type: 'char',
       attributeMarkerAttributeName: 'altnumber',
       isAttributeMarkerFor: ['c'],
+      hasStructuralSpaceAfterCloseAttributeMarker: true,
     },
     cat: {
       type: 'char',
@@ -439,10 +553,12 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     },
     esb: {
       type: 'sidebar',
+      independentClosingMarkers: ['esbe'],
       attributeMarkers: ['cat'],
     },
     esbe: {
       type: 'sidebar',
+      isIndependentClosingMarkerFor: ['esb'],
     },
     ex: {
       type: 'note',
@@ -1289,6 +1405,7 @@ export const USFM_MARKERS_MAP: MarkersMap = {
       type: 'char',
       attributeMarkerAttributeName: 'altnumber',
       isAttributeMarkerFor: ['v'],
+      hasStructuralSpaceAfterCloseAttributeMarker: true,
     },
     vp: {
       type: 'char',
@@ -1296,6 +1413,7 @@ export const USFM_MARKERS_MAP: MarkersMap = {
         'Published verse marker - this is a verse marking that would be used in the published text',
       attributeMarkerAttributeName: 'pubnumber',
       isAttributeMarkerFor: ['v'],
+      hasStructuralSpaceAfterCloseAttributeMarker: true,
     },
     w: {
       type: 'char',
@@ -1381,7 +1499,6 @@ export const USFM_MARKERS_MAP: MarkersMap = {
   markerTypes: {
     book: {},
     cell: {
-      hasNewlineBefore: true,
       skipOutputAttributeToUsfm: ['align'],
     },
     chapter: {
@@ -1416,7 +1533,7 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     ref: {
       hasClosingMarker: true,
       hasStyleAttribute: false,
-      skipOutputAttributeToUsfm: ['gen'],
+      skipOutputMarkerToUsfmIfAttributeIsPresent: ['gen'],
     },
     row: {
       hasNewlineBefore: true,
