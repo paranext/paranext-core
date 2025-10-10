@@ -1,8 +1,16 @@
-import * as React from "react"
-import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
-import { cn } from "@/utils/shadcn-ui.util"
-import { CheckIcon } from "@radix-ui/react-icons"
+import React from 'react';
+import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
+import { Check } from 'lucide-react';
 
+import { cn } from '@/utils/shadcn-ui.util';
+
+/**
+ * Checkbox component provides a control that allows the user to toggle between checked and not
+ * checked. This components is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/checkbox}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
+ */
 const Checkbox = React.forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
@@ -10,18 +18,19 @@ const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
-      "tw-peer tw-h-4 tw-w-4 tw-shrink-0 tw-rounded-sm tw-border tw-border-primary tw-shadow focus-visible:tw-outline-none focus-visible:tw-ring-1 focus-visible:tw-ring-ring disabled:tw-cursor-not-allowed disabled:tw-opacity-50 data-[state=checked]:tw-bg-primary data-[state=checked]:tw-text-primary-foreground",
-      className
+      'pr-twp', // CUSTOM
+      'tw-peer tw-h-4 tw-w-4 tw-shrink-0 tw-rounded-sm tw-border tw-border-primary tw-ring-offset-background focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 data-[state=checked]:tw-bg-primary data-[state=checked]:tw-text-primary-foreground',
+      className,
     )}
     {...props}
   >
     <CheckboxPrimitive.Indicator
-      className={cn("tw-flex tw-items-center tw-justify-center tw-text-current")}
+      className={cn('tw-flex tw-items-center tw-justify-center tw-text-current')}
     >
-      <CheckIcon className="tw-h-4 tw-w-4" />
+      <Check className="tw-h-4 tw-w-4" />
     </CheckboxPrimitive.Indicator>
   </CheckboxPrimitive.Root>
-))
-Checkbox.displayName = CheckboxPrimitive.Root.displayName
+));
+Checkbox.displayName = CheckboxPrimitive.Root.displayName;
 
-export { Checkbox }
+export { Checkbox };
