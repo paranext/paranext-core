@@ -149,7 +149,7 @@ export {
   CardDescription,
   CardContent,
 } from './components/shadcn-ui/card';
-export { default as Checkbox } from './components/shadcn-ui/checkbox';
+export { Checkbox } from './components/shadcn-ui/checkbox';
 export {
   Command,
   CommandEmpty,
