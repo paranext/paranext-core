@@ -630,7 +630,7 @@ global.webViewComponent = function FindWebView({
   );
 
   return (
-    <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
+    <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
       <Card>
         <CardContent className="tw-space-y-4 tw-p-6">
@@ -784,7 +784,7 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Results */}
       <div
-        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto"
+        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
         onScroll={handleResultsScroll}
       >
         {results &&
