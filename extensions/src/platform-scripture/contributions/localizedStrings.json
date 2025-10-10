@@ -1,5 +1,9 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
+      "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
+    }
+  },
   "localizedStrings": {
     "en": {
       "%project_settings_platformScripture_booksPresent_description%": "Which books of the Bible are present in this Scripture project",
@@ -50,6 +54,7 @@
       "%webView_checksSidePanel_loadingCheckResults%": "Loading Check Results...",
       "%webView_checksSidePanel_noCheckResults%": "No check results",
       "%webView_checksSidePanel_noChecksSelected%": "No checks selected",
+      "%webView_checksSidePanel_projectFilter_projectsAndResources%": "Your projects & resources",
       "%webView_checksSidePanel_projectFilter_label%": "Project",
       "%webView_checksSidePanel_projectFilter_noProjectSelected%": "No project",
       "%webView_checksSidePanel_projectFilter_noProjectsFound%": "No projects found",
