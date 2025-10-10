@@ -2,9 +2,8 @@
 
 import React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
+import { Cross2Icon } from '@radix-ui/react-icons';
 import { readDirection } from '@/utils/dir-helper.util';
 
 const Dialog = DialogPrimitive.Root;
@@ -57,7 +56,7 @@ const DialogContent = React.forwardRef<
             { 'tw-left-4': dir === 'rtl' }, // CUSTOM: Support RTL
           )}
         >
-          <X className="tw-h-4 tw-w-4" />
+          <Cross2Icon className="tw-h-4 tw-w-4" />
           <span className="tw-sr-only">Close</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
@@ -121,8 +120,8 @@ export {
   Dialog,
   DialogPortal,
   DialogOverlay,
-  DialogClose,
   DialogTrigger,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogFooter,

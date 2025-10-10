@@ -329,7 +329,7 @@ const TableHead = React.forwardRef<
     ref={ref}
     className={cn(
       // CUSTOM: start instead of left, pe instead of pr to support RTL
-      'tw-h-12 tw-px-4 tw-text-start tw-align-middle tw-font-medium tw-text-muted-foreground [&:has([role=checkbox])]:tw-pe-0',
+      'tw-h-10 tw-px-2 tw-text-left tw-align-middle tw-font-medium tw-text-muted-foreground [&:has([role=checkbox])]:tw-pr-0 [&>[role=checkbox]]:tw-translate-y-[2px]',
       className,
     )}
     {...props}
@@ -345,7 +345,10 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     // CUSTOM: pe instead of pr to support RTL
-    className={cn('tw-p-4 tw-align-middle [&:has([role=checkbox])]:tw-pe-0', className)}
+    className={cn(
+      'tw-p-2 tw-align-middle [&:has([role=checkbox])]:tw-pr-0 [&>[role=checkbox]]:tw-translate-y-[2px]',
+      className,
+    )}
     {...props}
   />
 ));

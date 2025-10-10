@@ -6,9 +6,8 @@ import {
   useMenuContext,
 } from '@/context/menu.context';
 import * as MenubarPrimitive from '@radix-ui/react-menubar';
-import { Check, ChevronRight, Circle } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
+import { CheckIcon, ChevronRightIcon, DotFilledIcon } from '@radix-ui/react-icons';
 
 function MenubarMenu({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
   return <MenubarPrimitive.Menu {...props} />;
@@ -49,7 +48,7 @@ const Menubar = React.forwardRef<
       <MenubarPrimitive.Root
         ref={ref}
         className={cn(
-          'tw-flex tw-h-10 tw-items-center tw-space-x-1 tw-rounded-md tw-border tw-bg-background tw-p-1',
+          'tw-flex tw-h-9 tw-items-center tw-space-x-1 tw-rounded-md tw-border tw-bg-background tw-p-1 tw-shadow-sm',
           className,
         )}
         {...props}
@@ -69,7 +68,7 @@ const MenubarTrigger = React.forwardRef<
       ref={ref}
       className={cn(
         'pr-twp', // CUSTOM
-        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
+        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
       )}
       {...props}
@@ -97,7 +96,7 @@ const MenubarSubTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
+      <ChevronRightIcon className="tw-ml-auto tw-h-4 tw-w-4" />
     </MenubarPrimitive.SubTrigger>
   );
 });
@@ -106,23 +105,16 @@ MenubarSubTrigger.displayName = MenubarPrimitive.SubTrigger.displayName;
 const MenubarSubContent = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubContent>
->(({ className, ...props }, ref) => {
-  const context = useMenuContext(); // CUSTOM use context to add variants
-  return (
-    <MenubarPrimitive.SubContent
-      ref={ref}
-      className={cn(
-        'tw-z-50 tw-min-w-[8rem] tw-origin-[--radix-menubar-content-transform-origin] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-        // CUSTOM use context to add variants
-        {
-          'tw-bg-popover': context.variant === 'muted',
-        },
-        className,
-      )}
-      {...props}
-    />
-  );
-});
+>(({ className, ...props }, ref) => (
+  <MenubarPrimitive.SubContent
+    ref={ref}
+    className={cn(
+      'tw-z-50 tw-min-w-[8rem] tw-origin-[--radix-menubar-content-transform-origin] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-lg data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+      className,
+    )}
+    {...props}
+  />
+));
 MenubarSubContent.displayName = MenubarPrimitive.SubContent.displayName;
 
 const MenubarContent = React.forwardRef<
@@ -193,7 +185,7 @@ const MenubarCheckboxItem = React.forwardRef<
     >
       <span className="tw-absolute tw-left-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
         <MenubarPrimitive.ItemIndicator>
-          <Check className="tw-h-4 tw-w-4" />
+          <CheckIcon className="tw-h-4 tw-w-4" />
         </MenubarPrimitive.ItemIndicator>
       </span>
       {children}
@@ -219,7 +211,7 @@ const MenubarRadioItem = React.forwardRef<
     >
       <span className="tw-absolute tw-left-2 tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center">
         <MenubarPrimitive.ItemIndicator>
-          <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
+          <DotFilledIcon className="tw-h-2 tw-w-2 tw-fill-current" />
         </MenubarPrimitive.ItemIndicator>
       </span>
       {children}

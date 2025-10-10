@@ -27,10 +27,10 @@ const Slider = React.forwardRef<
       {...props}
       dir={dir}
     >
-      <SliderPrimitive.Track className="tw-relative tw-h-2 tw-w-full tw-grow tw-overflow-hidden tw-rounded-full tw-bg-secondary">
+      <SliderPrimitive.Track className="tw-relative tw-h-1.5 tw-w-full tw-grow tw-overflow-hidden tw-rounded-full tw-bg-primary/20">
         <SliderPrimitive.Range className="tw-absolute tw-h-full tw-bg-primary" />
       </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className="tw-block tw-h-5 tw-w-5 tw-rounded-full tw-border-2 tw-border-primary tw-bg-background tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50" />
+      <SliderPrimitive.Thumb className="tw-block tw-h-4 tw-w-4 tw-rounded-full tw-border tw-border-primary/50 tw-bg-background tw-shadow tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-1 focus-visible:tw-ring-ring disabled:tw-pointer-events-none disabled:tw-opacity-50" />
     </SliderPrimitive.Root>
   );
 });

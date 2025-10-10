@@ -12,7 +12,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
       ref={ref}
       className={cn(
         'pr-twp', // CUSTOM
-        'tw-rounded-lg tw-border tw-bg-card tw-text-card-foreground tw-shadow-sm',
+        'tw-rounded-xl tw-border tw-bg-card tw-text-card-foreground tw-shadow',
         className,
       )}
       {...props}
@@ -44,7 +44,7 @@ const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivE
       ref={ref}
       className={cn(
         'pr-twp', // CUSTOM
-        'tw-text-2xl tw-font-semibold tw-leading-none tw-tracking-tight',
+        'tw-font-semibold tw-leading-none tw-tracking-tight',
         className,
       )}
       {...props}

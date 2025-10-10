@@ -19,7 +19,7 @@ const Progress = React.forwardRef<
     ref={ref}
     className={cn(
       'pr-twp', // CUSTOM
-      'tw-relative tw-h-4 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-secondary',
+      'tw-relative tw-h-2 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-primary/20',
       className,
     )}
     {...props}

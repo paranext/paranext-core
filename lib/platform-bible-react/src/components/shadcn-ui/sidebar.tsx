@@ -1,8 +1,6 @@
 import React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { VariantProps, cva } from 'class-variance-authority';
-import { PanelLeft, PanelRight } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
@@ -19,6 +17,7 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { ViewVerticalIcon } from '@radix-ui/react-icons';
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state';
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -251,7 +250,7 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const context = useSidebar(); // CUSTOM: extract full context
+  const { toggleSidebar } = useSidebar();
 
   return (
     <Button
@@ -262,14 +261,11 @@ const SidebarTrigger = React.forwardRef<
       className={cn('tw-h-7 tw-w-7', className)}
       onClick={(event) => {
         onClick?.(event);
-        context.toggleSidebar();
+        toggleSidebar();
       }}
       {...props}
     >
-      {
-        /* CUSTOM: direction aware side */
-        context.side === 'primary' ? <PanelLeft /> : <PanelRight />
-      }
+      <ViewVerticalIcon />
       <span className="tw-sr-only">Toggle Sidebar</span>
     </Button>
   );

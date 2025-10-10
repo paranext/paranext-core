@@ -2,10 +2,10 @@
 
 import React from 'react';
 
-import { GripVertical } from 'lucide-react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 
 import { cn } from '@/utils/shadcn-ui.util';
+import { DragHandleDots2Icon } from '@radix-ui/react-icons';
 
 function ResizablePanelGroup({
   className,
@@ -41,7 +41,7 @@ function ResizableHandle({
     >
       {withHandle && (
         <div className="tw-z-10 tw-flex tw-h-4 tw-w-3 tw-items-center tw-justify-center tw-rounded-sm tw-border tw-bg-border">
-          <GripVertical className="tw-h-2.5 tw-w-2.5" />
+          <DragHandleDots2Icon className="tw-h-2.5 tw-w-2.5" />
         </div>
       )}
     </ResizablePrimitive.PanelResizeHandle>

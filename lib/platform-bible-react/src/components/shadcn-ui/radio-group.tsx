@@ -1,8 +1,7 @@
 import React from 'react';
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
-import { Circle } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
+import { DotFilledIcon } from '@radix-ui/react-icons';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
@@ -43,13 +42,13 @@ const RadioGroupItem = React.forwardRef<
       ref={ref}
       className={cn(
         'pr-twp', // CUSTOM
-        'tw-aspect-square tw-h-4 tw-w-4 tw-rounded-full tw-border tw-border-primary tw-text-primary tw-ring-offset-background focus:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
+        'tw-aspect-square tw-h-4 tw-w-4 tw-rounded-full tw-border tw-border-primary tw-text-primary tw-shadow focus:tw-outline-none focus-visible:tw-ring-1 focus-visible:tw-ring-ring disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
         className,
       )}
       {...props}
     >
       <RadioGroupPrimitive.Indicator className="tw-flex tw-items-center tw-justify-center">
-        <Circle className="tw-h-2.5 tw-w-2.5 tw-fill-current tw-text-current" />
+        <DotFilledIcon className="tw-h-3.5 tw-w-3.5 tw-fill-primary" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );
