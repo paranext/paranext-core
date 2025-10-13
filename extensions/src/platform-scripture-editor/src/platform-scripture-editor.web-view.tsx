@@ -209,7 +209,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
-          const current = footnotesPaneVisibleRef.current;
+          const { current } = footnotesPaneVisibleRef;
           setFootnotesPaneVisible(!current);
           break;
         }
@@ -227,7 +227,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll, decorations, setDecorations]);
+  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, setFootnotesPaneVisible]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
@@ -537,7 +537,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The editor's USJ needs to have anchors for these comments or the editor will error
       editorRef.current.setComments?.(threads);
     }
-  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
+  }, [
+    insertCommentAnchors,
+    legacyCommentsFromPdp,
+    saveUsjToPdpIfUpdated,
+    usjFromPdp,
+    updateFootnotesFromUsj,
+  ]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
