@@ -3926,6 +3926,231 @@ const testUSFM2SACh3Usj = JSON.parse(`{
   ]
 }`);
 
+/**
+ * Example with generated refs derived from Example 1 in the docs
+ * https://docs.usfm.bible/usfm/3.1/char/features/ref.html with the following modifications:
+ *
+ * - Single backslash replaced with double backslash to properly escape quotes
+ * - `usfm` 3.1 marker added to conform with requirements
+ * - Chapter number changed to 13 to match the verse number in the example
+ * - Normalized whitespace
+ *
+ *   - Replaced newlines with spaces in the paragraphs
+ *   - Added newline at the end
+ */
+const exampleGeneratedRefsUsfm = `\\id MAT
+\\usfm 3.1
+\\c 5
+\\s1 Salt and Light
+\\r (Mark 9.50; Luke 14.34,35)
+\\p
+\\v 13 \\x - \\xo 5.13: \\xt Mk 9.50; Lk 14.34,35.\\x*“You are like salt for the whole human race. But if salt loses its saltiness, there is no way to make it salty again. It has become worthless, so it is thrown out and people trample on it.
+`;
+
+/**
+ * Example with generated refs derived from Example 3 in the docs
+ * https://docs.usfm.bible/usfm/3.1/char/features/ref.html with the following modifications:
+ *
+ * - Single backslash replaced with double backslash to properly escape quotes
+ * - `s1` added to match the usfm in the previous example
+ * - `r` added to match the usfm in the previous example
+ */
+const exampleGeneratedRefsUsj = JSON.parse(`{
+  "type": "USJ",
+  "version": "3.1",
+  "content": [
+    {
+      "type": "book",
+      "marker": "id",
+      "code": "MAT",
+      "content": []
+    },
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "5",
+      "sid": "MAT 5"
+    },
+    {
+      "type": "para",
+      "marker": "s1",
+      "content": [
+        "Salt and Light"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "r",
+      "content": [
+        "(Mark 9.50; Luke 14.34,35)"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "13",
+          "sid": "MAT 5:13"
+        },
+        {
+          "type": "note",
+          "marker": "x",
+          "caller": "-",
+          "content": [
+            {
+              "type": "char",
+              "marker": "xo",
+              "content": ["5.13: "]
+            },
+            {
+              "type": "char",
+              "marker": "xt",
+              "content": [
+                {
+                  "type": "ref",
+                  "loc": "MRK 9:50",
+                  "gen": "true",
+                  "content": ["Mk 9.50"]
+                },
+                "; ",
+                {
+                  "type": "ref",
+                  "loc": "LUK 14:34",
+                  "gen": "true",
+                  "content": ["Lk 14.34"]
+                },
+                ",",
+                {
+                  "type": "ref",
+                  "loc": "LUK 14:35",
+                  "gen": "true",
+                  "content": ["35"]
+                },
+                "."
+              ]
+            }
+          ]
+        },
+        "“You are like salt for the whole human race. But if salt loses its saltiness, there is no way to make it salty again. It has become worthless, so it is thrown out and people trample on it."
+      ]
+    }
+  ]
+}`);
+
+/**
+ * Example with provided refs derived from Example 4 in the docs
+ * https://docs.usfm.bible/usfm/3.1/char/features/ref.html with the following modifications:
+ *
+ * - Single backslash replaced with double backslash to properly escape quotes
+ * - `usfm` 3.1 marker added to conform with requirements
+ * - Chapter number changed to 13 to match the verse number in the example
+ * - Normalized whitespace
+ *
+ *   - Replaced newlines with spaces in the paragraphs
+ *   - Added newline at the end
+ */
+const exampleProvidedRefsUsfm = `\\id MAT
+\\usfm 3.1
+\\c 5
+\\s1 Salt and Light
+\\r (Mark 9.50; Luke 14.34,35)
+\\p
+\\v 13 \\x - \\xo 5.13: \\xt \\ref Mk 9.50|MRK 9:50\\ref*; \\ref Lk 14.34|LUK 14:34\\ref*,\\ref 35|LUK 14:35\\ref*.\\x*“You are like salt for the whole human race. But if salt loses its saltiness, there is no way to make it salty again. It has become worthless, so it is thrown out and people trample on it.
+`;
+
+/**
+ * Example with generated refs taken from Example 6 in the docs
+ * https://docs.usfm.bible/usfm/3.1/char/features/ref.html with the following modifications:
+ *
+ * - Single backslash replaced with double backslash to properly escape quotes
+ * - `s1` added to match the usfm in the previous example
+ * - `r` added to match the usfm in the previous example
+ */
+const exampleProvidedRefsUsj = JSON.parse(`{
+  "type": "USJ",
+  "version": "3.1",
+  "content": [
+    {
+      "type": "book",
+      "marker": "id",
+      "code": "MAT",
+      "content": []
+    },
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "5",
+      "sid": "MAT 5"
+    },
+    {
+      "type": "para",
+      "marker": "s1",
+      "content": [
+        "Salt and Light"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "r",
+      "content": [
+        "(Mark 9.50; Luke 14.34,35)"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "13",
+          "sid": "MAT 5:13"
+        },
+        {
+          "type": "note",
+          "marker": "x",
+          "caller": "-",
+          "content": [
+            {
+              "type": "char",
+              "marker": "xo",
+              "content": ["5.13: "]
+            },
+            {
+              "type": "char",
+              "marker": "xt",
+              "content": [
+                {
+                  "type": "ref",
+                  "loc": "MRK 9:50",
+                  "content": ["Mk 9.50"]
+                },
+                "; ",
+                {
+                  "type": "ref",
+                  "loc": "LUK 14:34",
+                  "content": ["Lk 14.34"]
+                },
+                ",",
+                {
+                  "type": "ref",
+                  "loc": "LUK 14:35",
+                  "content": ["35"]
+                },
+                "."
+              ]
+            }
+          ]
+        },
+        "“You are like salt for the whole human race. But if salt loses its saltiness, there is no way to make it salty again. It has become worthless, so it is thrown out and people trample on it."
+      ]
+    }
+  ]
+}`);
+
 describe('Translate offsets between USFM and USJ', () => {
   test('jsonPathToVerseRefAndOffset translates USJ jsonPath to USFM VerseRefs and offsets', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
@@ -4373,7 +4598,23 @@ describe('findAllNotes', () => {
   });
 });
 
-describe('Transform USJ to Paratext USFM', () => {
+describe('Transform USJ 3.1 to spec USFM 3.1', () => {
+  test('toUsfm properly transforms generated refs', () => {
+    const usjDoc = new UsjReaderWriter(exampleGeneratedRefsUsj);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(exampleGeneratedRefsUsfm);
+  });
+
+  test('toUsfm properly transforms provided refs', () => {
+    const usjDoc = new UsjReaderWriter(exampleProvidedRefsUsj);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(exampleProvidedRefsUsfm);
+  });
+});
+
+describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
   const paratextUsjReaderWriterOptions = {
     // TODO: Generate Paratext-specific markers map and 3.0 markers map
     markersMap: {
@@ -4382,6 +4623,7 @@ describe('Transform USJ to Paratext USFM', () => {
       version: '3.0',
       // Paratext
       isSpaceAfterAttributeMarkersContent: true,
+      shouldOptionalClosingMarkersBePresent: true,
       // 3.0
       markers: Object.fromEntries(
         Object.entries(USFM_MARKERS_MAP.markers).map(([markerName, markerInfo]) => {
