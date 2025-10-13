@@ -863,10 +863,14 @@ describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
       // 3.0
       markers: Object.fromEntries(
         Object.entries(USFM_MARKERS_MAP.markers).map(([markerName, markerInfo]) => {
-          if (markerInfo && markerInfo.defaultAttribute === 'href')
-            markerInfo.defaultAttribute = 'link-href';
-          if (markerName === 'k' && markerInfo) delete markerInfo.defaultAttribute;
-          return [markerName, markerInfo];
+          if (!markerInfo) return [markerName, markerInfo];
+
+          const newMarkerInfo = { ...markerInfo };
+
+          if (newMarkerInfo.defaultAttribute === 'href')
+            newMarkerInfo.defaultAttribute = 'link-href';
+          if (markerName === 'k') delete newMarkerInfo.defaultAttribute;
+          return [markerName, newMarkerInfo];
         }),
       ),
     },
