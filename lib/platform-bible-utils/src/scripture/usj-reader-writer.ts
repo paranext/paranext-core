@@ -1115,15 +1115,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Special case: If the marker type is `unmatched`, use empty marker type info
     if (!markerTypeInfo && markerType === 'unmatched') markerTypeInfo = {};
 
-    // Couldn't find the marker type info, so fall back to "para" for unknown marker types (matches Paratext 9)
-    // TODO: Test! Not sure if I have tried importing USX with an actually unknown marker type in Paratext 9
+    // Couldn't find the marker type info
+    // Note: In this case, Paratext just ignores the marker and prints the marker's content. This
+    // really shouldn't happen, though. I had to manually change a marker type in USX and then import
+    // it to Paratext to see this behavior. If you hit this, something is already going terribly wrong.
     if (!markerTypeInfo) {
-      markerTypeInfo = this.markersMap.markerTypes.para;
-      if (!markerTypeInfo)
-        throw new Error(
-          `Unknown marker type ${markerType} and could not find marker type "para". Cannot proceed.`,
-        );
-      console.warn(`Warning: Unknown marker type ${markerType}. Using marker type "para".`);
+      throw new Error(`Unknown marker type ${markerType} on marker ${markerName}! Cannot proceed.`);
     }
 
     // Figure out attribute marker attribute names
@@ -1385,11 +1382,33 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         } is intended to have a normal closing marker and independent closing markers. As of writing this code, there is no known syntax for this situation in USFM. Cannot proceed.`,
       );
 
+    // Determine if the marker is supposed to have an explicit closing marker
+    let hasExplicitClosingMarker = true;
+    // If the closing marker is required
+    if (!markerInfo.isClosingMarkerOptional) {
+      // If it is specified as not closed, it should not have a closing marker
+      if (markerWithAnyAttributes.closed === 'false') hasExplicitClosingMarker = false;
+    } else if (
+      !this.markersMap.shouldOptionalClosingMarkersBePresent &&
+      markerWithAnyAttributes.closed !== 'true'
+    )
+      // The closing marker is optional
+      // If optional closing markers should be left out and it is not specified as closed, it
+      // should not have a closing marker
+      hasExplicitClosingMarker = false;
+    else if (
+      this.markersMap.shouldOptionalClosingMarkersBePresent &&
+      markerWithAnyAttributes.closed === 'false'
+    )
+      // If optional closing markers should still be explicitly closed and it is specified as not
+      // closed, it should not have a closing marker
+      hasExplicitClosingMarker = false;
+
     // If this marker has an independent closing marker, create that
     if (
       markerInfo.independentClosingMarkers &&
       markerInfo.independentClosingMarkers.length > 0 &&
-      markerWithAnyAttributes.closed !== 'false'
+      hasExplicitClosingMarker
     ) {
       // Create a marker that represents this independent closing marker so we can make the USFM
       const independentClosingMarker: MarkerObject = {
@@ -1446,7 +1465,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     // Add the normal closing marker
-    if (markerTypeInfo.hasClosingMarker && markerWithAnyAttributes.closed !== 'false') {
+    if (markerTypeInfo.hasClosingMarker && hasExplicitClosingMarker) {
       const closingMarkerName = markerTypeInfo.isClosingMarkerEmpty ? '' : markerNameUsfm;
 
       // Special case with `char` markers - prefix with `+` if inside another `char` marker
