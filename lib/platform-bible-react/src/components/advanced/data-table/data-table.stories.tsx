@@ -418,7 +418,13 @@ const productColumns: ColumnDef<Product>[] = [
 ];
 
 export const BasicTable: Story = {
-  render: () => <DataTable<User, unknown> columns={userColumns} data={users} />,
+  render: () => (
+    <DataTable<User, unknown>
+      columns={userColumns}
+      data={users}
+      noResultsMessage="No users found"
+    />
+  ),
   parameters: {
     docs: {
       description: {
@@ -434,6 +440,7 @@ export const WithPagination: Story = {
       columns={productColumns}
       data={[...products, ...products, ...products]}
       enablePagination
+      noResultsMessage="No products found"
     />
   ),
   parameters: {
@@ -452,6 +459,7 @@ export const WithPaginationControls: Story = {
       data={[...products, ...products, ...products]}
       enablePagination
       showPaginationControls
+      noResultsMessage="No products found"
     />
   ),
   parameters: {
@@ -469,6 +477,7 @@ export const WithColumnVisibilityControls: Story = {
       columns={advancedUserColumns}
       data={users}
       showColumnVisibilityControls
+      noResultsMessage="No users found"
     />
   ),
   parameters: {
@@ -486,6 +495,7 @@ export const StickyHeader: Story = {
       columns={productColumns}
       data={[...products, ...products, ...products]} // Triple the data to show scrolling
       stickyHeader
+      noResultsMessage="No products found"
     />
   ),
   parameters: {
@@ -506,6 +516,7 @@ export const FullFeatured: Story = {
       showPaginationControls
       showColumnVisibilityControls
       stickyHeader
+      noResultsMessage="No users found"
     />
   ),
   parameters: {
@@ -519,7 +530,9 @@ export const FullFeatured: Story = {
 };
 
 export const EmptyTable: Story = {
-  render: () => <DataTable<User, unknown> columns={userColumns} data={[]} />,
+  render: () => (
+    <DataTable<User, unknown> columns={userColumns} data={[]} noResultsMessage="No users found" />
+  ),
   parameters: {
     docs: {
       description: {
@@ -530,7 +543,14 @@ export const EmptyTable: Story = {
 };
 
 export const LoadingTable: Story = {
-  render: () => <DataTable<User, unknown> columns={userColumns} data={undefined} isLoading />,
+  render: () => (
+    <DataTable<User, unknown>
+      columns={userColumns}
+      data={undefined}
+      isLoading
+      noResultsMessage="No users found"
+    />
+  ),
   parameters: {
     docs: {
       description: {

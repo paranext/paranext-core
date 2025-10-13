@@ -278,7 +278,7 @@ interface DataTableProps<TData, TValue> {
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 	id?: string;
 	isLoading?: boolean;
-	noResultsMessage?: string;
+	noResultsMessage: string;
 }
 /**
  * Feature-rich table component that infuses our basic shadcn-based Table component with features

@@ -46,7 +46,7 @@ interface DataTableProps<TData, TValue> {
   onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
   id?: string;
   isLoading?: boolean;
-  noResultsMessage?: string;
+  noResultsMessage: string;
 }
 
 /**
@@ -63,7 +63,7 @@ export function DataTable<TData, TValue>({
   onRowClickHandler = () => {},
   id,
   isLoading = false,
-  noResultsMessage = 'No results.',
+  noResultsMessage,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
