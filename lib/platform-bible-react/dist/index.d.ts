@@ -1289,7 +1289,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  */
 export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
-	"%settings_uiLanguageSelector_selectFallbackLanguages%"
+	"%settings_uiLanguageSelector_fallbackLanguages%"
 ];
 type UiLanguageSelectorLocalizedStrings = {
 	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
