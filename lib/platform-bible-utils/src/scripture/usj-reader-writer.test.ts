@@ -1,12 +1,15 @@
-/* eslint-disable no-useless-escape, no-irregular-whitespace */
+/* eslint-disable no-useless-escape, no-irregular-whitespace, camelcase, @typescript-eslint/naming-convention */
 // Need to disable no-useless-escape because there are some useless escapes in the raw USFM and USJ
 // data, and it's better to do fewer manual edits.
 // Need to disable no-irregular-whitespace because the test data includes irregular whitespace that
 // we are testing on purpose.
+// Disabling camelcase and @typescript-eslint/naming-convention so we can use 3_1 indicating USFM 3.1
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from './usj-reader-writer';
 import { usjMat1 } from './footnote-util-test.usj.data';
 import { USFM_MARKERS_MAP } from './markers-map-3.1.model';
+
+// #region Matthew 1-2 test data
 
 /**
  * WEB Matthew 1-2 in USFM. (When copied from the file, had to replace `\` with `\\`)
@@ -941,6 +944,10 @@ const matthew2verseRangeUsj = JSON.parse(`{
   ]
 }`);
 
+// #endregion Matthew 1-2 test data
+
+// #region testUSFM test data - Paratext 9 USFM 3.0
+
 /**
  * TestUSFM 2 Samuel 1 in USFM. Output from Platform.Bible; had to change `\\r\\n` to `\n`
  *
@@ -1033,7 +1040,7 @@ const testUSFM2SACh1Usfm = `\\id 2SA - TJs USFM Test
 \\p
 \\v 11 \\va 11 va\\va*\\vp 11 vp\\vp* This verse marker has simple va and vp with no space between but with a space after. The spec indicates there is optional whitespace after attribute markers (one space is output after attribute markers except cat in canonical form), so this space should not be in the text content. However, Paratext treats all spaces after attribute markers as text content, so Paratext will output a space after the vp.
 \\p
-\\v 12 \\va 12 va\\va* \\vp 11 vp\\vp*This verse marker has simple va and vp with a space between but not after. This space should be ignored as part of optional structural space according to spec, but Paratext treats it as text content. As such, Paratext will output altnumber on the verse marker, but the vp will be its own separate marker.
+\\v 12 \\va 12 va\\va* \\vp 12 vp\\vp*This verse marker has simple va and vp with a space between but not after. This space should be ignored as part of optional structural space according to spec, but Paratext treats it as text content. As such, Paratext will output altnumber on the verse marker, but the vp will be its own separate marker.
 \\p
 \\v 13 \\va 13 \\+wj va \\+wj*\\va*\\vp 13 vp\\vp*This verse marker has va with marker content in it, which makes it a standalone marker. Random \\va va\\va* without the verse marker also becomes a standalone marker. va does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext. The vp after the va is standalone because it is no longer connected to the verse marker.
 \\p
@@ -1121,9 +1128,6 @@ const testUSFM2SACh1Usfm = `\\id 2SA - TJs USFM Test
 
 /**
  * TestUSFM 2 Samuel 2 in USFM. Output from Platform.Bible; had to change `\\r\\n` to `\n`.
- *
- * WARNING: I also had to add `" ",` to the start of the content array in the `ef` marker because it
- * seems that `usxStringToUsj` is incorrectly removing it.
  *
  * Note: this content was fed into Paratext 9 so its whitespace was normalized according to Paratext
  * 9's rules. We will deal with whitespace normalization issues later.
@@ -1222,6 +1226,9 @@ const testUSFM2SACh3Usfm = `\\c 3
  * TestUSFM 2 Samuel 1 output in USJ from Platform.Bible (single backslash replaced with double
  * backslash to properly escape quotes; version 3.1 replaced with 3.0 in the USJ marker because that
  * is more accurate. The USJ version handling isn't great yet).
+ *
+ * WARNING: I also had to add `" ",` to the start of the content array in the `ef` marker because it
+ * seems that `usxStringToUsj` is incorrectly removing it.
  */
 const testUSFM2SACh1Usj = JSON.parse(`{
   "type": "USJ",
@@ -2328,7 +2335,7 @@ const testUSFM2SACh1Usj = JSON.parse(`{
           "type": "char",
           "marker": "vp",
           "content": [
-            "11 vp"
+            "12 vp"
           ]
         },
         "This verse marker has simple va and vp with a space between but not after. This space should be ignored as part of optional structural space according to spec, but Paratext treats it as text content. As such, Paratext will output altnumber on the verse marker, but the vp will be its own separate marker."
@@ -3926,6 +3933,2722 @@ const testUSFM2SACh3Usj = JSON.parse(`{
   ]
 }`);
 
+// #endregion testUSFM test data - in Paratext 9 USFM 3.0 format
+
+// #region testUSFM test data - in canonical 3.1 format
+
+/**
+ * TestUSFM 2 Samuel 1 in USFM. Output from Platform.Bible; had to change `\\r\\n` to `\n`.
+ *
+ * Then aligned to canonical 3.1 output manually. Note that this means some descriptions of what
+ * whitespace is where are not necessarily accurate anymore; they are written to describe the
+ * Paratext 3.0 content.
+ *
+ * Note: this content's whitespace is hand-normalized according to 3.1 `usx.rng` rules. We will deal
+ * with whitespace normalization issues later.
+ */
+const testUSFM2SACh1UsfmCanonical3_1 = `\\id 2SA - TJs USFM Test
+\\toc3 2Sam
+\\toc2 2 Sam
+\\toc1 2 Samuel
+\\c 1 \\ca 1 ca\\ca*
+\\cp 1 cp
+\\s1 This chapter and the next two chapters have lots of challenging USFM test markers and such in them.
+\\p
+\\v 1 \\bd usfm marker
+\\p In USFM, the usfm marker should come right after the id marker at the top of the page. According to spec, it should only occur if the USFM version is not 3.0; usfm 3.0 should never occur, and anything else like usfm 3.1 should always be present. In USX, this USFM marker should be transformed into the top-level usx marker that contains all the content of the document including the id marker, and the version from the usfm marker should be set as the version attribute on the usx marker. However, Paratext handles this marker differently. When output to USX, the usfm marker is transformed into a para marker with style=\"usfm\", and the version is the text content of the marker. Paratext does not remove the usfm marker, and it does not set the usx marker's version to the version specified by the usfm marker; it is always 3.0.
+\\b
+\\p
+\\v 2 \\bd Footnotes and crossrefs:
+\\p The footnote in this paragraph has as category without markers in its content, so it should be an attribute on the footnote\\f + \\cat things\\cat*\\fr 1:12 \\ft Some footnote text.\\f* instead of its own standalone marker. There is no space after the cat marker, which is the canonical form in the spec. Note the letter before the footnote and the space after.
+\\p The end footnote in this paragraph has as category without markers in its content but with a space after, so it should be an attribute on the footnote \\fe + \\cat things\\cat* \\fr 1:12 \\ft More footnote text. \\fp Another \\+wj paragraph\\+wj* in the footnote.\\fe* instead of its own standalone marker. However, Paratext seems to interpret the space after as part of the footnote text content instead of an optional space (that is not output in canonical form) on the attribute marker according to spec. Note the space before the footnote and the space after. Also note the fp marker in the footnote is a character marker that looks like a paragraph, so character markers inside it must have + in USFM 3.0.
+\\p The footnote in this paragraph has a category with markers in its content, so it should be its own standalone marker \\f + \\cat \\+wj stuff \\+wj*\\cat* \\fr 1:2 \\ft Other footnote text.\\f*. Note the space before the footnote and the period after.
+\\p The crossref in this verse has a category without markers in its content, so it should be an attribute on the crossref\\x - \\xo 1.2\\xo* \\xt Crossref text.\\xt*\\x*. It also has closed character markers that do not need to be closed in 3.1 even though other markers need to be closed in 3.1. Note the letter before the crossref and the period after.
+\\b
+\\p
+\\v 3 \\bd Character markers:
+\\p In\\wj si\\wj*de, \\wj WholeWord\\wj*, \\wj Span Words\\wj*, Pa\\wj rt Span wor\\wj*ds
+\\p Empty character marker here: \\wj \\wj*
+\\p w \\w marker|stuff\\w* with default attribute (note default attribute with normal attribute syntax gets normalized to default attribute)
+\\p w \\w marker|stuff \\w* with a space at the end of the default attribute. Note this space is on the default attribute. With non-default attribute syntax, any space before the closing marker is removed as part of normalization.
+\\p w \\w marker|strong=\"H1234,G1234\" lemma=\"markerLemma\" srcloc=\"Location\"\\w* with multiple attributes. Note they are not in the typical order of lemma, strong, srcloc
+\\p jmp \\jmp marker|2SA 1:1\\jmp* with default attribute - note the default attribute name changes between 3.0 link-href and 3.1 href
+\\p jmp \\jmp marker|link-href=\"2SA 1:2\" link-title=\"My Title\" link-id=\"3.0 link\"\\jmp* with multiple attributes with 3.0 names - note the attribute name changes between 3.0 and 3.1
+\\p jmp \\jmp marker|href=\"2SA 1:3\" id=\"3.1 link\"\\jmp* with multiple attributes with 3.1 names - note the attribute name changes between 3.0 and 3.1. For some reason, Paratext 9.5 (with USFM 3.0) is automatically removing the title attribute, so it is not present.
+\\p jmp \\jmp marker|x-user-defined:thing\\jmp* with a user-defined URI prefix. Must begin with x-.
+\\p jmp \\jmp marker|prj:zzz6 2SA 1:4\\jmp* with a prj URI prefix. Links to a reference in another project.
+\\p jmp \\jmp marker|x-prj:zzz6 2SA 1:5\\jmp* with an x-prj URI prefix. The 3.1 docs mention that this should link to another project, but the 3.1 usx.rng doesn't seem to indicate it is allowed unlike prj: which is in the 3.1 usx.rng.
+\\p jmp \\jmp |2SA 1:6\\jmp* marker that has no text content.
+\\p jmp \\jmp marker|figures/platform-bible-discord.png\\jmp* with a file path in it.
+\\p jmp \\jmp marker|#fake-named-target-id\\jmp* with a named target in it (I do not know how to define a named target or how this differs than listing an anchor in link-id).
+\\p Non-jmp wj \\wj marker|link-href=\"2SA 1:7\"\\wj* with link-href on it. The 3.0 spec says this should be considered a link, and Paratext 9.5 treats it that way. However, the 3.1 spec does not indicate such.
+\\p k \\k marker|key=\"something\"\\k* with key attribute (default in 3.1+; did not exist in 3.0-)
+\\p Empty character marker here \\wj \\wj* has a structure space in it unlike milestones which do not.
+\\p qt \\qt marker\\qt* that is a character marker that looks like it is a milestone.
+\\p Nested \\wj character \\+nd markers\\+nd* must\\wj* have + in 3.0-, but it is optional in 3.1+.
+\\p Character markers \\wj inside notes\\f + \\fr 1:3 \\ft Footnote text with a \\wj character marker\\wj*\\f* inside character markers\\wj* are not considered nested, so it must just be the direct parent that is considered for nesting.
+\\p Character \\wj markers technically must close in 3.1+, but unclosed character markers can be handled the same as in 3.0. They should automatically close at the end of the paragraph and should be labeled as not closed in USX and USJ.
+\\b
+\\p
+\\v 4 \\bd Milestones:
+\\p This line has \\qt-s\\* two milestones \\qt-e\\* without attributes. There are content spaces on both sides of each milestone. Note that, unlike with character markers, there is no structural space before the closing marker when there are no attributes; it is normalized out.
+\\p This line has \\qt-s |TJ \\*two milestones\\qt-e\\*, the first of which has default who attribute. There is a content space before the first milestone only. Note that there is a structural space after the opening marker when there are attributes. Also note that the space before the closing marker is part of the default attribute as with character markers.
+\\p This line has a \\qt-s |sid=\"Some quote\" who=\"TJ\"\\*starting milestone with sid and who.
+\\p This line has no milestone.
+\\p This line has an \\qt-e |Some quote\\*ending milestone with default eid attribute.
+\\p This line has an opening ts milestone \\ts-s |Translator's section\\* with default sid and closing ts milestone \\ts-e |Translator's section\\* with default eid. Note that the default attribute can have spaces in it.
+\\p This line has t-s \\t-s \\* and t-e
+\\p For some reason, Paratext does not recognize the ts \\ts \\*, t-s \\t-s \\*, or t-e \\t-e \\* markers. ts is a standalone translator's section milestone, and I guess the others are shorthands for ts-s and ts-e. Paratext puts a structural space before the closing marker on all three even though it should not be there.
+\\b
+\\p
+\\v 5
+\\b
+\\p
+\\v 6 \\bd Leading attributes
+\\p See the id marker at the top of this book for its code leading attribute
+\\p See the chapter marker at the top of this chapter for its number leading attribute.
+\\p See the many verse markers in this chapter for their number leading attribute.
+\\p See the Footnotes and crossrefs section for footnote and crossref caller leading attribute.
+\\b
+\\p
+\\v 7 \\bd Text content attributes
+\\p periph has alt as its text content attribute, but periph is unfortunately only supported in peripheral books (FRT, BAK, INT, and OTH) in Paratext 9.5. Paratext splits these peripheral books into a separate file for each peripheral when outputting to USX. Please see the OTH book for examples of periph markers. Note that periph's id attribute cannot use default attribute syntax; it must be named.
+\\p usfm, usx, and USJ markers have version as their text content attribute, but the usfm marker is unfortunately not present on this document because it uses USFM 3.0, so spec indicates it should not be present.
+\\b
+\\p
+\\v 8 \\bd Custom attributes
+\\p This \\wj character marker|x-custom-attribute-1=\"Stuff\" z-custom-attribute-2=\"Things\"\\wj* has two custom attributes. Custom attributes are supposed to start with x or z according to spec.
+\\p This \\wj character marker|custom-attribute-no-prefix=\"Bad\" custom-attribute-no-prefix-2=\"Attributes\"\\wj* has two unknown attributes that do not start with x or z. Paratext treats them just like custom attributes.
+\\b
+\\p
+\\v 9 \\bd Attribute markers
+\\p See the Footnotes and crossrefs section for testing the cat marker on footnotes and crossrefs.
+\\p See the chapter marker at the top of this chapter for testing ca and cp being applied to the chapter marker as attribute markers.
+\\p See the chapter marker at the top of chapter 2 for not closing ca which leads it to be its own separate marker. Then cp is also its own separate marker afterward and can contain other markers as content.
+\\p See the chapter marker at the top of chapter 3 for testing cp after the chapter marker with content in it, which should make the cp stay as its own independent marker.
+\\p Note: All remaining tests of attribute markers will also have leading attributes because v and c are the only markers left with attribute markers to test, and they both have leading attributes.
+\\p
+\\v 10 \\va 10 va\\va* \\vp 10 vp\\vp* This verse marker has simple va and vp with no space between or after. Paratext and the spec treat this the same way: both markers turn into attributes on the marker in USX and USJ, and there are no spaces in the text content.
+\\p
+\\v 11 \\va 11 va\\va* \\vp 11 vp\\vp* This verse marker has simple va and vp with no space between but with a space after. The spec indicates there is optional whitespace after attribute markers (one space is output after attribute markers except cat in canonical form), so this space should not be in the text content. However, Paratext treats all spaces after attribute markers as text content, so Paratext will output a space after the vp.
+\\p
+\\v 12 \\va 12 va\\va* \\vp 12 vp\\vp* This verse marker has simple va and vp with a space between but not after. This space should be ignored as part of optional structural space according to spec, but Paratext treats it as text content. As such, Paratext will output altnumber on the verse marker, but the vp will be its own separate marker.
+\\p
+\\v 13 \\va 13 \\+wj va \\+wj*\\va*\\vp 13 vp\\vp*This verse marker has va with marker content in it, which makes it a standalone marker. Random \\va va\\va* without the verse marker also becomes a standalone marker. va does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext. The vp after the va is standalone because it is no longer connected to the verse marker.
+\\p
+\\v 14 \\va 14\\va* \\vp 14 \\+wj vp\\+wj*\\vp*This verse marker has vp with marker content in it, which makes it a standalone marker. Random \\vp vp\\vp* without the verse marker also becomes a standalone marker. The va before the vp appropriately becomes altnumber on the verse marker.
+\\p
+\\v 15 \\va 15 va \\vp 15 vp This verse marker has va and vp without closing markers. Neither of these markers becomes an attribute in USX or USJ because both have closed=\"false\" and are therefore not simple markers.
+\\p This paragraph contains a random \\ca ca with an \\+wj inline marker inside\\+wj*\\ca* not after the chapter marker, which becomes a standalone marker. ca does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext.
+\\cp This paragraph is a random cp with an \\wj inline marker inside\\wj* not after the chapter marker, which becomes a standalone marker.
+\\b
+\\p
+\\v 16 \\bd Whitespace
+\\p Tilde~should~be a NBSP in USX and USJ
+\\p Double slash should be an optbreak in USX and USJ. Here // is one with spaces around it. Here//is one without spaces around it.
+\\p Paratext 9.5's unformatted view leaves a space after the number on verse markers, but the standard view does not. This seems like a bug in the unformatted view.
+\\p
+\\v 17
+\\p TODO: add some whitespace character tests
+\\b
+\\p
+\\v 18 \\bd Figures
+\\p There is a figure here \\fig |src=\"platform-bible-discord.png\" size=\"col\" ref=\"1.13\"\\fig* . It has a space on both sides. Only the three required attributes are present and in the order in which they are listed in the spec. The attribute src in USFM should be file in USX and USJ.
+\\p There is a figure here\\fig Caption Here|alt=\"Description Here\" src=\"platform-bible-discord.png\" size=\"span\" loc=\"Location here\" copy=\"Copyright here\" ref=\"1.13\"\\fig*. It has no spaces around it. All six attributes are present and are not in the order in which they are listed in the spec. The attribute src in USFM should be file in USX and USJ.
+\\b
+\\p
+\\v 19 \\bd Lists
+\\p Following is a normal list with a header, entries, and footer. It has – at the start of each line like in the documentation example.
+\\lh Header for the \\wj normal\\wj* list:
+\\li1 –First \\wj list\\wj* item
+\\li2 –Subpoint on the first list item
+\\li3 –Subpoint on the \\wj subpoint\\wj* on the first list item
+\\li1 –Second list item
+\\li1 –Third list item
+\\lf Footer for the normal list.
+\\p Following is an embedded list with just entries.
+\\lim1 First embedded list item
+\\lim1 Second embedded list item
+\\lim1 Third embedded list item
+\\lim2 Subpoint on the third embedded list item
+\\lim3 Subpoint on the subpoint on the third embedded list item
+\\b
+\\p
+\\v 20 \\bd Tables
+\\p Following is a table with various kinds of cells and a header row. Paratext only supports th1 through th12 because that is all that is in usfm.sty. Note that USFM 3.1 does not require closing markers on table cells.
+\\tr \\th1 Header 1\\th2 Header 2 space after \\thc3-4 Header 3-4 centered\\thr5 Header 5 right
+\\tr \\tc1 Row 1 cell 1\\tc2 Row 1 cell 2 space after \\thc3 Row 1 cell 3 centered\\thr4-5 Row 1 cell 4-5 right
+\\tr \\tcr1-4 Row 2 cell 1-4 right\\tc5 Row 2 cell 5
+\\p Following is a table with 6 columns but no header row. Paratext does not support tc13 or higher and therefore makes two separate tables of one row each on this line, but it interestingly allows having multiple tc5 cells in one row. The spec does not appear to impose any limits on the column number.
+\\tr \\tc1 r1c1\\tc2 r1c2 with closed wj \\wj marker\\wj* space after \\tc3 r1c3\\tc4 r1c4\\tc5 r1c5 \\tc5 r1c5 again \\tc13 r1c13
+\\tr \\tc1 r2c1\\tc2 r2c2 with unclosed wj \\wj marker space after \\tc3 r2c3\\tc4 r2c4\\tc5 r2c5\\tc5 r2c5 again \\tc13 r2c13
+\\b
+\\p
+\\v 21 \\bd Periphs
+\\p periph is unfortunately only supported in peripheral books (FRT, BAK, INT, and OTH) in Paratext 9.5. Paratext splits these peripheral books into a separate file for each peripheral when outputting to USX. Please see the OTH book for examples of periph markers.
+\\b
+\\p
+\\v 22 \\bd Custom markers
+\\p Following is a custom marker that is unknown (not in custom.sty or markers.ext). Paratext translates unknown markers to para type markers in USX. Custom markers must start with z. \\zUnknownCustomMarker This text is \\wj in the custom\\wj* marker.
+\\b
+\\p
+\\v 23-24 \\bd Verse range
+\\p This is a verse range.
+\\b
+\\p
+\\v 25 \\bd Refs
+\\p Paratext 9.5 standard view does not support entering an independent ref marker; it just replaces the ref with its text content. However, it will allow an unclosed ref marker (the contents are all put in the text content of the marker; the default attribute loc does not work): \\ref 2Sam 1:1|REV 1:1
+\\p Also, if you enter a ref marker in the unformatted view and don't touch it in the standard view, it will work:
+\\p \\ref 2Sam 1:1|2SA 1:1\\ref*
+\\p This crossref\\x - \\xo 1:21 \\xt 2Sam 1:1; 2Sam 1:2-3.\\x* has a properly filled out xt marker. Paratext generates ref markers around each Scripture reference in the xt when outputting USX. The ref marker text content is the localized reference, and the loc attribute (default) is the canonized reference. When translated back to USFM, the refs inside the xt need to be removed; only the text content should remain.
+\\p This paragraph has a properly filled out xt marker: \\xt 2Sam 1:2; 2Sam 1:3\\xt*. Paratext generates ref markers around each Scripture reference in the xt when outputting USX the same way as it does for xt markers in crossrefs as detailed in the previous paragraph.
+\\b
+\\p
+\\v 26 \\bd Sidebars
+\\p There is a closed sidebar after this paragraph. It has the category \"Test Category\". Note that Paratext's Standard view normalizes out any space before the closing cat marker, so there cannot be trailing space on the category unless you use a different view. It seems the spec allows trailing space there as part of the text content of the marker.
+\\esb \\cat Test Category\\cat*
+\\p This paragraph is in the sidebar. The sidebar can contain many things like \\wj character markers\\wj*, \\qt1-s\\* milestones \\qt1-e\\*, and more paragraphs.
+\\p This is a second paragraph in the sidebar. The sidebar will end at esbe marker.
+\\esbe
+\\p There is a sidebar that is not closed after this paragraph. The entire rest of the chapter will be in this sidebar because sidebars automatically close at the end of the chapter.
+\\esb
+\\p This paragraph is in the sidebar.
+\\b
+\\p
+\\v 27 This is \\wj still\\wj* in the sidebar.
+`;
+
+/**
+ * TestUSFM 2 Samuel 1 output in USJ from Platform.Bible (single backslash replaced with double
+ * backslash to properly escape quotes; version 3.1 replaced with 3.0 in the USJ marker because that
+ * is more accurate. The USJ version handling isn't great yet).
+ *
+ * Then aligned to canonical 3.1 output manually. Note that this means some descriptions of what
+ * whitespace is where are not necessarily accurate anymore; they are written to describe the
+ * Paratext 3.0 content.
+ */
+const testUSFM2SACh1UsjCanonical3_1 = JSON.parse(`{
+  "type": "USJ",
+  "version": "3.0",
+  "content": [
+    {
+      "type": "book",
+      "marker": "id",
+      "code": "2SA",
+      "content": [
+        "- TJs USFM Test"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "toc3",
+      "content": [
+        "2Sam"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "toc2",
+      "content": [
+        "2 Sam"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "toc1",
+      "content": [
+        "2 Samuel"
+      ]
+    },
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "1",
+      "altnumber": "1 ca",
+      "pubnumber": "1 cp",
+      "sid": "2SA 1"
+    },
+    {
+      "type": "para",
+      "marker": "s1",
+      "content": [
+        "This chapter and the next two chapters have lots of challenging USFM test markers and such in them."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": "2SA 1:1"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "usfm marker"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "In USFM, the usfm marker should come right after the id marker at the top of the page. According to spec, it should only occur if the USFM version is not 3.0; usfm 3.0 should never occur, and anything else like usfm 3.1 should always be present. In USX, this USFM marker should be transformed into the top-level usx marker that contains all the content of the document including the id marker, and the version from the usfm marker should be set as the version attribute on the usx marker. However, Paratext handles this marker differently. When output to USX, the usfm marker is transformed into a para marker with style=\\"usfm\\", and the version is the text content of the marker. Paratext does not remove the usfm marker, and it does not set the usx marker's version to the version specified by the usfm marker; it is always 3.0."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2",
+          "sid": "2SA 1:2"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Footnotes and crossrefs:"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "The footnote in this paragraph has as category without markers in its content, so it should be an attribute on the footnote",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "+",
+          "category": "things",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "content": [
+                "1:12 "
+              ]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "content": [
+                "Some footnote text."
+              ]
+            }
+          ]
+        },
+        " instead of its own standalone marker. There is no space after the cat marker, which is the canonical form in the spec. Note the letter before the footnote and the space after."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "The end footnote in this paragraph has as category without markers in its content but with a space after, so it should be an attribute on the footnote ",
+        {
+          "type": "note",
+          "marker": "fe",
+          "caller": "+",
+          "category": "things",
+          "content": [
+            " ",
+            {
+              "type": "char",
+              "marker": "fr",
+              "content": [
+                "1:12 "
+              ]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "content": [
+                "More footnote text. "
+              ]
+            },
+            {
+              "type": "char",
+              "marker": "fp",
+              "content": [
+                "Another ",
+                {
+                  "type": "char",
+                  "marker": "wj",
+                  "content": [
+                    "paragraph"
+                  ]
+                },
+                " in the footnote."
+              ]
+            }
+          ]
+        },
+        " instead of its own standalone marker. However, Paratext seems to interpret the space after as part of the footnote text content instead of an optional space (that is not output in canonical form) on the attribute marker according to spec. Note the space before the footnote and the space after. Also note the fp marker in the footnote is a character marker that looks like a paragraph, so character markers inside it must have + in USFM 3.0."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "The footnote in this paragraph has a category with markers in its content, so it should be its own standalone marker ",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "+",
+          "content": [
+            {
+              "type": "char",
+              "marker": "cat",
+              "content": [
+                {
+                  "type": "char",
+                  "marker": "wj",
+                  "content": [
+                    "stuff "
+                  ]
+                }
+              ]
+            },
+            " ",
+            {
+              "type": "char",
+              "marker": "fr",
+              "content": [
+                "1:2 "
+              ]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "content": [
+                "Other footnote text."
+              ]
+            }
+          ]
+        },
+        ". Note the space before the footnote and the period after."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "The crossref in this verse has a category without markers in its content, so it should be an attribute on the crossref",
+        {
+          "type": "note",
+          "marker": "x",
+          "caller": "-",
+          "content": [
+            {
+              "type": "char",
+              "marker": "xo",
+              "closed": "true",
+              "content": [
+                "1.2"
+              ]
+            },
+            " ",
+            {
+              "type": "char",
+              "marker": "xt",
+              "closed": "true",
+              "content": [
+                "Crossref text."
+              ]
+            }
+          ]
+        },
+        ". It also has closed character markers that do not need to be closed in 3.1 even though other markers need to be closed in 3.1. Note the letter before the crossref and the period after."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "3",
+          "sid": "2SA 1:3"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Character markers:"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "In",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "si"
+          ]
+        },
+        "de, ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "WholeWord"
+          ]
+        },
+        ", ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "Span Words"
+          ]
+        },
+        ", Pa",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "rt Span wor"
+          ]
+        },
+        "ds"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Empty character marker here: ",
+        {
+          "type": "char",
+          "marker": "wj"
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "w ",
+        {
+          "type": "char",
+          "marker": "w",
+          "lemma": "stuff",
+          "content": [
+            "marker"
+          ]
+        },
+        " with default attribute (note default attribute with normal attribute syntax gets normalized to default attribute)"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "w ",
+        {
+          "type": "char",
+          "marker": "w",
+          "lemma": "stuff ",
+          "content": [
+            "marker"
+          ]
+        },
+        " with a space at the end of the default attribute. Note this space is on the default attribute. With non-default attribute syntax, any space before the closing marker is removed as part of normalization."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "w ",
+        {
+          "type": "char",
+          "marker": "w",
+          "strong": "H1234,G1234",
+          "lemma": "markerLemma",
+          "srcloc": "Location",
+          "content": [
+            "marker"
+          ]
+        },
+        " with multiple attributes. Note they are not in the typical order of lemma, strong, srcloc"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "2SA 1:1",
+          "content": [
+            "marker"
+          ]
+        },
+        " with default attribute - note the default attribute name changes between 3.0 link-href and 3.1 href"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "2SA 1:2",
+          "link-title": "My Title",
+          "link-id": "3.0 link",
+          "content": [
+            "marker"
+          ]
+        },
+        " with multiple attributes with 3.0 names - note the attribute name changes between 3.0 and 3.1"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "href": "2SA 1:3",
+          "id": "3.1 link",
+          "content": [
+            "marker"
+          ]
+        },
+        " with multiple attributes with 3.1 names - note the attribute name changes between 3.0 and 3.1. For some reason, Paratext 9.5 (with USFM 3.0) is automatically removing the title attribute, so it is not present."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "x-user-defined:thing",
+          "content": [
+            "marker"
+          ]
+        },
+        " with a user-defined URI prefix. Must begin with x-."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "prj:zzz6 2SA 1:4",
+          "content": [
+            "marker"
+          ]
+        },
+        " with a prj URI prefix. Links to a reference in another project."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "x-prj:zzz6 2SA 1:5",
+          "content": [
+            "marker"
+          ]
+        },
+        " with an x-prj URI prefix. The 3.1 docs mention that this should link to another project, but the 3.1 usx.rng doesn't seem to indicate it is allowed unlike prj: which is in the 3.1 usx.rng."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "2SA 1:6"
+        },
+        " marker that has no text content."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "figures/platform-bible-discord.png",
+          "content": [
+            "marker"
+          ]
+        },
+        " with a file path in it."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "jmp ",
+        {
+          "type": "char",
+          "marker": "jmp",
+          "link-href": "#fake-named-target-id",
+          "content": [
+            "marker"
+          ]
+        },
+        " with a named target in it (I do not know how to define a named target or how this differs than listing an anchor in link-id)."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Non-jmp wj ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "link-href": "2SA 1:7",
+          "content": [
+            "marker"
+          ]
+        },
+        " with link-href on it. The 3.0 spec says this should be considered a link, and Paratext 9.5 treats it that way. However, the 3.1 spec does not indicate such."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "k ",
+        {
+          "type": "char",
+          "marker": "k",
+          "key": "something",
+          "content": [
+            "marker"
+          ]
+        },
+        " with key attribute (default in 3.1+; did not exist in 3.0-)"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Empty character marker here ",
+        {
+          "type": "char",
+          "marker": "wj"
+        },
+        " has a structure space in it unlike milestones which do not."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "qt ",
+        {
+          "type": "char",
+          "marker": "qt",
+          "content": [
+            "marker"
+          ]
+        },
+        " that is a character marker that looks like it is a milestone."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Nested ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "character ",
+            {
+              "type": "char",
+              "marker": "nd",
+              "content": [
+                "markers"
+              ]
+            },
+            " must"
+          ]
+        },
+        " have + in 3.0-, but it is optional in 3.1+."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Character markers ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "inside notes",
+            {
+              "type": "note",
+              "marker": "f",
+              "caller": "+",
+              "content": [
+                {
+                  "type": "char",
+                  "marker": "fr",
+                  "closed": "false",
+                  "content": [
+                    "1:3 "
+                  ]
+                },
+                {
+                  "type": "char",
+                  "marker": "ft",
+                  "closed": "false",
+                  "content": [
+                    "Footnote text with a "
+                  ]
+                },
+                {
+                  "type": "char",
+                  "marker": "wj",
+                  "content": [
+                    "character marker"
+                  ]
+                }
+              ]
+            },
+            " inside character markers"
+          ]
+        },
+        " are not considered nested, so it must just be the direct parent that is considered for nesting."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Character ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "closed": "false",
+          "content": [
+            "markers technically must close in 3.1+, but unclosed character markers can be handled the same as in 3.0. They should automatically close at the end of the paragraph and should be labeled as not closed in USX and USJ."
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4",
+          "sid": "2SA 1:4"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Milestones:"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has ",
+        {
+          "type": "ms",
+          "marker": "qt-s"
+        },
+        " two milestones ",
+        {
+          "type": "ms",
+          "marker": "qt-e"
+        },
+        " without attributes. There are content spaces on both sides of each milestone. Note that, unlike with character markers, there is no structural space before the closing marker when there are no attributes; it is normalized out."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has ",
+        {
+          "type": "ms",
+          "marker": "qt-s",
+          "who": "TJ "
+        },
+        "two milestones",
+        {
+          "type": "ms",
+          "marker": "qt-e"
+        },
+        ", the first of which has default who attribute. There is a content space before the first milestone only. Note that there is a structural space after the opening marker when there are attributes. Also note that the space before the closing marker is part of the default attribute as with character markers."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has a ",
+        {
+          "type": "ms",
+          "marker": "qt-s",
+          "sid": "Some quote",
+          "who": "TJ"
+        },
+        "starting milestone with sid and who."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has no milestone."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has an ",
+        {
+          "type": "ms",
+          "marker": "qt-e",
+          "eid": "Some quote"
+        },
+        "ending milestone with default eid attribute."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has an opening ts milestone ",
+        {
+          "type": "ms",
+          "marker": "ts-s",
+          "sid": "Translator's section"
+        },
+        " with default sid and closing ts milestone ",
+        {
+          "type": "ms",
+          "marker": "ts-e",
+          "eid": "Translator's section"
+        },
+        " with default eid. Note that the default attribute can have spaces in it."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This line has t-s "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "t-s",
+      "content": [
+        {
+          "type": "unmatched",
+          "marker": "*"
+        },
+        " and t-e"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "For some reason, Paratext does not recognize the ts "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "ts",
+      "content": [
+        {
+          "type": "unmatched",
+          "marker": "*"
+        },
+        ", t-s "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "t-s",
+      "content": [
+        {
+          "type": "unmatched",
+          "marker": "*"
+        },
+        ", or t-e "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "t-e",
+      "content": [
+        {
+          "type": "unmatched",
+          "marker": "*"
+        },
+        " markers. ts is a standalone translator's section milestone, and I guess the others are shorthands for ts-s and ts-e. Paratext puts a structural space before the closing marker on all three even though it should not be there."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "5",
+          "sid": "2SA 1:5"
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "6",
+          "sid": "2SA 1:6"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Leading attributes"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the id marker at the top of this book for its code leading attribute"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the chapter marker at the top of this chapter for its number leading attribute."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the many verse markers in this chapter for their number leading attribute."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the Footnotes and crossrefs section for footnote and crossref caller leading attribute."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "7",
+          "sid": "2SA 1:7"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Text content attributes"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "periph has alt as its text content attribute, but periph is unfortunately only supported in peripheral books (FRT, BAK, INT, and OTH) in Paratext 9.5. Paratext splits these peripheral books into a separate file for each peripheral when outputting to USX. Please see the OTH book for examples of periph markers. Note that periph's id attribute cannot use default attribute syntax; it must be named."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "usfm, usx, and USJ markers have version as their text content attribute, but the usfm marker is unfortunately not present on this document because it uses USFM 3.0, so spec indicates it should not be present."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "8",
+          "sid": "2SA 1:8"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Custom attributes"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "x-custom-attribute-1": "Stuff",
+          "z-custom-attribute-2": "Things",
+          "content": [
+            "character marker"
+          ]
+        },
+        " has two custom attributes. Custom attributes are supposed to start with x or z according to spec."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "custom-attribute-no-prefix": "Bad",
+          "custom-attribute-no-prefix-2": "Attributes",
+          "content": [
+            "character marker"
+          ]
+        },
+        " has two unknown attributes that do not start with x or z. Paratext treats them just like custom attributes."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "9",
+          "sid": "2SA 1:9"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Attribute markers"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the Footnotes and crossrefs section for testing the cat marker on footnotes and crossrefs."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the chapter marker at the top of this chapter for testing ca and cp being applied to the chapter marker as attribute markers."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the chapter marker at the top of chapter 2 for not closing ca which leads it to be its own separate marker. Then cp is also its own separate marker afterward and can contain other markers as content."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "See the chapter marker at the top of chapter 3 for testing cp after the chapter marker with content in it, which should make the cp stay as its own independent marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Note: All remaining tests of attribute markers will also have leading attributes because v and c are the only markers left with attribute markers to test, and they both have leading attributes."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "10",
+          "altnumber": "10 va",
+          "pubnumber": "10 vp",
+          "sid": "2SA 1:10"
+        },
+        "This verse marker has simple va and vp with no space between or after. Paratext and the spec treat this the same way: both markers turn into attributes on the marker in USX and USJ, and there are no spaces in the text content."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "11",
+          "altnumber": "11 va",
+          "pubnumber": "11 vp",
+          "sid": "2SA 1:11"
+        },
+        "This verse marker has simple va and vp with no space between but with a space after. The spec indicates there is optional whitespace after attribute markers (one space is output after attribute markers except cat in canonical form), so this space should not be in the text content. However, Paratext treats all spaces after attribute markers as text content, so Paratext will output a space after the vp."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "12",
+          "altnumber": "12 va",
+          "pubnumber": "12 vp",
+          "sid": "2SA 1:12"
+        },
+        "This verse marker has simple va and vp with a space between but not after. This space should be ignored as part of optional structural space according to spec, but Paratext treats it as text content. As such, Paratext will output altnumber on the verse marker, but the vp will be its own separate marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "13",
+          "sid": "2SA 1:13"
+        },
+        {
+          "type": "char",
+          "marker": "va",
+          "content": [
+            "13 ",
+            {
+              "type": "char",
+              "marker": "wj",
+              "content": [
+                "va "
+              ]
+            }
+          ]
+        },
+        {
+          "type": "char",
+          "marker": "vp",
+          "content": [
+            "13 vp"
+          ]
+        },
+        "This verse marker has va with marker content in it, which makes it a standalone marker. Random ",
+        {
+          "type": "char",
+          "marker": "va",
+          "content": [
+            "va"
+          ]
+        },
+        " without the verse marker also becomes a standalone marker. va does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext. The vp after the va is standalone because it is no longer connected to the verse marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "14",
+          "altnumber": "14",
+          "sid": "2SA 1:14"
+        },
+        {
+          "type": "char",
+          "marker": "vp",
+          "content": [
+            "14 ",
+            {
+              "type": "char",
+              "marker": "wj",
+              "content": [
+                "vp"
+              ]
+            }
+          ]
+        },
+        "This verse marker has vp with marker content in it, which makes it a standalone marker. Random ",
+        {
+          "type": "char",
+          "marker": "vp",
+          "content": [
+            "vp"
+          ]
+        },
+        " without the verse marker also becomes a standalone marker. The va before the vp appropriately becomes altnumber on the verse marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "15",
+          "sid": "2SA 1:15"
+        },
+        {
+          "type": "char",
+          "marker": "va",
+          "closed": "false",
+          "content": [
+            "15 va "
+          ]
+        },
+        {
+          "type": "char",
+          "marker": "vp",
+          "closed": "false",
+          "content": [
+            "15 vp This verse marker has va and vp without closing markers. Neither of these markers becomes an attribute in USX or USJ because both have closed=\\"false\\" and are therefore not simple markers."
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This paragraph contains a random ",
+        {
+          "type": "char",
+          "marker": "ca",
+          "content": [
+            "ca with an ",
+            {
+              "type": "char",
+              "marker": "wj",
+              "content": [
+                "inline marker inside"
+              ]
+            }
+          ]
+        },
+        " not after the chapter marker, which becomes a standalone marker. ca does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "cp",
+      "content": [
+        "This paragraph is a random cp with an ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "inline marker inside"
+          ]
+        },
+        " not after the chapter marker, which becomes a standalone marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "16",
+          "sid": "2SA 1:16"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Whitespace"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Tilde should be a NBSP in USX and USJ"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Double slash should be an optbreak in USX and USJ. Here ",
+        {
+          "type": "optbreak"
+        },
+        " is one with spaces around it. Here",
+        {
+          "type": "optbreak"
+        },
+        "is one without spaces around it."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Paratext 9.5's unformatted view leaves a space after the number on verse markers, but the standard view does not. This seems like a bug in the unformatted view."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "17",
+          "sid": "2SA 1:17"
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "TODO: add some whitespace character tests"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "18",
+          "sid": "2SA 1:18"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Figures"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "There is a figure here ",
+        {
+          "type": "figure",
+          "marker": "fig",
+          "file": "platform-bible-discord.png",
+          "size": "col",
+          "ref": "1.13"
+        },
+        " . It has a space on both sides. Only the three required attributes are present and in the order in which they are listed in the spec. The attribute src in USFM should be file in USX and USJ."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "There is a figure here",
+        {
+          "type": "figure",
+          "marker": "fig",
+          "alt": "Description Here",
+          "file": "platform-bible-discord.png",
+          "size": "span",
+          "loc": "Location here",
+          "copy": "Copyright here",
+          "ref": "1.13",
+          "content": [
+            "Caption Here"
+          ]
+        },
+        ". It has no spaces around it. All six attributes are present and are not in the order in which they are listed in the spec. The attribute src in USFM should be file in USX and USJ."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "19",
+          "sid": "2SA 1:19"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Lists"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Following is a normal list with a header, entries, and footer. It has – at the start of each line like in the documentation example."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lh",
+      "content": [
+        "Header for the ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "normal"
+          ]
+        },
+        " list:"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "li1",
+      "content": [
+        "–First ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "list"
+          ]
+        },
+        " item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "li2",
+      "content": [
+        "–Subpoint on the first list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "li3",
+      "content": [
+        "–Subpoint on the ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "subpoint"
+          ]
+        },
+        " on the first list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "li1",
+      "content": [
+        "–Second list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "li1",
+      "content": [
+        "–Third list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lf",
+      "content": [
+        "Footer for the normal list."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Following is an embedded list with just entries."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lim1",
+      "content": [
+        "First embedded list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lim1",
+      "content": [
+        "Second embedded list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lim1",
+      "content": [
+        "Third embedded list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lim2",
+      "content": [
+        "Subpoint on the third embedded list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "lim3",
+      "content": [
+        "Subpoint on the subpoint on the third embedded list item"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "20",
+          "sid": "2SA 1:20"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Tables"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Following is a table with various kinds of cells and a header row. Paratext only supports th1 through th12 because that is all that is in usfm.sty. Note that USFM 3.1 does not require closing markers on table cells."
+      ]
+    },
+    {
+      "type": "table",
+      "content": [
+        {
+          "type": "table:row",
+          "marker": "tr",
+          "content": [
+            {
+              "type": "table:cell",
+              "marker": "th1",
+              "align": "start",
+              "content": [
+                "Header 1"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "th2",
+              "align": "start",
+              "content": [
+                "Header 2 space after "
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "thc3",
+              "align": "center",
+              "colspan": "2",
+              "content": [
+                "Header 3-4 centered"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "thr5",
+              "align": "end",
+              "content": [
+                "Header 5 right"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "table:row",
+          "marker": "tr",
+          "content": [
+            {
+              "type": "table:cell",
+              "marker": "tc1",
+              "align": "start",
+              "content": [
+                "Row 1 cell 1"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc2",
+              "align": "start",
+              "content": [
+                "Row 1 cell 2 space after "
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "thc3",
+              "align": "center",
+              "content": [
+                "Row 1 cell 3 centered"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "thr4",
+              "align": "end",
+              "colspan": "2",
+              "content": [
+                "Row 1 cell 4-5 right"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "table:row",
+          "marker": "tr",
+          "content": [
+            {
+              "type": "table:cell",
+              "marker": "tcr1",
+              "align": "end",
+              "colspan": "4",
+              "content": [
+                "Row 2 cell 1-4 right"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc5",
+              "align": "start",
+              "content": [
+                "Row 2 cell 5"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Following is a table with 6 columns but no header row. Paratext does not support tc13 or higher and therefore makes two separate tables of one row each on this line, but it interestingly allows having multiple tc5 cells in one row. The spec does not appear to impose any limits on the column number."
+      ]
+    },
+    {
+      "type": "table",
+      "content": [
+        {
+          "type": "table:row",
+          "marker": "tr",
+          "content": [
+            {
+              "type": "table:cell",
+              "marker": "tc1",
+              "align": "start",
+              "content": [
+                "r1c1"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc2",
+              "align": "start",
+              "content": [
+                "r1c2 with closed wj ",
+                {
+                  "type": "char",
+                  "marker": "wj",
+                  "content": [
+                    "marker"
+                  ]
+                },
+                " space after "
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc3",
+              "align": "start",
+              "content": [
+                "r1c3"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc4",
+              "align": "start",
+              "content": [
+                "r1c4"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc5",
+              "align": "start",
+              "content": [
+                "r1c5 "
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc5",
+              "align": "start",
+              "content": [
+                "r1c5 again "
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "tc13",
+      "content": [
+        "r1c13"
+      ]
+    },
+    {
+      "type": "table",
+      "content": [
+        {
+          "type": "table:row",
+          "marker": "tr",
+          "content": [
+            {
+              "type": "table:cell",
+              "marker": "tc1",
+              "align": "start",
+              "content": [
+                "r2c1"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc2",
+              "align": "start",
+              "content": [
+                "r2c2 with unclosed wj ",
+                {
+                  "type": "char",
+                  "marker": "wj",
+                  "closed": "false",
+                  "content": [
+                    "marker space after "
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc3",
+              "align": "start",
+              "content": [
+                "r2c3"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc4",
+              "align": "start",
+              "content": [
+                "r2c4"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc5",
+              "align": "start",
+              "content": [
+                "r2c5"
+              ]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc5",
+              "align": "start",
+              "content": [
+                "r2c5 again "
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "tc13",
+      "content": [
+        "r2c13"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "21",
+          "sid": "2SA 1:21"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Periphs"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "periph is unfortunately only supported in peripheral books (FRT, BAK, INT, and OTH) in Paratext 9.5. Paratext splits these peripheral books into a separate file for each peripheral when outputting to USX. Please see the OTH book for examples of periph markers."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "22",
+          "sid": "2SA 1:22"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Custom markers"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Following is a custom marker that is unknown (not in custom.sty or markers.ext). Paratext translates unknown markers to para type markers in USX. Custom markers must start with z. "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "zUnknownCustomMarker",
+      "content": [
+        "This text is ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "in the custom"
+          ]
+        },
+        " marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "23-24",
+          "sid": "2SA 1:23-24"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Verse range"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This is a verse range."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "25",
+          "sid": "2SA 1:25"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Refs"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Paratext 9.5 standard view does not support entering an independent ref marker; it just replaces the ref with its text content. However, it will allow an unclosed ref marker (the contents are all put in the text content of the marker; the default attribute loc does not work): "
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "ref",
+      "content": [
+        "2Sam 1:1|REV 1:1"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "Also, if you enter a ref marker in the unformatted view and don't touch it in the standard view, it will work:"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p"
+    },
+    {
+      "type": "para",
+      "marker": "ref",
+      "content": [
+        "2Sam 1:1|2SA 1:1",
+        {
+          "type": "unmatched",
+          "marker": "ref*"
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This crossref",
+        {
+          "type": "note",
+          "marker": "x",
+          "caller": "-",
+          "content": [
+            {
+              "type": "char",
+              "marker": "xo",
+              "closed": "false",
+              "content": [
+                "1:21 "
+              ]
+            },
+            {
+              "type": "char",
+              "marker": "xt",
+              "closed": "false",
+              "content": [
+                "2Sam 1:1; 2Sam 1:2-3."
+              ]
+            }
+          ]
+        },
+        " has a properly filled out xt marker. Paratext generates ref markers around each Scripture reference in the xt when outputting USX. The ref marker text content is the localized reference, and the loc attribute (default) is the canonized reference. When translated back to USFM, the refs inside the xt need to be removed; only the text content should remain."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "This paragraph has a properly filled out xt marker: ",
+        {
+          "type": "char",
+          "marker": "xt",
+          "closed": "true",
+          "content": [
+            "2Sam 1:2; 2Sam 1:3"
+          ]
+        },
+        ". Paratext generates ref markers around each Scripture reference in the xt when outputting USX the same way as it does for xt markers in crossrefs as detailed in the previous paragraph."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "b"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "26",
+          "sid": "2SA 1:26"
+        },
+        {
+          "type": "char",
+          "marker": "bd",
+          "closed": "false",
+          "content": [
+            "Sidebars"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "There is a closed sidebar after this paragraph. It has the category \\"Test Category\\". Note that Paratext's Standard view normalizes out any space before the closing cat marker, so there cannot be trailing space on the category unless you use a different view. It seems the spec allows trailing space there as part of the text content of the marker."
+      ]
+    },
+    {
+      "type": "sidebar",
+      "marker": "esb",
+      "category": "Test Category",
+      "content": [
+        {
+          "type": "para",
+          "marker": "p",
+          "content": [
+            "This paragraph is in the sidebar. The sidebar can contain many things like ",
+            {
+              "type": "char",
+              "marker": "wj",
+              "content": [
+                "character markers"
+              ]
+            },
+            ", ",
+            {
+              "type": "ms",
+              "marker": "qt1-s"
+            },
+            " milestones ",
+            {
+              "type": "ms",
+              "marker": "qt1-e"
+            },
+            ", and more paragraphs."
+          ]
+        },
+        {
+          "type": "para",
+          "marker": "p",
+          "content": [
+            "This is a second paragraph in the sidebar. The sidebar will end at esbe marker."
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        "There is a sidebar that is not closed after this paragraph. The entire rest of the chapter will be in this sidebar because sidebars automatically close at the end of the chapter."
+      ]
+    },
+    {
+      "type": "sidebar",
+      "marker": "esb",
+      "closed": "false",
+      "content": [
+        {
+          "type": "para",
+          "marker": "p",
+          "content": [
+            "This paragraph is in the sidebar."
+          ]
+        },
+        {
+          "type": "para",
+          "marker": "b"
+        },
+        {
+          "type": "para",
+          "marker": "p",
+          "content": [
+            {
+              "type": "verse",
+              "marker": "v",
+              "number": "27",
+              "sid": "2SA 1:27"
+            },
+            "This is ",
+            {
+              "type": "char",
+              "marker": "wj",
+              "content": [
+                "still"
+              ]
+            },
+            " in the sidebar."
+          ]
+        }
+      ]
+    }
+  ]
+}`);
+
+/**
+ * TestUSFM 2 Samuel 2 in USFM. Output from Platform.Bible; had to change `\\r\\n` to `\n`.
+ *
+ * Then aligned to canonical 3.1 output manually.
+ *
+ * Note: this content's whitespace is hand-normalized according to 3.1 `usx.rng` rules. We will deal
+ * with whitespace normalization issues later.
+ */
+const testUSFM2SACh2UsfmCanonical3_1 = `\\c 2 \\ca 2 ca
+\\cp 2 cp \\f + \\fr 2.0 \\ft For some reason, Paratext's backslash menu allows you to insert a note and nothing else in a cp marker. You can add \\wj character markers\\wj* inside the note.\\f* more \\wj cp\\wj* text
+\\p
+\\v 1 Notice that this chapter's attribute marker ca does not apply to the chapter as the altnumber attribute because the ca is not closed and therefore has the closed=\"true\" attribute. Because ca is not translated to an attribute, attribute marker cp also follows suit and is not translated into pubnumber. This prior separation of cp from the chapter marker allows Paratext 9.5 to understand that it should make cp an independent marker that may have other marker contents in it. But see chapter 3 in which Paratext 9.5 fails to recognize that cp should be an independent marker.
+\\p
+\\v 2
+\\v 3
+\\v 4
+\\v 5
+\\v 6
+\\v 7
+\\v 8
+\\v 9
+\\v 10
+\\v 11
+\\v 12
+\\v 13
+\\v 14
+\\v 15
+\\v 16
+\\v 17
+\\v 18
+\\v 19
+\\v 20
+\\v 21
+\\v 22
+\\v 23
+\\v 24
+\\v 25
+\\v 26
+\\v 27
+\\v 28
+\\v 29
+\\v 30
+\\v 31
+\\v 32
+`;
+
+const testUSFM2SACh2UsjCanonical3_1 = { ...testUSFM2SACh2Usj, version: '3.1' };
+
+/**
+ * TestUSFM 2 Samuel 3 in USFM. Output from Platform.Bible; had to change `\\r\\n` to `\n`.
+ *
+ * Then aligned to canonical 3.1 output manually.
+ *
+ * Note: this content's whitespace is hand-normalized according to 3.1 `usx.rng` rules. We will deal
+ * with whitespace normalization issues later.
+ */
+const testUSFM2SACh3UsfmCanonical3_1 = `\\c 3 \\ca 3 ca\\ca*
+\\cp 3 cp \\wj wj marker \\wj*
+\\p
+\\v 1 Notice that this chapter's attribute marker ca properly applies to the chapter as the altnumber attribute. However, its attribute marker cp should not be translated into pubnumber because it has markers in it. But Paratext 9.5 does not realize cp should be its own marker and improperly applies the part of cp before any markers as the pubnumber and puts the rest of the contents after the chapter marker.
+\\v 2
+\\v 3
+\\v 4
+\\v 5
+\\v 6
+\\v 7
+\\v 8
+\\v 9
+\\v 10
+\\v 11
+\\v 12
+\\v 13
+\\v 14
+\\v 15
+\\v 16
+\\v 17
+\\v 18
+\\v 19
+\\v 20
+\\v 21
+\\v 22
+\\v 23
+\\v 24
+\\v 25
+\\v 26
+\\v 27
+\\v 28
+\\v 29
+\\v 30
+\\v 31
+\\v 32
+\\v 33
+\\v 34
+\\v 35
+\\v 36
+\\v 37
+\\v 38
+\\v 39
+`;
+
+/**
+ * TestUSFM 2 Samuel 3 output in USJ from Platform.Bible (single backslash replaced with double
+ * backslash to properly escape quotes; version 3.1 replaced with 3.0 in the USJ marker because that
+ * is more accurate. The USJ version handling isn't great yet).
+ */
+const testUSFM2SACh3UsjCanonical3_1 = JSON.parse(`{
+  "type": "USJ",
+  "version": "3.1",
+  "content": [
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "3",
+      "altnumber": "3 ca",
+      "sid": " 3"
+    },
+    {
+      "type": "para",
+      "marker": "cp",
+      "content": [
+        "3 cp ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": [
+            "wj marker "
+          ]
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": ""
+        },
+        "Notice that this chapter's attribute marker ca properly applies to the chapter as the altnumber attribute. However, its attribute marker cp should not be translated into pubnumber because it has markers in it. But Paratext 9.5 does not realize cp should be its own marker and improperly applies the part of cp before any markers as the pubnumber and puts the rest of the contents after the chapter marker. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "3",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "5",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "6",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "7",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "8",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "9",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "10",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "11",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "12",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "13",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "14",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "15",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "16",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "17",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "18",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "19",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "20",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "21",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "22",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "23",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "24",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "25",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "26",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "27",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "28",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "29",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "30",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "31",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "32",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "33",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "34",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "35",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "36",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "37",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "38",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "39",
+          "sid": ""
+        }
+      ]
+    }
+  ]
+}`);
+
+// #region testUSFM test data - in canonical 3.1 format
+
 /**
  * Example with generated refs derived from Example 1 in the docs
  * https://docs.usfm.bible/usfm/3.1/char/features/ref.html with the following modifications:
@@ -4598,22 +7321,6 @@ describe('findAllNotes', () => {
   });
 });
 
-describe('Transform USJ 3.1 to spec USFM 3.1', () => {
-  test('toUsfm properly transforms generated refs', () => {
-    const usjDoc = new UsjReaderWriter(exampleGeneratedRefsUsj);
-
-    const resultingUsfm = usjDoc.toUsfm();
-    expect(resultingUsfm).toBe(exampleGeneratedRefsUsfm);
-  });
-
-  test('toUsfm properly transforms provided refs', () => {
-    const usjDoc = new UsjReaderWriter(exampleProvidedRefsUsj);
-
-    const resultingUsfm = usjDoc.toUsfm();
-    expect(resultingUsfm).toBe(exampleProvidedRefsUsfm);
-  });
-});
-
 describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
   const paratextUsjReaderWriterOptions = {
     // TODO: Generate Paratext-specific markers map and 3.0 markers map
@@ -4662,5 +7369,42 @@ describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
+  });
+});
+
+describe('Transform USJ 3.1 to spec USFM 3.1', () => {
+  test('toUsfm properly transforms canonical 2SA 1 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh1UsfmCanonical3_1);
+  });
+
+  test('toUsfm properly transforms canonical 2SA 2 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh2UsjCanonical3_1);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh2UsfmCanonical3_1);
+  });
+
+  test('toUsfm properly transforms canonical 2SA 3 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCanonical3_1);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh3UsfmCanonical3_1);
+  });
+
+  test('toUsfm properly transforms generated refs', () => {
+    const usjDoc = new UsjReaderWriter(exampleGeneratedRefsUsj);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(exampleGeneratedRefsUsfm);
+  });
+
+  test('toUsfm properly transforms provided refs', () => {
+    const usjDoc = new UsjReaderWriter(exampleProvidedRefsUsj);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(exampleProvidedRefsUsfm);
   });
 });
