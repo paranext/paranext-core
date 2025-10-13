@@ -193,23 +193,15 @@ export type NormalMarkerInfo = {
    */
   attributeMarkers?: string[];
   /**
-   * Whether the closing marker for this marker is explicitly considered optional in USFM. This
-   * should always be not present or `false` if there is no closing marker for the marker type of
-   * this marker.
+   * Whether the closing marker for this marker is considered optional in USFM. This should always
+   * be not present or `false` if there is no closing marker for the marker type of this marker.
    *
    * If this is `false` and a closing marker for this marker in USFM is _not_ present, the USX/USJ
    * for this marker should have the attribute `closed` set to `false`.
    *
-   * If this is `true` and a closing marker for this marker in USFM _is_ present, the USX/USJ for
-   * this marker should have the `closed` attribute set to `true`.
-   *
-   * Disclaimer: Currently, this is only determined for 3.1+. It is not very important for 3.0.x- as
-   * most or maybe all closing markers are optional in 3.0.x-.
-   *
-   * Disclaimer: The implications of this value regarding when the `closed` attribute should be
-   * present are interpreted from the contents of `usx.rng`. It is possible this has never been
-   * implemented, and this may need to be adjusted if the eventual implementation differs from these
-   * statements.
+   * If this is `true`, the `closed` attribute should be present if the presence of a closing marker
+   * for this marker in USFM does not match the assumption implied by
+   * {@link MarkersMap.shouldOptionalClosingMarkersBePresent}.
    *
    * If not present, defaults to `false`
    */
@@ -234,6 +226,9 @@ export type NormalMarkerInfo = {
    *
    * Note that the independent closing marker does not have a `*` at the end because it is not a
    * closing marker for `esb` but rather a completely separate marker that closes the `esb` marker.
+   *
+   * When outputting to USFM, the first independent closing marker listed in this array should be
+   * used.
    */
   independentClosingMarkers?: string[];
   /**
@@ -367,12 +362,56 @@ export type MarkerTypeInfoBase = {
   /**
    * List of attributes indicating whether to skip outputting this marker to USFM. If any of the
    * listed attributes is present on the marker, skip outputting this marker when converting to
-   * USFM.
+   * USFM. Only skip outputting the opening and closing marker representations, though; the content
+   * inside the marker (if present) should not be skipped.
    *
-   * This is used for markers with attributes that are not present in USFM. For example, if the
-   * `verse` marker has an `eid` attribute, it indicates it is a closing marker that is derived
-   * metadata in USX/USJ and is not present in USFM. Note that the `verse` marker does not have the
-   * `style="v"` attribute in this situation, so this list of attributes is on the marker type.
+   * This is used for certain markers that sometimes are normal markers but sometimes are derived
+   * metadata and are not present in USFM. These derived metadata markers are all identified by
+   * whether they have specific attributes on them.
+   *
+   * For example, if the `verse` marker has an `eid` attribute, it indicates it is a marker denoting
+   * the end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that
+   * the `verse` marker does not have the `style="v"` attribute in this situation, so this list of
+   * attributes is on the marker type.
+   *
+   * Following is an example of a derived metadata `verse` marker in USX:
+   *
+   * ```xml
+   * <para style="p">
+   *   <verse number="21" style="v" sid="2SA 1:21" />
+   *   This is verse 21.
+   *   <verse eid="2SA 1:21" />
+   * </para>;
+   * ```
+   *
+   * The equivalent in USFM would be:
+   *
+   * ```usfm
+   * \p
+   * \v 21 This is verse 21.
+   * ```
+   *
+   * An example with content inside the marker that should not be skipped is generated `ref`s. These
+   * `ref`s wrap project-localized Scripture references in `xt` markers and have computer-readable
+   * Scripture References as their `loc` attribute. These `ref`s that are derived metadata have the
+   * `gen` attribute set to `"true"` and can be removed if `gen="true"` is present.
+   *
+   * Following is an example of a generated `ref` in USX:
+   *
+   * ```xml
+   * <char style="xt">
+   *   <ref loc="2SA 1:1" gen="true">
+   *     2Sam 1:1
+   *   </ref>
+   *   ; <ref loc="2SA 1:2-3">2Sam 1:2-3</ref>.
+   * </char>;
+   * ```
+   *
+   * The equivalent in USFM would be:
+   *
+   * ```usfm
+   * \xt 2Sam 1:1; 2Sam 1:2-3.\xt*
+   * ```
    *
    * This property is not used when converting to USX or USJ.
    */
@@ -436,6 +475,37 @@ export type MarkersMap = {
    * If not present, defaults to `false`.
    */
   isSpaceAfterAttributeMarkersContent?: boolean;
+  /**
+   * Whether markers with optional closing markers (see
+   * {@link NormalMarkerInfo.isClosingMarkerOptional}) should still be explicitly closed in USFM.
+   * That is, whether markers with optional closing markers still need the `closed` attribute set to
+   * `"false"` in USX/USJ if the closing marker is not present in USFM.
+   *
+   * In other words, this setting determines whether markers with optional closing markers should be
+   * assumed to be explicitly closed (meaning the closing marker is present in USFM) when
+   * transforming USX/USJ to USFM unless otherwise indicated by the `closed` attribute.
+   *
+   * If this is `true` (matches Paratext 9.4), markers with optional closing markers are treated
+   * like other markers in that they are assumed to be explicitly closed in USFM unless otherwise
+   * indicated:
+   *
+   * - If they are not explicitly closed in USFM, they should have `closed="false"`
+   * - If they are explicitly closed in USFM, they do not need `closed="true"`
+   *
+   * If this is `false` (matches specification), markers with optional closing markers are assumed
+   * not to be explicitly closed in USFM unless otherwise indicated:
+   *
+   * - If they are not explicitly closed in USFM, they do not need `closed="false"`
+   * - If they are explicitly closed in USFM, they should have `closed="true"`
+   *
+   *   - Disclaimer: It is not clear that `closed="true"` should be present in this case according to
+   *       `usx.rng`; it seems `usx.rng` indicates that optional closing markers should never be
+   *       output to USFM. It is possible that `usx.rng` considers this to be a case where
+   *       preserving the exact USFM is not important.
+   *
+   * If not present, defaults to `false`.
+   */
+  shouldOptionalClosingMarkersBePresent?: boolean;
   /**
    * Map whose keys are the marker names and whose values are information about that marker
    *
