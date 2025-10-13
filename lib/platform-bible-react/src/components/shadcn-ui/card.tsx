@@ -11,7 +11,8 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        'pr-twp tw-rounded-lg tw-border tw-bg-card tw-text-card-foreground tw-shadow-sm',
+        'pr-twp', // CUSTOM
+        'tw-rounded-xl tw-border tw-bg-card tw-text-card-foreground tw-shadow',
         className,
       )}
       {...props}
@@ -25,7 +26,11 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('pr-twp tw-flex tw-flex-col tw-space-y-1.5 tw-p-6', className)}
+      className={cn(
+        'pr-twp', // CUSTOM
+        'tw-flex tw-flex-col tw-space-y-1.5 tw-p-6',
+        className,
+      )}
       {...props}
     />
   ),
@@ -33,36 +38,49 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 CardHeader.displayName = 'CardHeader';
 
 /** @inheritdoc Card */
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
+const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <h3
+    <div
       ref={ref}
       className={cn(
-        'pr-twp tw-text-2xl tw-font-semibold tw-leading-none tw-tracking-tight',
+        'pr-twp', // CUSTOM
+        'tw-font-semibold tw-leading-none tw-tracking-tight',
         className,
       )}
       {...props}
-    >
-      {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
-      {props.children}
-    </h3>
+    />
   ),
 );
 CardTitle.displayName = 'CardTitle';
 
 /** @inheritdoc Card */
-const CardDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('pr-twp tw-text-sm tw-text-muted-foreground', className)} {...props} />
-));
+const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(
+        'pr-twp', // CUSTOM
+        'tw-text-sm tw-text-muted-foreground',
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
 CardDescription.displayName = 'CardDescription';
 
 /** @inheritdoc Card */
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />
+    <div
+      ref={ref}
+      className={cn(
+        'pr-twp', // CUSTOM
+        'tw-p-6 tw-pt-0',
+        className,
+      )}
+      {...props}
+    />
   ),
 );
 CardContent.displayName = 'CardContent';
@@ -72,7 +90,11 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('pr-twp tw-flex tw-items-center tw-p-6 tw-pt-0', className)}
+      className={cn(
+        'pr-twp', // CUSTOM
+        'tw-flex tw-items-center tw-p-6 tw-pt-0',
+        className,
+      )}
       {...props}
     />
   ),
