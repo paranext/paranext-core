@@ -18,6 +18,7 @@ import {
   VerseRefOffset,
 } from './usj-reader-writer.model';
 import { SortedNumberMap } from '../sorted-number-map';
+import { extractFootnotesFromUsjContent } from './footnote-util';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
@@ -228,6 +229,25 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   // #endregion
 
   // #region Walk the node tree
+
+  /**
+   * Extract textual notes (aka, "footnotes") from a full USJ object.
+   *
+   * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
+   */
+  findAllNotes(): MarkerObject[] {
+    return extractFootnotesFromUsjContent(this.usj?.content);
+
+    // Note that the following could be used instead of the above call to
+    // extractFootnotesFromUsjContent, and that function could be removed. However, this is about
+    // 100x slower than the custom traversal in extractFootnotesFromUsjContent.
+    // return this.findAll('$.content..[?(@.type=="note")]');
+    // This would depend on implementing findAll in this class:
+    // findAll<T>(jsonPathQuery: string): T[] {
+    //   const results = JSONPath({ path: jsonPathQuery, json: this.usj, wrap: true });
+    //   return Array.isArray(results) ? results as T[] : [];
+    // }
+  }
 
   /**
    * Given the starting point of a tree to consider (`node`), find the rightmost MarkerObject from

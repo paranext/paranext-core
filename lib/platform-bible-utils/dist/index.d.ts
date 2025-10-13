@@ -3494,6 +3494,12 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private static convertWorkingStackToJsonPath;
 	private convertJsonPathToWorkingStack;
 	/**
+	 * Extract textual notes (aka, "footnotes") from a full USJ object.
+	 *
+	 * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
+	 */
+	findAllNotes(): MarkerObject[];
+	/**
 	 * Given the starting point of a tree to consider (`node`), find the rightmost MarkerObject from
 	 * the array of `content`. In the following example, this would be "J".
 	 *
