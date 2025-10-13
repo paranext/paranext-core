@@ -24,11 +24,11 @@
           },
           "platformScriptureEditor.insert": {
             "label": "%webView_platformScriptureEditor_insert%",
-            "order": 6
+            "order": 5
           },
           "platformScriptureEditor.info": {
             "label": "%webView_platformScriptureEditor_info%",
-            "order": 7
+            "order": 6
           }
         },
         "groups": {
