@@ -1,0 +1,170 @@
+\id 2SA - TJs USFM Test
+\toc3 2Sam
+\toc2 2 Sam
+\toc1 2 Samuel
+\c 1
+ \ca 1 ca\ca*
+\cp 1 cp
+\s1 This chapter and the next two chapters have lots of challenging USFM test markers and such in them.
+\p
+\v 1 \bd usfm marker
+\p In USFM, the usfm marker should come right after the id marker at the top of the page. According to spec, it should only occur if the USFM version is not 3.0; usfm 3.0 should never occur, and anything else like usfm 3.1 should always be present. In USX, this USFM marker should be transformed into the top-level usx marker that contains all the content of the document including the id marker, and the version from the usfm marker should be set as the version attribute on the usx marker. However, Paratext handles this marker differently. When output to USX, the usfm marker is transformed into a para marker with style="usfm", and the version is the text content of the marker. Paratext does not remove the usfm marker, and it does not set the usx marker's version to the version specified by the usfm marker; it is always 3.0.
+\b
+\p
+\v 2 \bd Footnotes and crossrefs:
+\p The footnote in this paragraph has as category without markers in its content, so it should be an attribute on the footnote\f + \cat things\cat*\fr 1:12 \ft Some footnote text.\f* instead of its own standalone marker. There is no space after the cat marker, which is the canonical form in the spec. Note the letter before the footnote and the space after.
+\p The end footnote in this paragraph has as category without markers in its content but with a space after, so it should be an attribute on the footnote \fe + \cat things\cat* \fr 1:12 \ft More footnote text. \fp Another \+wj paragraph\+wj* in the footnote.\fe* instead of its own standalone marker. However, Paratext seems to interpret the space after as part of the footnote text content instead of an optional space (that is not output in canonical form) on the attribute marker according to spec. Note the space before the footnote and the space after. Also note the fp marker in the footnote is a character marker that looks like a paragraph, so character markers inside it must have + in USFM 3.0.
+\p The footnote in this paragraph has a category with markers in its content, so it should be its own standalone marker \f + \cat \+wj stuff \+wj*\cat* \fr 1:2 \ft Other footnote text.\f*. Note the space before the footnote and the period after.
+\p The crossref in this verse has a category without markers in its content, so it should be an attribute on the crossref\x - \xo 1.2\xo* \xt Crossref text.\xt*\x*. It also has closed character markers that do not need to be closed in 3.1 even though other markers need to be closed in 3.1. Note the letter before the crossref and the period after.
+\b
+\p
+\v 3 \bd Character markers:
+\p In\wj si\wj*de, \wj WholeWord\wj*, \wj Span Words\wj*, Pa\wj rt Span wor\wj*ds
+\p Empty character marker here: \wj \wj*
+\p w \w marker|stuff\w* with default attribute (note default attribute with normal attribute syntax gets normalized to default attribute)
+\p w \w marker|stuff \w* with a space at the end of the default attribute. Note this space is on the default attribute. With non-default attribute syntax, any space before the closing marker is removed as part of normalization.
+\p w \w marker|strong="H1234,G1234" lemma="markerLemma" srcloc="Location"\w* with multiple attributes. Note they are not in the typical order of lemma, strong, srcloc
+\p jmp \jmp marker|2SA 1:1\jmp* with default attribute - note the default attribute name changes between 3.0 link-href and 3.1 href
+\p jmp \jmp marker|link-href="2SA 1:2" link-title="My Title" link-id="3.0 link"\jmp* with multiple attributes with 3.0 names - note the attribute name changes between 3.0 and 3.1
+\p jmp \jmp marker|href="2SA 1:3" id="3.1 link"\jmp* with multiple attributes with 3.1 names - note the attribute name changes between 3.0 and 3.1. For some reason, Paratext 9.5 (with USFM 3.0) is automatically removing the title attribute, so it is not present.
+\p jmp \jmp marker|x-user-defined:thing\jmp* with a user-defined URI prefix. Must begin with x-.
+\p jmp \jmp marker|prj:zzz6 2SA 1:4\jmp* with a prj URI prefix. Links to a reference in another project.
+\p jmp \jmp marker|x-prj:zzz6 2SA 1:5\jmp* with an x-prj URI prefix. The 3.1 docs mention that this should link to another project, but the 3.1 usx.rng doesn't seem to indicate it is allowed unlike prj: which is in the 3.1 usx.rng.
+\p jmp \jmp |2SA 1:6\jmp* marker that has no text content.
+\p jmp \jmp marker|figures/platform-bible-discord.png\jmp* with a file path in it.
+\p jmp \jmp marker|#fake-named-target-id\jmp* with a named target in it (I do not know how to define a named target or how this differs than listing an anchor in link-id).
+\p Non-jmp wj \wj marker|link-href="2SA 1:7"\wj* with link-href on it. The 3.0 spec says this should be considered a link, and Paratext 9.5 treats it that way. However, the 3.1 spec does not indicate such.
+\p k \k marker|key="something"\k* with key attribute (default in 3.1+; did not exist in 3.0-)
+\p Empty character marker here \wj \wj* has a structure space in it unlike milestones which do not.
+\p qt \qt marker\qt* that is a character marker that looks like it is a milestone.
+\p Nested \wj character \+nd markers\+nd* must\wj* have + in 3.0-, but it is optional in 3.1+.
+\p Character markers \wj inside notes\f + \fr 1:3 \ft Footnote text with a \wj character marker\wj*\f* inside character markers\wj* are not considered nested, so it must just be the direct parent that is considered for nesting.
+\p Character \wj markers technically must close in 3.1+, but unclosed character markers can be handled the same as in 3.0. They should automatically close at the end of the paragraph and should be labeled as not closed in USX and USJ.
+\b
+\p
+\v 4 \bd Milestones:
+\p This line has \qt-s\* two milestones \qt-e\* without attributes. There are content spaces on both sides of each milestone. Note that, unlike with character markers, there is no structural space before the closing marker when there are no attributes; it is normalized out.
+\p This line has \qt-s |TJ \*two milestones\qt-e\*, the first of which has default who attribute. There is a content space before the first milestone only. Note that there is a structural space after the opening marker when there are attributes. Also note that the space before the closing marker is part of the default attribute as with character markers.
+\p This line has a \qt-s |sid="Some quote" who="TJ"\*starting milestone with sid and who.
+\p This line has no milestone.
+\p This line has an \qt-e |Some quote\*ending milestone with default eid attribute.
+\p This line has an opening ts milestone \ts-s |Translator's section\* with default sid and closing ts milestone \ts-e |Translator's section\* with default eid. Note that the default attribute can have spaces in it.
+\p This line has t-s \t-s \* and t-e
+\p For some reason, Paratext does not recognize the ts \ts \*, t-s \t-s \*, or t-e \t-e \* markers. ts is a standalone translator's section milestone, and I guess the others are shorthands for ts-s and ts-e. Paratext puts a structural space before the closing marker on all three even though it should not be there.
+\b
+\p
+\v 5
+\b
+\p
+\v 6 \bd Leading attributes
+\p See the id marker at the top of this book for its code leading attribute
+\p See the chapter marker at the top of this chapter for its number leading attribute.
+\p See the many verse markers in this chapter for their number leading attribute.
+\p See the Footnotes and crossrefs section for footnote and crossref caller leading attribute.
+\b
+\p
+\v 7 \bd Text content attributes
+\p periph has alt as its text content attribute, but periph is unfortunately only supported in peripheral books (FRT, BAK, INT, and OTH) in Paratext 9.5. Paratext splits these peripheral books into a separate file for each peripheral when outputting to USX. Please see the OTH book for examples of periph markers. Note that periph's id attribute cannot use default attribute syntax; it must be named.
+\p usfm, usx, and USJ markers have version as their text content attribute, but the usfm marker is unfortunately not present on this document because it uses USFM 3.0, so spec indicates it should not be present.
+\b
+\p
+\v 8 \bd Custom attributes
+\p This \wj character marker|x-custom-attribute-1="Stuff" z-custom-attribute-2="Things"\wj* has two custom attributes. Custom attributes are supposed to start with x or z according to spec.
+\p This \wj character marker|custom-attribute-no-prefix="Bad" custom-attribute-no-prefix-2="Attributes"\wj* has two unknown attributes that do not start with x or z. Paratext treats them just like custom attributes.
+\b
+\p
+\v 9 \bd Attribute markers
+\p See the Footnotes and crossrefs section for testing the cat marker on footnotes and crossrefs.
+\p See the chapter marker at the top of this chapter for testing ca and cp being applied to the chapter marker as attribute markers.
+\p See the chapter marker at the top of chapter 2 for not closing ca which leads it to be its own separate marker. Then cp is also its own separate marker afterward and can contain other markers as content.
+\p See the chapter marker at the top of chapter 3 for testing cp after the chapter marker with content in it, which should make the cp stay as its own independent marker.
+\p Note: All remaining tests of attribute markers will also have leading attributes because v and c are the only markers left with attribute markers to test, and they both have leading attributes.
+\p
+\v 10 \va 10 va\va*\vp 10 vp\vp*This verse marker has simple va and vp with no space between or after. Paratext and the spec treat this the same way: both markers turn into attributes on the marker in USX and USJ, and there are no spaces in the text content.
+\p
+\v 11 \va 11 va\va*\vp 11 vp\vp* This verse marker has simple va and vp with no space between but with a space after. The spec indicates there is optional whitespace after attribute markers (one space is output after attribute markers except cat in canonical form), so this space should not be in the text content. However, Paratext treats all spaces after attribute markers as text content, so Paratext will output a space after the vp.
+\p
+\v 12 \va 12 va\va* \vp 12 vp\vp*This verse marker has simple va and vp with a space between but not after. This space should be ignored as part of optional structural space according to spec, but Paratext treats it as text content. As such, Paratext will output altnumber on the verse marker, but the vp will be its own separate marker.
+\p
+\v 13 \va 13 \+wj va \+wj*\va*\vp 13 vp\vp*This verse marker has va with marker content in it, which makes it a standalone marker. Random \va va\va* without the verse marker also becomes a standalone marker. va does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext. The vp after the va is standalone because it is no longer connected to the verse marker.
+\p
+\v 14 \va 14\va*\vp 14 \+wj vp\+wj*\vp*This verse marker has vp with marker content in it, which makes it a standalone marker. Random \vp vp\vp* without the verse marker also becomes a standalone marker. The va before the vp appropriately becomes altnumber on the verse marker.
+\p
+\v 15 \va 15 va \vp 15 vp This verse marker has va and vp without closing markers. Neither of these markers becomes an attribute in USX or USJ because both have closed="false" and are therefore not simple markers.
+\p This paragraph contains a random \ca ca with an \+wj inline marker inside\+wj*\ca* not after the chapter marker, which becomes a standalone marker. ca does not seem to be allowed to be its own standalone marker according to spec, but it works in Paratext.
+\cp This paragraph is a random cp with an \wj inline marker inside\wj* not after the chapter marker, which becomes a standalone marker.
+\b
+\p
+\v 16 \bd Whitespace
+\p Tilde~should~be a NBSP in USX and USJ
+\p Double slash should be an optbreak in USX and USJ. Here // is one with spaces around it. Here//is one without spaces around it.
+\p Paratext 9.5's unformatted view leaves a space after the number on verse markers, but the standard view does not. This seems like a bug in the unformatted view.
+\p
+\v 17
+\p TODO: add some whitespace character tests
+\b
+\p
+\v 18 \bd Figures
+\p There is a figure here \fig |src="platform-bible-discord.png" size="col" ref="1.13"\fig* . It has a space on both sides. Only the three required attributes are present and in the order in which they are listed in the spec. The attribute src in USFM should be file in USX and USJ.
+\p There is a figure here\fig Caption Here|alt="Description Here" src="platform-bible-discord.png" size="span" loc="Location here" copy="Copyright here" ref="1.13"\fig*. It has no spaces around it. All six attributes are present and are not in the order in which they are listed in the spec. The attribute src in USFM should be file in USX and USJ.
+\b
+\p
+\v 19 \bd Lists
+\p Following is a normal list with a header, entries, and footer. It has – at the start of each line like in the documentation example.
+\lh Header for the \wj normal\wj* list:
+\li1 –First \wj list\wj* item
+\li2 –Subpoint on the first list item
+\li3 –Subpoint on the \wj subpoint\wj* on the first list item
+\li1 –Second list item
+\li1 –Third list item
+\lf Footer for the normal list.
+\p Following is an embedded list with just entries.
+\lim1 First embedded list item
+\lim1 Second embedded list item
+\lim1 Third embedded list item
+\lim2 Subpoint on the third embedded list item
+\lim3 Subpoint on the subpoint on the third embedded list item
+\b
+\p
+\v 20 \bd Tables
+\p Following is a table with various kinds of cells and a header row. Paratext only supports th1 through th12 because that is all that is in usfm.sty. Note that USFM 3.1 does not require closing markers on table cells.
+\tr \th1 Header 1\th2 Header 2 space after \thc3-4 Header 3-4 centered\thr5 Header 5 right
+\tr \tc1 Row 1 cell 1\tc2 Row 1 cell 2 space after \thc3 Row 1 cell 3 centered\thr4-5 Row 1 cell 4-5 right
+\tr \tcr1-4 Row 2 cell 1-4 right\tc5 Row 2 cell 5
+\p Following is a table with 6 columns but no header row. Paratext does not support tc13 or higher and therefore makes two separate tables of one row each on this line, but it interestingly allows having multiple tc5 cells in one row. The spec does not appear to impose any limits on the column number.
+\tr \tc1 r1c1\tc2 r1c2 with closed wj \wj marker\wj* space after \tc3 r1c3\tc4 r1c4\tc5 r1c5 \tc5 r1c5 again \tc13 r1c13
+\tr \tc1 r2c1\tc2 r2c2 with unclosed wj \wj marker space after \tc3 r2c3\tc4 r2c4\tc5 r2c5\tc5 r2c5 again \tc13 r2c13
+\b
+\p
+\v 21 \bd Periphs
+\p periph is unfortunately only supported in peripheral books (FRT, BAK, INT, and OTH) in Paratext 9.5. Paratext splits these peripheral books into a separate file for each peripheral when outputting to USX. Please see the OTH book for examples of periph markers.
+\b
+\p
+\v 22 \bd Custom markers
+\p Following is a custom marker that is unknown (not in custom.sty or markers.ext). Paratext translates unknown markers to para type markers in USX. Custom markers must start with z. \zUnknownCustomMarker This text is \wj in the custom\wj* marker.
+\b
+\p
+\v 23-24 \bd Verse range
+\p This is a verse range.
+\b
+\p
+\v 25 \bd Refs
+\p Paratext 9.5 standard view does not support entering an independent ref marker; it just replaces the ref with its text content. However, it will allow an unclosed ref marker (the contents are all put in the text content of the marker; the default attribute loc does not work): \ref 2Sam 1:1|REV 1:1
+\p Also, if you enter a ref marker in the unformatted view and don't touch it in the standard view, it will work:
+\p \ref 2Sam 1:1|2SA 1:1\ref*
+\p This crossref\x - \xo 1:21 \xt 2Sam 1:1; 2Sam 1:2-3.\x* has a properly filled out xt marker. Paratext generates ref markers around each Scripture reference in the xt when outputting USX. The ref marker text content is the localized reference, and the loc attribute (default) is the canonized reference. When translated back to USFM, the refs inside the xt need to be removed; only the text content should remain.
+\p This paragraph has a properly filled out xt marker: \xt 2Sam 1:2; 2Sam 1:3\xt*. Paratext generates ref markers around each Scripture reference in the xt when outputting USX the same way as it does for xt markers in crossrefs as detailed in the previous paragraph.
+\b
+\p
+\v 26 \bd Sidebars
+\p There is a closed sidebar after this paragraph. It has the category "Test Category". Note that Paratext's Standard view normalizes out any space before the closing cat marker, so there cannot be trailing space on the category unless you use a different view. It seems the spec allows trailing space there as part of the text content of the marker.
+\esb \cat Test Category\cat*
+\p This paragraph is in the sidebar. The sidebar can contain many things like \wj character markers\wj*, \qt1-s\* milestones \qt1-e\*, and more paragraphs.
+\p This is a second paragraph in the sidebar. The sidebar will end at esbe marker.
+\esbe
+\p There is a sidebar that is not closed after this paragraph. The entire rest of the chapter will be in this sidebar because sidebars automatically close at the end of the chapter.
+\esb
+\p This paragraph is in the sidebar.
+\b
+\p
+\v 27 This is \wj still\wj* in the sidebar.
