@@ -33,7 +33,7 @@
 \p jmp \jmp marker|figures/platform-bible-discord.png\jmp* with a file path in it.
 \p jmp \jmp marker|#fake-named-target-id\jmp* with a named target in it (I do not know how to define a named target or how this differs than listing an anchor in link-id).
 \p Non-jmp wj \wj marker|link-href="2SA 1:7"\wj* with link-href on it. The 3.0 spec says this should be considered a link, and Paratext 9.5 treats it that way. However, the 3.1 spec does not indicate such.
-\p k \k marker|key="something"\k* with key attribute (default in 3.1+; did not exist in 3.0-)
+\p k \k marker|something\k* with key attribute (default in 3.1+; did not exist in 3.0-)
 \p Empty character marker here \wj \wj* has a structure space in it unlike milestones which do not.
 \p qt \qt marker\qt* that is a character marker that looks like it is a milestone.
 \p Nested \wj character \+nd markers\+nd* must\wj* have + in 3.0-, but it is optional in 3.1+.

@@ -332,7 +332,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "2SA 1:1",
+          "href": "2SA 1:1",
           "content": ["marker"]
         },
         " with default attribute - note the default attribute name changes between 3.0 link-href and 3.1 href"
@@ -377,7 +377,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "x-user-defined:thing",
+          "href": "x-user-defined:thing",
           "content": ["marker"]
         },
         " with a user-defined URI prefix. Must begin with x-."
@@ -391,7 +391,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "prj:zzz6 2SA 1:4",
+          "href": "prj:zzz6 2SA 1:4",
           "content": ["marker"]
         },
         " with a prj URI prefix. Links to a reference in another project."
@@ -405,7 +405,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "x-prj:zzz6 2SA 1:5",
+          "href": "x-prj:zzz6 2SA 1:5",
           "content": ["marker"]
         },
         " with an x-prj URI prefix. The 3.1 docs mention that this should link to another project, but the 3.1 usx.rng doesn't seem to indicate it is allowed unlike prj: which is in the 3.1 usx.rng."
@@ -419,7 +419,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "2SA 1:6"
+          "href": "2SA 1:6"
         },
         " marker that has no text content."
       ]
@@ -432,7 +432,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "figures/platform-bible-discord.png",
+          "href": "figures/platform-bible-discord.png",
           "content": ["marker"]
         },
         " with a file path in it."
@@ -446,7 +446,7 @@
         {
           "type": "char",
           "marker": "jmp",
-          "link-href": "#fake-named-target-id",
+          "href": "#fake-named-target-id",
           "content": ["marker"]
         },
         " with a named target in it (I do not know how to define a named target or how this differs than listing an anchor in link-id)."
