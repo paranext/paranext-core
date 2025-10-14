@@ -48,52 +48,58 @@ export function FootnoteList({
     ? localizeString(localizedStrings, '%webView_footnoteList_header%')
     : 'Footnotes';
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
-  const handleFootnoteClick = (footnote: MarkerObject) => {
+  const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
     if (onFootnoteSelected) {
-      onFootnoteSelected(footnote);
+      onFootnoteSelected(footnote, index, listId);
     }
   };
 
   return (
     <>
-      {layout === 'vertical' && <div className="tw-mb-2 tw-font-semibold">{headerText}</div>}
+      {layout === 'vertical' && <h2 className="tw-mb-2 tw-font-semibold">{headerText}</h2>}
       <div
         role="listbox"
         aria-label="Footnotes"
-        className={cn(
-          layout === 'horizontal' ? 'tw-table tw-border-collapse' : 'tw-flex tw-flex-col tw-gap-1',
-          !suppressFormatting && 'formatted-font',
-          className,
-        )}
+        className={cn('tw-h-full tw-overflow-y-auto', className)}
       >
-        {footnotes.map((footnote, idx) => {
-          const isSelected = footnote === selectedFootnote;
-          const key = `${listId}-${idx}`;
-          return (
-            <Card
-              role="option"
-              aria-selected={isSelected}
-              key={key}
-              data-marker={footnote.marker}
-              className={cn(
-                onFootnoteSelected && 'tw-cursor-pointer',
-                'tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
-                isSelected && 'tw-bg-muted/70',
-                layout === 'horizontal'
-                  ? 'horizontal tw-table-row'
-                  : 'vertical tw-block tw-px-1 tw-py-0 tw-text-sm',
-              )}
-              onClick={() => handleFootnoteClick(footnote)}
-            >
-              <FootnoteItem
-                footnote={footnote}
-                layout={layout}
-                formatCaller={() => handleFormatCaller(footnote.caller, idx)}
-                showMarkers={showMarkers}
-              />
-            </Card>
-          );
-        })}
+        <div
+          className={cn(
+            layout === 'horizontal'
+              ? 'tw-table tw-border-collapse'
+              : 'tw-flex tw-flex-col tw-gap-1',
+            !suppressFormatting && 'formatted-font',
+          )}
+        >
+          {footnotes.map((footnote, idx) => {
+            const isSelected = footnote === selectedFootnote;
+            const key = `${listId}-${idx}`;
+            return (
+              <Card
+                role="option"
+                aria-selected={isSelected}
+                key={key}
+                data-marker={footnote.marker}
+                data-state={isSelected ? 'selected' : undefined}
+                className={cn(
+                  'data-[state=selected]:tw-bg-muted',
+                  onFootnoteSelected && 'tw-cursor-pointer hover:tw-bg-muted/50',
+                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
+                  layout === 'horizontal'
+                    ? 'horizontal tw-table-row'
+                    : 'vertical tw-block tw-px-1 tw-py-0 tw-text-sm',
+                )}
+                onClick={() => handleFootnoteClick(footnote, idx)}
+              >
+                <FootnoteItem
+                  footnote={footnote}
+                  layout={layout}
+                  formatCaller={() => handleFormatCaller(footnote.caller, idx)}
+                  showMarkers={showMarkers}
+                />
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </>
   );
