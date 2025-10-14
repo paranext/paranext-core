@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Platform.Bible from source URI Handler
+Comment=Handle Platform.Bible Protocol Links
+Exec=REPO_PATH/node_modules/electron/dist/electron --no-sandbox REPO_PATH %u
+Type=Application
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/platform-bible;
