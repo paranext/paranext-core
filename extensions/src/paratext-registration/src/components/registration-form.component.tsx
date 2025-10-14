@@ -68,7 +68,10 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
   '%paratextRegistration_alert_validRegistration%',
   '%paratextRegistration_alert_validRegistration_description%',
+  '%paratextRegistration_button_cancel%',
+  '%paratextRegistration_button_change%',
   '%paratextRegistration_button_saveAndRestart%',
+  '%paratextRegistration_button_restarting%',
   '%paratextRegistration_label_emailAddress%',
   '%paratextRegistration_label_registrationCode%',
   '%paratextRegistration_label_registrationName%',
@@ -436,13 +439,13 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             <div className="tw-flex tw-gap-3">
               {currentRegistrationData.code !== '' && (
                 <Button variant="outline" onClick={cancelEditing}>
-                  Cancel
+                  {localizedStrings['%paratextRegistration_button_cancel%']}
                 </Button>
               )}
               <Button variant="default" disabled={isButtonDisabled} onClick={saveAndRestart}>
                 {saveState === SaveState.IsRestarting ? (
                   <>
-                    <Spinner /> Restarting...
+                    <Spinner /> {localizedStrings['%paratextRegistration_button_restarting%']}
                   </>
                 ) : (
                   localizedStrings['%paratextRegistration_button_saveAndRestart%']
@@ -451,7 +454,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             </div>
           ) : (
             <Button variant="default" onClick={onClickChange}>
-              <PenIcon /> Change
+              <PenIcon /> {localizedStrings['%paratextRegistration_button_change%']}
             </Button>
           )}
         </Grid>
