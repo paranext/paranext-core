@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { ComponentProps, useCallback, useState } from 'react';
 import {
   UiLanguageSelector,
   LanguageInfo,
@@ -52,6 +53,51 @@ const mockKnownLanguages: Record<string, LanguageInfo> = {
   },
 };
 
+const handleLanguagesChange = (languages: string[]) => {
+  console.log('Languages changed to:', languages);
+};
+
+// Reusable wrapper component with state management
+function UiLanguageSelectorWithState({
+  initialPrimaryLanguage = 'en',
+  initialFallbackLanguages = [],
+  ...props
+}: {
+  initialPrimaryLanguage?: string;
+  initialFallbackLanguages?: string[];
+} & Omit<
+  ComponentProps<typeof UiLanguageSelector>,
+  | 'primaryLanguage'
+  | 'fallbackLanguages'
+  | 'onLanguagesChange'
+  | 'onPrimaryLanguageChange'
+  | 'onFallbackLanguagesChange'
+>) {
+  const [primaryLanguage, setPrimaryLanguage] = useState(initialPrimaryLanguage);
+  const [fallbackLanguages, setFallbackLanguages] = useState(initialFallbackLanguages);
+
+  const handlePrimaryLanguageChange = useCallback((languageCode: string) => {
+    setPrimaryLanguage(languageCode);
+    console.log('Primary language changed to:', languageCode);
+  }, []);
+
+  const handleFallbackLanguagesChange = useCallback((fallbackLangs: string[]) => {
+    setFallbackLanguages(fallbackLangs);
+    console.log('Fallback languages changed to:', fallbackLangs);
+  }, []);
+
+  return (
+    <UiLanguageSelector
+      {...props}
+      primaryLanguage={primaryLanguage}
+      fallbackLanguages={fallbackLanguages}
+      onLanguagesChange={handleLanguagesChange}
+      onPrimaryLanguageChange={handlePrimaryLanguageChange}
+      onFallbackLanguagesChange={handleFallbackLanguagesChange}
+    />
+  );
+}
+
 const meta: Meta<typeof UiLanguageSelector> = {
   title: 'Advanced/UI Language Selector',
   component: UiLanguageSelector,
@@ -73,19 +119,10 @@ type Story = StoryObj<typeof UiLanguageSelector>;
 
 export const Default: Story = {
   render: () => (
-    <UiLanguageSelector
+    <UiLanguageSelectorWithState
       knownUiLanguages={mockKnownLanguages}
-      primaryLanguage="en"
-      fallbackLanguages={[]}
-      onLanguagesChange={(languages: string[]) => console.log('Languages changed to:', languages)}
-      onPrimaryLanguageChange={(languageCode: string) =>
-        console.log('Primary language changed to:', languageCode)
-      }
-      onFallbackLanguagesChange={(fallbackLanguages: string[]) =>
-        console.log('Fallback languages changed to:', fallbackLanguages)
-      }
       localizedStrings={{
-        '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Select fallback languages',
+        '%settings_uiLanguageSelector_fallbackLanguages%': 'Fallback languages',
       }}
     />
   ),
@@ -100,19 +137,12 @@ export const Default: Story = {
 
 export const WithFallbackLanguages: Story = {
   render: () => (
-    <UiLanguageSelector
+    <UiLanguageSelectorWithState
       knownUiLanguages={mockKnownLanguages}
-      primaryLanguage="es"
-      fallbackLanguages={['en', 'pt']}
-      onLanguagesChange={(languages: string[]) => console.log('Languages changed to:', languages)}
-      onPrimaryLanguageChange={(languageCode: string) =>
-        console.log('Primary language changed to:', languageCode)
-      }
-      onFallbackLanguagesChange={(fallbackLanguages: string[]) =>
-        console.log('Fallback languages changed to:', fallbackLanguages)
-      }
+      initialPrimaryLanguage="es"
+      initialFallbackLanguages={['en', 'pt']}
       localizedStrings={{
-        '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Seleccionar idiomas de respaldo',
+        '%settings_uiLanguageSelector_fallbackLanguages%': 'Idiomas de respaldo de Interfaz',
       }}
     />
   ),
@@ -130,19 +160,10 @@ export const LimitedLanguages: Story = {
     const limitedLanguages = Object.fromEntries(Object.entries(mockKnownLanguages).slice(0, 4));
 
     return (
-      <UiLanguageSelector
+      <UiLanguageSelectorWithState
         knownUiLanguages={limitedLanguages}
-        primaryLanguage="en"
-        fallbackLanguages={[]}
-        onLanguagesChange={(languages: string[]) => console.log('Languages changed to:', languages)}
-        onPrimaryLanguageChange={(languageCode: string) =>
-          console.log('Primary language changed to:', languageCode)
-        }
-        onFallbackLanguagesChange={(fallbackLanguages: string[]) =>
-          console.log('Fallback languages changed to:', fallbackLanguages)
-        }
         localizedStrings={{
-          '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Select fallback languages',
+          '%settings_uiLanguageSelector_fallbackLanguages%': 'Fallback Languages',
         }}
       />
     );
@@ -167,19 +188,12 @@ export const AsianLanguages: Story = {
     };
 
     return (
-      <UiLanguageSelector
+      <UiLanguageSelectorWithState
         knownUiLanguages={asianLanguages}
-        primaryLanguage="zh-hans"
-        fallbackLanguages={['en']}
-        onLanguagesChange={(languages: string[]) => console.log('Languages changed to:', languages)}
-        onPrimaryLanguageChange={(languageCode: string) =>
-          console.log('Primary language changed to:', languageCode)
-        }
-        onFallbackLanguagesChange={(fallbackLanguages: string[]) =>
-          console.log('Fallback languages changed to:', fallbackLanguages)
-        }
+        initialPrimaryLanguage="zh-hans"
+        initialFallbackLanguages={['en']}
         localizedStrings={{
-          '%settings_uiLanguageSelector_selectFallbackLanguages%': '选择后备语言',
+          '%settings_uiLanguageSelector_fallbackLanguages%': '后备语言',
         }}
       />
     );

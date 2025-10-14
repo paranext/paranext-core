@@ -30,6 +30,7 @@ export interface MultiSelectComboBoxProps {
   sortSelected?: boolean;
   icon?: ReactNode;
   className?: string;
+  id?: string;
 }
 
 /**
@@ -49,6 +50,7 @@ export interface MultiSelectComboBoxProps {
  * @param {boolean} [props.sortSelected] - Flag to sort selected items.
  * @param {ReactNode} [props.icon] - Optional icon to display in the button.
  * @param {string} [props.className] - Additional class names for styling.
+ * @param {string} [props.id] - Optional ID for the component.
  */
 export function MultiSelectComboBox({
   entries,
@@ -62,6 +64,7 @@ export function MultiSelectComboBox({
   sortSelected = false,
   icon = undefined,
   className = undefined,
+  id,
 }: MultiSelectComboBoxProps) {
   const [open, setOpen] = useState(false);
 
@@ -101,7 +104,7 @@ export function MultiSelectComboBox({
   }, [entries, selected, sortSelected]);
 
   return (
-    <div className={className}>
+    <div id={id} className={className}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button

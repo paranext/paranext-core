@@ -138,6 +138,9 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 
   /** Callback function to notify when a row is selected */
   onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
+
+  /** Optional id attribute for the outermost element */
+  id?: string;
 };
 
 function getColumns(
@@ -233,6 +236,7 @@ export function ScriptureResultsViewer({
   typeColumnName,
   detailsColumnName,
   onRowSelected,
+  id,
 }: ScriptureResultsViewerProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
@@ -368,7 +372,7 @@ export function ScriptureResultsViewer({
   };
 
   return (
-    <div className="pr-twp tw-flex tw-h-full tw-w-full tw-flex-col">
+    <div id={id} className="pr-twp tw-flex tw-h-full tw-w-full tw-flex-col">
       {!showColumnHeaders && (
         <Select
           value={JSON.stringify(grouping)}

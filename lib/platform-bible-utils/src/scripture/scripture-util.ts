@@ -6,9 +6,9 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split, startsWith } from './string-util';
-import { LocalizeKey } from './menus.model';
-import { isString } from './util';
+import { at, isWhiteSpace, slice, split, startsWith } from '../string-util';
+import { LocalizeKey } from '../extension-contributions/menus.model';
+import { isString } from '../util';
 
 /**
  * All marker types that seem to be block-level according to `UsxFragmenter.AppendStartUsfm`. And

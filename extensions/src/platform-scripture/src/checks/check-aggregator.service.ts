@@ -1,55 +1,101 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
-import {
-  DataProviderUpdateInstructions,
-  IDataProviderEngine,
-  IDisposableDataProvider,
-} from '@papi/core';
+import { DataProviderUpdateInstructions, IDisposableDataProvider } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { InventoryItem } from 'platform-bible-react';
 import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
-  CheckAggregatorDataTypes,
   CheckInputRange,
+  CheckJobRunner,
+  CheckJobScope,
+  CheckJobStatus,
+  CheckJobStatusReport,
   CheckResultClassifier,
+  CheckResultsInvalidated,
   CheckRunnerCheckDetails,
-  CheckRunResult,
-  CheckSubscriptionId,
-  CheckSubscriptionManager,
+  CheckRunnerDataTypes,
   ICheckAggregatorService,
   ICheckRunner,
-  InventoryDataRetriever,
-  SettableCheckDetails,
+  CheckConfigurationProvider,
 } from 'platform-scripture';
 import {
-  aggregateProjectIdsByCheckId,
-  aggregateRanges,
-  isWithinRange,
-  SubscriptionData,
-} from './check-aggregator.utils';
-import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
+  CHECK_RESULTS_INVALIDATED_EVENT,
+  CHECK_RUNNER_NETWORK_OBJECT_TYPE,
+  CHECK_STOP_DEFAULT_TIMEOUT_MS,
+} from './check.model';
+
+/**
+ * When a job is started, it may need to be split up and sent to multiple check runners depending on
+ * which checks are being run. This type represents the portion of a job that is assigned to one
+ * specific check runner.
+ */
+type PartitionedJobScope = {
+  checkRunner: ICheckRunner;
+  jobId: string;
+  jobScope: CheckJobScope;
+};
 
 class CheckAggregatorDataProviderEngine
-  extends DataProviderEngine<CheckAggregatorDataTypes>
-  implements
-    IDataProviderEngine<CheckAggregatorDataTypes>,
-    CheckResultClassifier,
-    CheckSubscriptionManager,
-    InventoryDataRetriever
+  extends DataProviderEngine<CheckRunnerDataTypes>
+  implements CheckJobRunner, CheckResultClassifier, CheckConfigurationProvider
 {
   // Maps check runner IDs to their ICheckRunner objects
-  checkRunners = new Map<string, ICheckRunner>();
+  private checkRunners = new Map<string, ICheckRunner>();
 
-  // Maps subscription IDs that we created to data about the subscription
-  subscriptionsBySubscriptionId = new Map<CheckSubscriptionId, SubscriptionData>();
+  // Maps job IDs to the check runner and job ID on that check runner
+  private activeJobs = new Map<string, PartitionedJobScope[]>();
+
+  // #region Static Helpers
+
+  private static combineJobStatus(jobReports: CheckJobStatusReport[]): CheckJobStatus {
+    if (jobReports.length === 0) throw new Error('No job reports to combine');
+    if (jobReports.length === 1) return jobReports[0].status;
+    let statusNumber = -1;
+    jobReports.forEach((report) => {
+      const reportStatusNumber = CheckAggregatorDataProviderEngine.jobStatusToNumber(report.status);
+      if (reportStatusNumber > statusNumber) statusNumber = reportStatusNumber;
+    });
+    return CheckAggregatorDataProviderEngine.numberToJobStatus(statusNumber);
+  }
+
+  private static jobStatusToNumber(status: CheckJobStatus): number {
+    switch (status) {
+      case 'completed':
+        return 0;
+      case 'queued':
+        return 1;
+      case 'running':
+        return 2;
+      case 'stopped':
+        return 3;
+      case 'errored':
+        return 4;
+      default:
+        throw new Error(`Unknown job status: ${status}`);
+    }
+  }
+
+  private static numberToJobStatus(statusNumber: number): CheckJobStatus {
+    switch (statusNumber) {
+      case 0:
+        return 'completed';
+      case 1:
+        return 'queued';
+      case 2:
+        return 'running';
+      case 3:
+        return 'stopped';
+      case 4:
+        return 'errored';
+      default:
+        throw new Error(`Unknown job status number: ${statusNumber}`);
+    }
+  }
+
+  // #endregion
 
   // #region Checks
 
-  async getAvailableChecks(
-    subscriptionId: CheckSubscriptionId,
-  ): Promise<CheckRunnerCheckDetails[]> {
-    if (!subscriptionId) return [];
-    const subscriptionData = this.findSubscription(subscriptionId);
-
+  async getAvailableChecks(): Promise<CheckRunnerCheckDetails[]> {
     // Gather up all checks that are currently registered
     await this.refreshCheckRunners();
     const retVal: CheckRunnerCheckDetails[] = [];
@@ -60,159 +106,107 @@ class CheckAggregatorDataProviderEngine
         retVal.push(...checksAvailable);
       }),
     );
-
-    // Mark which projects this subscription is using for each check
-    const { enabledProjectsByCheckId } = subscriptionData;
-    retVal.forEach((checkDetails) => {
-      checkDetails.enabledProjectIds = [
-        ...(enabledProjectsByCheckId.get(checkDetails.checkId) ?? []),
-      ];
-    });
-
     return retVal;
   }
 
-  async setAvailableChecks(
-    subscriptionId: CheckSubscriptionId,
-    newAvailableChecks: SettableCheckDetails[],
-  ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
-    if (!subscriptionId) return false;
-    const subscriptionData = this.findSubscription(subscriptionId);
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
+    throw new Error('Not supported on the check aggregator');
+  }
 
-    // Take a snapshot
-    const beforeUpdate = aggregateProjectIdsByCheckId(this.subscriptionsBySubscriptionId);
+  // #endregion
 
-    // Update the subscription
-    subscriptionData.enabledProjectsByCheckId.clear();
-    newAvailableChecks.forEach((singleCheckDetails) => {
-      subscriptionData.enabledProjectsByCheckId.set(
-        singleCheckDetails.checkId,
-        new Set(singleCheckDetails.enabledProjectIds),
+  // #region Jobs
+
+  async beginCheckJob(jobScope: CheckJobScope): Promise<string> {
+    if (jobScope.checkIds.length === 0)
+      throw new Error('At least one check ID must be specified to start a job');
+    if (jobScope.inputRanges.length === 0)
+      throw new Error('At least one input range must be specified to start a job');
+
+    const partitionedJobs: PartitionedJobScope[] = await this.splitJobScopeByCheckRunner(jobScope);
+    if (partitionedJobs.length === 0)
+      throw new Error('No check runners found for the specified checks');
+    await Promise.all(
+      partitionedJobs.map(async (job) => {
+        job.jobId = await job.checkRunner.beginCheckJob(job.jobScope);
+      }),
+    );
+
+    // Create a new job ID to represent the collection of jobs on the individual check runners
+    const aggregatorJobId = newGuid();
+    this.activeJobs.set(aggregatorJobId, partitionedJobs);
+    return aggregatorJobId;
+  }
+
+  async stopCheckJob(
+    jobId: string,
+    timeoutMs: number = CHECK_STOP_DEFAULT_TIMEOUT_MS,
+  ): Promise<boolean> {
+    const job = this.activeJobs.get(jobId);
+    if (!job) throw new Error(`Job ID not found: ${jobId}`);
+    const stopResults = await Promise.all(
+      job.map((assignedJob) => assignedJob.checkRunner.stopCheckJob(assignedJob.jobId, timeoutMs)),
+    );
+    return stopResults.every((result) => result === true);
+  }
+
+  async abandonCheckJob(jobId: string): Promise<void> {
+    const job = this.activeJobs.get(jobId);
+    if (!job) throw new Error(`Job ID not found: ${jobId}`);
+    try {
+      await Promise.all(
+        job.map((assignedJob) => assignedJob.checkRunner.abandonCheckJob(assignedJob.jobId)),
       );
-    });
-
-    // Take another snapshot
-    const afterUpdate = aggregateProjectIdsByCheckId(this.subscriptionsBySubscriptionId);
-
-    // Enable checks that weren't previously enabled
-    const toEnable: { checkId: string; projectId: string }[] = [];
-    afterUpdate.forEach((projectIds, checkId) => {
-      projectIds.forEach((projectId) => {
-        const beforeProjectIds = beforeUpdate.get(checkId);
-        if (!beforeProjectIds || !beforeProjectIds.has(projectId))
-          toEnable.push({ checkId, projectId });
-      });
-    });
-    await Promise.all(toEnable.map((x) => this.enableCheck(x.checkId, x.projectId)));
-
-    // Disable checks that are no longer enabled
-    const toDisable: { checkId: string; projectId: string }[] = [];
-    beforeUpdate.forEach((projectIds, checkId) => {
-      projectIds.forEach((projectId) => {
-        const afterProjectIds = afterUpdate.get(checkId);
-        if (!afterProjectIds || !afterProjectIds.has(projectId))
-          toDisable.push({ checkId, projectId });
-      });
-    });
-    await Promise.all(toDisable.map((x) => this.disableCheck(x.checkId, x.projectId)));
-
-    return ['AvailableChecks', 'CheckResults'];
+    } catch (error) {
+      logger.error(`Error abandoning check job ${jobId}: ${error}`);
+    }
+    this.activeJobs.delete(jobId);
   }
 
-  // #endregion
+  async retrieveCheckJobUpdate(
+    jobId: string,
+    maxResultsToInclude: number,
+  ): Promise<CheckJobStatusReport> {
+    const jobScopes = this.activeJobs.get(jobId);
+    if (!jobScopes) throw new Error(`Job ID not found: ${jobId}`);
 
-  // #region Active Ranges
+    let remainingResultsToInclude = maxResultsToInclude;
+    const jobReports: CheckJobStatusReport[] = [];
+    for (let i = 0; i < jobScopes.length; i += 1) {
+      const assignedJob = jobScopes[i];
+      // We need to wait and see how many results are returned before asking the next check runner
+      // eslint-disable-next-line no-await-in-loop
+      const jobReport = await assignedJob.checkRunner.retrieveCheckJobUpdate(
+        assignedJob.jobId,
+        remainingResultsToInclude,
+      );
+      remainingResultsToInclude -= jobReport.nextResults?.length ?? 0;
+      jobReports.push(jobReport);
+    }
 
-  async getActiveRanges(subscriptionId: CheckSubscriptionId): Promise<CheckInputRange[]> {
-    if (!subscriptionId) return [];
-    return this.findSubscription(subscriptionId).ranges;
-  }
+    // Combine the reports from all the check runners into one report
+    const combinedReport: CheckJobStatusReport = {
+      jobId,
+      status: CheckAggregatorDataProviderEngine.combineJobStatus(jobReports),
+      percentComplete:
+        jobReports.reduce((acc, report) => acc + report.percentComplete, 0) / jobReports.length,
+      totalResultsCount: jobReports.reduce((acc, report) => acc + report.totalResultsCount, 0),
+      nextResults: jobReports.flatMap((report) => report.nextResults ?? []),
+      error: jobReports
+        .map((r) => r.error)
+        .filter((m) => m && m.length > 0)
+        .join('; '),
+      totalExecutionTimeMs: jobReports.reduce(
+        (acc, report) => acc + (report.totalExecutionTimeMs ?? 0),
+        0,
+      ),
+    };
 
-  async setActiveRanges(
-    subscriptionId: CheckSubscriptionId,
-    ranges: CheckInputRange[],
-  ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
-    if (!subscriptionId) return false;
-
-    // Update the subscription
-    this.findSubscription(subscriptionId).ranges = ranges;
-
-    // Aggregate all ranges from all subscriptions
-    const aggregatedRanges = aggregateRanges(this.subscriptionsBySubscriptionId);
-
-    // Push the single, aggregated view of ranges into all of the active check runners
-    await this.refreshCheckRunners();
-    await Promise.all(
-      [...this.checkRunners.values()].map(async (checkRunner) => {
-        await checkRunner.setActiveRanges(undefined, aggregatedRanges);
-      }),
-    );
-    return ['ActiveRanges', 'CheckResults'];
-  }
-
-  // #endregion
-
-  // #region Include Denied Results
-
-  async getIncludeDeniedResults(subscriptionId: CheckSubscriptionId): Promise<boolean> {
-    if (!subscriptionId) return false;
-    return this.findSubscription(subscriptionId).includeDeniedResults;
-  }
-
-  async setIncludeDeniedResults(
-    subscriptionId: CheckSubscriptionId,
-    newIncludeDeniedResults: boolean,
-  ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
-    if (!subscriptionId) return false;
-    this.findSubscription(subscriptionId).includeDeniedResults = newIncludeDeniedResults;
-    return ['IncludeDeniedResults', 'CheckResults'];
-  }
-
-  // #endregion
-
-  // #region Check Results
-
-  async getCheckResults(subscriptionId: CheckSubscriptionId): Promise<CheckRunResult[]> {
-    if (!subscriptionId) return [];
-
-    // Find all applicable check runners for our subscription
-    const subscription = this.findSubscription(subscriptionId);
-    const checkIdsForSubscription = Array.from(subscription.enabledProjectsByCheckId.keys());
-    const checkRunners = new Set<ICheckRunner>();
-    await Promise.all(
-      checkIdsForSubscription.map(async (checkId: string) => {
-        const checkRunner = await this.findCheckRunnerForCheckId(checkId);
-        checkRunners.add(checkRunner);
-      }),
-    );
-
-    // Get results from all applicable check runners and filter based on the subscription
-    const retVal: CheckRunResult[] = [];
-    await Promise.all(
-      [...checkRunners].map(async (checkRunner) => {
-        const results = await checkRunner.getCheckResults(undefined);
-        results.forEach((result) => {
-          // Filter by "denied"
-          if (result.isDenied && !subscription.includeDeniedResults) return;
-
-          // Filter by range
-          const { verseRef } = result;
-          if (!subscription.ranges.some((range) => isWithinRange(range, verseRef))) return;
-
-          // Filter by check + project
-          if (!result.checkId) return;
-          const projects = subscription.enabledProjectsByCheckId.get(result.checkId);
-          if (projects?.has(result.projectId)) retVal.push(result);
-        });
-      }),
-    );
-    return retVal;
-  }
-
-  // Required method since this is a data provider engine
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/class-methods-use-this
-  async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
-    throw new Error('setCheckResults disabled');
+    if (combinedReport.nextResults?.length === 0) delete combinedReport.nextResults;
+    if (combinedReport.error?.length === 0) delete combinedReport.error;
+    return combinedReport;
   }
 
   // #endregion
@@ -224,7 +218,7 @@ class CheckAggregatorDataProviderEngine
     checkResultType: string,
     projectId: string,
     verseRef: SerializedVerseRef,
-    selectedText: string,
+    itemText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
@@ -233,10 +227,9 @@ class CheckAggregatorDataProviderEngine
       checkResultType,
       projectId,
       verseRef,
-      selectedText,
+      itemText,
       checkResultUniqueId,
     );
-    this.notifyUpdate('CheckResults');
     return retVal;
   }
 
@@ -245,7 +238,7 @@ class CheckAggregatorDataProviderEngine
     checkResultType: string,
     projectId: string,
     verseRef: SerializedVerseRef,
-    selectedText: string,
+    itemText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
@@ -254,41 +247,15 @@ class CheckAggregatorDataProviderEngine
       checkResultType,
       projectId,
       verseRef,
-      selectedText,
+      itemText,
       checkResultUniqueId,
     );
-    this.notifyUpdate('CheckResults');
     return retVal;
   }
 
   // #endregion
 
-  // #region Subscriptions
-
-  async createSubscription(): Promise<CheckSubscriptionId> {
-    const retVal = newGuid();
-    this.subscriptionsBySubscriptionId.set(retVal, {
-      enabledProjectsByCheckId: new Map<string, Set<string>>(),
-      ranges: [],
-      includeDeniedResults: true,
-    });
-    logger.debug(`Created check subscription: ${retVal}`);
-    return retVal;
-  }
-
-  async deleteSubscription(subscriptionId: CheckSubscriptionId): Promise<boolean> {
-    logger.debug(`Deleted check subscription: ${subscriptionId}`);
-    return this.subscriptionsBySubscriptionId.delete(subscriptionId);
-  }
-
-  async validateSubscription(subscriptionId: CheckSubscriptionId): Promise<boolean> {
-    const subscription = this.subscriptionsBySubscriptionId.get(subscriptionId);
-    return !!subscription;
-  }
-
-  // #endregion
-
-  // #region Inventory Data
+  // #region Check Configuration Provider
 
   async retrieveInventoryData(
     checkId: string,
@@ -300,25 +267,22 @@ class CheckAggregatorDataProviderEngine
     return checkRunner.retrieveInventoryData(checkId, projectId, checkInputRange);
   }
 
+  async isCheckSetupForProject(checkId: string, projectId: string): Promise<boolean> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+    return checkRunner.isCheckSetupForProject(checkId, projectId);
+  }
+
   // #endregion
 
   // #region Helper methods
 
-  private async enableCheck(checkId: string, projectId: string): Promise<void> {
-    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
-    return checkRunner.enableCheck(checkId, projectId);
-  }
-
-  private async disableCheck(checkId: string, projectId?: string): Promise<void> {
-    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
-    return checkRunner.disableCheck(checkId, projectId);
-  }
-
   private async refreshCheckRunners(): Promise<void> {
-    // Wait for any check runner to be registered
+    // Wait for the .NET check runner to be available
+    // Ideally we would wait for all of them, but the .NET runner is the only critical one for now
     const timeoutInMS = 20_000;
     await papi.networkObjectStatus.waitForNetworkObject(
-      { objectType: CHECK_RUNNER_NETWORK_OBJECT_TYPE },
+      { id: 'dotNetCheckRunner-data', objectType: CHECK_RUNNER_NETWORK_OBJECT_TYPE },
       timeoutInMS,
     );
 
@@ -330,6 +294,7 @@ class CheckAggregatorDataProviderEngine
     });
 
     // Add new check runners to the map
+    let notifyOfNewCheckRunners = false;
     await Promise.all(
       Object.getOwnPropertyNames(allNetworkObjects).map(async (propertyName) => {
         const checkRunnerDetails = allNetworkObjects[propertyName];
@@ -342,44 +307,17 @@ class CheckAggregatorDataProviderEngine
         // Check the map a second time to avoid race conditions after the previous `await`
         if (this.checkRunners.has(checkRunnerDetails.id)) return;
         this.checkRunners.set(checkRunnerDetails.id, checkRunner);
-
-        // Make sure the new check runner has the correct ranges set
-        await checkRunner.setActiveRanges(
-          undefined,
-          aggregateRanges(this.subscriptionsBySubscriptionId),
-        );
-
-        // Pass along updated results from check runners
-        const resultsUnsubscriber = await checkRunner.subscribeCheckResults(
-          undefined,
-          () => this.notifyUpdate('CheckResults'),
-          { retrieveDataImmediately: false },
-        );
-        // Pass along updated available checks from check runners
-        const checksUnsubscriber = await checkRunner.subscribeAvailableChecks(
-          undefined,
-          () => this.notifyUpdate('AvailableChecks'),
-          { retrieveDataImmediately: false },
-        );
-        // Don't pass along updated active ranges because we set those on the check runners
+        notifyOfNewCheckRunners = true;
 
         // Clean up when a check runner goes away
         checkRunner.onDidDispose(async () => {
-          return (
-            (await resultsUnsubscriber()) &&
-            (await checksUnsubscriber()) &&
-            this.checkRunners.delete(checkRunnerDetails.id)
-          );
+          const retVal = this.checkRunners.delete(checkRunnerDetails.id);
+          this.notifyUpdate('AvailableChecks');
+          return retVal;
         });
       }),
     );
-  }
-
-  private findSubscription(subscriptionId: CheckSubscriptionId) {
-    // Find this subscription
-    const retVal = this.subscriptionsBySubscriptionId.get(subscriptionId);
-    if (!retVal) throw new Error(`Subscription ID not found: ${subscriptionId}`);
-    return retVal;
+    if (notifyOfNewCheckRunners) this.notifyUpdate('AvailableChecks');
   }
 
   // Try to find the one check runner that is hosting the desired check ID
@@ -424,6 +362,31 @@ class CheckAggregatorDataProviderEngine
     return retVal;
   }
 
+  private async splitJobScopeByCheckRunner(
+    jobScope: CheckJobScope,
+  ): Promise<PartitionedJobScope[]> {
+    const assignedJobs: PartitionedJobScope[] = [];
+    await Promise.all(
+      jobScope.checkIds.map(async (checkId) => {
+        const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+        if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+        let assignedScope = assignedJobs.find((j) => j.checkRunner === checkRunner);
+        // Add the check ID to the existing job scope if we already have one for this check runner
+        if (assignedScope) {
+          assignedScope.jobScope.checkIds.push(checkId);
+        } else {
+          assignedScope = {
+            checkRunner,
+            jobId: '',
+            jobScope: { ...jobScope, checkIds: [checkId] },
+          };
+          assignedJobs.push(assignedScope);
+        }
+      }),
+    );
+    return assignedJobs;
+  }
+
   // #endregion
 }
 
@@ -455,9 +418,15 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const checkAggregatorServiceObjectToProxy = Object.freeze({
-  dataProviderName: checkAggregatorServiceProviderName,
-});
+const resultsInvalidatedEventEmitter =
+  papi.network.createNetworkEventEmitter<CheckResultsInvalidated>(CHECK_RESULTS_INVALIDATED_EVENT);
+
+/** Notify all listeners that check results have been invalidated and should be refreshed */
+export function notifyCheckResultsInvalidated(e: CheckResultsInvalidated): void {
+  resultsInvalidatedEventEmitter.emit(e);
+}
+
+const checkAggregatorServiceObjectToProxy = Object.freeze({});
 
 const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(async () => {
   await initialize();

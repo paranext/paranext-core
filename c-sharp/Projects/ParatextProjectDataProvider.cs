@@ -103,8 +103,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
+        scope.ProjectID = ProjectDetails.Metadata.Id;
+
         Stream? dataStream =
-            GetExtensionStream(scope, false)
+            GetExtensionStream(scope, true)
             ?? throw new InvalidDataException("Extension data not found");
         using (dataStream)
         {
@@ -118,6 +120,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
+
+        scope.ProjectID = ProjectDetails.Metadata.Id;
 
         Stream? dataStream =
             GetExtensionStream(scope, true)
@@ -199,6 +203,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (!CommentsEnabled)
             return false;
 
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         bool madeChange = false;
         foreach (var ic in incomingComments)
         {
@@ -213,6 +218,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 );
             if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
                 continue;
+            // Override the user name with the value from ParatextData
+            ic.User = scrText.User.Name;
             _commentManager.AddComment(ic);
             _commentManager.SaveUser(ic.User, false);
             madeChange = true;
@@ -661,6 +668,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
             if (verseRef.Versification == null)
                 verseRef.Versification = scrText.Settings.Versification;
+            if (!scrText.BookPresent(verseRef.BookNum))
+                throw new MissingBookException(verseRef.BookNum, ProjectDetails.Metadata.Id);
             return getTextFromScrText(scrText, verseRef);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)

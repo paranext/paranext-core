@@ -21,7 +21,7 @@
   font-family: 'Charis SIL';
   src:
     local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
-    local('Charis SIL Italic'), url('file:///C:/Windows/Fonts/CharisSIL-B.ttf');
+    local('Charis SIL Italic');
   font-weight: normal;
 }
 @font-face {
@@ -51,7 +51,7 @@
   font-size: 100%;
 }
 
-.book[data-code]::before {
+.marker-hidden .book[data-code]::before {
   content: attr(data-code) ' ';
 }
 
@@ -1612,14 +1612,6 @@
   font-size: 100%;
 }
 
-/* TextNode in NoteNode */
-
-.marker-hidden .usfm_f span[data-lexical-text='true'],
-.marker-hidden .usfm_fe span[data-lexical-text='true'],
-.marker-hidden .usfm_x span[data-lexical-text='true'] {
-  display: none;
-}
-
 /* periph */
 
 .formatted-font .usfm_periph {
@@ -2064,8 +2056,16 @@ body {
 .marker {
   unicode-bidi: isolate;
 }
-.formatted-font .marker {
+
+.marker-visible .marker,
+.marker-hidden .marker,
+.marker-hidden .book[data-code]::before,
+.marker-editable .book .marker {
   color: rgba(140, 140, 140, 1);
+}
+
+.marker-visible .marker:not(.chapter),
+.marker-hidden .marker:not(.chapter) {
   font-size: 0.7em;
 }
 
@@ -2086,17 +2086,66 @@ body {
   font-weight: bold;
 }
 
-/* NoteNode, ImmutableNoteCallerNode */
+/* NoteNode >  Marker, TextNode */
+
+.note.collapsed .marker[data-lexical-decorator='true'],
+.note.collapsed span[data-lexical-text='true'] {
+  display: none;
+}
+
+/* Expanded NoteNode background styling */
+.marker-visible .note.expanded,
+.marker-hidden .note.expanded {
+  /* Light neon blue */
+  background-color: rgba(173, 216, 230, 0.3);
+  padding: 1px 8px;
+  /* Pill-like rounded ends */
+  border-radius: 15px;
+}
+
+/* First level nested CharNodes within expanded NoteNode */
+.marker-visible .note.expanded .char,
+.marker-hidden .note.expanded .char {
+  /* Slightly darker neon blue */
+  background-color: rgba(173, 216, 230, 0.45);
+  padding: 1px 6px;
+  /* Pill-like rounded ends */
+  border-radius: 12px;
+}
+
+/* Second level nested CharNodes within expanded NoteNode */
+.marker-visible .note.expanded .char .char,
+.marker-hidden .note.expanded .char .char {
+  /* Darker neon blue */
+  background-color: rgba(173, 216, 230, 0.6);
+  padding: 0px 4px;
+  /* Pill-like rounded ends */
+  border-radius: 10px;
+}
+
+/* NoteNode > ImmutableNoteCallerNode */
 
 .immutable-note-caller > button,
 /* Styles for Preview (and Ruby) views */
 .caller_preview,
 .previewcallee {
   color: rgba(18, 82, 179, 1);
+}
+
+.note.collapsed .immutable-note-caller > button,
+/* Styles for Preview (and Ruby) views */
+.caller_preview,
+.previewcallee {
   font-weight: bold;
   line-height: 1;
   vertical-align: super;
   font-size: 0.66em;
+}
+
+.note.expanded .immutable-note-caller > button {
+  vertical-align: baseline;
+  font-size: 1em;
+  font-weight: normal;
 }
 
 .immutable-note-caller > button {
@@ -2126,11 +2175,13 @@ body {
   counter-increment: caller;
 }
 
-.immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed .immutable-note-caller[data-caller='+'] > button::before {
   content: counter(caller, note-callers);
 }
 
-.formatted-font.text-spacing .immutable-note-caller[data-caller='-'] {
+.formatted-font.text-spacing[contenteditable='false']
+  .note.collapsed
+  .immutable-note-caller[data-caller='-'] {
   display: none;
 }
 

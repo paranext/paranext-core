@@ -1,18 +1,55 @@
-.about {
+.about-scroll-container {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
-  margin: 20px 0;
-  text-align: center;
-}
-
-.about-panel {
   width: 100%;
   height: 100%;
-  background: #0a403a;
-  overflow-y: auto;
-  color: hsl(var(--foreground));
+  overflow-y: auto; // Allow scrolling if content is too tall
+}
+
+.about-content {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 448px; // tw-max-w-md equivalent
+  padding-inline: clamp(1rem, 10vw, 4rem);
+  padding-block: clamp(1rem, 10vh, 4rem);
+  gap: 0.25rem;
+  text-wrap: pretty; // Keeps things like URLs from breaking awkwardly
+  box-sizing: border-box; // Include padding in width calculations
+}
+
+:where(.about-content) > * {
+  margin-block: unset; // Reset default (16px) margins on all children. Maybe this should be in a CSS reset instead?
+}
+
+:where(.about-content) p {
+  line-height: 1.6; // Arbitrary, but improves readability
+  margin-block-end: 0.5rem; // Space between paragraphs
+}
+
+.about-logo {
+  // svg
+  height: auto; // Maintain aspect ratio
+  width: 110%; // Overshoot the container width to account for ink weight
+  padding-block-end: clamp(1rem, 10vw, 2rem); // Space below logo
+  align-self: center;
+}
+
+.about-title {
+  // h1
+  font-size: 1.25em; // Smaller than default
+  margin-block-end: 0; // Close to subtitle (description)
+}
+
+.about-description {
+  margin-block-start: 0; // Close to title
+  margin-block-end: 2rem; // Far from other fields
+}
+
+.about-version {
+  overflow-wrap: anywhere; // Let long version numbers wrap
 }
 
 .about-panel .test-panel {

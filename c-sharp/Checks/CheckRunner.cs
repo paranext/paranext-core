@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Checks;
-using Paratext.Data;
 using Paratext.Data.Checking;
-using Paratext.Data.ProjectFileAccess;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -15,17 +15,9 @@ namespace Paranext.DataProvider.Checks;
 /// The data provider implements the ICheckRunner interface that is defined in TypeScript. See the
 /// definition of ICheckRunner and its related types in TypeScript for more details.
 /// </summary>
-internal class CheckRunner : NetworkObjects.DataProvider
+internal sealed class CheckRunner : NetworkObjects.DataProvider
 {
     #region Internal classes
-
-    private sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
-    {
-        public ScriptureCheckBase Check { get; } = check;
-        public CheckResultsRecorder ResultsRecorder { get; } = new(checkId, projectId);
-        public bool SettingsChanged { get; set; } = false;
-        public object Lock = new();
-    }
 
     private class InventoryItem(string inventoryText, string verse, VerseRef verseRef, int offset)
     {
@@ -39,12 +31,6 @@ internal class CheckRunner : NetworkObjects.DataProvider
 
     #region Consts and member variables
 
-    private const string DATA_TYPE_AVAILABLE_CHECKS = "AvailableChecks";
-    private const string DATA_TYPE_ACTIVE_RANGES = "ActiveRanges";
-    private const string DATA_TYPE_CHECK_RESULTS = "CheckResults";
-
-    // Note that CheckType.Schema is not available outside Paratext itself due to dependencies
-    // It cannot be easily copied, either, without some refactoring
     private readonly Dictionary<string, ParatextCheckDetails> _checkDetailsByCheckId =
         new()
         {
@@ -64,39 +50,25 @@ internal class CheckRunner : NetworkObjects.DataProvider
             { CheckType.QuotedText.InternalValue, new(CheckType.QuotedText) },
             { CheckType.Reference.InternalValue, new(CheckType.Reference) },
             { CheckType.RepeatedWord.InternalValue, new(CheckType.RepeatedWord) },
+            { CheckType.Schema.InternalValue, new(CheckType.Schema) },
         };
-    private CheckInputRange[] _activeRanges = [];
-    private readonly ConcurrentDictionary<string, ChecksDataSource> _dataSourcesByProjectId = [];
-    private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = [];
-    private readonly ConcurrentDictionary<
-        (string checkId, string projectId),
-        CheckForProject
-    > _checksByIds = [];
-    private readonly object _setActiveRangesLock = new();
+    private readonly List<string> _allCheckIds;
+    private readonly List<ParatextCheckDetails> _allCheckDetails;
+    private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = new();
+    private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
+    private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
+    private readonly CheckCache _checkCache;
     private readonly object _runChecksLock = new();
 
     #endregion
 
     #region Constructor
     public CheckRunner(PapiClient papiClient)
-        : base("dotNetCheckRunner", papiClient, "checkRunner")
+        : base("dotNetCheckRunner", papiClient, NetworkObjectType.CHECK_RUNNER)
     {
-        // When inventory data is changed, there is no way from the ScrText or Settings objects
-        // to be notified of the change. So we have to listen for file changes in the project
-        // directory and rerun checks for the project if the inventory data changes.
-        ProjectFileManager.FileChanged += (scrText, relFilePath, changeType) =>
-        {
-            if (relFilePath.Contains("SETTINGS.XML", StringComparison.InvariantCultureIgnoreCase))
-            {
-                var projectId = scrText.GetProjectDetails().Metadata.Id;
-                _checksByIds
-                    .Where((kvp) => kvp.Key.projectId == projectId)
-                    .Select((kvp) => kvp.Value)
-                    .ToList()
-                    .ForEach((check) => check.SettingsChanged = true);
-                RunChecksForProject(projectId);
-            }
-        };
+        _allCheckIds = _checkDetailsByCheckId.Keys.ToList();
+        _allCheckDetails = _checkDetailsByCheckId.Values.ToList();
+        _checkCache = new CheckCache(_allCheckIds, papiClient);
     }
 
     #endregion
@@ -108,15 +80,15 @@ internal class CheckRunner : NetworkObjects.DataProvider
     {
         return
         [
+            ("abandonCheckJob", AbandonCheckJob),
             ("allowCheckResult", AllowCheckResult),
+            ("beginCheckJob", BeginCheckJob),
             ("denyCheckResult", DenyCheckResult),
-            ("disableCheck", DisableCheck),
-            ("enableCheck", EnableCheck),
-            ("getActiveRanges", GetActiveRanges),
             ("getAvailableChecks", GetAvailableChecks),
-            ("getCheckResults", GetCheckResults),
-            ("setActiveRanges", SetActiveRanges),
+            ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
             ("retrieveInventoryData", RetrieveInventoryData),
+            ("isCheckSetupForProject", IsCheckSetupForProject),
+            ("stopCheckJob", StopCheckJob),
         ];
     }
 
@@ -131,68 +103,54 @@ internal class CheckRunner : NetworkObjects.DataProvider
 
     private List<ParatextCheckDetails> GetAvailableChecks(JsonElement _ignore)
     {
-        return new List<ParatextCheckDetails>(_checkDetailsByCheckId.Values);
+        return _allCheckDetails;
     }
 
-    private CheckInputRange[] GetActiveRanges(JsonElement _ignore)
+    private string BeginCheckJob(CheckJobScope jobScope)
     {
-        return _activeRanges;
+        var job = new CheckJobStatus(jobScope);
+        _activeCheckJobsByJobId[job.JobId] = job;
+        _queuedCheckJobs.Enqueue(job.JobId);
+        ThreadingUtils.RunTask(Task.Run(ProcessQueuedCheckJobs), "Process queued check jobs");
+        return job.JobId;
     }
 
-    private bool SetActiveRanges(JsonElement _ignore, CheckInputRange[]? ranges)
+    // Default timeout should match CHECK_STOP_DEFAULT_TIMEOUT_MS in check.model.ts
+    private bool StopCheckJob(string jobId, int? timeoutMs = 2000)
     {
-        ArgumentNullException.ThrowIfNull(ranges);
-
-        foreach (var range in ranges)
-        {
-            if (range.End.HasValue && range.Start.BookNum != range.End.Value.BookNum)
-                throw new ArgumentException("Ranges cannot span between books");
-        }
-
-        lock (_setActiveRangesLock)
-        {
-            var oldProjectIds = _activeRanges.Select(range => range.ProjectId).Distinct();
-            var newProjectIds = ranges.Select(range => range.ProjectId).Distinct();
-
-            foreach (var projectId in oldProjectIds)
-                GetOrCreateDataSource(projectId).ScrText.TextChanged -= RerunChecks;
-            foreach (var projectId in newProjectIds)
-                GetOrCreateDataSource(projectId).ScrText.TextChanged += RerunChecks;
-            _activeRanges = ranges;
-
-            foreach (var projectId in newProjectIds)
-                RunChecksForProject(projectId);
-
-            SendDataUpdateEvent(DATA_TYPE_ACTIVE_RANGES, "SetActiveRanges");
+        var job =
+            (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active check job with ID {jobId} (stop)");
+        job.StopRequested = true;
+        if (_queuedCheckJobs.Contains(jobId) || job.Status != CheckJobStatus.Running)
             return true;
+        // Poll until the job stops or the timeout expires
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        while (stopwatch.ElapsedMilliseconds < timeoutMs.GetValueOrDefault())
+        {
+            if (job.Status != CheckJobStatus.Running)
+                return true;
+            Thread.Sleep(100);
         }
+        return job.Status != CheckJobStatus.Running;
     }
 
-    private List<CheckRunResult> GetCheckResults(JsonElement _ignore)
+    private void AbandonCheckJob(string jobId)
     {
-        var retVal = new List<CheckRunResult>();
+        var job =
+            (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active check job with ID {jobId} (abandon)");
+        job.StopRequested = true;
+        if (!_activeCheckJobsByJobId.TryRemove(jobId, out _))
+            Console.WriteLine($"Failed to remove check job {jobId} from active jobs");
+    }
 
-        foreach (var check in _checksByIds.Values)
-        {
-            lock (check.Lock)
-            {
-                retVal.AddRange(check.ResultsRecorder.CheckRunResults);
-            }
-
-            if (retVal.Count >= 1000)
-                break;
-        }
-
-        if (retVal.Count > 1000)
-        {
-            var fullCount = retVal.Count;
-            retVal.RemoveRange(1000, fullCount - 1000);
-            retVal.TrimExcess();
-            Console.WriteLine($"Trimming {fullCount} check results to 1000");
-        }
-
-        Console.WriteLine($"Returning {retVal.Count} check results");
-        return retVal;
+    private CheckJobStatusReport RetrieveCheckJobUpdate(string jobId, int maxResultsToInclude)
+    {
+        var job =
+            (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active check job with ID {jobId} (update)");
+        return job.GenerateStatusReport(maxResultsToInclude);
     }
 
     private List<InventoryItem> RetrieveInventoryData(
@@ -205,7 +163,7 @@ internal class CheckRunner : NetworkObjects.DataProvider
         ArgumentException.ThrowIfNullOrEmpty(projectId);
         ArgumentNullException.ThrowIfNull(checkInputRange);
 
-        var dataSource = GetOrCreateDataSource(projectId);
+        var dataSource = _checkCache.GetChecksDataSource(projectId);
         var check = CheckFactory.CreateCheck(checkId, dataSource);
         if (check is not ScriptureInventoryBase checkWithInventory)
         {
@@ -229,6 +187,17 @@ internal class CheckRunner : NetworkObjects.DataProvider
         var references = new List<TextTokenSubstring>();
         references.AddRange(newReferences);
 
+        // HACK: This function will be split into 2 separate ones when
+        // https://paratextstudio.atlassian.net/browse/PT-3561 is done. At that point, filtering of
+        // "always valid characters" will be handled by the existing TextInventory class.
+        if (checkId == CheckType.Character.InternalValue)
+        {
+            const string ALWAYS_VALID_CHARACTERS = " \r\n";
+            references = references
+                .Where(r => !ALWAYS_VALID_CHARACTERS.Contains(r.InventoryText))
+                .ToList();
+        }
+
         return
         [
             .. references.Select(reference => new InventoryItem(
@@ -240,61 +209,14 @@ internal class CheckRunner : NetworkObjects.DataProvider
         ];
     }
 
-    private void EnableCheck(string checkId, string projectId)
+    private bool IsCheckSetupForProject(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        var enabledProjectIds = _checkDetailsByCheckId[checkId].EnabledProjectIds;
-        if (enabledProjectIds.Contains(projectId))
-        {
-            Console.WriteLine($"Check {checkId} for project {projectId} was already enabled");
-            return;
-        }
-
-        enabledProjectIds.Add(projectId);
-        var check = CheckFactory.CreateCheck(checkId, GetOrCreateDataSource(projectId));
-        _checksByIds.TryAdd((checkId, projectId), new CheckForProject(check, checkId, projectId));
-        Console.WriteLine($"Enabled check {checkId} for project {projectId}");
-        RunChecksForProject(projectId);
-        SendDataUpdateEvent(DATA_TYPE_AVAILABLE_CHECKS, "EnableCheck");
-    }
-
-    private void DisableCheck(string checkId, string? projectId)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(checkId);
-
-        HashSet<string> updateEvents = [DATA_TYPE_AVAILABLE_CHECKS];
-        var checkDetails = _checkDetailsByCheckId[checkId];
-
-        string[] projectIds;
-        if (string.IsNullOrEmpty(projectId))
-            projectIds = _checksByIds
-                .Keys.Where(ids => ids.checkId == checkId)
-                .Select(ids => ids.projectId)
-                .Distinct()
-                .ToArray();
-        else
-            projectIds = [projectId];
-
-        var cid = checkId;
-        foreach (var pid in projectIds)
-        {
-            var checkData = _checksByIds[(cid, pid)];
-            lock (checkData.Lock)
-            {
-                if (checkData.ResultsRecorder.CheckRunResults.Count > 0)
-                    updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
-                _checksByIds.TryRemove((cid, pid), out _);
-                Console.WriteLine(
-                    checkDetails.EnabledProjectIds.Remove(pid)
-                        ? $"Disabled check {cid} for project {pid}"
-                        : $"Project {pid} was not enabled for check {cid}"
-                );
-            }
-        }
-
-        SendDataUpdateEvent(updateEvents.ToList(), "disable check update");
+        var dataSource = _checkCache.GetChecksDataSource(projectId);
+        var check = CheckFactory.CreateCheck(checkId, dataSource);
+        return check.SetupComplete;
     }
 
     private bool DenyCheckResult(
@@ -302,21 +224,16 @@ internal class CheckRunner : NetworkObjects.DataProvider
         string checkResultType,
         string projectId,
         VerseRef vRef,
-        string selectedText,
+        string itemText,
         string? _checkResultUniqueId
     )
     {
-        if (!_checksByIds.TryGetValue((checkId, projectId), out var check))
-            throw new Exception($"Check {checkId} is not enabled for project {projectId}");
-        lock (check.Lock)
-        {
-            var denials = GetOrCreateDenials(projectId);
-            denials.AddDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
-            denials.Save();
-            check.ResultsRecorder.PostProcessResults(null, denials, null);
-            SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Denied check result");
-            return true;
-        }
+        var check = _checkCache.GetCheck(checkId, projectId);
+        var denials = GetOrCreateDenials(projectId);
+        denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
+        denials.Save();
+        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials, null));
+        return true;
     }
 
     private bool AllowCheckResult(
@@ -324,145 +241,183 @@ internal class CheckRunner : NetworkObjects.DataProvider
         string checkResultType,
         string projectId,
         VerseRef vRef,
-        string selectedText,
+        string itemText,
         string? _checkResultUniqueId
     )
     {
-        if (!_checksByIds.TryGetValue((checkId, projectId), out var check))
-            throw new Exception($"Check {checkId} has not been run for project {projectId}");
-        lock (check.Lock)
-        {
-            var denials = GetOrCreateDenials(projectId);
-            denials.RemoveDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
-            denials.Save();
-            check.ResultsRecorder.PostProcessResults(null, denials, null);
-            SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Allowed check result");
-            return true;
-        }
+        var check = _checkCache.GetCheck(checkId, projectId);
+        var denials = GetOrCreateDenials(projectId);
+        denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
+        denials.Save();
+        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials, null));
+        return true;
     }
 
-    private void RerunChecks(object? sender, TextChangedEventArgs e)
-    {
-        var projectId = _dataSourcesByProjectId.First((kvp) => kvp.Value.ScrText == e.ScrText).Key;
-        if (string.IsNullOrEmpty(projectId))
-        {
-            Console.WriteLine(
-                $"Attempted to run checks on project {e.ScrText.Guid} but couldn't find its project ID"
-            );
-            return;
-        }
-
-        // Only run the checks if we have some range active that includes the text that changed
-        if (_activeRanges.Any((range) => range.IsWithinRange(projectId, e.BookNum, e.ChapterNum)))
-            RunChecksForProject(projectId);
-    }
-
-    /// <summary>
-    /// Asynchronously run all enabled checks on a project for books within active ranges
-    /// </summary>
-    private void RunChecksForProject(string projectId)
-    {
-        ThreadingUtils.RunTask(
-            Task.Run(() => RunChecksForProjectInternal(projectId)),
-            $"RunChecksForProject {projectId}"
-        );
-    }
-
-    /// <summary>
-    /// Run all enabled checks on a project for books within active ranges
-    /// </summary>
-    private void RunChecksForProjectInternal(string projectId)
+    private void ProcessQueuedCheckJobs()
     {
         lock (_runChecksLock)
         {
-            bool signalUpdatedData = false;
-
-            // Text has to be tokenized for the checks before the checks can run
-            var enabledChecksForProject = _checksByIds
-                .Where((kvp) => kvp.Key.projectId == projectId)
-                .Select((kvp) => kvp.Value.Check);
-            CheckDataFormat neededDataFormat = 0;
-            foreach (var check in enabledChecksForProject)
-                neededDataFormat |= check.NeededFormat;
-
-            foreach (var range in _activeRanges.Where((range) => range.ProjectId == projectId))
+            while (_queuedCheckJobs.TryDequeue(out var jobId))
             {
-                // "GetText" will tokenize the text for checks to use
-                // "0" chapter number means all chapters
-                _dataSourcesByProjectId[projectId]
-                    .GetText(range.Start.BookNum, 0, neededDataFormat);
+                ProcessCheckJob(jobId);
+            }
+        }
+    }
 
-                var scrText = LocalParatextProjects.GetParatextProject(projectId);
-                var indexer = new UsfmBookIndexer(scrText.GetText(range.Start.BookNum));
+    private void ProcessCheckJob(string jobId)
+    {
+        // It might have been cancelled/abandoned while in the queue
+        if (!_activeCheckJobsByJobId.TryGetValue(jobId, out var job))
+            return;
 
-                foreach (
-                    var checkId in _checkDetailsByCheckId
-                        .Values.Where(
-                            (checkDetails) => checkDetails.EnabledProjectIds.Contains(projectId)
-                        )
-                        .Select((checkDetails) => checkDetails.CheckId)
-                )
+        // Don't start a job that has been requested to stop
+        if (job.StopRequested)
+        {
+            job.Status = CheckJobStatus.Stopped;
+            return;
+        }
+
+        // This should never happen, but just in case
+        if (job.Status != CheckJobStatus.Queued)
+        {
+            Console.WriteLine($"Check job {jobId} is not queued. Skipping.");
+            return;
+        }
+
+        job.Status = CheckJobStatus.Running;
+        job.PercentComplete = 0;
+        job.StartTimeUtc = DateTime.UtcNow;
+
+        double itemsToComplete = job.JobScope.InputRanges.Length * job.JobScope.CheckIds.Length;
+        var completedItems = 0;
+
+        try
+        {
+            var checkIdsToRun = new List<string>();
+            foreach (var range in job.JobScope.InputRanges)
+            {
+                checkIdsToRun.Clear();
+                foreach (var checkId in job.JobScope.CheckIds)
                 {
-                    if (_checksByIds.TryGetValue((checkId, projectId), out var x))
-                    {
-                        // Checks have to be reinitialized to pick up changes to inventories
-                        // Inventories are stored in the project settings file
-                        if (x.SettingsChanged)
+                    if (job.StopRequested)
+                        break;
+
+                    var check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    if (check.SettingsChanged)
+                        check.ClearResults();
+
+                    bool areResultsCached = false;
+                    check.AccessResults(
+                        range.Start.BookNum,
+                        recorder =>
                         {
-                            x.SettingsChanged = false;
-                            x.Check.Initialize(_dataSourcesByProjectId[projectId]);
+                            areResultsCached = recorder.ResultsReady;
+                            if (areResultsCached)
+                            {
+                                job.AllResults.AddRange(recorder.GetResultsInRange(range));
+                                job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                            }
                         }
-                        bool newResultsReturned = RunCheck(checkId, x.Check, range, indexer);
-                        signalUpdatedData |= newResultsReturned;
-                    }
+                    );
+                    if (!areResultsCached)
+                        checkIdsToRun.Add(checkId);
+                }
+
+                if (job.StopRequested)
+                    break;
+
+                if (checkIdsToRun.Count == 0)
+                    continue;
+
+                RunChecksForProject(range, checkIdsToRun);
+                foreach (var checkId in checkIdsToRun)
+                {
+                    var check = _checkCache.GetCheck(checkId, range.ProjectId);
+                    check.AccessResults(
+                        range.Start.BookNum,
+                        recorder =>
+                        {
+                            if (!recorder.ResultsReady)
+                                throw new Exception(
+                                    $"Check {checkId} did not complete running properly."
+                                );
+                            job.AllResults.AddRange(recorder.GetResultsInRange(range));
+                            job.PercentComplete = 100 * ++completedItems / itemsToComplete;
+                        }
+                    );
                 }
             }
 
-            if (signalUpdatedData)
-                SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "RunChecksForProject");
+            job.Status = job.StopRequested ? CheckJobStatus.Stopped : CheckJobStatus.Completed;
+        }
+        catch (Exception ex)
+        {
+            job.Status = CheckJobStatus.Errored;
+            job.Error = ex.Message;
+        }
+        finally
+        {
+            job.EndTimeUtc = DateTime.UtcNow;
+            // Avoid problems with floating point precision
+            job.PercentComplete = Math.Round(job.PercentComplete, 0);
         }
     }
 
     /// <summary>
-    /// Returns true if the check produced any new or different results, false otherwise.
+    /// Run all provided checks on a project for books within active ranges
     /// </summary>
-    private bool RunCheck(
-        string checkId,
-        ScriptureCheckBase check,
+    private void RunChecksForProject(CheckInputRange range, IEnumerable<string> checkIds)
+    {
+        // Text has to be tokenized for the checks before the checks can run
+        var enabledChecksForProject = _checkCache.GetChecks(checkIds, range.ProjectId);
+        CheckDataFormat neededDataFormat = 0;
+        foreach (var check in enabledChecksForProject)
+            neededDataFormat |= check.Check.NeededFormat;
+
+        // "GetText" will tokenize the text for checks to use
+        // "0" chapter number means all chapters
+        var checkDataSource = _checkCache.GetChecksDataSource(range.ProjectId);
+        checkDataSource.GetText(range.Start.BookNum, 0, neededDataFormat);
+
+        var scrText = LocalParatextProjects.GetParatextProject(range.ProjectId);
+        var indexer = new UsfmBookIndexer(scrText.GetText(range.Start.BookNum));
+
+        foreach (var checkId in checkIds)
+        {
+            var check = _checkCache.GetCheck(checkId, range.ProjectId);
+            check.ClearResultsForBook(range.Start.BookNum);
+            // Checks have to be reinitialized to pick up changes to inventories
+            // Inventories are stored in the project settings file
+            if (check.SettingsChanged)
+            {
+                check.SettingsChanged = false;
+                check.Check.Initialize(checkDataSource);
+            }
+            RunCheck(check, checkDataSource, range, indexer);
+        }
+    }
+
+    /// <summary>
+    /// Run the given check on the given range
+    /// </summary>
+    private void RunCheck(
+        CheckForProject checkForProject,
+        ChecksDataSource dataSource,
         CheckInputRange range,
         UsfmBookIndexer indexer
     )
     {
-        var checkData = _checksByIds.GetOrAdd(
-            (checkId, range.ProjectId),
-            (ids) => new CheckForProject(check, ids.checkId, ids.projectId)
-        );
-        CheckResultsRecorder recorder = checkData.ResultsRecorder;
         ErrorMessageDenials denials = GetOrCreateDenials(range.ProjectId);
 
-        lock (checkData.Lock)
-        {
-            var removedItems = recorder.TrimResultsFromBook(range.Start.BookNum);
-            int totalBeforeRunning = recorder.CheckRunResults.Count;
-            check.Run(range.Start.BookNum, GetOrCreateDataSource(range.ProjectId), recorder);
-            recorder.PostProcessResults(_activeRanges, denials, indexer);
-            int totalAfterRunning = recorder.CheckRunResults.Count;
-
-            if (totalAfterRunning == totalBeforeRunning)
-                return removedItems.Count != 0;
-
-            if (totalAfterRunning != totalBeforeRunning + removedItems.Count)
-                return true;
-
-            return removedItems.Exists(item => !recorder.CheckRunResults.Contains(item));
-        }
-    }
-
-    private ChecksDataSource GetOrCreateDataSource(string projectId)
-    {
-        return _dataSourcesByProjectId.GetOrAdd(
-            projectId,
-            id => new ChecksDataSource(LocalParatextProjects.GetParatextProject(id))
+        checkForProject.AccessResults(
+            range.Start.BookNum,
+            recorder =>
+            {
+                recorder.ClearResultsFromBook(range.Start.BookNum);
+                checkForProject.Check.Run(range.Start.BookNum, dataSource, recorder);
+                recorder.PostProcessResults(denials, indexer);
+                recorder.ResultsReady = true;
+            }
         );
     }
 
