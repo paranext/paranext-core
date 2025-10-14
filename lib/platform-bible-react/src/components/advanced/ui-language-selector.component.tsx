@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LocalizedStringValue } from 'platform-bible-utils';
+import { LocalizedStringValue, formatReplacementString } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';
@@ -10,7 +10,7 @@ import { Label } from '../shadcn-ui/label';
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export const UI_LANGUAGE_SELECTOR_STRING_KEYS = Object.freeze([
-  '%settings_uiLanguageSelector_selectFallbackLanguages%',
+  '%settings_uiLanguageSelector_fallbackLanguages%',
 ] as const);
 
 export type UiLanguageSelectorLocalizedStrings = {
@@ -99,9 +99,9 @@ export function UiLanguageSelector({
   className,
   id,
 }: UiLanguageSelectorProps) {
-  const selectFallbackLanguagesText = localizeString(
+  const fallbackLanguagesText = localizeString(
     localizedStrings,
-    '%settings_uiLanguageSelector_selectFallbackLanguages%',
+    '%settings_uiLanguageSelector_fallbackLanguages%',
   );
   const [isOpen, setIsOpen] = useState(false);
 
@@ -165,23 +165,18 @@ export function UiLanguageSelector({
 
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
-        <>
-          <Label className="tw-ms-3">{selectFallbackLanguagesText}</Label>
-          <div className="tw-ms-3">
-            {/* Do not localize or "improve". This label is temporary. */}
-            <Label>
-              Currently:{'\u00A0'}
-              {fallbackLanguages?.length > 0
-                ? `${fallbackLanguages
-                    .map((f) => getLanguageDisplayName(f, primaryLanguage))
-                    .join(', ')}`
-                : `default (${knownUiLanguages.en.autonym})`}
-            </Label>
-            {/* <MultiSelector>
-              Something like this will be added once UX decides exactly what they want.
-          </MultiSelector> */}
-          </div>
-        </>
+        <div className="tw-pt-3">
+          <Label className="tw-font-normal tw-text-muted-foreground">
+            {formatReplacementString(fallbackLanguagesText, {
+              fallbackLanguages:
+                fallbackLanguages?.length > 0
+                  ? fallbackLanguages
+                      .map((f) => getLanguageDisplayName(f, primaryLanguage))
+                      .join(', ')
+                  : knownUiLanguages.en.autonym,
+            })}
+          </Label>
+        </div>
       )}
     </div>
   );

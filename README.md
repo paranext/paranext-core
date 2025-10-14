@@ -91,6 +91,36 @@ If you are developing on Ubuntu 24.04 with AppArmor, you will need to modify `pa
 
 This should be a temporary workaround until we update to newer versions of `electron` and `electron-builder`.
 
+#### Handling platform-bible: URIs during Linux development
+
+If you want your development Platform.Bible to handle the opening of platform-bible:// URIs, such as
+for completing authentication from a web browser, do the following to install a development
+Platform.Bible .desktop launcher.
+
+1. From the root of the repository, use these commands to copy the launcher into your local
+   applications launchers list, replacing REPO_PATH with the path to your source repository, and
+   update:
+   ```bash
+   perl -p -e "s#REPO_PATH#$(pwd)#g" platform.bible-dev.desktop > \
+     ~/.local/share/applications/platform.bible-dev.desktop
+   update-desktop-database ~/.local/share/applications/
+   ```
+2. Set the newly installed .desktop file as the handler for platform-bible:
+   ```bash
+   xdg-mime default platform.bible-dev.desktop x-scheme-handler/platform-bible
+   ```
+3. Optionally check that the handler is set:
+   ```bash
+   xdg-mime query default x-scheme-handler/platform-bible
+   ```
+4. After starting Platform.Bible, you can manually check how it handles the links by running:
+   ```bash
+   xdg-open platform-bible://test
+   ```
+
+This allows platform-bible:// handling by an existing Platform.Bible process. More work
+may be needed to successfully handle platform-bible:// if Platform.Bible is not already launched.
+
 ### macOS Development Pre-requisites
 
 macOS doesn't come preinstalled with all the
