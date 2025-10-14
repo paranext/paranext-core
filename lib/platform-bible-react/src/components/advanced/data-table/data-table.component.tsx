@@ -99,11 +99,11 @@ export function DataTable<TData, TValue>({
     const skeletonRowIds = Array.from({ length: rowCount }).map((_, idx) => `skeleton-row-${idx}`);
     bodyContent = skeletonRowIds.map((rowId) => (
       <TableRow key={rowId}>
-        {visibleColumns.map((col) => (
-          <TableCell key={`skeleton-cell-${col.id}-${rowId}`}>
-            <Skeleton className="tw-h-16 tw-w-full" />
-          </TableCell>
-        ))}
+        <TableCell colSpan={visibleColumns.length ?? columns.length} className="tw-border-0 tw-p-0">
+          <div className="tw-w-full tw-py-2">
+            <Skeleton className="tw-h-14 tw-w-full tw-rounded-md" />
+          </div>
+        </TableCell>
       </TableRow>
     ));
   } else if (table.getRowModel().rows?.length > 0) {
