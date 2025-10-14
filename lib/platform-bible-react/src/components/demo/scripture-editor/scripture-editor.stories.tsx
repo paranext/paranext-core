@@ -13,7 +13,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
-import ExternalToolbar from '@/components/demo/scripture-editor/ExternalToolbar';
+import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
 import {
   annotationRangeWeb1,
   annotationRangeWeb2,
@@ -35,7 +35,7 @@ const meta: Meta<typeof Editorial> = {
         component: `
 **Demo Only:** This component is provided for demonstration purposes only. For production applications, developers should import the Scripture Editor component directly from:
 - npm [@eten-tech-foundation/platform-editor](https://www.npmjs.com/package/@eten-tech-foundation/platform-editor)
-- github [@eten-tech-foundation/platform-editor](https://github.com/eten-tech-foundation/scripture-editors/tree/main/packages/platform)
+- github [eten-tech-foundation/platform-editor](https://github.com/eten-tech-foundation/scripture-editors/tree/main/packages/platform)
 
 This demo version is included in Storybook to showcase the component's functionality and usage patterns.
 
@@ -110,28 +110,21 @@ export const ReadOnly: Story = {
 };
 
 export const RTL: Story = {
-  render: (args, context) => (
-    <CanvasWithDescription
-      viewMode={context.viewMode}
-      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
-    >
-      <Editorial {...args} />
-    </CanvasWithDescription>
-  ),
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
         story:
           'Right-to-left example using a Hebrew snippet (Psalm 1:1). ' +
           'The editor is set to RTL via _options.textDirection = "rtl"_. If you want the UI ' +
-          '(editor toolbar) to be RTL click **Switch direction** in the Storybook toolbar.',
+          '(tab toolbar) to be RTL click **Switch direction** in the Storybook toolbar.',
       },
     },
   },
   args: {
     defaultUsj: usjHebrew,
-    scrRef: defaultScrRef,
     options: {
+      hasExternalUI: true,
       textDirection: 'rtl',
     },
   },
@@ -158,6 +151,7 @@ export const Annotated: Story = {
 };
 
 const inlineNoteOptions: EditorOptions = {
+  hasExternalUI: true,
   view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
   nodes: {
     noteCallerOnClick: (_event, _noteNodeKey, isCollapsed, getCaller, setCaller) => {
@@ -170,14 +164,7 @@ const inlineNoteOptions: EditorOptions = {
 };
 
 export const InlineNoteEditing: Story = {
-  render: (args, context) => (
-    <CanvasWithDescription
-      viewMode={context.viewMode}
-      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
-    >
-      <Editorial {...args} />
-    </CanvasWithDescription>
-  ),
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
@@ -191,50 +178,36 @@ export const InlineNoteEditing: Story = {
   },
   args: {
     defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
     options: inlineNoteOptions,
   },
 };
 
 const insertNoteOptions: EditorOptions = {
+  hasExternalUI: true,
   view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
 };
 
 export const InsertNote: Story = {
-  render: (args, context) => {
-    // eslint-disable-next-line no-null/no-null
-    const editorRef = useRef<EditorRef | null>(null);
-
-    return (
-      <CanvasWithDescription
-        viewMode={context.viewMode}
-        description={
-          context.parameters?.docs?.description?.story ?? context.parameters?.description
-        }
-      >
-        <ExternalToolbar editorRef={editorRef} />
-        <Editorial {...args} ref={editorRef} />
-      </CanvasWithDescription>
-    );
-  },
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
         story:
-          'This story demonstrates inserting notes. Use the buttons above the editor to insert ' +
-          'footnotes, cross-references, and endnotes at the current cursor position. Selecting ' +
-          'text before inserting a footnote will use that text as the footnote quote.',
+          'This story demonstrates inserting notes. Use the Project menu (hamburger) or the ' +
+          'toolbar buttons above the editor to insert footnotes, cross-references, and endnotes ' +
+          'at the current cursor position. Selecting text before inserting a footnote will use ' +
+          'that text as the footnote quote. You can also insert by typing "\\f", "\\x", or "\\fe".',
       },
     },
   },
   args: {
     defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
     options: insertNoteOptions,
   },
 };
 
 const customNodeOptions: EditorOptions = {
+  hasExternalUI: true,
   nodes: {
     noteCallers: ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'],
     noteCallerOnClick: (event) => {
@@ -247,14 +220,7 @@ const customNodeOptions: EditorOptions = {
 };
 
 export const CustomNoteOptions: Story = {
-  render: (args, context) => (
-    <CanvasWithDescription
-      viewMode={context.viewMode}
-      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
-    >
-      <Editorial {...args} />
-    </CanvasWithDescription>
-  ),
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
@@ -267,20 +233,12 @@ export const CustomNoteOptions: Story = {
   },
   args: {
     defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
     options: customNodeOptions,
   },
 };
 
 export const CustomMarkerTrigger: Story = {
-  render: (args, context) => (
-    <CanvasWithDescription
-      viewMode={context.viewMode}
-      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
-    >
-      <Editorial {...args} />
-    </CanvasWithDescription>
-  ),
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
@@ -294,8 +252,8 @@ export const CustomMarkerTrigger: Story = {
   },
   args: {
     defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
     options: {
+      hasExternalUI: true,
       markerMenuTrigger: '?',
     },
   },
@@ -383,14 +341,7 @@ export const MarkersView: Story = {
 
 export const ViewOptionsStory: Story = {
   name: 'View Options',
-  render: (args, context) => (
-    <CanvasWithDescription
-      viewMode={context.viewMode}
-      description={context.parameters?.docs?.description?.story ?? context.parameters?.description}
-    >
-      <Editorial {...args} />
-    </CanvasWithDescription>
-  ),
+  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
@@ -404,8 +355,8 @@ export const ViewOptionsStory: Story = {
   },
   args: {
     defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
     options: {
+      hasExternalUI: true,
       view: {
         markerMode: 'hidden',
         hasSpacing: true,
