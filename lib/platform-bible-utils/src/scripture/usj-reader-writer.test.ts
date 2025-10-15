@@ -103,6 +103,17 @@ const testUSFM2SACh2Usj = JSON.parse(readTestDataFile('testUSFM-2SA-2.json'));
  */
 const testUSFM2SACh3Usj = JSON.parse(readTestDataFile('testUSFM-2SA-3.json'));
 
+/**
+ * TestUSFM 2 Samuel 3 output in USJ from Platform.Bible with the following modifications:
+ *
+ * - Version 3.1 replaced with 3.0 in the USJ marker because that is more accurate. The USJ version
+ *   handling isn't great yet.
+ * - `c`'s `pubnumber` moved to its own paragraph after the `c` marker that contains the contents up
+ *   until the next `para` marker. TJ believes this is how the USJ is supposed to look, but he
+ *   thinks Paratext 9 is not transforming USFM to USX properly in this case.
+ */
+const testUSFM2SACh3UsjCorrected = JSON.parse(readTestDataFile('testUSFM-2SA-3-corrected.json'));
+
 // #endregion testUSFM test data - in Paratext 9 USFM 3.0 format
 
 // #region testUSFM test data - in canonical 3.1 format
@@ -906,8 +917,19 @@ describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
     expect(resultingUsfm).toBe(testUSFM2SACh2Usfm);
   });
 
-  test('toUsfm properly transforms 2SA 3 testUSFM', () => {
+  // This problem is due to what TJ thinks is a bug in Paratext 9's USFM -> USX translation.
+  // See https://discord.com/channels/892072317436448768/902938040362729552/1426247234621804727
+  // TODO: link YouTrack case if they agree this is a bug
+  // eslint-disable-next-line jest/no-disabled-tests
+  test.skip('toUsfm properly transforms 2SA 3 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh3Usj, paratextUsjReaderWriterOptions);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
+  });
+
+  test('toUsfm properly transforms 2SA 3 testUSFM corrected', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCorrected, paratextUsjReaderWriterOptions);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
