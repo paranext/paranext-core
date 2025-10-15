@@ -6,7 +6,90 @@ declare module 'legacy-comment-manager' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
+  import { ScriptureRange } from 'platform-scripture';
   import { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+
+  // #region Enums
+
+  /** Possible status of a comment/note as defined in Paratext 9 */
+  export type CommentStatus = 'Unspecified' | 'Todo' | 'Done' | 'Resolved';
+
+  /**
+   * Possible types of comment/note as defined in Paratext 9 For conflict subtypes, see
+   * {@link CommentConflictType}
+   */
+  export type CommentType = 'Unspecified' | 'Normal' | 'Conflict';
+
+  /** Possible types of conflicts for a comment/note as defined in Paratext 9 */
+  export type CommentConflictType =
+    | 'None'
+    | 'VerseTextConflict'
+    | 'InvalidVerses'
+    | 'VerseBridgeDifferences'
+    | 'DuplicateVerses'
+    | 'ReadError'
+    | 'VerseOrderError'
+    | 'StudyBibleChangeConflict'
+    | 'StudyBibleOverlappingChanges'
+    | 'StudyBibleChangeDeleteConflict';
+
+  // #endregion
+
+  // #region Scripture Range Types
+
+  /**
+   * Represents a selection of scripture text for comment filtering
+   *
+   * Extends the ScriptureRange type from platform-scripture with granularity information
+   */
+  export type CommentScriptureRange = ScriptureRange & {
+    /**
+     * Specifies how granular the VerseRefs should be interpreted
+     *
+     * - `book` = Range covers entire book(s)
+     * - `chapter` = Range covers entire chapter(s)
+     * - `verse` = Range covers specific verse(s)
+     *
+     * @default 'verse'
+     */
+    granularity?: 'book' | 'chapter' | 'verse';
+  };
+
+  // #endregion
+
+  // #region Date Filter Types
+
+  /**
+   * Filter for comment dates using Unix timestamps
+   *
+   * Can specify exact date, date range, or before/after a date
+   */
+  export type DateFilter =
+    | {
+        /** Exact date match */
+        exact: number;
+      }
+    | {
+        /** Date range filter */
+        range: {
+          /** Start date (inclusive) */
+          start: number;
+          /** End date (inclusive) */
+          end: number;
+        };
+      }
+    | {
+        /** Comments on or before this date */
+        before: number;
+      }
+    | {
+        /** Comments on or after this date */
+        after: number;
+      };
+
+  // #endregion
+
+  // #region Selector Types
 
   export type LegacyCommentSelector = {
     bookId: string;
@@ -14,6 +97,32 @@ declare module 'legacy-comment-manager' {
     verseNum?: number;
     commentId?: string;
   };
+
+  /**
+   * Selector for retrieving comment threads
+   *
+   * All properties are optional - if none are specified, returns all threads
+   */
+  export type CommentThreadSelector = {
+    /** Filter by note status */
+    status?: CommentStatus;
+    /** Filter by note type */
+    type?: CommentType;
+    /** Filter by thread ID */
+    threadId?: string;
+    /** Filter by date */
+    dateFilter?: DateFilter;
+    /** Filter by user who created comments */
+    user?: string;
+    /** Filter by user to whom comments are assigned */
+    assignedTo?: string;
+    /** Filter by scripture range */
+    scriptureRanges?: CommentScriptureRange[];
+  };
+
+  // #endregion
+
+  // #region Legacy Types
 
   export type LegacyComment = {
     assignedUser?: string;
@@ -42,10 +151,54 @@ declare module 'legacy-comment-manager' {
     verseRef: string;
   };
 
+  /**
+   * Represents a comment thread - a collection of related comments
+   *
+   * This is the C# CommentThread type from Paratext.Data.ProjectComments
+   */
+  export type CommentThread = {
+    /** Thread identifier (from first comment) */
+    id: string;
+    /** All comments in this thread */
+    comments: LegacyComment[];
+    /** Only non-deleted comments */
+    activeComments: LegacyComment[];
+    /** Thread status (aggregated from most recent non-Unspecified comment) */
+    status: CommentStatus;
+    /** Thread type (from first comment) */
+    type: CommentType;
+    /** User to whom the thread is assigned */
+    assignedUser: string;
+    /** User to reply to */
+    replyToUser: string;
+    /** Last modified date (Unix timestamp in milliseconds) */
+    modifiedDate: number;
+    /** Scripture reference for this thread */
+    verseRef: string;
+    /** Original selected verse text */
+    originalVerseText: string;
+    /** Name of the context scripture text */
+    contextScrTextName?: string;
+    /** Whether this is a spelling note */
+    isSpellingNote: boolean;
+    /** Whether this is a back translation note */
+    isBTNote: boolean;
+    /** Whether this is a consultant note */
+    isConsultantNote: boolean;
+    /** Biblical term ID if this is a biblical term note */
+    biblicalTermId?: string;
+  };
+
+  // #endregion
+
+  // #region Data Provider Types
+
   /** Provides comment data */
   export type LegacyCommentProjectInterfaceDataTypes = {
     /** Called "Project Notes" in Paratext 9 */
     Comments: DataProviderDataType<LegacyCommentSelector, LegacyComment[], LegacyComment[]>;
+    /** Comment threads matching the selector criteria */
+    CommentThreads: DataProviderDataType<CommentThreadSelector, CommentThread[], never>;
   };
 
   /** Provides comments from project team members in a way that is compatible with Paratext 9 */
@@ -74,7 +227,53 @@ declare module 'legacy-comment-manager' {
         callback: (comments: LegacyComment[] | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
+      /**
+       * Gets comment threads matching the specified selector criteria
+       *
+       * @param selector Filter criteria for comment threads. If not provided or all properties are
+       *   undefined, returns all threads
+       * @returns Promise that resolves to an array of comment threads
+       */
+      getCommentThreads(selector?: CommentThreadSelector): Promise<CommentThread[]>;
+
+      /**
+       * Creates a new comment. The comment ID and thread ID are automatically generated.
+       *
+       * @param selector Specifies the location and content of the new comment. BookId, ChapterNum,
+       *   and VerseNum are required. CommentId should contain the comment text content.
+       * @returns Promise that resolves to the auto-generated comment ID (format:
+       *   "threadId/userName/date")
+       */
+      createComment(selector: LegacyCommentSelector): Promise<string>;
+
+      /**
+       * Deletes a comment by its ID
+       *
+       * @param commentId The unique ID of the comment to delete
+       * @returns Promise that resolves to update instructions indicating which data types were
+       *   affected, or `false` if the comment was not found
+       */
+      deleteComment(
+        commentId: string,
+      ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
+
+      /**
+       * Updates the content of an existing comment
+       *
+       * @param commentId The unique ID of the comment to update
+       * @param updatedContent The new text content for the comment
+       * @returns Promise that resolves to update instructions indicating which data types were
+       *   affected, or `false` if the comment was not found
+       */
+      updateComment(
+        commentId: string,
+        updatedContent: string,
+      ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
+
+      // #endregion
     };
+
+  // #endregion
 }
 
 declare module 'papi-shared-types' {
