@@ -800,7 +800,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     <ResizableHandle />
                     <ResizablePanel
                       defaultSize={footnotePaneSize}
-                      className="tw-bg-white tw-border"
+                      className="tw-bg-sidebar tw-border"
                       minSize={3}
                       maxSize={97}
                     >
