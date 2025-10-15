@@ -6,11 +6,17 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { MarkersMap } from './markers-map-3.1.model';
 
+/** USJ content node type for a book */
+export const BOOK_TYPE = 'book';
+
 /** USJ content node type for a chapter */
 export const CHAPTER_TYPE = 'chapter';
 
 /** USJ content node type for a verse */
 export const VERSE_TYPE = 'verse';
+
+/** 3-character code that indicates there is no known book */
+export const NO_BOOK_ID = '***';
 
 /** Represents a book, chapter, verse, and offset */
 export type VerseRefOffset = {
