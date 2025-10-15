@@ -41,6 +41,7 @@
       "%webView_checksSidePanel_checkTypeFilter_countLabel%": "Checks ({resultsCount} selected)",
       "%webView_checksSidePanel_checkTypeFilter_label%": "Check Type",
       "%webView_checksSidePanel_checkingBadge_title%": "Checking...",
+      "%webView_checksSidePanel_checkRequiresSetup%": "Setup required",
       "%webView_checksSidePanel_deniedBadge_title%": "Denied",
       "%webView_checksSidePanel_fixedBadge_title%": "Fixed",
       "%webView_checksSidePanel_focusedCheckDropdown_allowItem%": "Allow",

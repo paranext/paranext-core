@@ -1,4 +1,4 @@
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, buttonVariants } from '@/components/shadcn-ui/button';
 import {
   Command,
   CommandEmpty,
@@ -11,62 +11,78 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/
 import { cn } from '@/utils/shadcn-ui.util';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
 import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { type VariantProps } from 'class-variance-authority';
 
 export type MultiSelectComboBoxEntry = {
   value: string;
   label: string;
+  secondaryLabel?: string;
   starred?: boolean;
 };
 
+/**
+ * Props for MultiSelectComboBox component that provides a UI for selecting multiple items from a
+ * list. It supports displaying a placeholder, custom selected text, and an optional icon. Users can
+ * search through options and view starred items prominently.
+ */
 export interface MultiSelectComboBoxProps {
+  /** The list of entries to select from. */
   entries: MultiSelectComboBoxEntry[];
-  getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
+  /** The currently selected values. */
   selected: string[];
+  /** Callback function to handle changes in selection. */
   onChange: (values: string[]) => void;
+  /** Placeholder text when no items are selected. */
   placeholder: string;
+  /** Whether to show select all/clear all buttons. */
+  hasToggleAllFeature?: boolean;
+  /** Text for the select all button. */
+  selectAllText?: string;
+  /** Text for the clear all button. */
+  clearAllText?: string;
+  /** Message displayed when no entries are found. */
   commandEmptyMessage?: string;
+  /** Custom text to display when items are selected. */
   customSelectedText?: string;
+  /** Whether the dropdown is open (for controlled usage). */
+  isOpen?: boolean;
+  /** Handler that is called when the dropdown's open state changes. */
+  onOpenChange?: (open: boolean) => void;
+  /** Flag to disable the component. */
   isDisabled?: boolean;
+  /** Flag to sort selected items. */
   sortSelected?: boolean;
+  /** Optional icon to display in the button. */
   icon?: ReactNode;
+  /** Additional class names for styling. */
   className?: string;
+  /** Button variant to use for the trigger button. */
+  variant?: VariantProps<typeof buttonVariants>['variant'];
+  /** Optional ID for the component. */
   id?: string;
 }
 
-/**
- * MultiSelectComboBox is a component that provides a UI for selecting multiple items from a list.
- * It supports displaying a placeholder, custom selected text, and an optional icon. Users can
- * search through options and view starred items prominently.
- *
- * @param {MultiSelectComboBoxProps} props
- * @param {MultiSelectComboBoxEntry[]} props.entries - The list of entries to select from.
- * @param {function} [props.getEntriesCount] - Optional function to get the count of entries.
- * @param {string[]} props.selected - The currently selected values.
- * @param {function} props.onChange - Callback function to handle changes in selection.
- * @param {string} props.placeholder - Placeholder text when no items are selected.
- * @param {string} [props.commandEmptyMessage] - Message displayed when no entries are found.
- * @param {string} [props.customSelectedText] - Custom text to display when items are selected.
- * @param {boolean} [props.isDisabled] - Flag to disable the component.
- * @param {boolean} [props.sortSelected] - Flag to sort selected items.
- * @param {ReactNode} [props.icon] - Optional icon to display in the button.
- * @param {string} [props.className] - Additional class names for styling.
- * @param {string} [props.id] - Optional ID for the component.
- */
+/** MultiSelectComboBox component for selecting multiple items from a list. */
 export function MultiSelectComboBox({
   entries,
-  getEntriesCount = undefined,
   selected,
   onChange,
   placeholder,
+  hasToggleAllFeature = false,
+  selectAllText = 'Select All',
+  clearAllText = 'Clear All',
   commandEmptyMessage = 'No entries found',
   customSelectedText,
+  isOpen = undefined,
+  onOpenChange = undefined,
   isDisabled = false,
   sortSelected = false,
   icon = undefined,
   className = undefined,
+  variant = 'ghost',
   id,
 }: MultiSelectComboBoxProps) {
-  const [open, setOpen] = useState(false);
+  const [isOpenLocal, setIsOpenLocal] = useState(false);
 
   const handleSelect = useCallback(
     (label: string) => {
@@ -103,35 +119,37 @@ export function MultiSelectComboBox({
     return [...starredItems, ...nonStarredItems];
   }, [entries, selected, sortSelected]);
 
+  const handleSelectAll = () => {
+    onChange(entries.map((entry) => entry.value));
+  };
+
+  const handleClearAll = () => {
+    onChange([]);
+  };
+
+  const actualIsOpen = isOpen ?? isOpenLocal;
+  const actualOnOpenChange = onOpenChange ?? setIsOpenLocal;
+
   return (
     <div id={id} className={className}>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={actualIsOpen} onOpenChange={actualOnOpenChange}>
         <PopoverTrigger asChild>
           <Button
-            variant="ghost"
+            variant={variant}
             role="combobox"
-            aria-expanded={open}
-            className={cn(
-              'tw-w-full tw-justify-between',
-              selected.length > 0 && selected.length < entries.length && 'tw-border-primary',
-              'tw-group',
-            )}
+            aria-expanded={actualIsOpen}
+            className="tw-group tw-w-full tw-justify-between"
             disabled={isDisabled}
           >
             <div className="tw-flex tw-items-center tw-gap-2">
-              <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
-                <span className="tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center">
-                  {icon}
-                </span>
-              </div>
-              <div
-                className={cn({
-                  'tw-text-muted-foreground group-hover:tw-text-secondary-foreground':
-                    selected.length === 0 || selected.length === entries.length,
-                })}
-              >
-                <div className="tw-font-normal">{getPlaceholderText()}</div>
-              </div>
+              {icon && (
+                <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
+                  <span className="tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center">
+                    {icon}
+                  </span>
+                </div>
+              )}
+              <div className="tw-font-normal">{getPlaceholderText()}</div>
             </div>
             <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
           </Button>
@@ -139,13 +157,20 @@ export function MultiSelectComboBox({
         <PopoverContent align="start" className="tw-w-full tw-p-0">
           <Command>
             <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+            {hasToggleAllFeature && (
+              <div className="tw-flex tw-justify-between tw-border-b tw-p-2">
+                <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+                  {selectAllText}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleClearAll}>
+                  {clearAllText}
+                </Button>
+              </div>
+            )}
             <CommandList>
               <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
               <CommandGroup>
                 {sortedOptions.map((option) => {
-                  const count: number | undefined = getEntriesCount
-                    ? getEntriesCount(option)
-                    : undefined;
                   return (
                     <CommandItem
                       key={option.label}
@@ -161,12 +186,12 @@ export function MultiSelectComboBox({
                           )}
                         />
                       </div>
-                      <div className="tw-w-4">
-                        {option.starred && <Star className="tw-h-4 tw-w-4" />}
-                      </div>
+                      {option.starred && <Star className="tw-h-4 tw-w-4" />}
                       <div className="tw-flex-grow">{option.label}</div>
-                      {getEntriesCount && (
-                        <div className="tw-w-10 tw-text-end tw-text-muted-foreground">{count}</div>
+                      {option.secondaryLabel && (
+                        <div className="tw-text-end tw-text-muted-foreground">
+                          {option.secondaryLabel}
+                        </div>
                       )}
                     </CommandItem>
                   );
