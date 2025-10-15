@@ -51,6 +51,166 @@ const TABLE_MARKER_NUMBER_REGEXP = /\w+(\d+)/;
 /** Map of USJ content arrays and objects inside content arrays to the content array owner */
 type UsjParentMap = Map<MarkerObject | MarkerContent[], MarkerObject | Usj>;
 
+type UsjAttributeKey = { isAttributeKey: string; forMarker: MarkerObject | Usj };
+type UsjAttributeValue = { isAttributeValueForKey: string; forMarker: MarkerObject | Usj };
+
+type UsjFragment = MarkerToken | UsjAttributeKey | UsjAttributeValue;
+
+type UsjFragmentInfoMinimal = {
+  fragment: UsjFragment;
+  indexInUsfm: number;
+};
+
+type TokenToUsfmReturn = {
+  usfm: string;
+  fragmentsInfo: UsjFragmentInfoMinimal[];
+};
+
+type UsjFragmentInfo = UsjFragmentInfoMinimal & {
+  workingStack: WorkingStack;
+  indexFromVerseStart: number;
+};
+
+/** Fragments at each index in the USFM string */
+type FragmentsByIndexInUsfm = SortedNumberMap<UsjFragmentInfo>;
+
+/**
+ * Fragment that is associated with the start of a verse ref. Used for getting index from verse
+ * start
+ */
+type VerseFragmentsByVerseRef = {
+  [book: string]: {
+    [chapterNum: number]: SortedNumberMap<UsjFragmentInfo>;
+  };
+};
+
+/**
+ * JSON path to the `style` or an attribute on a {@link MarkerContent} or {@link Usj} in the current
+ * USJ document.
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
+type PropertyJsonPath =
+  | ''
+  | `$.${string}`
+  | `$.content[${number}].${string}`
+  | `$.content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`;
+
+/**
+ * Node within a USJ object, a JSONPath query to the node, and an offset to any kind of
+ * {@link UsjFragment} within that node.
+ */
+type UsjFragmentLocation = {
+  node: MarkerContent | Usj;
+} & JsonPathScriptureLocation;
+
+/**
+ * A JSONPath query to a node within a USJ document and an offset to any kind of {@link UsjFragment}
+ * within that node.
+ */
+type JsonPathScriptureLocation =
+  | JsonPathMarkerLocation
+  | JsonPathClosingMarkerLocation
+  | JsonPathTextContentLocation
+  | JsonPathMarkerPropertyValueLocation
+  | JsonPathMarkerAttributeKeyLocation;
+
+// TODO: should we have an offset within the JsonPathMarkerLocation so you can select the nested
+// prefix? Or the double backslash for optbreak?
+/**
+ * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
+ * that marker (at the backslash in USFM).
+ */
+type JsonPathMarkerLocation = {
+  /** JSON path to the marker object the location is pointing to. */
+  jsonPath: ContentJsonPath;
+};
+
+/**
+ * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
+ * that marker (at the backslash in USFM).
+ */
+/**
+ * A JSONPath query to a specific point in the closing marker representation of a
+ * {@link MarkerObject} or {@link Usj} node.
+ */
+type JsonPathClosingMarkerLocation = {
+  /**
+   * JSON path to the marker object whose closing marker the location is pointing to. The offset
+   * applies to the closing marker representation of that marker (for example, `\nd*` in USFM).
+   */
+  jsonPath: ContentJsonPath;
+  /**
+   * The character index in the closing marker representation where this location is pointing. The
+   * location is at this offset within the closing marker representation.
+   */
+  /**
+   * If this is defined, the location is this offset within the string value of the closing marker
+   * representation of the marker being pointed to by {@link UsjFragmentLocation.jsonPath}.
+   */
+  closingMarkerOffset: number;
+};
+
+/**
+ * A JSONPath query to a specific point in a text content string in a {@link MarkerObject.content}
+ * array.
+ */
+type JsonPathTextContentLocation = {
+  /**
+   * JSON path to the text content string the location is pointing to. The offset applies to this
+   * text string.
+   */
+  jsonPath: ContentJsonPath;
+  /**
+   * The character index in the text content string where this location is pointing. The location is
+   * at this offset within the text content string.
+   */
+  offset: number;
+};
+
+/**
+ * A JSONPath query to a specific point in a property (`marker` or an attribute) value string in a
+ * {@link MarkerObject} or {@link Usj}. The property cannot be `type` because `type`'s value has no
+ * representation in USFM.
+ *
+ * To represent a location in an attribute's key, use {@link JsonPathMarkerAttributeKeyLocation}.
+ */
+type JsonPathMarkerPropertyValueLocation = {
+  /**
+   * JSON path to the property the location is pointing to. The offset applies to this property's
+   * value string.
+   */
+  jsonPath: PropertyJsonPath;
+  /**
+   * The character index in the property's value string where this location is pointing. The
+   * location is at this offset within the property's value string.
+   */
+  offset: number;
+};
+
+/**
+ * A JSONPath query to a specific point in an attribute key string in a {@link MarkerObject} or
+ * {@link Usj}. The property cannot be `type` or `marker` because these properties' keys have no
+ * representation in USFM. The property also cannot be any special attribute whose key doesn't have
+ * a text representation in USFM like default attribute, leading attribute, text content attribute
+ *
+ * To represent a location in an attribute's value, use {@link JsonPathMarkerPropertyValueLocation}.
+ */
+type JsonPathMarkerAttributeKeyLocation = {
+  /**
+   * JSON path to the property the location is pointing to. The offset applies to this property's
+   * key string.
+   */
+  jsonPath: PropertyJsonPath;
+  /**
+   * The character index in the property's key string where this location is pointing. The location
+   * is at this offset within the property's key string.
+   */
+  keyOffset: number;
+};
+
 /**
  * Represents information about where a USJ node resides in the `content` array of its parent.
  * `parent` is a reference to the node's parent, and `index` represents the numeric index inside of
@@ -83,7 +243,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private readonly usj: Usj;
   private readonly markersMap: MarkersMap;
   private readonly shouldAllowInvisibleCharacters: boolean;
+
+  // Cached properties
   private parentMapInternal: UsjParentMap | undefined;
+  private fragmentsByIndexInUsfmInternal: FragmentsByIndexInUsfm | undefined;
+  private usfmInternal: string | undefined;
 
   constructor(usj: Usj, options?: UsjReaderWriterOptions) {
     this.usj = usj;
@@ -110,6 +274,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   // If new variables are created to speed up queries, they should be reset here
   usjChanged(): void {
     this.parentMapInternal = undefined;
+    this.fragmentsByIndexInUsfmInternal = undefined;
+    this.usfmInternal = undefined;
   }
 
   // #region Directly using the JSONPath package to perform JSONPath query -> USJ node
@@ -1185,11 +1351,32 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /** Converts the text content of a marker to its equivalent in USFM */
-  private textContentToUsfm(textContent: string) {
+  private textContentToUsfm(textContent: string): TokenToUsfmReturn {
     // Special case: NBSP should be replaced with ~ in USFM if invisible characters are not allowed
-    return this.shouldAllowInvisibleCharacters
-      ? textContent
-      : textContent.replace(TEXT_CONTENT_NBSP_REGEXP, '~');
+    return {
+      usfm: this.shouldAllowInvisibleCharacters
+        ? textContent
+        : textContent.replace(TEXT_CONTENT_NBSP_REGEXP, '~'),
+      fragmentsInfo: [{ fragment: textContent, indexInUsfm: 0 }],
+    };
+  }
+
+  /**
+   * Merge an independent array of fragment info into an existing array of fragment info, offsetting
+   * the indices of the new fragments so their locations start from the end of the string
+   */
+  private static mergeFragmentsInfoIntoExistingArray(
+    newFragmentsInfo: UsjFragmentInfoMinimal[],
+    existingFragmentsInfo: UsjFragmentInfoMinimal[],
+    existingUsfmLength: number,
+  ) {
+    newFragmentsInfo.forEach((fragmentInfo) => {
+      const fragmentIndex = existingUsfmLength + fragmentInfo.indexInUsfm;
+      existingFragmentsInfo.push({
+        ...fragmentInfo,
+        indexInUsfm: fragmentIndex,
+      });
+    });
   }
 
   /**
@@ -1209,8 +1396,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @returns String containing the marker information that should come before the contents of the
    *   marker in USFM
    */
-  private openingMarkerToUsfm(marker: MarkerObject | Usj, isInsideMarkerWithSameType: boolean) {
+  private openingMarkerToUsfm(
+    marker: MarkerObject | Usj,
+    isInsideMarkerWithSameType: boolean,
+  ): TokenToUsfmReturn {
     let usfm = '';
+    const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
 
     const { markerNameUsfm, markerInfo, markerType, markerTypeInfo, attributeMarkerInfoEntries } =
       this.getInfoForMarker(marker);
@@ -1230,10 +1421,20 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Add the marker name
     // Special case with `optbreak` - transform to `//`
     // Special case with `unmatched` - no space after the marker name because it is basically a closing marker
-    usfm +=
-      markerType === 'optbreak'
-        ? '//'
-        : `\\${markerPrefix}${markerNameUsfm}${markerType === 'unmatched' ? '' : ' '}`;
+    // Fragment representing the very beginning of the marker is the marker itself
+    fragmentsInfo.push({ fragment: marker, indexInUsfm: usfm.length });
+    usfm += markerType === 'optbreak' ? '//' : `\\${markerPrefix}`;
+
+    if (markerType !== 'optbreak') {
+      // Fragment representing the marker name is the `marker` property
+      fragmentsInfo.push({
+        // TODO: should we change things so we have some other way to specify the opening marker
+        // and then can just use "attribute" for all these instead of property e.g. JsonPathMarkerPropertyValueLocation
+        fragment: { isAttributeValueForKey: 'marker', forMarker: marker },
+        indexInUsfm: usfm.length,
+      });
+      usfm += `${markerNameUsfm}${markerType === 'unmatched' ? '' : ' '}`;
+    }
 
     // Add leading attributes in listed order
     if (markerInfo.leadingAttributes) {
@@ -1242,13 +1443,25 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
         if (!attributeValue) return;
 
+        fragmentsInfo.push({
+          fragment: { isAttributeValueForKey: attributeName, forMarker: marker },
+          indexInUsfm: usfm.length,
+        });
         usfm += `${attributeValue} `;
       });
     }
 
     // Add text content attribute
-    if (markerInfo.textContentAttribute && markerWithAnyAttributes[markerInfo.textContentAttribute])
+    if (
+      markerInfo.textContentAttribute &&
+      markerWithAnyAttributes[markerInfo.textContentAttribute]
+    ) {
+      fragmentsInfo.push({
+        fragment: { isAttributeValueForKey: markerInfo.textContentAttribute, forMarker: marker },
+        indexInUsfm: usfm.length,
+      });
       usfm += `${markerWithAnyAttributes[markerInfo.textContentAttribute]} `;
+    }
 
     // Add attribute markers in listed order
     if (markerInfo.attributeMarkers) {
@@ -1272,8 +1485,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // attributes. It likely will never matter as this is a very strange concept and it seems
         // the USFM committee doesn't want to create more attribute markers.
 
+        // TODO: add new location type for attribute marker opening?
         usfm = this.addMarkerUsfmToString(usfm, attributeMarker, marker);
-        usfm += this.textContentToUsfm(attributeValue);
+        const { usfm: textContentUsfm } = this.textContentToUsfm(attributeValue);
+        fragmentsInfo.push({
+          fragment: {
+            isAttributeValueForKey: attributeMarkerInfo.attributeMarkerAttributeName,
+            forMarker: marker,
+          },
+          indexInUsfm: usfm.length,
+        });
+        usfm += textContentUsfm;
+        // TODO: add new location type for attribute marker closing?
         usfm = this.addMarkerUsfmToString(
           usfm,
           {
@@ -1292,7 +1515,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       });
     }
 
-    return usfm;
+    return { usfm, fragmentsInfo };
   }
 
   /**
@@ -1321,7 +1544,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @returns String containing the marker information that should come after the contents of the
    *   marker in USFM
    */
-  private closingMarkerToUsfm(marker: MarkerObject | Usj, isInsideMarkerWithSameType: boolean) {
+  private closingMarkerToUsfm(
+    marker: MarkerObject | Usj,
+    isInsideMarkerWithSameType: boolean,
+  ): TokenToUsfmReturn {
     const {
       markerName,
       markerNameUsfm,
@@ -1424,10 +1650,26 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         ),
       };
 
-      let usfm = this.openingMarkerToUsfm(independentClosingMarker, isInsideMarkerWithSameType);
+      let usfm = '';
+      const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
+
+      const { usfm: openingMarkerUsfm } = this.openingMarkerToUsfm(
+        independentClosingMarker,
+        isInsideMarkerWithSameType,
+      );
+      // Fragment for independent closing marker is just the normal closing fragment
+      fragmentsInfo.push({
+        fragment: { isClosingMarker: true, forMarker: marker },
+        indexInUsfm: usfm.length,
+      });
+      usfm += openingMarkerUsfm;
       // Only add the independent closing marker if it does not have the same name as the marker we
       // are closing so we don't get in an infinite loop
       if (markerName !== independentClosingMarker.marker)
+        // ENHANCE: If we ever have a situation where closing marker attributes get on a marker
+        // with an independent closing marker, let's add fragments for the attributes here. Though
+        // I think this may be something the USFM committee intends to avoid doing based on the
+        // proposal to add attributes at the opening marker
         usfm = this.addMarkerUsfmToString(
           usfm,
           {
@@ -1437,30 +1679,48 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           isInsideMarkerWithSameType,
         );
 
-      return usfm;
+      return { usfm, fragmentsInfo };
     }
 
     // This marker doesn't have an independent closing marker, so create a normal closing marker
     let usfm = '';
+    const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
 
     // Add attributes to the closing marker USFM
     if (closingMarkerAttributeNames.length > 0) {
+      // Add the bar before closing attributes
+      usfm += '|';
+
       // Default attribute syntax if it is the only attribute present
       if (
         closingMarkerAttributeNames.length === 1 &&
         closingMarkerAttributeNames[0] === markerInfo.defaultAttribute
       ) {
-        usfm += `|${markerWithAnyAttributes[markerInfo.defaultAttribute]}`;
+        fragmentsInfo.push({
+          fragment: { isAttributeValueForKey: markerInfo.defaultAttribute, forMarker: marker },
+          indexInUsfm: usfm.length,
+        });
+        usfm += markerWithAnyAttributes[markerInfo.defaultAttribute];
       } else {
-        // List all attributes
-        usfm += closingMarkerAttributeNames.reduce((attributesUsfm, attributeName, index) => {
+        // List all attributes with key and value
+        closingMarkerAttributeNames.forEach((attributeName, index) => {
           // Special case: fig's file attribute is src in USFM
           const attributeNameUsfm =
             markerName === 'fig' && attributeName === 'file' ? 'src' : attributeName;
           // Add to the accumulated usfm (starting with a bar): a space if this is after the first
           // attribute, then the attribute name, then =, then "the attribute value"
-          return `${attributesUsfm}${index > 0 ? ' ' : ''}${attributeNameUsfm}="${markerWithAnyAttributes[attributeName]}"`;
-        }, '|');
+          if (index > 0) usfm += ' ';
+          fragmentsInfo.push({
+            fragment: { isAttributeKey: attributeName, forMarker: marker },
+            indexInUsfm: usfm.length,
+          });
+          usfm += `${attributeNameUsfm}="`;
+          fragmentsInfo.push({
+            fragment: { isAttributeValueForKey: attributeName, forMarker: marker },
+            indexInUsfm: usfm.length,
+          });
+          usfm += `${markerWithAnyAttributes[attributeName]}"`;
+        });
       }
     }
 
@@ -1471,10 +1731,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // Special case with `char` markers - prefix with `+` if inside another `char` marker
       const markerPrefix = markerType === 'char' && isInsideMarkerWithSameType ? '+' : '';
 
+      fragmentsInfo.push({
+        fragment: { isClosingMarker: true, forMarker: marker },
+        indexInUsfm: usfm.length,
+      });
       usfm += `\\${markerPrefix}${closingMarkerName}*`;
     }
 
-    return usfm;
+    return { usfm, fragmentsInfo };
   }
 
   /**
@@ -1514,12 +1778,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @param marker The opening or closing marker to add to the USFM
    * @param tokenParent Parent of the marker being added. Used to determine if this marker is nested
    *   within another marker of the same type
+   * @param fragmentsInfo The array of fragment information built so far for the USFM string passed
+   *   in. THIS METHOD WILL MODIFY THE ARRAY PASSED IN; it will add new fragments that correspond to
+   *   the marker added.
    * @returns Final USFM string with the marker added
    */
   private addMarkerUsfmToString(
     usfm: string,
     marker: MarkerObject | ClosingMarker,
     tokenParent: MarkerObject | Usj | undefined,
+    fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string;
   /**
    * Add an opening or closing marker USFM representation to the end of a string of USFM
@@ -1528,20 +1796,29 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @param marker The opening or closing marker to add to the USFM
    * @param isInsideMarkerWithSameType `true` if this marker is inside another marker of the same
    *   type. This is used to determine if a prefix should be added before the marker name.
+   * @param fragmentsInfo The array of fragment information built so far for the USFM string passed
+   *   in. THIS METHOD WILL MODIFY THE ARRAY PASSED IN; it will add new fragments that correspond to
+   *   the marker added.
    * @returns Final USFM string with the marker added
    */
   private addMarkerUsfmToString(
     usfm: string,
     marker: MarkerObject | ClosingMarker,
     isInsideMarkerWithSameType: boolean,
+    fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string;
   private addMarkerUsfmToString(
     usfm: string,
     marker: MarkerObject | ClosingMarker,
     tokenParentOrIsInsideMarkerWithSameType: MarkerObject | Usj | boolean | undefined,
+    fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string {
     let usfmOutput = usfm;
-    let markerUsfmOutput: string;
+
+    // Build up the marker's usfm and fragment info separately first because we may modify it before
+    // adding it to the full usfm
+    let markerUsfmOutput;
+    let markerFragmentsInfo: UsjFragmentInfoMinimal[];
 
     const { markerName, markerType, markerTypeInfo } = this.getInfoForMarker(
       'isClosingMarker' in marker ? marker.forMarker : marker,
@@ -1561,7 +1838,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     if ('isClosingMarker' in marker) {
-      markerUsfmOutput = this.closingMarkerToUsfm(marker.forMarker, isParentSameType);
+      const { usfm: closingUsfm, fragmentsInfo: closingFragmentsInfo } = this.closingMarkerToUsfm(
+        marker.forMarker,
+        isParentSameType,
+      );
+      markerFragmentsInfo = closingFragmentsInfo;
+      markerUsfmOutput = closingUsfm;
 
       // If the closing marker is supposed to be empty, there was nothing in the marker content, and
       // there are no closing marker attributes present, we need to remove the structural space after
@@ -1577,12 +1859,21 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
       }
     } else {
-      markerUsfmOutput = this.openingMarkerToUsfm(marker, isParentSameType);
+      const { usfm: openingUsfm, fragmentsInfo: openingFragmentsInfo } = this.openingMarkerToUsfm(
+        marker,
+        isParentSameType,
+      );
+      markerFragmentsInfo = openingFragmentsInfo;
+      markerUsfmOutput = openingUsfm;
     }
 
     if (markerUsfmOutput.startsWith('\n')) {
       if (usfmOutput.length === 0) {
         // If the USFM is empty, don't add a newline at the start
+        markerFragmentsInfo.map((fragmentInfo) => ({
+          ...fragmentInfo,
+          indexInUsfm: fragmentInfo.indexInUsfm - 1,
+        }));
         markerUsfmOutput = markerUsfmOutput.substring(1);
       } else {
         // If there's supposed to be a newline before the marker, it should eat the last space if
@@ -1611,14 +1902,53 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
+    // Add the marker fragments and USFM into the existing fragments and USFM
+    if (fragmentsInfo)
+      UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
+        markerFragmentsInfo,
+        fragmentsInfo,
+        usfmOutput.length,
+      );
     usfmOutput += markerUsfmOutput;
 
     return usfmOutput;
   }
 
   toUsfm() {
+    return this.usfm;
+  }
+
+  // #endregion
+
+  // #region USFM-related cached properties
+
+  private calculateUsfmProperties(): {
+    usfm: string;
+    fragmentsByIndexInUsfm: FragmentsByIndexInUsfm;
+  } {
     // Build the USFM up from the USJ content
     let usfm = '';
+    // Fragments array to build all the fragments before loading them into the map
+    const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
+
+    // Build the fragments map as we go
+    const fragmentsByIndexInUsfm = new SortedNumberMap<UsjFragmentInfo>();
+
+    function addFragmentsInfo(
+      fragmentsInfoToAdd: UsjFragmentInfoMinimal[],
+      workingStack: WorkingStack,
+    ) {
+      fragmentsInfoToAdd.forEach((fragmentInfo) => {
+        const fragmentIndex = usfm.length + fragmentInfo.indexInUsfm;
+        fragmentsByIndexInUsfm.set(fragmentIndex, {
+          ...fragmentInfo,
+          workingStack,
+          indexInUsfm: fragmentIndex,
+          // TODO:
+          indexFromVerseStart: 0,
+        });
+      });
+    }
 
     // Special case: Opening marker of the `USJ` marker - needs to go after `id` closes in USFM even
     // though it is before it in USJ
@@ -1640,7 +1970,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       (token, workingStack) => {
         if (typeof token !== 'object') {
           // Add the text contents USFM representation
-          usfm += this.textContentToUsfm(token);
+          const { usfm: textContentUsfm, fragmentsInfo: textContentFragmentsInfo } =
+            this.textContentToUsfm(token);
+          UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
+            textContentFragmentsInfo,
+            fragmentsInfo,
+            usfm.length,
+          );
+          usfm += textContentUsfm;
           return false;
         }
 
@@ -1662,13 +1999,13 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           }
 
           // Add the closing marker USFM representation
-          usfm = this.addMarkerUsfmToString(usfm, token, tokenParent);
+          usfm = this.addMarkerUsfmToString(usfm, token, tokenParent, fragmentsInfo);
 
           // If this is closing the `id` marker (the only marker whose type is `book`), add the
           // top-level USJ opening marker after it
           if (token.forMarker.type === 'book' && !hasPassedIdMarker) {
             if (usjOpeningMarker)
-              usfm = this.addMarkerUsfmToString(usfm, usjOpeningMarker, tokenParent);
+              usfm = this.addMarkerUsfmToString(usfm, usjOpeningMarker, tokenParent, fragmentsInfo);
 
             hasPassedIdMarker = true;
           }
@@ -1695,7 +2032,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         }
 
         // Add the opening marker USFM representation
-        usfm = this.addMarkerUsfmToString(usfm, token, tokenParent);
+        usfm = this.addMarkerUsfmToString(usfm, token, tokenParent, fragmentsInfo);
 
         // Keep going through the whole document
         return false;
@@ -1705,7 +2042,29 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Always add newline at the end of the file; likely replaces a space
     usfm = `${UsjReaderWriter.removeEndSpace(usfm)}\n`;
 
-    return usfm;
+    console.log(`FRAGMENTS INFO:\n${JSON.stringify(fragmentsInfo, undefined, 2)}`);
+
+    return { usfm, fragmentsByIndexInUsfm };
+  }
+
+  private get usfm(): string {
+    if (this.usfmInternal !== undefined) return this.usfmInternal;
+
+    const { usfm, fragmentsByIndexInUsfm } = this.calculateUsfmProperties();
+    this.usfmInternal = usfm;
+    this.fragmentsByIndexInUsfmInternal = fragmentsByIndexInUsfm;
+
+    return this.usfmInternal;
+  }
+
+  private get fragmentsByIndexInUsfm(): FragmentsByIndexInUsfm {
+    if (this.fragmentsByIndexInUsfmInternal) return this.fragmentsByIndexInUsfmInternal;
+
+    const { usfm, fragmentsByIndexInUsfm } = this.calculateUsfmProperties();
+    this.usfmInternal = usfm;
+    this.fragmentsByIndexInUsfmInternal = fragmentsByIndexInUsfm;
+
+    return this.fragmentsByIndexInUsfmInternal;
   }
 
   // #endregion

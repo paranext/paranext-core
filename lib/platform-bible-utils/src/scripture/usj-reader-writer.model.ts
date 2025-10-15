@@ -18,7 +18,12 @@ export type VerseRefOffset = {
   offset: number;
 };
 
-/** This could actually have more content clauses at the end, but TS types are limited */
+/**
+ * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
+ * document.
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
 export type ContentJsonPath =
   | ''
   | `$`
