@@ -7,6 +7,7 @@ using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.ProjectSettingsAccess;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
@@ -75,6 +76,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         retVal.Add(("getComments", GetComments));
         retVal.Add(("setComments", SetComments));
+        retVal.Add(("getCommentThreads", GetCommentThreads));
+        retVal.Add(("createComment", CreateComment));
+        retVal.Add(("deleteComment", DeleteComment));
+        retVal.Add(("updateComment", UpdateComment));
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
@@ -229,6 +234,282 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             SendDataUpdateEvent(ProjectDataType.COMMENTS, "comments data update event");
 
         return madeChange;
+    }
+
+    public List<CommentThread> GetCommentThreads(CommentThreadSelector? selector)
+    {
+        if (!CommentsEnabled)
+            return [];
+
+        // Get all threads (activeOnly=false to include threads with deleted comments)
+        List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
+
+        // If no selector provided or all properties are null/default, return all thread IDs
+        if (selector == null || selector.IsEmpty)
+            return allThreads.ToList();
+
+        // Apply filters
+        IEnumerable<CommentThread> filteredThreads = allThreads;
+
+        // Filter by thread ID (exact match)
+        if (!string.IsNullOrEmpty(selector.ThreadId))
+            filteredThreads = filteredThreads.Where(t => t.Id == selector.ThreadId);
+
+        // Filter by status
+        if (!string.IsNullOrEmpty(selector.Status))
+        {
+            var status = new Enum<NoteStatus>(selector.Status);
+            filteredThreads = filteredThreads.Where(t => t.Status == status);
+        }
+
+        // Filter by type
+        if (!string.IsNullOrEmpty(selector.Type))
+        {
+            var type = new Enum<NoteType>(selector.Type);
+            filteredThreads = filteredThreads.Where(t => t.Type == type);
+        }
+
+        // Filter by user (who created comments in the thread)
+        if (!string.IsNullOrEmpty(selector.Author))
+            filteredThreads = filteredThreads.Where(t =>
+                t.Comments.Any(c => c.User == selector.Author)
+            );
+
+        // Filter by assigned user
+        if (!string.IsNullOrEmpty(selector.AssignedTo))
+            filteredThreads = filteredThreads.Where(t => t.AssignedUser == selector.AssignedTo);
+
+        // Filter by date
+        if (selector.DateFilter != null)
+            filteredThreads = FilterByDate(filteredThreads, selector.DateFilter);
+
+        // Filter by scripture ranges
+        if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
+            filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
+
+        return filteredThreads.ToList();
+    }
+
+    public bool DeleteComment(string commentId)
+    {
+        if (!CommentsEnabled)
+            return false;
+
+        // Find the comment by ID across all comments
+        Comment? commentToDelete = _commentManager.AllComments.FirstOrDefault(c =>
+            c.Id == commentId
+        );
+
+        if (commentToDelete == null)
+            return false;
+
+        // Do not allow deletion of comments not created by the current user
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        if (commentToDelete.User != scrText.User.Name)
+            throw new InvalidOperationException(
+                "Cannot delete a comment that is not created by the current user"
+            );
+
+        // Remove the comment using CommentManager
+        _commentManager.RemoveComment(commentToDelete);
+
+        _commentManager.SaveUser(commentToDelete.User, false);
+
+        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment deleted event");
+        return true;
+    }
+
+    public string CreateComment(CommentSelector selector)
+    {
+        if (!CommentsEnabled)
+            throw new InvalidOperationException("Comments are not enabled for this project");
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        Comment newComment = new(scrText.User);
+
+        // Set the comment text
+        if (string.IsNullOrWhiteSpace(selector.CommentText))
+            throw new InvalidDataException("Comment text cannot be empty");
+        newComment.AddTextToContent(selector.CommentText, false);
+
+        // Set the verse reference
+        if (
+            string.IsNullOrWhiteSpace(selector.BookId)
+            || selector.ChapterNum <= 0
+            || selector.VerseNum < 0
+        )
+        {
+            throw new InvalidDataException(
+                "Comment must have a valid verse reference (BookId, ChapterNum, VerseNum)"
+            );
+        }
+        VerseRef verseRef =
+            new(
+                selector.BookId,
+                selector.ChapterNum.ToString(),
+                selector.VerseNum.ToString(),
+                scrText.Settings.Versification
+            );
+        newComment.VerseRefStr = verseRef.ToString();
+
+        if (string.IsNullOrEmpty(selector.ThreadId))
+        {
+            // Throw if thread does not exist
+            if (_commentManager.FindThread(selector.ThreadId) == null)
+                throw new InvalidDataException("Thread with given ThreadId does not exist");
+
+            // Create a new thread for this comment
+            // The thread will use the auto-generated Thread ID from the comment
+            CommentThread thread = _commentManager.CreateThread(
+                _commentManager.ScrText,
+                new ScriptureSelection(newComment.VerseRef),
+                NoteStatus.Todo
+            );
+
+            // Set the comment's thread ID to match the created thread
+            // (or the thread will use the comment's thread ID)
+            newComment.Thread = thread.Id;
+        }
+        else
+        {
+            // If a ThreadId is provided, set it on the comment
+            newComment.Thread = selector.ThreadId;
+        }
+
+        // Add the comment to the thread
+        _commentManager.AddComment(newComment);
+
+        // Save the changes
+        _commentManager.SaveUser(newComment.User, false);
+
+        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment created event");
+
+        // Return the generated comment ID
+        return newComment.Id;
+    }
+
+    public bool UpdateComment(string commentId, string updatedContent)
+    {
+        if (!CommentsEnabled)
+            return false;
+
+        if (string.IsNullOrEmpty(commentId))
+            return false;
+
+        // Find the comment by ID
+        var commentToUpdate = FindCommentById(commentId);
+        if (commentToUpdate == null)
+            return false;
+
+        // Do not allow updating of comments not created by the current user
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        if (commentToUpdate.User != scrText.User.Name)
+            throw new InvalidOperationException(
+                "Cannot update a comment that is not created by the current user"
+            );
+
+        commentToUpdate.AddTextToContent("", false); // Clear existing content
+        commentToUpdate.AddTextToContent(updatedContent, true); // Add new content
+
+        _commentManager.SaveUser(commentToUpdate.User, false);
+
+        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment updated");
+
+        return true;
+    }
+
+    private Comment? FindCommentById(string commentId)
+    {
+        if (!CommentsEnabled)
+            return null;
+
+        // Get all threads (activeOnly=false to include deleted comments)
+        List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
+
+        // Search through all threads to find the comment with matching ID
+        foreach (var thread in allThreads)
+        {
+            var comment = thread.Comments.FirstOrDefault(c => c.Id == commentId);
+            if (comment != null)
+                return comment;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<CommentThread> FilterByDate(
+        IEnumerable<CommentThread> threads,
+        DateFilter dateFilter
+    )
+    {
+        if (!string.IsNullOrEmpty(dateFilter.Exact))
+        {
+            var targetDate = DateTimeOffset.Parse(dateFilter.Exact);
+            // For exact date matching, compare only the date portion (ignore time)
+            return threads.Where(t => t.ModifiedDate.Date == targetDate.Date);
+        }
+
+        if (!string.IsNullOrEmpty(dateFilter.Before))
+        {
+            var beforeDate = DateTimeOffset.Parse(dateFilter.Before);
+            return threads.Where(t => t.ModifiedDate <= beforeDate);
+        }
+
+        if (!string.IsNullOrEmpty(dateFilter.After))
+        {
+            var afterDate = DateTimeOffset.Parse(dateFilter.After);
+            return threads.Where(t => t.ModifiedDate >= afterDate);
+        }
+
+        if (!string.IsNullOrEmpty(dateFilter.Start) && !string.IsNullOrEmpty(dateFilter.End))
+        {
+            var startDate = DateTimeOffset.Parse(dateFilter.Start);
+            var endDate = DateTimeOffset.Parse(dateFilter.End);
+            return threads.Where(t => t.ModifiedDate >= startDate && t.ModifiedDate <= endDate);
+        }
+
+        return threads;
+    }
+
+    private IEnumerable<CommentThread> FilterByScriptureRanges(
+        IEnumerable<CommentThread> threads,
+        List<ScriptureRange> scriptureRanges
+    )
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        return threads.Where(thread =>
+        {
+            VerseRef threadVerseRef = thread.VerseRef;
+            return scriptureRanges.Any(range => MatchesScriptureRange(threadVerseRef, range));
+        });
+    }
+
+    private static bool MatchesScriptureRange(VerseRef verseRef, ScriptureRange range)
+    {
+        // Match based on granularity
+        string granularity = range.Granularity ?? "verse";
+
+        switch (granularity.ToLowerInvariant())
+        {
+            case "book":
+                // Match if the comment is in any book within the range
+                return verseRef.BookNum >= range.Start.BookNum
+                    && verseRef.BookNum <= range.End.BookNum;
+
+            case "chapter":
+                // Match if the comment is in the same book and within the chapter range
+                if (verseRef.BookNum != range.Start.BookNum)
+                    return false;
+                return verseRef.ChapterNum >= range.Start.ChapterNum
+                    && verseRef.ChapterNum <= range.End.ChapterNum;
+
+            case "verse":
+            default:
+                // Match if the comment's verse is within the range
+                return verseRef.CompareTo(range.Start) >= 0 && verseRef.CompareTo(range.End) <= 0;
+        }
     }
 
     #endregion
