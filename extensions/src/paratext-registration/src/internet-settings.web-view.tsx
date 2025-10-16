@@ -69,7 +69,7 @@ function getLocalizeKeyForProxyMode(option: string): LocalizeKey {
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%general_error_title%',
-  '%paratextRegistration_alert_updatedRegistration%',
+  '%paratextRegistration_alert_updatedInternetSettings%',
   '%paratextRegistration_alert_updatedRegistration_description%',
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
   '%paratextRegistration_button_saveAndRestart%',
@@ -325,7 +325,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
               <Alert ref={scrollToRef}>
                 <CircleCheck className="tw-h-4 tw-w-4" />
                 <AlertTitle>
-                  {localizedStrings['%paratextRegistration_alert_updatedRegistration%']}
+                  {localizedStrings['%paratextRegistration_alert_updatedInternetSettings%']}
                 </AlertTitle>
                 <AlertDescription>{formatSuccessAlertDescription()}</AlertDescription>
               </Alert>
