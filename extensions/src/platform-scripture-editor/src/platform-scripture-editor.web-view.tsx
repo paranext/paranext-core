@@ -166,6 +166,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.insertNote('f');
           break;
         }
+        case 'insertCrossReferenceAtSelection': {
+          editorRef.current?.insertNote('x');
+          break;
+        }
         default:
           // Unknown method name
           logger.debug(

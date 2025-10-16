@@ -103,6 +103,12 @@
             "group": "platformScriptureEditor.footnotes",
             "order": 1,
             "command": "platformScriptureEditor.insertFootnoteAtSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
+            "group": "platformScriptureEditor.footnotes",
+            "order": 2,
+            "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
           }
         ]
       },

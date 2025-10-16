@@ -97,6 +97,27 @@ async function insertFootnoteAtSelection(webViewId: string | undefined): Promise
   return undefined;
 }
 
+async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting footnote...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertCrossReferenceAtSelection();
+
+  return undefined;
+}
+
 /** Function to prompt for a project and open it in the editor */
 async function open(
   isReadOnly: boolean,
@@ -417,6 +438,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           message,
         );
       },
+      async insertCrossReferenceAtSelection() {
+        const message: EditorWebViewMessage = {
+          method: 'insertCrossReferenceAtSelection',
+        };
+        await papi.webViewProviders.postMessageToWebView(
+          currentWebViewDefinition.id,
+          webViewNonce,
+          message,
+        );
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -452,6 +483,28 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
           name: 'return value',
           summary: 'The ID of the opened web view',
           schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const insertCrossReferencePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertCrossReferenceAtSelection',
+    insertCrossReferenceAtSelection,
+    {
+      method: {
+        summary: 'Insert a cross-reference into the project at the given selection in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project that we are inserting the footnote',
+            schema: { type: 'null' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
         },
       },
     },
@@ -519,6 +572,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
     await insertFootnotePromise,
+    await insertCrossReferencePromise,
   );
 
   logger.debug('Scripture editor is finished activating!');
