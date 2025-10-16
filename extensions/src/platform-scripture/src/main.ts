@@ -131,7 +131,11 @@ async function openChecksSidePanel(
     return undefined;
   }
 
-  const options: ChecksSidePanelWebViewOptions = { projectId, editorScrollGroupId };
+  const options: ChecksSidePanelWebViewOptions = {
+    projectId,
+    editorScrollGroupId,
+    editorWebViewId,
+  };
   const sidePanelWebViewId = await papi.webViews.openWebView(
     checksSidePanelWebViewType,
     { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },

@@ -213,7 +213,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         var denials = GetOrCreateDenials(projectId);
         denials.AddDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
         denials.Save();
-        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials, null));
+        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials));
         return true;
     }
 
@@ -230,7 +230,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         var denials = GetOrCreateDenials(projectId);
         denials.RemoveDenial(new Enum<MessageId>(checkResultType), vRef, null, itemText);
         denials.Save();
-        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials, null));
+        check.AccessResults(vRef.BookNum, recorder => recorder.PostProcessResults(denials));
         return true;
     }
 
@@ -361,7 +361,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         checkDataSource.GetText(range.Start.BookNum, 0, neededDataFormat);
 
         var scrText = LocalParatextProjects.GetParatextProject(range.ProjectId);
-        var indexer = new UsfmBookIndexer(scrText.GetText(range.Start.BookNum));
 
         foreach (var checkId in checkIds)
         {
@@ -374,7 +373,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 check.SettingsChanged = false;
                 check.Check.Initialize(checkDataSource);
             }
-            RunCheck(check, checkDataSource, range, indexer);
+            RunCheck(check, checkDataSource, range);
         }
     }
 
@@ -384,8 +383,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private void RunCheck(
         CheckForProject checkForProject,
         ChecksDataSource dataSource,
-        CheckInputRange range,
-        UsfmBookIndexer indexer
+        CheckInputRange range
     )
     {
         ErrorMessageDenials denials = GetOrCreateDenials(range.ProjectId);
@@ -396,7 +394,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             {
                 recorder.ClearResultsFromBook(range.Start.BookNum);
                 checkForProject.Check.Run(range.Start.BookNum, dataSource, recorder);
-                recorder.PostProcessResults(denials, indexer);
+                recorder.PostProcessResults(denials);
                 recorder.ResultsReady = true;
             }
         );
