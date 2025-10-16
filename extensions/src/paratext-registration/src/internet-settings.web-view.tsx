@@ -25,8 +25,6 @@ import { AlertCircle, CircleCheck } from 'lucide-react';
 import { Grid } from './components/grid.component';
 import { scrollToRef, SaveState } from './utils';
 
-const SAVE_SETTINGS_DELAY_MS = 1000;
-
 const SERVER_TYPE_OPTIONS: ServerType[] = ['Production', 'QualityAssurance', 'Development', 'Test'];
 const INTERNET_USE_OPTIONS: InternetUse[] = ['Enabled', 'VpnRequired', 'Disabled', 'ProxyOnly'];
 // For some reason, these aren't an enum in C#. So just following the existing conventions. Maybe
