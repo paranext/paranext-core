@@ -1,6 +1,6 @@
 import {
-  GetWebViewOptions,
   IWebViewProvider,
+  OpenWebViewOptions,
   SavedWebViewDefinition,
   ScrollGroupScrRef,
   WebViewDefinition,
@@ -11,9 +11,14 @@ import tailwindStyles from './tailwind.css?inline';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
-export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
+export interface ChecksSidePanelWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
+  /**
+   * ID of WebView that called to open this Checks Side Panel WebView. Should be of `webViewType`
+   * `platformScriptureEditor.react`
+   */
+  editorWebViewId?: string;
 }
 
 export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
@@ -37,6 +42,7 @@ export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
+        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
       },
     };
   }

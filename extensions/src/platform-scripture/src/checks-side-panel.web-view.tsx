@@ -1,6 +1,11 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useWebViewController,
+} from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
@@ -124,6 +129,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
       return projectDict;
     }, []),
     useMemo(() => ({}), []),
+  );
+
+  const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+
+  const editorWebViewController = useWebViewController(
+    'platformScriptureEditor.react',
+    editorWebViewId,
   );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -530,31 +542,53 @@ global.webViewComponent = function ChecksSidePanelWebView({
     fetchChecksInfo();
   }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
 
-  // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
-   * Scrolls the editor to the reference of the selected check result by setting the scripture
-   * reference of the scroll group shared by the side panel and the editor.
+   * Selects the check result in the editor and focuses the editor.
    *
    * @param id - The unique identifier of the selected check result.
    */
-  const scrollToCheckReferenceInEditor = useCallback(
+  const selectCheckReferenceInEditor = useCallback(
     (id: string) => {
       const selectedResult = checkResultsRef.current.find(
         (result, index) => writeCheckId(result, index) === id,
       );
       if (!selectedResult) return;
 
-      setScrRef(selectedResult.verseRef);
+      if (editorWebViewId && editorWebViewController) {
+        // Set the focus and the range to the result in the editor
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        editorWebViewController.selectRange({
+          start:
+            'jsonPath' in selectedResult.start
+              ? {
+                  book: selectedResult.verseRef.book,
+                  chapterNum: selectedResult.verseRef.chapterNum,
+                  ...selectedResult.start,
+                }
+              : { scrRef: selectedResult.start.verseRef, ...selectedResult.start },
+          end:
+            'jsonPath' in selectedResult.end
+              ? {
+                  book: selectedResult.verseRef.book,
+                  chapterNum: selectedResult.verseRef.chapterNum,
+                  ...selectedResult.end,
+                }
+              : { scrRef: selectedResult.end.verseRef, ...selectedResult.end },
+        });
+      } else {
+        // Could not get controller to set specific range, so at least set the verse ref
+        setScrRef(selectedResult.verseRef);
+      }
     },
-    [setScrRef, writeCheckId],
+    [setScrRef, writeCheckId, editorWebViewId, editorWebViewController],
   );
 
   const handleSelectCheck = useCallback(
     async (id: string) => {
       setSelectedCheckId(id);
-      scrollToCheckReferenceInEditor(id);
+      selectCheckReferenceInEditor(id);
     },
-    [scrollToCheckReferenceInEditor],
+    [selectCheckReferenceInEditor],
   );
 
   const setDeniedStatusForResult = useCallback(
