@@ -69,6 +69,9 @@ function getLocalizeKeyForProxyMode(option: string): LocalizeKey {
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%general_error_title%',
+  '%paratextRegistration_alert_updatedRegistration%',
+  '%paratextRegistration_alert_updatedRegistration_description%',
+  '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
   '%paratextRegistration_button_saveAndRestart%',
   '%paratextRegistration_button_restarting%',
   '%paratextRegistration_description_internetUse_disclaimer%',
@@ -84,9 +87,6 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_section_internetSettings%',
   '%paratextRegistration_section_internetSettings_tooltip%',
   '%paratextRegistration_section_proxySettings%',
-  '%paratextRegistration_alert_updatedRegistration%',
-  '%paratextRegistration_alert_updatedRegistration_description%',
-  '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
 ];
 
 // #endregion
@@ -177,77 +177,20 @@ globalThis.webViewComponent = function InternetSettingsComponent({
           await papi.commands.sendCommand('platform.restart');
         } catch (e) {
           logger.warn(
-            `Failed to restart after saving Paratext registration information! The user will need to restart manually`,
+            `Failed to restart after saving Internet settings! The user will need to restart manually`,
           );
         }
       })();
 
       if (isMounted.current) setSaveState(SaveState.IsRestarting);
     } catch (err: unknown) {
-      logger.warn(`Failed to save Paratext Registration information ${err}`);
+      logger.warn(`Failed to save Internet settings ${err}`);
 
       const errMessage = getErrorMessage(err);
-      // Matches error code -32000,
       setSaveError(errMessage);
       setSaveState(SaveState.HasNotSaved);
     }
   };
-
-  // Hook to try to update the internet settings as they change
-  // useEffect(() => {
-  //   // If the settings are able to be updated
-  //   if (
-  //     !isFormDisabled &&
-  //     !isLoadingCurrentInternetSettings &&
-  //     hasUnsavedChanges &&
-  //     isProxyHostValid
-  //   ) {
-  //     // If there is an existing timeout, cancels that timeout
-  //     if (saveTimeout) {
-  //       clearTimeout(saveTimeout.current);
-  //     }
-
-  //     // Starts the save settings timeout
-  //     const newSaveTimeout = setTimeout(async () => {
-  //       try {
-  //         setSaveState(SaveState.IsSaving);
-  //         setSaveError('');
-  //         await saveInternetSettings(internetSettings);
-
-  //         if (isMounted.current) {
-  //           setCurrentInternetSettings(internetSettings);
-  //           setSaveState(SaveState.HasSaved);
-  //         }
-
-  //         papi.notifications.send({
-  //           severity: 'info',
-  //           message: '%paratextRegistration_alert_updatedInternetSettings%',
-  //         });
-  //       } catch (err: unknown) {
-  //         logger.warn(`Failed to save Paratext Registration information ${err}`);
-  //         setSaveError(getErrorMessage(err));
-  //         setSaveState(SaveState.HasNotSaved);
-  //       }
-
-  //       saveTimeout.current = undefined;
-  //     }, SAVE_SETTINGS_DELAY_MS);
-  //     saveTimeout.current = newSaveTimeout;
-  //   }
-
-  //   // If the component unmounts early, clears the timeout if it exists
-  //   return () => {
-  //     if (saveTimeout) {
-  //       clearTimeout(saveTimeout.current);
-  //     }
-  //   };
-  // }, [
-  //   isLoadingCurrentInternetSettings,
-  //   internetSettings,
-  //   hasUnsavedChanges,
-  //   isFormDisabled,
-  //   isProxyHostValid,
-  //   saveTimeout,
-  // ]);
 
   const formatSuccessAlertDescription = () => {
     if (saveState === SaveState.IsRestarting) {

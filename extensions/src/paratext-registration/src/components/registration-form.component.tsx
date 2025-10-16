@@ -58,6 +58,7 @@ async function saveRegistrationInformation(
 // #region localized strings
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%general_cancel%',
   '%general_error_title%',
   '%paratextRegistration_alert_invalidRegistration%',
   '%paratextRegistration_alert_invalidRegistration_description%',
@@ -68,7 +69,6 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
   '%paratextRegistration_alert_validRegistration%',
   '%paratextRegistration_alert_validRegistration_description%',
-  '%paratextRegistration_button_cancel%',
   '%paratextRegistration_button_change%',
   '%paratextRegistration_button_saveAndRestart%',
   '%paratextRegistration_button_restarting%',
@@ -439,7 +439,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             <div className="tw-flex tw-gap-3">
               {currentRegistrationData.code !== '' && (
                 <Button variant="outline" onClick={cancelEditing}>
-                  {localizedStrings['%paratextRegistration_button_cancel%']}
+                  {localizedStrings['%general_cancel%']}
                 </Button>
               )}
               <Button variant="default" disabled={isButtonDisabled} onClick={saveAndRestart}>

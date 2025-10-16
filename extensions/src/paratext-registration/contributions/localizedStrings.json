@@ -81,7 +81,6 @@
       "%paratextRegistration_alert_validRegistration%": "Registration information accepted",
       "%paratextRegistration_alert_validRegistration_description%": "You can now save the changes and the app will restart to make them in effect.",
       "%paratextRegistration_app_startup_description%": "Welcome to {%product_name%}! To get started, login with your registration information.",
-      "%paratextRegistration_button_cancel%": "Cancel",
       "%paratextRegistration_button_change%": "Change",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
       "%paratextRegistration_button_restarting%": "Restarting...",
