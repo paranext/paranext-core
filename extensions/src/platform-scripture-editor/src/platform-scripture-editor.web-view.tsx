@@ -135,12 +135,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'bottom',
   );
 
-  const [footnotePaneSize, setFootnotePaneSize] = useWebViewState<number>('footnotePaneSize', 20);
+  const [footnotesPaneSize, setFootnotesPaneSize] = useWebViewState<number>(
+    'footnotesPaneSize',
+    20,
+  );
 
-  const onLayoutFootnotePane = (sizes: number[]) => {
+  const debouncedSetFootnotesPaneSize = useMemo(() => {
+    let timeout: NodeJS.Timeout;
+    return (size: number) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setFootnotesPaneSize(size), 50);
+    };
+  }, [setFootnotesPaneSize]);
+
+  const onLayoutFootnotesPane = (sizes: number[]) => {
     // Only update if the footnote pane is visible.
     if (!sizes || sizes.length < 2 || !footnotesPaneVisible) return;
-    setFootnotePaneSize(sizes[1]);
+    debouncedSetFootnotesPaneSize(sizes[1]);
   };
 
   const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
@@ -148,6 +159,86 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [footnoteListKey, setFootnoteListKey] = useState(0);
 
   const footnotesLayout = footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical';
+
+  // Using react's ref api which uses null, so we must use null
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState<number>(0);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setContainerHeight(containerRef.current.clientHeight);
+    }
+  }, []);
+
+  /** Computes the footnotes pane min/max percentages based on actual container height. */
+  function getFootnotesPaneSizeLimits(containerHeight: number) {
+    // Ensure the footnotes pane never shrinks to nothing or takes over the world.
+    const footnotesPaneAbsoluteMinPercent = 3;
+    const footnotesPaneAbsoluteMaxPercent = 90;
+    const footnoteRowHeightPx = 20;
+    const minimumEditorHeightPx = 50; // This has to account for toolbar height + some text.
+
+    let footnotesPaneMinPercent: number;
+    let footnotesPaneMaxPercent: number;
+
+    if (containerHeight < footnoteRowHeightPx + minimumEditorHeightPx) {
+      // Fallback for very small or unmeasured container
+      footnotesPaneMinPercent = footnotesPaneAbsoluteMinPercent;
+      footnotesPaneMaxPercent = footnotesPaneAbsoluteMaxPercent;
+    } else {
+      // Max percent: leave enough space for the editor to show a little bit of actual text.
+      footnotesPaneMaxPercent = Math.min(
+        Math.floor(((containerHeight - minimumEditorHeightPx) / containerHeight) * 100),
+        footnotesPaneAbsoluteMaxPercent,
+      );
+
+      // Min percent: enough for a single footnote row
+      footnotesPaneMinPercent = Math.min(
+        Math.max(
+          Math.ceil((footnoteRowHeightPx / containerHeight) * 100),
+          footnotesPaneAbsoluteMinPercent,
+        ),
+        footnotesPaneMaxPercent, // never exceed max
+      );
+    }
+
+    return {
+      calculatedFootnotesPaneMinPercent: footnotesPaneMinPercent,
+      calculatedFootnotesPaneMaxPercent: footnotesPaneMaxPercent,
+    };
+  }
+
+  const { calculatedFootnotesPaneMinPercent, calculatedFootnotesPaneMaxPercent } =
+    getFootnotesPaneSizeLimits(containerHeight);
+
+  // Make sure the calculated range accommodates the current saved size. There is an off-chance this
+  // could allow for the splitter to get dragged to a size we're not happy about, but it is very
+  // unlikely and this is better than having the size jump around unexpectedly. I assume it could
+  // only happen if for some reason the WebView came up at a very different size than when it was
+  // last used and the split percentage was saved.
+  const footnotesPaneMaxPercent = Math.max(calculatedFootnotesPaneMaxPercent, footnotesPaneSize);
+  const footnotesPaneMinPercent = Math.min(calculatedFootnotesPaneMinPercent, footnotesPaneSize);
+
+  useEffect(() => {
+    if (containerHeight <= 0) return;
+
+    const { calculatedFootnotesPaneMinPercent, calculatedFootnotesPaneMaxPercent } =
+      getFootnotesPaneSizeLimits(containerHeight);
+
+    const clampedSize = Math.min(
+      Math.max(footnotesPaneSize, calculatedFootnotesPaneMinPercent),
+      calculatedFootnotesPaneMaxPercent,
+    );
+
+    if (clampedSize !== footnotesPaneSize) {
+      setFootnotesPaneSize(clampedSize);
+    }
+  }, [containerHeight]);
+
+  console.debug(
+    `containerHeight = ${containerHeight}, min = ${footnotesPaneMinPercent}%, max = ${footnotesPaneMaxPercent}%`,
+  );
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
@@ -340,7 +431,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const currentlyWritingUsjToPdp = useRef(false);
 
   const updateFootnotesFromUsj = useCallback((usj: Usj) => {
-    console.debug('In `updateFootnotesFromUsj`');
     const usjReaderWriter = new UsjReaderWriter(usj);
     setFootnotes(usjReaderWriter.findAllNotes());
     setFootnoteListKey((prev) => prev + 1);
@@ -784,37 +874,39 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 </Alert>
               ))}
 
-              {/* Editor + Footnotes split */}
-              <ResizablePanelGroup
-                direction={groupDirection}
-                className="tw-h-full tw-w-full"
-                onLayout={onLayoutFootnotePane}
-              >
-                <ResizablePanel>
-                  {/** Render the editor inside the container decorations without re-mounting on re-parent */}
-                  <OutPortal node={editorPortalNode} />
-                </ResizablePanel>
+              {/* Editor + Footnotes pane split */}
+              <div ref={containerRef} className="tw-h-full tw-w-full">
+                <ResizablePanelGroup
+                  direction={groupDirection}
+                  className="tw-h-full tw-w-full"
+                  onLayout={onLayoutFootnotesPane}
+                >
+                  <ResizablePanel>
+                    {/** Render the editor inside the container decorations without re-mounting on re-parent */}
+                    <OutPortal node={editorPortalNode} />
+                  </ResizablePanel>
 
-                {footnotesPaneVisible && (
-                  <>
-                    <ResizableHandle />
-                    <ResizablePanel
-                      defaultSize={footnotePaneSize}
-                      className="tw-bg-sidebar tw-border"
-                      minSize={3}
-                      maxSize={97}
-                    >
-                      <FootnoteList
-                        listId={footnoteListKey}
-                        layout={footnotesLayout}
-                        footnotes={footnotes}
-                        localizedStrings={localizedStrings}
-                        showMarkers={options.view?.markerMode !== 'hidden'}
-                      />
-                    </ResizablePanel>
-                  </>
-                )}
-              </ResizablePanelGroup>
+                  {footnotesPaneVisible && (
+                    <>
+                      <ResizableHandle />
+                      <ResizablePanel
+                        defaultSize={footnotesPaneSize}
+                        className="tw-bg-sidebar tw-p-2 tw-pb-0"
+                        minSize={footnotesPaneMinPercent}
+                        maxSize={footnotesPaneMaxPercent}
+                      >
+                        <FootnoteList
+                          listId={footnoteListKey}
+                          layout={footnotesLayout}
+                          footnotes={footnotes}
+                          localizedStrings={localizedStrings}
+                          showMarkers={options.view?.markerMode !== 'hidden'}
+                        />
+                      </ResizablePanel>
+                    </>
+                  )}
+                </ResizablePanelGroup>
+              </div>
             </div>
           </div>,
         )}

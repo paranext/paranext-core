@@ -148,7 +148,7 @@ async function open(
 
 async function toggleFootnotesPane(webViewId: string | undefined): Promise<undefined> {
   if (!webViewId) {
-    logger.debug('No editor web view ID!');
+    logger.debug('No editor WebView ID!');
     return undefined;
   }
 
@@ -178,7 +178,7 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<undef
   return undefined;
 }
 
-/** Simple web view provider that provides Scripture web views when papi requests them */
+/** Simple WebView provider so PAPI can get a Scripture Editor upon request */
 class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
   constructor() {
     super(scriptureEditorWebViewType);
@@ -190,7 +190,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== scriptureEditorWebViewType)
       throw new Error(
-        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} Webview`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
@@ -253,7 +253,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async selectRange(range) {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
@@ -347,7 +347,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
               if (endOffset < (range.end.offset ?? 0) - 50) {
                 logger.warn(
-                  `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
+                  `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
                 );
                 endJsonPath = startJsonPath;
                 endOffset = startOffset + 1;
@@ -389,7 +389,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -397,7 +397,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async updateDecorations(decorationsToAdd, decorationsToRemove) {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
@@ -413,7 +413,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -421,7 +421,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async toggleFootnotesPaneVisibility() {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to toggleFootnotesPaneVisibility`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to toggleFootnotesPaneVisibility`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
@@ -435,7 +435,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -473,7 +473,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened web view',
+          summary: 'The ID of the opened WebView',
           schema: { type: 'string' },
         },
       },
@@ -502,7 +502,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened web view',
+          summary: 'The ID of the opened WebView',
           schema: { type: 'string' },
         },
       },
@@ -524,7 +524,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view to toggle the footnotes panel for',
+            summary: 'The ID of the WebView to toggle the footnotes panel for',
             schema: { type: 'string' },
           },
         ],
