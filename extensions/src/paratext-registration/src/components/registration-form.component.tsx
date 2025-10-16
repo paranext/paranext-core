@@ -179,10 +179,10 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
     currentRegistrationData.supporterName !== supporter;
 
   const saveAndRestart = async () => {
+    if (!hasUnsavedChanges) return;
+
     setSaveState(SaveState.IsSaving);
     setError('');
-
-    if (!hasUnsavedChanges) return;
 
     try {
       await saveRegistrationInformation(name, registrationCode, email, supporter);
@@ -211,7 +211,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
         );
       } else {
         setError(localizedStrings['%general_error_title%']);
-        setErrorDescription(getErrorMessage(err));
+        setErrorDescription(errMessage);
       }
       setSaveState(SaveState.HasNotSaved);
     }

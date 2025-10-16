@@ -6,6 +6,7 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  Button,
   Card,
   CardContent,
   CardHeader,
@@ -15,11 +16,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Spinner,
   usePromise,
 } from 'platform-bible-react';
-import { deepEqual, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import { deepEqual, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, CircleCheck } from 'lucide-react';
 import { Grid } from './components/grid.component';
 import { scrollToRef, SaveState } from './utils';
 
@@ -31,6 +33,12 @@ const INTERNET_USE_OPTIONS: InternetUse[] = ['Enabled', 'VpnRequired', 'Disabled
 // there can be other values, but let's just keep it to these for now.
 // InternetAccess.httpProxyMode, InternetAccess.socksProxyMode
 const PROXY_MODE_OPTIONS = ['Http', 'Socks'];
+
+/**
+ * Time in milliseconds to wait before restarting the application after changing Paratext
+ * registration information
+ */
+const INTERNET_SETTINGS_RESTART_DELAY_MS = 5 * 1000;
 
 // #region InternetSettings functions
 
@@ -63,6 +71,8 @@ function getLocalizeKeyForProxyMode(option: string): LocalizeKey {
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%general_error_title%',
+  '%paratextRegistration_button_saveAndRestart%',
+  '%paratextRegistration_button_restarting%',
   '%paratextRegistration_description_internetUse_disclaimer%',
   ...INTERNET_USE_OPTIONS.map(getLocalizeKeyForInternetUse),
   '%paratextRegistration_label_proxyHost%',
@@ -76,6 +86,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_section_internetSettings%',
   '%paratextRegistration_section_internetSettings_tooltip%',
   '%paratextRegistration_section_proxySettings%',
+  '%paratextRegistration_alert_updatedRegistration%',
+  '%paratextRegistration_alert_updatedRegistration_description%',
+  '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
 ];
 
 // #endregion
@@ -94,9 +107,20 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   // How much progress the form has made in saving registration data
-  const [saveState, setSaveState] = useState(SaveState.HasNotSaved);
+  const [saveState, setSaveState] = useWebViewState(
+    'internetSettingsSaveState',
+    SaveState.HasNotSaved,
+  );
   const [saveError, setSaveError] = useState('');
-  const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>();
+
+  // If the app just got done with restarting, then changes the save state to `HasSaved`
+  useEffect(() => {
+    if (saveState === SaveState.IsRestarting) {
+      setSaveState(SaveState.HasSaved);
+    }
+    // This hook needs to only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // #region InternetSettings
 
@@ -133,61 +157,109 @@ globalThis.webViewComponent = function InternetSettingsComponent({
 
   const hasUnsavedChanges = !deepEqual(currentInternetSettings, internetSettings);
 
-  // Hook to try to update the internet settings as they change
-  useEffect(() => {
-    // If the settings are able to be updated
-    if (
-      !isFormDisabled &&
-      !isLoadingCurrentInternetSettings &&
-      hasUnsavedChanges &&
-      isProxyHostValid
-    ) {
-      // If there is an existing timeout, cancels that timeout
-      if (saveTimeout) {
-        clearTimeout(saveTimeout.current);
-      }
+  const isButtonDisabled =
+    isFormDisabled ||
+    isLoadingCurrentInternetSettings ||
+    !hasUnsavedChanges ||
+    !isProxyHostValid ||
+    saveState === SaveState.IsRestarting;
 
-      // Starts the save settings timeout
-      const newSaveTimeout = setTimeout(async () => {
+  const saveAndRestart = async () => {
+    if (!hasUnsavedChanges) return;
+
+    setSaveState(SaveState.IsSaving);
+    setSaveError('');
+
+    try {
+      await saveInternetSettings(internetSettings);
+      // Queue up the restart
+      (async () => {
         try {
-          setSaveState(SaveState.IsSaving);
-          setSaveError('');
-          await saveInternetSettings(internetSettings);
-
-          if (isMounted.current) {
-            setCurrentInternetSettings(internetSettings);
-            setSaveState(SaveState.HasSaved);
-          }
-
-          papi.notifications.send({
-            severity: 'info',
-            message: '%paratextRegistration_alert_updatedInternetSettings%',
-          });
-        } catch (err: unknown) {
-          logger.warn(`Failed to save Paratext Registration information ${err}`);
-          setSaveError(getErrorMessage(err));
-          setSaveState(SaveState.HasNotSaved);
+          await wait(INTERNET_SETTINGS_RESTART_DELAY_MS);
+          await papi.commands.sendCommand('platform.restart');
+        } catch (e) {
+          logger.warn(
+            `Failed to restart after saving Paratext registration information! The user will need to restart manually`,
+          );
         }
+      })();
 
-        saveTimeout.current = undefined;
-      }, SAVE_SETTINGS_DELAY_MS);
-      saveTimeout.current = newSaveTimeout;
+      if (isMounted.current) setSaveState(SaveState.IsRestarting);
+    } catch (err: unknown) {
+      logger.warn(`Failed to save Paratext Registration information ${err}`);
+
+      const errMessage = getErrorMessage(err);
+      // Matches error code -32000,
+      setSaveError(errMessage);
+      setSaveState(SaveState.HasNotSaved);
+    }
+  };
+
+  // Hook to try to update the internet settings as they change
+  // useEffect(() => {
+  //   // If the settings are able to be updated
+  //   if (
+  //     !isFormDisabled &&
+  //     !isLoadingCurrentInternetSettings &&
+  //     hasUnsavedChanges &&
+  //     isProxyHostValid
+  //   ) {
+  //     // If there is an existing timeout, cancels that timeout
+  //     if (saveTimeout) {
+  //       clearTimeout(saveTimeout.current);
+  //     }
+
+  //     // Starts the save settings timeout
+  //     const newSaveTimeout = setTimeout(async () => {
+  //       try {
+  //         setSaveState(SaveState.IsSaving);
+  //         setSaveError('');
+  //         await saveInternetSettings(internetSettings);
+
+  //         if (isMounted.current) {
+  //           setCurrentInternetSettings(internetSettings);
+  //           setSaveState(SaveState.HasSaved);
+  //         }
+
+  //         papi.notifications.send({
+  //           severity: 'info',
+  //           message: '%paratextRegistration_alert_updatedInternetSettings%',
+  //         });
+  //       } catch (err: unknown) {
+  //         logger.warn(`Failed to save Paratext Registration information ${err}`);
+  //         setSaveError(getErrorMessage(err));
+  //         setSaveState(SaveState.HasNotSaved);
+  //       }
+
+  //       saveTimeout.current = undefined;
+  //     }, SAVE_SETTINGS_DELAY_MS);
+  //     saveTimeout.current = newSaveTimeout;
+  //   }
+
+  //   // If the component unmounts early, clears the timeout if it exists
+  //   return () => {
+  //     if (saveTimeout) {
+  //       clearTimeout(saveTimeout.current);
+  //     }
+  //   };
+  // }, [
+  //   isLoadingCurrentInternetSettings,
+  //   internetSettings,
+  //   hasUnsavedChanges,
+  //   isFormDisabled,
+  //   isProxyHostValid,
+  //   saveTimeout,
+  // ]);
+
+  const formatSuccessAlertDescription = () => {
+    if (saveState === SaveState.IsRestarting) {
+      return localizedStrings['%paratextRegistration_alert_updatedRegistration_description%'];
     }
 
-    // If the component unmounts early, clears the timeout if it exists
-    return () => {
-      if (saveTimeout) {
-        clearTimeout(saveTimeout.current);
-      }
-    };
-  }, [
-    isLoadingCurrentInternetSettings,
-    internetSettings,
-    hasUnsavedChanges,
-    isFormDisabled,
-    isProxyHostValid,
-    saveTimeout,
-  ]);
+    return localizedStrings[
+      '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%'
+    ];
+  };
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-2 tw-h-screen tw-p-4">
@@ -305,15 +377,41 @@ globalThis.webViewComponent = function InternetSettingsComponent({
           </SelectContent>
         </Select>
       </Grid>
-      {saveError && (
-        <div className="tw-mx-2 tw-my-4">
-          <Alert ref={scrollToRef} variant="destructive">
-            <AlertCircle className="tw-h-4 tw-w-4" />
-            <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
-            <AlertDescription>{saveError}</AlertDescription>
-          </Alert>
-        </div>
-      )}
+      <div>
+        {!saveError &&
+          (saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved) && (
+            <div className="tw-mx-2 tw-my-4">
+              <Alert ref={scrollToRef}>
+                <CircleCheck className="tw-h-4 tw-w-4" />
+                <AlertTitle>
+                  {localizedStrings['%paratextRegistration_alert_updatedRegistration%']}
+                </AlertTitle>
+                <AlertDescription>{formatSuccessAlertDescription()}</AlertDescription>
+              </Alert>
+            </div>
+          )}
+        {saveError && (
+          <div className="tw-mx-2 tw-my-4">
+            <Alert ref={scrollToRef} variant="destructive">
+              <AlertCircle className="tw-h-4 tw-w-4" />
+              <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+        <Grid className="tw-grid-cols-[1fr_auto] tw-items-end">
+          <span />
+          <Button variant="default" disabled={isButtonDisabled} onClick={saveAndRestart}>
+            {saveState === SaveState.IsRestarting ? (
+              <>
+                <Spinner /> {localizedStrings['%paratextRegistration_button_restarting%']}
+              </>
+            ) : (
+              localizedStrings['%paratextRegistration_button_saveAndRestart%']
+            )}
+          </Button>
+        </Grid>
+      </div>
     </div>
   );
 };
