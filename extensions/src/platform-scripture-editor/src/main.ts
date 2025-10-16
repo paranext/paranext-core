@@ -79,20 +79,20 @@ async function openPlatformResourceViewer(
 async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
   logger.debug('Inserting footnote...');
 
-  if (webViewId) {
-    const webViewController = await papi.webViews.getWebViewController(
-      scriptureEditorWebViewType,
-      webViewId,
-    );
-
-    if (webViewController) {
-      await webViewController.insertFootnoteAtSelection();
-    } else {
-      throw new Error('No web view controller found!');
-    }
-  } else {
+  if (!webViewId) {
     throw new Error('No WebView ID provided!');
   }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertFootnoteAtSelection();
 
   return undefined;
 }

@@ -27,7 +27,7 @@
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
       "%webView_platformScriptureEditor_openFind%": "Find...",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Open Checks Side Panel",
-      "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote...",
+      "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_title_editable_no_project%": "Scripture Editor",
