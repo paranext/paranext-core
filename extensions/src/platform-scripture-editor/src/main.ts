@@ -93,12 +93,10 @@ async function insertFootnoteAtSelection(webViewId: string | undefined): Promise
   }
 
   await webViewController.insertFootnoteAtSelection();
-
-  return undefined;
 }
 
 async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
-  logger.debug('Inserting footnote...');
+  logger.debug('Inserting cross-reference...');
 
   if (!webViewId) {
     throw new Error('No WebView ID provided!');
@@ -114,8 +112,6 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   }
 
   await webViewController.insertCrossReferenceAtSelection();
-
-  return undefined;
 }
 
 /** Function to prompt for a project and open it in the editor */
