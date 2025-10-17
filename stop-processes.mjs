@@ -6,6 +6,15 @@ import { indexOf, lastIndexOf, includes } from 'platform-bible-utils';
 // All processes with any of these terms in the command line will be killed
 const searchTerms = ['electronmon', 'esbuild', 'nodemon', 'vite', 'webpack', 'extension-host'];
 
+// Paths to exclude - processes with these in their path will not be killed
+const excludePaths = [
+  'vitest',
+  // Exclude processes from `eten-tech-foundation/scripture-editors` repo.
+  '/scripture-editors/node_modules/',
+  '\\scripture-editors\\node_modules\\',
+  '\\WINDOWS\\system32\\cmd.exe',
+];
+
 // Don't display errors because we try to kill processes that already died because of a previous kill
 const fkillOptions = { silent: true, forceAfterTimeout: 1000 };
 
@@ -57,10 +66,16 @@ function killProcessesWithSearchTerm() {
       process.exit(-1);
     }
 
-    // Kill the processes with a search term in process name or arguments
+    // Kill the processes with a search term in process name or arguments, excluding those with
+    // excluded paths.
     await Promise.all(
       processes.map(async ({ pid, command }) => {
-        if (command && pid && searchTerms.some((term) => includes(command, term))) {
+        if (
+          command &&
+          pid &&
+          searchTerms.some((term) => includes(command, term)) &&
+          !excludePaths.some((path) => includes(command, path))
+        ) {
           console.log(`Killing ${command}`);
           return fkill(Number(pid), fkillOptions);
         }
