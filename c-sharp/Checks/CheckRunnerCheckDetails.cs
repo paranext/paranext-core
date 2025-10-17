@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.Checks;
 /// Represents metadata about an individual check. This class must serialize/deserialize to the
 /// CheckRunnerCheckDetails type defined in TypeScript.
 /// </summary>
-public sealed class ParatextCheckDetails(Enum<CheckType> checkType)
+public sealed class CheckRunnerCheckDetails(Enum<CheckType> checkType)
 {
     public string CheckName { get; } = checkType.ToString();
     public string CheckDescription { get; } = checkType.ToLocalizedString();

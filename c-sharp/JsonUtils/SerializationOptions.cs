@@ -24,6 +24,7 @@ internal static class SerializationOptions
         options.Converters.Add(new CommentConverter());
         options.Converters.Add(new ConcurrentHashSetConverter<string>());
         options.Converters.Add(new InternetSettingsMementoConverter());
+        options.Converters.Add(new InventoryOptionValueConverter());
         options.Converters.Add(new RegistrationDataConverter());
         options.Converters.Add(new VerseRefConverter());
         return options;
