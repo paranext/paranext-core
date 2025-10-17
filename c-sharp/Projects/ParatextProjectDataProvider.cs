@@ -351,17 +351,25 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             newComment.AddTextToContent(selector.CommentId, false);
         }
 
-        // Create a new thread for this comment
-        // The thread will use the auto-generated Thread ID from the comment
-        CommentThread thread = _commentManager.CreateThread(
-            _commentManager.ScrText,
-            new ScriptureSelection(newComment.VerseRef),
-            NoteStatus.Todo
-        );
+        if (!string.IsNullOrEmpty(selector.ThreadId))
+        {
+            // If a ThreadId is provided, set it on the comment
+            newComment.Thread = selector.ThreadId;
+        }
+        else
+        {
+            // Create a new thread for this comment
+            // The thread will use the auto-generated Thread ID from the comment
+            CommentThread thread = _commentManager.CreateThread(
+                _commentManager.ScrText,
+                new ScriptureSelection(newComment.VerseRef),
+                NoteStatus.Todo
+            );
 
-        // Set the comment's thread ID to match the created thread
-        // (or the thread will use the comment's thread ID)
-        newComment.Thread = thread.Id;
+            // Set the comment's thread ID to match the created thread
+            // (or the thread will use the comment's thread ID)
+            newComment.Thread = thread.Id;
+        }
 
         // Add the comment to the thread
         _commentManager.AddComment(newComment);

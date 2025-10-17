@@ -11,6 +11,7 @@ public class CommentSelector
     public int VerseNum { get; set; } = 0;
 
     public string? CommentId { get; set; } = null;
+    public string? ThreadId { get; set; } = null;
 }
 
 public class CommentThreadSelector

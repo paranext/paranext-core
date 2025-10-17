@@ -96,6 +96,7 @@ declare module 'legacy-comment-manager' {
     chapterNum?: number;
     verseNum?: number;
     commentId?: string;
+    threadId?: string;
   };
 
   /**
