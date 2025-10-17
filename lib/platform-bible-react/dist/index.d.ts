@@ -623,7 +623,7 @@ export interface FootnoteListProps {
 	 */
 	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** Callback to handle clicking/selecting a footnote in the list */
-	onFootnoteSelected?: (footnote: MarkerObject) => void;
+	onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
 }
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;

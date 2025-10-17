@@ -14,7 +14,7 @@ const meta: Meta<typeof FootnoteList> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw-h-[300px] tw-overflow-hidden tw-border tw-border-slate-300 tw-p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -41,7 +41,7 @@ function Template({ footnotes = [], listId = 'default-list-id', ...restArgs }: S
       footnotes={footnotes}
       listId={listId}
       selectedFootnote={selectedFootnote}
-      onFootnoteSelected={setSelectedFootnote}
+      onFootnoteSelected={(footnote) => setSelectedFootnote(footnote)}
     />
   );
 }

@@ -70,5 +70,5 @@ export interface FootnoteListProps {
    */
   formatCaller?: (caller: string | undefined, index: number) => string | undefined;
   /** Callback to handle clicking/selecting a footnote in the list */
-  onFootnoteSelected?: (footnote: MarkerObject) => void;
+  onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
 }
