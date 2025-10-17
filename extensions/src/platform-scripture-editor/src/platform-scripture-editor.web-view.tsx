@@ -141,7 +141,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const debouncedSetFootnotesPaneSize = useMemo(() => {
-    let timeout: NodeJS.Timeout;
+    let timeout: ReturnType<typeof setTimeout>;
     return (size: number) => {
       clearTimeout(timeout);
       timeout = setTimeout(() => setFootnotesPaneSize(size), 50);
@@ -241,10 +241,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     calculatedFootnotesPaneMaxPercent,
     calculatedFootnotesPaneMinPercent,
   ]);
-
-  console.debug(
-    `containerHeight = ${containerHeight}, min = ${footnotesPaneMinPercent}%, max = ${footnotesPaneMaxPercent}%`,
-  );
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
