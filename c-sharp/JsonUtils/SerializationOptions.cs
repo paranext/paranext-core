@@ -22,6 +22,7 @@ internal static class SerializationOptions
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
         options.Converters.Add(new CommentConverter());
+        options.Converters.Add(new CommentThreadConverter());
         options.Converters.Add(new ConcurrentHashSetConverter<string>());
         options.Converters.Add(new InternetSettingsMementoConverter());
         options.Converters.Add(new RegistrationDataConverter());
