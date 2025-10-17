@@ -50,9 +50,7 @@ export function FootnoteList({
     : 'Footnotes';
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
   const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
-    if (onFootnoteSelected) {
-      onFootnoteSelected(footnote, index, listId);
-    }
+    onFootnoteSelected?.(footnote, index, listId);
   };
   const initialFocusedIndex = selectedFootnote
     ? footnotes.findIndex((f) => f === selectedFootnote)
