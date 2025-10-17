@@ -9,7 +9,7 @@ public class ParatextCheckDetailsTests
     [Test]
     public void Serialization_Json_MatchesExpectations()
     {
-        var checkDetails = new ParatextCheckDetails(CheckType.Capitalization);
+        var checkDetails = new CheckRunnerCheckDetails(CheckType.Capitalization);
         Assert.That(
             checkDetails.SerializeToJson(),
             Is.EqualTo(
