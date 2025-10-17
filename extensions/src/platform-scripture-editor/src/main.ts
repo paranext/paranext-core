@@ -190,7 +190,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== scriptureEditorWebViewType)
       throw new Error(
-        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} Webview`,
+        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
       );
 
     // We know that the projectId (if present in the state) will be a string.

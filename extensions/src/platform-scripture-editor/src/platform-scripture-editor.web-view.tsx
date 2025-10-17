@@ -171,32 +171,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, []);
 
-  /** Computes the footnotes pane min/max percentages based on actual container height. */
-  function getFootnotesPaneSizeLimits(containerHeight: number) {
+  /* Computes the footnotes pane min/max percentages based on total available height. */
+  function getFootnotesPaneSizeLimits(availableHeightPx: number) {
+    const splitterHeightPx = 4;
+    const usableHeightPx = availableHeightPx - splitterHeightPx;
     // Ensure the footnotes pane never shrinks to nothing or takes over the world.
     const footnotesPaneAbsoluteMinPercent = 3;
     const footnotesPaneAbsoluteMaxPercent = 90;
-    const footnoteRowHeightPx = 20;
-    const minimumEditorHeightPx = 50; // This has to account for toolbar height + some text.
+    // TODO: calculate these dynamically:
+    const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
+    const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 
     let footnotesPaneMinPercent: number;
     let footnotesPaneMaxPercent: number;
 
-    if (containerHeight < footnoteRowHeightPx + minimumEditorHeightPx) {
+    if (usableHeightPx < footnoteRowHeightPx + minimumEditorHeightPx) {
       // Fallback for very small or unmeasured container
       footnotesPaneMinPercent = footnotesPaneAbsoluteMinPercent;
       footnotesPaneMaxPercent = footnotesPaneAbsoluteMaxPercent;
     } else {
       // Max percent: leave enough space for the editor to show a little bit of actual text.
       footnotesPaneMaxPercent = Math.min(
-        Math.floor(((containerHeight - minimumEditorHeightPx) / containerHeight) * 100),
+        Math.floor(((usableHeightPx - minimumEditorHeightPx) / usableHeightPx) * 100),
         footnotesPaneAbsoluteMaxPercent,
       );
 
       // Min percent: enough for a single footnote row
       footnotesPaneMinPercent = Math.min(
         Math.max(
-          Math.ceil((footnoteRowHeightPx / containerHeight) * 100),
+          Math.ceil((footnoteRowHeightPx / usableHeightPx) * 100),
           footnotesPaneAbsoluteMinPercent,
         ),
         footnotesPaneMaxPercent, // never exceed max
@@ -223,9 +226,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     if (containerHeight <= 0) return;
 
-    const { calculatedFootnotesPaneMinPercent, calculatedFootnotesPaneMaxPercent } =
-      getFootnotesPaneSizeLimits(containerHeight);
-
     const clampedSize = Math.min(
       Math.max(footnotesPaneSize, calculatedFootnotesPaneMinPercent),
       calculatedFootnotesPaneMaxPercent,
@@ -234,7 +234,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (clampedSize !== footnotesPaneSize) {
       setFootnotesPaneSize(clampedSize);
     }
-  }, [containerHeight]);
+  }, [
+    containerHeight,
+    footnotesPaneSize,
+    setFootnotesPaneSize,
+    calculatedFootnotesPaneMaxPercent,
+    calculatedFootnotesPaneMinPercent,
+  ]);
 
   console.debug(
     `containerHeight = ${containerHeight}, min = ${footnotesPaneMinPercent}%, max = ${footnotesPaneMaxPercent}%`,
@@ -424,7 +430,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [usjFromPdp]);
 
-  /** Latest USJ from the PDP with comment anchors inserted */
+  /* Latest USJ from the PDP with comment anchors inserted */
   const usjFromPdpWithAnchors = useRef(defaultUsj);
 
   const usjSentToPdp = useRef(usjFromPdp);
@@ -436,7 +442,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setFootnoteListKey((prev) => prev + 1);
   }, []);
 
-  /** If the editor has updates that the PDP hasn't recorded, save them to the PDP */
+  /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
       if (
@@ -821,10 +827,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   return (
     <>
-      {/** Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-screen tw-w-screen">
-        {/** Containers */}
+        {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
             <div
@@ -875,15 +881,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               ))}
 
               {/* Editor + Footnotes pane split */}
-              <div ref={containerRef} className="tw-h-full tw-w-full">
+              <div ref={containerRef} className="tw-h-full tw-w-full tw-min-h-0">
                 <ResizablePanelGroup
                   direction={groupDirection}
-                  className="tw-h-full tw-w-full"
+                  className="tw-h-full tw-w-full tw-min-h-0"
                   onLayout={onLayoutFootnotesPane}
                 >
-                  <ResizablePanel>
-                    {/** Render the editor inside the container decorations without re-mounting on re-parent */}
-                    <OutPortal node={editorPortalNode} />
+                  <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
+                    <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
+                      {/* Render the editor inside the container decorations without re-mounting on re-parent */}
+                      <OutPortal node={editorPortalNode} />
+                    </div>
                   </ResizablePanel>
 
                   {footnotesPaneVisible && (
@@ -891,17 +899,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       <ResizableHandle />
                       <ResizablePanel
                         defaultSize={footnotesPaneSize}
-                        className="tw-bg-sidebar tw-p-2 tw-pb-0"
+                        className="tw-bg-sidebar tw-p-2 tw-pb-0 tw-flex tw-flex-col tw-min-h-0"
                         minSize={footnotesPaneMinPercent}
                         maxSize={footnotesPaneMaxPercent}
                       >
-                        <FootnoteList
-                          listId={footnoteListKey}
-                          layout={footnotesLayout}
-                          footnotes={footnotes}
-                          localizedStrings={localizedStrings}
-                          showMarkers={options.view?.markerMode !== 'hidden'}
-                        />
+                        <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
+                          <FootnoteList
+                            listId={footnoteListKey}
+                            layout={footnotesLayout}
+                            footnotes={footnotes}
+                            localizedStrings={localizedStrings}
+                            showMarkers={options.view?.markerMode !== 'hidden'}
+                          />
+                        </div>
                       </ResizablePanel>
                     </>
                   )}
