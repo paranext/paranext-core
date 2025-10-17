@@ -2,10 +2,20 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { ChevronDown } from 'lucide-react';
 import {
   Button,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Progress,
   Select,
   SelectContent,
@@ -82,6 +92,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'selectedCheckTypes',
     [],
   );
+  const [isSelectProjectsOpen, setIsSelectProjectsOpen] = useState(false);
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [activeRanges, setActiveRanges] = useState<CheckInputRange[]>(() => []);
@@ -653,6 +664,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
     );
   }, [localizedStrings, projectIdsAndNames, projectId]);
 
+  const sortedProjectEntries = useMemo(() => {
+    return Object.entries(projectIdsAndNames).sort(([, a], [, b]) =>
+      a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+    );
+  }, [projectIdsAndNames]);
+
   const getScopeLabel = useCallback(
     (scopeValue: string) => {
       if (isValidCheckScope(scopeValue)) {
@@ -712,28 +729,52 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
-        <Select value={projectId ?? ''} onValueChange={handleSelectProject}>
-          <SelectTrigger className="tw-flex-1 tw-min-w-32">
-            <SelectValue
-              placeholder={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
+        <Popover open={isSelectProjectsOpen} onOpenChange={setIsSelectProjectsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="tw-flex-1 tw-min-w-32 tw-font-normal"
+              aria-label={
+                localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+              }
             >
-              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+              <div className="tw-flex tw-w-full tw-items-center tw-justify-between">
                 {getProjectShortNameLabel()}
+                <ChevronDown className="tw-opacity-50" />
               </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="tw-max-w-sm" align="start">
-            {Object.entries(projectIdsAndNames).length === 0
-              ? localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-              : Object.entries(projectIdsAndNames).map(([projectIdOption, project]) => (
-                  <SelectItem key={projectIdOption} value={projectIdOption}>
-                    <div className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
-                      {writeProjectName(project.fullName, project.shortName)}
-                    </div>
-                  </SelectItem>
-                ))}
-          </SelectContent>
-        </Select>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="tw-max-w-sm tw-p-0" align="start">
+            <Command>
+              <CommandInput />
+              <CommandList>
+                <CommandEmpty>
+                  {localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']}
+                </CommandEmpty>
+                <CommandGroup
+                  heading={
+                    localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+                  }
+                >
+                  {sortedProjectEntries.map(([projectIdOption, project]) => (
+                    <CommandItem
+                      key={projectIdOption}
+                      onSelect={() => {
+                        handleSelectProject(projectIdOption);
+                        setIsSelectProjectsOpen(false);
+                      }}
+                      className="tw-flex tw-items-center"
+                    >
+                      <span className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
+                        {writeProjectName(project.fullName, project.shortName)}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>
@@ -812,54 +853,56 @@ global.webViewComponent = function ChecksSidePanelWebView({
         )
       }
       {/* Status bar */}
-      {activeJobStatusReport && checkResults && (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
-          {/* The job is active */}
-          {activeJobStatusReport.status === 'queued' ||
-            (activeJobStatusReport.status === 'running' &&
-              // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
-              activeJobStatusReport.percentComplete > 0 && (
+      {activeJobStatusReport &&
+        activeJobStatusReport !== defaultJobStatusReport &&
+        checkResults && (
+          <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
+            {/* The job is active */}
+            {activeJobStatusReport.status === 'queued' ||
+              (activeJobStatusReport.status === 'running' &&
+                // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
+                activeJobStatusReport.percentComplete > 0 && (
+                  <div className="tw-flex tw-items-center tw-gap-4">
+                    <Progress value={activeJobStatusReport.percentComplete} className="tw-w-64" />
+                    <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
+                      {localizedStrings['%general_cancel%']}
+                    </Button>
+                  </div>
+                ))}
+            {/* The job has finished but not all results are loaded into the UI yet */}
+            {(activeJobStatusReport.status === 'completed' ||
+              activeJobStatusReport.status === 'stopped') &&
+              checkResults &&
+              checkResults.length < activeJobStatusReport.totalResultsCount && (
                 <div className="tw-flex tw-items-center tw-gap-4">
-                  <Progress value={activeJobStatusReport.percentComplete} className="tw-w-64" />
+                  <Progress
+                    value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
+                    className="tw-w-64"
+                  />
+                  {checkResults.length.toString()} /{' '}
+                  {activeJobStatusReport.totalResultsCount.toString()}
                   <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
                     {localizedStrings['%general_cancel%']}
                   </Button>
                 </div>
-              ))}
-          {/* The job has finished but not all results are loaded into the UI yet */}
-          {(activeJobStatusReport.status === 'completed' ||
-            activeJobStatusReport.status === 'stopped') &&
-            checkResults &&
-            checkResults.length < activeJobStatusReport.totalResultsCount && (
-              <div className="tw-flex tw-items-center tw-gap-4">
-                <Progress
-                  value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
-                  className="tw-w-64"
-                />
-                {checkResults.length.toString()} /{' '}
-                {activeJobStatusReport.totalResultsCount.toString()}
-                <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
-                  {localizedStrings['%general_cancel%']}
-                </Button>
-              </div>
+              )}
+            {/* The job has finished and all results are loaded into the UI */}
+            {(activeJobStatusReport.status === 'completed' ||
+              activeJobStatusReport.status === 'stopped') &&
+              checkResults &&
+              checkResults.length === activeJobStatusReport.totalResultsCount && (
+                <p className="tw-font-light">
+                  {checkResults.length > 0
+                    ? checkResults.length.toString()
+                    : localizedStrings['%webView_find_noResultsFound%']}
+                </p>
+              )}
+            {/* The job encountered an error while running */}
+            {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
+              <p className="tw-font-light"> {activeJobStatusReport.error}</p>
             )}
-          {/* The job has finished and all results are loaded into the UI */}
-          {(activeJobStatusReport.status === 'completed' ||
-            activeJobStatusReport.status === 'stopped') &&
-            checkResults &&
-            checkResults.length === activeJobStatusReport.totalResultsCount && (
-              <p className="tw-font-light">
-                {checkResults.length > 0
-                  ? checkResults.length.toString()
-                  : localizedStrings['%webView_find_noResultsFound%']}
-              </p>
-            )}
-          {/* The job encountered an error while running */}
-          {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
-            <p className="tw-font-light"> {activeJobStatusReport.error}</p>
-          )}
-        </div>
-      )}
+          </div>
+        )}
     </div>
   );
 };
