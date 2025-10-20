@@ -136,10 +136,13 @@ export const Annotated: Story = {
     const editorRef = useRef<EditorRef | null>(null);
 
     useEffect(() => {
-      if (editorRef.current) {
-        editorRef.current.addAnnotation(annotationRangeWeb1, 'spelling', 'annotationId');
-        editorRef.current.addAnnotation(annotationRangeWeb2, 'grammar', 'abc123');
-      }
+      const timeoutId = setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.addAnnotation(annotationRangeWeb1, 'spelling', 'annotationId');
+          editorRef.current.addAnnotation(annotationRangeWeb2, 'grammar', 'abc123');
+        }
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }, []);
 
     return <Editorial {...args} ref={editorRef} />;
@@ -210,9 +213,17 @@ const customNodeOptions: EditorOptions = {
   hasExternalUI: true,
   nodes: {
     noteCallers: ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'],
-    noteCallerOnClick: (event) => {
+    noteCallerOnClick: (event, noteNodeKey, isCollapsed, getCaller, setCaller, getNoteOps) => {
       // eslint-disable-next-line no-console
-      console.log('Note caller clicked:', event);
+      console.log(
+        'Note caller clicked:',
+        event,
+        noteNodeKey,
+        isCollapsed,
+        getCaller,
+        setCaller,
+        getNoteOps,
+      );
       // eslint-disable-next-line no-alert
       alert('Note caller clicked! Check console for details.');
     },
@@ -349,7 +360,8 @@ export const ViewOptionsStory: Story = {
           'Demonstrates the editor view options (marker visibility, spacing, and formatted font) ' +
           'using USX input. Below in the **Controls** tab, try changing the **options.view** ' +
           'values to see how they affect the editor display. Valid values for **markerMode** are ' +
-          '_"hidden"_, _"visible"_, and _"editable"_.',
+          '_"hidden"_, _"visible"_, and _"editable"_. Valid values for **noteMode** are ' +
+          '_"collapsed"_, _"expandInline"_, and _"expanded"_.',
       },
     },
   },
@@ -359,6 +371,7 @@ export const ViewOptionsStory: Story = {
       hasExternalUI: true,
       view: {
         markerMode: 'hidden',
+        noteMode: 'collapsed',
         hasSpacing: true,
         isFormattedFont: true,
       },
