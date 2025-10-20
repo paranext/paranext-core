@@ -75,10 +75,9 @@ export function FootnoteList({
       case 'Enter':
       case ' ':
         e.preventDefault();
-        if (onFootnoteSelected) {
-          onFootnoteSelected(footnotes[focusedIndex], focusedIndex, listId);
-        }
+        onFootnoteSelected?.(footnotes[focusedIndex], focusedIndex, listId);
         break;
+
       default:
         break;
     }
