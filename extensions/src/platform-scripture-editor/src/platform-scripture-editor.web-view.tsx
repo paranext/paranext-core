@@ -174,6 +174,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
+        case 'insertFootnoteAtSelection': {
+          editorRef.current?.insertNote('f');
+          break;
+        }
+        case 'insertCrossReferenceAtSelection': {
+          editorRef.current?.insertNote('x');
+          break;
+        }
         default:
           // Unknown method name
           logger.debug(
