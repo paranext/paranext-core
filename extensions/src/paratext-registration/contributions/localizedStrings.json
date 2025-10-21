@@ -74,7 +74,7 @@
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
       "%paratextRegistration_alert_unchangedRegistration_description%": "Registration name and code have not been changed.",
-      "%paratextRegistration_alert_updatedInternetSettings%": "Internet settigns updated",
+      "%paratextRegistration_alert_updatedInternetSettings%": "Internet settings updated",
       "%paratextRegistration_alert_updatedRegistration%": "Registration information updated",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
