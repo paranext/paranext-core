@@ -135,7 +135,7 @@
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
       "%paratextRegistration_alert_unchangedRegistration%": "Información de registro sin cambios",
       "%paratextRegistration_alert_unchangedRegistration_description%": "El nombre y el código de registro no han sido modificados.",
-      "%paratextRegistration_alert_updatedInternetSettings%": "¡Sus cambios en la configuración de Internet se aplicaron correctamente!",
+      "%paratextRegistration_alert_updatedInternetSettings%": "Configuración de internet actualizada",
       "%paratextRegistration_alert_updatedRegistration%": "Información de registro actualizada",
       "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados. La aplicación se reiniciará en unos segundos.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "¡La aplicación se reinició correctamente! Sus cambios ahora están activos.",
