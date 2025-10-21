@@ -895,7 +895,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       <ResizableHandle />
                       <ResizablePanel
                         defaultSize={footnotesPaneSize}
-                        className="tw-bg-sidebar tw-p-2 tw-pb-0 tw-flex tw-flex-col tw-min-h-0"
+                        className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
                         minSize={footnotesPaneMinPercent}
                         maxSize={footnotesPaneMaxPercent}
                       >
