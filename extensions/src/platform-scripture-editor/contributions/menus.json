@@ -44,7 +44,7 @@
             "column": "platformScriptureEditor.options",
             "order": 2
           },
-          "platformScriptureEditor.insertNotes": {
+          "platformScriptureEditor.footnotes": {
             "column": "platformScriptureEditor.insert",
             "order": 1
           },
@@ -100,13 +100,13 @@
           },
           {
             "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
-            "group": "platformScriptureEditor.insertNotes",
+            "group": "platformScriptureEditor.footnotes",
             "order": 1,
             "command": "platformScriptureEditor.insertFootnoteAtSelection"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
-            "group": "platformScriptureEditor.insertNotes",
+            "group": "platformScriptureEditor.footnotes",
             "order": 2,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
           }
