@@ -124,7 +124,9 @@ global.webViewComponent = function FindWebView({
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
+    useMemo(() => LOCALIZED_STRINGS, []),
+  );
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -629,6 +631,10 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const findButtonText = isLocalizedStringsLoading
+    ? ''
+    : localizedStrings['%webView_find_findButton%'];
+
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
@@ -674,13 +680,11 @@ global.webViewComponent = function FindWebView({
                   ) : (
                     <Button
                       onClick={handleStartSearch}
-                      disabled={!isSearchQueryValid || searchStatus === 'running'}
+                      disabled={
+                        !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                      }
                     >
-                      {searchStatus === 'running' ? (
-                        <Spinner />
-                      ) : (
-                        localizedStrings['%webView_find_findButton%']
-                      )}
+                      {searchStatus === 'running' ? <Spinner /> : findButtonText}
                     </Button>
                   )}
                 </TooltipTrigger>
