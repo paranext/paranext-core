@@ -11,12 +11,13 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
+  MarkerObject,
   USJ_TYPE,
   USJ_VERSION,
   Usj,
 } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -40,7 +41,11 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  FootnoteList,
   MarkdownRenderer,
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
   Spinner,
 } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
@@ -115,6 +120,128 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     defaultEditorDecorations,
   );
 
+  const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
+    'footnotesPaneVisible',
+    false,
+  );
+
+  const footnotesPaneVisibleRef = useRef(footnotesPaneVisible);
+  useEffect(() => {
+    footnotesPaneVisibleRef.current = footnotesPaneVisible;
+  }, [footnotesPaneVisible]);
+
+  const [footnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
+    'footnotesPanePosition',
+    'bottom',
+  );
+
+  const [footnotesPaneSize, setFootnotesPaneSize] = useWebViewState<number>(
+    'footnotesPaneSize',
+    20,
+  );
+
+  const debouncedSetFootnotesPaneSize = useMemo(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    return (size: number) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => setFootnotesPaneSize(size), 50);
+    };
+  }, [setFootnotesPaneSize]);
+
+  const onLayoutFootnotesPane = (sizes: number[]) => {
+    // Only update if the footnote pane is visible.
+    if (!sizes || sizes.length < 2 || !footnotesPaneVisible) return;
+    debouncedSetFootnotesPaneSize(sizes[1]);
+  };
+
+  const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
+
+  const [footnoteListKey, setFootnoteListKey] = useState(0);
+
+  const footnotesLayout = footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical';
+
+  // Using react's ref api which uses null, so we must use null
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState<number>(0);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setContainerHeight(containerRef.current.clientHeight);
+    }
+  }, []);
+
+  /* Computes the footnotes pane min/max percentages based on total available height. */
+  function getFootnotesPaneSizeLimits(availableHeightPx: number) {
+    const splitterHeightPx = 4;
+    const usableHeightPx = availableHeightPx - splitterHeightPx;
+    // Ensure the footnotes pane never shrinks to nothing or takes over the world.
+    const footnotesPaneAbsoluteMinPercent = 3;
+    const footnotesPaneAbsoluteMaxPercent = 90;
+    // TODO: calculate these dynamically:
+    const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
+    const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
+
+    let footnotesPaneMinPercent: number;
+    let footnotesPaneMaxPercent: number;
+
+    if (usableHeightPx < footnoteRowHeightPx + minimumEditorHeightPx) {
+      // Fallback for very small or unmeasured container
+      footnotesPaneMinPercent = footnotesPaneAbsoluteMinPercent;
+      footnotesPaneMaxPercent = footnotesPaneAbsoluteMaxPercent;
+    } else {
+      // Max percent: leave enough space for the editor to show a little bit of actual text.
+      footnotesPaneMaxPercent = Math.min(
+        Math.floor(((usableHeightPx - minimumEditorHeightPx) / usableHeightPx) * 100),
+        footnotesPaneAbsoluteMaxPercent,
+      );
+
+      // Min percent: enough for a single footnote row
+      footnotesPaneMinPercent = Math.min(
+        Math.max(
+          Math.ceil((footnoteRowHeightPx / usableHeightPx) * 100),
+          footnotesPaneAbsoluteMinPercent,
+        ),
+        footnotesPaneMaxPercent, // never exceed max
+      );
+    }
+
+    return {
+      calculatedFootnotesPaneMinPercent: footnotesPaneMinPercent,
+      calculatedFootnotesPaneMaxPercent: footnotesPaneMaxPercent,
+    };
+  }
+
+  const { calculatedFootnotesPaneMinPercent, calculatedFootnotesPaneMaxPercent } =
+    getFootnotesPaneSizeLimits(containerHeight);
+
+  // Make sure the calculated range accommodates the current saved size. There is an off-chance this
+  // could allow for the splitter to get dragged to a size we're not happy about, but it is very
+  // unlikely and this is better than having the size jump around unexpectedly. I assume it could
+  // only happen if for some reason the WebView came up at a very different size than when it was
+  // last used and the split percentage was saved.
+  const footnotesPaneMaxPercent = Math.max(calculatedFootnotesPaneMaxPercent, footnotesPaneSize);
+  const footnotesPaneMinPercent = Math.min(calculatedFootnotesPaneMinPercent, footnotesPaneSize);
+
+  useEffect(() => {
+    if (containerHeight <= 0) return;
+
+    const clampedSize = Math.min(
+      Math.max(footnotesPaneSize, calculatedFootnotesPaneMinPercent),
+      calculatedFootnotesPaneMaxPercent,
+    );
+
+    if (clampedSize !== footnotesPaneSize) {
+      setFootnotesPaneSize(clampedSize);
+    }
+  }, [
+    containerHeight,
+    footnotesPaneSize,
+    setFootnotesPaneSize,
+    calculatedFootnotesPaneMaxPercent,
+    calculatedFootnotesPaneMinPercent,
+  ]);
+
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
@@ -174,6 +301,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
+        case 'toggleFootnotesPaneVisibility': {
+          const { current } = footnotesPaneVisibleRef;
+          setFootnotesPaneVisible(!current);
+          break;
+        }
         default:
           // Unknown method name
           logger.debug(
@@ -188,7 +320,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll, decorations, setDecorations]);
+  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, setFootnotesPaneVisible]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
@@ -294,13 +426,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [usjFromPdp]);
 
-  /** Latest USJ from the PDP with comment anchors inserted */
+  /* Latest USJ from the PDP with comment anchors inserted */
   const usjFromPdpWithAnchors = useRef(defaultUsj);
 
   const usjSentToPdp = useRef(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
-  /** If the editor has updates that the PDP hasn't recorded, save them to the PDP */
+  const updateFootnotesFromUsj = useCallback((usj: Usj) => {
+    const usjReaderWriter = new UsjReaderWriter(usj);
+    setFootnotes(usjReaderWriter.findAllNotes());
+    setFootnoteListKey((prev) => prev + 1);
+  }, []);
+
+  /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
       if (
@@ -474,6 +612,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
 
+    // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
+    // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
+    // we may have set the editor from the PDP if the PDP had a "trumping" change.
+    const authoritativeUsj =
+      editorRef.current?.getUsj() ?? usjFromPdpWithAnchors.current ?? usjFromPdp;
+    if (authoritativeUsj) updateFootnotesFromUsj(authoritativeUsj);
+
     // Make sure the editor has the latest comment data from the PDP
     if (
       'setComments' in editorRef.current &&
@@ -484,7 +629,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The editor's USJ needs to have anchors for these comments or the editor will error
       editorRef.current.setComments?.(threads);
     }
-  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
+  }, [
+    insertCommentAnchors,
+    legacyCommentsFromPdp,
+    saveUsjToPdpIfUpdated,
+    usjFromPdp,
+    updateFootnotesFromUsj,
+  ]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -668,12 +819,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     );
   }
 
+  const groupDirection = footnotesPanePosition === 'bottom' ? 'vertical' : 'horizontal';
+
   return (
     <>
-      {/** Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-screen tw-w-screen">
-        {/** Containers */}
+        {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
             <div
@@ -686,8 +839,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             </div>
           ),
           <div className="tw-flex tw-flex-col tw-h-full">
-            {/** Headers */}
-            <div className="tw-flex-grow-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
+            <div className="tw-flex-grow tw-min-h-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
               {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
@@ -723,9 +875,45 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   )}
                 </Alert>
               ))}
+
+              {/* Editor + Footnotes pane split */}
+              <div ref={containerRef} className="tw-h-full tw-w-full tw-min-h-0">
+                <ResizablePanelGroup
+                  direction={groupDirection}
+                  className="tw-h-full tw-w-full tw-min-h-0"
+                  onLayout={onLayoutFootnotesPane}
+                >
+                  <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
+                    <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
+                      {/* Render the editor inside the container decorations without re-mounting on re-parent */}
+                      <OutPortal node={editorPortalNode} />
+                    </div>
+                  </ResizablePanel>
+
+                  {footnotesPaneVisible && (
+                    <>
+                      <ResizableHandle />
+                      <ResizablePanel
+                        defaultSize={footnotesPaneSize}
+                        className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
+                        minSize={footnotesPaneMinPercent}
+                        maxSize={footnotesPaneMaxPercent}
+                      >
+                        <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
+                          <FootnoteList
+                            listId={footnoteListKey}
+                            layout={footnotesLayout}
+                            footnotes={footnotes}
+                            localizedStrings={localizedStrings}
+                            showMarkers={options.view?.markerMode !== 'hidden'}
+                          />
+                        </div>
+                      </ResizablePanel>
+                    </>
+                  )}
+                </ResizablePanelGroup>
+              </div>
             </div>
-            {/** Render the editor inside the container decorations without re-mounting on re-parent */}
-            <OutPortal node={editorPortalNode} />
           </div>,
         )}
       </div>
