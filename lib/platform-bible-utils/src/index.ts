@@ -190,7 +190,7 @@ export * from './extension-contributions/theme.model';
 export * from './extension-contributions/theme.util';
 export type {
   IUsjReaderWriter,
-  UsjContentLocation,
+  UsjNodeAndDocumentLocation,
   UsjSearchResult,
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
