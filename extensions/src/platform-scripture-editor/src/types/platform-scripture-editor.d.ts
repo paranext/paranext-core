@@ -231,9 +231,12 @@ declare module 'papi-shared-types' {
       existingTabIdToReplace?: string,
     ) => Promise<string | undefined>;
 
-    'platformScripture.toggleFootnotes': (
-      webViewId?: string | undefined,
-    ) => Promise<string | undefined>;
+    /**
+     * Toggles the visibility of the footnotes pane for the given the WebView ID
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScripture.toggleFootnotes': (webViewId?: string | undefined) => Promise<void>;
   }
 
   export interface WebViewControllers {

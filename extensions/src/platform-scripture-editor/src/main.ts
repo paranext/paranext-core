@@ -146,21 +146,21 @@ async function open(
   return undefined;
 }
 
-async function toggleFootnotesPane(webViewId: string | undefined): Promise<undefined> {
+async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
   if (!webViewId) {
     logger.debug('No editor WebView ID!');
-    return undefined;
+    return;
   }
 
   const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
   if (!webViewDefinition) {
     logger.debug(`No webViewDefinition found for ${webViewId}!`);
-    return undefined;
+    return;
   }
 
   if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
     logger.debug(`WebView is not a Scripture editor!`);
-    return undefined;
+    return;
   }
 
   const controller = await papi.webViews.getWebViewController(
@@ -170,12 +170,10 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<undef
 
   if (!controller) {
     logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
-    return undefined;
+    return;
   }
 
   await controller.toggleFootnotesPaneVisibility();
-
-  return undefined;
 }
 
 /** Simple WebView provider so PAPI can get a Scripture Editor upon request */
