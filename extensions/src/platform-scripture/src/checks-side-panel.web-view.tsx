@@ -1,6 +1,41 @@
 import { WebViewProps } from '@papi/core';
-import { logger, network } from '@papi/frontend';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import papi, { logger, network } from '@papi/frontend';
+import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { ChevronDown } from 'lucide-react';
+import {
+  Button,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  MultiSelectComboBox,
+  MultiSelectComboBoxEntry,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Progress,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Spinner,
+  useEvent,
+  usePromise,
+} from 'platform-bible-react';
+import {
+  deepEqual,
+  formatReplacementString,
+  formatReplacementStringToArray,
+  getChaptersForBook,
+  getErrorMessage,
+  isPlatformError,
+  LAST_SCR_BOOK_NUM,
+  Mutex,
+} from 'platform-bible-utils';
 import {
   CheckInputRange,
   CheckJobScope,
@@ -9,26 +44,18 @@ import {
   CheckRunnerCheckDetails,
   CheckRunResult,
 } from 'platform-scripture';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  deepEqual,
-  getChaptersForBook,
-  getErrorMessage,
-  isPlatformError,
-  LAST_SCR_BOOK_NUM,
-  LocalizeKey,
-  Mutex,
-} from 'platform-bible-utils';
-import { Button, Progress, Spinner, useEvent } from 'platform-bible-react';
-import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
-import {
-  ChecksScopeFilter,
+  CHECK_SCOPE_FILTER_STRINGS,
+  CheckInfo,
   CheckScopes,
-} from './checks/configure-checks/checks-scope-filter.component';
-import { ChecksProjectFilter } from './checks/configure-checks/checks-project-filter.component';
-import ChecksCheckTypeFilter from './checks/configure-checks/checks-check-type-filter.component';
+  getProjectNames,
+  isValidCheckScope,
+  LOCALIZED_STRINGS,
+  ProjectOption,
+} from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
+import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -49,19 +76,6 @@ const defaultJobStatusReport: CheckJobStatusReport = {
 
 const defaultCheckResults: CheckRunResult[] = [];
 
-const LOCALIZED_STRINGS: LocalizeKey[] = [
-  '%general_cancel%',
-  '%webView_checksSidePanel_fixedBadge_title%',
-  '%webView_checksSidePanel_deniedBadge_title%',
-  '%webView_checksSidePanel_checkingBadge_title%',
-  '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
-  '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
-  '%webView_checksSidePanel_loadingCheckResults%',
-  '%webView_checksSidePanel_noCheckResults%',
-  '%webView_checksSidePanel_noChecksSelected%',
-  '%webView_checksSidePanel_selectChecks%',
-];
-
 const RESULTS_PAGE_SIZE = 500;
 
 const aggregatorMutex = new Mutex();
@@ -78,6 +92,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'selectedCheckTypes',
     [],
   );
+  const [isSelectProjectsOpen, setIsSelectProjectsOpen] = useState(false);
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [activeRanges, setActiveRanges] = useState<CheckInputRange[]>(() => []);
@@ -96,6 +111,28 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultCheckRunnerCheckDetails], []),
   );
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+
+  // Project data loading
+  const [projectIdsAndNames]: [{ [projectId: string]: ProjectOption }, boolean] = usePromise(
+    useCallback(async () => {
+      const projectDict: { [projectId: string]: ProjectOption } = {};
+
+      // Fetch projects metadata to get ids
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects();
+
+      // Map through all metadata to get ids and names
+      await Promise.all(
+        allMetadata.map(async (metadata) => {
+          const names = await getProjectNames(metadata.id);
+          if (!names) return;
+          projectDict[metadata.id] = names;
+        }),
+      );
+
+      return projectDict;
+    }, []),
+    useMemo(() => ({}), []),
+  );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -148,13 +185,17 @@ global.webViewComponent = function ChecksSidePanelWebView({
     });
   }, [projectId]);
 
+  const previousProjectId = useRef<string | undefined>(undefined);
   const previousScope = useRef<CheckScopes>(undefined);
   const previousScrRef = useRef<SerializedVerseRef>(scrRef);
 
   // Effect to determine if the range used by the check job has changed
   useEffect(() => {
     // If the scope hasn't changed, determine if the scrRef change actually affects the ranges
-    if (previousScope.current === scope) {
+    if (
+      previousProjectId.current === checkInputRange.projectId &&
+      previousScope.current === scope
+    ) {
       // For "All" scope, scrRef changes do not impact the ranges; avoid resetting them
       if (scope === CheckScopes.All) return;
       // For "Book" scope, only changes to the book matter
@@ -168,6 +209,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         return;
     }
 
+    previousProjectId.current = checkInputRange.projectId;
     previousScope.current = scope;
     previousScrRef.current = scrRef;
     setActiveRanges(scope === CheckScopes.All ? getInputRangesForScopeAll() : [checkInputRange]);
@@ -471,15 +513,30 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [availableChecks],
   );
 
-  const checkNamesAndIds = useMemo(() => {
-    if (!Array.isArray(availableChecks)) {
-      // This means availableChecks has type PlatformError
-      return [];
+  const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
+
+  useEffect(() => {
+    if (!checkAggregator || !projectId || isPlatformError(availableChecks)) {
+      setChecksInfo([]);
+      return;
     }
-    return availableChecks.map(
-      (check) => `${getLocalizedCheckDescription(check.checkId)},${check.checkId}`,
-    );
-  }, [availableChecks, getLocalizedCheckDescription]);
+
+    const fetchChecksInfo = async () => {
+      const promises = availableChecks.map(async (check) => {
+        const isSetup = await checkAggregator.isCheckSetupForProject(check.checkId, projectId);
+        return {
+          checkId: check.checkId,
+          checkName: getLocalizedCheckDescription(check.checkId),
+          isSetup,
+          setUpLink: undefined, // TODO: Add setUpLink when available from backend
+        };
+      });
+      const results = await Promise.all(promises);
+      setChecksInfo(results);
+    };
+
+    fetchChecksInfo();
+  }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
 
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
@@ -577,8 +634,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   const handleSelectScope = useCallback(
-    (newScope: CheckScopes) => {
-      setScope(newScope);
+    (newScope: string) => {
+      if (isValidCheckScope(newScope)) {
+        setScope(newScope);
+      }
     },
     [setScope],
   );
@@ -586,6 +645,65 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const handleSelectCheckType = (updatedCheckIds: string[]) => {
     setSelectedCheckTypeIds(updatedCheckIds);
   };
+
+  // Helper functions for project and scope filters
+  const writeProjectName = useCallback(
+    (fullName: string, shortName: string) => {
+      return formatReplacementStringToArray(
+        localizedStrings['%webView_checksSidePanel_projectFilter_projectName_format%'],
+        { fullName, shortName },
+      );
+    },
+    [localizedStrings],
+  );
+
+  const getProjectShortNameLabel = useCallback(() => {
+    return (
+      projectIdsAndNames[projectId ?? '']?.shortName ??
+      localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
+    );
+  }, [localizedStrings, projectIdsAndNames, projectId]);
+
+  const sortedProjectEntries = useMemo(() => {
+    return Object.entries(projectIdsAndNames).sort(([, a], [, b]) =>
+      a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+    );
+  }, [projectIdsAndNames]);
+
+  const getScopeLabel = useCallback(
+    (scopeValue: string) => {
+      if (isValidCheckScope(scopeValue)) {
+        return localizedStrings[CHECK_SCOPE_FILTER_STRINGS[scopeValue]];
+      }
+      return scopeValue; // Fallback for invalid scope values
+    },
+    [localizedStrings],
+  );
+
+  // Helper functions for check type filter
+  const checkTypeEntries: MultiSelectComboBoxEntry[] = useMemo(
+    () =>
+      checksInfo.map((check) => ({
+        value: check.checkId,
+        label: check.checkName,
+        secondaryLabel: check.isSetup
+          ? undefined
+          : localizedStrings['%webView_checksSidePanel_checkRequiresSetup%'],
+        starred: false,
+      })),
+    [checksInfo, localizedStrings],
+  );
+
+  const selectedChecksCountLabel = useMemo(
+    () =>
+      formatReplacementString(
+        localizedStrings['%webView_checksSidePanel_checkTypeFilter_countLabel%'],
+        {
+          resultsCount: selectedCheckTypeIds.length,
+        },
+      ),
+    [localizedStrings, selectedCheckTypeIds],
+  );
 
   const handleCancelOperation = useCallback(async () => {
     await stopActiveJob();
@@ -597,7 +715,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   if (isLoadingAvailableChecks || !checkAggregator) {
     return (
-      <div className="pr-twp tw-h-screen tw-box-border tw-bg-sidebar tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+      <div className="pr-twp tw-h-screen tw-box-border tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
         <span className="tw-text-sm">
           {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
@@ -607,20 +725,92 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-flex tw-flex-col tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen tw-min-w-[10rem]">
+    <div className="pr-twp tw-container  tw-mx-auto  tw-flex tw-flex-col tw-max-h-screen tw-gap-6 tw-p-4 tw-min-w-[10rem]">
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
-        <ChecksProjectFilter
-          handleSelectProject={handleSelectProject}
-          selectedProjectId={projectId ?? ''}
-        />
-        <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
-        <ChecksCheckTypeFilter
-          filterItems={checkNamesAndIds}
-          selectedCheckTypeIds={selectedCheckTypeIds}
-          handleSelectCheckTypeToggle={handleSelectCheckType}
-          open={isCheckTypesOpen}
-          onOpenChange={(open) => setIsCheckTypesOpen(open)}
+        {/* Project Filter */}
+        <Popover open={isSelectProjectsOpen} onOpenChange={setIsSelectProjectsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="tw-flex-1 tw-min-w-32 tw-font-normal"
+              aria-label={
+                localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+              }
+            >
+              <div className="tw-flex tw-w-full tw-items-center tw-justify-between">
+                {getProjectShortNameLabel()}
+                <ChevronDown className="tw-opacity-50" />
+              </div>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="tw-max-w-sm tw-p-0" align="start">
+            <Command>
+              <CommandInput />
+              <CommandList>
+                <CommandEmpty>
+                  {localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']}
+                </CommandEmpty>
+                <CommandGroup
+                  heading={
+                    localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+                  }
+                >
+                  {sortedProjectEntries.map(([projectIdOption, project]) => (
+                    <CommandItem
+                      key={projectIdOption}
+                      onSelect={() => {
+                        handleSelectProject(projectIdOption);
+                        setIsSelectProjectsOpen(false);
+                      }}
+                      className="tw-flex tw-items-center"
+                    >
+                      <span className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
+                        {writeProjectName(project.fullName, project.shortName)}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        {/* Scope Filter */}
+        <Select value={scope} onValueChange={handleSelectScope}>
+          <SelectTrigger className="tw-flex-1 tw-min-w-32">
+            <SelectValue
+              placeholder={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
+            >
+              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+                {getScopeLabel(scope)}
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="tw-max-w-sm" align="start">
+            {Object.values(CheckScopes).map((scopeOption) => (
+              <SelectItem key={scopeOption} value={scopeOption}>
+                {getScopeLabel(scopeOption)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* Check Type Filter */}
+        <MultiSelectComboBox
+          entries={checkTypeEntries}
+          selected={selectedCheckTypeIds}
+          onChange={handleSelectCheckType}
+          placeholder={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
+          hasToggleAllFeature
+          selectAllText="Select All"
+          clearAllText="Clear All"
+          customSelectedText={selectedChecksCountLabel}
+          commandEmptyMessage="No checks found"
+          isOpen={isCheckTypesOpen}
+          onOpenChange={setIsCheckTypesOpen}
+          sortSelected={false}
+          className="tw-flex-[2] tw-min-w-32"
+          variant="outline"
         />
       </div>
       {/* Check results */}
@@ -633,12 +823,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
                 : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
             </div>
-            <Button onClick={() => setIsCheckTypesOpen(!isCheckTypesOpen)}>
+            <Button onClick={() => setIsCheckTypesOpen(true)}>
               {localizedStrings['%webView_checksSidePanel_selectChecks%']}
             </Button>
           </div>
         ) : (
-          <div className="tw-min-h-48 tw-flex-1 tw-flex tw-flex-col tw-justify-start tw-items-start tw-p-0 tw-gap-3 tw-pb-3 tw-overflow-y-auto">
+          <div className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2">
             {checkResults.map((result, index) => (
               <CheckCard
                 key={writeCheckId(result, index)}
@@ -653,60 +843,66 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 handleOpenSettingsAndInventories={openSettingsAndInventories}
                 showBadge
                 checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
+                isCheckSetup={
+                  checksInfo.find((check) => check.checkId === result.checkId)?.isSetup ?? true
+                }
+                checkCardDescription={result.messageFormatString}
               />
             ))}
           </div>
         )
       }
       {/* Status bar */}
-      {activeJobStatusReport && checkResults && (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
-          {/* The job is active */}
-          {activeJobStatusReport.status === 'queued' ||
-            (activeJobStatusReport.status === 'running' &&
-              // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
-              activeJobStatusReport.percentComplete > 0 && (
+      {activeJobStatusReport &&
+        activeJobStatusReport !== defaultJobStatusReport &&
+        checkResults && (
+          <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
+            {/* The job is active */}
+            {activeJobStatusReport.status === 'queued' ||
+              (activeJobStatusReport.status === 'running' &&
+                // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
+                activeJobStatusReport.percentComplete > 0 && (
+                  <div className="tw-flex tw-items-center tw-gap-4">
+                    <Progress value={activeJobStatusReport.percentComplete} className="tw-w-64" />
+                    <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
+                      {localizedStrings['%general_cancel%']}
+                    </Button>
+                  </div>
+                ))}
+            {/* The job has finished but not all results are loaded into the UI yet */}
+            {(activeJobStatusReport.status === 'completed' ||
+              activeJobStatusReport.status === 'stopped') &&
+              checkResults &&
+              checkResults.length < activeJobStatusReport.totalResultsCount && (
                 <div className="tw-flex tw-items-center tw-gap-4">
-                  <Progress value={activeJobStatusReport.percentComplete} className="tw-w-64" />
+                  <Progress
+                    value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
+                    className="tw-w-64"
+                  />
+                  {checkResults.length.toString()} /{' '}
+                  {activeJobStatusReport.totalResultsCount.toString()}
                   <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
                     {localizedStrings['%general_cancel%']}
                   </Button>
                 </div>
-              ))}
-          {/* The job has finished but not all results are loaded into the UI yet */}
-          {(activeJobStatusReport.status === 'completed' ||
-            activeJobStatusReport.status === 'stopped') &&
-            checkResults &&
-            checkResults.length < activeJobStatusReport.totalResultsCount && (
-              <div className="tw-flex tw-items-center tw-gap-4">
-                <Progress
-                  value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
-                  className="tw-w-64"
-                />
-                {checkResults.length.toString()} /{' '}
-                {activeJobStatusReport.totalResultsCount.toString()}
-                <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
-                  {localizedStrings['%general_cancel%']}
-                </Button>
-              </div>
+              )}
+            {/* The job has finished and all results are loaded into the UI */}
+            {(activeJobStatusReport.status === 'completed' ||
+              activeJobStatusReport.status === 'stopped') &&
+              checkResults &&
+              checkResults.length === activeJobStatusReport.totalResultsCount && (
+                <p className="tw-font-light">
+                  {checkResults.length > 0
+                    ? checkResults.length.toString()
+                    : localizedStrings['%webView_find_noResultsFound%']}
+                </p>
+              )}
+            {/* The job encountered an error while running */}
+            {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
+              <p className="tw-font-light"> {activeJobStatusReport.error}</p>
             )}
-          {/* The job has finished and all results are loaded into the UI */}
-          {(activeJobStatusReport.status === 'completed' ||
-            activeJobStatusReport.status === 'stopped') &&
-            checkResults &&
-            checkResults.length === activeJobStatusReport.totalResultsCount && (
-              <p className="tw-font-light">
-                {checkResults.length > 0
-                  ? checkResults.length.toString()
-                  : localizedStrings['%webView_find_noResultsFound%']}
-              </p>
-            )}
-          {/* The job encountered an error while running */}
-          {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
-            <p className="tw-font-light"> {activeJobStatusReport.error}</p>
-          )}
-        </div>
-      )}
+          </div>
+        )}
     </div>
   );
 };

@@ -23,6 +23,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
@@ -269,19 +270,21 @@ export type TableContents<TData> = TSTable<TData>;
 export type SortDirection = TSSortDirection;
 interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
-	data: TData[];
+	data: TData[] | undefined;
 	enablePagination?: boolean;
 	showPaginationControls?: boolean;
 	showColumnVisibilityControls?: boolean;
 	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 	id?: string;
+	isLoading?: boolean;
+	noResultsMessage: string;
 }
 /**
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, noResultsMessage, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -454,45 +457,88 @@ interface FooterProps {
  * @returns The rendered Footer component
  */
 export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, currentVersion, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
+	secondaryLabel?: string;
 	starred?: boolean;
 };
 interface MultiSelectComboBoxProps {
+	/** The list of entries to select from. */
 	entries: MultiSelectComboBoxEntry[];
-	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
+	/** The currently selected values. */
 	selected: string[];
+	/** Callback function to handle changes in selection. */
 	onChange: (values: string[]) => void;
+	/** Placeholder text when no items are selected. */
 	placeholder: string;
+	/** Whether to show select all/clear all buttons. */
+	hasToggleAllFeature?: boolean;
+	/** Text for the select all button. */
+	selectAllText?: string;
+	/** Text for the clear all button. */
+	clearAllText?: string;
+	/** Message displayed when no entries are found. */
 	commandEmptyMessage?: string;
+	/** Custom text to display when items are selected. */
 	customSelectedText?: string;
+	/** Whether the dropdown is open (for controlled usage). */
+	isOpen?: boolean;
+	/** Handler that is called when the dropdown's open state changes. */
+	onOpenChange?: (open: boolean) => void;
+	/** Flag to disable the component. */
 	isDisabled?: boolean;
+	/** Flag to sort selected items. */
 	sortSelected?: boolean;
+	/** Optional icon to display in the button. */
 	icon?: React$1.ReactNode;
+	/** Additional class names for styling. */
 	className?: string;
+	/** Button variant to use for the trigger button. */
+	variant?: VariantProps<typeof buttonVariants>["variant"];
+	/** Optional ID for the component. */
 	id?: string;
 }
-/**
- * MultiSelectComboBox is a component that provides a UI for selecting multiple items from a list.
- * It supports displaying a placeholder, custom selected text, and an optional icon. Users can
- * search through options and view starred items prominently.
- *
- * @param {MultiSelectComboBoxProps} props
- * @param {MultiSelectComboBoxEntry[]} props.entries - The list of entries to select from.
- * @param {function} [props.getEntriesCount] - Optional function to get the count of entries.
- * @param {string[]} props.selected - The currently selected values.
- * @param {function} props.onChange - Callback function to handle changes in selection.
- * @param {string} props.placeholder - Placeholder text when no items are selected.
- * @param {string} [props.commandEmptyMessage] - Message displayed when no entries are found.
- * @param {string} [props.customSelectedText] - Custom text to display when items are selected.
- * @param {boolean} [props.isDisabled] - Flag to disable the component.
- * @param {boolean} [props.sortSelected] - Flag to sort selected items.
- * @param {ReactNode} [props.icon] - Optional icon to display in the button.
- * @param {string} [props.className] - Additional class names for styling.
- * @param {string} [props.id] - Optional ID for the component.
- */
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+/** MultiSelectComboBox component for selecting multiple items from a list. */
+export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
@@ -508,21 +554,35 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export type FootnoteLayout = "horizontal" | "vertical";
 export interface FootnoteItemProps {
-	/** Optional additional class name for styling */
-	className?: string;
-	/** The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is
-	 * an array of {@link MarkerObject}, in practice, for footnotes that array contains only one
+	/**
+	 * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
+	 * array of {@link MarkerObject}, in practice, for footnotes that array contains only one
 	 * additional level of `MarkerObject` objects. The `content` of those nested objects will be plain
 	 * strings, containing the text of the individual footnote data (reference, quoted text, footnote
-	 * text, etc.).  */
+	 * text, etc.).
+	 */
 	footnote: MarkerObject;
+	/**
+	 * Determines how footnotes are displayed:
+	 *
+	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
+	 *   second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
+	 *   beneath (typically used side-by-side with the text).
+	 *
+	 * @default 'horizontal'
+	 */
+	layout?: FootnoteLayout;
 	/** Flag indicating whether to display USFM-style markers */
 	showMarkers?: boolean;
-	/** A function that can interpret the two special footnote caller codes defined by USFM, `+` and
-	 *  `-` in order to display (or suppress display of) a meaningful caller in the context where this
-	 * is being used. */
+	/**
+	 * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
+	 * `-` in order to display (or suppress display of) a meaningful caller in the context where this
+	 * is being used.
+	 */
 	formatCaller?: (caller: string | undefined) => string | undefined;
 }
 export interface FootnoteListProps {
@@ -530,27 +590,53 @@ export interface FootnoteListProps {
 	className?: string;
 	/** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
 	footnotes: MarkerObject[];
-	/** ID provided by the caller that should change whenever the list changes (due to additions,
-	 * deletions or — unlikely — reordering)
-	) */
+	/**
+	 * Determines how footnotes are displayed:
+	 *
+	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
+	 *   second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
+	 *   beneath (typically used side-by-side with the text).
+	 *
+	 * @default 'horizontal'
+	 */
+	layout?: FootnoteLayout;
+	/**
+	 * ID provided by the caller that should change whenever the list changes (due to additions,
+	 * deletions or — unlikely — reordering) )
+	 */
 	listId: string | number;
-	/** Flag indicating whether to display USFM-style markers */
-	showMarkers?: boolean;
-	/** A function that can interpret the two special footnote caller codes defined by USFM, `+` and
-	 *  `-` in order to display (or suppress display of) a meaningful caller in the context where this
-	 * is being used. */
-	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** The currently selected footnote (or undefined if none) */
 	selectedFootnote?: MarkerObject;
+	/** Flag indicating whether to display USFM-style markers */
+	showMarkers?: boolean;
+	/**
+	 * Flag indicating whether to suppress USFM-style formatting.
+	 *
+	 * @default false
+	 */
+	suppressFormatting?: boolean;
+	/**
+	 * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
+	 * `-` in order to display (or suppress display of) a meaningful caller in the context where this
+	 * is being used.
+	 */
+	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** Callback to handle clicking/selecting a footnote in the list */
-	onFootnoteSelected?: (footnote: MarkerObject) => void;
+	onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
 }
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
-export declare function FootnoteItem({ className, footnote, formatCaller, showMarkers, }: FootnoteItemProps & {
-	showMarkers?: boolean;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
+declare const FOOTNOTE_LIST_STRING_KEYS: readonly [
+	"%webView_footnoteList_header%"
+];
+type FootnoteListLocalizedStrings = {
+	[localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ footnotes, showMarkers, formatCaller, listId, selectedFootnote, onFootnoteSelected, className, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ className, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
+	localizedStrings?: FootnoteListLocalizedStrings;
+}): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
@@ -644,7 +730,8 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_filter_text%",
 	"%webView_inventory_show_additional_items%",
 	"%webView_inventory_occurrences_table_header_reference%",
-	"%webView_inventory_occurrences_table_header_occurrence%"
+	"%webView_inventory_occurrences_table_header_occurrence%",
+	"%webView_inventory_no_results%"
 ];
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
@@ -655,7 +742,7 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The inventory items that the inventory should be populated with */
-	inventoryItems: InventoryItem[];
+	inventoryItems: InventoryItem[] | undefined;
 	/** Callback function that is executed when the scripture reference is changed */
 	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
@@ -687,9 +774,11 @@ type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 	/** Unique identifier for the Inventory component */
 	id?: string;
+	/** Whether the inventory items are still loading */
+	areInventoryItemsLoading?: boolean;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -1248,7 +1337,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  */
 export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
-	"%settings_uiLanguageSelector_selectFallbackLanguages%"
+	"%settings_uiLanguageSelector_fallbackLanguages%"
 ];
 type UiLanguageSelectorLocalizedStrings = {
 	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
@@ -1343,44 +1432,6 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
-type ClassValue$1 = ClassValue;
-type ClassProp = {
-	class: ClassValue$1;
-	className?: never;
-} | {
-	class?: never;
-	className: ClassValue$1;
-} | {
-	class?: never;
-	className?: never;
-};
-type OmitUndefined<T> = T extends undefined ? never : T;
-type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-	asChild?: boolean;
-}
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ComboBoxLabelOption = {
 	label: string;
 };
@@ -1427,6 +1478,34 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+interface ResultsCardProps {
+	/** Unique key for the card */
+	cardKey: string;
+	/** Whether this card is currently selected/focused */
+	isSelected: boolean;
+	/** Callback function called when the card is clicked */
+	onSelect: () => void;
+	/** Whether the content of this card are in a denied state */
+	isDenied?: boolean;
+	/** Whether the card should be hidden */
+	isHidden?: boolean;
+	/** Additional CSS classes to apply to the card */
+	className?: string;
+	/** Main content to display on the card */
+	children: React$1.ReactNode;
+	/** Content to show in the dropdown menu when selected */
+	dropdownContent?: React$1.ReactNode;
+	/** Additional content to show below the main content when selected */
+	additionalSelectedContent?: React$1.ReactNode;
+	/** Color to use for the card's accent border */
+	accentColor?: string;
+}
+/**
+ * ResultsCard is a base component for displaying scripture-related results in a card format, even
+ * though it is not based on the Card component. It provides common functionality like selection
+ * state, dropdown menus, and expandable content.
+ */
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
@@ -1943,6 +2022,27 @@ export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectP
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Select */
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
+	className?: string;
+	collapsedSize?: number | undefined;
+	collapsible?: boolean | undefined;
+	defaultSize?: number | undefined;
+	id?: string;
+	maxSize?: number | undefined;
+	minSize?: number | undefined;
+	onCollapse?: ResizablePrimitive.PanelOnCollapse;
+	onExpand?: ResizablePrimitive.PanelOnExpand;
+	onResize?: ResizablePrimitive.PanelOnResize;
+	order?: number;
+	style?: object;
+	tagName?: keyof HTMLElementTagNameMap | undefined;
+} & {
+	children?: import("react").ReactNode | undefined;
+} & React$1.RefAttributes<ResizablePrimitive.ImperativePanelHandle>>;
+export declare function ResizableHandle({ withHandle, className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle> & {
+	withHandle?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
 /**
  * The Separator component visually or semantically separates content. This component is built on
  * Radix UI primitives and styled with Shadcn UI.

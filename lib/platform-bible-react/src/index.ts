@@ -43,6 +43,7 @@ export { default as Footer } from './components/advanced/extension-marketplace/f
 export { default as Filter } from './components/advanced/filter.component';
 export type {
   FootnoteItemProps,
+  FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
@@ -130,6 +131,7 @@ export type {
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
+export { default as ResultsCard } from './components/basics/results-card.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
@@ -166,6 +168,7 @@ export * from './components/shadcn-ui/popover';
 export { Progress } from './components/shadcn-ui/progress';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
+export * from './components/shadcn-ui/resizable';
 export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sidebar';
 export * from './components/shadcn-ui/sonner';

@@ -1,5 +1,6 @@
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from './usj-reader-writer';
+import { usjMat1 } from './footnote-util-test.usj.data';
 
 const usj: Usj = JSON.parse(`{
   "content": [
@@ -1213,4 +1214,30 @@ test('Correct USJ details are found using search', () => {
   const textWithinNoteRegex = /NU omits /g;
   const noteMatches = usjDoc.search(textWithinNoteRegex);
   expect(noteMatches.length).toBeGreaterThan(0);
+});
+
+describe('findAllNotes', () => {
+  it('should extract multiple notes from real-life data', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1);
+    const result = usjDoc.findAllNotes();
+
+    expect(result.length).toEqual(10);
+
+    // Spot-check some known markers
+    expect(result[0].marker).toBe('x'); // first one is cross-ref
+    expect(result[1].marker).toBe('f'); // second is footnote
+    expect(result[2].marker).toBe('fe'); // third is endnote
+    expect(result[result.length - 1].marker).toBe('x'); // last is also cross-ref
+
+    expect(result.every((n) => n.type === 'note')).toBe(true);
+
+    // e.g., All notes in this test data should start with a `MarkerObject` whose type is `char`
+    result.forEach((note) => {
+      expect(note.type).toBe('note');
+      const firstChild = note.content?.[0];
+      if (firstChild === undefined) throw new Error('Expected first child to be defined');
+      if (typeof firstChild === 'string') throw new Error('Expected MarkerObject, got string');
+      expect(firstChild.type).toBe('char');
+    });
+  });
 });

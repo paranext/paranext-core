@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { getDefaultCallerSequence, getNthCaller, getFormatCallerFunction } from './footnote-util';
+import { MarkerContent, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import {
+  getDefaultCallerSequence,
+  getNthCaller,
+  getFormatCallerFunction,
+  extractFootnotesFromUsjContent,
+} from './footnote-util';
+import { usjMat1 } from './footnote-util-test.usj.data';
 
 describe('Caller Utilities', () => {
   describe('getDefaultCallerSequence', () => {
@@ -65,5 +71,79 @@ describe('Caller Utilities', () => {
       expect(fn('-', 0)).toBeUndefined();
       expect(fn('x', 0)).toBe('x');
     });
+  });
+});
+
+describe('extractFootnotesFromUsjContent', () => {
+  it('should return an empty array if there are no notes', () => {
+    const content: MarkerContent = { type: 'text', marker: 'p', content: ['Some text'] };
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([]);
+  });
+
+  it('should handle nodes with undefined or string content', () => {
+    const note: MarkerObject = { type: 'note', marker: 'f', content: undefined };
+    const content: MarkerContent = {
+      type: 'paragraph',
+      marker: 'q',
+      content: ['Evil men seek my life', { type: 'text', marker: 'add', content: undefined }, note],
+    };
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([note]);
+  });
+
+  it('should extract a single note at the top level', () => {
+    const note: MarkerObject = { type: 'note', marker: 'x', content: [] };
+    const content: MarkerContent = note;
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([note]);
+  });
+
+  it('should extract nested notes', () => {
+    const note1: MarkerObject = { type: 'note', marker: 'fe', content: [] };
+    const note2: MarkerObject = { type: 'note', marker: 'f', content: [] };
+    const content: MarkerContent = {
+      type: 'para',
+      marker: 'p',
+      content: [
+        {
+          type: 'verse',
+          marker: 'v',
+          number: '1',
+          content: [
+            { type: 'text', marker: 't', content: ['Hello '] },
+            note1,
+            {
+              type: 'wj',
+              marker: 'wj',
+              content: [note2],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = extractFootnotesFromUsjContent([content]);
+    expect(result).toEqual([note1, note2]);
+  });
+
+  it('should ignore non-note markers', () => {
+    const paraWithVerse12 = usjMat1.content.find(
+      (node) =>
+        typeof node === 'object' &&
+        node.type === 'para' &&
+        node.content?.some(
+          (c) =>
+            typeof c === 'object' && c.type === 'verse' && c.marker === 'v' && c.number === '12',
+        ),
+    );
+
+    if (!paraWithVerse12) throw new Error('Paragraph with verse 12 not found');
+
+    const result = extractFootnotesFromUsjContent([paraWithVerse12]);
+    expect(result).toEqual([]);
   });
 });
