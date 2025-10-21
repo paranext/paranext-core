@@ -4,12 +4,12 @@ using Paratext.Data.Checking;
 
 namespace TestParanextDataProvider.Checks;
 
-public class ParatextCheckDetailsTests
+public class CheckRunnerCheckDetailsTests
 {
     [Test]
     public void Serialization_Json_MatchesExpectations()
     {
-        var checkDetails = new ParatextCheckDetails(CheckType.Capitalization);
+        var checkDetails = new CheckRunnerCheckDetails(CheckType.Capitalization);
         Assert.That(
             checkDetails.SerializeToJson(),
             Is.EqualTo(

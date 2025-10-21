@@ -1036,6 +1036,139 @@ declare module 'platform-scripture' {
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
   };
 
+  // #endregion
+
+  // #region Inventory Data Provider Types
+
+  /** Details about an option available for an inventory */
+  export type InventoryOption = {
+    /** Name of the option */
+    optionName: string;
+    /** Localization key for the option name */
+    localizeKeyName: LocalizeKey;
+    /** Type of the option value: "boolean" or "string" */
+    valueType: 'boolean' | 'string';
+  };
+
+  /** Details about an available inventory */
+  export type AvailableInventory = {
+    /** Unique identifier for the inventory (same as the check ID for inventory-based checks) */
+    inventoryId: string;
+    /** Localization key for the inventory name */
+    localizeKeyName: LocalizeKey;
+    /** List of options available for this inventory */
+    options: InventoryOption[];
+  };
+
+  /** Status of an individual inventory item */
+  export type InventoryItemStatus = {
+    /** The text of the inventory item itself (e.g., single character in character inventory) */
+    key: string;
+    /** True if the item is valid, false if it is invalid */
+    status: boolean;
+  };
+
+  /** An inventory option with its value */
+  export type InventoryOptionValue = {
+    /** Name of the option */
+    optionName: string;
+    /** Value of the option */
+    optionValue: boolean | string;
+  };
+
+  /** Selector for inventory option values */
+  export type InventoryOptionValuesSelector = {
+    /** ID of the project */
+    projectId: string;
+    /** ID of the inventory */
+    inventoryId: string;
+    /** Name of the inventory option */
+    optionName?: string;
+  };
+
+  /**
+   * Type of text an inventory can apply to
+   *
+   * - AllText: All text
+   * - VerseText: Verse text only
+   * - NonVerseText: Non-verse text only (e.g., headings, footnotes, side bars, etc.)
+   * - RegularContent: All verse and non-verse text, excluding Study Bible content
+   * - StudyBibleContent: Study Bible content only
+   */
+  export type InventoryTextType =
+    | 'allText'
+    | 'verseText'
+    | 'nonVerseText'
+    | 'regularContent'
+    | 'studyBibleContent';
+
+  /** Selector for inventory item status */
+  export type InventoryItemStatusSelector = {
+    /** ID of the project */
+    projectId: string;
+    /** ID of the inventory */
+    inventoryId: string;
+    /** Type of text to get inventory item status for */
+    textType?: InventoryTextType;
+    /** Specific key of the inventory item of interest */
+    key?: string;
+  };
+
+  /** Data types provided by the inventory data provider */
+  export type InventoryDataTypes = {
+    /** Get list of available inventories (get only, no set) */
+    AvailableInventories: DataProviderDataType<undefined, AvailableInventory[], never>;
+    /**
+     * Get or set inventory options
+     *
+     * When getting inventory options, if the `optionName` property is provided in the selector,
+     * then only that option's value is returned in the array. If not provided, then all option
+     * values for the inventory are returned in the array.
+     *
+     * When setting inventory options, if the `optionName` property is provided in the selector,
+     * then only that option's value is set to a boolean or string value. Passing a value of
+     * `undefined` will reset that option to its default value. If `optionName` is not provided,
+     * then all option values for the inventory are set based on the array of `InventoryOptionValue`
+     * objects passed.
+     */
+    InventoryOptionValues: DataProviderDataType<
+      InventoryOptionValuesSelector,
+      InventoryOptionValue[],
+      InventoryOptionValue[] | boolean | string | undefined
+    >;
+    /**
+     * Get or set inventory item status
+     *
+     * When getting inventory item status, if the `key` property is provided in the selector, then
+     * only that item's status is returned in the array. If not provided, then all item statuses for
+     * the inventory are returned in the array.
+     *
+     * When setting inventory item status, if the `key` property is provided in the selector, then
+     * only that item's status is set to true (valid), false (invalid), or undefined (unknown). If
+     * `key` is not provided, then all item statuses for the inventory are set based on the array of
+     * `InventoryItemStatus` objects passed.
+     *
+     * When both getting and setting, the `textType` property can be used to filter which text types
+     * to consider when retrieving or updating item statuses. If not provided, all text types are
+     * considered.
+     */
+    InventoryItemStatus: DataProviderDataType<
+      InventoryItemStatusSelector,
+      InventoryItemStatus[],
+      InventoryItemStatus[] | boolean | undefined
+    >;
+  };
+
+  /**
+   * Data provider that provides information about inventories and allows managing inventory options
+   * and item statuses
+   */
+  export type IInventoryDataProvider = IDataProvider<InventoryDataTypes>;
+
+  // #endregion
+
+  // #region Check Runner Types
+
   /**
    * All processes that can run checks are expected to implement this type in a data provider
    * registered with object type 'checkRunner'
@@ -1168,6 +1301,7 @@ declare module 'papi-shared-types' {
     IFindInScriptureProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
+    IInventoryDataProvider,
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
@@ -1197,6 +1331,8 @@ declare module 'papi-shared-types' {
      * includes all checks registered with all {@link ICheckRunner} instances.
      */
     'platformScripture.extensionHostCheckRunner': ICheckRunner;
+    /** Data provider for managing inventories and their options */
+    'platformScripture.inventoryDataProvider': IInventoryDataProvider;
   }
 
   export interface CommandHandlers {
