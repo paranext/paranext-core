@@ -24,6 +24,8 @@ export type VerseRefOffset = {
   offset: number;
 };
 
+// #region Serializable USFM and USJ locations
+
 /**
  * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
  * document.
@@ -38,28 +40,221 @@ export type ContentJsonPath =
   | `$.content[${number}].content[${number}].content[${number}]`
   | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
 
-/** Node within a USJ object, an offset within that node, and a JSONPath query to the node */
-export type UsjContentLocation = {
-  node: MarkerContent;
-  offset: number;
+/**
+ * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
+ * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
+ * if there are symbols other than underscore in the property name
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
+export type PropertyJsonPath =
+  | ''
+  | `$.${string}`
+  | `$['${string}']`
+  | `$.content[${number}].${string}`
+  | `$.content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+
+/** A verse ref and an offset in USFM space that point to a specific location in USFM. */
+export type UsfmLocation = {
+  /** Verse reference indicating which verse the location is in */
+  verseRef: SerializedVerseRef;
+  /**
+   * Offset to apply to start of the verse indicated by `verseRef`.
+   *
+   * If the verse is 0, the start of the chapter is offset 0. If the verse is greater than 0, the
+   * backslash on the verse marker is offset 0
+   *
+   * If not provided, defaults to 0.
+   */
+  offset?: number;
+};
+
+/**
+ * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
+ * additional information that point to a specific location in USJ.
+ *
+ * This type does not include a verse reference because the JSONPath is relative to a specific USJ
+ * document; that USJ document may have a book, a chapter, or something else in it.
+ *
+ * This type intends to represent USFM positions ({@link UsfmLocation}) in USJ space. However, there
+ * are some USFM positions that are not currently representable with these types:
+ *
+ * - The second slash in `optbreak`'s USFM representation `//` (literally not representable)
+ * - Nested marker prefix on opening markers like `+` for character markers (literally not
+ *   representable)
+ * - The bar `|` that indicates the start of closing marker attributes (no official representation)
+ * - The equals sign for closing marker attributes (no official representation)
+ * - The quotes around closing marker attribute values (no official representation)
+ * - The space between closing marker attributes (no official representation)
+ */
+export type UsjDocumentLocation =
+  | UsjMarkerLocation
+  | UsjClosingMarkerLocation
+  | UsjTextContentLocation
+  | UsjPropertyValueLocation
+  | UsjAttributeKeyLocation
+  | UsjAttributeMarkerLocation
+  | UsjClosingAttributeMarkerLocation;
+
+/**
+ * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
+ * that marker (at the backslash in USFM).
+ */
+export type UsjMarkerLocation = {
+  /** JSON path to the marker object the location is pointing to. */
   jsonPath: ContentJsonPath;
+};
+
+/**
+ * A JSONPath query to a specific point in the closing marker representation of a
+ * {@link MarkerObject} or {@link Usj} node.
+ */
+export type UsjClosingMarkerLocation = {
+  /**
+   * JSON path to the marker object whose closing marker the location is pointing to. The offset
+   * applies to the closing marker representation of that marker (for example, `\nd*` in USFM).
+   */
+  jsonPath: ContentJsonPath;
+  /**
+   * The character index in the closing marker representation where this location is pointing. The
+   * location is at this offset within the closing marker representation.
+   */
+  closingMarkerOffset: number;
+};
+
+/**
+ * A JSONPath query to a specific point in a text content string in a {@link MarkerObject.content}
+ * array.
+ */
+export type UsjTextContentLocation = {
+  /**
+   * JSON path to the text content string the location is pointing to. The offset applies to this
+   * text string.
+   */
+  jsonPath: ContentJsonPath;
+  /**
+   * The character index in the text content string where this location is pointing. The location is
+   * at this offset within the text content string.
+   */
+  offset: number;
+};
+
+/**
+ * A JSONPath query to a specific point in a property (`marker` or an attribute) value string in a
+ * {@link MarkerObject} or {@link Usj}. The property cannot be `type` because `type`'s value has no
+ * representation in USFM.
+ *
+ * To represent a location in an attribute's key, use {@link UsjAttributeKeyLocation}.
+ */
+export type UsjPropertyValueLocation = {
+  /**
+   * JSON path to the property the location is pointing to. The offset applies to this property's
+   * value string.
+   */
+  jsonPath: PropertyJsonPath;
+  /**
+   * The character index in the property's value string where this location is pointing. The
+   * location is at this offset within the property's value string.
+   */
+  propertyOffset: number;
+};
+
+/**
+ * A JSONPath query to a specific point in an attribute key string in a {@link MarkerObject} or
+ * {@link Usj}. The property cannot be `type` or `marker` because these properties' keys have no
+ * representation in USFM. The property also cannot be any special attribute whose key doesn't have
+ * a text representation in USFM like default attribute, leading attribute, text content attribute
+ *
+ * To represent a location in an attribute's value, use {@link UsjPropertyValueLocation}.
+ */
+export type UsjAttributeKeyLocation = {
+  /**
+   * JSON path to the marker whose attribute key the location is pointing to. The offset applies to
+   * this attribute's key string unless the attribute is an attribute marker in USFM.
+   */
+  jsonPath: ContentJsonPath;
+  /** Attribute name on the marker object whose key this location is pointing to. */
+  keyName: string;
+  /**
+   * The character index in the attribute's key string where this location is pointing.
+   *
+   * If the attribute is an attribute marker in USFM, the location is at this offset within the
+   * marker name for this attribute marker (for example, `c`'s `altnumber` attribute has attribute
+   * marker `ca`, so its `keyOffset` applies to `ca`).
+   *
+   * If the attribute is not an attribute marker in USFM, the location is at this offset within the
+   * attribute's key string.
+   */
+  keyOffset: number;
+};
+
+/**
+ * A JSONPath query to an attribute marker derived from an attribute on a {@link MarkerObject} or
+ * {@link Usj}. Indicates the very beginning of that marker (at the backslash in USFM).
+ */
+export type UsjAttributeMarkerLocation = {
+  /** JSON path to the marker whose attribute marker the location is pointing to. */
+  jsonPath: ContentJsonPath;
+  /**
+   * Attribute name on the marker object whose key this location is pointing to. This attribute is
+   * an attribute marker in USFM.
+   */
+  keyName: string;
+};
+
+/**
+ * A JSONPath query to a specific point in the closing marker representation of an attribute marker
+ * derived from an attribute on a {@link MarkerObject} or {@link Usj}.
+ */
+export type UsjClosingAttributeMarkerLocation = {
+  /**
+   * JSON path to the marker whose attribute marker's closing marker the location is pointing to.
+   * The offset applies to the closing marker representation of that attribute marker (for example,
+   * `\ca*` in USFM).
+   */
+  jsonPath: ContentJsonPath;
+  /**
+   * Attribute name on the marker object whose key this location is pointing to. This attribute is
+   * an attribute marker in USFM.
+   */
+  keyName: string;
+  /**
+   * The character index in the closing marker representation where this location is pointing. The
+   * location is at this offset within the closing marker representation of the attribute marker.
+   */
+  keyClosingMarkerOffset: number;
+};
+
+// #endregion Serializable USFM and USJ locations
+
+/**
+ * Node in a USJ object (including the top-level Usj object) and its location in the document. You
+ * must make sure you only add `node`s that correspond to the appropriate type of
+ * `UsjDocumentLocation` (e.g. if `documentLocation` is a {@link UsjTextContentLocation}, `node` must
+ * be a text content string)
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
+ */
+export type UsjNodeAndDocumentLocation<
+  TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
+> = {
+  node: TDocumentLocation extends UsjTextContentLocation ? string : MarkerObject | Usj;
+  documentLocation: TDocumentLocation;
 };
 
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
-  location: UsjContentLocation;
+  location: UsjNodeAndDocumentLocation<UsjTextContentLocation>;
   /** The matching text that was found at the location */
   text: string;
 };
-
-/** Token indicating a marker closed */
-export type ClosingMarker = { isClosingMarker: true; forMarker: MarkerObject | Usj };
-
-/**
- * A string found in the USJ document, a marker (including top-level USJ marker), or a closing
- * marker indicator
- */
-export type MarkerToken = MarkerContent | ClosingMarker | Usj;
 
 /**
  * Set of options to provide to `UsjReaderWriter`'s constructor to customize how the reading and
@@ -88,7 +283,7 @@ export interface IUsjReaderWriter {
    * @param start Point where text extraction will start
    * @param desiredLength Length of text to extract from this USJ data
    */
-  extractText(start: UsjContentLocation, desiredLength: number): string;
+  extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
   /**
    * Return a copy of text between two points
    *
@@ -98,8 +293,8 @@ export interface IUsjReaderWriter {
    * @returns Text between the two points, capped at length `maxLength`
    */
   extractTextBetweenPoints(
-    start: UsjContentLocation,
-    end: UsjContentLocation,
+    start: UsjNodeAndDocumentLocation,
+    end: UsjNodeAndDocumentLocation,
     maxLength: number,
   ): string;
   /**
@@ -116,10 +311,10 @@ export interface IUsjReaderWriter {
    *   changing this USJ data.
    */
   findNextLocationOfMatchingText(
-    start: UsjContentLocation,
+    start: UsjNodeAndDocumentLocation,
     text: string,
     maxTextLengthToSearch: number,
-  ): UsjContentLocation | undefined;
+  ): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
   /** Find the first value matching the given JSONPath query within this USJ data */
   findSingleValue<T>(jsonPathQuery: string): T | undefined;
   /** Find the parent of the first value matching the given JSONPath query within this USJ data */
@@ -174,20 +369,37 @@ export interface IUsjReaderWriter {
    */
   usjChanged(): void;
   /**
-   * Convert a verse ref + offset into a node + offset within this USJ data and a JSONPath query
+   * Convert a location in USFM space into a node and location in USJ space within this USJ data.
    *
-   * @param verseRef Indicates the book, chapter, and verse of interest to find
-   * @param verseRefOffset Specific location within verse text (defaults to 0)
-   * @returns Object containing the USJ node indicated by `verseRef` and `verseRefOffset`, offset
-   *   within that node that matches the `verseRefOffset`, and a JSONPath string that indicates the
-   *   location of the of USJ node within this USJ data. Note that if the USJ node returned is an
-   *   object, it is the same object that is within this USJ data. So if you change it, you are
-   *   changing this USJ data.
+   * If the USJ document has no book markers in it to determine which book the USJ is in, the
+   * `verseRef.book` will be ignored, and only the chapter and verse numbers will be used to
+   * determine the location.
+   *
+   * @param usfmLocation Location in USFM space - a book, chapter, verse, and character offset
+   *   within the verse's USFM
+   * @returns Object containing the USJ node and location within the USJ document indicated by
+   *   `usfmLocation`. Note that if the USJ node returned is an object, it is the same object that
+   *   is within this USJ data. So if you change it, you are changing this USJ data.
    */
-  verseRefToUsjContentLocation(
-    verseRef: SerializedVerseRef,
-    verseRefOffset: number,
-  ): UsjContentLocation;
+  usfmLocationToUsjNodeAndDocumentLocation(
+    usfmLocation: UsfmLocation | SerializedVerseRef,
+  ): UsjNodeAndDocumentLocation;
+  /**
+   * Convert a location in USFM space into a location in USJ space within this USJ data.
+   *
+   * If the USJ document has no book markers in it to determine which book the USJ is in, the
+   * `verseRef.book` will be ignored, and only the chapter and verse numbers will be used to
+   * determine the location.
+   *
+   * @param usfmLocation Location in USFM space - a book, chapter, verse, and character offset
+   *   within the verse's USFM
+   * @returns Object containing the USJ location within the USJ document indicated by
+   *   `usfmLocation`. Note that if the USJ node returned is an object, it is the same object that
+   *   is within this USJ data. So if you change it, you are changing this USJ data.
+   */
+  usfmLocationToUsjDocumentLocation(
+    usfmLocation: UsfmLocation | SerializedVerseRef,
+  ): UsjDocumentLocation;
   /**
    * Get the node + offset and JSONPath query within this USJ data of the first encountered string
    * after the verse marker for a specific verse in a USJ chapter.
@@ -202,7 +414,9 @@ export interface IUsjReaderWriter {
    * @throws Error if there is no text after the verse marker for `verseRef`
    * @throws Error if `verseRef` does not point to a valid verse in this USJ data
    */
-  verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
+  verseRefToNextTextLocation(
+    verseRef: SerializedVerseRef,
+  ): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
   /** Transforms the USJ document into USFM */
   toUsfm(): string;
 }
