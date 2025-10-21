@@ -11,16 +11,18 @@ import { JSONPath } from 'jsonpath-plus';
 import {
   BOOK_TYPE,
   CHAPTER_TYPE,
-  ClosingMarker,
   ContentJsonPath,
   IUsjReaderWriter,
-  MarkerToken,
   NO_BOOK_ID,
-  UsjContentLocation,
+  PropertyJsonPath,
+  UsfmLocation,
+  UsjNodeAndDocumentLocation,
+  UsjDocumentLocation,
   UsjReaderWriterOptions,
   UsjSearchResult,
   VERSE_TYPE,
   VerseRefOffset,
+  UsjTextContentLocation,
 } from './usj-reader-writer.model';
 import { SortedNumberMap } from '../sorted-number-map';
 import { extractFootnotesFromUsjContent } from './footnote-util';
@@ -31,7 +33,7 @@ import {
   MarkerTypeInfo,
   USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1,
 } from './markers-map-3.1.model';
-import { isString } from '../util';
+import { deepClone, isString } from '../util';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
@@ -75,10 +77,34 @@ const VERSE_MARKER_NUMBER_SPAN_REGEXP = /(\d+)-?(\d+)?/;
 /** Map of USJ content arrays and objects inside content arrays to the content array owner */
 type UsjParentMap = Map<MarkerObject | MarkerContent[], MarkerObject | Usj>;
 
-type UsjAttributeKey = { isAttributeKey: string; forMarker: MarkerObject | Usj };
-type UsjAttributeValue = { isAttributeValueForKey: string; forMarker: MarkerObject | Usj };
+/** Token indicating a marker closed */
+type UsjClosingMarker = { isClosingMarker: true; forMarker: MarkerObject | Usj };
 
-type UsjFragment = MarkerToken | UsjAttributeKey | UsjAttributeValue;
+/**
+ * A string found in the USJ document, a marker (including top-level USJ marker), or a closing
+ * marker indicator
+ */
+type MarkerToken = MarkerContent | UsjClosingMarker | Usj;
+
+/** Fragment indicating the value for an attribute */
+type UsjAttributeValue = { isAttributeValueForKey: string; forMarker: MarkerObject | Usj };
+/** Fragment indicating the key for an attribute */
+type UsjAttributeKey = { isAttributeKey: string; forMarker: MarkerObject | Usj };
+/** Fragment indicating the opening of an attribute marker */
+type UsjAttributeMarker = { isAttributeMarker: string; forMarker: MarkerObject | Usj };
+/** Fragment indicating the closing of an attribute marker */
+type UsjAttributeMarkerClosingMarker = {
+  isAttributeMarkerClosingMarker: string;
+  forMarker: MarkerObject | Usj;
+};
+
+/** A part of a USJ document or a JSON representation of some piece of USFM that is not in USJ */
+type UsjFragment =
+  | MarkerToken
+  | UsjAttributeValue
+  | UsjAttributeKey
+  | UsjAttributeMarker
+  | UsjAttributeMarkerClosingMarker;
 
 type UsjFragmentInfoMinimal = {
   fragment: UsjFragment;
@@ -121,133 +147,6 @@ type FragmentsByVerseRef = {
           | undefined;
       }
     | undefined;
-};
-
-/**
- * JSON path to the `style` or an attribute on a {@link MarkerContent} or {@link Usj} in the current
- * USJ document.
- *
- * This could actually have more content clauses at the end, but TS types are limited
- */
-type PropertyJsonPath =
-  | ''
-  | `$.${string}`
-  | `$.content[${number}].${string}`
-  | `$.content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`;
-
-/**
- * Node within a USJ object, a JSONPath query to the node, and an offset to any kind of
- * {@link UsjFragment} within that node.
- */
-type UsjFragmentLocation = {
-  node: MarkerContent | Usj;
-} & JsonPathScriptureLocation;
-
-/**
- * A JSONPath query to a node within a USJ document and an offset to any kind of {@link UsjFragment}
- * within that node.
- */
-type JsonPathScriptureLocation =
-  | JsonPathMarkerLocation
-  | JsonPathClosingMarkerLocation
-  | JsonPathTextContentLocation
-  | JsonPathMarkerPropertyValueLocation
-  | JsonPathMarkerAttributeKeyLocation;
-
-// TODO: should we have an offset within the JsonPathMarkerLocation so you can select the nested
-// prefix? Or the double backslash for optbreak?
-/**
- * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
- * that marker (at the backslash in USFM).
- */
-type JsonPathMarkerLocation = {
-  /** JSON path to the marker object the location is pointing to. */
-  jsonPath: ContentJsonPath;
-};
-
-/**
- * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
- * that marker (at the backslash in USFM).
- */
-/**
- * A JSONPath query to a specific point in the closing marker representation of a
- * {@link MarkerObject} or {@link Usj} node.
- */
-type JsonPathClosingMarkerLocation = {
-  /**
-   * JSON path to the marker object whose closing marker the location is pointing to. The offset
-   * applies to the closing marker representation of that marker (for example, `\nd*` in USFM).
-   */
-  jsonPath: ContentJsonPath;
-  /**
-   * The character index in the closing marker representation where this location is pointing. The
-   * location is at this offset within the closing marker representation.
-   */
-  /**
-   * If this is defined, the location is this offset within the string value of the closing marker
-   * representation of the marker being pointed to by {@link UsjFragmentLocation.jsonPath}.
-   */
-  closingMarkerOffset: number;
-};
-
-/**
- * A JSONPath query to a specific point in a text content string in a {@link MarkerObject.content}
- * array.
- */
-type JsonPathTextContentLocation = {
-  /**
-   * JSON path to the text content string the location is pointing to. The offset applies to this
-   * text string.
-   */
-  jsonPath: ContentJsonPath;
-  /**
-   * The character index in the text content string where this location is pointing. The location is
-   * at this offset within the text content string.
-   */
-  offset: number;
-};
-
-/**
- * A JSONPath query to a specific point in a property (`marker` or an attribute) value string in a
- * {@link MarkerObject} or {@link Usj}. The property cannot be `type` because `type`'s value has no
- * representation in USFM.
- *
- * To represent a location in an attribute's key, use {@link JsonPathMarkerAttributeKeyLocation}.
- */
-type JsonPathMarkerPropertyValueLocation = {
-  /**
-   * JSON path to the property the location is pointing to. The offset applies to this property's
-   * value string.
-   */
-  jsonPath: PropertyJsonPath;
-  /**
-   * The character index in the property's value string where this location is pointing. The
-   * location is at this offset within the property's value string.
-   */
-  offset: number;
-};
-
-/**
- * A JSONPath query to a specific point in an attribute key string in a {@link MarkerObject} or
- * {@link Usj}. The property cannot be `type` or `marker` because these properties' keys have no
- * representation in USFM. The property also cannot be any special attribute whose key doesn't have
- * a text representation in USFM like default attribute, leading attribute, text content attribute
- *
- * To represent a location in an attribute's value, use {@link JsonPathMarkerPropertyValueLocation}.
- */
-type JsonPathMarkerAttributeKeyLocation = {
-  /**
-   * JSON path to the property the location is pointing to. The offset applies to this property's
-   * key string.
-   */
-  jsonPath: PropertyJsonPath;
-  /**
-   * The character index in the property's key string where this location is pointing. The location
-   * is at this offset within the property's key string.
-   */
-  keyOffset: number;
 };
 
 /**
@@ -347,11 +246,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   private findBookId(): string | undefined {
     return this.findSingleValue('$.content[?(@.type=="book" && @.marker=="id")].code');
-  }
-
-  private findChapterNode(chapterNumber: number): MarkerObject | undefined {
-    const chapterQuery = `$..content[?(@.type=="chapter" && @.number=="${chapterNumber}")]`;
-    return this.findSingleValue(chapterQuery);
   }
 
   // #endregion
@@ -464,7 +358,19 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return jsonPath as ContentJsonPath;
   }
 
-  private convertJsonPathToWorkingStack(jsonPath: ContentJsonPath): WorkingStack {
+  private static convertWorkingStackAndPropertyToJsonPath(
+    stack: WorkingStack,
+    property: string,
+  ): PropertyJsonPath {
+    // Adding this property makes it conform to PropertyJsonPath. Always using bracket notation
+    // because it works in more cases than dot notation does
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return `${UsjReaderWriter.convertWorkingStackToJsonPath(stack)}['${property}']` as PropertyJsonPath;
+  }
+
+  private convertJsonPathToWorkingStack(
+    jsonPath: ContentJsonPath | PropertyJsonPath,
+  ): WorkingStack {
     const retVal: WorkingStack = [];
 
     const levels = jsonPath.match(/content\[(\d+)\]/g);
@@ -488,6 +394,26 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     });
 
     return retVal;
+  }
+
+  /**
+   * If `property` is `undefined`, the `jsonPath` passed in was a `ContentJsonPath`. Otherwise, it
+   * was a `PropertyJsonPath`
+   */
+  private convertJsonPathToWorkingStackAndProperty(jsonPath: ContentJsonPath | PropertyJsonPath): {
+    stack: WorkingStack;
+    property: string | undefined;
+  } {
+    const stack = this.convertJsonPathToWorkingStack(jsonPath);
+
+    // Get the property from dot notation or bracket notation. If neither match, there is no property
+    const [, property] =
+      jsonPath.match(/\.([^[]+)$/) ??
+      jsonPath.match(/\['(.+)']$/) ??
+      jsonPath.match(/\["(.+)"]$/) ??
+      [];
+
+    return { stack, property };
   }
 
   // #endregion
@@ -584,7 +510,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         [nextNode] = nextNode.content;
       } else {
         // The node has no children, so check the closing marker for this node
-        const nextNodeClosingMarker: ClosingMarker | undefined =
+        const nextNodeClosingMarker: UsjClosingMarker | undefined =
           typeof nextNode === 'object' ? { isClosingMarker: true, forMarker: nextNode } : undefined;
         if (
           !skipNextNode &&
@@ -612,7 +538,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             } else {
               // There is no next sibling, so check the closing marker for the parent before we continue
               // to look at the parent's next sibling and etc.
-              const parentClosingMarker: ClosingMarker = {
+              const parentClosingMarker: UsjClosingMarker = {
                 isClosingMarker: true,
                 forMarker: nextLevel.parent,
               };
@@ -787,6 +713,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return this.findVerseRefForNode(descendant.node, descendant.parent, retVal);
   }
 
+  // TODO: Rename nodeToUsfmLocation
   nodeToVerseRefAndOffset(
     bookId: string,
     node: MarkerContent,
@@ -844,6 +771,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region JSONPath -> SerializedVerseRef + offset
 
+  // TODO: Rename usjLocationToUsfmLocation? Or make new method
   jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset {
     const effectiveBookId = bookId ?? this.findBookId();
     if (!effectiveBookId) throw new Error('Not able to determine the book ID');
@@ -865,90 +793,167 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #endregion
 
-  // #region SerializedVerseRef + offset -> Node + JSONPath + offset
+  // #region USFM location -> Usj location
 
-  verseRefToUsjContentLocation(
-    verseRef: SerializedVerseRef,
-    verseRefOffset: number = 0,
-  ): UsjContentLocation {
+  usfmLocationToUsjNodeAndDocumentLocation(
+    usfmLocation: UsfmLocation | SerializedVerseRef,
+  ): UsjNodeAndDocumentLocation {
+    const verseRef = 'verseRef' in usfmLocation ? usfmLocation.verseRef : usfmLocation;
+    const verseRefOffset = 'verseRef' in usfmLocation ? (usfmLocation.offset ?? 0) : 0;
+
     if (verseRefOffset < 0) throw new Error('offset must be >= 0');
 
-    // Prefer getting the book ID from the USJ itself, but it might not be available
-    const bookId = this.findBookId() ?? verseRef.book;
-    if (!bookId) throw new Error('Not able to determine the book ID');
-    if (bookId !== verseRef.book)
-      throw new Error(`Book IDs don't match: USJ=${bookId}, SerializedVerseRef=${verseRef.book}`);
+    // Make sure the requested book ID is in the USJ content
+    const availableBookIds = Object.keys(this.fragmentsByVerseRef);
+    const noBookIdsFound =
+      availableBookIds.length === 0 ||
+      (availableBookIds.length === 1 && availableBookIds[0] === NO_BOOK_ID);
+    const bookId = noBookIdsFound ? NO_BOOK_ID : verseRef.book;
+    const bookFragments = this.fragmentsByVerseRef[bookId];
+    if (!bookFragments)
+      throw new Error(
+        `Book ID ${verseRef.book} not found in USJ! ${noBookIdsFound ? `There seems to be no USJ content because there is no content in ${NO_BOOK_ID} either` : `Book IDs in USJ: ${JSON.stringify(availableBookIds)}`}`,
+      );
 
-    const chapterNode = this.findChapterNode(verseRef.chapterNum);
-    if (chapterNode === undefined)
+    // Make sure the requested chapter number is in the USJ content
+    const chapterFragments = bookFragments[verseRef.chapterNum];
+    if (!chapterFragments)
       throw new Error(`Could not find ${bookId} chapter ${verseRef.chapterNum}`);
 
-    let foundAnotherChapter = false;
-    let jsonPath: ContentJsonPath = '';
-    const expectedVerse = verseRef.verse ?? verseRef.verseNum.toString();
-    const verseNode: MarkerContent | undefined = this.findNextMatchingNode(
-      chapterNode,
-      NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
-      (node, workingStack) => {
-        if (node === chapterNode) {
-          if (verseRef.verseNum === 0) {
-            jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
-            return true;
-          }
-          return false;
-        }
-        if (typeof node !== 'object') return false;
-        if (node.type === CHAPTER_TYPE) {
-          foundAnotherChapter = true;
-          return true;
-        }
-        if (
-          node.type === VERSE_TYPE &&
-          node.number !== undefined &&
-          node.number === expectedVerse
-        ) {
-          jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
-          return true;
-        }
-        return false;
-      },
+    // Make sure the requested verse number is in the USJ content
+    const verseFragments = chapterFragments[verseRef.verseNum];
+    if (!verseFragments)
+      // TODO: What should we do about verse ranges? The original code required that the range
+      // given match exactly to the range in the text instead of starting at the first verse in the
+      // range and going from there. Maybe just fill in each verse in the range with the same map?
+      // Maybe too unclear now to do something about?
+      throw new Error(`Verse ${verseRef.verseNum} not found in ${bookId} ${verseRef.chapterNum}`);
+
+    const { value: fragmentInfo } = verseFragments.findClosestLessThanOrEqual(verseRefOffset) ?? {
+      value: undefined,
+    };
+    if (!fragmentInfo)
+      throw new Error(
+        `Somehow, did not find anything at index in verse ${verseRefOffset} or below in ${bookId} ${verseRef.chapterNum}:${verseRef.verseNum}. Not sure how this would happen.`,
+      );
+
+    // Return the appropriate `UsjDocumentLocation` subtype based on what this fragment is
+
+    const usjOffset = verseRefOffset - fragmentInfo.indexFromVerseStart;
+
+    // Check if the fragment itself is the target (`string`, `MarkerObject`, and `Usj`)
+    if (
+      isString(fragmentInfo.fragment) ||
+      UsjReaderWriter.isFragmentAMarker(fragmentInfo.fragment)
+    ) {
+      // The fragment itself is the target. Get JsonPath to the fragment
+      const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(fragmentInfo.workingStack);
+
+      if (isString(fragmentInfo.fragment))
+        return {
+          node: fragmentInfo.fragment,
+          // If the target is a text content string, location is the jsonPath and the offset in that
+          // string
+          documentLocation: { jsonPath, offset: usjOffset },
+        };
+
+      return {
+        node: fragmentInfo.fragment,
+        // The target is a marker itself, so location is just the marker jsonPath. We don't currently
+        // provide a way to represent an offset within the opening marker.
+        documentLocation: { jsonPath },
+      };
+    }
+
+    // Check if the target is a closing marker
+    if ('isClosingMarker' in fragmentInfo.fragment) {
+      // Get JsonPath to the marker this is a closing marker for
+      const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(fragmentInfo.workingStack);
+
+      return {
+        node: fragmentInfo.fragment.forMarker,
+        // Location is the jsonPath to the marker and an offset within the closing marker
+        documentLocation: { jsonPath, closingMarkerOffset: usjOffset },
+      };
+    }
+
+    // Check if the target is a property value (`marker` or an attribute)
+    if ('isAttributeValueForKey' in fragmentInfo.fragment) {
+      // Get JsonPath to the indicated property on the marker this is a property for
+      const jsonPath = UsjReaderWriter.convertWorkingStackAndPropertyToJsonPath(
+        fragmentInfo.workingStack,
+        fragmentInfo.fragment.isAttributeValueForKey,
+      );
+
+      return {
+        node: fragmentInfo.fragment.forMarker,
+        // Location is the jsonPath to the property on the marker and the offset within the property
+        // value
+        documentLocation: { jsonPath, propertyOffset: usjOffset },
+      };
+    }
+
+    // Check if the target is an attribute key
+    if ('isAttributeKey' in fragmentInfo.fragment) {
+      // Get JsonPath to the marker this is an attribute key for
+      const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(fragmentInfo.workingStack);
+
+      return {
+        node: fragmentInfo.fragment.forMarker,
+        // Location is the jsonPath to the marker, the key, and the offset within that key
+        documentLocation: {
+          jsonPath,
+          keyName: fragmentInfo.fragment.isAttributeKey,
+          keyOffset: usjOffset,
+        },
+      };
+    }
+
+    // Check if the target is an attribute marker
+    if ('isAttributeMarker' in fragmentInfo.fragment) {
+      // Get JsonPath to the marker this is an attribute marker for
+      const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(fragmentInfo.workingStack);
+
+      return {
+        node: fragmentInfo.fragment.forMarker,
+        // Location is the jsonPath to the marker and the key for the attribute marker. We don't
+        // currently provide a way to represent an offset within the opening marker.
+        documentLocation: { jsonPath, keyName: fragmentInfo.fragment.isAttributeMarker },
+      };
+    }
+
+    // Check if the target is an attribute marker closing marker
+    if ('isAttributeMarkerClosingMarker' in fragmentInfo.fragment) {
+      // Get JsonPath to the marker this is an attribute marker for
+      const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(fragmentInfo.workingStack);
+
+      return {
+        node: fragmentInfo.fragment.forMarker,
+        // Location is the jsonPath to the marker and the key for the attribute marker
+        documentLocation: {
+          jsonPath,
+          keyName: fragmentInfo.fragment.isAttributeMarkerClosingMarker,
+          keyClosingMarkerOffset: usjOffset,
+        },
+      };
+    }
+
+    throw new Error(
+      `Found unrecognized fragment closest before ${JSON.stringify(usfmLocation)}: ${JSON.stringify(fragmentInfo)}`,
     );
-
-    if (foundAnotherChapter || verseNode === undefined || typeof verseNode === 'string')
-      throw new Error(`Verse ${expectedVerse} not found in ${bookId} ${verseRef.chapterNum}`);
-
-    if (verseRefOffset === 0) return { node: verseNode, offset: 0, jsonPath };
-
-    let cumulativeVerseLengthSeen = 0;
-    let usjNodeOffset = 0;
-    let foundNode: MarkerContent | undefined;
-    this.findNextMatchingNode(
-      verseNode,
-      NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
-      (node, workingStack) => {
-        if (node === verseNode) return false;
-        if (typeof node === 'string') {
-          cumulativeVerseLengthSeen += node.length;
-          if (cumulativeVerseLengthSeen > verseRefOffset) {
-            jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
-            usjNodeOffset = verseRefOffset - cumulativeVerseLengthSeen + node.length;
-            foundNode = node;
-            return true;
-          }
-        }
-        // If we found another verse or chapter, then the offset was larger than the verse length
-        // Just return the original verse node in that case
-        else if (node.type === CHAPTER_TYPE || node.type === VERSE_TYPE) return true;
-        return false;
-      },
-    );
-
-    return { node: foundNode ?? verseNode, offset: usjNodeOffset, jsonPath };
   }
 
-  verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation {
+  usfmLocationToUsjDocumentLocation(
+    usfmLocation: UsfmLocation | SerializedVerseRef,
+  ): UsjDocumentLocation {
+    return this.usfmLocationToUsjNodeAndDocumentLocation(usfmLocation).documentLocation;
+  }
+
+  verseRefToNextTextLocation(
+    verseRef: SerializedVerseRef,
+  ): UsjNodeAndDocumentLocation<UsjTextContentLocation> {
     // Get the location of the verse marker
-    const verseLocation = this.verseRefToUsjContentLocation(verseRef);
+    const verseLocation = this.usfmLocationToUsjNodeAndDocumentLocation(verseRef);
 
     // Find the first string after the verse marker
     const firstStringLocationAfterVerseMarker = this.findNextLocationOfMatchingText(
@@ -958,7 +963,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     if (!firstStringLocationAfterVerseMarker)
       throw new Error(
-        `Could not find next text location after verse ${JSON.stringify(verseRef)} at location ${verseLocation.jsonPath}`,
+        `Could not find next text location after verse ${JSON.stringify(verseRef)} at location ${
+          verseLocation.documentLocation.jsonPath
+        }`,
       );
 
     return firstStringLocationAfterVerseMarker;
@@ -968,16 +975,53 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region Search for text from a node + JSONPath + offset
 
+  /**
+   * Determine if the USJ document location is pointing to a text content location instead of some
+   * location related to a marker object
+   *
+   * @param usjDocumentLocation USJ document location to test
+   * @returns `true` if the location is for text content; `false` otherwise
+   */
+  static isUsjDocumentLocationForTextContent(
+    usjDocumentLocation: UsjDocumentLocation,
+  ): usjDocumentLocation is UsjTextContentLocation;
+  /**
+   * Determine if the USJ document location in this node and document location is pointing to a text
+   * content location instead of some location related to a marker object
+   *
+   * @param usjNodeAndDocumentLocation USJ node and document location to test
+   * @returns `true` if the location is for text content; `false` otherwise
+   */
+  static isUsjDocumentLocationForTextContent(
+    usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation,
+  ): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+  static isUsjDocumentLocationForTextContent(
+    usjDocumentLocationMaybeNode: UsjDocumentLocation | UsjNodeAndDocumentLocation,
+  ): boolean {
+    let documentLocation = usjDocumentLocationMaybeNode;
+    if ('node' in usjDocumentLocationMaybeNode) {
+      // If it's a UsjNodeAndDocumentLocation, the node must be a string
+      if (!isString(usjDocumentLocationMaybeNode.node)) return false;
+
+      documentLocation = usjDocumentLocationMaybeNode.documentLocation;
+    }
+
+    // Text content representation in USJDocumentLocation requires offset and nothing else has offset
+    return 'offset' in documentLocation;
+  }
+
   findNextLocationOfMatchingText(
-    startingPoint: UsjContentLocation,
+    startingPoint: UsjNodeAndDocumentLocation,
     text: string,
     maxTextLengthToSearch: number = 1000,
-  ): UsjContentLocation | undefined {
+  ): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined {
     let textScanned = '';
     let lengthScanned = 0;
     let lengthTrimmed = 0;
     let foundStartingAtOffset = -1;
-    const workingStackForStartingPoint = this.convertJsonPathToWorkingStack(startingPoint.jsonPath);
+    const workingStackForStartingPoint = this.convertJsonPathToWorkingStack(
+      startingPoint.documentLocation.jsonPath,
+    );
     // Cloning because the working stack items are modified during search
     const startingPointStackItem = {
       ...workingStackForStartingPoint[workingStackForStartingPoint.length - 1],
@@ -996,10 +1040,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // If the node is the starting point, then we need to start scanning from the offset.
         // Otherwise look from the start of the string
         if (UsjReaderWriter.areStackItemsShallowEqual(currentStackItem, startingPointStackItem)) {
-          nodeTextToSearch = node.substring(startingPoint.offset);
+          if (!('offset' in startingPoint.documentLocation))
+            throw new Error(
+              `Somehow 'offset' was not in text content string document location. This should not happen. ${JSON.stringify(startingPoint.documentLocation)}`,
+            );
+          nodeTextToSearch = node.substring(startingPoint.documentLocation.offset);
           // We're skipping the offset characters in the first node, so we need to adjust the final
           // foundStartingAtOffset to account for that
-          lengthTrimmed += startingPoint.offset;
+          lengthTrimmed += startingPoint.documentLocation.offset;
         }
 
         lengthScanned += nodeTextToSearch.length;
@@ -1031,7 +1079,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let finalStack: WorkingStack = [];
     const finalNode = UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
-      this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
+      this.convertJsonPathToWorkingStack(startingPoint.documentLocation.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
       (node, stack) => {
         if (typeof node !== 'string') return false;
@@ -1045,11 +1093,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       },
     );
     if (!finalNode) throw new Error('Internal error: inconsistent search results');
+    if (!isString(finalNode))
+      throw new Error(
+        `Somehow found non-string node while searching for strings: ${JSON.stringify(finalNode)}`,
+      );
 
     return {
       node: finalNode,
-      offset: finalOffset,
-      jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(finalStack),
+      documentLocation: {
+        jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(finalStack),
+        offset: finalOffset,
+      },
     };
   }
 
@@ -1058,15 +1112,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (this.usj.content.length === 0) return retVal;
 
     // Start searching from the first node in the USJ content tree
-    const startingPoint: UsjContentLocation = {
+    const startingPoint: UsjNodeAndDocumentLocation = {
       node: this.usj.content[0],
-      offset: 0,
-      jsonPath: `$.content[0]`,
+      documentLocation: {
+        jsonPath: `$.content[0]`,
+      },
     };
+    // Make sure it is a valid document location: put offset 0 on it if it is a text content string
+    if (isString(this.usj.content[0]))
+      // We just verified this is a text content string, so we're just properly making it a UsjTextContentLocation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (startingPoint.documentLocation as UsjTextContentLocation).offset = 0;
+
     // This will hold all of the text content from the USJ, so we can search it all at once
     const textChunks: string[] = [];
     // This will map the index of each text chunk in the full text, so we can find the location
-    const fullTextIndexMap = new SortedNumberMap<UsjContentLocation>();
+    const fullTextIndexMap = new SortedNumberMap<
+      UsjNodeAndDocumentLocation<UsjTextContentLocation>
+    >();
 
     // Variables to track our current position while walking through the USJ content tree
     let currentIndex = 0;
@@ -1074,7 +1137,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     while (nextNode !== undefined) {
       nextNode = UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
         startingPoint.node,
-        this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
+        this.convertJsonPathToWorkingStack(startingPoint.documentLocation.jsonPath),
         [],
         // We need to use variables from outside the function to keep track of our current position
         // eslint-disable-next-line no-loop-func
@@ -1084,8 +1147,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           textChunks.push(node);
           fullTextIndexMap.set(currentIndex, {
             node,
-            offset: 0,
-            jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(workingStack),
+            documentLocation: {
+              offset: 0,
+              jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(workingStack),
+            },
           });
           currentIndex += node.length;
           return false;
@@ -1108,10 +1173,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         const closestNode = fullTextIndexMap.findClosestLessThanOrEqual(match.index);
         if (!closestNode)
           throw new Error(`Internal error: no closest node found for index ${match.index}`);
-        const location: UsjContentLocation = {
+        const location: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
           node: closestNode.value.node,
-          offset: match.index - closestNode.key,
-          jsonPath: closestNode.value.jsonPath,
+          documentLocation: {
+            jsonPath: closestNode.value.documentLocation.jsonPath,
+            offset: match.index - closestNode.key,
+          },
         };
         retVal.push({ text: match[0], location });
       }
@@ -1128,13 +1195,13 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region Extract text from a node + JSONPath + offset
 
-  extractText(start: UsjContentLocation, desiredLength: number): string {
+  extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string {
     let retVal = '';
-    let offsetRemaining = start.offset;
+    let offsetRemaining = 'offset' in start.documentLocation ? start.documentLocation.offset : 0;
     let lengthRecorded = 0;
     UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       start.node,
-      this.convertJsonPathToWorkingStack(start.jsonPath),
+      this.convertJsonPathToWorkingStack(start.documentLocation.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
       (node) => {
         if (typeof node !== 'string') return false;
@@ -1161,14 +1228,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   extractTextBetweenPoints(
-    start: UsjContentLocation,
-    end: UsjContentLocation,
+    start: UsjNodeAndDocumentLocation,
+    end: UsjNodeAndDocumentLocation,
     maxLength: number = 100,
   ): string {
     let retVal = '';
     UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       start.node,
-      this.convertJsonPathToWorkingStack(start.jsonPath),
+      this.convertJsonPathToWorkingStack(start.documentLocation.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
       (node, currentStack) => {
         // `node` and `end.node` are both `MarkerContent` which might be strings or objects
@@ -1177,7 +1244,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           if (typeof node === 'object') return true;
 
           // If both strings are the same, we need to verify that we're at the same place in `usj`
-          if (end.jsonPath === UsjReaderWriter.convertWorkingStackToJsonPath(currentStack))
+          if (
+            end.documentLocation.jsonPath ===
+            UsjReaderWriter.convertWorkingStackToJsonPath(currentStack)
+          )
             return true;
         }
         if (typeof node !== 'string') return false;
@@ -1421,6 +1491,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /**
+   * Determine if a fragment is a marker, not a text content string or some kind of position
+   * fragment that isn't actually a marker e.g. closing marker fragment
+   */
+  private static isFragmentAMarker(fragment: UsjFragment): fragment is MarkerObject | Usj {
+    return !isString(fragment) && !('forMarker' in fragment);
+  }
+
+  /**
    * Transforms the provided USJ marker into its opening marker representation in USFM
    *
    * Includes a newline before the marker if applicable. Generally also includes a space at the end.
@@ -1469,8 +1547,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (markerType !== 'optbreak') {
       // Fragment representing the marker name is the `marker` property
       fragmentsInfo.push({
-        // TODO: should we change things so we have some other way to specify the opening marker
-        // and then can just use "attribute" for all these instead of property e.g. JsonPathMarkerPropertyValueLocation
         fragment: { isAttributeValueForKey: 'marker', forMarker: marker },
         indexInUsfm: usfm.length,
       });
@@ -1527,7 +1603,23 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // the USFM committee doesn't want to create more attribute markers.
 
         // TODO: add new location type for attribute marker opening?
-        usfm = this.addMarkerUsfmToString(usfm, attributeMarker, marker);
+
+        /* UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
+        markerFragmentsInfo,
+        fragmentsInfo,
+        usfmOutput.length,
+      ); */
+
+        // Collect opening and closing attribute marker fragments so we can modify them before adding
+        // them to the main fragments
+        const attributeMarkerFragmentsInfo: UsjFragmentInfoMinimal[] = [];
+
+        usfm = this.addMarkerUsfmToString(
+          usfm,
+          attributeMarker,
+          marker,
+          attributeMarkerFragmentsInfo,
+        );
         const { usfm: textContentUsfm } = this.textContentToUsfm(attributeValue);
         fragmentsInfo.push({
           fragment: {
@@ -1537,7 +1629,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           indexInUsfm: usfm.length,
         });
         usfm += textContentUsfm;
-        // TODO: add new location type for attribute marker closing?
         usfm = this.addMarkerUsfmToString(
           usfm,
           {
@@ -1545,7 +1636,79 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             forMarker: attributeMarker,
           },
           marker,
+          attributeMarkerFragmentsInfo,
         );
+
+        // Transform the opening fragments to attribute marker fragments and add them to the main
+        // fragments
+        attributeMarkerFragmentsInfo.forEach((fragmentInfo) => {
+          // There should never be such a thing as text content in the opening/closing of an attribute
+          // marker or an attribute key for an attribute marker
+          if (isString(fragmentInfo.fragment) || 'isAttributeKey' in fragmentInfo.fragment)
+            throw new Error(
+              `Attribute marker opening or closing markers generated a text content fragment or an attribute key fragment! This does not make sense. ${JSON.stringify(fragmentInfo)}`,
+            );
+
+          if (UsjReaderWriter.isFragmentAMarker(fragmentInfo.fragment)) {
+            // Opening marker. Need to point to the original marker and indicate this is the opening
+            // marker for its attribute marker
+            fragmentsInfo.push({
+              ...fragmentInfo,
+              fragment: {
+                isAttributeMarker: attributeMarkerInfo.attributeMarkerAttributeName,
+                forMarker: marker,
+              },
+            });
+
+            return;
+          }
+
+          if ('isAttributeValueForKey' in fragmentInfo.fragment) {
+            // There should never be an attribute value for an attribute marker other than the marker name
+            if (fragmentInfo.fragment.isAttributeValueForKey !== 'marker')
+              throw new Error(
+                `Attribute marker opening or closing markers generated an attribute value fragment for a key that was not marker! This does not make sense. ${JSON.stringify(fragmentInfo)}`,
+              );
+            // Marker representation of the attribute marker. Change to attribute key for attribute
+            // marker attribute name.
+            fragmentsInfo.push({
+              ...fragmentInfo,
+              fragment: {
+                isAttributeKey: attributeMarkerInfo.attributeMarkerAttributeName,
+                forMarker: marker,
+              },
+            });
+            return;
+          }
+
+          if ('isClosingMarker' in fragmentInfo.fragment) {
+            // Closing marker. Need to point to the original marker and indicate this is the closing
+            // marker for its attribute marker
+
+            // Need to remove isClosingMarker but will not use it again. This was the easiest way to
+            // delete it without TypeScript going berserk
+            // eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/no-unused-vars
+            const { isClosingMarker: _, ...partialClosingFragment } = fragmentInfo.fragment;
+
+            const fragment: UsjAttributeMarkerClosingMarker = {
+              ...partialClosingFragment,
+              forMarker: marker,
+              isAttributeMarkerClosingMarker: attributeMarkerInfo.attributeMarkerAttributeName,
+            };
+
+            fragmentsInfo.push({
+              ...fragmentInfo,
+              fragment,
+            });
+
+            return;
+          }
+
+          // That should have been all of them, so not sure what other fragment this could be
+          throw new Error(
+            `Attribute marker opening or closing markers generated an unrecognized fragment: ${JSON.stringify(fragmentInfo)}`,
+          );
+        });
 
         if (
           !this.markersMap.isSpaceAfterAttributeMarkersContent &&
@@ -1694,14 +1857,24 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       let usfm = '';
       const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
 
-      const { usfm: openingMarkerUsfm } = this.openingMarkerToUsfm(
-        independentClosingMarker,
-        isInsideMarkerWithSameType,
-      );
-      // Fragment for independent closing marker is just the normal closing fragment
+      const { usfm: openingMarkerUsfm, fragmentsInfo: openingFragmentsInfo } =
+        this.openingMarkerToUsfm(independentClosingMarker, isInsideMarkerWithSameType);
+      // Fragment for independent closing marker is just the normal closing fragment. So find the
+      // opening fragment, change it to closing fragment, and add it to the fragments for this
+      // marker. Need to get the opening marker so we have the right indexInUsfm (might be 1 if
+      // the marker has a newline before it, for example)
+      const openingFragmentInfo = openingFragmentsInfo.find((fragmentInfo) => {
+        return UsjReaderWriter.isFragmentAMarker(fragmentInfo.fragment);
+      });
+      if (!openingFragmentInfo)
+        throw new Error(
+          `Could not find opening fragment info for independent closing marker ${JSON.stringify(
+            independentClosingMarker,
+          )}. Fragments info generated: ${JSON.stringify(openingFragmentsInfo)}`,
+        );
       fragmentsInfo.push({
+        ...openingFragmentInfo,
         fragment: { isClosingMarker: true, forMarker: marker },
-        indexInUsfm: usfm.length,
       });
       usfm += openingMarkerUsfm;
       // Only add the independent closing marker if it does not have the same name as the marker we
@@ -1826,7 +1999,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    */
   private addMarkerUsfmToString(
     usfm: string,
-    marker: MarkerObject | ClosingMarker,
+    marker: MarkerObject | UsjClosingMarker,
     tokenParent: MarkerObject | Usj | undefined,
     fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string;
@@ -1844,13 +2017,13 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    */
   private addMarkerUsfmToString(
     usfm: string,
-    marker: MarkerObject | ClosingMarker,
+    marker: MarkerObject | UsjClosingMarker,
     isInsideMarkerWithSameType: boolean,
     fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string;
   private addMarkerUsfmToString(
     usfm: string,
-    marker: MarkerObject | ClosingMarker,
+    marker: MarkerObject | UsjClosingMarker,
     tokenParentOrIsInsideMarkerWithSameType: MarkerObject | Usj | boolean | undefined,
     fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string {
@@ -1963,6 +2136,171 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region USFM-related cached properties
 
+  /**
+   * Fill out fragments info from a minimal fragments info array and move them into the final
+   * fragments map
+   *
+   * @param fragmentsInfo Minimal fragments info array to fill out and put into maps. ALL CONTENTS
+   *   OF THIS ARRAY ARE REMOVED IN THIS METHOD
+   * @param workingStack Current working stack
+   * @param position Object containing properties describing where in the USFM document these
+   *   fragments are. PROPERTIES ON THIS OBJECT ARE MODIFIED IN THIS METHOD
+   * @param fragmentsByIndexInUsfm Map to add fragment information to
+   * @param fragmentsByVerseRef Map to add fragment information to
+   */
+  private static transferFragmentsInfoArrayToMaps(
+    fragmentsInfo: UsjFragmentInfoMinimal[],
+    workingStack: WorkingStack,
+    position: {
+      bookId: string;
+      chapterNum: number;
+      verseNum: number;
+      /** Track index in USFM of the very start of the verse (backslash on the verse marker) */
+      verseStartIndexInUsfm: number;
+    },
+    fragmentsByIndexInUsfm: SortedNumberMap<UsjFragmentInfo>,
+    fragmentsByVerseRef: FragmentsByVerseRef,
+  ) {
+    // Add the extra information to each fragment to make it complete
+    const fullFragmentsInfo = fragmentsInfo.map((fragmentInfo) => {
+      // Adjust current verse ref if we find start of book, chapter, or verse marker
+      if (typeof fragmentInfo.fragment === 'object' && 'type' in fragmentInfo.fragment) {
+        const marker = fragmentInfo.fragment;
+
+        if (marker.type === BOOK_TYPE && marker.code) {
+          // Found book marker. Update current verse ref to new book
+          position.bookId = marker.code;
+          position.chapterNum = 0;
+          position.verseNum = 0;
+          position.verseStartIndexInUsfm = 0;
+
+          // If there are any fragments before the first encountered book id, move them to the first
+          // encountered book id
+          if (fragmentsByVerseRef[NO_BOOK_ID]) {
+            fragmentsByVerseRef[position.bookId] = fragmentsByVerseRef[NO_BOOK_ID];
+            delete fragmentsByVerseRef[NO_BOOK_ID];
+          }
+        } else if (marker.type === CHAPTER_TYPE && marker.number) {
+          // Found chapter marker. Try to update chapter
+          const nextChapterNum = parseInt(marker.number, 10);
+
+          if (Number.isNaN(nextChapterNum)) {
+            console.warn(
+              `Found ${CHAPTER_TYPE} type marker with number ${
+                marker.number
+              }, but could not parse chapter number from it. Continuing using previous chapter number ${
+                position.chapterNum
+              }`,
+            );
+          } else {
+            // Update current verse ref to new chapter
+            position.chapterNum = nextChapterNum;
+            position.verseNum = 0;
+            position.verseStartIndexInUsfm = 0;
+
+            // If there are any fragments before the first encountered chapter number, move them to
+            // the first encountered chapter number
+            const currentBookFragments = fragmentsByVerseRef[position.bookId];
+            if (currentBookFragments?.[0]) {
+              // Not array destructuring because it's really hard to read here
+              // eslint-disable-next-line prefer-destructuring
+              currentBookFragments[position.chapterNum] = currentBookFragments[0];
+              delete currentBookFragments[0];
+            }
+          }
+        } else if (marker.type === VERSE_TYPE && marker.number) {
+          // Found verse marker. Try to update verse
+          const nextVerseNumString = VERSE_MARKER_NUMBER_SPAN_REGEXP.exec(marker.number)?.[1];
+
+          if (!nextVerseNumString) {
+            console.warn(
+              `Found ${VERSE_TYPE} type marker with number ${
+                marker.number
+              }, but could not find starting verse number in it. Continuing using previous verse number ${
+                position.verseNum
+              }`,
+            );
+          } else {
+            const nextVerseNum = parseInt(nextVerseNumString, 10);
+
+            if (Number.isNaN(nextVerseNum)) {
+              console.warn(
+                `Found ${VERSE_TYPE} type marker with number ${
+                  marker.number
+                }, but could not parse starting verse number from ${nextVerseNumString}. Continuing using previous verse number ${
+                  position.verseNum
+                }`,
+              );
+            } else if (position.verseNum === nextVerseNum) {
+              console.warn(
+                `Found multiple ${VERSE_TYPE} markers in a row with same number ${
+                  position.verseNum
+                }! Not updating verse start index. All positions will be based on the first ${
+                  VERSE_TYPE
+                } marker index.`,
+              );
+            } else if (
+              fragmentsByVerseRef[position.bookId]?.[position.chapterNum]?.[nextVerseNum]
+            ) {
+              console.warn(`Found ${VERSE_TYPE} marker with existing number ${nextVerseNum} after
+                  current ${VERSE_TYPE} number ${
+                    position.verseNum
+                  }! Not updating verse start index. All positions in this duplicate verse will be based on the current ${
+                    VERSE_TYPE
+                  } marker, not the new duplicate marker.`);
+            } else {
+              if (nextVerseNum < position.verseNum)
+                console.debug(
+                  `Found ${VERSE_TYPE} marker with number ${nextVerseNum} lower than current ${
+                    VERSE_TYPE
+                  } number ${position.verseNum}. Verses are out of order. There may be some issues.`,
+                );
+
+              // Update current verse ref to new verse
+              position.verseNum = nextVerseNum;
+              // Set the verse start index to the start of this verse
+              position.verseStartIndexInUsfm = fragmentInfo.indexInUsfm;
+            }
+          }
+        }
+      }
+
+      // Fill out the rest of the fragment info
+      const fullFragmentInfo: UsjFragmentInfo = {
+        ...fragmentInfo,
+        // TODO: does it make a meaningful difference if we instead convert to JSONPath? Or maybe
+        // doesn't matter since this is an internal detail
+        workingStack: deepClone(workingStack),
+        indexFromVerseStart: fragmentInfo.indexInUsfm - position.verseStartIndexInUsfm,
+      };
+
+      return fullFragmentInfo;
+    });
+
+    // Add staged fragments to final fragments maps
+    fullFragmentsInfo.forEach((fragmentInfo) => {
+      fragmentsByIndexInUsfm.set(fragmentInfo.indexInUsfm, fragmentInfo);
+
+      // We are ensuring the properties are defined all the way through before use, so allow the
+      // bang operator. This would be way more verbose without bang operator.
+      /* eslint-disable no-type-assertion/no-type-assertion */
+      if (!fragmentsByVerseRef[position.bookId]) fragmentsByVerseRef[position.bookId] = {};
+      if (!fragmentsByVerseRef[position.bookId]![position.chapterNum])
+        fragmentsByVerseRef[position.bookId]![position.chapterNum] = {};
+      if (!fragmentsByVerseRef[position.bookId]![position.chapterNum]![position.verseNum])
+        fragmentsByVerseRef[position.bookId]![position.chapterNum]![position.verseNum] =
+          new SortedNumberMap<UsjFragmentInfo>();
+      fragmentsByVerseRef[position.bookId]![position.chapterNum]![position.verseNum]!.set(
+        fragmentInfo.indexFromVerseStart,
+        fragmentInfo,
+      );
+      /* eslint-enable no-type-assertion/no-type-assertion */
+    });
+
+    // Remove all elements from fragmentsInfo
+    fragmentsInfo.splice(0);
+  }
+
   private calculateUsfmProperties(): {
     usfm: string;
     fragmentsByIndexInUsfm: FragmentsByIndexInUsfm;
@@ -1979,116 +2317,21 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // Keep track of current verse reference numbers as we go through the content so we can put
     // fragments in the right place
-    let currentBookId = NO_BOOK_ID;
-    let currentChapterNum = 0;
-    let currentVerseNum = 0;
-    // Track index in USFM of the very start of the verse (backslash on the verse marker)
-    let verseStartIndexInUsfm = 0;
-
+    const currentPosition = {
+      bookId: NO_BOOK_ID,
+      chapterNum: 0,
+      verseNum: 0,
+      verseStartIndexInUsfm: 0,
+    };
     /** Move the fragments info that are in `fragmentsInfo` into the final fragments map */
     function transferFragmentsInfo(workingStack: WorkingStack) {
-      // Add the extra information to each fragment to make it complete
-      const fullFragmentsInfo = fragmentsInfo.map((fragmentInfo) => {
-        // Adjust current verse ref if we find start of book, chapter, or verse marker
-        if (typeof fragmentInfo.fragment === 'object' && 'type' in fragmentInfo.fragment) {
-          const marker = fragmentInfo.fragment;
-
-          if (marker.type === BOOK_TYPE && marker.code) {
-            currentBookId = marker.code;
-
-            // If there are any fragments before the first encountered book id, move them to the first
-            // encountered book id
-            if (fragmentsByVerseRef[NO_BOOK_ID]) {
-              fragmentsByVerseRef[currentBookId] = fragmentsByVerseRef[NO_BOOK_ID];
-              delete fragmentsByVerseRef[NO_BOOK_ID];
-            }
-          } else if (marker.type === CHAPTER_TYPE && marker.number) {
-            const nextChapterNum = parseInt(marker.number, 10);
-
-            if (Number.isNaN(nextChapterNum)) {
-              console.warn(
-                `Found ${CHAPTER_TYPE} type marker with number ${
-                  marker.number
-                }, but could not parse chapter number from it. Continuing using previous chapter number ${
-                  currentChapterNum
-                }`,
-              );
-            } else {
-              currentChapterNum = nextChapterNum;
-
-              // If there are any fragments before the first encountered chapter number, move them to
-              // the first encountered chapter number
-              const currentBookFragments = fragmentsByVerseRef[currentBookId];
-              if (currentBookFragments?.[0]) {
-                // Not array destructuring because it's really hard to read here
-                // eslint-disable-next-line prefer-destructuring
-                currentBookFragments[currentChapterNum] = currentBookFragments[0];
-                delete currentBookFragments[0];
-              }
-            }
-          } else if (marker.type === VERSE_TYPE && marker.number) {
-            const nextVerseNumString = VERSE_MARKER_NUMBER_SPAN_REGEXP.exec(marker.number)?.[1];
-
-            if (!nextVerseNumString) {
-              console.warn(
-                `Found ${VERSE_TYPE} type marker with number ${
-                  marker.number
-                }, but could not find starting verse number in it. Continuing using previous verse number ${
-                  currentVerseNum
-                }`,
-              );
-            } else {
-              const nextVerseNum = parseInt(nextVerseNumString, 10);
-
-              if (Number.isNaN(nextVerseNum)) {
-                console.warn(
-                  `Found ${VERSE_TYPE} type marker with number ${
-                    marker.number
-                  }, but could not parse starting verse number from ${nextVerseNumString}. Continuing using previous verse number ${
-                    currentVerseNum
-                  }`,
-                );
-              } else {
-                currentVerseNum = nextVerseNum;
-                // Set the verse start index to the start of this verse
-                verseStartIndexInUsfm = fragmentInfo.indexInUsfm;
-              }
-            }
-          }
-        }
-
-        // Fill out the rest of the fragment info
-        const fullFragmentInfo: UsjFragmentInfo = {
-          ...fragmentInfo,
-          workingStack,
-          indexFromVerseStart: fragmentInfo.indexInUsfm - verseStartIndexInUsfm,
-        };
-
-        return fullFragmentInfo;
-      });
-
-      // Add staged fragments to final fragments maps
-      fullFragmentsInfo.forEach((fragmentInfo) => {
-        fragmentsByIndexInUsfm.set(fragmentInfo.indexInUsfm, fragmentInfo);
-
-        // We are ensuring the properties are defined all the way through before use, so allow the
-        // bang operator. This would be way more verbose without bang operator.
-        /* eslint-disable no-type-assertion/no-type-assertion */
-        if (!fragmentsByVerseRef[currentBookId]) fragmentsByVerseRef[currentBookId] = {};
-        if (!fragmentsByVerseRef[currentBookId]![currentChapterNum])
-          fragmentsByVerseRef[currentBookId]![currentChapterNum] = {};
-        if (!fragmentsByVerseRef[currentBookId]![currentChapterNum]![currentVerseNum])
-          fragmentsByVerseRef[currentBookId]![currentChapterNum]![currentVerseNum] =
-            new SortedNumberMap<UsjFragmentInfo>();
-        fragmentsByVerseRef[currentBookId]![currentChapterNum]![currentVerseNum]!.set(
-          fragmentInfo.indexFromVerseStart,
-          fragmentInfo,
-        );
-        /* eslint-enable no-type-assertion/no-type-assertion */
-      });
-
-      // Remove all elements from fragmentsInfo
-      fragmentsInfo.splice(0);
+      UsjReaderWriter.transferFragmentsInfoArrayToMaps(
+        fragmentsInfo,
+        workingStack,
+        currentPosition,
+        fragmentsByIndexInUsfm,
+        fragmentsByVerseRef,
+      );
     }
 
     // Special case: Opening marker of the `USJ` marker - needs to go after `id` closes in USFM even
