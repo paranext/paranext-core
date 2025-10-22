@@ -103,7 +103,7 @@ export function FootnoteList({
       >
         <div
           className={cn(
-            'tw-p-0.5',
+            'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
             layout === 'horizontal' ? 'tw-table' : 'tw-flex tw-flex-col tw-gap-1',
             !suppressFormatting && 'formatted-font',
           )}
@@ -125,7 +125,14 @@ export function FootnoteList({
                 className={cn(
                   'data-[state=selected]:tw-bg-muted',
                   onFootnoteSelected && 'tw-cursor-pointer hover:tw-bg-muted/50',
-                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-py-0 tw-shadow-none',
+                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
+                  'focus:tw-outline-none focus-visible:tw-outline-none',
+                  /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
+                     that looks great in Storybook. However, the left edge of the ring is clipped in
+                     P.B app. These are similar, but not identical to, the customizations made in
+                     our shadcn table component.
+                  */
+                  'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
                   layout === 'horizontal'
                     ? 'horizontal tw-table-row'
                     : 'vertical tw-block tw-text-sm',

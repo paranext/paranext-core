@@ -160,6 +160,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const footnotesLayout = footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical';
 
+  const [selectedFootnote, setSelectedFootnote] = useState<
+    { footnote: MarkerObject; index: number } | undefined
+  >(undefined);
+
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
@@ -214,6 +218,33 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const { calculatedFootnotesPaneMinPercent, calculatedFootnotesPaneMaxPercent } =
     getFootnotesPaneSizeLimits(containerHeight);
+
+  function updateFootnotes(newFootnotes: MarkerObject[]) {
+    setFootnotes(newFootnotes);
+    setFootnoteListKey((prev) => prev + 1);
+
+    setSelectedFootnote((current) => {
+      if (!current) return undefined;
+      const { index, footnote } = current;
+      if (index < 0 || index >= newFootnotes.length) return undefined;
+      const f = newFootnotes[index];
+      if (f.marker === footnote.marker && deepEqualAcrossIframes(f.content, footnote.content)) {
+        return current;
+      }
+      return undefined;
+    });
+  }
+
+  function handleFootnoteSelected(
+    footnote: MarkerObject,
+    index: number,
+    listId: string | number,
+  ): void {
+    if (!footnote || index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
+
+    setSelectedFootnote({ footnote: footnotes[index], index });
+    editorRef.current?.selectNote(index);
+  }
 
   // Make sure the calculated range accommodates the current saved size. There is an off-chance this
   // could allow for the splitter to get dragged to a size we're not happy about, but it is very
@@ -434,8 +465,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const updateFootnotesFromUsj = useCallback((usj: Usj) => {
     const usjReaderWriter = new UsjReaderWriter(usj);
-    setFootnotes(usjReaderWriter.findAllNotes());
-    setFootnoteListKey((prev) => prev + 1);
+    updateFootnotes(usjReaderWriter.findAllNotes());
   }, []);
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
@@ -906,6 +936,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                             footnotes={footnotes}
                             localizedStrings={localizedStrings}
                             showMarkers={options.view?.markerMode !== 'hidden'}
+                            selectedFootnote={selectedFootnote?.footnote}
+                            onFootnoteSelected={handleFootnoteSelected}
                           />
                         </div>
                       </ResizablePanel>
