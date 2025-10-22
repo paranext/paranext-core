@@ -221,8 +221,6 @@ jobs:
           # so the GitHub Release doesn't have to create the tag and assume it is on `main`
           tag: v${{ inputs.version }}
           commit: ${{ github.head_ref || github.ref_name }}
-          # only update if the release is still a draft
-          updateOnlyUnreleased: true
 
       - name: Upload release assets to S3
         id: upload_s3
