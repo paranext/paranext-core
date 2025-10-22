@@ -3,7 +3,7 @@ run-name: Publish release v${{ github.event.inputs.version }} on ${{ github.head
 
 # Make sure these match with the matrix.os values below
 env:
-  OS_WINDOWS: windows-latest
+  OS_WINDOWS: windows-2022
   OS_MACOS: macos-latest
   # The Ubuntu version must align with the "core" version in electron-builder.json5
   OS_LINUX: ubuntu-22.04
@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
+        os: [windows-2022]
         dotnet_version: [8.0.x]
 
     steps:
