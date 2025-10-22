@@ -1,7 +1,7 @@
 {
   "name": "platform-get-resources",
   "private": true,
-  "version": "0.5.0-rc.2",
+  "version": "0.5.0",
   "main": "src/main.js",
   "types": "src/types/platform-get-resources.d.ts",
   "author": "Paranext",
