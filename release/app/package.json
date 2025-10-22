@@ -1,7 +1,7 @@
 {
   "name": "platform-bible",
-  "version": "0.5.0-rc.2",
-  "marketingVersion": "",
+  "version": "0.5.0",
+  "marketingVersion": "Preview 2",
   "marketingVersionMoniker": "",
   "description": "Extensible Bible translation software",
   "license": "MIT",
