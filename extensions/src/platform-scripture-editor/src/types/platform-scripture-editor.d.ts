@@ -236,7 +236,7 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
-    'platformScripture.toggleFootnotes': (webViewId?: string) => Promise<void>;
+    'platformScripture.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
   }
 
   export interface WebViewControllers {
