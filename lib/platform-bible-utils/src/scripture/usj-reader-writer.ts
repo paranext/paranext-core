@@ -118,31 +118,34 @@ type TokenToUsfmReturn = {
 
 type UsjFragmentInfo = UsjFragmentInfoMinimal & {
   workingStack: WorkingStack;
-  indexFromVerseStart: number;
 };
 
 /** Fragments at each index in the USFM string */
 type FragmentsByIndexInUsfm = SortedNumberMap<UsjFragmentInfo>;
 
 /**
- * Fragment that is associated with the start of a verse ref. Used for getting index from verse
- * start
+ * String index of the start of each verse (the backslash on the verse marker) in the USFM
+ * representation of the USJ document. Used for taking an index based on the start of a verse and
+ * determining the index in the whole USFM document to look up in {@link FragmentsByIndexInUsfm}.
  *
- * Note that all fragments before a book id are associated with the first book id present. If there
- * is not a book id present in the USJ data, everything will be in book {@link NO_BOOK_ID}.
+ * Note that all indices before a book id are associated with the first book id present. If there is
+ * not a book id present in the USJ data, everything will be in book {@link NO_BOOK_ID}.
  *
- * Note that all fragments before a chapter number are associated with the first chapter number
+ * Note that all indices before a chapter number are associated with the first chapter number
  * present. If there is not a chapter number present in the USJ data, everything will be in chapter
  * 0.
  *
- * Note that any fragments that occur before a verse number will be in verse 0.
+ * Note that any indices that occur before a verse number will be in verse 0.
+ *
+ * The start of a book is at the book name, chapter 1 (or 0 if no chapter numbers), verse 0. The
+ * start of a chapter is at the book name, chapter number, verse 0.
  */
-type FragmentsByVerseRef = {
+type IndicesInUsfmByVerseRef = {
   [book: string]:
     | {
         [chapterNum: number]:
           | {
-              [verseNum: number]: SortedNumberMap<UsjFragmentInfo> | undefined;
+              [verseNum: number]: number | undefined;
             }
           | undefined;
       }
@@ -185,7 +188,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   // Cached properties
   private parentMapInternal: UsjParentMap | undefined;
   private fragmentsByIndexInUsfmInternal: FragmentsByIndexInUsfm | undefined;
-  private fragmentsByVerseRefInternal: FragmentsByVerseRef | undefined;
+  private indicesInUsfmByVerseRefInternal: IndicesInUsfmByVerseRef | undefined;
   private usfmInternal: string | undefined;
 
   constructor(usj: Usj, options?: UsjReaderWriterOptions) {
@@ -214,7 +217,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   usjChanged(): void {
     this.parentMapInternal = undefined;
     this.fragmentsByIndexInUsfmInternal = undefined;
-    this.fragmentsByVerseRefInternal = undefined;
+    this.indicesInUsfmByVerseRefInternal = undefined;
     this.usfmInternal = undefined;
   }
 
@@ -804,32 +807,36 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (verseRefOffset < 0) throw new Error('offset must be >= 0');
 
     // Make sure the requested book ID is in the USJ content
-    const availableBookIds = Object.keys(this.fragmentsByVerseRef);
+    const availableBookIds = Object.keys(this.indicesInUsfmByVerseRef);
     const noBookIdsFound =
       availableBookIds.length === 0 ||
       (availableBookIds.length === 1 && availableBookIds[0] === NO_BOOK_ID);
     const bookId = noBookIdsFound ? NO_BOOK_ID : verseRef.book;
-    const bookFragments = this.fragmentsByVerseRef[bookId];
-    if (!bookFragments)
+    const bookIndices = this.indicesInUsfmByVerseRef[bookId];
+    if (!bookIndices)
       throw new Error(
         `Book ID ${verseRef.book} not found in USJ! ${noBookIdsFound ? `There seems to be no USJ content because there is no content in ${NO_BOOK_ID} either` : `Book IDs in USJ: ${JSON.stringify(availableBookIds)}`}`,
       );
 
     // Make sure the requested chapter number is in the USJ content
-    const chapterFragments = bookFragments[verseRef.chapterNum];
-    if (!chapterFragments)
-      throw new Error(`Could not find ${bookId} chapter ${verseRef.chapterNum}`);
+    const chapterIndices = bookIndices[verseRef.chapterNum];
+    if (!chapterIndices) throw new Error(`Could not find ${bookId} chapter ${verseRef.chapterNum}`);
 
     // Make sure the requested verse number is in the USJ content
-    const verseFragments = chapterFragments[verseRef.verseNum];
-    if (!verseFragments)
+    const verseIndexInUsfm = chapterIndices[verseRef.verseNum];
+    if (verseIndexInUsfm === undefined)
       // TODO: What should we do about verse ranges? The original code required that the range
       // given match exactly to the range in the text instead of starting at the first verse in the
       // range and going from there. Maybe just fill in each verse in the range with the same map?
       // Maybe too unclear now to do something about?
       throw new Error(`Verse ${verseRef.verseNum} not found in ${bookId} ${verseRef.chapterNum}`);
 
-    const { value: fragmentInfo } = verseFragments.findClosestLessThanOrEqual(verseRefOffset) ?? {
+    // The USFM location's index in the USFM representation of this USJ document
+    const usfmLocationIndexInUsfm = verseIndexInUsfm + verseRefOffset;
+
+    const { value: fragmentInfo } = this.fragmentsByIndexInUsfm.findClosestLessThanOrEqual(
+      usfmLocationIndexInUsfm,
+    ) ?? {
       value: undefined,
     };
     if (!fragmentInfo)
@@ -839,7 +846,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // Return the appropriate `UsjDocumentLocation` subtype based on what this fragment is
 
-    const usjOffset = verseRefOffset - fragmentInfo.indexFromVerseStart;
+    // Get the offset within the fragment where the USFM location is pointing
+    const usjOffset = usfmLocationIndexInUsfm - fragmentInfo.indexInUsfm;
 
     // Check if the fragment itself is the target (`string`, `MarkerObject`, and `Usj`)
     if (
@@ -2146,7 +2154,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @param position Object containing properties describing where in the USFM document these
    *   fragments are. PROPERTIES ON THIS OBJECT ARE MODIFIED IN THIS METHOD
    * @param fragmentsByIndexInUsfm Map to add fragment information to
-   * @param fragmentsByVerseRef Map to add fragment information to
+   * @param indicesInUsfmByVerseRef Map to add verse start locations to
    */
   private static transferFragmentsInfoArrayToMaps(
     fragmentsInfo: UsjFragmentInfoMinimal[],
@@ -2155,11 +2163,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       bookId: string;
       chapterNum: number;
       verseNum: number;
-      /** Track index in USFM of the very start of the verse (backslash on the verse marker) */
-      verseStartIndexInUsfm: number;
     },
     fragmentsByIndexInUsfm: SortedNumberMap<UsjFragmentInfo>,
-    fragmentsByVerseRef: FragmentsByVerseRef,
+    indicesInUsfmByVerseRef: IndicesInUsfmByVerseRef,
   ) {
     // Add the extra information to each fragment to make it complete
     const fullFragmentsInfo = fragmentsInfo.map((fragmentInfo) => {
@@ -2172,13 +2178,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           position.bookId = marker.code;
           position.chapterNum = 0;
           position.verseNum = 0;
-          position.verseStartIndexInUsfm = 0;
 
           // If there are any fragments before the first encountered book id, move them to the first
           // encountered book id
-          if (fragmentsByVerseRef[NO_BOOK_ID]) {
-            fragmentsByVerseRef[position.bookId] = fragmentsByVerseRef[NO_BOOK_ID];
-            delete fragmentsByVerseRef[NO_BOOK_ID];
+          if (indicesInUsfmByVerseRef[NO_BOOK_ID]) {
+            indicesInUsfmByVerseRef[position.bookId] = indicesInUsfmByVerseRef[NO_BOOK_ID];
+            delete indicesInUsfmByVerseRef[NO_BOOK_ID];
           }
         } else if (marker.type === CHAPTER_TYPE && marker.number) {
           // Found chapter marker. Try to update chapter
@@ -2196,11 +2201,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             // Update current verse ref to new chapter
             position.chapterNum = nextChapterNum;
             position.verseNum = 0;
-            position.verseStartIndexInUsfm = 0;
 
             // If there are any fragments before the first encountered chapter number, move them to
             // the first encountered chapter number
-            const currentBookFragments = fragmentsByVerseRef[position.bookId];
+            const currentBookFragments = indicesInUsfmByVerseRef[position.bookId];
             if (currentBookFragments?.[0]) {
               // Not array destructuring because it's really hard to read here
               // eslint-disable-next-line prefer-destructuring
@@ -2240,7 +2244,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
                 } marker index.`,
               );
             } else if (
-              fragmentsByVerseRef[position.bookId]?.[position.chapterNum]?.[nextVerseNum]
+              indicesInUsfmByVerseRef[position.bookId]?.[position.chapterNum]?.[nextVerseNum]
             ) {
               console.warn(`Found ${VERSE_TYPE} marker with existing number ${nextVerseNum} after
                   current ${VERSE_TYPE} number ${
@@ -2258,8 +2262,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
               // Update current verse ref to new verse
               position.verseNum = nextVerseNum;
-              // Set the verse start index to the start of this verse
-              position.verseStartIndexInUsfm = fragmentInfo.indexInUsfm;
             }
           }
         }
@@ -2271,7 +2273,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // TODO: does it make a meaningful difference if we instead convert to JSONPath? Or maybe
         // doesn't matter since this is an internal detail
         workingStack: deepClone(workingStack),
-        indexFromVerseStart: fragmentInfo.indexInUsfm - position.verseStartIndexInUsfm,
       };
 
       return fullFragmentInfo;
@@ -2284,16 +2285,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // We are ensuring the properties are defined all the way through before use, so allow the
       // bang operator. This would be way more verbose without bang operator.
       /* eslint-disable no-type-assertion/no-type-assertion */
-      if (!fragmentsByVerseRef[position.bookId]) fragmentsByVerseRef[position.bookId] = {};
-      if (!fragmentsByVerseRef[position.bookId]![position.chapterNum])
-        fragmentsByVerseRef[position.bookId]![position.chapterNum] = {};
-      if (!fragmentsByVerseRef[position.bookId]![position.chapterNum]![position.verseNum])
-        fragmentsByVerseRef[position.bookId]![position.chapterNum]![position.verseNum] =
-          new SortedNumberMap<UsjFragmentInfo>();
-      fragmentsByVerseRef[position.bookId]![position.chapterNum]![position.verseNum]!.set(
-        fragmentInfo.indexFromVerseStart,
-        fragmentInfo,
-      );
+      if (!indicesInUsfmByVerseRef[position.bookId]) indicesInUsfmByVerseRef[position.bookId] = {};
+      if (!indicesInUsfmByVerseRef[position.bookId]![position.chapterNum])
+        indicesInUsfmByVerseRef[position.bookId]![position.chapterNum] = {};
+      if (
+        indicesInUsfmByVerseRef[position.bookId]![position.chapterNum]![position.verseNum] ===
+        undefined
+      )
+        indicesInUsfmByVerseRef[position.bookId]![position.chapterNum]![position.verseNum] =
+          fragmentInfo.indexInUsfm;
       /* eslint-enable no-type-assertion/no-type-assertion */
     });
 
@@ -2304,13 +2304,13 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private calculateUsfmProperties(): {
     usfm: string;
     fragmentsByIndexInUsfm: FragmentsByIndexInUsfm;
-    fragmentsByVerseRef: FragmentsByVerseRef;
+    indicesInUsfmByVerseRef: IndicesInUsfmByVerseRef;
   } {
     // Build the USFM up from the USJ content
     let usfm = '';
     // Build the fragments maps as we go
     const fragmentsByIndexInUsfm = new SortedNumberMap<UsjFragmentInfo>();
-    const fragmentsByVerseRef: FragmentsByVerseRef = {};
+    const indicesInUsfmByVerseRef: IndicesInUsfmByVerseRef = {};
 
     // Temporary staging array to put fragments in before loading them into the map
     const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
@@ -2321,7 +2321,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       bookId: NO_BOOK_ID,
       chapterNum: 0,
       verseNum: 0,
-      verseStartIndexInUsfm: 0,
     };
     /** Move the fragments info that are in `fragmentsInfo` into the final fragments map */
     function transferFragmentsInfo(workingStack: WorkingStack) {
@@ -2330,7 +2329,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         workingStack,
         currentPosition,
         fragmentsByIndexInUsfm,
-        fragmentsByVerseRef,
+        indicesInUsfmByVerseRef,
       );
     }
 
@@ -2431,7 +2430,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Always add newline at the end of the file; likely replaces a space
     usfm = `${UsjReaderWriter.removeEndSpace(usfm)}\n`;
 
-    return { usfm, fragmentsByIndexInUsfm, fragmentsByVerseRef };
+    return { usfm, fragmentsByIndexInUsfm, indicesInUsfmByVerseRef };
   }
 
   private get usfm(): string {
@@ -2440,7 +2439,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     ({
       usfm: this.usfmInternal,
       fragmentsByIndexInUsfm: this.fragmentsByIndexInUsfmInternal,
-      fragmentsByVerseRef: this.fragmentsByVerseRefInternal,
+      indicesInUsfmByVerseRef: this.indicesInUsfmByVerseRefInternal,
     } = this.calculateUsfmProperties());
 
     return this.usfmInternal;
@@ -2452,22 +2451,22 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     ({
       usfm: this.usfmInternal,
       fragmentsByIndexInUsfm: this.fragmentsByIndexInUsfmInternal,
-      fragmentsByVerseRef: this.fragmentsByVerseRefInternal,
+      indicesInUsfmByVerseRef: this.indicesInUsfmByVerseRefInternal,
     } = this.calculateUsfmProperties());
 
     return this.fragmentsByIndexInUsfmInternal;
   }
 
-  private get fragmentsByVerseRef(): FragmentsByVerseRef {
-    if (this.fragmentsByVerseRefInternal) return this.fragmentsByVerseRefInternal;
+  private get indicesInUsfmByVerseRef(): IndicesInUsfmByVerseRef {
+    if (this.indicesInUsfmByVerseRefInternal) return this.indicesInUsfmByVerseRefInternal;
 
     ({
       usfm: this.usfmInternal,
       fragmentsByIndexInUsfm: this.fragmentsByIndexInUsfmInternal,
-      fragmentsByVerseRef: this.fragmentsByVerseRefInternal,
+      indicesInUsfmByVerseRef: this.indicesInUsfmByVerseRefInternal,
     } = this.calculateUsfmProperties());
 
-    return this.fragmentsByVerseRefInternal;
+    return this.indicesInUsfmByVerseRefInternal;
   }
 
   // #endregion
