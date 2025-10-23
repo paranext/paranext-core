@@ -146,7 +146,7 @@ async function open(
   return undefined;
 }
 
-async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
+async function toggleFootnotesPane(webViewId?: string): Promise<void> {
   if (!webViewId) {
     logger.debug('No editor WebView ID!');
     return;
@@ -528,7 +528,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'Void',
           schema: { type: 'null' },
         },
       },
