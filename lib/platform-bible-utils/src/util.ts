@@ -316,6 +316,11 @@ export type ReplaceType<T, A, B> = T extends A
     ? { [K in keyof T]: ReplaceType<T[K], A, B> }
     : T;
 
+/** Converts a string type from CamelCase to kebab-case */
+export type KebabCase<T extends string> = T extends `${infer First}${infer Rest}`
+  ? `${First extends Lowercase<First> ? First : `-${Lowercase<First>}`}${KebabCase<Rest>}`
+  : T;
+
 // Thanks to jcalz at https://stackoverflow.com/a/50375286
 /**
  * Converts a union type to an intersection type (`|` to `&`).
