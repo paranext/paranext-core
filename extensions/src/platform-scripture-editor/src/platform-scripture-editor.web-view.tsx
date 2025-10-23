@@ -526,7 +526,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         try {
           nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(
             scrRef,
-          ).jsonPath;
+          ).documentLocation.jsonPath;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
