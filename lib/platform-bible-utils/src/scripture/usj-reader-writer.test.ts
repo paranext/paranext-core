@@ -13,6 +13,7 @@ import { USFM_MARKERS_MAP } from './markers-map-3.1.model';
 import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.model';
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
+import { UsjNodeAndDocumentLocation } from './usj-reader-writer.model';
 
 // #region set up file path variables
 
@@ -451,6 +452,8 @@ function test_UsfmLocationToUsjNodeAndDocumentLocation(
 ) {
   locations.forEach((testCase) => {
     const location = usjDoc.usfmLocationToUsjNodeAndDocumentLocation(testCase.usfmLocation);
+    // expect().toEqual() gives more detailed errors than UsjReaderWriter.areUsjDocumentLocationsEqual.
+    // If this ever becomes a problem with JSONPath property format, can use that instead
     expect(location.documentLocation).toEqual(testCase.usjContent.documentLocation);
     expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(location)).toBe(
       UsjReaderWriter.isUsjDocumentLocationForTextContent(testCase.usjContent),
@@ -473,44 +476,58 @@ function test_UsfmLocationToUsjNodeAndDocumentLocation(
   });
 }
 
-describe('Translate positions between USFM and USJ', () => {
-  test('jsonPathToVerseRefAndOffset translates USJ jsonPath to USFM VerseRefs and offsets', () => {
+function test_UsjDocumentLocationToUsfmVerseLocation(
+  usjDoc: UsjReaderWriter,
+  locations: LocationUsfmAndUsj[],
+) {
+  locations.forEach((testCase) => {
+    const location = usjDoc.usjDocumentLocationToUsfmVerseLocation(
+      testCase.usjContent.documentLocation,
+    );
+    // expect().toEqual() gives more detailed errors than UsjReaderWriter.areUsjDocumentLocationsEqual.
+    // If this ever becomes a problem with JSONPath property format, can use that instead
+    expect(location).toEqual(testCase.usfmLocation);
+  });
+}
+
+describe('jsonPathToUsfmVerseLocation translates USJ jsonPath to UsfmVerseLocation', () => {
+  test('Matthew 1-2 WEB', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
     const expectedResults = [
       { jsonPath: '$.content[0]', chapter: 1, verse: 0, offset: 0 },
-      { jsonPath: '$.content[8]', chapter: 1, verse: 0, offset: 0 },
-      { jsonPath: '$.content[9]', chapter: 1, verse: 0, offset: 0 },
+      { jsonPath: '$.content[8]', chapter: 1, verse: 0, offset: 185 },
+      { jsonPath: '$.content[9]', chapter: 1, verse: 0, offset: 190 },
       { jsonPath: '$.content[9].content[0]', chapter: 1, verse: 1, offset: 0 },
-      { jsonPath: '$.content[9].content[1]', chapter: 1, verse: 1, offset: 0 },
-      { jsonPath: '$.content[9].content[2]', chapter: 1, verse: 1, offset: 42 },
-      { jsonPath: '$.content[9].content[2].content[0]', chapter: 1, verse: 1, offset: 42 },
-      { jsonPath: '$.content[9].content[2].content[1]', chapter: 1, verse: 1, offset: 42 },
-      { jsonPath: '$.content[9].content[3]', chapter: 1, verse: 1, offset: 42 },
+      { jsonPath: '$.content[9].content[1]', chapter: 1, verse: 1, offset: 5 },
+      { jsonPath: '$.content[9].content[2]', chapter: 1, verse: 1, offset: 47 },
+      { jsonPath: '$.content[9].content[2].content[0]', chapter: 1, verse: 1, offset: 52 },
+      { jsonPath: '$.content[9].content[2].content[1]', chapter: 1, verse: 1, offset: 60 },
+      { jsonPath: '$.content[9].content[3]', chapter: 1, verse: 1, offset: 127 },
       { jsonPath: '$.content[10].content[0]', chapter: 1, verse: 2, offset: 0 },
-      { jsonPath: '$.content[10].content[1]', chapter: 1, verse: 2, offset: 0 },
+      { jsonPath: '$.content[10].content[1]', chapter: 1, verse: 2, offset: 5 },
       { jsonPath: '$.content[10].content[2]', chapter: 1, verse: 3, offset: 0 },
-      { jsonPath: '$.content[10].content[3]', chapter: 1, verse: 3, offset: 0 },
+      { jsonPath: '$.content[10].content[3]', chapter: 1, verse: 3, offset: 5 },
       { jsonPath: '$.content[10].content[4]', chapter: 1, verse: 4, offset: 0 },
-      { jsonPath: '$.content[10].content[5]', chapter: 1, verse: 4, offset: 0 },
+      { jsonPath: '$.content[10].content[5]', chapter: 1, verse: 4, offset: 5 },
       { jsonPath: '$.content[10].content[6]', chapter: 1, verse: 5, offset: 0 },
-      { jsonPath: '$.content[10].content[7]', chapter: 1, verse: 5, offset: 0 },
+      { jsonPath: '$.content[10].content[7]', chapter: 1, verse: 5, offset: 5 },
       { jsonPath: '$.content[10].content[8]', chapter: 1, verse: 6, offset: 0 },
-      { jsonPath: '$.content[10].content[9]', chapter: 1, verse: 6, offset: 0 },
-      { jsonPath: '$.content[10].content[10]', chapter: 1, verse: 6, offset: 53 },
-      { jsonPath: '$.content[10].content[10].content[0]', chapter: 1, verse: 6, offset: 53 },
-      { jsonPath: '$.content[10].content[10].content[1]', chapter: 1, verse: 6, offset: 53 },
-      { jsonPath: '$.content[29].content[4]', chapter: 2, verse: 15, offset: 156 },
+      { jsonPath: '$.content[10].content[9]', chapter: 1, verse: 6, offset: 5 },
+      { jsonPath: '$.content[10].content[10]', chapter: 1, verse: 6, offset: 58 },
+      { jsonPath: '$.content[10].content[10].content[0]', chapter: 1, verse: 6, offset: 63 },
+      { jsonPath: '$.content[10].content[10].content[1]', chapter: 1, verse: 6, offset: 71 },
+      { jsonPath: '$.content[29].content[4]', chapter: 2, verse: 15, offset: 162 },
     ];
 
     expectedResults.forEach((testCase) => {
-      const location = usjDoc.jsonPathToVerseRefAndOffset(testCase.jsonPath);
+      const location = usjDoc.jsonPathToUsfmVerseLocation(testCase.jsonPath);
       expect(location.verseRef.chapterNum).toBe(testCase.chapter);
       expect(location.verseRef.verseNum).toBe(testCase.verse);
       expect(location.offset).toBe(testCase.offset);
     });
 
     expect(() => {
-      usjDoc.jsonPathToVerseRefAndOffset('$.content[9999]');
+      usjDoc.jsonPathToUsfmVerseLocation('$.content[9999]');
     }).toThrow('No result found for JSONPath query: $.content[9999]');
 
     expect(() => {
@@ -518,14 +535,144 @@ describe('Translate positions between USFM and USJ', () => {
         type: USJ_TYPE,
         version: USJ_VERSION,
         content: [],
-      }).jsonPathToVerseRefAndOffset('');
-    }).toThrow('Not able to determine the book ID');
+      }).jsonPathToUsfmVerseLocation('');
+    }).toThrow('No result found for JSONPath query: ');
+  });
+});
+
+describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locations to USFM locations', () => {
+  test('Matthew 1-2 WEB', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    test_UsjDocumentLocationToUsfmVerseLocation(usjDoc, matthew1And2Locations);
+
+    expect(() => {
+      usjDoc.usjDocumentLocationToUsfmVerseLocation({
+        jsonPath: '$.content[0]',
+        offset: -1,
+      });
+    }).toThrow(
+      'Could not find fragment info at USJ document location {"jsonPath":"$.content[0]","offset":-1}',
+    );
   });
 
-  test('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to USJ document locations in Matthew 1-2 WEB', () => {
+  test('Matthew 2 with verse range added', () => {
+    const usjDoc = new UsjReaderWriter(matthew2verseRangeUsj);
+
+    const result0 = usjDoc.usjDocumentLocationToUsfmVerseLocation(
+      {
+        jsonPath: '$.content[3].content[0]',
+      },
+      'MAT',
+    );
+    expect(result0.verseRef).toEqual({
+      book: 'MAT',
+      chapterNum: 2,
+      verseNum: 21,
+      verse: '21-22',
+    });
+    expect(result0.offset).toEqual(0);
+  });
+
+  test('Paratext 2SA 1 testUSFM', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, paratextUsjReaderWriterOptions);
+
+    test_UsjDocumentLocationToUsfmVerseLocation(usjDoc, testUSFM2SaCh1Locations);
+
+    expect(() => {
+      usjDoc.usjDocumentLocationToUsfmVerseLocation({
+        jsonPath: '$.content[0]',
+        keyOffset: 1234,
+      });
+    }).toThrow(
+      'Could not find fragment info at USJ document location {"jsonPath":"$.content[0]","keyOffset":1234}',
+    );
+  });
+
+  test('Bookless USJ Document', () => {
+    const booklessUsjDoc = new UsjReaderWriter({
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: ['This USJ document has no book'],
+    });
+
+    const booklessUsfmVerseLocation = booklessUsjDoc.usjDocumentLocationToUsfmVerseLocation(
+      {
+        jsonPath: '$.content[0]',
+        offset: 5,
+      },
+      'GEN',
+    );
+    expect(booklessUsfmVerseLocation.verseRef).toEqual({ book: 'GEN', chapterNum: 0, verseNum: 0 });
+    expect(booklessUsfmVerseLocation.offset).toEqual(5);
+
+    expect(() => {
+      booklessUsjDoc.usjDocumentLocationToUsfmVerseLocation({
+        jsonPath: '$.content[0]',
+        offset: 5,
+      });
+    }).toThrow(
+      'Could not find book ID and no book ID provided when finding USFM verse location for USJ document location {"jsonPath":"$.content[0]","offset":5}',
+    );
+  });
+});
+
+describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to USJ document locations', () => {
+  test('Matthew 1-2 WEB', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, matthew1And2Locations);
+
+    // For now, requesting an offset beyond the last fragment in a verse just finds the appropriate
+    // content at that offset in USFM no matter how far away it is from the verseRef requested.
+    // This is not particularly designed to be this way; can change if desired.
+    // But it is helpful if someone just wants to provide chapter-based offsets or book-based
+    // offsets! Like so:
+    const usjLocationForOffsetTests: UsjNodeAndDocumentLocation = {
+      node: 'who shall shepherd my people, Israel.’”',
+      documentLocation: {
+        jsonPath: '$.content[25].content[0]',
+        offset: 17,
+      },
+    };
+    const chapterBasedOffsetTestCase: LocationUsfmAndUsj = {
+      usfmLocation: {
+        verseRef: { book: 'MAT', chapterNum: 2, verseNum: 0 },
+        offset: 850,
+      },
+      usjContent: usjLocationForOffsetTests,
+    };
+    test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, [chapterBasedOffsetTestCase]);
+
+    const bookBasedOffsetTestCase: LocationUsfmAndUsj = {
+      usfmLocation: {
+        verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
+        offset: 4648,
+      },
+      usjContent: usjLocationForOffsetTests,
+    };
+    test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, [bookBasedOffsetTestCase]);
+
+    // It is kinda weird, though, if you exceed the length of the USFM representation of the USJ doc
+    // passed in. It just sets a huge offset on the last position
+    const offsetExceedsVerseTestCase: LocationUsfmAndUsj = {
+      usfmLocation: {
+        verseRef: { book: 'MAT', chapterNum: 2, verseNum: 6 },
+        offset: 9999999,
+      },
+      usjContent: {
+        node: {
+          type: 'chapter',
+          marker: 'c',
+          number: '3',
+        },
+        documentLocation: {
+          jsonPath: "$.content[38]['number']",
+          propertyOffset: 9997136,
+        },
+      },
+    };
+    test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, [offsetExceedsVerseTestCase]);
 
     expect(() => {
       usjDoc.usfmLocationToUsjNodeAndDocumentLocation({
@@ -561,7 +708,7 @@ describe('Translate positions between USFM and USJ', () => {
     );
   });
 
-  test('usfmLocationToUsjNodeAndDocumentLocation translates USFM verse ranges and offsets to USJ details in Matthew 2 with verse range added', () => {
+  test('Matthew 2 with verse range added', () => {
     const usjDoc = new UsjReaderWriter(matthew2verseRangeUsj);
 
     const result0 = usjDoc.usfmLocationToUsjNodeAndDocumentLocation({
@@ -577,10 +724,48 @@ describe('Translate positions between USFM and USJ', () => {
     expect(result0.documentLocation).not.toHaveProperty('offset');
   });
 
-  test('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to USJ document locations in Paratext 2SA 1 testUSFM', () => {
+  test('Paratext 2SA 1 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, paratextUsjReaderWriterOptions);
 
     test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, testUSFM2SaCh1Locations);
+
+    // There are some locations that are not representable in USJ document locations because we
+    // didn't create a spec for such locations. These locations just go back to the closest previous
+    // fragment. Following are some examples:
+    // The USFM offset for the + prefix for the nested character marker goes back to the start of
+    // the marker in USJ
+    const nestedCharPrefixTestCase: LocationUsfmAndUsj = {
+      usfmLocation: {
+        verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
+        offset: 2514,
+      },
+      usjContent: {
+        node: {
+          type: 'char',
+          marker: 'nd',
+        },
+        documentLocation: {
+          jsonPath: '$.content[34].content[1].content[1]',
+        },
+      },
+    };
+    test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, [nestedCharPrefixTestCase]);
+    // The USFM offset for the second slash in optbreak goes back to the first optbreak slash in USJ
+    const optBreakSecondSlashTestCase: LocationUsfmAndUsj = {
+      usfmLocation: {
+        verseRef: { book: '2SA', chapterNum: 1, verseNum: 16 },
+        offset: 122,
+      },
+      usjContent: {
+        node: {
+          type: 'optbreak',
+        },
+        documentLocation: {
+          jsonPath: '$.content[85].content[1]',
+        },
+      },
+    };
+    test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, [optBreakSecondSlashTestCase]);
 
     expect(() => {
       usjDoc.usfmLocationToUsjNodeAndDocumentLocation({
@@ -588,6 +773,44 @@ describe('Translate positions between USFM and USJ', () => {
         offset: 0,
       });
     }).toThrow(`Book ID JHN not found in USJ! Book IDs in USJ: ["2SA"]`);
+  });
+
+  test('Bookless USJ Document', () => {
+    const booklessUsjDoc = new UsjReaderWriter({
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: ['This USJ document has no book'],
+    });
+
+    const booklessTestCase: LocationUsfmAndUsj = {
+      usfmLocation: {
+        verseRef: {
+          book: 'GEN',
+          chapterNum: 0,
+          verseNum: 0,
+        },
+        offset: 5,
+      },
+      usjContent: {
+        node: 'This USJ document has no book',
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          offset: 5,
+        },
+      },
+    };
+    test_UsfmLocationToUsjNodeAndDocumentLocation(booklessUsjDoc, [booklessTestCase]);
+
+    expect(() => {
+      booklessUsjDoc.usfmLocationToUsjNodeAndDocumentLocation({
+        verseRef: {
+          book: 'GEN',
+          chapterNum: 0,
+          verseNum: 0,
+        },
+        offset: -1,
+      });
+    }).toThrow('offset must be >= 0');
   });
 });
 
@@ -887,22 +1110,22 @@ describe('findAllNotes', () => {
   });
 });
 
-describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
-  test('toUsfm properly transforms Matthew 1-2 WEB', () => {
+describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
+  test('Matthew 1-2 WEB', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj, paratextUsjReaderWriterOptions);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(matthew1And2Usfm);
   });
 
-  test('toUsfm properly transforms 2SA 1 testUSFM', () => {
+  test('2SA 1 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, paratextUsjReaderWriterOptions);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh1Usfm);
   });
 
-  test('toUsfm properly transforms 2SA 2 testUSFM', () => {
+  test('2SA 2 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh2Usj, paratextUsjReaderWriterOptions);
 
     const resultingUsfm = usjDoc.toUsfm();
@@ -913,14 +1136,14 @@ describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
   // See https://discord.com/channels/892072317436448768/902938040362729552/1426247234621804727
   // TODO: link YouTrack case if they agree this is a bug
   // eslint-disable-next-line jest/no-disabled-tests
-  test.skip('toUsfm properly transforms 2SA 3 testUSFM', () => {
+  test.skip('2SA 3 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh3Usj, paratextUsjReaderWriterOptions);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
   });
 
-  test('toUsfm properly transforms 2SA 3 testUSFM corrected', () => {
+  test('2SA 3 testUSFM corrected', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCorrected, paratextUsjReaderWriterOptions);
 
     const resultingUsfm = usjDoc.toUsfm();
@@ -928,36 +1151,36 @@ describe('Transform USJ 3.0 to Paratext USFM 3.0', () => {
   });
 });
 
-describe('Transform USJ 3.1 to spec USFM 3.1', () => {
-  test('toUsfm properly transforms canonical 2SA 1 testUSFM', () => {
+describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
+  test('2SA 1 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh1UsfmCanonical3_1);
   });
 
-  test('toUsfm properly transforms canonical 2SA 2 testUSFM', () => {
+  test('2SA 2 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh2UsjCanonical3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh2UsfmCanonical3_1);
   });
 
-  test('toUsfm properly transforms canonical 2SA 3 testUSFM', () => {
+  test('2SA 3 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCanonical3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3UsfmCanonical3_1);
   });
 
-  test('toUsfm properly transforms generated refs', () => {
+  test('Generated refs', () => {
     const usjDoc = new UsjReaderWriter(exampleGeneratedRefsUsj);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(exampleGeneratedRefsUsfm);
   });
 
-  test('toUsfm properly transforms provided refs', () => {
+  test('Provided refs', () => {
     const usjDoc = new UsjReaderWriter(exampleProvidedRefsUsj);
 
     const resultingUsfm = usjDoc.toUsfm();

@@ -2009,24 +2009,9 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
     },
   },
-  // Notice how the USFM offset for the + prefix for the nested character marker goes to the same
-  // location in USJ because there actually is no specification for how to represent this location
-  // in USJ
-  {
-    usfmLocation: {
-      verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
-      offset: 2514,
-    },
-    usjContent: {
-      node: {
-        type: 'char',
-        marker: 'nd',
-      },
-      documentLocation: {
-        jsonPath: '$.content[34].content[1].content[1]',
-      },
-    },
-  },
+  // The USFM offset for the + prefix (2514) for the nested character marker goes to the same location in
+  // USJ because there actually is no specification for how to represent this location in USJ.
+  // Not including here because it is not the same when translating locations in both directions
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
@@ -2080,22 +2065,9 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
     },
   },
-  // Notice how the USFM offset for the second slash in optbreak goes to the same location in USJ
-  // because there actually is no specification for how to represent this location in USJ
-  {
-    usfmLocation: {
-      verseRef: { book: '2SA', chapterNum: 1, verseNum: 16 },
-      offset: 122,
-    },
-    usjContent: {
-      node: {
-        type: 'optbreak',
-      },
-      documentLocation: {
-        jsonPath: '$.content[85].content[1]',
-      },
-    },
-  },
+  // The USFM offset for the second slash in optbreak (122) goes to the same location in USJ because there
+  // actually is no specification for how to represent this location in USJ.
+  // Not including here because it is not the same when translating locations in both directions
   // Skip to first example of closed sidebar
   {
     usfmLocation: {
