@@ -189,9 +189,22 @@ export {
 export * from './extension-contributions/theme.model';
 export * from './extension-contributions/theme.util';
 export type {
+  ContentJsonPath,
+  PropertyJsonPath,
   IUsjReaderWriter,
+  UsfmLocation,
+  UsfmVerseLocation,
+  UsjAttributeKeyLocation,
+  UsjAttributeMarkerLocation,
+  UsjClosingAttributeMarkerLocation,
+  UsjClosingMarkerLocation,
+  UsjDocumentLocation,
+  UsjMarkerLocation,
   UsjNodeAndDocumentLocation,
+  UsjPropertyValueLocation,
+  UsjReaderWriterOptions,
   UsjSearchResult,
+  UsjTextContentLocation,
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
