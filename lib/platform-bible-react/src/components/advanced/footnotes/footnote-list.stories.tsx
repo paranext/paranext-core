@@ -38,7 +38,7 @@ type Story = StoryObj<typeof FootnoteList>;
 
 // Shared template with selection state
 function Template({ footnotes = [], listId = 'default-list-id', ...restArgs }: Story['args'] = {}) {
-  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>(undefined);
+  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>();
 
   return (
     <FootnoteList
@@ -58,7 +58,7 @@ function ScripturePanelTemplate({
   showMarkers,
   ...restArgs
 }: Story['args'] = {}) {
-  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>(undefined);
+  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>();
 
   return (
     <ResizablePanelGroup

@@ -162,7 +162,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const [selectedFootnote, setSelectedFootnote] = useState<
     { footnote: MarkerObject; index: number } | undefined
-  >(undefined);
+  >();
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
