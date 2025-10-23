@@ -35,6 +35,7 @@ const localizeString = (
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
   className,
+  classNameForItems,
   footnotes,
   layout = 'horizontal',
   listId,
@@ -124,7 +125,7 @@ export function FootnoteList({
                 tabIndex={-1}
                 className={cn(
                   'data-[state=selected]:tw-bg-muted',
-                  onFootnoteSelected && 'tw-cursor-pointer hover:tw-bg-muted/50',
+                  onFootnoteSelected && 'hover:tw-bg-muted/50',
                   'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
                   'focus:tw-outline-none focus-visible:tw-outline-none',
                   /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
@@ -136,6 +137,7 @@ export function FootnoteList({
                   layout === 'horizontal'
                     ? 'horizontal tw-table-row'
                     : 'vertical tw-block tw-text-sm',
+                  classNameForItems,
                 )}
                 onClick={() => handleFootnoteClick(footnote, idx)}
               >
