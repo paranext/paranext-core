@@ -294,8 +294,8 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
   // This is not particularly designed to be this way; can change if desired
   {
     usfmLocation: {
-      verseRef: { book: 'MAT', chapterNum: 2, verseNum: 6 },
-      offset: 9999999,
+      verseRef: { book: 'MAT', chapterNum: 3, verseNum: 0 },
+      offset: 9997139,
     },
     usjContent: {
       node: {
