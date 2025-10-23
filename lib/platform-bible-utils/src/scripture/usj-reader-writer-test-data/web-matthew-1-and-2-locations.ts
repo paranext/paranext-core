@@ -289,8 +289,9 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
       },
     },
   },
-  // For now, requesting beyond the last fragment in a verse just offsets from the last verse in
-  // that verse content. This is not particularly designed to be this way; can change if desired
+  // For now, requesting an offset beyond the last fragment in a verse just finds the appropriate
+  // content at that offset in USFM no matter how far away it is from the verseRef requested.
+  // This is not particularly designed to be this way; can change if desired
   {
     usfmLocation: {
       verseRef: { book: 'MAT', chapterNum: 2, verseNum: 6 },
@@ -298,12 +299,13 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
     usjContent: {
       node: {
-        type: 'para',
-        marker: 'p',
+        type: 'chapter',
+        marker: 'c',
+        number: '3',
       },
       documentLocation: {
-        jsonPath: "$.content[26]['marker']",
-        propertyOffset: 9999796,
+        jsonPath: "$.content[38]['number']",
+        propertyOffset: 9997136,
       },
     },
   },
