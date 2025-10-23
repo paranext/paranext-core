@@ -24,6 +24,7 @@ import {
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
+import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provider';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -557,6 +558,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const annotationStyleDataProviderPromise = papi.dataProviders.registerEngine(
+    'platformScriptureEditor.annotationStyle',
+    new AnnotationStyleDataProviderEngine(),
+  );
+
   const scriptureEditorWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     scriptureEditorWebViewType,
     scriptureEditorWebViewProvider,
@@ -569,6 +575,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformResourceViewerPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await annotationStyleDataProviderPromise,
   );
 
   logger.debug('Scripture editor is finished activating!');

@@ -920,6 +920,8 @@ export type DeepPartial<T> = T extends object ? {
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
+/** Converts a string type from CamelCase to kebab-case */
+export type KebabCase<T extends string> = T extends `${infer First}${infer Rest}` ? `${First extends Lowercase<First> ? First : `-${Lowercase<First>}`}${KebabCase<Rest>}` : T;
 /**
  * Converts a union type to an intersection type (`|` to `&`).
  *
