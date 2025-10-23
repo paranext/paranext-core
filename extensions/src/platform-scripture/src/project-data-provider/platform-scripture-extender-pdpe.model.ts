@@ -164,17 +164,23 @@ export class ScriptureExtenderProjectDataProviderEngine
 
   async getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-    return usx ? usxStringToUsj(usx) : undefined;
+    // Use version 3.0 because `ParatextData.dll` serves 3.0
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return usx ? { ...usxStringToUsj(usx), version: '3.0' as '3.1' } : undefined;
   }
 
   async getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
-    return usx ? usxStringToUsj(usx) : undefined;
+    // Use version 3.0 because `ParatextData.dll` serves 3.0
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return usx ? { ...usxStringToUsj(usx), version: '3.0' as '3.1' } : undefined;
   }
 
   async getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Verse'].getVerseUSX(verseRef);
-    return usx ? usxStringToUsj(usx) : undefined;
+    // Use version 3.0 because `ParatextData.dll` serves 3.0
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return usx ? { ...usxStringToUsj(usx), version: '3.0' as '3.1' } : undefined;
   }
 
   /**
