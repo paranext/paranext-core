@@ -467,14 +467,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    * @returns Token matching condition tested by the search function
    */
   private static findNextMatchingTokenUsingWorkingStack(
-    token: MarkerToken,
+    token: MarkerContent,
     workingStack: WorkingStack,
     skipTypes: string[],
     searchFunction: (potentiallyMatchingToken: MarkerToken, workingStack: WorkingStack) => boolean,
   ) {
-    // TODO: handle if they pass in a closing marker?
-    if (typeof token === 'object' && 'isClosingMarker' in token) return;
-
     // Walk the nodes in a depth-first, left-to-right manner until the search function returns true
     let nextNode: MarkerContent | Usj | undefined = token;
     while (nextNode !== undefined) {
@@ -524,7 +521,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
               };
               // Need to check if parent is skipped because we could have started in the middle of a
               // skipped marker
-              // TODO: Does this make sense? Or should we not skip parent closing markers?
+              // Does this make sense? Or should we not skip parent closing markers? Not sure. Revisit
+              // once this actually has a use case
               if (
                 !skipTypes.includes(parentClosingMarker.forMarker.type) &&
                 searchFunction(parentClosingMarker, workingStack)
@@ -616,7 +614,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
       // Add the stack item for the string node
       const nodeIndexInParent = realParent.content?.indexOf(node);
-      if (!nodeIndexInParent)
+      if (nodeIndexInParent === undefined || nodeIndexInParent < 0)
         throw new Error(`Could not find index of node in parent for creating working stack`);
       workingStack.push({ parent: realParent, index: nodeIndexInParent });
     } else {
@@ -1533,24 +1531,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         };
 
         // Add the attribute marker USFM to the document
-        // Caveat: it's not technically always true that this marker is the parent of the attribute
-        // markers, but there is currently no known case where it matters because there are no
-        // attribute markers that have the same marker type as the marker on which they are
-        // attributes. It likely will never matter as this is a very strange concept and it seems
-        // the USFM committee doesn't want to create more attribute markers.
-
-        // TODO: add new location type for attribute marker opening?
-
-        /* UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
-        markerFragmentsInfo,
-        fragmentsInfo,
-        usfmOutput.length,
-      ); */
 
         // Collect opening and closing attribute marker fragments so we can modify them before adding
         // them to the main fragments
         const attributeMarkerFragmentsInfo: UsjFragmentInfoMinimal[] = [];
 
+        // Caveat: it's not technically always true that this marker is the parent of the attribute
+        // markers, but there is currently no known case where it matters because there are no
+        // attribute markers that have the same marker type as the marker on which they are
+        // attributes. It likely will never matter as this is a very strange concept and it seems
+        // the USFM committee doesn't want to create more attribute markers.
         usfm = this.addMarkerUsfmToString(
           usfm,
           attributeMarker,
