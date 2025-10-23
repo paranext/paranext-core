@@ -495,6 +495,7 @@ describe('jsonPathToUsfmVerseLocation translates USJ jsonPath to UsfmVerseLocati
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
     const expectedResults = [
       { jsonPath: '$.content[0]', chapter: 1, verse: 0, offset: 0 },
+      { jsonPath: '$.content[0].content[0]', chapter: 1, verse: 0, offset: 8 },
       { jsonPath: '$.content[8]', chapter: 1, verse: 0, offset: 185 },
       { jsonPath: '$.content[9]', chapter: 1, verse: 0, offset: 190 },
       { jsonPath: '$.content[9].content[0]', chapter: 1, verse: 1, offset: 0 },

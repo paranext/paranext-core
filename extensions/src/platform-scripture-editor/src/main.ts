@@ -13,6 +13,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   serialize,
+  USFM_MARKERS_MAP_3_1,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -327,10 +328,6 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           let targetScrRef = { book: '', chapterNum: 0, verseNum: 0 };
 
-          // Temporarily disabled setting specific range for USFM ranges until we fix the offset
-          // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
-          let skipRange = false;
-
           // Figure out the book and chapter
           if ('jsonPath' in range.start && 'jsonPath' in range.end) {
             // Use the chapter and verse number from the range
@@ -347,8 +344,6 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             targetScrRef.chapterNum = range.start.chapterNum;
           } else {
             // At least one range location is USFM specification. Will convert to USJ for jsonPath
-            skipRange = true;
-
             if (
               'scrRef' in range.start &&
               'scrRef' in range.end &&
@@ -381,7 +376,29 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
               `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(targetScrRef)} is undefined!`,
             );
 
-          const usjRW = new UsjReaderWriter(usjChapter);
+          const usjRW = new UsjReaderWriter(usjChapter, {
+            markersMap: {
+              ...USFM_MARKERS_MAP_3_1,
+              // 3.0
+              version: '3.0',
+              // Paratext
+              isSpaceAfterAttributeMarkersContent: true,
+              shouldOptionalClosingMarkersBePresent: true,
+              // 3.0
+              markers: Object.fromEntries(
+                Object.entries(USFM_MARKERS_MAP_3_1.markers).map(([markerName, markerInfo]) => {
+                  if (!markerInfo) return [markerName, markerInfo];
+
+                  const newMarkerInfo = { ...markerInfo };
+
+                  if (newMarkerInfo.defaultAttribute === 'href')
+                    newMarkerInfo.defaultAttribute = 'link-href';
+                  if (markerName === 'k') delete newMarkerInfo.defaultAttribute;
+                  return [markerName, newMarkerInfo];
+                }),
+              ),
+            },
+          });
 
           // Convert the range now - easy conversion if already jsonPath, but need to run conversion
           // if in USFM verse ref
@@ -391,59 +408,64 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           let startOffset = 0;
           let endOffset = 0;
 
-          if (!skipRange) {
-            if ('scrRef' in range.start) {
-              const startContentLocation = usjRW.verseRefToUsjContentLocation(
-                range.start.scrRef,
-                range.start.offset,
-              );
-              startJsonPath = startContentLocation.jsonPath;
-              startOffset = startContentLocation.offset;
+          if ('scrRef' in range.start) {
+            const startContentLocation = usjRW.usfmLocationToUsjNodeAndDocumentLocation({
+              verseRef: range.start.scrRef,
+              offset: range.start.offset,
+            });
+            startJsonPath = startContentLocation.documentLocation.jsonPath;
+            // If we found a text content location, use it
+            if ('offset' in startContentLocation.documentLocation) {
+              startOffset = startContentLocation.documentLocation.offset;
             } else {
-              startJsonPath = range.start.jsonPath;
-              if (range.start.offset !== undefined) startOffset = range.start.offset;
-            }
-
-            if ('scrRef' in range.end) {
-              const endContentLocation = usjRW.verseRefToUsjContentLocation(
-                range.end.scrRef,
-                range.end.offset,
+              // Didn't find a text content location. Find the next text content location because
+              // the editor doesn't support other location types
+              const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(
+                startContentLocation,
+                '',
               );
-              endJsonPath = endContentLocation.jsonPath;
-              endOffset = endContentLocation.offset;
-
-              if (endOffset < (range.end.offset ?? 0) - 50) {
-                logger.warn(
-                  `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
-                );
-                endJsonPath = startJsonPath;
-                endOffset = startOffset + 1;
+              if (nextTextContentLocation) {
+                startJsonPath = nextTextContentLocation.documentLocation.jsonPath;
+                startOffset = nextTextContentLocation.documentLocation.offset;
               }
-            } else {
-              endJsonPath = range.end.jsonPath;
-              if (range.end.offset !== undefined) endOffset = range.end.offset;
-              else if (range.start.offset !== undefined) endOffset = range.start.offset;
             }
+          } else {
+            startJsonPath = range.start.jsonPath;
+            if (range.start.offset !== undefined) startOffset = range.start.offset;
           }
 
-          const convertedRange = skipRange
-            ? undefined
-            : {
-                start: { jsonPath: startJsonPath, offset: startOffset },
-                end: { jsonPath: endJsonPath, offset: endOffset },
-              };
-
-          if (convertedRange) {
-            // Figure out which verse we're on using the jsonPath
-            // Note: we could just use the verse if we receive a scrRef in the range, but our
-            // verseRefToUsjContentLocation doesn't always get the conversion right. So might as well
-            // use whatever verse it ends up on
-            const targetScrRefFromJsonPath = usjRW.jsonPathToVerseRefAndOffset(
-              convertedRange.start.jsonPath,
-              targetScrRef.book,
-            );
-            targetScrRef.verseNum = targetScrRefFromJsonPath.verseRef.verseNum;
+          if ('scrRef' in range.end) {
+            const endContentLocation = usjRW.usfmLocationToUsjNodeAndDocumentLocation({
+              verseRef: range.end.scrRef,
+              offset: range.end.offset,
+            });
+            endJsonPath = endContentLocation.documentLocation.jsonPath;
+            // If we found a text content location, use it
+            if ('offset' in endContentLocation.documentLocation) {
+              endOffset = endContentLocation.documentLocation.offset;
+            } else {
+              // Didn't find a text content location. Find the next text content location because
+              // the editor doesn't support other location types
+              const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(
+                endContentLocation,
+                '',
+              );
+              if (nextTextContentLocation) {
+                endJsonPath = nextTextContentLocation.documentLocation.jsonPath;
+                endOffset = nextTextContentLocation.documentLocation.offset;
+              }
+            }
+          } else {
+            endJsonPath = range.end.jsonPath;
+            if (range.end.offset !== undefined) endOffset = range.end.offset;
+            else if (startJsonPath === endJsonPath && range.start.offset !== undefined)
+              endOffset = range.start.offset;
           }
+
+          const convertedRange = {
+            start: { jsonPath: startJsonPath, offset: startOffset },
+            end: { jsonPath: endJsonPath, offset: endOffset },
+          };
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
