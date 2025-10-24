@@ -12,9 +12,7 @@
       "type": "char",
       "marker": "ca",
       "closed": "false",
-      "content": [
-        "2 ca"
-      ]
+      "content": ["2 ca"]
     },
     {
       "type": "para",
@@ -30,9 +28,7 @@
               "type": "char",
               "marker": "fr",
               "closed": "false",
-              "content": [
-                "2.0 "
-              ]
+              "content": ["2.0 "]
             },
             {
               "type": "char",
@@ -45,9 +41,7 @@
             {
               "type": "char",
               "marker": "wj",
-              "content": [
-                "character markers"
-              ]
+              "content": ["character markers"]
             },
             " inside the note."
           ]
@@ -56,9 +50,7 @@
         {
           "type": "char",
           "marker": "wj",
-          "content": [
-            "cp"
-          ]
+          "content": ["cp"]
         },
         " text"
       ]
