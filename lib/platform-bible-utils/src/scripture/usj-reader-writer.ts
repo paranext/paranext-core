@@ -230,17 +230,50 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region Walk the node tree
 
+  findFirstNodesWithSid(n: number) {
+    const contents = this.usj?.content ?? [];
+    const results: { marker?: string; sid?: string; type?: string }[] = [];
+
+    function traverse(item: MarkerContent, inheritedSid?: string) {
+      if (results.length >= n) return;
+
+      if (typeof item !== 'string') {
+        // inherit sid if missing
+        const currentSid = item.sid ?? inheritedSid;
+
+        if (currentSid) {
+          results.push({
+            marker: item.marker,
+            sid: currentSid,
+            type: item.type,
+          });
+        }
+
+        item.content?.some((i) => {
+          traverse(i);
+          return results.length >= n; // break condition
+        });
+      }
+    }
+
+    contents.forEach((item) => traverse(item));
+
+    return results;
+  }
+
   /**
    * Extract textual notes (aka, "footnotes") from a full USJ object.
    *
    * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
    */
   findAllNotes(): MarkerObject[] {
+    console.debug('First 10 nodes with sid:', this.findFirstNodesWithSid(10));
     return extractFootnotesFromUsjContent(this.usj?.content);
 
-    // Note that the following could be used instead of the above call to
-    // extractFootnotesFromUsjContent, and that function could be removed. However, this is about
-    // 100x slower than the custom traversal in extractFootnotesFromUsjContent.
+    // Note that if the note nodes in USJ had their `sid` property set, the following could be used
+    // instead of the above call to `extractFootnotesFromUsjContent`, and that function could be
+    // removed. However, this is about 100x slower than the custom traversal in
+    // `extractFootnotesFromUsjContent`.
     // return this.findAll('$.content..[?(@.type=="note")]');
     // This would depend on implementing findAll in this class:
     // findAll<T>(jsonPathQuery: string): T[] {

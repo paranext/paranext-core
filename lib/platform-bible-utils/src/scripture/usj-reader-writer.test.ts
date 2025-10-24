@@ -1225,15 +1225,26 @@ describe('findAllNotes', () => {
 
     // Spot-check some known markers
     expect(result[0].marker).toBe('x'); // first one is cross-ref
+    expect(result[0].sid).toBe('MAT 1:11');
     expect(result[1].marker).toBe('f'); // second is footnote
+    expect(result[1].sid).toBe('MAT 1:17');
     expect(result[2].marker).toBe('fe'); // third is endnote
+    expect(result[2].sid).toBe('MAT 1:17');
     expect(result[result.length - 1].marker).toBe('x'); // last is also cross-ref
 
     expect(result.every((n) => n.type === 'note')).toBe(true);
 
+    let lastSid: string = '';
     // e.g., All notes in this test data should start with a `MarkerObject` whose type is `char`
     result.forEach((note) => {
       expect(note.type).toBe('note');
+
+      expect(note.sid).toBeDefined(); // must now exist
+      if (typeof note.sid !== 'string') throw new Error('sid must be a string');
+      expect(note.sid.startsWith('MAT 1:')).toBe(true);
+      expect(note.sid >= lastSid).toBe(true);
+      lastSid = note.sid;
+
       const firstChild = note.content?.[0];
       if (firstChild === undefined) throw new Error('Expected first child to be defined');
       if (typeof firstChild === 'string') throw new Error('Expected MarkerObject, got string');

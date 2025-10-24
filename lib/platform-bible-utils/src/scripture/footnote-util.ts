@@ -58,23 +58,37 @@ export function getFormatCallerFunction(footnotes: MarkerObject[], callers: stri
  * Extract footnotes from an array of `MarkerContent` objects.
  *
  * @param contents - An array of `MarkerContent` objects
+ * @param contextSid - The sid from the containing context, if any
  * @returns An array of MarkerObjects representing all textual notes found in the contents.
  */
-export function extractFootnotesFromUsjContent(contents?: MarkerContent[]): MarkerObject[] {
+export function extractFootnotesFromUsjContent(
+  contents?: MarkerContent[],
+  contextSid?: string, // pass the current sid along
+): MarkerObject[] {
+  console.debug('extractFootnotesFromUsjContent: sid propagation logic active');
+
   const footnotes: MarkerObject[] = [];
-  if (!contents || contents.length === 0) return footnotes;
+  if (!contents?.length) return footnotes;
 
-  function traverse(item: MarkerContent) {
-    if (typeof item === 'string') return; // plain text node, ignore
+  function traverse(item: MarkerContent, lastSid?: string): string | undefined {
+    if (typeof item === 'string') return lastSid; // ignore plain text, propagate lastSid
 
-    // item is a MarkerObject
+    // Update sid if this node has one
+    const currentSid = item.sid ?? lastSid;
+
     if (item.type === 'note') {
-      footnotes.push(item);
-    } else if (Array.isArray(item.content) && item.content.length > 0) {
-      item.content.forEach(traverse);
+      footnotes.push({ ...item, sid: currentSid });
     }
+
+    if (Array.isArray(item.content) && item.content.length > 0) {
+      // Reduce through children, carrying forward the last seen sid
+      return item.content.reduce((sidAcc, child) => traverse(child, sidAcc), currentSid);
+    }
+
+    return currentSid;
   }
 
-  contents.forEach(traverse);
+  contents.reduce((sidAcc, item) => traverse(item, sidAcc), contextSid);
+
   return footnotes;
 }

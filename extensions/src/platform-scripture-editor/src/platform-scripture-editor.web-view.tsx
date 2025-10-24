@@ -33,6 +33,7 @@ import {
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
+  scrRefToBBBCCCVVV,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -48,6 +49,7 @@ import {
   ResizablePanelGroup,
   Spinner,
 } from 'platform-bible-react';
+import { VerseRef } from '@sillsdev/scripture';
 import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
@@ -314,7 +316,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
-            setScrRefWithScroll(targetScrRef);
+            setScrRefAndScrollAllPanes(targetScrRef);
             if (range) nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
@@ -411,12 +413,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const internalVerseLocationRef = useRef<SerializedVerseRef | undefined>(undefined);
 
+  const setScrRefAndScrollAllPanes = useCallback(
+    (newVerseLocation: SerializedVerseRef) => {
+      setScrRefWithScroll(newVerseLocation);
+      if (footnotesPaneVisibleRef.current) {
+        console.debug(
+          'Looking for a note to scroll into view for:',
+          JSON.stringify(newVerseLocation),
+        );
+        const indexOfNoteForScrRef = footnotes.findIndex((fn) => {
+          console.debug(`Considering \\${fn?.marker} note sid: ${fn?.sid}`);
+          if (!fn?.sid) return false;
+          const { success, verseRef } = VerseRef.tryParse(fn.sid);
+          if (!success) return false;
+          console.debug('Successfully parsed');
+          return verseRef.BBBCCCVVV === scrRefToBBBCCCVVV(newVerseLocation);
+        });
+        console.debug(`Found: ${indexOfNoteForScrRef}`);
+        if (indexOfNoteForScrRef >= 0) {
+          // TODO: Don't select the note, just scroll to it.
+          setSelectedFootnote({
+            footnote: footnotes[indexOfNoteForScrRef],
+            index: indexOfNoteForScrRef,
+          });
+        }
+      }
+    },
+    [setScrRefWithScroll, footnotes],
+  );
+
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
       internalVerseLocationRef.current = newVerseLocation;
-      setScrRefWithScroll(newVerseLocation);
+      setScrRefAndScrollAllPanes(newVerseLocation);
     },
-    [setScrRefWithScroll],
+    [setScrRefAndScrollAllPanes],
   );
 
   /**
@@ -913,7 +944,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   className="tw-h-full tw-w-full tw-min-h-0"
                   onLayout={onLayoutFootnotesPane}
                 >
-                  <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
+                  <ResizablePanel id="editor" order={0} className="tw-flex tw-flex-col tw-min-h-0">
                     <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
                       {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                       <OutPortal node={editorPortalNode} />
@@ -924,6 +955,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     <>
                       <ResizableHandle />
                       <ResizablePanel
+                        id="footnotes-pane"
+                        order={1}
                         defaultSize={footnotesPaneSize}
                         className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
                         minSize={footnotesPaneMinPercent}
