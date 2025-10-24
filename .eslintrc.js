@@ -50,6 +50,7 @@ module.exports = {
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
     ],
     '@typescript-eslint/member-ordering': 'error',
+    'no-dupe-class-members': 'off',
     'no-empty-function': 'off',
     '@typescript-eslint/no-empty-function': [
       'error',
@@ -122,6 +123,19 @@ module.exports = {
   globals: {
     globalThis: 'readonly',
   },
+  overrides: [
+    {
+      files: ['*.ts', '*.tsx'],
+      rules: {
+        // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js except certain overrides
+
+        // These are already handled by TypeScript
+        'no-dupe-class-members': 'off',
+
+        // #endregion
+      },
+    },
+  ],
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',

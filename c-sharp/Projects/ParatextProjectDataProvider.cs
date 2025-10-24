@@ -715,7 +715,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
     {
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
-        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(scrText, verseRef.BookNum, usfmData);
+        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(
+            scrText,
+            scrText.ScrStylesheet(verseRef.BookNum),
+            usfmData,
+            true
+        );
         return xmlDoc.OuterXml;
     }
 

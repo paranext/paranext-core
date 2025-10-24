@@ -1,0 +1,260 @@
+{
+  "type": "USJ",
+  "version": "3.0",
+  "content": [
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "3",
+      "altnumber": "3 ca",
+      "pubnumber": "3 cp",
+      "sid": " 3"
+    },
+    {
+      "type": "char",
+      "marker": "wj",
+      "content": ["wj marker "]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": ""
+        },
+        "Notice that this chapter's attribute marker ca properly applies to the chapter as the altnumber attribute. However, its attribute marker cp should not be translated into pubnumber because it has markers in it. But Paratext 9.5 does not realize cp should be its own marker and improperly applies the part of cp before any markers as the pubnumber and puts the rest of the contents after the chapter marker. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "3",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "5",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "6",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "7",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "8",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "9",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "10",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "11",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "12",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "13",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "14",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "15",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "16",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "17",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "18",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "19",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "20",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "21",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "22",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "23",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "24",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "25",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "26",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "27",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "28",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "29",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "30",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "31",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "32",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "33",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "34",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "35",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "36",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "37",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "38",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "39",
+          "sid": ""
+        }
+      ]
+    }
+  ]
+}
