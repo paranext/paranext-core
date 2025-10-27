@@ -786,7 +786,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           style={{
             top: footnotePopoverY,
             left: footnotePopoverX,
-            height: '10px',
+            height: '15px',
             width: 0,
             pointerEvents: 'none',
           }}

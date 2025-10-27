@@ -110,7 +110,7 @@ export default function FootnoteEditor({
       >
         <Editorial options={options} onScrRefChange={() => {}} scrRef={scrRef} ref={editorRef} />
         <div className="tw-absolute tw-bottom-0 tw-right-0">
-          <Button onClick={handleCopy} variant="ghost" size="icon">
+          <Button onClick={handleCopy} className="tw-h-6 tw-w-6" variant="ghost" size="icon">
             <Copy />
           </Button>
         </div>
