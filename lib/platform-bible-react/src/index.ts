@@ -46,8 +46,10 @@ export type {
   FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
+export { default as FootnoteEditor } from './components/advanced/footnotes/footnote-editor.component';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
+export {};
 export {
   default as Inventory,
   type InventoryItem,
