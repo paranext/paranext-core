@@ -8,6 +8,8 @@ import {
   SelectionRange,
   ViewOptions,
   getDefaultViewOptions,
+  UsjNodeOptions,
+  DeltaOp,
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
@@ -16,7 +18,7 @@ import {
   Usj,
 } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -40,7 +42,11 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  FootnoteEditor,
   MarkdownRenderer,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
   Spinner,
 } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
@@ -84,7 +90,7 @@ const defaultProjectName = '';
 
 const defaultTextDirection = 'ltr';
 
-const formattedView: ViewOptions = { ...getDefaultViewOptions(), noteMode: 'expandInline' };
+const formattedView: ViewOptions = { ...getDefaultViewOptions() };
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -108,6 +114,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
+
+  const [footnotePopoverX, setFootnotePopoverX] = useState<number>();
+  const [footnotePopoverY, setFootnotePopoverY] = useState<number>();
+  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
+  const editingNoteKey = useRef<string>();
+  const editingNoteOps = useRef<DeltaOp[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -617,15 +629,45 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirection;
   }, [projectName, scrRef, textDirection]);
 
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      noteCallerOnClick: (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+        if (!isReadOnly) {
+          const clickX = (event as any)['clientX'];
+          const clickY = (event as any)['clientY'];
+          setFootnotePopoverX(clickX);
+          setFootnotePopoverY(clickY - 5);
+
+          noteNodeKey;
+          if (isCollapsed) {
+            if (editingNoteKey.current) return;
+
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = getNoteOps();
+            setShowFootnoteEditor(true);
+          }
+        }
+      },
+    }),
+    [],
+  );
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
+      nodes: nodeOptions,
       textDirection: textDirectionEffective,
       view: formattedView,
     }),
     [isReadOnly, textDirectionEffective],
   );
+
+  function closeFootnoteEditor() {
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
+    setShowFootnoteEditor(false);
+  }
 
   function renderEditor() {
     const commonProps = {
@@ -737,6 +779,28 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </div>,
         )}
       </div>
+      {/** Footnote editor components */}
+      <Popover open={showFootnoteEditor}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: footnotePopoverY,
+            left: footnotePopoverX,
+            height: '10px',
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent className="tw-w-96 tw-p-[10px]">
+          <FootnoteEditor
+            parentRef={editorRef.current}
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
+            closeEditor={closeFootnoteEditor}
+            scrRef={scrRef}
+          />
+        </PopoverContent>
+      </Popover>
     </>
   );
 };
