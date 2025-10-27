@@ -12,7 +12,7 @@ This is a Webpack project template pre-configured to build a Platform.Bible exte
 
 Note that the `*.web-view.*` files and the `assets` folder mentioned in [Summary](#summary) are **not** included in this template. For examples of what these might look like, refer to any extension that is based on either this template or the [paranext-multi-extension-template](https://github.com/paranext/paranext-multi-extension-template) — for instance, the [Text Collection extension](https://github.com/paranext/paratext-bible-extensions/tree/main/src/paratext-bible-text-collection).
 
-**Important:** Before proceding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the latter, it would be better to use the [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template) instead of this template.
+**Important:** Before proceeding to use this template, consider whether you intend to build a single extension to be packaged and installed independently, or a set of related extensions that should be used together. If the latter, it would be better to use the [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template) instead of this template.
 
 ### Customize extension details
 
@@ -152,16 +152,9 @@ To package this extension into a zip file for distribution:
 
 These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version.
 
-1. Make sure the versions in this repo are on the version number you want to release. If they are not, run the `bump-versions` npm script to set the versions to what you want to release. This script will create a branch named `bump-versions-<version>` from your current head with the needed changes. Open a PR and merge that new branch into the branch you plan to release from. For example, to bump branch `my-branch` to version 0.2.0, run the following:
+1. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
-   ```bash
-   git checkout my-branch
-   npm run bump-versions 0.2.0
-   ```
-
-   Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
-
-2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from. This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
 
    - `version`: Enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: Enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump.
@@ -202,6 +195,25 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
 4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
 
+### Bumping version without publishing a release
+
+Sometimes, it may be useful to change the version without [publishing a release](#publishing).
+
+To bump versions without publishing a release, manually dispatch the Bump Versions workflow in GitHub Actions targeting the branch on which you want to change versions. Alternatively, you can run the `bump-versions` npm script. This workflow will create a branch named `bump-versions-<version>` from the target branch (or, if running the script, your current head) with the needed changes. Open a PR and merge that new branch into the branch on which you want to change versions.
+
+This workflow has the following inputs:
+
+- `newVersion`: enter the version you want to bump to (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version.
+
+For example, to bump branch `my-branch` to version `0.2.0`, run the following:
+
+```bash
+git checkout my-branch
+npm run bump-versions -- 0.2.0
+```
+
+Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
+
 ### Publishing problems
 
 Following are some problems you may encounter while publishing and steps to solve them.
@@ -215,7 +227,7 @@ Module build failed (from ./node_modules/swc-loader/src/index.js):
 Error: Failed to load native binding
 ```
 
-You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core@<version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
+Please see ["Failed to load native binding" in the Troubleshooting guide for how to solve this problem](https://github.com/paranext/paranext/wiki/Troubleshooting-Guide#failed-to-load-native-binding).
 
 ## To update this extension from the template
 
