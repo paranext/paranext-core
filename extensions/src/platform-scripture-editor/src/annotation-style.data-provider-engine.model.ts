@@ -4,18 +4,8 @@ import type {
   AnnotationStyleDataProviderDataTypes,
   AnnotationStyleNonce,
   AnnotationStyleProperties,
-} from 'platform-scripture-editor';
-import { KebabCase, newGuid } from 'platform-bible-utils';
-
-/**
- * Convert camelCase to kebab-case for CSS properties.
- *
- * @param str CamelCase string
- * @returns Kebab-case string
- */
-function camelToKebab(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-}
+} from 'annotation-style.data-provider';
+import { KebabCase, newGuid, toKebabCase } from 'platform-bible-utils';
 
 /**
  * Convert annotation style properties to CSS property declarations.
@@ -29,7 +19,7 @@ function stylesToCss(properties: AnnotationStyleProperties): string {
   Object.entries(properties).forEach(([key, value]) => {
     if (value === undefined) return;
 
-    const cssProperty = camelToKebab(key);
+    const cssProperty = toKebabCase(key);
     cssLines.push(`  ${cssProperty}: ${value};`);
   });
 
@@ -104,6 +94,8 @@ export class AnnotationStyleDataProviderEngine
 
       // Create a CSS rule targeting elements with the annotation type as a class
       // e.g., .annotation-type-spelling-error { ... }
+      // The regex replaces unexpected characters with hyphens to ensure class names are acceptable
+      // Note that the regex could result in consecutive and/or trailing hyphens
       const className = `annotation-type-${typeName.replace(/[^a-zA-Z0-9-]/g, '-')}`;
       cssRules.push(`.${className} {\n${cssProperties}\n}`);
     });
@@ -119,3 +111,5 @@ export class AnnotationStyleDataProviderEngine
     throw new Error('Annotation stylesheet is read-only. Cannot set stylesheet directly.');
   }
 }
+
+export default AnnotationStyleDataProviderEngine;

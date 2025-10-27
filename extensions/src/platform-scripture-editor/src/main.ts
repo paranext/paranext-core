@@ -21,10 +21,10 @@ import {
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
 } from 'platform-scripture-editor';
+import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provider-engine.model';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
-import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provider';
 
 logger.debug('Scripture Editor is importing!');
 
