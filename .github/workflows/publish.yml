@@ -119,7 +119,7 @@ jobs:
 
       - name: Bump repo versions
         if: ${{ inputs.newVersionAfterPublishing != '' }}
-        uses: ./.github/actions/bump-versions-action
+        uses: ./extension-repo/.github/actions/bump-versions-action
         with:
           newVersion: ${{ inputs.newVersionAfterPublishing }}
 
