@@ -190,7 +190,7 @@
       "%inventoryOptionName_ParagraphFinalPunctuation_IgnoreWhenFollowedByFinalPunctuationParameter%": "Secuencias de marcadores a ignorar",
       "%inventoryOptionName_ParagraphFinalPunctuation_MarkersCheckedForFinalPunctuation%": "Marcadores verificados para puntuación final",
       "%inventoryOptionName_ParagraphFinalPunctuation_MarkersSkippedForFinalPunctuation%": "Marcadores omitidos durante el procesamiento",
-      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersStartingNewSentencesForFinalPunctuation%": "Los marcadores que iniciar una nueva frase",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersStartingNewSentencesForFinalPunctuation%": "Los marcadores que inician una nueva frase",
       "%inventoryOptionName_ParagraphFinalPunctuation_SentenceFinalPunctuation%": "Puntuación final",
       "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": "Abreviaturas",
       "%project_settings_platformScripture_booksPresent_description%": "Libros de la Biblia que están presentes en este proyecto bíblico",
