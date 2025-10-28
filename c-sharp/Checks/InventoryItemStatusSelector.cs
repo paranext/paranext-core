@@ -1,3 +1,5 @@
+using Paratext.Checks;
+
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
@@ -9,6 +11,6 @@ public class InventoryItemStatusSelector
 {
     public string ProjectId { get; set; } = string.Empty;
     public string InventoryId { get; set; } = string.Empty;
-    public string? TextType { get; set; }
+    public InventoryTextType? TextType { get; set; }
     public string? Key { get; set; }
 };

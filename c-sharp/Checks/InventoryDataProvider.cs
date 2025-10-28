@@ -93,20 +93,18 @@ internal sealed class InventoryDataProvider(
     {
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
-        if (!SerializedInventoryTextType.IsValidOrNull(selector.TextType))
-            throw new ArgumentException("Invalid textType: " + selector.TextType);
 
         var inventory = _inventoryCache
             .GetInventoryForProject(selector.InventoryId, selector.ProjectId)
             .Inventory;
 
         var allItemsStatus = new List<InventoryItemStatus>();
-        if (selector.TextType == SerializedInventoryTextType.NonVerseText)
+        if (selector.TextType == InventoryTextType.NonVerseText)
         {
             AddItemStatus(inventory, inventory.NonVerseValidItems, true, allItemsStatus);
             AddItemStatus(inventory, inventory.NonVerseInvalidItems, false, allItemsStatus);
         }
-        else if (selector.TextType == SerializedInventoryTextType.StudyBibleContent)
+        else if (selector.TextType == InventoryTextType.StudyBibleContent)
         {
             AddItemStatus(inventory, inventory.StudyBibleValidItems, true, allItemsStatus);
             AddItemStatus(inventory, inventory.StudyBibleInvalidItems, false, allItemsStatus);
@@ -129,8 +127,6 @@ internal sealed class InventoryDataProvider(
     {
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
-        if (!SerializedInventoryTextType.IsValidOrNull(selector.TextType))
-            throw new ArgumentException("Invalid textType: " + selector.TextType);
 
         var inventory = _inventoryCache
             .GetInventoryForProject(selector.InventoryId, selector.ProjectId)
@@ -145,12 +141,12 @@ internal sealed class InventoryDataProvider(
             var validItems = HashSetToString(IEnumerableToHashSet(items, item => item.IsValid));
             var invalidItems = HashSetToString(IEnumerableToHashSet(items, item => !item.IsValid));
 
-            if (selector.TextType == SerializedInventoryTextType.NonVerseText)
+            if (selector.TextType == InventoryTextType.NonVerseText)
             {
                 inventory.NonVerseValidItems = validItems;
                 inventory.NonVerseInvalidItems = invalidItems;
             }
-            else if (selector.TextType == SerializedInventoryTextType.StudyBibleContent)
+            else if (selector.TextType == InventoryTextType.StudyBibleContent)
             {
                 inventory.StudyBibleValidItems = validItems;
                 inventory.StudyBibleInvalidItems = invalidItems;
@@ -173,7 +169,7 @@ internal sealed class InventoryDataProvider(
                     "Status must be true, false, or null when a key is provided"
                 ),
             };
-            if (selector.TextType == SerializedInventoryTextType.NonVerseText)
+            if (selector.TextType == InventoryTextType.NonVerseText)
             {
                 var validItems = inventory.NonVerseValidItems;
                 var invalidItems = inventory.NonVerseInvalidItems;
@@ -181,7 +177,7 @@ internal sealed class InventoryDataProvider(
                 inventory.NonVerseValidItems = validItems;
                 inventory.NonVerseInvalidItems = invalidItems;
             }
-            else if (selector.TextType == SerializedInventoryTextType.StudyBibleContent)
+            else if (selector.TextType == InventoryTextType.StudyBibleContent)
             {
                 var validItems = inventory.StudyBibleValidItems;
                 var invalidItems = inventory.StudyBibleInvalidItems;

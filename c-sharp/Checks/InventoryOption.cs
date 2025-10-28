@@ -28,10 +28,13 @@ internal class InventoryOption
             case TYPE_BOOLEAN:
                 if (value is bool b)
                     return b ? CMSOption.yesValue : CMSOption.noValue;
-                else if (value is JsonElement t && t.ValueKind == JsonValueKind.True)
-                    return CMSOption.yesValue;
-                else if (value is JsonElement f && f.ValueKind == JsonValueKind.False)
-                    return CMSOption.noValue;
+                if (value is JsonElement j)
+                {
+                    if (j.ValueKind == JsonValueKind.True)
+                        return CMSOption.yesValue;
+                    if (j.ValueKind == JsonValueKind.False)
+                        return CMSOption.noValue;
+                }
                 throw new ArgumentException("Invalid boolean value: " + value);
             case TYPE_STRING:
                 return stringValue;
