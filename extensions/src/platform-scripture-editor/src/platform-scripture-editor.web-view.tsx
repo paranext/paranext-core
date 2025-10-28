@@ -18,7 +18,7 @@ import {
   Usj,
 } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -633,12 +633,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       noteCallerOnClick: (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
         if (!isReadOnly) {
-          const clickX = (event as any)['clientX'];
-          const clickY = (event as any)['clientY'];
+          // The event type that its being cast to does not include `clientX` and `clientY` but
+          // they are still apart of the object, accesses them by casting to the original
+          // `onClick` event type
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const originalClickEvent = event as unknown as MouseEvent<HTMLButtonElement, MouseEvent>;
+          const clickX = originalClickEvent.clientX;
+          const clickY = originalClickEvent.clientY;
           setFootnotePopoverX(clickX);
           setFootnotePopoverY(clickY - 5);
 
-          noteNodeKey;
           if (isCollapsed) {
             if (editingNoteKey.current) return;
 
@@ -649,7 +653,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       },
     }),
-    [],
+    [isReadOnly],
   );
 
   const options = useMemo<EditorOptions>(
@@ -660,14 +664,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       textDirection: textDirectionEffective,
       view: formattedView,
     }),
-    [isReadOnly, textDirectionEffective],
+    [isReadOnly, textDirectionEffective, nodeOptions],
   );
 
-  function closeFootnoteEditor() {
+  const closeFootnoteEditor = useCallback(() => {
     editingNoteKey.current = undefined;
     editingNoteOps.current = undefined;
     setShowFootnoteEditor(false);
-  }
+  }, []);
 
   function renderEditor() {
     const commonProps = {
