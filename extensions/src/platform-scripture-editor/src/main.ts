@@ -176,6 +176,36 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<void>
   await controller.toggleFootnotesPaneVisibility();
 }
 
+async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.changeFootnotesPaneLocation();
+}
+
 /** Simple WebView provider so PAPI can get a Scripture Editor upon request */
 class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
   constructor() {
@@ -438,6 +468,37 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           throw new Error(message);
         }
       },
+      async changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'> {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to changeFootnotesPaneLocation`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          // Determine current location from saved state (default to 'bottom') and toggle it
+          const currentLocation =
+            (currentWebViewDefinition.state as any)?.footnotesPaneLocation ?? 'bottom';
+          const newLocation: 'bottom' | 'trailing' =
+            currentLocation === 'bottom' ? 'trailing' : 'bottom';
+
+          const message: EditorWebViewMessage = {
+            method: 'changeFootnotesPaneLocation',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+
+          // Return the new location as required by the interface
+          return newLocation;
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeFootnotesPaneLocation! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -517,12 +578,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     toggleFootnotesPane,
     {
       method: {
-        summary: 'Toggle the visibility of the footnotes panel',
+        summary: 'Toggle the visibility of the footnotes pane',
         params: [
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the WebView to toggle the footnotes panel for',
+            summary: 'The ID of the WebView to toggle the footnotes pane for',
             schema: { type: 'string' },
           },
         ],
@@ -534,12 +595,36 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
+    'platformScripture.changeFootnotesPaneLocation',
+    changeFootnotesPaneLocation,
+    {
+      method: {
+        summary: 'Toggle the location of the footnotes pane (bottom vs. side-by-side)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose footnotes pane location is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The new location of the footnotes pane',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
     await toggleFootnotesPanePromise,
+    await changeFootnotesPaneLocationPromise,
   );
 
   logger.debug('Scripture editor is finished activating!');

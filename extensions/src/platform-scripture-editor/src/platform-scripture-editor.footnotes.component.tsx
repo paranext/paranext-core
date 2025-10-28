@@ -9,6 +9,7 @@ import {
 import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
+import { EditorWebViewMessage } from 'platform-scripture-editor';
 
 // REVIEW: Is there a proper way to get this from the list component rather than hardcoding here?
 const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[] = ['%webView_footnoteList_header%'];
@@ -60,10 +61,40 @@ export default function FootnotesLayout({
     }
   }, []);
 
-  const [footnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
+  const [footnotesPanePosition, setFootnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
     'footnotesPanePosition',
     'bottom',
   );
+
+  const footnotesPanePositionRef = useRef(footnotesPanePosition);
+
+  useEffect(() => {
+    footnotesPanePositionRef.current = footnotesPanePosition;
+  }, [footnotesPanePosition]);
+
+  // listen to messages from the web view controller
+  useEffect(() => {
+    const webViewMessageListener = ({
+      data: editorMessage,
+    }: MessageEvent<EditorWebViewMessage>) => {
+      switch (editorMessage.method) {
+        case 'changeFootnotesPaneLocation': {
+          const { current } = footnotesPanePositionRef;
+          setFootnotesPanePosition(current === 'bottom' ? 'trailing' : 'bottom');
+          break;
+        }
+        default:
+          // Probably handled elsewhere
+          break;
+      }
+    };
+
+    window.addEventListener('message', webViewMessageListener);
+
+    return () => {
+      window.removeEventListener('message', webViewMessageListener);
+    };
+  }, [setFootnotesPanePosition]);
 
   const [footnotesPaneSize, setFootnotesPaneSize] = useWebViewState<number>(
     'footnotesPaneSize',

@@ -71,6 +71,12 @@
             "command": "platformScripture.toggleFootnotes"
           },
           {
+            "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
+            "group": "platformScriptureEditor.footnotes",
+            "order": 2,
+            "command": "platformScripture.changeFootnotesPaneLocation"
+          },
+          {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 1,

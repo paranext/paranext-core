@@ -41,11 +41,17 @@ declare module 'platform-scripture-editor' {
     method: 'toggleFootnotesPaneVisibility';
   };
 
+  /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
+  export type EditorMessageChangeFootnotesPaneLocation = {
+    method: 'changeFootnotesPaneLocation';
+  };
+
   /** Messages sent to the editor web view */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
-    | EditorMessageToggleFootnotesPaneVisibility;
+    | EditorMessageToggleFootnotesPaneVisibility
+    | EditorMessageChangeFootnotesPaneLocation;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -176,6 +182,8 @@ declare module 'platform-scripture-editor' {
     selectRange(range: ScriptureRange): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
+    /** Toggle the visibility of the footnotes pane in the editor */
+    changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
      * Add or update decorations in the editor. New decoration definitions with the same id
      * overwrite existing decorations
@@ -237,6 +245,16 @@ declare module 'papi-shared-types' {
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScripture.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
+     * toggling between showing it at the bottom or side-by-side.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScripture.changeFootnotesPaneLocation': (
+      webViewId: string | undefined,
+    ) => Promise<void>;
   }
 
   export interface WebViewControllers {

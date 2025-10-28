@@ -180,6 +180,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setFootnotesPaneVisible(!current);
           break;
         }
+        case 'changeFootnotesPaneLocation': {
+          break;
+        } // handled in FootnoteLayout
         default:
           // Unknown method name
           logger.debug(
