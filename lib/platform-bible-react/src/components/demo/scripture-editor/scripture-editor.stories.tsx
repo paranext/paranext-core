@@ -11,7 +11,7 @@ import {
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
 import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
@@ -305,11 +305,15 @@ export const FootnoteEditorView: Story = {
             getNoteOps,
           ) => {
             // The event type that its being cast to does not include `clientX` and `clientY` but
-            // they are still apart of the object, accesses them by casting to any
-            // eslint-disable-next-line
-            const clickX = (event as any).clientX;
-            // eslint-disable-next-line
-            const clickY = (event as any).clientY;
+            // they are still apart of the object, accesses them by casting to the original
+            // `onClick` event type
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const originalClickEvent = event as unknown as MouseEvent<
+              HTMLButtonElement,
+              MouseEvent
+            >;
+            const clickX = originalClickEvent.clientX;
+            const clickY = originalClickEvent.clientY;
             setPopoverX(clickX);
             setPopoverY(clickY + 10);
 
