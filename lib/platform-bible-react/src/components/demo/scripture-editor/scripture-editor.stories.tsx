@@ -11,7 +11,7 @@ import {
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import React, { useRef, useEffect, useState, useMemo, useCallback, MouseEvent } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
 import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
@@ -339,13 +339,7 @@ export const FootnoteEditorView: Story = {
 
     return (
       <div>
-        <Editorial
-          {...args}
-          options={mergedOptions}
-          ref={editorRef}
-          scrRef={defaultScrRef}
-          onScrRefChange={() => {}}
-        />
+        <Editorial {...args} options={mergedOptions} ref={editorRef} onScrRefChange={() => {}} />
         <Popover open={showFootnoteEditor}>
           <PopoverAnchor
             className="tw-absolute"
@@ -357,7 +351,7 @@ export const FootnoteEditorView: Story = {
               noteKey={noteKey.current}
               noteOps={noteOps.current}
               closeEditor={closeEditor}
-              scrRef={defaultScrRef}
+              scrRef={args.scrRef ?? defaultScrRef}
             />
           </PopoverContent>
         </Popover>
