@@ -35,7 +35,6 @@ import {
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
-import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import {
   Alert,
   AlertDescription,
@@ -44,10 +43,11 @@ import {
   MarkdownRenderer,
   Spinner,
 } from 'platform-bible-react';
-import FootnotesLayout from './platform-scripture-editor.footnotes.component';
 import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
+import FootnotesLayout from './platform-scripture-editor.footnotes.component';
+import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -319,9 +319,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const [actualUsj, setActualUsj] = useState<Usj | undefined>();
 
-  function handleFootnoteSelected(index: number): void {
+  const handleFootnoteSelected = useCallback((index: number) => {
     editorRef.current?.selectNote(index);
-  }
+  }, []);
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
@@ -763,6 +763,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 <FootnotesLayout
                   usj={actualUsj}
                   onFootnoteSelected={handleFootnoteSelected}
+                  useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}

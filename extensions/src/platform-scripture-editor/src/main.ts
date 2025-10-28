@@ -515,8 +515,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             throw new Error(`webViewDefinition.projectId is empty!`);
 
           // Determine current location from saved state (default to 'bottom') and toggle it
-          const currentLocation =
-            (currentWebViewDefinition.state as any)?.footnotesPaneLocation ?? 'bottom';
+          const currentLocation = currentWebViewDefinition.state?.footnotesPanePosition ?? 'bottom';
           const newLocation: 'bottom' | 'trailing' =
             currentLocation === 'bottom' ? 'trailing' : 'bottom';
 

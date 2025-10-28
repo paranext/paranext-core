@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   FootnoteList,
@@ -6,18 +6,20 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from 'platform-bible-react';
-import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
+import { UseWebViewStateHook } from '@papi/core';
+import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 // REVIEW: Is there a proper way to get this from the list component rather than hardcoding here?
 const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[] = ['%webView_footnoteList_header%'];
 
 export type FootnotesLayoutProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   usj: Usj;
   showMarkers: boolean;
+  useWebViewState: UseWebViewStateHook;
   onFootnoteSelected: (index: number) => void;
 };
 
@@ -25,8 +27,17 @@ export default function FootnotesLayout({
   children,
   usj,
   showMarkers,
+  useWebViewState,
   onFootnoteSelected,
 }: FootnotesLayoutProps) {
+  const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
+
+  const [footnoteListKey, setFootnoteListKey] = useState(0);
+
+  const [selectedFootnote, setSelectedFootnote] = useState<
+    { footnote: MarkerObject; index: number } | undefined
+  >();
+
   useEffect(() => {
     const usjReaderWriter = new UsjReaderWriter(usj);
     const newFootnotes = usjReaderWriter.findAllNotes();
@@ -45,10 +56,6 @@ export default function FootnotesLayout({
       return undefined;
     });
   }, [usj]);
-
-  const [selectedFootnote, setSelectedFootnote] = useState<
-    { footnote: MarkerObject; index: number } | undefined
-  >();
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
@@ -185,20 +192,16 @@ export default function FootnotesLayout({
     debouncedSetFootnotesPaneSize(sizes[1]);
   };
 
-  const [footnotes, setFootnotes] = useState<MarkerObject[]>([]);
+  /** Handle a footnote selection request. */
+  const handleFootnoteSelected = useCallback(
+    (_footnote: MarkerObject, index: number, listId: string | number) => {
+      if (index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
 
-  const [footnoteListKey, setFootnoteListKey] = useState(0);
-
-  /**
-   * Handle a footnote selection request. Mirrors prior behavior but requires callers to pass
-   * current state and setters.
-   */
-  function handleFootnoteSelected(footnote: MarkerObject, index: number, listId: string | number) {
-    if (!footnote || index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
-
-    setSelectedFootnote({ footnote: footnotes[index], index });
-    onFootnoteSelected(index);
-  }
+      setSelectedFootnote({ footnote: footnotes[index], index });
+      onFootnoteSelected(index);
+    },
+    [footnotes, footnoteListKey, onFootnoteSelected],
+  );
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => FOOTNOTE_LIST_STRING_KEYS, []));
 
