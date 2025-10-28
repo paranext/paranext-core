@@ -67,8 +67,11 @@ export default function FootnoteEditor({
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     if (noteOps && !editorRef.current?.getUsj()?.content) {
-      editorRef.current?.setUsj(emptyUsj);
-      editorRef.current?.applyUpdate(noteOps);
+      // Temporary fix to fix flushSync error in the console
+      setTimeout(() => {
+        editorRef.current?.setUsj(emptyUsj);
+        editorRef.current?.applyUpdate(noteOps);
+      });
     }
   }, [noteOps, noteKey]);
 
