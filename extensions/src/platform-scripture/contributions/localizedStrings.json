@@ -1,5 +1,83 @@
 {
   "metadata": {
+    "%inventoryName_Character%": {
+      "fallbackKey": "%CheckType_3%"
+    },
+    "%inventoryName_Marker%": {
+      "fallbackKey": "%CheckType_4%"
+    },
+    "%inventoryName_MatchedPairs%": {
+      "fallbackKey": "%CheckType_5%"
+    },
+    "%inventoryName_MixexCapitalization%": {
+      "fallbackKey": "%MixedCapitalizationCheck_1%"
+    },
+    "%inventoryName_ParagraphFinalPunctuation%": {
+      "fallbackKey": "%CheckType_7%"
+    },
+    "%inventoryName_Punctuation%": {
+      "fallbackKey": "%CheckType_8%"
+    },
+    "%inventoryName_RepeatedWord%": {
+      "fallbackKey": "%CheckType_13%"
+    },
+    "%inventoryName_SentenceFinalCapitalization%": {
+      "fallbackKey": "%SentenceFinalPunctCapitalizationCheck_2%"
+    },
+    "%inventoryName_StylesCapitalization%": {
+      "fallbackKey": "%UncapitalizedStylesCheck_1%"
+    },
+    "%inventoryOptionName_SetVerseAndNonVerseSeparately%": {
+      "fallbackKey": "%Paratext.Checking.InventoryForm.setNonVerseStatus.Text%"
+    },
+    "%inventoryOptionName_MatchedPairs_ClosedByParagraph%": {
+      "fallbackKey": "%MatchedPairsCheck_4%"
+    },
+    "%inventoryOptionName_MatchedPairs_IntroductionOutlineStyles%": {
+      "fallbackKey": "%MatchedPairsCheck_8%"
+    },
+    "%inventoryOptionName_MatchedPairs_Pairs%": {
+      "fallbackKey": "%MatchedPairsCheck_2%"
+    },
+    "%inventoryOptionName_MatchedPairs_PoeticStyles%": {
+      "fallbackKey": "%MatchedPairsCheck_6%"
+    },
+    "%inventoryOptionName_MixexCapitalization_CapitalizedPrefixes%": {
+      "fallbackKey": "%MixedCapitalizationCheck_8%"
+    },
+    "%inventoryOptionName_MixexCapitalization_CapitalizedSuffixes%": {
+      "fallbackKey": "%MixedCapitalizationCheck_6%"
+    },
+    "%inventoryOptionName_MixexCapitalization_UncapitalizedPrefixes%": {
+      "fallbackKey": "%MixedCapitalizationCheck_4%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInCrossRefs%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_13%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFigures%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_15%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFootnotes%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_11%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_IgnoreWhenFollowedByFinalPunctuationParameter%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_5%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_MarkersCheckedForFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_3%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_MarkersSkippedForFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_9%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_MarkersStartingNewSentencesForFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_7%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_SentenceFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_1%"
+    },
+    "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": {
+      "fallbackKey": "%SentenceFinalPunctCapitalizationCheck_5%"
+    },
     "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     }
@@ -177,7 +255,7 @@
       "%inventoryName_SentenceFinalCapitalization%": "Puntuación seguida de una letra minúscula",
       "%inventoryName_StylesCapitalization%": "Marcadores seguidos de minúsculas",
       "%inventoryOptionName_SetVerseAndNonVerseSeparately%": "Establecer el estado de verso y no verso por separado",
-      "%inventoryOptionName_MatchedPairs_ClosedByParagraph%": "Cerrar por el final del párrafo",
+      "%inventoryOptionName_MatchedPairs_ClosedByParagraph%": "Cerrar antes del final del párrafo",
       "%inventoryOptionName_MatchedPairs_IntroductionOutlineStyles%": "Marcadores de esquemas de introducción",
       "%inventoryOptionName_MatchedPairs_Pairs%": "Coincidencia de pares",
       "%inventoryOptionName_MatchedPairs_PoeticStyles%": "Marcadores poéticos",

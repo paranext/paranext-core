@@ -4,8 +4,9 @@ namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Serialized representation of InventoryTextType.
-/// This class must match the structure of InventoryTextType defined in platform-scripture.d.ts
-///
+/// This class corresponds to the InventoryTextType type defined in platform-scripture.d.ts.
+/// Keep their structures in sync for serialization compatibility.
+/// <br/>
 /// Note this is not called InventoryTextType to avoid confusion with Paratext.Checks.InventoryTextType.
 /// </summary>
 public static class SerializedInventoryTextType

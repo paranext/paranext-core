@@ -5,7 +5,8 @@ namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Details about an inventory option
-/// This class must match the structure of InventoryOption defined in platform-scripture.d.ts.
+/// This class corresponds to the InventoryOption type defined in platform-scripture.d.ts.
+/// Keep their structures in sync for serialization compatibility.
 /// </summary>
 internal class InventoryOption
 {

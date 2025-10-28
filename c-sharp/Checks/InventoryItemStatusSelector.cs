@@ -2,7 +2,8 @@ namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Selector for an inventory item status.
-/// This class must match the structure of InventoryItemStatusSelector defined in platform-scripture.d.ts
+/// This class corresponds to the InventoryItemStatusSelector type defined in platform-scripture.d.ts.
+/// Keep their structures in sync for serialization compatibility.
 /// </summary>
 public class InventoryItemStatusSelector
 {

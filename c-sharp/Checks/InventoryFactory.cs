@@ -4,6 +4,8 @@ using Paratext.Data.Checking;
 
 namespace Paranext.DataProvider.Checks;
 
+using static CheckType;
+
 /// <summary>
 /// Creates inventory objects based on checkIds that have inventories
 /// </summary>
@@ -16,34 +18,34 @@ public static class InventoryFactory
         new()
         {
             // Characters
-            { CheckType.Character.InternalValue, () => new CharactersCheck() },
+            { Character.InternalValue, () => new CharactersCheck() },
             // Markers
-            { CheckType.Marker.InternalValue, () => new MarkerCheck() },
+            { Marker.InternalValue, () => new MarkerCheck() },
             // Unmatched pairs of punctuation
-            { CheckType.MatchedPairs.InternalValue, () => new MatchedPairsCheck() },
+            { MatchedPairs.InternalValue, () => new MatchedPairsCheck() },
             // Mixed capitalization
-            { CheckType.MixedCapitalization.InternalValue, () => new MixedCapitalizationCheck() },
+            { MixedCapitalization.InternalValue, () => new MixedCapitalizationCheck() },
             // Markers missing final punctuation
             {
-                CheckType.ParagraphFinalPunctuation.InternalValue,
+                ParagraphFinalPunctuation.InternalValue,
                 () => new ParagraphFinalPunctuationCheck()
             },
             // Punctuation
-            { CheckType.Punctuation.InternalValue, () => new PunctuationCheck() },
+            { Punctuation.InternalValue, () => new PunctuationCheck() },
             // QuotationCheck and QuotationTypesCheck are included because they implement
             // ScriptureInventoryBase even though they are configured through settings UI in
             // Paratext 9, not inventory UI.
-            { CheckType.Quotation.InternalValue, () => new QuotationCheck() },
-            { CheckType.QuotationTypes.InternalValue, () => new QuotationTypesCheck() },
+            { Quotation.InternalValue, () => new QuotationCheck() },
+            { QuotationTypes.InternalValue, () => new QuotationTypesCheck() },
             // Repeated words
-            { CheckType.RepeatedWord.InternalValue, () => new RepeatedWordsCheck() },
+            { RepeatedWord.InternalValue, () => new RepeatedWordsCheck() },
             // Punctuation followed by lowercase
             {
-                CheckType.SentenceFinalCapitalization.InternalValue,
+                SentenceFinalCapitalization.InternalValue,
                 () => new SentenceFinalPunctCapitalizationCheck()
             },
             // Markers followed by lowercase
-            { CheckType.StylesCapitalization.InternalValue, () => new UncapitalizedStylesCheck() },
+            { StylesCapitalization.InternalValue, () => new UncapitalizedStylesCheck() },
         };
 
     public static IEnumerable<string> GetAvailableInventoryIds()

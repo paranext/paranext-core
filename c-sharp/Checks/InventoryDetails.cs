@@ -4,7 +4,8 @@ namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Details about an available inventory.
-/// This class must match the structure of AvailableInventory defined in platform-scripture.d.ts.
+/// This class corresponds to the AvailableInventory type defined in platform-scripture.d.ts.
+/// Keep their structures in sync for serialization compatibility.
 /// </summary>
 internal class InventoryDetails
 {

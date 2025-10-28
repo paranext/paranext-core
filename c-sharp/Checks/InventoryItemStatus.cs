@@ -2,7 +2,8 @@ namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Status of an inventory item.
-/// This class must match the structure of InventoryItemStatus defined in platform-scripture.d.ts.
+/// This class corresponds to the InventoryItemStatus type defined in platform-scripture.d.ts.
+/// Keep their structures in sync for serialization compatibility.
 /// </summary>
 internal class InventoryItemStatus(string key, bool isValid)
 {
