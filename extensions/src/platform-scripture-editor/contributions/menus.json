@@ -22,9 +22,13 @@
             "label": "%webView_platformScriptureEditor_tools%",
             "order": 4
           },
+          "platformScriptureEditor.insert": {
+            "label": "%webView_platformScriptureEditor_insert%",
+            "order": 5
+          },
           "platformScriptureEditor.info": {
             "label": "%webView_platformScriptureEditor_info%",
-            "order": 5
+            "order": 6
           }
         },
         "groups": {
@@ -40,9 +44,13 @@
             "column": "platformScriptureEditor.options",
             "order": 2
           },
-          "platformScriptureEditor.footnotes": {
+          "platformScriptureEditor.footnotesPane": {
             "column": "platformScriptureEditor.options",
             "order": 3
+          },
+          "platformScriptureEditor.insertTextualNotes": {
+            "column": "platformScriptureEditor.insert",
+            "order": 1
           },
           "platformScriptureEditor.general": {
             "column": "platformScriptureEditor.info",
@@ -66,13 +74,13 @@
           },
           {
             "label": "%webView_platformScriptureEditor_showFootnotes%",
-            "group": "platformScriptureEditor.footnotes",
+            "group": "platformScriptureEditor.footnotesPane",
             "order": 1,
             "command": "platformScripture.toggleFootnotes"
           },
           {
             "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
-            "group": "platformScriptureEditor.footnotes",
+            "group": "platformScriptureEditor.footnotesPane",
             "order": 2,
             "command": "platformScripture.changeFootnotesPaneLocation"
           },
@@ -105,6 +113,18 @@
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
+            "group": "platformScriptureEditor.insertTextualNotes",
+            "order": 1,
+            "command": "platformScriptureEditor.insertFootnoteAtSelection"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
+            "group": "platformScriptureEditor.insertTextualNotes",
+            "order": 2,
+            "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
           }
         ]
       },

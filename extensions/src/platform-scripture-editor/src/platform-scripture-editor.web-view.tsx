@@ -180,6 +180,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setFootnotesPaneVisible(!current);
           break;
         }
+        case 'insertFootnoteAtSelection': {
+          editorRef.current?.insertNote('f');
+          break;
+        }
+        case 'insertCrossReferenceAtSelection': {
+          editorRef.current?.insertNote('x');
+          break;
+        }
         case 'changeFootnotesPaneLocation': {
           break;
         } // handled in FootnoteLayout

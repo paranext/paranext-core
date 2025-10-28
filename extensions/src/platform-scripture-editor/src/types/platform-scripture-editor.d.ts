@@ -46,12 +46,18 @@ declare module 'platform-scripture-editor' {
     method: 'changeFootnotesPaneLocation';
   };
 
+  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  export type EditorMessageInsertTextualNoteAtSelection = {
+    method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
+  };
+
   /** Messages sent to the editor web view */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
     | EditorMessageToggleFootnotesPaneVisibility
-    | EditorMessageChangeFootnotesPaneLocation;
+    | EditorMessageChangeFootnotesPaneLocation
+    | EditorMessageInsertTextualNoteAtSelection;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -195,6 +201,10 @@ declare module 'platform-scripture-editor' {
       decorationsToAdd: EditorDecorations | undefined,
       decorationsToRemove?: string[],
     ): Promise<void>;
+    /** Function to insert a footnote in the editor at the current selection */
+    insertFootnoteAtSelection(): Promise<void>;
+    /** Function to insert a cross-reference in the editor at the current selection */
+    insertCrossReferenceAtSelection(): Promise<void>;
   }>;
 }
 
@@ -254,6 +264,24 @@ declare module 'papi-shared-types' {
      */
     'platformScripture.changeFootnotesPaneLocation': (
       webViewId: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert a footnote into a given editor web view.
+     *
+     * @param editorWebViewId The ID of the web view to insert the footnote for
+     */
+    'platformScriptureEditor.insertFootnoteAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert a cross-reference into a given editor web view.
+     *
+     * @param editorWebViewId The ID of the web view to insert the footnote for
+     */
+    'platformScriptureEditor.insertCrossReferenceAtSelection': (
+      editorWebViewId?: string | undefined,
     ) => Promise<void>;
   }
 
