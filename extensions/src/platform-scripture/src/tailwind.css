@@ -11,130 +11,155 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
-  /*
-   * Theme colors in Platform.Bible. These are applied in CSS properties using `hsl(var(--varName))`
-   * or Tailwind classes like `tw-bg-primary`
+  /**
+   * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
+   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
    *
-   * See the wiki's
-   * [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * See the wiki's [Matching Application
+   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
    * section for more information
    */
+  /* ["Slate" base theme by shadcn/ui](https://ui.shadcn.com/docs/theming#slate) */
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --foreground: 222.2 84% 4.9%; /* black */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 222.2 84% 4.9%; /* black */
+    --popover: 210 20% 98%; /* popover platform */
+    --popover-foreground: 222.2 84% 4.9%; /* black */
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 90%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
+    --secondary: 210 50% 95%;
+    --secondary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --muted: 210 50% 95%;
     --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
+    --accent: 210 50% 95%;
+    --accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --border: 214.3 31.8% 91.4%; /* slate-200 */
+    --input: 214.3 31.8% 91.4%; /* slate-200 */
+    --ring: 222.2 84% 4.9%; /* black */
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --sidebar-background: 210 20% 98%; /* popover platform */
+    --sidebar-foreground: 222.2 84% 4.9%; /* black */
+    --sidebar-primary: 222.2 47.4% 11.2%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 50% 95%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --sidebar-border: 214.3 31.8% 91.4%; /* slate-200 */
+    --sidebar-ring: 222.2 84% 4.9%; /* black */
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
+    --background: 222.2 84% 4.9%; /* black */
+    --foreground: 210 40% 98%; /* slate-50 */
+    --card: 222.2 84% 4.9%; /* black */
+    --card-foreground: 210 40% 98%; /* slate-50 */
+    --popover: 222.2 84% 4.9%; /* black */
+    --popover-foreground: 210 40% 98%; /* slate-50 */
+    --primary: 210 40% 98%; /* slate-50 */
+    --primary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
     --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
+    --secondary-foreground: 210 40% 98%; /* slate-50 */
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-
     --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
+    --accent-foreground: 210 40% 98%; /* slate-50 */
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --border: 215.3 19.3% 34.5%; /* slate-600 */
+    --input: 215.3 19.3% 34.5%; /* slate-600 */
     --ring: 212.7 26.8% 83.9%;
+
+    --sidebar-background: 222.2 84% 4.9%; /* black */
+    --sidebar-foreground: 215 20.2% 65.1%;
+    --sidebar-primary: 210 40% 98%; /* slate-50 */
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 215 20.2% 65.1%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 212.7 26.8% 83.9%;
   }
 
-  /* using color palette https://supercolorpalette.com/?scp=G0-hsl-99827A-E7DDD0-FEF4E7-FEFAF1-FFFFFF-D8E9E3-719892-07463D-0A433D-083030-041616-000000-85DBB8-F2F52E-CD3737 */
+  /* Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme*/
   .paratext-light {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
-    --muted: 33.9 32.4% 86.1%;
-    --muted-foreground: 15.5 13.2% 53.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
-    --border: 220 13% 91%;
-    --input: 161.3 26.7% 88.2%;
-    --primary: 173.4 82.1% 15.3%;
-    --primary-foreground: 40 85.7% 97.3%;
-    --secondary: 161.3 26.7% 88.2%;
-    --secondary-foreground: 173.4 82.1% 15.3%;
-    --accent: 161.3 26.7% 88.2%;
-    --accent-foreground: 173.4 82.1% 15.3%;
-    --destructive: 0 60% 51%;
-    --destructive-foreground: 210 20% 98%;
-    --ring: 13.5 13.2% 53.9%;
+    --background: 0 0% 97.6471%;
+    --foreground: 0 0% 12.549%;
+    --muted: 0 0% 93.7255%;
+    --muted-foreground: 0 0% 39.2157%;
+    --popover: 0 0% 98.8235%;
+    --popover-foreground: 0 0% 12.549%;
+    --card: 0 0% 98.8235%;
+    --card-foreground: 0 0% 12.549%;
+    --border: 0 0% 84.7059%;
+    --input: 0 0% 84.7059%;
+    --primary: 171.4286 81.8182% 15.098%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 34.0541 100% 85.4902%;
+    --secondary-foreground: 16.2712 50.4274% 22.9412%;
+    --accent: 0 0% 90.9804%;
+    --accent-foreground: 0 0% 12.549%;
+    --destructive: 10.1639 77.8723% 53.9216%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 16.6667 21.9512% 32.1569%;
+
+    /* WARN: in Shadcn files, `--sidebar-background` is `--sidebar`
+     * I recommend changing this to make it match Shadcn.
+     */
+    --sidebar-background: 0 0% 98.4314%;
+    --sidebar-foreground: 0 0% 14.5098%;
+    --sidebar-primary: 0 0% 20.3922%;
+    --sidebar-primary-foreground: 0 0% 98.4314%;
+    --sidebar-accent: 0 0% 93.7255%;
+    --sidebar-accent-foreground: 0 0% 20.3922%;
+    --sidebar-border: 0 0% 92.1569%;
+    --sidebar-ring: 0 0% 70.9804%;
   }
 
   .paratext-dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-    --muted: 15.5 13.2% 53.9%;
-    --muted-foreground: 33.9 32.4% 86.1%;
-    --popover: 180 71.4% 5%;
-    --popover-foreground: 0 0% 100%;
-    --card: 0 0% 0%;
-    --card-foreground: 0 0% 100%;
-    --border: 220 13% 20%;
-    --input: 220 13% 20%;
-    --primary: 161.3 26.7% 88.2%;
-    --primary-foreground: 173.4 82.1% 15.3%;
-    --secondary: 180 71.4% 11%;
-    --secondary-foreground: 161.3 26.7% 88.2%;
-    --accent: 180 71.4% 11%;
-    --accent-foreground: 161.3 26.7% 88.2%;
-    --destructive: 0 60% 51%;
-    --destructive-foreground: 210 20% 98%;
-    --ring: 13.5 13.2% 53.9%;
+    --background: 0 0% 6.6667%;
+    --foreground: 0 0% 93.3333%;
+    --muted: 0 0% 13.3333%;
+    --muted-foreground: 0 0% 70.5882%;
+    --popover: 0 0% 9.8039%;
+    --popover-foreground: 0 0% 93.3333%;
+    --card: 0 0% 9.8039%;
+    --card-foreground: 0 0% 93.3333%;
+    --border: 45 14.2857% 10.9804%;
+    --input: 0 0% 28.2353%;
+    --primary: 40 85.7143% 97.2549%;
+    --primary-foreground: 183.1579 54.2857% 6.8627%;
+    --secondary: 28.2353 17.5258% 19.0196%;
+    --secondary-foreground: 29.5082 100% 88.0392%;
+    --accent: 0 0% 16.4706%;
+    --accent-foreground: 0 0% 93.3333%;
+    --destructive: 10.1639 77.8723% 53.9216%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 29.5082 100% 88.0392%;
+
+    --sidebar-background: 240 5.8824% 10%;
+    --sidebar-foreground: 240 4.7619% 95.8824%;
+    --sidebar-primary: 224.2781 76.3265% 48.0392%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7037% 15.8824%;
+    --sidebar-accent-foreground: 240 4.7619% 95.8824%;
+    --sidebar-border: 240 3.7037% 15.8824%;
+    --sidebar-ring: 240 4.878% 83.9216%;
   }
 }
+/* #endregion */
 
+/* #region shared with https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css but with the difference of being scoped to .pr-twp in platform-bible-react */
 @layer base {
   * {
-    @apply tw-border-border;
+    @apply tw-border-border tw-outline-ring/50;
   }
 
   body {
     @apply tw-bg-background tw-text-foreground;
   }
 }
-
 /* #endregion */
