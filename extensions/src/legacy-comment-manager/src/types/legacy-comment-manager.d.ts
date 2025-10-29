@@ -259,15 +259,16 @@ declare module 'legacy-comment-manager' {
       /**
        * Creates a new comment
        *
-       * @param comment Comment data to create a new comment through ParatextData. 'id', 'user', and
-       *   'date' properties will be auto-generated and should not be provided. If no 'thread' ID is
-       *   provided, a new threadId will also be auto-generated.
+       * @param comment Comment data to create a new comment through ParatextData. All properties
+       *   are optional, and the 'id', 'user', and 'date' properties are omitted as they will be
+       *   auto-generated and should not be provided. If no 'thread' ID is provided, a new threadId
+       *   will also be auto-generated.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
        * @throws If no valid comment content is provided, or when trying to add a comment to a
        *   non-existing thread
        */
-      createComment(comment: Omit<LegacyComment, 'id' | 'user' | 'date'>): Promise<string>;
+      createComment(comment: Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>>): Promise<string>;
 
       /**
        * Deletes a comment by its ID
