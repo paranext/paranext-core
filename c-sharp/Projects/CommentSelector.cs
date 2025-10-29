@@ -3,10 +3,7 @@ namespace Paranext.DataProvider.Projects;
 public class CommentSelector
 {
     public string BookId { get; set; } = "";
-
     public int ChapterNum { get; set; } = 0;
-
-    public int VerseNum { get; set; } = 0;
-
+    public int? VerseNum { get; set; } = null;
     public string? CommentId { get; set; } = null;
 }
