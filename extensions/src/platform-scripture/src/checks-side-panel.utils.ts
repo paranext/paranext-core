@@ -82,8 +82,6 @@ export type ProjectOption = {
 export async function getProjectNames(projectId: string): Promise<ProjectOption | undefined> {
   const pdp = await projectDataProviders.get('platform.base', projectId);
 
-  if (!(await pdp.getSetting('platform.isEditable'))) return undefined;
-
   const projectShortName = await pdp.getSetting('platform.name');
   const projectFullName = await pdp.getSetting('platform.fullName');
 
