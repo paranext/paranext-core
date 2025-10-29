@@ -20,8 +20,8 @@ internal sealed class InventoryDataProvider(
 {
     #region Constants
 
-    const string DATA_TYPE_INVENTORY_STATUS = "InventoryItemStatus";
-    const string DATA_TYPE_INVENTORY_OPTION_VALUES = "InventoryOptionValues";
+    private const string DATA_TYPE_INVENTORY_STATUS = "InventoryItemStatus";
+    private const string DATA_TYPE_INVENTORY_OPTION_VALUES = "InventoryOptionValues";
 
     #endregion
 
@@ -137,7 +137,9 @@ internal sealed class InventoryDataProvider(
         {
             var items =
                 JsonSerializer.Deserialize<List<InventoryItemStatus>>(status, _serializationOptions)
-                ?? throw new ArgumentException("Status must be an array when no key is provided");
+                ?? throw new ArgumentException(
+                    $"Status must be an array when no key is provided (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                );
             var validItems = HashSetToString(IEnumerableToHashSet(items, item => item.IsValid));
             var invalidItems = HashSetToString(IEnumerableToHashSet(items, item => !item.IsValid));
 
@@ -166,7 +168,7 @@ internal sealed class InventoryDataProvider(
                 JsonValueKind.False => false,
                 JsonValueKind.Null => null,
                 _ => throw new ArgumentException(
-                    "Status must be true, false, or null when a key is provided"
+                    $"Status must be true, false, or null when a key is provided (key: {selector.Key}, projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
                 ),
             };
             if (selector.TextType == InventoryTextType.NonVerseText)
@@ -217,11 +219,15 @@ internal sealed class InventoryDataProvider(
         {
             var option =
                 inventoryOptions.Find(option => option.Name == selector.OptionName)
-                ?? throw new ArgumentException("Invalid option name: " + selector.OptionName);
+                ?? throw new ArgumentException(
+                    $"Invalid option name: {selector.OptionName} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                );
 
             var details =
                 inventoryDetails.Options.Find(option => option.OptionName == selector.OptionName)
-                ?? throw new ArgumentException("Invalid option name: " + selector.OptionName);
+                ?? throw new ArgumentException(
+                    $"Invalid option name: {selector.OptionName} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                );
 
             retVal.Add(
                 new InventoryOptionValue
@@ -238,7 +244,9 @@ internal sealed class InventoryDataProvider(
             {
                 var details =
                     detailsList.Find(detail => detail.OptionName == option.Name)
-                    ?? throw new ArgumentException("Invalid option name: " + option.Name);
+                    ?? throw new ArgumentException(
+                        $"Invalid option name: {option.Name} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                    );
 
                 retVal.Add(
                     new InventoryOptionValue
@@ -269,11 +277,15 @@ internal sealed class InventoryDataProvider(
         {
             var option =
                 inventoryOptions.Find(option => option.Name == selector.OptionName)
-                ?? throw new ArgumentException("Invalid option name: " + selector.OptionName);
+                ?? throw new ArgumentException(
+                    $"Invalid option name: {selector.OptionName} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                );
 
             var details =
                 inventoryDetails.Options.Find(option => option.OptionName == selector.OptionName)
-                ?? throw new ArgumentException("Invalid option name: " + selector.OptionName);
+                ?? throw new ArgumentException(
+                    $"Invalid option name: {selector.OptionName} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                );
 
             var deserializedValue = JsonSerializer.Deserialize<object?>(
                 values,
@@ -292,18 +304,22 @@ internal sealed class InventoryDataProvider(
                     _serializationOptions
                 )
                 ?? throw new ArgumentException(
-                    "Values must be an array when no option name is provided"
+                    $"Values must be an array when no option name is provided (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
                 );
 
             foreach (var value in valuesList)
             {
                 var option =
                     inventoryOptions.Find(option => option.Name == value.OptionName)
-                    ?? throw new ArgumentException("Invalid option name: " + value.OptionName);
+                    ?? throw new ArgumentException(
+                        $"Invalid option name: {value.OptionName} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                    );
 
                 var details =
                     inventoryDetails.Options.Find(option => option.OptionName == value.OptionName)
-                    ?? throw new ArgumentException("Invalid option name: " + value.OptionName);
+                    ?? throw new ArgumentException(
+                        $"Invalid option name: {value.OptionName} (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                    );
 
                 if (value.OptionValue == null)
                     scrText.Settings.RemoveSetting(option.Name);
