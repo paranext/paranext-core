@@ -179,15 +179,6 @@ public class CommentConverter : JsonConverter<Comment>
         }
 
         VerifyDataProvided(CONTENTS, contents);
-        VerifyDataProvided(DATE, date);
-        VerifyDataProvided(DELETED, deleted);
-        VerifyDataProvided(HIDE_IN_TEXT_WINDOW, hideInTextWindow);
-        VerifyDataProvided(ID, id);
-        VerifyDataProvided(LANGUAGE, language);
-        VerifyDataProvided(START_POSITION, startPosition);
-        VerifyDataProvided(THREAD, thread);
-        VerifyDataProvided(USER, user);
-        VerifyDataProvided(VERSE_REF, verseRef);
 
         XmlElement? contentsXml;
         try
@@ -201,36 +192,35 @@ public class CommentConverter : JsonConverter<Comment>
             throw new InvalidDataException($"Contents are not valid XML: {contents}");
         }
 
-        var conflictTypeEnum =
-            ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType) ?? NoteConflictType.None;
-        var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status) ?? NoteStatus.Todo;
-        var typeEnum = ConvertToEnum<NoteType>(TYPE, type) ?? NoteType.Normal;
+        var conflictTypeEnum = ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType);
+        var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status);
+        var typeEnum = ConvertToEnum<NoteType>(TYPE, type);
 
         Comment comment =
-            new(new ParatextUser(user, null))
+            new(new ParatextUser(user ?? string.Empty, null))
             {
                 AssignedUser = assignedUser,
                 BiblicalTermId = biblicalTermId,
-                ConflictType = conflictTypeEnum,
+                ConflictType = conflictTypeEnum ?? NoteConflictType.None,
                 Contents = contentsXml,
                 ContextAfter = contextAfter,
                 ContextBefore = contextBefore,
-                Date = date,
-                Deleted = deleted!.Value,
+                Date = date ?? string.Empty,
+                Deleted = deleted ?? false,
                 ExtraHeadingInfoInternal = extraHeadingInfo,
-                HideInTextWindow = hideInTextWindow!.Value,
-                Language = language,
+                HideInTextWindow = hideInTextWindow ?? false,
+                Language = language ?? string.Empty,
                 ReplyToUser = replyToUser,
                 SelectedText = selectedText,
                 Shared = shared,
-                StartPosition = startPosition!.Value,
-                Status = statusEnum,
+                StartPosition = startPosition ?? 0,
+                Status = statusEnum ?? NoteStatus.Unspecified,
                 TagsAdded = tagAdded?.Split(","),
                 TagsRemoved = tagRemoved?.Split(","),
-                Thread = thread,
-                Type = typeEnum,
+                Thread = thread ?? string.Empty,
+                Type = typeEnum ?? NoteType.Unspecified,
                 Verse = verse,
-                VerseRefStr = verseRef,
+                VerseRefStr = verseRef ?? string.Empty,
             };
 
         if (comment.Id != id)
