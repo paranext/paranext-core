@@ -10,8 +10,8 @@ namespace Paranext.DataProvider.JsonUtils;
 /// </summary>
 internal class InventoryOptionValueConverter : JsonConverter<InventoryOptionValue>
 {
-    private const string OptionNameProperty = "optionName";
-    private const string OptionValueProperty = "optionValue";
+    private const string OPTION_NAME = "optionName";
+    private const string OPTION_VALUE = "optionValue";
 
     public override InventoryOptionValue Read(
         ref Utf8JsonReader reader,
@@ -19,47 +19,69 @@ internal class InventoryOptionValueConverter : JsonConverter<InventoryOptionValu
         JsonSerializerOptions options
     )
     {
-        if (reader.TokenType != JsonTokenType.StartObject)
-            throw new JsonException("Expected start of object");
+        string? optionName = null;
+        object? optionValue = null;
+        bool optionValueSet = false;
 
-        var result = new InventoryOptionValue();
-
-        while (reader.Read())
+        string? lastPropertyName = null;
+        // The starting token is consumed before we get the reader
+        int onObjectLevel = 1;
+        while (onObjectLevel > 0 && reader.Read())
         {
-            if (reader.TokenType == JsonTokenType.EndObject)
-                return result;
-
-            if (reader.TokenType != JsonTokenType.PropertyName)
-                throw new JsonException("Expected property name");
-
-            string propertyName = reader.GetString() ?? string.Empty;
-            reader.Read();
-
-            if (propertyName == OptionNameProperty)
+            switch (reader.TokenType)
             {
-                result.OptionName = reader.GetString() ?? string.Empty;
-            }
-            else if (propertyName == OptionValueProperty)
-            {
-                // Handle different value types
-                result.OptionValue = reader.TokenType switch
-                {
-                    JsonTokenType.Null => null,
-                    JsonTokenType.String => reader.GetString(),
-                    JsonTokenType.True => true,
-                    JsonTokenType.False => false,
-                    _ => throw new JsonException(
-                        $"Unexpected token type for optionValue: {reader.TokenType}"
-                    ),
-                };
-            }
-            else
-            {
-                reader.Skip();
+                case JsonTokenType.StartObject:
+                case JsonTokenType.StartArray:
+                    onObjectLevel++;
+                    break;
+                case JsonTokenType.EndObject:
+                case JsonTokenType.EndArray:
+                    onObjectLevel--;
+                    break;
+                case JsonTokenType.PropertyName:
+                    lastPropertyName = reader.GetString();
+                    break;
+                case JsonTokenType.Null:
+                    switch (lastPropertyName)
+                    {
+                        case OPTION_NAME:
+                            optionName = null;
+                            break;
+                        case OPTION_VALUE:
+                            optionValue = null;
+                            optionValueSet = true;
+                            break;
+                    }
+                    break;
+                case JsonTokenType.True:
+                case JsonTokenType.False:
+                    if (lastPropertyName == OPTION_VALUE)
+                    {
+                        optionValue = reader.GetBoolean();
+                        optionValueSet = true;
+                    }
+                    break;
+                case JsonTokenType.String:
+                    switch (lastPropertyName)
+                    {
+                        case OPTION_NAME:
+                            optionName = reader.GetString();
+                            break;
+                        case OPTION_VALUE:
+                            optionValue = reader.GetString();
+                            optionValueSet = true;
+                            break;
+                    }
+                    break;
             }
         }
 
-        throw new JsonException("Expected end of object");
+        if (optionName == null)
+            throw new JsonException($"Missing required property: {OPTION_NAME}");
+        if (!optionValueSet)
+            throw new JsonException($"Missing required property: {OPTION_VALUE}");
+
+        return new InventoryOptionValue() { OptionName = optionName, OptionValue = optionValue };
     }
 
     public override void Write(
@@ -70,10 +92,10 @@ internal class InventoryOptionValueConverter : JsonConverter<InventoryOptionValu
     {
         writer.WriteStartObject();
 
-        writer.WritePropertyName(OptionNameProperty);
+        writer.WritePropertyName(OPTION_NAME);
         writer.WriteStringValue(value.OptionName);
 
-        writer.WritePropertyName(OptionValueProperty);
+        writer.WritePropertyName(OPTION_VALUE);
         if (value.OptionValue == null)
         {
             writer.WriteNullValue();

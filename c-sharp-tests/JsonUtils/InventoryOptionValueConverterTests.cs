@@ -150,6 +150,26 @@ public class InventoryOptionValueConverterTests
         );
     }
 
+    [Test]
+    public void Deserialize_MissingOptionName_ThrowsJsonException()
+    {
+        var json = @"{""optionValue"": true}";
+
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<InventoryOptionValue>(json, _serializationOptions)
+        );
+    }
+
+    [Test]
+    public void Deserialize_MissingOptionValue_ThrowsJsonException()
+    {
+        var json = @"{""optionName"": ""enabled""}";
+
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<InventoryOptionValue>(json, _serializationOptions)
+        );
+    }
+
     #endregion
 
     #region Serialization Tests

@@ -109,6 +109,7 @@ internal sealed class InventoryDataProvider(
             AddItemStatus(inventory, inventory.StudyBibleValidItems, true, allItemsStatus);
             AddItemStatus(inventory, inventory.StudyBibleInvalidItems, false, allItemsStatus);
         }
+        // Default to standard scripture inventory items for all other text types (same as P9)
         else
         {
             AddItemStatus(inventory, inventory.ValidItems, true, allItemsStatus);
@@ -140,8 +141,19 @@ internal sealed class InventoryDataProvider(
                 ?? throw new ArgumentException(
                     $"Status must be an array when no key is provided (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
                 );
-            var validItems = HashSetToString(IEnumerableToHashSet(items, item => item.IsValid));
-            var invalidItems = HashSetToString(IEnumerableToHashSet(items, item => !item.IsValid));
+
+            var validHashSet = IEnumerableToHashSet(items, item => item.IsValid);
+            var invalidHashSet = IEnumerableToHashSet(items, item => !item.IsValid);
+            var intersection = validHashSet.Intersect(invalidHashSet).ToList();
+            if (intersection.Count > 0)
+            {
+                throw new ArgumentException(
+                    $"The inventory item(s) \"{string.Join(", ", intersection)}\" cannot be both valid and invalid (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
+                );
+            }
+
+            var validItems = HashSetToString(validHashSet);
+            var invalidItems = HashSetToString(invalidHashSet);
 
             if (selector.TextType == InventoryTextType.NonVerseText)
             {
@@ -153,6 +165,7 @@ internal sealed class InventoryDataProvider(
                 inventory.StudyBibleValidItems = validItems;
                 inventory.StudyBibleInvalidItems = invalidItems;
             }
+            // Default to standard scripture inventory items for all other text types (same as P9)
             else
             {
                 inventory.ValidItems = validItems;
@@ -187,6 +200,7 @@ internal sealed class InventoryDataProvider(
                 inventory.StudyBibleValidItems = validItems;
                 inventory.StudyBibleInvalidItems = invalidItems;
             }
+            // Default to standard scripture inventory items for all other text types (same as P9)
             else
             {
                 var validItems = inventory.ValidItems;
@@ -358,13 +372,7 @@ internal sealed class InventoryDataProvider(
         Func<InventoryItemStatus, bool> filter
     )
     {
-        var hashSet = new HashSet<string>();
-        foreach (var item in enumerable)
-        {
-            if (filter(item))
-                hashSet.Add(item.Key);
-        }
-        return hashSet;
+        return enumerable.Where(filter).Select(item => item.Key).ToHashSet();
     }
 
     // Adapted from Paratext.Checks.ScriptureInventoryBase.HashSetToString
