@@ -29,6 +29,8 @@ export type ErrorPopoverProps = PropsWithChildren &
     localizedStrings: ErrorPopoverLocalizedStrings;
     /** Optional CSS classes to insert into the `PopoverContent` */
     className?: string;
+    /** Optional ID for the popover content for accessibility */
+    id?: string;
   };
 
 /** A popover component that displays detailed error information using the ErrorDump component. */
@@ -38,6 +40,7 @@ export function ErrorPopover({
   localizedStrings,
   children,
   className,
+  id,
 }: ErrorPopoverProps) {
   const [isCopySuccess, setIsCopySuccess] = useState<boolean>(false);
 
@@ -57,7 +60,7 @@ export function ErrorPopover({
   return (
     <Popover onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent className={cn('tw-min-w-80 tw-max-w-96', className)}>
+      <PopoverContent id={id} className={cn('tw-min-w-80 tw-max-w-96', className)}>
         {isCopySuccess && localizedStrings['%webView_error_dump_copied_message%'] && (
           <Label>{localizedStrings['%webView_error_dump_copied_message%']}</Label>
         )}

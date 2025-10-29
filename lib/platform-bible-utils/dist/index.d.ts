@@ -134,43 +134,6 @@ export declare class DateTimeFormat {
 	 */
 	resolvedOptions(): Intl.ResolvedDateTimeFormatOptions;
 }
-/** Function to run to dispose of something. Returns true if successfully unsubscribed */
-export type Unsubscriber = () => boolean;
-/**
- * Returns an Unsubscriber function that combines all the unsubscribers passed in.
- *
- * @param unsubscribers All unsubscribers to aggregate into one unsubscriber
- * @returns Function that unsubscribes from all passed in unsubscribers when run
- */
-export declare const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
-/**
- * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
- * successfully unsubscribed
- */
-export type UnsubscriberAsync = () => Promise<boolean>;
-/**
- * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
- *
- * @param unsubscribers - All unsubscribers to aggregate into one unsubscriber.
- * @returns Function that unsubscribes from all passed in unsubscribers when run
- */
-export declare const aggregateUnsubscriberAsyncs: (unsubscribers: (UnsubscriberAsync | Unsubscriber)[]) => UnsubscriberAsync;
-/** Callback function that accepts an event and should run when an event is emitted */
-export type PlatformEventHandler<T> = (event: T) => void;
-/**
- * Function that subscribes the provided callback to run when this event is emitted.
- *
- * @param callback Function to run with the event when it is emitted
- * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
- *   emitted
- */
-export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
-/**
- * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
- *
- * Note: The callback itself is not asynchronous.
- */
-export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
 export type JsonObjectLike = {
 	[key: string]: unknown;
 };
@@ -425,6 +388,43 @@ export declare class NumberFormat {
 	 */
 	resolvedOptions(): Intl.ResolvedNumberFormatOptions;
 }
+/** Function to run to dispose of something. Returns true if successfully unsubscribed */
+export type Unsubscriber = () => boolean;
+/**
+ * Returns an Unsubscriber function that combines all the unsubscribers passed in.
+ *
+ * @param unsubscribers All unsubscribers to aggregate into one unsubscriber
+ * @returns Function that unsubscribes from all passed in unsubscribers when run
+ */
+export declare const aggregateUnsubscribers: (unsubscribers: Unsubscriber[]) => Unsubscriber;
+/**
+ * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
+ * successfully unsubscribed
+ */
+export type UnsubscriberAsync = () => Promise<boolean>;
+/**
+ * Returns an UnsubscriberAsync function that combines all the unsubscribers passed in.
+ *
+ * @param unsubscribers - All unsubscribers to aggregate into one unsubscriber.
+ * @returns Function that unsubscribes from all passed in unsubscribers when run
+ */
+export declare const aggregateUnsubscriberAsyncs: (unsubscribers: (UnsubscriberAsync | Unsubscriber)[]) => UnsubscriberAsync;
+/** Callback function that accepts an event and should run when an event is emitted */
+export type PlatformEventHandler<T> = (event: T) => void;
+/**
+ * Function that subscribes the provided callback to run when this event is emitted.
+ *
+ * @param callback Function to run with the event when it is emitted
+ * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
+ *   emitted
+ */
+export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+/**
+ * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
+ *
+ * Note: The callback itself is not asynchronous.
+ */
+export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
 /** Require a `dispose` function */
 export interface Dispose {
 	/** Release resources and notify dependent services when tearing down an object */
@@ -920,6 +920,25 @@ export type DeepPartial<T> = T extends object ? {
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
+/**
+ * Converts a string type from camelCase to kebab-case. Note this simply inserts hyphens before
+ * uppercase letters and converts them to lowercase. It does not handle special cases like acronyms
+ * or symbols. It can result in multiple hyphens in a row, leading hyphens, or trailing hyphens.
+ *
+ * By using this as the type for a string parameter or string property, you can enforce (somewhat)
+ * at compile time that the string is in kebab-case format assuming it is provided as a string
+ * literal.
+ *
+ * @example
+ *
+ * ```typescript
+ * type Kebab1 = KebabCase<'backgroundColor'>; // 'background-color'
+ * type Kebab2 = KebabCase<'HTMLParser'>; // '-h-t-m-l-parser'
+ * type Kebab3 = KebabCase<'simpletest'>; // 'simpletest'
+ * type Kebab4 = KebabCase<'My$Value'>; // '-my$-value'
+ * ```
+ */
+export type KebabCase<T extends string> = T extends `${infer First}${infer Rest}` ? `${First extends Lowercase<First> ? First : `-${Lowercase<First>}`}${KebabCase<Rest>}` : T;
 /**
  * Converts a union type to an intersection type (`|` to `&`).
  *
@@ -1631,6 +1650,25 @@ export interface IUsjReaderWriter {
 	 */
 	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
 }
+/** Gets the default caller sequence to use to generate callers for textual notes. */
+export declare function getDefaultCallerSequence(): string[];
+/**
+ * Gets a caller to be displayed for a textual note. This is primarily useful as a helper function
+ * in {@link getFormatCallerFunction} , but it might be useful in stories, UI preview code, etc.
+ *
+ * @param callers Array of caller symbols, or `undefined` to use the default sequence, which is the
+ *   lowercase Roman-script letters as sequenced in the English alphabet.
+ * @param n Zero-based index into the caller list.
+ */
+export declare function getNthCaller(n: number, callers?: string[]): string;
+/**
+ * Gets a function that provides a (stable) caller based on a given sequence of textual notes.
+ *
+ * @param footnotes Sequence of footnotes, cross-references, and/or end-notes.
+ * @param callers Array of caller symbols, or `undefined` to use the default sequence, which is the
+ *   lowercase Roman-script letters as sequenced in the English alphabet.
+ */
+export declare function getFormatCallerFunction(footnotes: MarkerObject[], callers: string[] | undefined): (caller: string | undefined, index: number) => string | undefined;
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
  * Unicode code points instead of UTF-16 character codes.
@@ -3474,6 +3512,12 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private createWorkingStack;
 	private static convertWorkingStackToJsonPath;
 	private convertJsonPathToWorkingStack;
+	/**
+	 * Extract textual notes (aka, "footnotes") from a full USJ object.
+	 *
+	 * @returns An array of MarkerObjects representing all textual notes found in the USJ content.
+	 */
+	findAllNotes(): MarkerObject[];
 	/**
 	 * Given the starting point of a tree to consider (`node`), find the rightmost MarkerObject from
 	 * the array of `content`. In the following example, this would be "J".

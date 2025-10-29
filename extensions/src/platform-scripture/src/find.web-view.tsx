@@ -34,9 +34,16 @@ import {
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
+  Mutex,
 } from 'platform-bible-utils';
-import { FindJobStatus, FindResult, FindScope } from 'platform-scripture';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FindJobStatus,
+  FindJobStatusReport,
+  FindOptions,
+  FindResult,
+  FindScope,
+} from 'platform-scripture';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SearchResult from './find/search-result.component';
 
 type HidableFindResult = FindResult & { isHidden?: boolean };
@@ -62,6 +69,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 
 const defaultBooksPresent: string = '';
 const defaultProjectName = '';
+const findPdpMutex = new Mutex();
+const RESULTS_BATCH_SIZE = 100;
 
 global.webViewComponent = function FindWebView({
   projectId,
@@ -99,6 +108,7 @@ global.webViewComponent = function FindWebView({
   const [searchError, setSearchError] = useState<string | undefined>();
 
   const [results, setResults] = useState<HidableFindResult[]>([]);
+  const loadedResultsLengthRef = useRef(0);
   const [numberOfHiddenResults, setNumberOfHiddenResults] = useState<number>(0);
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
@@ -135,6 +145,14 @@ global.webViewComponent = function FindWebView({
     }
     return projectNamePossiblyError;
   }, [projectNamePossiblyError]);
+
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // #region Get available books and their localizations
 
@@ -183,53 +201,145 @@ global.webViewComponent = function FindWebView({
 
   // #endregion
 
+  // #region Safe wrappers for findPdp calls to avoid concurrency issues
+
+  const activeJobIdRef = useRef(activeJobId);
+
+  // Keep activeJobIdRef in sync with activeJobId state
+  useEffect(() => {
+    activeJobIdRef.current = activeJobId;
+  }, [activeJobId]);
+
+  const abandonFindJob = useCallback(async () => {
+    try {
+      return await findPdpMutex.runExclusive(async () => {
+        if (!findPdp || !activeJobIdRef.current) return;
+        const jobIdToAbandon = activeJobIdRef.current;
+        activeJobIdRef.current = undefined;
+
+        try {
+          await findPdp.abandonFindJob(jobIdToAbandon);
+          if (isMountedRef.current) setActiveJobId(undefined);
+        } catch (error) {
+          logger.error(`Error abandoning find job: ${getErrorMessage(error)}`);
+        }
+      });
+    } catch (error) {
+      logger.error(`Error acquiring mutex to abandon find job: ${getErrorMessage(error)}`);
+    }
+  }, [findPdp, setActiveJobId]);
+
+  const beginFindJob = useCallback(
+    async (findOptions: FindOptions) => {
+      try {
+        return await findPdpMutex.runExclusive(async () => {
+          if (!findPdp) return;
+
+          try {
+            const jobId = await findPdp.beginFindJob(findOptions);
+            if (isMountedRef.current) setActiveJobId(jobId);
+            activeJobIdRef.current = jobId;
+          } catch (error) {
+            logger.error(`Error beginning find job: ${getErrorMessage(error)}`);
+            if (isMountedRef.current) setActiveJobId(undefined);
+            activeJobIdRef.current = undefined;
+            throw error;
+          }
+        });
+      } catch (error) {
+        logger.error(`Error acquiring mutex to begin find job: ${getErrorMessage(error)}`);
+      }
+    },
+    [findPdp, setActiveJobId],
+  );
+
+  const stopFindJob = useCallback(async () => {
+    try {
+      return await findPdpMutex.runExclusive(async () => {
+        if (!findPdp || !activeJobIdRef.current) return false;
+
+        try {
+          return await findPdp.stopFindJob(activeJobIdRef.current);
+        } catch (error) {
+          logger.error(`Error stopping find job: ${getErrorMessage(error)}`);
+          return false;
+        }
+      });
+    } catch (error) {
+      logger.error(`Error acquiring mutex to stop find job: ${getErrorMessage(error)}`);
+      return false;
+    }
+  }, [findPdp]);
+
+  const retrieveFindJobUpdate = useCallback(
+    async (maxResultsToInclude: number): Promise<FindJobStatusReport | undefined> => {
+      try {
+        return findPdpMutex.runExclusive(async () => {
+          if (!findPdp || !activeJobIdRef.current) return undefined;
+          try {
+            return await findPdp.retrieveFindJobUpdate(activeJobIdRef.current, maxResultsToInclude);
+          } catch (error) {
+            logger.error(`Error retrieving find job update: ${getErrorMessage(error)}`);
+            return undefined;
+          }
+        });
+      } catch (error) {
+        logger.error(
+          `Error acquiring mutex to retrieve find job update: ${getErrorMessage(error)}`,
+        );
+        return undefined;
+      }
+    },
+    [findPdp],
+  );
+
+  // #endregion
+
   // #region Search related functions
 
   const isSearchQueryValid = useMemo(() => {
     if (searchTerm.trim() === '') return false;
     if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
     return true;
-  }, [searchTerm, scope, selectedBookIds]);
+  }, [scope, searchTerm, selectedBookIds]);
 
-  const handleStartSearch = async () => {
-    if (!isSearchQueryValid || !findPdp) return;
+  const findScope = useMemo((): FindScope[] => {
+    switch (scope) {
+      case 'chapter':
+        return [{ bookId: verseRefSetting.book, chapter: verseRefSetting.chapterNum }];
+      case 'book':
+        return [{ bookId: verseRefSetting.book }];
+      case 'selectedBooks':
+        return selectedBookIds.map((bookId) => ({ bookId }));
+      default:
+        throw new Error(`Unsupported scope: ${scope}`);
+    }
+  }, [scope, selectedBookIds, verseRefSetting]);
 
-    addRecentSearchItem(searchTerm);
+  const isStartingSearchRef = useRef(false);
 
-    const findScope = (): FindScope[] => {
-      switch (scope) {
-        case 'chapter':
-          return [{ bookId: verseRefSetting.book, chapter: verseRefSetting.chapterNum }];
-        case 'book':
-          return [{ bookId: verseRefSetting.book }];
-        case 'selectedBooks':
-          return selectedBookIds.map((bookId) => ({ bookId }));
-        default:
-          throw new Error(`Unsupported scope: ${scope}`);
-      }
-    };
+  const handleStartSearch = useCallback(async () => {
+    if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+
+    // Set the flag to prevent concurrent calls
+    // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
+    // them to execute serially. Rapid button clicking or pressing Enter isn't a use case that needs
+    // to be supported since no one could see the search results of all but the final search anyway.
+    isStartingSearchRef.current = true;
 
     try {
-      if (activeJobId) {
-        try {
-          await findPdp.abandonFindJob(activeJobId);
-          setActiveJobId(undefined);
-        } catch (error) {
-          logger.error('Error abandoning previous search job:', error);
-        }
-      }
+      addRecentSearchItem(searchTerm);
 
-      try {
-        const jobId = await findPdp.beginFindJob({
-          scope: findScope(),
-          searchString: searchTerm,
-          caseInsensitive: !shouldMatchCase,
-          useRegex: isRegexAllowed,
-        });
-        setActiveJobId(jobId);
-      } catch (error) {
-        logger.error('Error starting search job:', error);
-      }
+      await abandonFindJob();
+      if (!isMountedRef.current) return;
+
+      await beginFindJob({
+        scope: findScope,
+        searchString: searchTerm,
+        caseInsensitive: !shouldMatchCase,
+        useRegex: isRegexAllowed,
+      });
+      if (!isMountedRef.current) return;
 
       setSearchStatus('running');
       setSearchProgress(0);
@@ -244,10 +354,10 @@ global.webViewComponent = function FindWebView({
       setFocusedResultIndex(undefined);
 
       setResults([]);
+      loadedResultsLengthRef.current = 0;
       setNumberOfHiddenResults(0);
     } catch (error) {
       logger.error('Error starting search:', error);
-      setActiveJobId(undefined);
 
       setSearchStatus('errored');
       setSearchProgress(0);
@@ -256,12 +366,32 @@ global.webViewComponent = function FindWebView({
       setSubmittedScope(undefined);
       setSubmittedScrollGroupId(undefined);
       setSubmittedVerseRef(undefined);
+    } finally {
+      // Clear the flag regardless of success or failure
+      isStartingSearchRef.current = false;
     }
-  };
+  }, [
+    abandonFindJob,
+    addRecentSearchItem,
+    beginFindJob,
+    findPdp,
+    findScope,
+    isRegexAllowed,
+    isSearchQueryValid,
+    scope,
+    scrollGroupId,
+    searchTerm,
+    selectedBookIds,
+    shouldMatchCase,
+    verseRefSetting,
+  ]);
 
-  const clearSearchResults = async () => {
-    setActiveJobId(undefined);
+  const clearSearchResults = useCallback(async () => {
+    await abandonFindJob();
+    if (!isMountedRef.current) return;
+
     setResults([]);
+    loadedResultsLengthRef.current = 0;
     setNumberOfHiddenResults(0);
 
     setSearchStatus(undefined);
@@ -277,36 +407,21 @@ global.webViewComponent = function FindWebView({
     setSubmittedIsRegexAllowed(false);
 
     setFocusedResultIndex(undefined);
+  }, [abandonFindJob]);
 
-    if (activeJobId && findPdp) {
-      try {
-        await findPdp.cleanUpFindJob(activeJobId);
-      } catch (error) {
-        logger.error('Error cleaning up search job:', error);
-      }
-    }
-  };
-
-  const handleStopSearch = async (shouldClearResults?: boolean) => {
-    setSearchProgress(0);
-    if (activeJobId && findPdp) {
+  const handleStopSearch = useCallback(
+    async (shouldClearResults?: boolean) => {
+      if (!isMountedRef.current) return;
+      setSearchProgress(0);
       if (shouldClearResults) {
         setResults([]);
+        loadedResultsLengthRef.current = 0;
         setNumberOfHiddenResults(0);
-        try {
-          await findPdp.abandonFindJob(activeJobId);
-        } catch (error) {
-          logger.error('Error stopping search job:', error);
-        }
-      } else
-        try {
-          const isStoppedSuccessfully = await findPdp.stopFindJob(activeJobId);
-          if (!isStoppedSuccessfully) logger.error('Error stopping search job.');
-        } catch (error) {
-          logger.error('Error stopping search job:', error);
-        }
-    }
-  };
+        await abandonFindJob();
+      } else await stopFindJob();
+    },
+    [abandonFindJob, stopFindJob],
+  );
 
   const searchQueryChanged = useMemo(() => {
     return (
@@ -340,10 +455,9 @@ global.webViewComponent = function FindWebView({
   ]);
 
   const loadMoreResults = useCallback(async () => {
-    if (!activeJobId || !findPdp) return;
-
     try {
-      const update = await findPdp.retrieveFindJobUpdate(activeJobId, 100);
+      const update = await retrieveFindJobUpdate(RESULTS_BATCH_SIZE);
+      if (!update || !isMountedRef.current) return;
       const newResults = update.nextResults || [];
 
       if (newResults.length > 0) {
@@ -351,70 +465,77 @@ global.webViewComponent = function FindWebView({
           const currentResults = prev || [];
           return [...currentResults, ...newResults];
         });
+        loadedResultsLengthRef.current += newResults.length;
       }
     } catch (error) {
       logger.error('Error loading more results:', error);
     }
-  }, [activeJobId, findPdp]);
+  }, [retrieveFindJobUpdate]);
 
-  const handleResultsScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
-    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+  const handleResultsScroll = useCallback(
+    async (event: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
 
-    if (scrollPercentage > 0.9 && activeJobId && results.length < totalNumberOfResults) {
-      loadMoreResults();
-    }
-  };
+      if (scrollPercentage > 0.9 && results.length < totalNumberOfResults) await loadMoreResults();
+    },
+    [loadMoreResults, results.length, totalNumberOfResults],
+  );
 
+  // Effect to poll for search job updates
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
+    let isEffectActive = true;
 
     const checkForUpdates = async () => {
-      if (!activeJobId || !findPdp) return;
+      // Check if this effect is still active to avoid race conditions
+      if (!isEffectActive) return;
 
       try {
-        const update = await findPdp.retrieveFindJobUpdate(activeJobId, 0);
+        const update = await retrieveFindJobUpdate(0);
+        if (!update || !isEffectActive) return;
 
         setSearchProgress(update.percentComplete);
         setTotalNumberOfResults(update.totalResultsCount);
         setSearchStatus(update.status);
         setSearchError(update.error);
 
-        if (Array.isArray(update.nextResults) && results.length < 100) loadMoreResults();
-
-        if (searchStatus === 'running') {
-          timeoutId = setTimeout(checkForUpdates, 100);
+        const loadedCount = loadedResultsLengthRef.current;
+        if (loadedCount < RESULTS_BATCH_SIZE && update.totalResultsCount > loadedCount) {
+          await loadMoreResults();
+          if (!isEffectActive) return;
         }
+
+        // Continue polling if the job is still running and this effect is still active
+        if (update.status === 'running' && isEffectActive)
+          timeoutId = setTimeout(checkForUpdates, 100);
       } catch (error) {
-        logger.error('Error checking search results:', error);
-        setSearchStatus('errored');
+        if (isEffectActive) {
+          logger.error(`Error checking search results: ${getErrorMessage(error)}`);
+          setSearchStatus('errored');
+        }
       }
     };
 
-    checkForUpdates();
+    // Only start polling if we have an active job
+    if (activeJobId) checkForUpdates();
 
     return () => {
+      isEffectActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [activeJobId, findPdp, results.length, loadMoreResults, searchStatus]);
+  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate]);
 
   // #endregion
 
   // Cleanup function that runs when component unmounts
   useEffect(() => {
     return () => {
-      if (activeJobId && findPdp) {
-        // We can't use async/await in the cleanup function, so we'll use .catch
-        findPdp.abandonFindJob(activeJobId).catch((error) => {
-          logger.error('Error abandoning search job during cleanup:', error);
-        });
-      }
+      abandonFindJob();
     };
-    // We only want this useEffect to run on unmounting the component, so dependencies are empty
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [abandonFindJob]);
 
-  const getScopeSummaryText = () => {
+  const scopeSummaryText = useMemo(() => {
     if (!submittedScope || !submittedVerseRef)
       return localizedStrings['%webView_find_scopeUndetermined%'];
 
@@ -437,55 +558,71 @@ global.webViewComponent = function FindWebView({
       default:
         return localizedStrings['%webView_find_scopeUndetermined%'];
     }
-  };
+  }, [
+    localizedBookData,
+    localizedStrings,
+    scopeSelectorLocalizedStrings,
+    submittedBookIds,
+    submittedScope,
+    submittedVerseRef,
+  ]);
 
-  const handleFocusedResultChange = (
-    verseRef: SerializedVerseRef,
-    index: number,
-    occurrenceTextPositionStart?: number,
-    occurrenceTextPositionEnd?: number,
-  ) => {
-    setFocusedResultIndex(index);
-    setVerseRefSetting(verseRef);
-    if (editorWebViewId && editorWebViewController) {
-      papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-      editorWebViewController.selectRange({
-        start: { scrRef: verseRef, offset: occurrenceTextPositionStart },
-        end: { scrRef: verseRef, offset: occurrenceTextPositionEnd },
-      });
-    }
-  };
+  const handleFocusedResultChange = useCallback(
+    (
+      verseRef: SerializedVerseRef,
+      index: number,
+      occurrenceTextPositionStart?: number,
+      occurrenceTextPositionEnd?: number,
+    ) => {
+      setFocusedResultIndex(index);
+      setVerseRefSetting(verseRef);
+      if (editorWebViewId && editorWebViewController) {
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        editorWebViewController.selectRange({
+          start: { scrRef: verseRef, offset: occurrenceTextPositionStart },
+          end: { scrRef: verseRef, offset: occurrenceTextPositionEnd },
+        });
+      }
+    },
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+  );
 
-  const handleHideResult = (index: number) => {
-    setResults((prevResults) =>
-      prevResults.map((prevResult, i) =>
-        i === index ? { ...prevResult, isHidden: true } : prevResult,
-      ),
-    );
-    setNumberOfHiddenResults((prevCount) => prevCount + 1);
-    setFocusedResultIndex(undefined);
-  };
+  const handleHideResult = useCallback(
+    (index: number) => {
+      setResults((prevResults) =>
+        prevResults.map((prevResult, i) =>
+          i === index ? { ...prevResult, isHidden: true } : prevResult,
+        ),
+      );
+      setNumberOfHiddenResults((prevCount) => prevCount + 1);
+      setFocusedResultIndex(undefined);
+    },
+    [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
+  );
 
-  const getOccurrenceInVerseIndex = (currentIndex: number): number => {
-    const currentResult = results[currentIndex];
-    let occurrenceIndex = 0;
+  const getOccurrenceInVerseIndex = useCallback(
+    (currentIndex: number): number => {
+      const currentResult = results[currentIndex];
+      let occurrenceIndex = 0;
 
-    for (let i = currentIndex - 1; i >= 0; i--) {
-      const prevResult = results[i];
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        const prevResult = results[i];
 
-      if (
-        prevResult.verseRef.book !== currentResult.verseRef.book ||
-        prevResult.verseRef.chapterNum !== currentResult.verseRef.chapterNum ||
-        prevResult.verseRef.verseNum !== currentResult.verseRef.verseNum
-      ) {
-        break;
+        if (
+          prevResult.verseRef.book !== currentResult.verseRef.book ||
+          prevResult.verseRef.chapterNum !== currentResult.verseRef.chapterNum ||
+          prevResult.verseRef.verseNum !== currentResult.verseRef.verseNum
+        ) {
+          break;
+        }
+
+        occurrenceIndex += 1;
       }
 
-      occurrenceIndex += 1;
-    }
-
-    return occurrenceIndex;
-  };
+      return occurrenceIndex;
+    },
+    [results],
+  );
 
   const canClearResults = useMemo(
     () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
@@ -493,7 +630,7 @@ global.webViewComponent = function FindWebView({
   );
 
   return (
-    <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
+    <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
       <Card>
         <CardContent className="tw-space-y-4 tw-p-6">
@@ -621,7 +758,7 @@ global.webViewComponent = function FindWebView({
       {/* Search Query Summary */}
       <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
         {submittedScope && submittedSearchTerm
-          ? `${projectName} · ${getScopeSummaryText()} · Find: ${submittedSearchTerm}`
+          ? `${projectName} · ${scopeSummaryText} · Find: ${submittedSearchTerm}`
           : formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
               projectName,
             })}
@@ -647,7 +784,7 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Results */}
       <div
-        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto"
+        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
         onScroll={handleResultsScroll}
       >
         {results &&

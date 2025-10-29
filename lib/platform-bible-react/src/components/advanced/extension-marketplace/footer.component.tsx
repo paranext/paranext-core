@@ -50,7 +50,7 @@ export function Footer({
   const languageNames = getLanguageNames(locales);
 
   return (
-    <div id={id} className="tw-border-t tw-py-2">
+    <div id={id} className="pr-twp tw-border-t tw-py-2">
       <div className="tw-flex tw-flex-col tw-gap-2 tw-divide-y">
         {Object.entries(versionHistory).length > 0 && (
           <VersionHistory versionHistory={versionHistory} />

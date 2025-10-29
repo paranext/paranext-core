@@ -27,6 +27,9 @@ export type SearchBarProps = {
 
   /** Optional boolean to disable the search bar */
   isDisabled?: boolean;
+
+  /** Optional id for the root element */
+  id?: string;
 };
 
 /**
@@ -42,13 +45,14 @@ export type SearchBarProps = {
  * @param {string} [props.className] - Additional css classes to help with unique styling of the
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
+ * @param {string} [props.id] - Optional id for the root element
  */
 export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
-  ({ value, onSearch, placeholder, isFullWidth, className, isDisabled = false }, inputRef) => {
+  ({ value, onSearch, placeholder, isFullWidth, className, isDisabled = false, id }, inputRef) => {
     const dir: Direction = readDirection();
 
     return (
-      <div className={cn('tw-relative', { 'tw-w-full': isFullWidth }, className)}>
+      <div id={id} className={cn('tw-relative', { 'tw-w-full': isFullWidth }, className)}>
         <Search
           className={cn(
             'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',

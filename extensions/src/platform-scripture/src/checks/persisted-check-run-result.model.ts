@@ -8,7 +8,12 @@ export type PersistedCheckRunResult = {
   /** Single verse reference identifying where the check result occurred */
   verseRef: SerializedVerseRef;
   /** Project text that was selected in the check result */
-  selectedText: string;
+  verseText?: string;
+  /**
+   * The specific item (i.e. marker, word, punctuation character et cetera) that the result applies
+   * to. Is also present in `messageFormatString` to form a localizable message.
+   */
+  itemText: string;
   /** Distinct ID for this check result if it might occur more than once in a single verse */
   checkResultUniqueId?: string;
 };
@@ -66,8 +71,8 @@ export class PersistedCheckRunResults {
     const index = chapterResults.findIndex((existingResult) => {
       return (
         existingResult.checkResultType === result.checkResultType &&
-        existingResult.verseRef.verse === result.verseRef.verse &&
-        existingResult.selectedText === result.selectedText &&
+        existingResult.verseRef.verseNum === result.verseRef.verseNum &&
+        existingResult.itemText === result.itemText &&
         existingResult.checkResultUniqueId === result.checkResultUniqueId
       );
     });
@@ -95,8 +100,8 @@ export class PersistedCheckRunResults {
     return !!possibleMatches.find((possibleMatch) => {
       return (
         possibleMatch.checkResultType === result.checkResultType &&
-        possibleMatch.verseRef.verse === result.verseRef.verse &&
-        possibleMatch.selectedText === result.selectedText &&
+        possibleMatch.verseRef.verseNum === result.verseRef.verseNum &&
+        possibleMatch.itemText === result.itemText &&
         possibleMatch.checkResultUniqueId === result.checkResultUniqueId
       );
     });

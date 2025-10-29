@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -12,7 +11,8 @@ public sealed record CheckRunResult(
     string CheckResultType,
     string ProjectId,
     string MessageFormatString,
-    string SelectedText,
+    string VerseText,
+    string ItemText,
     bool IsDenied,
     VerseRef VerseRef,
     CheckLocation Start,
@@ -28,7 +28,8 @@ public sealed record CheckRunResult(
             && CheckResultType == other.CheckResultType
             && ProjectId == other.ProjectId
             && MessageFormatString == other.MessageFormatString
-            && SelectedText == other.SelectedText
+            && VerseText == other.VerseText
+            && ItemText == other.ItemText
             && IsDenied == other.IsDenied
             && VerseRef.ToStringWithVersification() == other.VerseRef.ToStringWithVersification()
             && Start == other.Start
@@ -42,11 +43,11 @@ public sealed record CheckRunResult(
             CheckResultType,
             ProjectId,
             MessageFormatString,
-            SelectedText,
+            VerseText,
+            ItemText,
             IsDenied,
-            VerseRef,
-            Start
+            VerseRef
         );
-        return HashCode.Combine(hash, End);
+        return HashCode.Combine(hash, Start, End);
     }
 }

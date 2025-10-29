@@ -21,6 +21,7 @@ import {
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
 } from 'platform-scripture-editor';
+import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provider-engine.model';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
@@ -74,6 +75,44 @@ async function openPlatformResourceViewer(
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(true, projectId, existingTabIdToReplace, options);
+}
+
+async function insertFootnoteAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting footnote...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertFootnoteAtSelection();
+}
+
+async function insertCrossReferenceAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting cross-reference...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertCrossReferenceAtSelection();
 }
 
 /** Function to prompt for a project and open it in the editor */
@@ -386,6 +425,26 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           throw new Error(message);
         }
       },
+      async insertFootnoteAtSelection() {
+        const message: EditorWebViewMessage = {
+          method: 'insertFootnoteAtSelection',
+        };
+        await papi.webViewProviders.postMessageToWebView(
+          currentWebViewDefinition.id,
+          webViewNonce,
+          message,
+        );
+      },
+      async insertCrossReferenceAtSelection() {
+        const message: EditorWebViewMessage = {
+          method: 'insertCrossReferenceAtSelection',
+        };
+        await papi.webViewProviders.postMessageToWebView(
+          currentWebViewDefinition.id,
+          webViewNonce,
+          message,
+        );
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -425,6 +484,50 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       },
     },
   );
+  const insertCrossReferencePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertCrossReferenceAtSelection',
+    insertCrossReferenceAtSelection,
+    {
+      method: {
+        summary: 'Insert a cross-reference into the project at the given selection in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project that we are inserting the footnote',
+            schema: { type: 'null' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertFootnotePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertFootnoteAtSelection',
+    insertFootnoteAtSelection,
+    {
+      method: {
+        summary: 'Insert a footnote into the project at the given selection in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project that we are inserting the footnote',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
 
   const openPlatformResourceViewerPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openResourceViewer',
@@ -455,6 +558,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const annotationStyleDataProviderPromise = papi.dataProviders.registerEngine(
+    'platformScriptureEditor.annotationStyle',
+    new AnnotationStyleDataProviderEngine(),
+  );
+
   const scriptureEditorWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     scriptureEditorWebViewType,
     scriptureEditorWebViewProvider,
@@ -465,6 +573,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
+    await insertFootnotePromise,
+    await insertCrossReferencePromise,
+    await annotationStyleDataProviderPromise,
   );
 
   logger.debug('Scripture editor is finished activating!');

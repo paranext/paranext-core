@@ -31,6 +31,9 @@ export type TabNavigationContentSearchProps = {
 
   /** Optional className to modify the search input */
   searchClassName?: string;
+
+  /** Optional id for the root element */
+  id?: string;
 };
 
 /**
@@ -48,6 +51,7 @@ export type TabNavigationContentSearchProps = {
  * @param {string} [props.headerTitle] - Optional title to display above the search input.
  * @param {string} [props.searchClassName] - Optional CSS class name to apply custom styles to the
  *   search input.
+ * @param {string} [props.id] - Optional id for the root element.
  */
 export function TabNavigationContentSearch({
   tabList,
@@ -56,9 +60,10 @@ export function TabNavigationContentSearch({
   searchPlaceholder,
   headerTitle,
   searchClassName,
+  id,
 }: TabNavigationContentSearchProps) {
   return (
-    <div className="pr-twp">
+    <div id={id} className="pr-twp">
       <div className="tw-sticky tw-top-0 tw-space-y-2 tw-pb-2">
         {headerTitle ? <h1>{headerTitle}</h1> : ''}
         <SearchBar

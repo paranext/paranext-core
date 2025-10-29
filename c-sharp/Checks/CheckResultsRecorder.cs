@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Paranext.DataProvider.ParatextUtils;
 using Paratext.Checks;
 using Paratext.Data;
@@ -14,9 +15,49 @@ namespace Paranext.DataProvider.Checks;
 /// objects for reporting problems to the user. This class is essentially an adapter for storing a
 /// list of problems from checks.
 /// </summary>
-public sealed class CheckResultsRecorder(string checkId, string projectId) : IRecordCheckError
+public sealed partial class CheckResultsRecorder(string checkId, string projectId)
+    : IRecordCheckError
 {
+    /// <summary>
+    /// Pre-compiled regex for extracting text between ||...|| markers for better performance
+    /// </summary>
+    [GeneratedRegex(@"\|\|(.*?)\|\|")]
+    private static partial Regex ItemTextRegex();
+
     public List<CheckRunResult> CheckRunResults { get; } = [];
+
+    public bool ResultsReady { get; set; } = false;
+
+    /// <summary>
+    /// Parses and normalizes check messages to a consistent format, and separates out item text if present.
+    /// </summary>
+    /// <param name="message">The raw message to parse</param>
+    /// <returns>A tuple containing the normalized message and the extracted item text (if any)</returns>
+    private static (string normalizedMessage, string itemText) ParseAndNormalizeMessage(
+        string message
+    )
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return (string.Empty, string.Empty);
+
+        string normalized = message.Trim();
+
+        if (normalized.StartsWith("#"))
+            normalized = normalized.Substring(1).Trim();
+
+        string[] parts = normalized.Split(':', 2);
+        string messageText = parts[0].Trim();
+        string? itemText = parts.Length > 1 ? parts[1].Trim() : null;
+
+        if (!string.IsNullOrWhiteSpace(itemText))
+        {
+            // Remove all pairs of vertical bars (||) from the string
+            itemText = itemText.Replace("||", "");
+            return ($"{messageText}: {itemText}", itemText);
+        }
+
+        return (messageText, string.Empty);
+    }
 
     public void RecordError(
         ITextToken token,
@@ -28,14 +69,16 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         VerseListItemType type = VerseListItemType.Error
     )
     {
+        (string normalizedMessage, string itemText) = ParseAndNormalizeMessage(message);
         CheckRunResults.Add(
             new CheckRunResult(
                 checkId,
                 messageId.InternalValue,
                 projectId,
-                message,
+                normalizedMessage,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 token.Text.TrimEnd(),
+                itemText,
                 false,
                 token.VerseRef,
                 // Actual offsets will be calculated below after results have been filtered
@@ -55,14 +98,16 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         VerseListItemType type = VerseListItemType.Error
     )
     {
+        (string normalizedMessage, string itemText) = ParseAndNormalizeMessage(message);
         CheckRunResults.Add(
             new CheckRunResult(
                 checkId,
                 messageId.InternalValue,
                 projectId,
-                message,
+                normalizedMessage,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 text.TrimEnd(),
+                itemText,
                 false,
                 vref,
                 // Actual offsets will be calculated below after results have been filtered
@@ -72,62 +117,56 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         );
     }
 
+    public void ClearResults()
+    {
+        ResultsReady = false;
+        CheckRunResults.Clear();
+    }
+
     /// <summary>
     /// Remove all results that are within the given book and return them
     /// </summary>
     /// <returns>All results that were removed</returns>
-    public List<CheckRunResult> TrimResultsFromBook(int bookNum)
+    public void ClearResultsFromBook(int bookNum)
     {
-        var retVal = new List<CheckRunResult>();
+        ResultsReady = false;
         for (int i = CheckRunResults.Count - 1; i >= 0; i--)
         {
             var result = CheckRunResults[i];
             var verseRef = result.Start.VerseRef;
             if (verseRef.BookNum == bookNum)
             {
-                retVal.Add(result);
                 CheckRunResults.RemoveAt(i);
             }
         }
-        return retVal;
+    }
+
+    public IEnumerable<CheckRunResult> GetResultsInRange(CheckInputRange range)
+    {
+        foreach (var result in CheckRunResults)
+        {
+            if (
+                range.IsWithinRange(
+                    result.ProjectId,
+                    result.VerseRef.BookNum,
+                    result.VerseRef.ChapterNum
+                )
+            )
+                yield return result;
+        }
     }
 
     /// <summary>
     /// After a check has finished running, filter and complete filling in data on the results found.
     /// This will:<br/>
-    /// 1. Remove all results that are not within the given ranges<br/>
-    /// 2. Lookup whether each check result was previously denied<br/>
-    /// 3. Calculate actual offsets for each result
+    /// 1. Lookup whether each check result was previously denied<br/>
+    /// 2. Calculate actual offsets for each result
     /// </summary>
-    public void PostProcessResults(
-        CheckInputRange[]? ranges,
-        ErrorMessageDenials? denials,
-        UsfmBookIndexer? indexer
-    )
+    public void PostProcessResults(ErrorMessageDenials? denials, UsfmBookIndexer? indexer)
     {
         for (int i = CheckRunResults.Count - 1; i >= 0; i--)
         {
             var result = CheckRunResults[i];
-
-            // Filter by ranges first to throw out whatever we can
-            if (ranges != null)
-            {
-                var vref = result.Start.VerseRef;
-                bool isWithinAnyRange = false;
-                foreach (var range in ranges)
-                {
-                    if (range.IsWithinRange(result.ProjectId, vref.BookNum, vref.ChapterNum))
-                    {
-                        isWithinAnyRange = true;
-                        break;
-                    }
-                }
-                if (!isWithinAnyRange)
-                {
-                    CheckRunResults.RemoveAt(i);
-                    continue;
-                }
-            }
 
             // Lookup whether a check was previously denied
             if (denials != null)
@@ -135,8 +174,8 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 var isDenied = denials.IsDenied(
                     new Enum<MessageId>(result.CheckResultType),
                     result.VerseRef,
-                    result.MessageFormatString,
-                    result.SelectedText
+                    "",
+                    result.ItemText
                 );
                 if (isDenied != result.IsDenied)
                     CheckRunResults[i] = new CheckRunResult(
@@ -144,7 +183,8 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                         result.CheckResultType,
                         result.ProjectId,
                         result.MessageFormatString,
-                        result.SelectedText,
+                        result.VerseText,
+                        result.ItemText,
                         isDenied,
                         result.VerseRef,
                         result.Start,
@@ -162,7 +202,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                     continue;
                 }
 
-                var textIndex = indexer.Usfm.IndexOf(result.SelectedText, verseIndex.Value);
+                var textIndex = indexer.Usfm.IndexOf(result.VerseText, verseIndex.Value);
                 if (textIndex < 0)
                 {
                     result.Start.Offset = 0;
@@ -170,7 +210,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 }
 
                 result.Start.Offset += textIndex - verseIndex.Value;
-                result.End.Offset = result.Start.Offset + result.SelectedText.Length;
+                result.End.Offset = result.Start.Offset + result.VerseText.Length;
             }
         }
     }
