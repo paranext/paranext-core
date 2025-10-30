@@ -1,4 +1,5 @@
 \id 2SA - TJs USFM Test
+\usfm 3.1
 \toc3 2Sam
 \toc2 2 Sam
 \toc1 2 Samuel
@@ -48,8 +49,8 @@
 \p This line has no milestone.
 \p This line has an \qt-e |Some quote\*ending milestone with default eid attribute.
 \p This line has an opening ts milestone \ts-s |Translator's section\* with default sid and closing ts milestone \ts-e |Translator's section\* with default eid. Note that the default attribute can have spaces in it.
-\p This line has t-s \t-s \* and t-e
-\p For some reason, Paratext does not recognize the ts \ts \*, t-s \t-s \*, or t-e \t-e \* markers. ts is a standalone translator's section milestone, and I guess the others are shorthands for ts-s and ts-e. Paratext puts a structural space before the closing marker on all three even though it should not be there.
+\p This line has t-s \t-s\* and t-e
+\p For some reason, Paratext does not recognize the ts \ts\*, t-s \t-s\*, or t-e \t-e\* markers. ts is a standalone translator's section milestone, and I guess the others are shorthands for ts-s and ts-e. Paratext puts a structural space before the closing marker on all three even though it should not be there.
 \b
 \p
 \v 5
