@@ -75,16 +75,16 @@ const DrawerContent = React.forwardRef<
   const directionStyles = {
     bottom: 'tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px]',
     top: 'tw-inset-x-0 tw-top-0 tw-mb-24 tw-rounded-b-[10px]',
-    left: 'tw-inset-y-0 tw-left-0 tw-mr-24 tw-rounded-r-[10px] tw-w-auto tw-max-w-sm',
-    right: 'tw-inset-y-0 tw-right-0 tw-ml-24 tw-rounded-l-[10px] tw-w-auto tw-max-w-sm',
+    left: 'tw-inset-y-0 tw-start-0 tw-me-24 tw-rounded-e-[10px] tw-w-auto tw-max-w-sm',
+    right: 'tw-inset-y-0 tw-end-0 tw-ms-24 tw-rounded-s-[10px] tw-w-auto tw-max-w-sm',
   };
 
   // CUSTOM: Define handle styles for each direction
   const handleStyles = {
-    bottom: 'tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
+    bottom: 'tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted', // same as shadcn default
     top: 'tw-mx-auto tw-mb-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
-    left: 'tw-my-auto tw-mr-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
-    right: 'tw-my-auto tw-ml-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
+    left: 'tw-my-auto tw-me-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
+    right: 'tw-my-auto tw-ms-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
   };
 
   return (
@@ -93,11 +93,10 @@ const DrawerContent = React.forwardRef<
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          // CUSTOM: Change Tailwind CSS classes for styling
-          // Removed tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px] tw-flex-col
-          'pr-twp tw-fixed tw-z-50 tw-flex tw-h-auto tw-border tw-bg-background',
-          direction === 'bottom' || direction === 'top' ? 'tw-flex-col' : 'tw-flex-row',
-          directionStyles[direction],
+          // CUSTOM: Removed tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px] tw-flex-col
+          'tw-fixed tw-z-50 tw-flex tw-h-auto tw-rounded-t-[10px] tw-border tw-bg-background',
+          direction === 'bottom' || direction === 'top' ? 'tw-flex-col' : 'tw-flex-row', // CUSTOM
+          directionStyles[direction], // CUSTOM
           className,
         )}
         {...props}

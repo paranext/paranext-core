@@ -8,6 +8,7 @@ import tailwindCssAnimate from 'tailwindcss-animate';
 import containerQueries from '@tailwindcss/container-queries';
 
 const config: Config = {
+  darkMode: ['class'],
   content: ['./src/**/*.{js,ts,jsx,tsx}'],
   // Prefix on all tailwind classes so they don't clash with built-in classes
   // short for tailwind - we hope to have the same prefix as users of this library so the cn

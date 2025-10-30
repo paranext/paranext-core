@@ -1,5 +1,8 @@
+'use client';
+
 import { ComponentProps } from 'react';
-import { toast as sonner, Toaster } from 'sonner';
+import { useTheme } from 'next-themes';
+import { toast as sonner, Toaster as Sonner } from 'sonner';
 
 /**
  * Props for Sonner component.
@@ -7,19 +10,24 @@ import { toast as sonner, Toaster } from 'sonner';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-type SonnerProps = ComponentProps<typeof Toaster>;
+type ToasterProps = ComponentProps<typeof Sonner>;
 
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
  * styled with Shadcn UI.
  *
- * @param SonnerProps
+ * @param ToasterProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-function Sonner({ ...props }: SonnerProps) {
+function Toaster({ ...props }: ToasterProps) {
+  const { theme = 'system' } = useTheme();
+
   return (
-    <Toaster
+    <Sonner
+      // CUSTOM: Suppress warning produced by imported shadcn code
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      theme={theme as ToasterProps['theme']}
       className="tw-toaster tw-group"
       toastOptions={{
         classNames: {
@@ -35,5 +43,5 @@ function Sonner({ ...props }: SonnerProps) {
   );
 }
 
-// The re-export of the sonner function was added manually
-export { Sonner, sonner };
+// CUSTOM: The re-export of the sonner function was added manually
+export { Toaster as Sonner, sonner };

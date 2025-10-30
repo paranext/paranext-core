@@ -1,11 +1,12 @@
+'use client';
+
 import React from 'react';
 import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
-import { Search } from 'lucide-react';
-
 import { cn } from '@/utils/shadcn-ui.util';
 import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { MagnifyingGlassIcon } from '@radix-ui/react-icons';
 
 /**
  * Command menu for React. These components are built on cmdk and styled with Shadcn UI. See Shadcn
@@ -27,13 +28,11 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-interface CommandDialogProps extends DialogProps {}
-
 /** @inheritdoc Command */
-function CommandDialog({ children, ...props }: CommandDialogProps) {
+function CommandDialog({ children, ...props }: DialogProps) {
   return (
     <Dialog {...props}>
-      <DialogContent className="tw-overflow-hidden tw-p-0 tw-shadow-lg">
+      <DialogContent className="tw-overflow-hidden tw-p-0">
         <Command className="[&_[cmdk-group-heading]]:tw-px-2 [&_[cmdk-group-heading]]:tw-font-medium [&_[cmdk-group-heading]]:tw-text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:tw-pt-0 [&_[cmdk-group]]:tw-px-2 [&_[cmdk-input-wrapper]_svg]:tw-h-5 [&_[cmdk-input-wrapper]_svg]:tw-w-5 [&_[cmdk-input]]:tw-h-12 [&_[cmdk-item]]:tw-px-2 [&_[cmdk-item]]:tw-py-3 [&_[cmdk-item]_svg]:tw-h-5 [&_[cmdk-item]_svg]:tw-w-5">
           {children}
         </Command>
@@ -49,12 +48,15 @@ const CommandInput = React.forwardRef<
 >(({ className, ...props }, ref) => {
   const dir: Direction = readDirection();
   return (
-    <div className="tw-flex tw-items-center tw-border-b tw-px-3" dir={dir}>
-      <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+    // CUSTOM: Suppress warning produced by imported shadcn code
+    // eslint-disable-next-line react/no-unknown-property
+    <div className="tw-flex tw-items-center tw-border-b tw-px-3" cmdk-input-wrapper="" dir={dir}>
+      {/* CUSTOM: RTL support: replaced tw-mr-2 by tw-me-2 */}
+      <MagnifyingGlassIcon className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
       <CommandPrimitive.Input
         ref={ref}
         className={cn(
-          'tw-flex tw-h-11 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
+          'tw-flex tw-h-10 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
           className,
         )}
         {...props}
@@ -127,7 +129,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none data-[disabled=true]:tw-pointer-events-none data-[selected=true]:tw-bg-accent data-[selected=true]:tw-text-accent-foreground data-[disabled=true]:tw-opacity-50',
+      'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-gap-2 tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none data-[disabled=true]:tw-pointer-events-none data-[selected=true]:tw-bg-accent data-[selected=true]:tw-text-accent-foreground data-[disabled=true]:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0',
       className,
     )}
     {...props}
@@ -140,7 +142,12 @@ CommandItem.displayName = CommandPrimitive.Item.displayName;
 function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
-      className={cn('tw-ms-auto tw-text-xs tw-tracking-widest tw-text-muted-foreground', className)}
+      className={cn(
+        // CUSTOM: remove tw-ml-auto
+        'tw-text-xs tw-tracking-widest tw-text-muted-foreground',
+        'tw-ms-auto', // CUSTOM: Support RTL
+        className,
+      )}
       {...props}
     />
   );

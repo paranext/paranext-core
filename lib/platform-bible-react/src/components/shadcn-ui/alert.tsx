@@ -4,23 +4,24 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn-ui.util';
 
 const alertVariants = cva(
-  // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can use
-  // images (or svgs from file) as icons
-  // Implemented by TJ Couch
-  // Approved by Alex Mercado
-  // 20 February 2025
-  'tw-relative tw-w-full tw-rounded-lg tw-border tw-p-4 [&>svg~*]:tw-pl-7 [&>svg+div]:tw-translate-y-[-3px] [&>svg]:tw-absolute [&>svg]:tw-left-4 [&>svg]:tw-top-4 [&>svg]:tw-text-foreground [&>img~*]:tw-pl-7 [&>img+div]:tw-translate-y-[-3px] [&>img]:tw-absolute [&>img]:tw-left-4 [&>img]:tw-top-4 [&>img]:tw-text-foreground',
+  cn(
+    'tw-relative tw-w-full tw-rounded-lg tw-border tw-px-4 tw-py-3 tw-text-sm [&>svg+div]:tw-translate-y-[-3px] [&>svg]:tw-absolute [&>svg]:tw-left-4 [&>svg]:tw-top-4 [&>svg]:tw-text-foreground [&>svg~*]:tw-pl-7',
+    // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can use
+    // images (or svgs from file) as icons
+    // Implemented by TJ Couch
+    // Approved by Alex Mercado
+    // 20 February 2025
+    '[&>img~*]:tw-pl-7 [&>img+div]:tw-translate-y-[-3px] [&>img]:tw-absolute [&>img]:tw-left-4 [&>img]:tw-top-4 [&>img]:tw-text-foreground',
+  ),
   {
     variants: {
       variant: {
         default: 'tw-bg-background tw-text-foreground',
-        destructive:
-          // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can
-          // use images (or svgs from file) as icons
-          // Implemented by TJ Couch
-          // Approved by Alex Mercado
-          // 20 February 2025
-          'tw-border-destructive/50 tw-text-destructive dark:tw-border-destructive [&>svg]:tw-text-destructive [&>img]:tw-text-destructive',
+        destructive: cn(
+          'tw-border-destructive/50 tw-text-destructive dark:tw-border-destructive [&>svg]:tw-text-destructive',
+          // CUSTOM: see above
+          '[&>img]:tw-text-destructive',
+        ),
       },
     },
     defaultVariants: {
@@ -41,8 +42,7 @@ const Alert = React.forwardRef<
     ref={ref}
     role="alert"
     className={cn(
-      // CUSTOM
-      'pr-twp',
+      'pr-twp', // CUSTOM
       alertVariants({ variant }),
       className,
     )}
@@ -59,7 +59,7 @@ const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<H
       className={cn('tw-mb-1 tw-font-medium tw-leading-none tw-tracking-tight', className)}
       {...props}
     >
-      {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
+      {/* CUSTOM: added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
       {props.children}{' '}
     </h5>
   ),

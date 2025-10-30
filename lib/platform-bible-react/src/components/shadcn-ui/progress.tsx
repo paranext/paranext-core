@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import * as ProgressPrimitive from '@radix-ui/react-progress';
 
@@ -16,7 +18,8 @@ const Progress = React.forwardRef<
   <ProgressPrimitive.Root
     ref={ref}
     className={cn(
-      'pr-twp tw-relative tw-h-4 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-secondary',
+      'pr-twp', // CUSTOM
+      'tw-relative tw-h-2 tw-w-full tw-overflow-hidden tw-rounded-full tw-bg-primary/20',
       className,
     )}
     {...props}
