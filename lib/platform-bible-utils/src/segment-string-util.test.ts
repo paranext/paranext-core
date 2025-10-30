@@ -638,6 +638,26 @@ describe('indexOf', () => {
     expect(result).toEqual(POS_FIRST_PIZZA);
   });
 
+  it('indexOf with empty search string', () => {
+    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '');
+    expect(result).toEqual(-1);
+  });
+
+  it('indexOf with a search length longer than 1', () => {
+    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋')
+    expect(result).toEqual(67);
+  });
+
+  it('indexOf at the end of the string', () => {
+    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
+    expect(result).toEqual(73);
+  })
+
+  it ('indexOf with a seach for something that\'s not in the string', () => {
+    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
+    expect(result).toEqual(-1);
+  });
+
   it('indexOf with a searchString that\'s longer than the string', () => {
     const result = indexOf(MEDIUM_SURROGATE_PAIRS_STRING, LONG_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(-1);
@@ -664,6 +684,26 @@ describe('lastIndexOf', () => {
   it('lastIndexOf with negative position', () => {
     const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', -1);
     // TODO(mattg): Figure out why this isn't POS_SECOND_PIZZA like it is for indexOf
+    expect(result).toEqual(-1);
+  });
+
+  it('lastIndexOf with empty search string', () => {
+    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '');
+    expect(result).toEqual(-1);
+  });
+
+  it('lastIndexOf with a search length longer than 1', () => {
+    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋')
+    expect(result).toEqual(67);
+  });
+
+  it('lastIndexOf at the end of the string', () => {
+    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
+    expect(result).toEqual(73);
+  })
+
+  it ('lastIndexOf with a seach for something that\'s not in the string', () => {
+    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
     expect(result).toEqual(-1);
   });
 

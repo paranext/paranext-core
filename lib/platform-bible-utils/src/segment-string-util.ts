@@ -1,12 +1,127 @@
 import { LocalizeKey } from 'extension-contributions/menus.model';
 import {
-  indexOf as stringzIndexOf,
   limit as stringzLimit,
   toArray as stringzToArray,
 } from 'stringz';
 import { ensureArray } from './array-util';
 import { isString } from './util';
 
+/*
+ * TODO(mattg): This is a comment on the state of this branch, and where it needs
+ * to go in the future.
+ * 
+ * CURRENT STATE OF THIS BRANCH:
+ * As of 2025/10/30, I, Matthew Getgen, have finished re-writing 
+ * stringLength, at, charAt, codePointAt, endsWith,
+ * includes, indexOf, lastIndexOf, substr, and substring to use the
+ * `SegmentedString` type I created. The tests for these have also been updated,
+ * with edge cases added. I myself also have a perf testing folder on my computer
+ * under `~/repos/test/platform-bible-utils-perf` used to test the perf difference
+ * of the JavaScript std functions, the old, and the newer versions. In there I have
+ * proven that the new versions of at and charAt are more performant, but in the
+ * future it would be good to ensure that more are actually better.
+ * Below is a class that I defined. Instead of giving users the option of either a
+ * `string` or `SegmentedString`, we should instead provide an API that requires you to
+ * use a `UnicodeString` class which requires it, so the performant option is always
+ * chosen. This is just the very start of that work.
+ * 
+ * TODOS:
+ * - Re-write all functions.
+ * - Ensure tests work to ensure edge cases are met and regressions aren't made.
+ * - Add tests when needed.
+ * - Compare performance in the perf test folder.
+ * - Standardize the way we index into strings (positive,negative,overflow,underflow).
+ *   - The current methods don't have a standard, each one follows different rules.
+ * - Move all functions to a class-based solution using the UnicodeString class.
+ * - Add comments above the classes and functions to describe their usage.
+ * - Rename the `segment-string-util.ts` and `segment-string-util.test.ts` files to match
+ *   the name chosen for the class. `unicode-string-util.ts` for example.
+ * - Mark previous functions as deprecated.
+ */
+export class UnicodeString {
+  private readonly _string: string;
+  private readonly _graphemes: string[];
+  private readonly _indecies: number[];
+
+  public constructor(string: string) {
+    this._string = string;
+    this._graphemes = stringzToArray(this._string);
+    this._indecies = [];
+
+    let index: number = 0;
+    for (const grapheme of this._graphemes) {
+      this._indecies.push(index);
+      index += grapheme.length;
+    }
+  }
+
+  public get string(): string {
+    return this._string;
+  }
+
+  public get length(): number {
+    return this._graphemes.length;
+  }
+
+  public toArray(): string[] {
+    return this._graphemes;
+  }
+
+  private _substr() {}
+
+  public substring() {}
+
+  public slice() {}
+
+  public split() {}
+
+  public at() {}
+
+  public charAt() {}
+
+  public codePointAt() {}
+
+  public indexOf() {}
+
+  public lastIndexOf() {}
+
+  public includes() {}
+
+  public normalize() {}
+
+  public ordinalCompare() {}
+
+  public startsWith() {}
+
+  public endsWith() {}
+
+  public padStart() {}
+
+  public padEnd() {}
+
+  // NOTE(mattg): this may not need to be apart of the class
+  public isLocalizeKey() {}
+
+  // NOTE(mattg): this may not need to be apart of the class
+  public isWhiteSpace() {}
+
+  // NOTE(mattg): this may not need to be apart of the class
+  public toKebabCase() {}
+
+  private _indexOfClosestClosingCurlyBrace() {}
+
+  public formatReplacementStringToArray() {}
+
+  public formatReplacementString() {}
+
+  public escapeStringRegexp() {}
+
+  public transformAndEnsureRegExpRegExpArray() {}
+
+  public transformAndEnsureRegExpArray() {}
+};
+
+// DecomposedString or GraphemeString
 type SegmentedString = {
   string: string,
   segments: string[],
@@ -390,28 +505,30 @@ export function includes(
 export function indexOf(
   string: string | SegmentedString,
   searchString: string | SegmentedString,
-  position: number | undefined = 0,
+  position: number = 0,
 ): number {
   const segString: SegmentedString = ensureSegmentedString(string);
   const segSearchString: SegmentedString = ensureSegmentedString(searchString);
-  // 20
   const stringLen: number = stringLength(segString);
-  // 5
   const searchStringLen: number = stringLength(segSearchString);
-  // 15
+
+  if (searchStringLen === 0) return -1; 
+
   const searchableIndex: number = stringLen - searchStringLen;
   if (searchableIndex < 0) return -1;
-  if (position < 0 || position >= stringLen || position >= searchableIndex) return -1;
+  if (position < 0) position = 0;
+  if (position > searchableIndex) return -1;
 
-  for (let index = position; index < searchableIndex; index++) {
+  for (let index = position; index <= searchableIndex; index++) {
     if (charAt(segString, index) === charAt(segSearchString, 0)) {
-      if (substr(segString, searchStringLen) == segSearchString.string) {
+      if (searchStringLen === 1) {
+        // charAt did the work, we can exit now.
+        return index;
+      } else if (substr(segString, index, searchStringLen) === segSearchString.string) {
         return index;
       }
     }
   }
-  
-  // return stringzIndexOf(string, searchString, position);
   return -1;
 }
 
@@ -427,10 +544,22 @@ export function indexOf(
  *   of the string. Default is `undefined`
  * @returns Index of the last occurrence of searchString found, or -1 if not found.
  */
-export function lastIndexOf(string: string, searchString: string, position?: number): number {
-  const stringLen: number = stringLength(string);
-  const searchStringLen: number = stringLength(searchString);
-  let validatedPosition = position === undefined ? stringLen : position;
+export function lastIndexOf(
+  string: string | SegmentedString,
+  searchString: string | SegmentedString,
+  position?: number,
+): number {
+  const segString: SegmentedString = ensureSegmentedString(string);
+  const segSearchString: SegmentedString = ensureSegmentedString(searchString);
+  const stringLen: number = stringLength(segString);
+  const searchStringLen: number = stringLength(segSearchString);
+
+  if (searchStringLen === 0) return -1; 
+
+  const searchableIndex: number = stringLen - searchStringLen;
+  if (searchableIndex < 0) return -1;
+
+  let validatedPosition = position === undefined ? searchableIndex : position;
 
   if (validatedPosition < 0) {
     validatedPosition = 0;
@@ -439,13 +568,14 @@ export function lastIndexOf(string: string, searchString: string, position?: num
   }
 
   for (let index = validatedPosition; index >= 0; index--) {
-    // this check is far cheaper than a `substr` call,
-    // so this is is a huge performance improvement!
-    // if (string[index] === searchString[0]) {
-      if (substr(string, index, searchStringLen) === searchString) {
+    if (charAt(segString, index) === charAt(segSearchString, 0)) {
+      if (searchStringLen === 1) {
+        // charAt did the work, we can exit now.
+        return index;
+      } else if (substr(segString, index, searchStringLen) === segSearchString.string) {
         return index;
       }
-    // }
+    }
   }
 
   return -1;
