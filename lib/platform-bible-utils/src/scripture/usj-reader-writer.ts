@@ -1555,7 +1555,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         fragment: { isAttributeValueForKey: 'marker', forMarker: marker },
         indexInUsfm: usfm.length,
       });
-      usfm += `${markerName}${markerTypeInfo.noSpaceAfterOpening ? '' : ' '}`;
+
+      // According to `unmatched`'s `outputToUsfmInstructions`, no space after the marker name
+      // because it is basically a closing marker
+      usfm += `${markerName}${markerType === 'unmatched' ? '' : ' '}`;
     }
 
     // Add leading attributes in listed order
