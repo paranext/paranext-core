@@ -609,31 +609,11 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
     },
   },
-  {
-    usfmLocation: {
-      verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 67,
-    },
-    usjContent: {
-      node: {
-        type: 'chapter',
-        marker: 'c',
-        number: '1',
-        altnumber: '1 ca',
-        pubnumber: '1 cp',
-        sid: '2SA 1',
-      },
-      documentLocation: {
-        jsonPath: "$.content[4]['number']",
-        propertyOffset: 2,
-      },
-    },
-  },
   // begin altnumber - first example of an attribute marker
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 68,
+      offset: 67,
     },
     usjContent: {
       node: {
@@ -653,7 +633,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 69,
+      offset: 68,
     },
     usjContent: {
       node: {
@@ -674,7 +654,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 70,
+      offset: 69,
     },
     usjContent: {
       node: {
@@ -695,7 +675,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 71,
+      offset: 70,
     },
     usjContent: {
       node: {
@@ -716,7 +696,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 72,
+      offset: 71,
     },
     usjContent: {
       node: {
@@ -736,7 +716,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 73,
+      offset: 72,
     },
     usjContent: {
       node: {
@@ -756,7 +736,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 74,
+      offset: 73,
     },
     usjContent: {
       node: {
@@ -776,7 +756,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 75,
+      offset: 74,
     },
     usjContent: {
       node: {
@@ -796,7 +776,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 76,
+      offset: 75,
     },
     usjContent: {
       node: {
@@ -817,7 +797,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 77,
+      offset: 76,
     },
     usjContent: {
       node: {
@@ -838,7 +818,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 78,
+      offset: 77,
     },
     usjContent: {
       node: {
@@ -859,7 +839,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 79,
+      offset: 78,
     },
     usjContent: {
       node: {
@@ -880,7 +860,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 80,
+      offset: 79,
     },
     usjContent: {
       node: {
@@ -902,7 +882,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 81,
+      offset: 80,
     },
     usjContent: {
       node: {
@@ -922,7 +902,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 82,
+      offset: 81,
     },
     usjContent: {
       node: {
@@ -943,7 +923,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 83,
+      offset: 82,
     },
     usjContent: {
       node: {
@@ -964,7 +944,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 84,
+      offset: 83,
     },
     usjContent: {
       node: {
@@ -985,7 +965,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 85,
+      offset: 84,
     },
     usjContent: {
       node: {
@@ -1005,7 +985,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 86,
+      offset: 85,
     },
     usjContent: {
       node: {
@@ -1025,7 +1005,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 87,
+      offset: 86,
     },
     usjContent: {
       node: {
@@ -1045,7 +1025,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 88,
+      offset: 87,
     },
     usjContent: {
       node: {
@@ -1065,7 +1045,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 89,
+      offset: 88,
     },
     usjContent: {
       node: {
@@ -1086,7 +1066,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 90,
+      offset: 89,
     },
     usjContent: {
       node: {
@@ -1102,7 +1082,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 196,
+      offset: 195,
     },
     usjContent: {
       node: {

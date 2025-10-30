@@ -87,8 +87,9 @@ const matthew2verseRangeUsj = JSON.parse(readTestDataFile('web-matthew-2-verse-r
  * TestUSFM 2 Samuel 1 in USFM. Output from Platform.Bible; had to change `\\"` to `"` to unescape
  * quotes then `\\r\\n` to `\n` to unescape newlines then `\\\\` to `\\` to unescape markers
  *
- * Note: this content was fed into Paratext 9 so its whitespace was normalized according to Paratext
- * 9's rules. We will deal with whitespace normalization issues later.
+ * Note: this content was normalized in Paratext 9 using `UsfmToken.NormalizeUsfm`, so its
+ * whitespace was normalized according to Paratext 9's rules. We will deal with whitespace
+ * normalization issues later.
  */
 const testUSFM2SACh1Usfm = readTestDataFile('testUSFM-2SA-1.usfm');
 
@@ -96,8 +97,9 @@ const testUSFM2SACh1Usfm = readTestDataFile('testUSFM-2SA-1.usfm');
  * TestUSFM 2 Samuel 2 in USFM. Output from Platform.Bible; had to change `\\"` to `"` to unescape
  * quotes then `\\r\\n` to `\n` to unescape newlines then `\\\\` to `\\` to unescape markers
  *
- * Note: this content was fed into Paratext 9 so its whitespace was normalized according to Paratext
- * 9's rules. We will deal with whitespace normalization issues later.
+ * Note: this content was normalized in Paratext 9 using `UsfmToken.NormalizeUsfm`, so its
+ * whitespace was normalized according to Paratext 9's rules. We will deal with whitespace
+ * normalization issues later.
  */
 const testUSFM2SACh2Usfm = readTestDataFile('testUSFM-2SA-2.usfm');
 
@@ -105,8 +107,9 @@ const testUSFM2SACh2Usfm = readTestDataFile('testUSFM-2SA-2.usfm');
  * TestUSFM 2 Samuel 3 in USFM. Output from Platform.Bible; had to change `\\"` to `"` to unescape
  * quotes then `\\r\\n` to `\n` to unescape newlines then `\\\\` to `\\` to unescape markers
  *
- * Note: this content was fed into Paratext 9 so its whitespace was normalized according to Paratext
- * 9's rules. We will deal with whitespace normalization issues later.
+ * Note: this content was normalized in Paratext 9 using `UsfmToken.NormalizeUsfm`, so its
+ * whitespace was normalized according to Paratext 9's rules. We will deal with whitespace
+ * normalization issues later.
  */
 const testUSFM2SACh3Usfm = readTestDataFile('testUSFM-2SA-3.usfm');
 
