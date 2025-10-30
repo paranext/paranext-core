@@ -19,6 +19,7 @@
  * The equivalent in USX would be:
  *
  * ```xml
+ * <!-- prettier-ignore -->
  * <chapter number="1" style="c" altnumber="2" pubnumber="A" sid="GEN 1" />
  * <para style="s1">This is a section header</para>
  * ```
@@ -147,9 +148,10 @@ export type NormalMarkerInfo = {
    * The equivalent in USX would be:
    *
    * ```xml
-   * <periph alt="Title Page" id="title">
+   * <!-- prettier-ignore -->
+   * <periph alt="Example Peripheral" id="x-example">
    *   <para style="p">Some contents of the example peripheral</para>
-   * </periph>;
+   * </periph>
    * ```
    */
   textContentAttribute?: string;
@@ -172,9 +174,8 @@ export type NormalMarkerInfo = {
    * The equivalent in USX would be:
    *
    * ```xml
-   * <book code="MAT" style="id">
-   *   41MATEX.SFM, Example Translation, September 2025
-   * </book>;
+   * <!-- prettier-ignore -->
+   * <book code="MAT" style="id">41MATEX.SFM, Example Translation, September 2025</book>
    * ```
    */
   leadingAttributes?: string[];
@@ -250,6 +251,22 @@ export type NormalMarkerInfo = {
    * `ex2`.
    */
   isIndependentClosingMarkerForRegExp?: string[];
+  /**
+   * Marker to use when operating on the USFM representation of this marker. For example, when
+   * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
+   * instead of the marker info for the marker as listed in USX or USJ.
+   */
+  markerUsfm?: string;
+  /**
+   * Instructions regarding special handling required for this marker when transforming from USFM to
+   * USX or USJ. These instructions are an explanation of what needs to be done to this marker to
+   * properly transform it to USX or USJ.
+   *
+   * This property is generally only included when it is exceptionally difficult to parse a marker
+   * properly from USFM; the markers map attempts to use this property as little as possible,
+   * favoring encoding information in other properties for more automatic transformation instead.
+   */
+  parseUsfmInstructions?: string;
 };
 
 /** Information about a USFM/USX/USJ marker that is essential for proper translation between formats */
@@ -341,6 +358,8 @@ export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  * {@link MarkerTypeInfo} for various kinds of marker types.
  */
 export type MarkerTypeInfoBase = {
+  /** Explanation of the meaning of this marker type */
+  description?: string;
   /**
    * Whether markers of this type should have a `style` attribute in USX/USJ.
    *
@@ -366,8 +385,8 @@ export type MarkerTypeInfoBase = {
    * inside the marker (if present) should not be skipped.
    *
    * This is used for certain markers that sometimes are normal markers but sometimes are derived
-   * metadata and are not present in USFM. These derived metadata markers are all identified by
-   * whether they have specific attributes on them.
+   * metadata and are not present in USFM. These derived metadata markers are identified by whether
+   * they have specific attributes on them.
    *
    * For example, if the `verse` marker has an `eid` attribute, it indicates it is a marker denoting
    * the end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that
@@ -377,11 +396,10 @@ export type MarkerTypeInfoBase = {
    * Following is an example of a derived metadata `verse` marker in USX:
    *
    * ```xml
+   * <!-- prettier-ignore -->
    * <para style="p">
-   *   <verse number="21" style="v" sid="2SA 1:21" />
-   *   This is verse 21.
-   *   <verse eid="2SA 1:21" />
-   * </para>;
+   *   <verse number="21" style="v" sid="2SA 1:21" />This is verse 21.<verse eid="2SA 1:21" />
+   * </para>
    * ```
    *
    * The equivalent in USFM would be:
@@ -399,12 +417,8 @@ export type MarkerTypeInfoBase = {
    * Following is an example of a generated `ref` in USX:
    *
    * ```xml
-   * <char style="xt">
-   *   <ref loc="2SA 1:1" gen="true">
-   *     2Sam 1:1
-   *   </ref>
-   *   ; <ref loc="2SA 1:2-3">2Sam 1:2-3</ref>.
-   * </char>;
+   * <!-- prettier-ignore -->
+   * <char style="xt"><ref loc="2SA 1:1" gen="true">2Sam 1:1</ref>; <ref loc="2SA 1:2-3">2Sam 1:2-3</ref>.</char>
    * ```
    *
    * The equivalent in USFM would be:
@@ -416,6 +430,54 @@ export type MarkerTypeInfoBase = {
    * This property is not used when converting to USX or USJ.
    */
   skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
+  /**
+   * Whether to always skip outputting this marker to USFM. Skip outputting this marker when
+   * converting to USFM. Only skip outputting the opening and closing marker representations,
+   * though; the content inside the marker (if present) should not be skipped.
+   *
+   * This is used for marker types that have no representation in USFM in a given version, likely
+   * meaning they are derived metadata and are not present in USFM.
+   *
+   * For example, in USFM 3.1, the `table` marker type is generated while transforming USFM into
+   * USX/USJ and is not preserved when transforming from USX/USJ to USFM.
+   *
+   * Following is an example of a derived metadata `table` marker in USX:
+   *
+   * ```xml
+   * <!-- prettier-ignore -->
+   * <table>
+   *   <row style="tr">
+   *     <cell style="th1" align="start">Header 1</cell>
+   *     <cell style="th2" align="start">Header 2 space after </cell>
+   *     <cell style="thc3" align="center" colspan="2">Header 3-4 centered</cell>
+   *     <cell style="thr5" align="end">Header 5 right</cell>
+   *   </row>
+   *   <row style="tr">
+   *     <cell style="tc1" align="start">Row 1 cell 1</cell>
+   *     <cell style="tc2" align="start">Row 1 cell 2 space after </cell>
+   *     <cell style="thc3" align="center">Row 1 cell 3 centered</cell>
+   *     <cell style="thr4" align="end" colspan="2">Row 1 cell 4-5 right</cell>
+   *   </row>
+   *   <row style="tr">
+   *     <cell style="tcr1" align="end" colspan="4">Row 2 cell 1-4 right</cell>
+   *     <cell style="tc5" align="start">Row 2 cell 5</cell>
+   *   </row>
+   * </table>
+   * ```
+   *
+   * The equivalent in USFM would be:
+   *
+   * ```usfm
+   * \tr \th1 Header 1\th2 Header 2 space after \thc3-4 Header 3-4 centered\thr5 Header 5 right
+   * \tr \tc1 Row 1 cell 1\tc2 Row 1 cell 2 space after \thc3 Row 1 cell 3 centered\thr4-5 Row 1 cell 4-5 right
+   * \tr \tcr1-4 Row 2 cell 1-4 right\tc5 Row 2 cell 5
+   * ```
+   *
+   * This property is not used when converting to USX or USJ.
+   *
+   * If not present, defaults to `false`
+   */
+  skipOutputMarkerToUsfm?: boolean;
   /**
    * Whether markers of this type should have a newline before them in USFM.
    *
@@ -433,6 +495,79 @@ export type MarkerTypeInfoBase = {
    * If not present, defaults to `false`
    */
   hasNewlineBefore?: boolean;
+  /**
+   * Marker type to use when operating on the USFM representation of markers of this type. For
+   * example, when outputting to USFM, the marker type listed here in `markerTypeUsfm` should be
+   * used instead of the marker's type as listed in USX or USJ.
+   */
+  markerTypeUsfm?: string;
+  /**
+   * Marker type to use when operating on the USX representation of markers of this type. For
+   * example, when outputting to USX, the marker type listed here in `markerTypeUsx` should be used
+   * instead of the marker's type as listed in USFM or USJ.
+   */
+  markerTypeUsx?: string;
+  /**
+   * Marker type to use when operating on the USJ representation of markers of this type. For
+   * example, when outputting to USJ, the marker type listed here in `markerTypeUsj` should be used
+   * instead of the marker's type as listed in USFM or USX.
+   */
+  markerTypeUsj?: string;
+  /**
+   * Prefix to add to the opening and closing marker before the marker name if a marker of this type
+   * occurs within another marker of this type when outputting to USFM.
+   *
+   * Following is an example of `nd` inside `wj` (both are `char`-type markers) in USFM:
+   *
+   * ```usfm
+   * \p \wj This is \+nd nested\+nd*!\wj*
+   * ```
+   */
+  nestedPrefix?: string;
+  /**
+   * Whether markers of this type do not have a structural space after the opening marker in USFM.
+   * All standard marker types have a structural space after the opening marker; this property is
+   * expected to be `true` only with the `unmatched` marker type, which is a non-standard type that
+   * Paratext generates for closing markers it cannot find matching opening markers for. If this
+   * property is `true`, the marker needs some way to indicate when it is over; `unmatched` markers
+   * always have an asterisk at the end.
+   *
+   * For example, `para` marker types such as `p` have a structural space after the opening marker,
+   * but `unmatched` marker types such as `nd*` markers without a matching opening `nd` should not:
+   *
+   * ```usfm
+   * \p Paragraph marker with a structural space at the start.
+   * \p This unmatched closing nd marker \nd*has no structural space after it.
+   * ```
+   *
+   * WARNING: There is no expectation that any standard marker should have no space after opening.
+   * This property is expected to be `true` _only_ for `unmatched` as it could cause serious issues
+   * with USFM syntax otherwise. Every opening marker in USFM should have a space after it except
+   * `unmatched`.
+   *
+   * If not present, defaults to `false`
+   */
+  noSpaceAfterOpening?: boolean;
+  /**
+   * Instructions regarding special handling required for this marker type when transforming to
+   * USFM. These instructions are an explanation of what needs to be done to markers of this type to
+   * properly transform the marker to USFM.
+   *
+   * This property is generally only included when it is exceptionally difficult to output a marker
+   * properly to USFM; the markers map attempts to use this property as little as possible, favoring
+   * encoding information in other properties for more automatic transformation instead.
+   */
+  outputToUsfmInstructions?: string;
+  /**
+   * Instructions regarding special handling required for this marker type when transforming from
+   * USFM to USX or USJ. These instructions are an explanation of what needs to be done to markers
+   * of this type to properly transform the marker to USX or USJ.
+   *
+   * This property is generally only included when it is exceptionally difficult to parse a marker
+   * properly from USFM; the markers map attempts to use this property as little as possible,
+   * favoring encoding information in other properties for more automatic transformation instead.
+   */
+  parseUsfmInstructions?: string;
 };
 
 /**
@@ -451,6 +586,11 @@ export type MarkersMap = {
    * the schema file.
    */
   commit: string;
+  /**
+   * Which version of the markers map types this markers map conforms to. Follows [Semantic
+   * versioning](https://semver.org/); the same major version contains no breaking changes.
+   */
+  markersMapVersion: `1.${number}.${number}${string}`;
   /**
    * Which tag or commit of `usfm-tools` repo this map is generated from.
    *
@@ -525,14 +665,40 @@ export type MarkersMap = {
   markerTypes: Record<string, MarkerTypeInfo | undefined>;
 };
 
+// This function should safely freeze anything, but TypeScript doesn't understand.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function deepFreeze(o: any) {
+  Object.freeze(o);
+  // Don't want to crash out on null
+  // eslint-disable-next-line no-null/no-null
+  if (o === undefined || o === null) {
+    return o;
+  }
+
+  Object.getOwnPropertyNames(o).forEach(function freezeProperty(prop) {
+    if (
+      // Need to make sure to avoid null, which is an object type
+      // eslint-disable-next-line no-null/no-null
+      o[prop] !== null &&
+      (typeof o[prop] === 'object' || typeof o[prop] === 'function') &&
+      !Object.isFrozen(o[prop])
+    ) {
+      deepFreeze(o[prop]);
+    }
+  });
+
+  return o;
+}
+
 /**
  * A map of all USFM/USX/USJ markers and some information about them. Generated from a `usx.rng`
  * file
  */
-export const USFM_MARKERS_MAP: MarkersMap = {
+export const USFM_MARKERS_MAP: MarkersMap = deepFreeze({
   version: '3.1',
   commit: '50f2a6ac3fc1d867d906df28bc00fcff729a7b76',
-  usfmToolsVersion: 'ed48bc011e1b9f1a402d23e49edf2db6c6d69728+',
+  markersMapVersion: '1.0.0',
+  usfmToolsVersion: '06981ba849b742d51d80cafb715f60ba166433c5+',
   markers: {
     add: {
       type: 'char',
@@ -1457,14 +1623,18 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     usfm: {
       type: 'para',
       textContentAttribute: 'version',
+      parseUsfmInstructions:
+        "If this marker is directly after the first id marker, this marker's version attribute should determine the version attribute of the usx or USJ marker at the top of the USX or USJ document, then this marker should be removed.",
     },
     USJ: {
       type: 'USJ',
       textContentAttribute: 'version',
+      markerUsfm: 'usfm',
     },
     usx: {
       type: 'usx',
       textContentAttribute: 'version',
+      markerUsfm: 'usfm',
     },
     v: {
       type: 'verse',
@@ -1570,6 +1740,11 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     book: {},
     cell: {
       skipOutputAttributeToUsfm: ['align'],
+      outputToUsfmInstructions:
+        "If this marker has a colspan attribute, the USFM marker name should be this marker's name plus hyphen (-) plus the marker's final column number (first column number found in the marker name plus colspan minus 1). Then the colspan attribute should not be output as a USFM attribute.",
+      parseUsfmInstructions:
+        "If this marker's name has a hyphen (-) and a number after the marker, the USX/USJ marker name should be just the portion of the marker name before the hyphen, and it should have the colspan attribute which is the number of columns spanned by the marker (second column number plus 1 minus first column number).",
+      markerTypeUsj: 'table:cell',
     },
     chapter: {
       hasNewlineBefore: true,
@@ -1578,9 +1753,12 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     },
     char: {
       hasClosingMarker: true,
+      nestedPrefix: '+',
     },
     figure: {
       hasClosingMarker: true,
+      outputToUsfmInstructions: 'The USX/USJ file attribute needs its name changed to src in USFM',
+      parseUsfmInstructions: 'The USFM src attribute needs its name changed to file in USX/USJ',
     },
     ms: {
       hasClosingMarker: true,
@@ -1607,6 +1785,7 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     },
     row: {
       hasNewlineBefore: true,
+      markerTypeUsj: 'table:row',
     },
     sidebar: {
       hasNewlineBefore: true,
@@ -1614,13 +1793,44 @@ export const USFM_MARKERS_MAP: MarkersMap = {
     table: {
       hasStyleAttribute: false,
       skipOutputAttributeToUsfm: ['vid'],
+      skipOutputMarkerToUsfm: true,
+    },
+    'table:cell': {
+      skipOutputAttributeToUsfm: ['align'],
+      outputToUsfmInstructions:
+        "If this marker has a colspan attribute, the USFM marker name should be this marker's name plus hyphen (-) plus the marker's final column number (first column number found in the marker name plus colspan minus 1). Then the colspan attribute should not be output as a USFM attribute.",
+      parseUsfmInstructions:
+        "If this marker's name has a hyphen (-) and a number after the marker, the USX/USJ marker name should be just the portion of the marker name before the hyphen, and it should have the colspan attribute which is the number of columns spanned by the marker (second column number plus 1 minus first column number).",
+      markerTypeUsj: 'table:cell',
+      markerTypeUsfm: 'cell',
+      markerTypeUsx: 'cell',
+    },
+    'table:row': {
+      hasNewlineBefore: true,
+      markerTypeUsj: 'table:row',
+      markerTypeUsfm: 'row',
+      markerTypeUsx: 'row',
+    },
+    unmatched: {
+      description:
+        'Paratext uses this type for closing markers that it cannot find opening markers for. They are treated like char markers but have no contents, no closing markers, and no space after the marker.',
+      noSpaceAfterOpening: true,
+      parseUsfmInstructions:
+        'If a closing marker occurs but does not seem to have a matching opening marker, create an unmatched-type marker. There is no structural space after the unmatched-type marker; its end is determined by the asterisk at the end of the marker.',
     },
     USJ: {
-      hasStyleAttribute: false,
-    },
-    usx: {
+      hasNewlineBefore: true,
       hasStyleAttribute: false,
       skipOutputAttributeToUsfm: ['noNamespaceSchemaLocation'],
+      outputToUsfmInstructions:
+        "If this marker is the top-level marker containing all other markers in this document, it should not be directly output to USFM. Instead, if this marker's version attribute is other than 3.0, a new usfm marker with this version attribute needs to be added after the id marker if one is present in the USFM.",
+    },
+    usx: {
+      hasNewlineBefore: true,
+      hasStyleAttribute: false,
+      skipOutputAttributeToUsfm: ['noNamespaceSchemaLocation'],
+      outputToUsfmInstructions:
+        "If this marker is the top-level marker containing all other markers in this document, it should not be directly output to USFM. Instead, if this marker's version attribute is other than 3.0, a new usfm marker with this version attribute needs to be added after the id marker if one is present in the USFM.",
     },
     verse: {
       hasNewlineBefore: true,
@@ -1628,4 +1838,14 @@ export const USFM_MARKERS_MAP: MarkersMap = {
       skipOutputMarkerToUsfmIfAttributeIsPresent: ['eid'],
     },
   },
-};
+});
+
+/**
+ * A map of all USFM/USX/USJ markers and some information about them. Generated from a `usx.rng`
+ * file and adjusted to reflect the way Paratext 9.4 handles USFM.
+ */
+export const USFM_MARKERS_MAP_PARATEXT: MarkersMap = Object.freeze({
+  ...USFM_MARKERS_MAP,
+  isSpaceAfterAttributeMarkersContent: true,
+  shouldOptionalClosingMarkersBePresent: true,
+});
