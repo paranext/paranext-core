@@ -23,7 +23,7 @@ import {
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
   toKebabCase,
-} from './string-util';
+} from './segment-string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
