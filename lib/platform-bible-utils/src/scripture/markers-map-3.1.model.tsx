@@ -525,30 +525,6 @@ export type MarkerTypeInfoBase = {
    */
   nestedPrefix?: string;
   /**
-   * Whether markers of this type do not have a structural space after the opening marker in USFM.
-   * All standard marker types have a structural space after the opening marker; this property is
-   * expected to be `true` only with the `unmatched` marker type, which is a non-standard type that
-   * Paratext generates for closing markers it cannot find matching opening markers for. If this
-   * property is `true`, the marker needs some way to indicate when it is over; `unmatched` markers
-   * always have an asterisk at the end.
-   *
-   * For example, `para` marker types such as `p` have a structural space after the opening marker,
-   * but `unmatched` marker types such as `nd*` markers without a matching opening `nd` should not:
-   *
-   * ```usfm
-   * \p Paragraph marker with a structural space at the start.
-   * \p This unmatched closing nd marker \nd*has no structural space after it.
-   * ```
-   *
-   * WARNING: There is no expectation that any standard marker should have no space after opening.
-   * This property is expected to be `true` _only_ for `unmatched` as it could cause serious issues
-   * with USFM syntax otherwise. Every opening marker in USFM should have a space after it except
-   * `unmatched`.
-   *
-   * If not present, defaults to `false`
-   */
-  noSpaceAfterOpening?: boolean;
-  /**
    * Instructions regarding special handling required for this marker type when transforming to
    * USFM. These instructions are an explanation of what needs to be done to markers of this type to
    * properly transform the marker to USFM.
@@ -1814,7 +1790,8 @@ export const USFM_MARKERS_MAP: MarkersMap = deepFreeze({
     unmatched: {
       description:
         'Paratext uses this type for closing markers that it cannot find opening markers for. They are treated like char markers but have no contents, no closing markers, and no space after the marker.',
-      noSpaceAfterOpening: true,
+      outputToUsfmInstructions:
+        'Do not output a structural space after the opening marker for markers with unmatched type.',
       parseUsfmInstructions:
         'If a closing marker occurs but does not seem to have a matching opening marker, create an unmatched-type marker. There is no structural space after the unmatched-type marker; its end is determined by the asterisk at the end of the marker.',
     },

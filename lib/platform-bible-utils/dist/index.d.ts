@@ -1577,6 +1577,7 @@ export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, 
  * The equivalent in USX would be:
  *
  * ```xml
+ * <!-- prettier-ignore -->
  * <chapter number="1" style="c" altnumber="2" pubnumber="A" sid="GEN 1" />
  * <para style="s1">This is a section header</para>
  * ```
@@ -1704,9 +1705,10 @@ export type NormalMarkerInfo = {
 	 * The equivalent in USX would be:
 	 *
 	 * ```xml
-	 * <periph alt="Title Page" id="title">
+	 * <!-- prettier-ignore -->
+	 * <periph alt="Example Peripheral" id="x-example">
 	 *   <para style="p">Some contents of the example peripheral</para>
-	 * </periph>;
+	 * </periph>
 	 * ```
 	 */
 	textContentAttribute?: string;
@@ -1729,9 +1731,8 @@ export type NormalMarkerInfo = {
 	 * The equivalent in USX would be:
 	 *
 	 * ```xml
-	 * <book code="MAT" style="id">
-	 *   41MATEX.SFM, Example Translation, September 2025
-	 * </book>;
+	 * <!-- prettier-ignore -->
+	 * <book code="MAT" style="id">41MATEX.SFM, Example Translation, September 2025</book>
 	 * ```
 	 */
 	leadingAttributes?: string[];
@@ -1807,6 +1808,22 @@ export type NormalMarkerInfo = {
 	 * `ex2`.
 	 */
 	isIndependentClosingMarkerForRegExp?: string[];
+	/**
+	 * Marker to use when operating on the USFM representation of this marker. For example, when
+	 * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
+	 * instead of the marker info for the marker as listed in USX or USJ.
+	 */
+	markerUsfm?: string;
+	/**
+	 * Instructions regarding special handling required for this marker when transforming from USFM to
+	 * USX or USJ. These instructions are an explanation of what needs to be done to this marker to
+	 * properly transform it to USX or USJ.
+	 *
+	 * This property is generally only included when it is exceptionally difficult to parse a marker
+	 * properly from USFM; the markers map attempts to use this property as little as possible,
+	 * favoring encoding information in other properties for more automatic transformation instead.
+	 */
+	parseUsfmInstructions?: string;
 };
 /** Information about a USFM/USX/USJ marker that is essential for proper translation between formats */
 export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
@@ -1894,6 +1911,8 @@ export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  * {@link MarkerTypeInfo} for various kinds of marker types.
  */
 export type MarkerTypeInfoBase = {
+	/** Explanation of the meaning of this marker type */
+	description?: string;
 	/**
 	 * Whether markers of this type should have a `style` attribute in USX/USJ.
 	 *
@@ -1919,8 +1938,8 @@ export type MarkerTypeInfoBase = {
 	 * inside the marker (if present) should not be skipped.
 	 *
 	 * This is used for certain markers that sometimes are normal markers but sometimes are derived
-	 * metadata and are not present in USFM. These derived metadata markers are all identified by
-	 * whether they have specific attributes on them.
+	 * metadata and are not present in USFM. These derived metadata markers are identified by whether
+	 * they have specific attributes on them.
 	 *
 	 * For example, if the `verse` marker has an `eid` attribute, it indicates it is a marker denoting
 	 * the end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that
@@ -1930,11 +1949,10 @@ export type MarkerTypeInfoBase = {
 	 * Following is an example of a derived metadata `verse` marker in USX:
 	 *
 	 * ```xml
+	 * <!-- prettier-ignore -->
 	 * <para style="p">
-	 *   <verse number="21" style="v" sid="2SA 1:21" />
-	 *   This is verse 21.
-	 *   <verse eid="2SA 1:21" />
-	 * </para>;
+	 *   <verse number="21" style="v" sid="2SA 1:21" />This is verse 21.<verse eid="2SA 1:21" />
+	 * </para>
 	 * ```
 	 *
 	 * The equivalent in USFM would be:
@@ -1952,12 +1970,8 @@ export type MarkerTypeInfoBase = {
 	 * Following is an example of a generated `ref` in USX:
 	 *
 	 * ```xml
-	 * <char style="xt">
-	 *   <ref loc="2SA 1:1" gen="true">
-	 *     2Sam 1:1
-	 *   </ref>
-	 *   ; <ref loc="2SA 1:2-3">2Sam 1:2-3</ref>.
-	 * </char>;
+	 * <!-- prettier-ignore -->
+	 * <char style="xt"><ref loc="2SA 1:1" gen="true">2Sam 1:1</ref>; <ref loc="2SA 1:2-3">2Sam 1:2-3</ref>.</char>
 	 * ```
 	 *
 	 * The equivalent in USFM would be:
@@ -1969,6 +1983,54 @@ export type MarkerTypeInfoBase = {
 	 * This property is not used when converting to USX or USJ.
 	 */
 	skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
+	/**
+	 * Whether to always skip outputting this marker to USFM. Skip outputting this marker when
+	 * converting to USFM. Only skip outputting the opening and closing marker representations,
+	 * though; the content inside the marker (if present) should not be skipped.
+	 *
+	 * This is used for marker types that have no representation in USFM in a given version, likely
+	 * meaning they are derived metadata and are not present in USFM.
+	 *
+	 * For example, in USFM 3.1, the `table` marker type is generated while transforming USFM into
+	 * USX/USJ and is not preserved when transforming from USX/USJ to USFM.
+	 *
+	 * Following is an example of a derived metadata `table` marker in USX:
+	 *
+	 * ```xml
+	 * <!-- prettier-ignore -->
+	 * <table>
+	 *   <row style="tr">
+	 *     <cell style="th1" align="start">Header 1</cell>
+	 *     <cell style="th2" align="start">Header 2 space after </cell>
+	 *     <cell style="thc3" align="center" colspan="2">Header 3-4 centered</cell>
+	 *     <cell style="thr5" align="end">Header 5 right</cell>
+	 *   </row>
+	 *   <row style="tr">
+	 *     <cell style="tc1" align="start">Row 1 cell 1</cell>
+	 *     <cell style="tc2" align="start">Row 1 cell 2 space after </cell>
+	 *     <cell style="thc3" align="center">Row 1 cell 3 centered</cell>
+	 *     <cell style="thr4" align="end" colspan="2">Row 1 cell 4-5 right</cell>
+	 *   </row>
+	 *   <row style="tr">
+	 *     <cell style="tcr1" align="end" colspan="4">Row 2 cell 1-4 right</cell>
+	 *     <cell style="tc5" align="start">Row 2 cell 5</cell>
+	 *   </row>
+	 * </table>
+	 * ```
+	 *
+	 * The equivalent in USFM would be:
+	 *
+	 * ```usfm
+	 * \tr \th1 Header 1\th2 Header 2 space after \thc3-4 Header 3-4 centered\thr5 Header 5 right
+	 * \tr \tc1 Row 1 cell 1\tc2 Row 1 cell 2 space after \thc3 Row 1 cell 3 centered\thr4-5 Row 1 cell 4-5 right
+	 * \tr \tcr1-4 Row 2 cell 1-4 right\tc5 Row 2 cell 5
+	 * ```
+	 *
+	 * This property is not used when converting to USX or USJ.
+	 *
+	 * If not present, defaults to `false`
+	 */
+	skipOutputMarkerToUsfm?: boolean;
 	/**
 	 * Whether markers of this type should have a newline before them in USFM.
 	 *
@@ -1986,6 +2048,55 @@ export type MarkerTypeInfoBase = {
 	 * If not present, defaults to `false`
 	 */
 	hasNewlineBefore?: boolean;
+	/**
+	 * Marker type to use when operating on the USFM representation of markers of this type. For
+	 * example, when outputting to USFM, the marker type listed here in `markerTypeUsfm` should be
+	 * used instead of the marker's type as listed in USX or USJ.
+	 */
+	markerTypeUsfm?: string;
+	/**
+	 * Marker type to use when operating on the USX representation of markers of this type. For
+	 * example, when outputting to USX, the marker type listed here in `markerTypeUsx` should be used
+	 * instead of the marker's type as listed in USFM or USJ.
+	 */
+	markerTypeUsx?: string;
+	/**
+	 * Marker type to use when operating on the USJ representation of markers of this type. For
+	 * example, when outputting to USJ, the marker type listed here in `markerTypeUsj` should be used
+	 * instead of the marker's type as listed in USFM or USX.
+	 */
+	markerTypeUsj?: string;
+	/**
+	 * Prefix to add to the opening and closing marker before the marker name if a marker of this type
+	 * occurs within another marker of this type when outputting to USFM.
+	 *
+	 * Following is an example of `nd` inside `wj` (both are `char`-type markers) in USFM:
+	 *
+	 * ```usfm
+	 * \p \wj This is \+nd nested\+nd*!\wj*
+	 * ```
+	 */
+	nestedPrefix?: string;
+	/**
+	 * Instructions regarding special handling required for this marker type when transforming to
+	 * USFM. These instructions are an explanation of what needs to be done to markers of this type to
+	 * properly transform the marker to USFM.
+	 *
+	 * This property is generally only included when it is exceptionally difficult to output a marker
+	 * properly to USFM; the markers map attempts to use this property as little as possible, favoring
+	 * encoding information in other properties for more automatic transformation instead.
+	 */
+	outputToUsfmInstructions?: string;
+	/**
+	 * Instructions regarding special handling required for this marker type when transforming from
+	 * USFM to USX or USJ. These instructions are an explanation of what needs to be done to markers
+	 * of this type to properly transform the marker to USX or USJ.
+	 *
+	 * This property is generally only included when it is exceptionally difficult to parse a marker
+	 * properly from USFM; the markers map attempts to use this property as little as possible,
+	 * favoring encoding information in other properties for more automatic transformation instead.
+	 */
+	parseUsfmInstructions?: string;
 };
 /**
  * Information about a USFM/USX/USJ marker type that is essential for proper translation between
@@ -2002,6 +2113,11 @@ export type MarkersMap = {
 	 * the schema file.
 	 */
 	commit: string;
+	/**
+	 * Which version of the markers map types this markers map conforms to. Follows [Semantic
+	 * versioning](https://semver.org/); the same major version contains no breaking changes.
+	 */
+	markersMapVersion: `1.${number}.${number}${string}`;
 	/**
 	 * Which tag or commit of `usfm-tools` repo this map is generated from.
 	 *
@@ -4301,6 +4417,20 @@ export declare function getStylesheetForTheme(theme: ThemeDefinitionExpanded): s
  * @returns
  */
 export declare function applyThemeStylesheet(this: Window, theme: ThemeDefinitionExpanded, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
+/**
+ * Represents information about where a USJ node resides in the `content` array of its parent.
+ * `parent` is a reference to the node's parent, and `index` represents the numeric index inside of
+ * `parent`'s content array.
+ */
+export type StackItem = {
+	parent: MarkerObject | Usj;
+	index: number;
+};
+/**
+ * Stack of levels inside a USJ tree relative to a specific node. The top of the stack should always
+ * be the root Usj object.
+ */
+export type WorkingStack = StackItem[];
 /** Represents USJ formatted scripture with helpful utilities for working with it */
 export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly usj;
@@ -4315,12 +4445,16 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	/**
-	 * Determine if the passed in marker is the USJ marker (should be the top-level marker)
+	 * Determine if the passed in marker is the top-level USJ marker.
+	 *
+	 * Note that USJ markers that are not the top-level USJ markers technically should not occur, but
+	 * they can occur. We should treat them like any other marker. They conform to
+	 * {@link MarkerObject}, so it's not hard to do.
 	 *
 	 * @param marker Marker to test if it is USJ marker
 	 * @returns `true` if it is a USJ marker; false otherwise
 	 */
-	static isUsjMarker(marker: Usj | MarkerContent): marker is Usj;
+	static isTopLevelUsjMarker(marker: Usj | MarkerContent, workingStack: WorkingStack): marker is Usj;
 	/**
 	 * Determine if a fragment is a marker, not a text content string or some kind of position
 	 * fragment that isn't actually a marker e.g. closing marker fragment
@@ -4440,8 +4574,13 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * Gathers various pieces of information about a marker that are helpful for transforming the
 	 * marker to USFM
 	 *
+	 * WARNING: this only has the ability to return the info for the marker to be used in USFM. If you
+	 * need to use info for the marker in USX or USJ, this method needs to be modified.
+	 *
 	 * @param marker A USJ marker (can be USJ type) or a string which is the marker name
-	 * @param markersMap The markers map from which to gather info
+	 * @param scriptureFormat The Scripture format to get the marker information for. For example, if
+	 *   you are using this marker info to transform the marker into USFM, this should be `usfm`.
+	 *   Defaults to `usfm`
 	 * @returns Various pieces of info about the marker
 	 */
 	private getInfoForMarker;
