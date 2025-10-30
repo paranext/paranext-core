@@ -9,11 +9,11 @@ import path from 'path';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from './usj-reader-writer';
 import { usjMat1 } from './footnote-util-test.usj.data';
-import { USFM_MARKERS_MAP } from './markers-map-3.1.model';
+import { USFM_MARKERS_MAP, USFM_MARKERS_MAP_PARATEXT } from './markers-map-3.1.model';
 import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.model';
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
-import { UsjNodeAndDocumentLocation } from './usj-reader-writer.model';
+import { UsjNodeAndDocumentLocation, UsjReaderWriterOptions } from './usj-reader-writer.model';
 
 // #region set up file path variables
 
@@ -29,16 +29,12 @@ function readTestDataFile(fileName: string) {
 
 // #region some testing prerequisites
 
-const paratextUsjReaderWriterOptions = {
-  // TODO: Generate Paratext-specific markers map and 3.0 markers map
+const paratextUsjReaderWriterOptions: UsjReaderWriterOptions = {
+  // TODO: Generate accurate 3.0 markers map
   markersMap: {
-    ...USFM_MARKERS_MAP,
+    ...USFM_MARKERS_MAP_PARATEXT,
     // 3.0
     version: '3.0',
-    // Paratext
-    isSpaceAfterAttributeMarkersContent: true,
-    shouldOptionalClosingMarkersBePresent: true,
-    // 3.0
     markers: Object.fromEntries(
       Object.entries(USFM_MARKERS_MAP.markers).map(([markerName, markerInfo]) => {
         if (!markerInfo) return [markerName, markerInfo];

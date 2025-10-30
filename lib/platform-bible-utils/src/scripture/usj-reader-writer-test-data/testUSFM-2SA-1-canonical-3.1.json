@@ -1,6 +1,6 @@
 {
   "type": "USJ",
-  "version": "3.0",
+  "version": "3.1",
   "content": [
     {
       "type": "book",
@@ -692,15 +692,11 @@
     {
       "type": "para",
       "marker": "p",
-      "content": ["This line has t-s "]
-    },
-    {
-      "type": "para",
-      "marker": "t-s",
       "content": [
+        "This line has t-s ",
         {
-          "type": "unmatched",
-          "marker": "*"
+          "type": "ms",
+          "marker": "t-s"
         },
         " and t-e"
       ]
@@ -708,37 +704,21 @@
     {
       "type": "para",
       "marker": "p",
-      "content": ["For some reason, Paratext does not recognize the ts "]
-    },
-    {
-      "type": "para",
-      "marker": "ts",
       "content": [
+        "For some reason, Paratext does not recognize the ts ",
         {
-          "type": "unmatched",
-          "marker": "*"
+          "type": "ms",
+          "marker": "ts"
         },
-        ", t-s "
-      ]
-    },
-    {
-      "type": "para",
-      "marker": "t-s",
-      "content": [
+        ", t-s ",
         {
-          "type": "unmatched",
-          "marker": "*"
+          "type": "ms",
+          "marker": "t-s"
         },
-        ", or t-e "
-      ]
-    },
-    {
-      "type": "para",
-      "marker": "t-e",
-      "content": [
+        ", or t-e ",
         {
-          "type": "unmatched",
-          "marker": "*"
+          "type": "ms",
+          "marker": "t-e"
         },
         " markers. ts is a standalone translator's section milestone, and I guess the others are shorthands for ts-s and ts-e. Paratext puts a structural space before the closing marker on all three even though it should not be there."
       ]
@@ -1534,19 +1514,14 @@
               "marker": "tc5",
               "align": "start",
               "content": ["r1c5 again "]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc13",
+              "content": ["r1c13"]
             }
           ]
-        }
-      ]
-    },
-    {
-      "type": "para",
-      "marker": "tc13",
-      "content": ["r1c13"]
-    },
-    {
-      "type": "table",
-      "content": [
+        },
         {
           "type": "table:row",
           "marker": "tr",
@@ -1594,15 +1569,15 @@
               "marker": "tc5",
               "align": "start",
               "content": ["r2c5 again "]
+            },
+            {
+              "type": "table:cell",
+              "marker": "tc13",
+              "content": ["r2c13"]
             }
           ]
         }
       ]
-    },
-    {
-      "type": "para",
-      "marker": "tc13",
-      "content": ["r2c13"]
     },
     {
       "type": "para",
@@ -1728,13 +1703,14 @@
       "type": "para",
       "marker": "p",
       "content": [
-        "Paratext 9.5 standard view does not support entering an independent ref marker; it just replaces the ref with its text content. However, it will allow an unclosed ref marker (the contents are all put in the text content of the marker; the default attribute loc does not work): "
+        "Paratext 9.5 standard view does not support entering an independent ref marker; it just replaces the ref with its text content. However, it will allow an unclosed ref marker (the contents are all put in the text content of the marker; the default attribute loc does not work): ",
+        {
+          "type": "ref",
+          "loc": "REV 1:1",
+          "closed": "false",
+          "content": ["2Sam 1:1"]
+        }
       ]
-    },
-    {
-      "type": "para",
-      "marker": "ref",
-      "content": ["2Sam 1:1|REV 1:1"]
     },
     {
       "type": "para",
@@ -1745,16 +1721,12 @@
     },
     {
       "type": "para",
-      "marker": "p"
-    },
-    {
-      "type": "para",
-      "marker": "ref",
+      "marker": "p",
       "content": [
-        "2Sam 1:1|2SA 1:1",
         {
-          "type": "unmatched",
-          "marker": "ref*"
+          "type": "ref",
+          "loc": "2SA 1:1",
+          "content": ["2Sam 1:1"]
         }
       ]
     },
