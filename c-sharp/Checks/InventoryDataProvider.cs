@@ -142,9 +142,27 @@ internal sealed class InventoryDataProvider(
                     $"Status must be an array when no key is provided (projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
                 );
 
-            var validHashSet = IEnumerableToHashSet(items, item => item.IsValid);
-            var invalidHashSet = IEnumerableToHashSet(items, item => !item.IsValid);
-            var intersection = validHashSet.Intersect(invalidHashSet).ToList();
+            var validHashSet = new HashSet<string>();
+            var invalidHashSet = new HashSet<string>();
+            var intersection = new HashSet<string>();
+            foreach (var item in items)
+            {
+                if (item.IsValid)
+                {
+                    if (invalidHashSet.Contains(item.Key))
+                        intersection.Add(item.Key);
+                    else
+                        validHashSet.Add(item.Key);
+                }
+                else
+                {
+                    if (validHashSet.Contains(item.Key))
+                        intersection.Add(item.Key);
+                    else
+                        invalidHashSet.Add(item.Key);
+                }
+            }
+
             if (intersection.Count > 0)
             {
                 throw new ArgumentException(
