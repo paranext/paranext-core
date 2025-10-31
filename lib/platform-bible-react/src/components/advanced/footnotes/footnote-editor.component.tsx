@@ -5,24 +5,30 @@ import {
   EditorOptions,
   EditorRef,
   GENERATOR_NOTE_CALLER,
-  getDefaultViewOptions,
   HIDDEN_NOTE_CALLER,
+  ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
+import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { Check, Copy, X } from 'lucide-react';
 import { createRef, useEffect, useMemo, useRef } from 'react';
 import '@/components/advanced/footnotes/editor-overrides.css';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
-interface FootnoteEditorParameters {
+/** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
+interface FootnoteEditorProps {
+  /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOp[] | undefined;
-  parentRef?: EditorRef | null;
-  closeEditor?: () => void;
+  /** Exterial function to handling saving changes to the footnote */
+  onSave: (noteOps: DeltaOp[]) => void;
+  /** Exterior function to handling closing the footnote editor */
+  onClose: () => void;
+  /** The scripture reference for the parent editor */
   scrRef: SerializedVerseRef;
+  /** The unique note key to identify the note being edited used to apply changes to the note */
   noteKey: string | undefined;
+  /** View options of the parent editor */
+  viewOptions: ViewOptions;
 }
-
-const emptyUsj = usxStringToUsj('<usx version="3.1" />');
 
 /**
  * Component to edit footnotes from within the editor component
@@ -33,11 +39,12 @@ const emptyUsj = usxStringToUsj('<usx version="3.1" />');
  */
 export default function FootnoteEditor({
   noteOps,
-  parentRef,
-  closeEditor,
+  onSave,
+  onClose,
   scrRef,
   noteKey,
-}: FootnoteEditorParameters) {
+  viewOptions,
+}: FootnoteEditorProps) {
   // The editor ref component must be this
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
@@ -59,35 +66,35 @@ export default function FootnoteEditor({
           else setCaller(GENERATOR_NOTE_CALLER);
         },
       },
-      view: { ...getDefaultViewOptions(), noteMode: 'expanded' },
+      view: { ...viewOptions, noteMode: 'expanded' },
     }),
-    [],
+    [viewOptions],
   );
 
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     if (noteOps && !editorRef.current?.getUsj()?.content) {
       // Temporary fix to fix flushSync error in the console
-      setTimeout(() => {
-        editorRef.current?.setUsj(emptyUsj);
+      const timeout = setTimeout(() => {
+        editorRef.current?.setUsj(EMPTY_USJ);
         editorRef.current?.applyUpdate(noteOps);
-      });
+      }, 0);
+
+      return () => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+      };
     }
+
+    return () => undefined;
   }, [noteOps, noteKey]);
 
-  const handleClose = () => {
-    editorRef.current?.setUsj(emptyUsj);
-    if (closeEditor) closeEditor();
-  };
-
   const handleSave = () => {
-    // TODO: Apply operations to parent editor ref
     const newNoteOps = editorRef.current?.getNoteOps(0);
-    if (newNoteOps && noteKey) {
-      parentRef?.replaceEmbedUpdate(noteKey, newNoteOps);
+    if (newNoteOps) {
+      onSave(newNoteOps);
     }
-    editorRef.current?.setUsj(emptyUsj);
-    if (closeEditor) closeEditor();
   };
 
   const handleCopy = () => {
@@ -100,7 +107,7 @@ export default function FootnoteEditor({
   return (
     <div className="tw-grid tw-gap-[12px]">
       <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
-        <Button onClick={handleClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
+        <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
           <X />
         </Button>
         <Button onClick={handleSave} className="tw-h-6 tw-w-6" size="icon" variant="default">

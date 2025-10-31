@@ -278,21 +278,27 @@ export const FootnoteEditorView: Story = {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
-    const noteKey = useRef<string>();
-    const noteOps = useRef<DeltaOp[]>();
+    // const noteKey = useRef<string>();
+    // const noteOps = useRef<DeltaOp[]>();
+    const [noteKey, setNoteKey] = useState<string>();
+    const [noteOps, setNoteOps] = useState<DeltaOp[]>();
 
     const [popoverX, setPopoverX] = useState<number>();
     const [popoverY, setPopoverY] = useState<number>();
 
     const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
 
-    const mergedOptions = useMemo<EditorOptions>(() => {
-      const base = args.options ?? {};
-      const view: ViewOptions = {
+    const viewOptions = useMemo<ViewOptions>(
+      () => ({
         markerMode: 'hidden',
         hasSpacing: true,
         isFormattedFont: true,
-      };
+      }),
+      [],
+    );
+
+    const mergedOptions = useMemo<EditorOptions>(() => {
+      const base = args.options ?? {};
       return {
         ...base,
         nodes: {
@@ -319,27 +325,39 @@ export const FootnoteEditorView: Story = {
 
             if (isCollapsed) {
               // (event as SyntheticEvent<)
-              if (noteKey.current) return;
+              if (noteKey) return;
 
-              noteKey.current = noteNodeKey;
-              noteOps.current = getNoteOps();
+              setNoteKey(noteNodeKey);
+              setNoteOps(getNoteOps());
               setShowFootnoteEditor(true);
             }
           },
         },
-        view,
+        view: viewOptions,
       };
-    }, [args.options]);
+    }, [args.options, viewOptions, noteKey]);
 
-    const closeEditor = () => {
-      noteKey.current = undefined;
-      noteOps.current = undefined;
+    const onEditorClose = () => {
+      setNoteKey(undefined);
+      setNoteOps(undefined);
       setShowFootnoteEditor(false);
+    };
+
+    const onEditorSave = (newNoteOps: DeltaOp[]) => {
+      if (noteKey) {
+        editorRef.current?.replaceEmbedUpdate(noteKey, newNoteOps);
+      }
+      onEditorClose();
     };
 
     return (
       <div>
-        <Editorial {...args} options={mergedOptions} ref={editorRef} onScrRefChange={() => {}} />
+        <Editorial
+          {...args}
+          options={mergedOptions}
+          ref={editorRef}
+          onScrRefChange={() => undefined}
+        />
         <Popover open={showFootnoteEditor}>
           <PopoverAnchor
             className="tw-absolute"
@@ -347,11 +365,12 @@ export const FootnoteEditorView: Story = {
           />
           <PopoverContent className="tw-w-96 tw-p-[10px]">
             <FootnoteEditor
-              parentRef={editorRef.current}
-              noteKey={noteKey.current}
-              noteOps={noteOps.current}
-              closeEditor={closeEditor}
+              noteKey={noteKey}
+              noteOps={noteOps}
+              onSave={onEditorSave}
+              onClose={onEditorClose}
               scrRef={args.scrRef ?? defaultScrRef}
+              viewOptions={viewOptions}
             />
           </PopoverContent>
         </Popover>
