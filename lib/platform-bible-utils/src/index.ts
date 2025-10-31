@@ -197,8 +197,11 @@ export type {
   MarkerTypeInfoBase,
   MarkerTypeInfo,
   MarkersMap,
-} from './scripture/markers-map-3.1.model';
-export { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './scripture/markers-map-3.1.model';
+} from './scripture/markers-maps/markers-map-3.0.model';
+export {
+  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+  USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+} from './scripture/markers-maps/markers-map-3.0.model';
 export type {
   ContentJsonPath,
   PropertyJsonPath,
