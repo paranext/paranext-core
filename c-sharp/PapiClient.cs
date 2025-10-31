@@ -39,6 +39,15 @@ internal class PapiClient : IDisposable
         {
             AllowModificationWhileListening = true,
             ExceptionOptions = ExceptionSettings.TrustedData,
+            /*
+             * This can be uncommented for detailed JSON-RPC tracing
+
+            TraceSource = new System.Diagnostics.TraceSource(
+                "JSONRPC",
+                System.Diagnostics.SourceLevels.Verbose
+            ),
+
+            */
         };
     }
 

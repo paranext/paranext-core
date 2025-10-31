@@ -1,13 +1,12 @@
 using System.Collections.Concurrent;
 using Paranext.DataProvider.Projects;
-using Paratext.Checks;
 using Paratext.Data.ProjectFileAccess;
 
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// A cache of checks (the executable code and the results) for all Paratext projects.
-/// This ensures that there is only one instance of each check and data source per project.
+/// This ensures that there is only one instance of each check per project.
 /// Also, this automatically clears check results when project text or settings change.
 /// </summary>
 internal sealed class CheckCache
@@ -20,7 +19,6 @@ internal sealed class CheckCache
         (string checkId, string projectId),
         CheckForProject
     > _checksByIds = [];
-    private readonly ConcurrentDictionary<string, ChecksDataSource> _dataSourcesByProjectId = [];
     private readonly List<string> _allCheckIds;
     private readonly PapiClient _papiClient;
 
@@ -81,7 +79,7 @@ internal sealed class CheckCache
             (checkId, projectId),
             _ =>
             {
-                var dataSource = GetChecksDataSource(projectId);
+                var dataSource = DataSourceCache.GetChecksDataSource(projectId);
                 var newCheck = new CheckForProject(
                     CheckFactory.CreateCheck(checkId, dataSource),
                     checkId,
@@ -126,13 +124,5 @@ internal sealed class CheckCache
     public IEnumerable<CheckForProject> GetChecks(IEnumerable<string> checkIds, string projectId)
     {
         return checkIds.Select((id) => GetCheck(id, projectId));
-    }
-
-    public ChecksDataSource GetChecksDataSource(string projectId)
-    {
-        return _dataSourcesByProjectId.GetOrAdd(
-            projectId,
-            id => new ChecksDataSource(LocalParatextProjects.GetParatextProject(id))
-        );
     }
 }
