@@ -35,6 +35,8 @@ export interface FootnoteItemProps {
 export interface FootnoteListProps {
   /** Optional additional class name for styling */
   className?: string;
+  /** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
+  classNameForItems?: string;
   /** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
   footnotes: MarkerObject[];
   /**

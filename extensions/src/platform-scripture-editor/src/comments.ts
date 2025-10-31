@@ -10,6 +10,7 @@ import {
 import { LegacyComment } from 'legacy-comment-manager';
 import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
+import { valuesAreDeeplyEqual } from './platform-scripture-editor.utils';
 
 export const MILESTONE_START = 'zmsc-s';
 export const MILESTONE_END = 'zmsc-e';
@@ -36,10 +37,6 @@ export type EditorThread = {
   type: 'thread';
   legacyComment: LegacyComment;
 };
-
-function valuesAreDeeplyEqual(a: unknown, b: unknown) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 /** Convert comments from the data provider to comments that can be read by the editor */
 export function convertLegacyCommentsToEditorThreads(

@@ -176,7 +176,7 @@ export function FootnoteItem({
         {footnoteOpening}
         {header}
       </div>
-      <div className={cn('textual-note-body', baseClasses)}>
+      <div className={cn('textual-note-body tw-pr-0.5', baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (
           <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}

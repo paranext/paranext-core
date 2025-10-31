@@ -16,7 +16,7 @@ import {
   Usj,
 } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -46,6 +46,8 @@ import {
 import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
+import FootnotesLayout from './platform-scripture-editor.footnotes.component';
+import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -89,18 +91,6 @@ const formattedView: ViewOptions = { ...getDefaultViewOptions(), noteMode: 'expa
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
 
-/**
- * Check deep equality of two values such that two equal objects or arrays created in two different
- * iframes successfully test as equal
- *
- * @param a
- * @param b
- * @returns
- */
-function deepEqualAcrossIframes(a: unknown, b: unknown) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
   projectId,
@@ -114,6 +104,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'decorations',
     defaultEditorDecorations,
   );
+
+  const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
+    'footnotesPaneVisible',
+    false,
+  );
+
+  const footnotesPaneVisibleRef = useRef(footnotesPaneVisible);
+
+  useEffect(() => {
+    footnotesPaneVisibleRef.current = footnotesPaneVisible;
+  }, [footnotesPaneVisible]);
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
@@ -174,6 +175,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
+        case 'toggleFootnotesPaneVisibility': {
+          const { current } = footnotesPaneVisibleRef;
+          setFootnotesPaneVisible(!current);
+          break;
+        }
         case 'insertFootnoteAtSelection': {
           editorRef.current?.insertNote('f');
           break;
@@ -182,6 +188,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.insertNote('x');
           break;
         }
+        case 'changeFootnotesPaneLocation': {
+          break;
+        } // handled in FootnoteLayout
         default:
           // Unknown method name
           logger.debug(
@@ -196,7 +205,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll, decorations, setDecorations]);
+  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, setFootnotesPaneVisible]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
@@ -302,13 +311,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [usjFromPdp]);
 
-  /** Latest USJ from the PDP with comment anchors inserted */
+  /* Latest USJ from the PDP with comment anchors inserted */
   const usjFromPdpWithAnchors = useRef(defaultUsj);
 
   const usjSentToPdp = useRef(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
-  /** If the editor has updates that the PDP hasn't recorded, save them to the PDP */
+  const [actualUsj, setActualUsj] = useState<Usj | undefined>();
+
+  const handleFootnoteSelected = useCallback((index: number) => {
+    editorRef.current?.selectNote(index);
+  }, []);
+
+  /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
       if (
@@ -482,6 +497,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
 
+    // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
+    // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
+    // we may have set the editor from the PDP if the PDP had a "trumping" change.
+    const authoritativeUsj =
+      editorRef.current?.getUsj() ?? usjFromPdpWithAnchors.current ?? usjFromPdp;
+    if (authoritativeUsj) setActualUsj(authoritativeUsj);
+
     // Make sure the editor has the latest comment data from the PDP
     if (
       'setComments' in editorRef.current &&
@@ -492,7 +514,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The editor's USJ needs to have anchors for these comments or the editor will error
       editorRef.current.setComments?.(threads);
     }
-  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
+  }, [
+    insertCommentAnchors,
+    legacyCommentsFromPdp,
+    saveUsjToPdpIfUpdated,
+    usjFromPdp,
+    setActualUsj,
+  ]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -678,10 +706,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   return (
     <>
-      {/** Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-screen tw-w-screen">
-        {/** Containers */}
+        {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
             <div
@@ -694,8 +722,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             </div>
           ),
           <div className="tw-flex tw-flex-col tw-h-full">
-            {/** Headers */}
-            <div className="tw-flex-grow-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
+            <div className="tw-flex-grow tw-min-h-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
               {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
@@ -731,9 +758,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   )}
                 </Alert>
               ))}
+
+              {footnotesPaneVisible && actualUsj ? (
+                <FootnotesLayout
+                  usj={actualUsj}
+                  onFootnoteSelected={handleFootnoteSelected}
+                  useWebViewState={useWebViewState}
+                  showMarkers={options.view?.markerMode !== 'hidden'}
+                >
+                  {/* Render the editor inside the container decorations without re-mounting on re-parent */}
+                  <OutPortal node={editorPortalNode} />
+                </FootnotesLayout>
+              ) : (
+                <>
+                  {/* Render the editor inside the container decorations without re-mounting on re-parent */}
+                  <OutPortal node={editorPortalNode} />
+                </>
+              )}
             </div>
-            {/** Render the editor inside the container decorations without re-mounting on re-parent */}
-            <OutPortal node={editorPortalNode} />
           </div>,
         )}
       </div>

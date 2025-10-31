@@ -36,8 +36,18 @@ declare module 'platform-scripture-editor' {
     decorationsToRemove?: string[];
   };
 
-  /** Tell the editor to insert a footnote */
-  export type EditorMessageInsertFootnoteAtSelection = {
+  /** Tell the editor to toggle footnotes pane visibility */
+  export type EditorMessageToggleFootnotesPaneVisibility = {
+    method: 'toggleFootnotesPaneVisibility';
+  };
+
+  /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
+  export type EditorMessageChangeFootnotesPaneLocation = {
+    method: 'changeFootnotesPaneLocation';
+  };
+
+  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  export type EditorMessageInsertTextualNoteAtSelection = {
     method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
   };
 
@@ -45,7 +55,9 @@ declare module 'platform-scripture-editor' {
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
-    | EditorMessageInsertFootnoteAtSelection;
+    | EditorMessageToggleFootnotesPaneVisibility
+    | EditorMessageChangeFootnotesPaneLocation
+    | EditorMessageInsertTextualNoteAtSelection;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -137,6 +149,26 @@ declare module 'platform-scripture-editor' {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
     /**
+     * When the footnote pane is shown, where it should be positioned
+     *
+     * Defaults to 'bottom'.
+     */
+    footnotesPanePosition?: 'bottom' | 'trailing';
+    /**
+     * Percentage of the available space that the footnote pane should take up when it is shown.
+     * This should be a number between 3 and 97. (0-100 are "legal" values for the components but
+     * nonsensical from a UX perspective.)
+     *
+     * Defaults to 20.
+     */
+    footnotesPaneSize?: number;
+    /**
+     * Flag indicating whether the footnote pane should be displayed
+     *
+     * Defaults to false.
+     */
+    footnotesPaneVisible?: boolean;
+    /**
      * Url of image to show on the title bar of the tab
      *
      * Defaults to the software's standard logo.
@@ -154,6 +186,10 @@ declare module 'platform-scripture-editor' {
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
     /** Set the current selection on the editor */
     selectRange(range: ScriptureRange): Promise<void>;
+    /** Toggle the visibility of the footnotes pane in the editor */
+    toggleFootnotesPaneVisibility(): Promise<void>;
+    /** Toggle the visibility of the footnotes pane in the editor */
+    changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
      * Add or update decorations in the editor. New decoration definitions with the same id
      * overwrite existing decorations
@@ -214,10 +250,26 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Command to insert a foot note into a given editor web view.
+     * Toggles the visibility of the footnotes pane for the given the WebView ID
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScripture.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
+     * toggling between showing it at the bottom or side-by-side.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScripture.changeFootnotesPaneLocation': (
+      webViewId: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert a footnote into a given editor web view.
      *
      * @param editorWebViewId The ID of the web view to insert the footnote for
-     * @returns
      */
     'platformScriptureEditor.insertFootnoteAtSelection': (
       editorWebViewId?: string | undefined,
@@ -227,7 +279,6 @@ declare module 'papi-shared-types' {
      * Command to insert a cross-reference into a given editor web view.
      *
      * @param editorWebViewId The ID of the web view to insert the footnote for
-     * @returns
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,

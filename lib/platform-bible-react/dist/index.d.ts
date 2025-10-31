@@ -588,6 +588,8 @@ export interface FootnoteItemProps {
 export interface FootnoteListProps {
 	/** Optional additional class name for styling */
 	className?: string;
+	/** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
+	classNameForItems?: string;
 	/** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
 	footnotes: MarkerObject[];
 	/**
@@ -634,7 +636,7 @@ type FootnoteListLocalizedStrings = {
 	[localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ className, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
+export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
 	localizedStrings?: FootnoteListLocalizedStrings;
 }): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
