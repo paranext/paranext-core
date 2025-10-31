@@ -189,9 +189,36 @@ export {
 export * from './extension-contributions/theme.model';
 export * from './extension-contributions/theme.util';
 export type {
+  AttributeMarkerInfo,
+  NormalMarkerInfo,
+  MarkerInfo,
+  CloseableMarkerTypeInfo,
+  NonCloseableMarkerTypeInfo,
+  MarkerTypeInfoBase,
+  MarkerTypeInfo,
+  MarkersMap,
+} from './scripture/markers-maps/markers-map-3.0.model';
+export {
+  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+  USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+} from './scripture/markers-maps/markers-map-3.0.model';
+export type {
+  ContentJsonPath,
+  PropertyJsonPath,
   IUsjReaderWriter,
-  UsjContentLocation,
+  UsfmLocation,
+  UsfmVerseLocation,
+  UsjAttributeKeyLocation,
+  UsjAttributeMarkerLocation,
+  UsjClosingAttributeMarkerLocation,
+  UsjClosingMarkerLocation,
+  UsjDocumentLocation,
+  UsjMarkerLocation,
+  UsjNodeAndDocumentLocation,
+  UsjPropertyValueLocation,
+  UsjReaderWriterOptions,
   UsjSearchResult,
+  UsjTextContentLocation,
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';

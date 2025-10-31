@@ -4,7 +4,7 @@
   "editor.rulers": [100],
   "editor.wordWrapColumn": 100,
 
-  "eslint.validate": ["javascript", "javascriptreact", "html", "typescriptreact"],
+  "eslint.validate": ["javascript", "typescript", "javascriptreact", "html", "typescriptreact"],
 
   "files.associations": {
     ".eslintignore": "ignore",

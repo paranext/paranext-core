@@ -1,0 +1,42 @@
+\c 3 \ca 3 ca\ca*
+\cp 3 cp \wj wj marker \wj*
+\p
+\v 1 Notice that this chapter's attribute marker ca properly applies to the chapter as the altnumber attribute. However, its attribute marker cp should not be translated into pubnumber because it has markers in it. But Paratext 9.5 does not realize cp should be its own marker and improperly applies the part of cp before any markers as the pubnumber and puts the rest of the contents after the chapter marker.
+\v 2
+\v 3
+\v 4
+\v 5
+\v 6
+\v 7
+\v 8
+\v 9
+\v 10
+\v 11
+\v 12
+\v 13
+\v 14
+\v 15
+\v 16
+\v 17
+\v 18
+\v 19
+\v 20
+\v 21
+\v 22
+\v 23
+\v 24
+\v 25
+\v 26
+\v 27
+\v 28
+\v 29
+\v 30
+\v 31
+\v 32
+\v 33
+\v 34
+\v 35
+\v 36
+\v 37
+\v 38
+\v 39
