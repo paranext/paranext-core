@@ -90,7 +90,7 @@ const defaultProjectName = '';
 
 const defaultTextDirection = 'ltr';
 
-const formattedView: ViewOptions = { ...getDefaultViewOptions() };
+const formattedView: ViewOptions = getDefaultViewOptions();
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -115,11 +115,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
 
-  const [footnotePopoverX, setFootnotePopoverX] = useState<number>();
-  const [footnotePopoverY, setFootnotePopoverY] = useState<number>();
+  // These two control the placement of the note editor popover by setting the location of the anchor
+  const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
+  const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
+
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
-  const editingNoteKey = useRef<string>();
-  const editingNoteOps = useRef<DeltaOp[]>();
+  const [editingNoteKey, setEditingNoteKey] = useState<string>();
+  const [editingNoteOps, setEditingNoteOps] = useState<DeltaOp[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -631,29 +633,34 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
-      noteCallerOnClick: (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-        if (!isReadOnly) {
-          // The event type that its being cast to does not include `clientX` and `clientY` but
-          // they are still apart of the object, accesses them by casting to the original
-          // `onClick` event type
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          const originalClickEvent = event as unknown as MouseEvent<HTMLButtonElement, MouseEvent>;
-          const clickX = originalClickEvent.clientX;
-          const clickY = originalClickEvent.clientY;
-          setFootnotePopoverX(clickX);
-          setFootnotePopoverY(clickY - 5);
+      noteCallerOnClick: isReadOnly
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            // The event type that its being cast to does not include `clientX` and `clientY` but
+            // they are still apart of the object, accesses them by casting to the original
+            // `onClick` event type
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const originalClickEvent = event as unknown as MouseEvent<
+              HTMLButtonElement,
+              MouseEvent
+            >;
+            const clickX = originalClickEvent.clientX;
+            const clickY = originalClickEvent.clientY;
+            setNotePopoverAnchorX(clickX);
+            // The offset here makes it so that the top of the anchor is just above the line of next
+            // where the note caller is to make that editor show above that
+            setNotePopoverAnchorY(clickY - 5);
 
-          if (isCollapsed) {
-            if (editingNoteKey.current) return;
+            if (isCollapsed) {
+              if (editingNoteKey) return;
 
-            editingNoteKey.current = noteNodeKey;
-            editingNoteOps.current = getNoteOps();
-            setShowFootnoteEditor(true);
-          }
-        }
-      },
+              setEditingNoteKey(noteNodeKey);
+              setEditingNoteOps(getNoteOps());
+              setShowFootnoteEditor(true);
+            }
+          },
     }),
-    [isReadOnly],
+    [isReadOnly, editingNoteKey],
   );
 
   const options = useMemo<EditorOptions>(
@@ -667,11 +674,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, textDirectionEffective, nodeOptions],
   );
 
-  const closeFootnoteEditor = useCallback(() => {
-    editingNoteKey.current = undefined;
-    editingNoteOps.current = undefined;
+  const onFootnoteEditorClose = useCallback(() => {
+    setEditingNoteKey(undefined);
+    setEditingNoteOps(undefined);
     setShowFootnoteEditor(false);
   }, []);
+
+  const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
+    if (editingNoteKey) {
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey, newNoteOps);
+    }
+    onFootnoteEditorClose();
+  };
 
   function renderEditor() {
     const commonProps = {
@@ -788,8 +802,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <PopoverAnchor
           className="tw-absolute"
           style={{
-            top: footnotePopoverY,
-            left: footnotePopoverX,
+            top: notePopoverAnchorY,
+            left: notePopoverAnchorX,
+            // This height makes it so that visually the popover displays below the current line where the footnote is
             height: '15px',
             width: 0,
             pointerEvents: 'none',
@@ -797,11 +812,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         />
         <PopoverContent className="tw-w-96 tw-p-[10px]">
           <FootnoteEditor
-            parentRef={editorRef.current}
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            closeEditor={closeFootnoteEditor}
+            noteOps={editingNoteOps}
+            noteKey={editingNoteKey}
+            onSave={onFootnoteEditorSave}
+            onClose={onFootnoteEditorClose}
             scrRef={scrRef}
+            viewOptions={options.view ?? formattedView}
           />
         </PopoverContent>
       </Popover>
