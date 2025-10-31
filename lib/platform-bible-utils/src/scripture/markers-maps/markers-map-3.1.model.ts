@@ -674,7 +674,7 @@ export const USFM_MARKERS_MAP: MarkersMap = deepFreeze({
   version: '3.1',
   commit: '50f2a6ac3fc1d867d906df28bc00fcff729a7b76',
   markersMapVersion: '1.0.0',
-  usfmToolsVersion: '06981ba849b742d51d80cafb715f60ba166433c5+',
+  usfmToolsVersion: '39dc10f26a33da0de4eb5b269f5bba1f2fd35c48',
   markers: {
     add: {
       type: 'char',

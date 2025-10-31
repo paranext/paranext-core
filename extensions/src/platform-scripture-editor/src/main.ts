@@ -13,7 +13,7 @@ import {
   LanguageStrings,
   LocalizeKey,
   serialize,
-  USFM_MARKERS_MAP_3_1,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -316,27 +316,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             );
 
           const usjRW = new UsjReaderWriter(usjChapter, {
-            markersMap: {
-              ...USFM_MARKERS_MAP_3_1,
-              // 3.0
-              version: '3.0',
-              // Paratext
-              isSpaceAfterAttributeMarkersContent: true,
-              shouldOptionalClosingMarkersBePresent: true,
-              // 3.0
-              markers: Object.fromEntries(
-                Object.entries(USFM_MARKERS_MAP_3_1.markers).map(([markerName, markerInfo]) => {
-                  if (!markerInfo) return [markerName, markerInfo];
-
-                  const newMarkerInfo = { ...markerInfo };
-
-                  if (newMarkerInfo.defaultAttribute === 'href')
-                    newMarkerInfo.defaultAttribute = 'link-href';
-                  if (markerName === 'k') delete newMarkerInfo.defaultAttribute;
-                  return [markerName, newMarkerInfo];
-                }),
-              ),
-            },
+            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
           });
 
           // Convert the range now - easy conversion if already jsonPath, but need to run conversion

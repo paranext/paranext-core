@@ -2164,6 +2164,11 @@ export type MarkersMap = {
  * file
  */
 declare const USFM_MARKERS_MAP: MarkersMap;
+/**
+ * A map of all USFM/USX/USJ markers and some information about them. Generated from a `usx.rng`
+ * file and adjusted to reflect the way Paratext 9.4 handles USFM.
+ */
+declare const USFM_MARKERS_MAP_PARATEXT: MarkersMap;
 /** USJ content node type for a chapter */
 export declare const CHAPTER_TYPE = "chapter";
 /** USJ content node type for a verse */
@@ -2395,6 +2400,12 @@ export type UsjReaderWriterOptions = {
 	/**
 	 * A map of all USFM/USX/USJ markers and some information about them. Used for translating between
 	 * the formats
+	 *
+	 * Defaults to trying to use a built-in markers map that matches the version of the USJ passed in.
+	 *
+	 * Currently supported built-in USFM versions:
+	 *
+	 * - 3.0/3.0.x
 	 */
 	markersMap?: MarkersMap;
 	/**
@@ -4700,7 +4711,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 }
 
 export {
-	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1,
+	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
 };
 
 export {};
