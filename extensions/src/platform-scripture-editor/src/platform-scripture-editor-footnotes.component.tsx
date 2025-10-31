@@ -1,29 +1,30 @@
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  FOOTNOTE_LIST_STRING_KEYS,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
+import { getPaneSizeLimits, UsjReaderWriter } from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
 import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
-// REVIEW: Is there a proper way to get this from the list component rather than hardcoding here?
-const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[] = ['%webView_footnoteList_header%'];
+// TODO: calculate these dynamically:
+const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
+const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 
-export type FootnotesLayoutProps = {
-  children: ReactNode;
+export type FootnotesLayoutProps = PropsWithChildren<{
   usj: Usj;
   showMarkers: boolean;
   useWebViewState: UseWebViewStateHook;
-  onFootnoteSelected: (index: number) => void;
-};
+  onFootnoteSelected?: (index: number) => void;
+}>;
 
-export default function FootnotesLayout({
+export function FootnotesLayout({
   children,
   usj,
   showMarkers,
@@ -60,12 +61,21 @@ export default function FootnotesLayout({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(0);
+  const [containerHeight, setContainerHeight] = useState(0);
 
   useEffect(() => {
-    if (containerRef.current) {
-      setContainerHeight(containerRef.current.clientHeight);
-    }
+    const element = containerRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver(() => {
+      setContainerHeight(element.clientHeight);
+    });
+
+    observer.observe(element);
+
+    setContainerHeight(element.clientHeight);
+
+    return () => observer.disconnect();
   }, []);
 
   const [footnotesPanePosition, setFootnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
@@ -103,94 +113,75 @@ export default function FootnotesLayout({
     };
   }, [setFootnotesPanePosition]);
 
-  const [footnotesPaneSize, setFootnotesPaneSize] = useWebViewState<number>(
-    'footnotesPaneSize',
+  const [footnotesPaneSizePercent, setFootnotesPaneSizePercent] = useWebViewState<number>(
+    'footnotesPaneSizePercent',
     20,
   );
 
-  const debouncedSetFootnotesPaneSize = useMemo(() => {
-    let timeout: ReturnType<typeof setTimeout>;
-    return (size: number) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => setFootnotesPaneSize(size), 50);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const debouncedSetFootnotesPaneSize = useCallback(
+    (size: number) => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setFootnotesPaneSizePercent(size), 50);
+    },
+    [setFootnotesPaneSizePercent],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [setFootnotesPaneSize]);
+  }, []);
 
-  /** Computes the footnotes pane min/max percentages based on total available height. */
-  function getFootnotesPaneSizeLimits(availableHeightPx: number) {
-    const splitterHeightPx = 4;
-    const usableHeightPx = availableHeightPx - splitterHeightPx;
-    // Ensure the footnotes pane never shrinks to nothing or takes over the world.
-    const footnotesPaneAbsoluteMinPercent = 3;
-    const footnotesPaneAbsoluteMaxPercent = 90;
-    // TODO: calculate these dynamically:
-    const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
-    const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
-
-    let footnotesPaneMinPercent: number;
-    let footnotesPaneMaxPercent: number;
-
-    if (usableHeightPx < footnoteRowHeightPx + minimumEditorHeightPx) {
-      // Fallback for very small or unmeasured container
-      footnotesPaneMinPercent = footnotesPaneAbsoluteMinPercent;
-      footnotesPaneMaxPercent = footnotesPaneAbsoluteMaxPercent;
-    } else {
-      // Max percent: leave enough space for the editor to show a little bit of actual text.
-      footnotesPaneMaxPercent = Math.min(
-        Math.floor(((usableHeightPx - minimumEditorHeightPx) / usableHeightPx) * 100),
-        footnotesPaneAbsoluteMaxPercent,
-      );
-
-      // Min percent: enough for a single footnote row
-      footnotesPaneMinPercent = Math.min(
-        Math.max(
-          Math.ceil((footnoteRowHeightPx / usableHeightPx) * 100),
-          footnotesPaneAbsoluteMinPercent,
-        ),
-        footnotesPaneMaxPercent, // never exceed max
-      );
-    }
-
-    return {
-      calculatedFootnotesPaneMinPercent: footnotesPaneMinPercent,
-      calculatedFootnotesPaneMaxPercent: footnotesPaneMaxPercent,
-    };
-  }
-
-  const { calculatedFootnotesPaneMinPercent, calculatedFootnotesPaneMaxPercent } =
-    getFootnotesPaneSizeLimits(containerHeight);
+  const {
+    minPercent: calculatedFootnotesPaneMinPercent,
+    maxPercent: calculatedFootnotesPaneMaxPercent,
+  } = getPaneSizeLimits(containerHeight, {
+    secondaryPaneMinHeightPx: footnoteRowHeightPx,
+    mainPaneMinHeightPx: minimumEditorHeightPx,
+  });
 
   // Make sure the calculated range accommodates the current saved size. There is an off-chance this
   // could allow for the splitter to get dragged to a size we're not happy about, but it is very
   // unlikely and this is better than having the size jump around unexpectedly. I assume it could
   // only happen if for some reason the WebView came up at a very different size than when it was
   // last used and the split percentage was saved.
-  const footnotesPaneMaxPercent = Math.max(calculatedFootnotesPaneMaxPercent, footnotesPaneSize);
-  const footnotesPaneMinPercent = Math.min(calculatedFootnotesPaneMinPercent, footnotesPaneSize);
+  const footnotesPaneMaxPercent = Math.max(
+    calculatedFootnotesPaneMaxPercent,
+    footnotesPaneSizePercent,
+  );
+  const footnotesPaneMinPercent = Math.min(
+    calculatedFootnotesPaneMinPercent,
+    footnotesPaneSizePercent,
+  );
 
   useEffect(() => {
     if (containerHeight <= 0) return;
 
     const clampedSize = Math.min(
-      Math.max(footnotesPaneSize, calculatedFootnotesPaneMinPercent),
+      Math.max(footnotesPaneSizePercent, calculatedFootnotesPaneMinPercent),
       calculatedFootnotesPaneMaxPercent,
     );
 
-    if (clampedSize !== footnotesPaneSize) {
-      setFootnotesPaneSize(clampedSize);
+    if (clampedSize !== footnotesPaneSizePercent) {
+      setFootnotesPaneSizePercent(clampedSize);
     }
   }, [
     containerHeight,
-    footnotesPaneSize,
-    setFootnotesPaneSize,
+    footnotesPaneSizePercent,
+    setFootnotesPaneSizePercent,
     calculatedFootnotesPaneMaxPercent,
     calculatedFootnotesPaneMinPercent,
   ]);
 
-  const onLayoutFootnotesPane = (sizes: number[]) => {
-    if (!sizes || sizes.length < 2) return;
-    debouncedSetFootnotesPaneSize(sizes[1]);
-  };
+  const onLayoutFootnotesPane = useCallback(
+    (sizes: number[]) => {
+      if (!sizes || sizes.length < 2) return;
+      debouncedSetFootnotesPaneSize(sizes[1]);
+    },
+    [debouncedSetFootnotesPaneSize],
+  );
 
   /** Handle a footnote selection request. */
   const handleFootnoteSelected = useCallback(
@@ -198,12 +189,16 @@ export default function FootnotesLayout({
       if (index < 0 || index >= footnotes.length || listId !== footnoteListKey) return;
 
       setSelectedFootnote({ footnote: footnotes[index], index });
-      onFootnoteSelected(index);
+      onFootnoteSelected?.(index);
     },
     [footnotes, footnoteListKey, onFootnoteSelected],
   );
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => FOOTNOTE_LIST_STRING_KEYS, []));
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => {
+      return Array.from(FOOTNOTE_LIST_STRING_KEYS);
+    }, []),
+  );
 
   return (
     <div ref={containerRef} className="tw-h-full tw-w-full tw-min-h-0">
@@ -212,12 +207,16 @@ export default function FootnotesLayout({
         className="tw-h-full tw-w-full tw-min-h-0"
         onLayout={onLayoutFootnotesPane}
       >
-        <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
-          <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">{children}</div>
-        </ResizablePanel>
-        <ResizableHandle />
+        {children && (
+          <>
+            <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
+              <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">{children}</div>
+            </ResizablePanel>
+            <ResizableHandle />
+          </>
+        )}
         <ResizablePanel
-          defaultSize={footnotesPaneSize}
+          defaultSize={footnotesPaneSizePercent}
           className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}

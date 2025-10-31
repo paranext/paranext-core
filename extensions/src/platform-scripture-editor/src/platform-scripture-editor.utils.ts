@@ -8,4 +8,4 @@ export function valuesAreDeeplyEqual(a: unknown, b: unknown): boolean {
 }
 
 // Alias that makes the "across iframes" intent explicit for callers that prefer it.
-export const valuesAreDeeplyEqualAcrossIframes = valuesAreDeeplyEqual;
+export const deepEqualAcrossIframes = valuesAreDeeplyEqual;

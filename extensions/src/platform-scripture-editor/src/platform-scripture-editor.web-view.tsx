@@ -46,8 +46,8 @@ import {
 import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import FootnotesLayout from './platform-scripture-editor.footnotes.component';
-import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
+import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -317,7 +317,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const usjSentToPdp = useRef(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
-  const [actualUsj, setActualUsj] = useState<Usj | undefined>();
+  const [usjForFootnoteDisplay, setUsjForFootnoteDisplay] = useState<Usj | undefined>();
 
   const handleFootnoteSelected = useCallback((index: number) => {
     editorRef.current?.selectNote(index);
@@ -499,10 +499,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
     // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
-    // we may have set the editor from the PDP if the PDP had a "trumping" change.
+    // we may have set the editor from the PDP if the PDP had a "trumping" change. Ira expressed
+    // doubts as to whether the above changes will have been fully applied to the editor by now, but
+    // they seem to be. At least I have not yet found another way to do this that keeps the
+    // footnotes in sync.
     const authoritativeUsj =
       editorRef.current?.getUsj() ?? usjFromPdpWithAnchors.current ?? usjFromPdp;
-    if (authoritativeUsj) setActualUsj(authoritativeUsj);
+    if (authoritativeUsj) setUsjForFootnoteDisplay(authoritativeUsj);
 
     // Make sure the editor has the latest comment data from the PDP
     if (
@@ -519,7 +522,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     legacyCommentsFromPdp,
     saveUsjToPdpIfUpdated,
     usjFromPdp,
-    setActualUsj,
+    setUsjForFootnoteDisplay,
   ]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
@@ -759,9 +762,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 </Alert>
               ))}
 
-              {footnotesPaneVisible && actualUsj ? (
+              {footnotesPaneVisible && usjForFootnoteDisplay ? (
                 <FootnotesLayout
-                  usj={actualUsj}
+                  usj={usjForFootnoteDisplay}
                   onFootnoteSelected={handleFootnoteSelected}
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}

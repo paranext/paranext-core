@@ -2035,6 +2035,48 @@ export declare function isWhiteSpace(ch: string): boolean;
  * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
  */
 export declare function toKebabCase(input: string): string;
+/** Options for calculating resizable pane size limits. */
+export interface PaneSizeLimitsOptions {
+	/**
+	 * The height of the splitter between the two panes, in pixels.
+	 *
+	 * @default 4
+	 */
+	splitterHeightPx?: number;
+	/**
+	 * Minimum height of the secondary pane (the pane whose size is to be constrained), in pixels.
+	 * Ensures the secondary pane never shrinks below this height.
+	 *
+	 * @default 20
+	 */
+	secondaryPaneMinHeightPx?: number;
+	/**
+	 * Minimum height of the main pane (the other pane), in pixels. Ensures the main pane always has
+	 * some visible content.
+	 *
+	 * @default 60
+	 */
+	mainPaneMinHeightPx?: number;
+	/**
+	 * Absolute minimum percentage of the total available height that the secondary pane can occupy.
+	 * Used to avoid the pane collapsing completely (e.g., if the available height is less that the
+	 * combined minimums).
+	 *
+	 * @default 3
+	 */
+	absoluteMinPercent?: number;
+	/**
+	 * Absolute maximum percentage of the total available height that the secondary pane can occupy.
+	 * Can be used to keep the "main" pane from being overwhelmed by the size of the secondary pane.
+	 *
+	 * @default 90
+	 */
+	absoluteMaxPercent?: number;
+}
+export declare function getPaneSizeLimits(availableHeightPx: number, opts?: PaneSizeLimitsOptions): {
+	minPercent: number;
+	maxPercent: number;
+};
 /**
  * Check that two objects are deeply equal, comparing members of each object and such
  *

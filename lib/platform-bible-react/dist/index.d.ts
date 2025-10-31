@@ -629,7 +629,12 @@ export interface FootnoteListProps {
 }
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
-declare const FOOTNOTE_LIST_STRING_KEYS: readonly [
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const FOOTNOTE_LIST_STRING_KEYS: readonly [
 	"%webView_footnoteList_header%"
 ];
 type FootnoteListLocalizedStrings = {
