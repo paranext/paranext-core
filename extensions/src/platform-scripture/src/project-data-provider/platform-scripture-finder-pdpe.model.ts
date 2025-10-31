@@ -8,6 +8,7 @@ import {
   escapeStringRegexp,
   getErrorMessage,
   newGuid,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -193,7 +194,7 @@ export class ScriptureFinderProjectDataProviderEngine
     if (!usx) throw new Error(`No scripture found for: ${JSON.stringify(scope)}`);
     const scripture: Usj | undefined = usxStringToUsj(usx);
 
-    const usj = new UsjReaderWriter(scripture);
+    const usj = new UsjReaderWriter(scripture, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
     const regexString = job.options.useRegex
       ? job.options.searchString
       : escapeStringRegexp(job.options.searchString);

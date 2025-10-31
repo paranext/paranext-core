@@ -37,8 +37,8 @@ import {
   MarkerInfo,
   MarkersMap,
   MarkerTypeInfo,
-  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1,
-} from './markers-map-3.1.model';
+  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+} from './markers-maps/markers-map-3.0.model';
 import { isString } from '../util';
 import { deepEqual } from '../equality-checking';
 
@@ -230,19 +230,32 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     const { markersMap: providedMarkersMap, shouldAllowInvisibleCharacters } = options ?? {};
 
-    if (providedMarkersMap) this.markersMap = providedMarkersMap;
-    else {
-      if (this.usj.version !== '3.1' && this.usj.version !== '3.0')
-        throw new Error('USJ version is not 3.1 or 3.0! Not equipped to handle yet');
-      // TODO: Handle 3.0 properly when we get a better markers map
-      // TODO: Handle other than 3.1/0
-      this.markersMap = USFM_MARKERS_MAP_3_1;
-    }
+    if (providedMarkersMap) {
+      this.markersMap = providedMarkersMap;
 
-    if (this.usj.version !== this.markersMap.version)
-      console.warn(
-        `Warning: USJ provided has version ${this.usj.version}, but markers map has version ${this.markersMap.version}. This may cause unexpected issues when transforming between formats.`,
-      );
+      if (this.usj.version !== this.markersMap.version)
+        console.warn(
+          `Warning: USJ provided has version ${
+            this.usj.version
+          }, but provided markers map has version ${
+            this.markersMap.version
+          }. This may cause unexpected issues when transforming between formats.`,
+        );
+    } else {
+      // Use a built-in markers map based on the USJ version
+
+      // Get the USJ version from the USJ. The `Usj` type doesn't realize you can have a different
+      // version from 3.1, but it can have whatever version in it
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const usjVersion = this.usj.version as string;
+
+      if (usjVersion === '3.0' || usjVersion.startsWith('3.0.'))
+        this.markersMap = USFM_MARKERS_MAP_3_0;
+      else
+        throw new Error(
+          'USJ version is not 3.0 or 3.0.x! Not equipped to handle yet without passing in a markers map',
+        );
+    }
 
     if (!this.markersMap.markersMapVersion.startsWith('1.'))
       throw new Error(
