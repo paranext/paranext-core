@@ -4,7 +4,7 @@ import {
   type MarkerObject,
 } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { MarkersMap } from './markers-map-3.1.model';
+import { MarkersMap } from './markers-maps/markers-map-3.0.model';
 
 /** USJ content node type for a book */
 export const BOOK_TYPE = 'book';
@@ -290,6 +290,12 @@ export type UsjReaderWriterOptions = {
   /**
    * A map of all USFM/USX/USJ markers and some information about them. Used for translating between
    * the formats
+   *
+   * Defaults to trying to use a built-in markers map that matches the version of the USJ passed in.
+   *
+   * Currently supported built-in USFM versions:
+   *
+   * - 3.0/3.0.x
    */
   markersMap?: MarkersMap;
   /**

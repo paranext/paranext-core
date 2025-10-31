@@ -35,6 +35,7 @@ import {
   isPlatformError,
   LocalizeKey,
   serialize,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -359,7 +360,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Remove the milestones that we inserted before writing back to the PDP
       const clonedUsj = deepClone(newUsj);
-      const usjRW = new UsjReaderWriter(clonedUsj);
+      const usjRW = new UsjReaderWriter(clonedUsj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
       usjRW.removeContentNodes((node: MarkerContent) => {
         if (typeof node === 'string') return false;
         if (node.type !== 'ms') return false;
@@ -439,7 +440,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       legacyCommentsFromPdp.forEach((existingComment) => legacyCommentIds.add(existingComment.id));
 
       // Determine which "new" comments are actually new
-      const usjRW = new UsjReaderWriter(usjWithAnchors);
+      const usjRW = new UsjReaderWriter(usjWithAnchors, {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+      });
       const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
       const legacyCommentsToAdd: LegacyComment[] = [];
       newLegacyComments.forEach((newComment) => {
@@ -555,9 +558,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         let nextTextLocationJsonPath = '';
         try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(
-            scrRef,
-          ).documentLocation.jsonPath;
+          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
+            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+          }).verseRefToNextTextLocation(scrRef).documentLocation.jsonPath;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
