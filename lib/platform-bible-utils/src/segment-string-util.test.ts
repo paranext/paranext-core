@@ -23,7 +23,7 @@ import {
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
   toKebabCase,
-} from './string-util';
+} from './segment-string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
@@ -640,8 +640,7 @@ describe('indexOf', () => {
 
   it('indexOf with empty search string', () => {
     const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '');
-    // NOTE(mattg): This is bad behavior, and I don't think we should support it.
-    expect(result).toEqual(0);
+    expect(result).toEqual(-1);
   });
 
   it('indexOf with a search length longer than 1', () => {
@@ -690,8 +689,7 @@ describe('lastIndexOf', () => {
 
   it('lastIndexOf with empty search string', () => {
     const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '');
-    // NOTE(mattg): This is bad behavior, and I don't think we should support it.
-    expect(result).toEqual(75);
+    expect(result).toEqual(-1);
   });
 
   it('lastIndexOf with a search length longer than 1', () => {
