@@ -2,6 +2,7 @@ import { Comments } from '@eten-tech-foundation/platform-editor';
 import { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   CHAPTER_TYPE,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsfmVerseLocation,
   UsjNodeAndDocumentLocation,
   UsjReaderWriter,
@@ -253,7 +254,7 @@ function insertAnchorIfNeeded(
  * @returns True if some comment anchors were inserted, false if no comment anchors were inserted
  */
 export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComment[]): boolean {
-  const usjRW = new UsjReaderWriter(usj);
+  const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
   let usjChanged = false;
 
   const threads = convertLegacyCommentsToEditorThreads(legacyComments);

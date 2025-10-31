@@ -6,10 +6,11 @@
 // Disabling camelcase and @typescript-eslint/naming-convention so we can use 3_1 indicating USFM 3.1
 import fs from 'fs';
 import path from 'path';
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import { Usj, USJ_TYPE } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from './usj-reader-writer';
 import { usjMat1 } from './footnote-util-test.usj.data';
-import { USFM_MARKERS_MAP, USFM_MARKERS_MAP_PARATEXT } from './markers-map-3.1.model';
+import { USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0 } from './markers-maps/markers-map-3.0.model';
+import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-maps/markers-map-3.1.model';
 import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.model';
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
@@ -27,29 +28,17 @@ function readTestDataFile(fileName: string) {
 
 // #endregion set up file path variables
 
-// #region some testing prerequisites
+// #region UsjReaderWriter markers maps
 
-const paratextUsjReaderWriterOptions: UsjReaderWriterOptions = {
-  // TODO: Generate accurate 3.0 markers map
-  markersMap: {
-    ...USFM_MARKERS_MAP_PARATEXT,
-    // 3.0
-    version: '3.0',
-    markers: Object.fromEntries(
-      Object.entries(USFM_MARKERS_MAP.markers).map(([markerName, markerInfo]) => {
-        if (!markerInfo) return [markerName, markerInfo];
-
-        const newMarkerInfo = { ...markerInfo };
-
-        if (newMarkerInfo.defaultAttribute === 'href') newMarkerInfo.defaultAttribute = 'link-href';
-        if (markerName === 'k') delete newMarkerInfo.defaultAttribute;
-        return [markerName, newMarkerInfo];
-      }),
-    ),
-  },
+const usjReaderWriterOptions3_1: UsjReaderWriterOptions = {
+  markersMap: USFM_MARKERS_MAP_3_1,
 };
 
-// #endregion
+const usjReaderWriterOptionsParatext3_0: UsjReaderWriterOptions = {
+  markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+};
+
+// #endregion UsjReaderWriter markers maps
 
 // #region Matthew 1-2 test data
 
@@ -487,7 +476,7 @@ function test_UsjDocumentLocationToUsfmVerseLocation(
 }
 
 describe('jsonPathToUsfmVerseLocation translates USJ jsonPath to UsfmVerseLocation', () => {
-  test('Matthew 1-2 WEB', () => {
+  test('Matthew 1-2 WEB 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
     const expectedResults = [
       { jsonPath: '$.content[0]', chapter: 1, verse: 0, offset: 0 },
@@ -530,7 +519,9 @@ describe('jsonPathToUsfmVerseLocation translates USJ jsonPath to UsfmVerseLocati
     expect(() => {
       new UsjReaderWriter({
         type: USJ_TYPE,
-        version: USJ_VERSION,
+        // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        version: '3.0' as '3.1',
         content: [],
       }).jsonPathToUsfmVerseLocation('');
     }).toThrow('No result found for JSONPath query: ');
@@ -538,7 +529,7 @@ describe('jsonPathToUsfmVerseLocation translates USJ jsonPath to UsfmVerseLocati
 });
 
 describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locations to USFM locations', () => {
-  test('Matthew 1-2 WEB', () => {
+  test('Matthew 1-2 WEB 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     test_UsjDocumentLocationToUsfmVerseLocation(usjDoc, matthew1And2Locations);
@@ -553,8 +544,8 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
     );
   });
 
-  test('Matthew 2 with verse range added', () => {
-    const usjDoc = new UsjReaderWriter(matthew2verseRangeUsj);
+  test('Matthew 2 with verse range added 3.1', () => {
+    const usjDoc = new UsjReaderWriter(matthew2verseRangeUsj, usjReaderWriterOptions3_1);
 
     const result0 = usjDoc.usjDocumentLocationToUsfmVerseLocation(
       {
@@ -571,8 +562,8 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
     expect(result0.offset).toEqual(0);
   });
 
-  test('Paratext 2SA 1 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, paratextUsjReaderWriterOptions);
+  test('Paratext 2SA 1 testUSFM 3.0', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, usjReaderWriterOptionsParatext3_0);
 
     test_UsjDocumentLocationToUsfmVerseLocation(usjDoc, testUSFM2SaCh1Locations);
 
@@ -589,7 +580,9 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
   test('Bookless USJ Document', () => {
     const booklessUsjDoc = new UsjReaderWriter({
       type: USJ_TYPE,
-      version: USJ_VERSION,
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as '3.1',
       content: ['This USJ document has no book'],
     });
 
@@ -615,7 +608,7 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
 });
 
 describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to USJ document locations', () => {
-  test('Matthew 1-2 WEB', () => {
+  test('Matthew 1-2 WEB 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, matthew1And2Locations);
@@ -695,7 +688,9 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
     expect(() => {
       new UsjReaderWriter({
         type: USJ_TYPE,
-        version: USJ_VERSION,
+        // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        version: '3.0' as '3.1',
         content: [],
       }).usfmLocationToUsjNodeAndDocumentLocation({
         verseRef: { book: 'JHN', chapterNum: 1, verseNum: 1 },
@@ -705,8 +700,8 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
     );
   });
 
-  test('Matthew 2 with verse range added', () => {
-    const usjDoc = new UsjReaderWriter(matthew2verseRangeUsj);
+  test('Matthew 2 with verse range added 3.1', () => {
+    const usjDoc = new UsjReaderWriter(matthew2verseRangeUsj, usjReaderWriterOptions3_1);
 
     const result0 = usjDoc.usfmLocationToUsjNodeAndDocumentLocation({
       verseRef: { book: 'MAT', chapterNum: 2, verseNum: 21, verse: '21-22' },
@@ -721,8 +716,8 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
     expect(result0.documentLocation).not.toHaveProperty('offset');
   });
 
-  test('Paratext 2SA 1 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, paratextUsjReaderWriterOptions);
+  test('Paratext 2SA 1 testUSFM 3.0', () => {
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, usjReaderWriterOptionsParatext3_0);
 
     test_UsfmLocationToUsjNodeAndDocumentLocation(usjDoc, testUSFM2SaCh1Locations);
 
@@ -775,7 +770,9 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
   test('Bookless USJ Document', () => {
     const booklessUsjDoc = new UsjReaderWriter({
       type: USJ_TYPE,
-      version: USJ_VERSION,
+      // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      version: '3.0' as '3.1',
       content: ['This USJ document has no book'],
     });
 
@@ -812,7 +809,7 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
 });
 
 describe('Find USJ details for text searches', () => {
-  test('verseRefToNextTextLocation takes USJ location and finds USJ details for next text', () => {
+  test('verseRefToNextTextLocation takes USJ location and finds USJ details for next text 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     // Start from a verse node
@@ -837,7 +834,7 @@ describe('Find USJ details for text searches', () => {
     }).toThrow('Verse 1 not found in MAT 3');
   });
 
-  test('findNextLocationOfMatchingText takes location and text and finds USJ details for next occurrence', () => {
+  test('findNextLocationOfMatchingText takes location and text and finds USJ details for next occurrence 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     // Start from a verse node
@@ -964,7 +961,7 @@ describe('Find USJ details for text searches', () => {
     expect(result10.documentLocation.offset).toBe(22);
   });
 
-  test('search with various regex patterns finds USJ details for match(es)', () => {
+  test('search with various regex patterns finds USJ details for match(es) 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     // Test 1: Find all occurrences of "father" with global regex
@@ -1082,8 +1079,8 @@ describe('Find USJ details for text searches', () => {
 });
 
 describe('findAllNotes', () => {
-  it('should extract multiple notes from real-life data', () => {
-    const usjDoc = new UsjReaderWriter(usjMat1);
+  it('should extract multiple notes from real-life data 3.1', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
     const result = usjDoc.findAllNotes();
 
     expect(result.length).toEqual(10);
@@ -1109,21 +1106,21 @@ describe('findAllNotes', () => {
 
 describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
   test('Matthew 1-2 WEB', () => {
-    const usjDoc = new UsjReaderWriter(matthew1And2Usj, paratextUsjReaderWriterOptions);
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj, usjReaderWriterOptionsParatext3_0);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(matthew1And2Usfm);
   });
 
   test('2SA 1 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, paratextUsjReaderWriterOptions);
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, usjReaderWriterOptionsParatext3_0);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh1Usfm);
   });
 
   test('2SA 2 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh2Usj, paratextUsjReaderWriterOptions);
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh2Usj, usjReaderWriterOptionsParatext3_0);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh2Usfm);
@@ -1134,14 +1131,17 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
   // TODO: link YouTrack case if they agree this is a bug
   // eslint-disable-next-line jest/no-disabled-tests
   test.skip('2SA 3 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh3Usj, paratextUsjReaderWriterOptions);
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh3Usj, usjReaderWriterOptionsParatext3_0);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
   });
 
   test('2SA 3 testUSFM corrected', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCorrected, paratextUsjReaderWriterOptions);
+    const usjDoc = new UsjReaderWriter(
+      testUSFM2SACh3UsjCorrected,
+      usjReaderWriterOptionsParatext3_0,
+    );
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
@@ -1150,35 +1150,35 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
 
 describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
   test('2SA 1 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1);
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1, usjReaderWriterOptions3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh1UsfmCanonical3_1);
   });
 
   test('2SA 2 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh2UsjCanonical3_1);
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh2UsjCanonical3_1, usjReaderWriterOptions3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh2UsfmCanonical3_1);
   });
 
   test('2SA 3 testUSFM', () => {
-    const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCanonical3_1);
+    const usjDoc = new UsjReaderWriter(testUSFM2SACh3UsjCanonical3_1, usjReaderWriterOptions3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3UsfmCanonical3_1);
   });
 
   test('Generated refs', () => {
-    const usjDoc = new UsjReaderWriter(exampleGeneratedRefsUsj);
+    const usjDoc = new UsjReaderWriter(exampleGeneratedRefsUsj, usjReaderWriterOptions3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(exampleGeneratedRefsUsfm);
   });
 
   test('Provided refs', () => {
-    const usjDoc = new UsjReaderWriter(exampleProvidedRefsUsj);
+    const usjDoc = new UsjReaderWriter(exampleProvidedRefsUsj, usjReaderWriterOptions3_1);
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(exampleProvidedRefsUsfm);
