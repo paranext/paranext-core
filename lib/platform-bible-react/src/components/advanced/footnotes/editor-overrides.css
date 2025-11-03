@@ -1,5 +1,5 @@
 /* By default the editor is too tall for the footnote editor, even while empty, so this makes it 
    shorter. */
-.editor-input {
+.footnote-editor .editor-input {
   min-height: 75px;
 }

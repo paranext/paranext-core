@@ -6,7 +6,6 @@ import {
   Marginal,
   MarginalRef,
   SelectionRange,
-  ViewOptions,
   getDefaultViewOptions,
   UsjNodeOptions,
   DeltaOp,
@@ -90,8 +89,6 @@ const defaultProjectName = '';
 
 const defaultTextDirection = 'ltr';
 
-const formattedView: ViewOptions = getDefaultViewOptions();
-
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
 
@@ -118,6 +115,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // These two control the placement of the note editor popover by setting the location of the anchor
   const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
+  const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
   const [editingNoteKey, setEditingNoteKey] = useState<string>();
@@ -640,16 +638,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // they are still apart of the object, accesses them by casting to the original
             // `onClick` event type
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const originalClickEvent = event as unknown as MouseEvent<
-              HTMLButtonElement,
-              MouseEvent
-            >;
-            const clickX = originalClickEvent.clientX;
-            const clickY = originalClickEvent.clientY;
-            setNotePopoverAnchorX(clickX);
-            // The offset here makes it so that the top of the anchor is just above the line of next
-            // where the note caller is to make that editor show above that
-            setNotePopoverAnchorY(clickY - 5);
+            const originalClickEvent = event as MouseEvent<HTMLButtonElement>;
+            const targetRect = originalClickEvent.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
 
             if (isCollapsed) {
               if (editingNoteKey) return;
@@ -669,7 +662,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
-      view: formattedView,
+      view: getDefaultViewOptions(),
     }),
     [isReadOnly, textDirectionEffective, nodeOptions],
   );
@@ -805,7 +798,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             top: notePopoverAnchorY,
             left: notePopoverAnchorX,
             // This height makes it so that visually the popover displays below the current line where the footnote is
-            height: '15px',
+            height: notePopoverAnchorHeight,
             width: 0,
             pointerEvents: 'none',
           }}
@@ -817,7 +810,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
-            viewOptions={options.view ?? formattedView}
+            viewOptions={options.view ?? getDefaultViewOptions()}
           />
         </PopoverContent>
       </Popover>
