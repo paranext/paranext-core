@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { getPaneSizeLimits } from './pane-utils';
 
 describe('getPaneSizeLimits', () => {
@@ -14,7 +13,7 @@ describe('getPaneSizeLimits', () => {
     expect(maxPercent).toBe(90);
   });
 
-  it('falls back to absolute min/max when options specify min heights greater than available ', () => {
+  it('falls back to absolute min/max when options specify min heights greater than available', () => {
     const { minPercent, maxPercent } = getPaneSizeLimits(502, {
       secondaryPaneMinHeightPx: 50,
       mainPaneMinHeightPx: 450,
