@@ -31,7 +31,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
     #region Consts and member variables
 
-    private readonly Dictionary<string, ParatextCheckDetails> _checkDetailsByCheckId =
+    private readonly Dictionary<string, CheckRunnerCheckDetails> _checkDetailsByCheckId =
         new()
         {
             { CheckType.Capitalization.InternalValue, new(CheckType.Capitalization) },
@@ -53,7 +53,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             { CheckType.Schema.InternalValue, new(CheckType.Schema) },
         };
     private readonly List<string> _allCheckIds;
-    private readonly List<ParatextCheckDetails> _allCheckDetails;
+    private readonly List<CheckRunnerCheckDetails> _allCheckDetails;
     private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = new();
     private readonly ConcurrentDictionary<string, CheckJobStatus> _activeCheckJobsByJobId = new();
     private readonly ConcurrentQueue<string> _queuedCheckJobs = new();
@@ -101,7 +101,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
     #region CheckRunner methods
 
-    private List<ParatextCheckDetails> GetAvailableChecks(JsonElement _ignore)
+    private List<CheckRunnerCheckDetails> GetAvailableChecks(JsonElement _ignore)
     {
         return _allCheckDetails;
     }
@@ -163,7 +163,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         ArgumentException.ThrowIfNullOrEmpty(projectId);
         ArgumentNullException.ThrowIfNull(checkInputRange);
 
-        var dataSource = _checkCache.GetChecksDataSource(projectId);
+        var dataSource = DataSourceCache.GetChecksDataSource(projectId);
         var check = CheckFactory.CreateCheck(checkId, dataSource);
         if (check is not ScriptureInventoryBase checkWithInventory)
         {
@@ -214,7 +214,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        var dataSource = _checkCache.GetChecksDataSource(projectId);
+        var dataSource = DataSourceCache.GetChecksDataSource(projectId);
         var check = CheckFactory.CreateCheck(checkId, dataSource);
         return check.SetupComplete;
     }
@@ -376,7 +376,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 
         // "GetText" will tokenize the text for checks to use
         // "0" chapter number means all chapters
-        var checkDataSource = _checkCache.GetChecksDataSource(range.ProjectId);
+        var checkDataSource = DataSourceCache.GetChecksDataSource(range.ProjectId);
         checkDataSource.GetText(range.Start.BookNum, 0, neededDataFormat);
 
         var scrText = LocalParatextProjects.GetParatextProject(range.ProjectId);

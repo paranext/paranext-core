@@ -1,11 +1,115 @@
 {
   "metadata": {
+    "%inventoryName_Character%": {
+      "fallbackKey": "%CheckType_3%"
+    },
+    "%inventoryName_Marker%": {
+      "fallbackKey": "%CheckType_4%"
+    },
+    "%inventoryName_MatchedPairs%": {
+      "fallbackKey": "%CheckType_5%"
+    },
+    "%inventoryName_MixexCapitalization%": {
+      "fallbackKey": "%MixedCapitalizationCheck_1%"
+    },
+    "%inventoryName_ParagraphFinalPunctuation%": {
+      "fallbackKey": "%CheckType_7%"
+    },
+    "%inventoryName_Punctuation%": {
+      "fallbackKey": "%CheckType_8%"
+    },
+    "%inventoryName_RepeatedWord%": {
+      "fallbackKey": "%CheckType_13%"
+    },
+    "%inventoryName_SentenceFinalCapitalization%": {
+      "fallbackKey": "%SentenceFinalPunctCapitalizationCheck_2%"
+    },
+    "%inventoryName_StylesCapitalization%": {
+      "fallbackKey": "%UncapitalizedStylesCheck_1%"
+    },
+    "%inventoryOptionName_SetVerseAndNonVerseSeparately%": {
+      "fallbackKey": "%Paratext.Checking.InventoryForm.setNonVerseStatus.Text%"
+    },
+    "%inventoryOptionName_MatchedPairs_ClosedByParagraph%": {
+      "fallbackKey": "%MatchedPairsCheck_4%"
+    },
+    "%inventoryOptionName_MatchedPairs_IntroductionOutlineStyles%": {
+      "fallbackKey": "%MatchedPairsCheck_8%"
+    },
+    "%inventoryOptionName_MatchedPairs_Pairs%": {
+      "fallbackKey": "%MatchedPairsCheck_2%"
+    },
+    "%inventoryOptionName_MatchedPairs_PoeticStyles%": {
+      "fallbackKey": "%MatchedPairsCheck_6%"
+    },
+    "%inventoryOptionName_MixexCapitalization_CapitalizedPrefixes%": {
+      "fallbackKey": "%MixedCapitalizationCheck_8%"
+    },
+    "%inventoryOptionName_MixexCapitalization_CapitalizedSuffixes%": {
+      "fallbackKey": "%MixedCapitalizationCheck_6%"
+    },
+    "%inventoryOptionName_MixexCapitalization_UncapitalizedPrefixes%": {
+      "fallbackKey": "%MixedCapitalizationCheck_4%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInCrossRefs%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_13%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFigures%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_15%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFootnotes%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_11%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_IgnoreWhenFollowedByFinalPunctuationParameter%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_5%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_MarkersCheckedForFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_3%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_MarkersSkippedForFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_9%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_MarkersStartingNewSentencesForFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_7%"
+    },
+    "%inventoryOptionName_ParagraphFinalPunctuation_SentenceFinalPunctuation%": {
+      "fallbackKey": "%ParagraphFinalPunctuationCheck_1%"
+    },
+    "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": {
+      "fallbackKey": "%SentenceFinalPunctCapitalizationCheck_5%"
+    },
     "%webView_checksSidePanel_projectFilter_projectsAndResources%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     }
   },
   "localizedStrings": {
     "en": {
+      "%inventoryName_Character%": "Characters inventory",
+      "%inventoryName_Marker%": "Markers inventory",
+      "%inventoryName_MatchedPairs%": "Unmatched pairs of punctuation",
+      "%inventoryName_MixexCapitalization%": "Mixed capitalization",
+      "%inventoryName_ParagraphFinalPunctuation%": "Markers missing final punctuation",
+      "%inventoryName_Punctuation%": "Punctuation inventory",
+      "%inventoryName_RepeatedWord%": "Repeated words",
+      "%inventoryName_SentenceFinalCapitalization%": "Punctuation followed by lowercase letter",
+      "%inventoryName_StylesCapitalization%": "Markers followed by lowercase",
+      "%inventoryOptionName_SetVerseAndNonVerseSeparately%": "Set verse and non-verse status separately",
+      "%inventoryOptionName_MatchedPairs_ClosedByParagraph%": "Close By End Of Paragraph",
+      "%inventoryOptionName_MatchedPairs_IntroductionOutlineStyles%": "Introduction Outline Markers",
+      "%inventoryOptionName_MatchedPairs_Pairs%": "Matched Pairs",
+      "%inventoryOptionName_MatchedPairs_PoeticStyles%": "Poetic Markers",
+      "%inventoryOptionName_MixexCapitalization_CapitalizedPrefixes%": "Capitalized Prefixes",
+      "%inventoryOptionName_MixexCapitalization_CapitalizedSuffixes%": "Capitalized Suffixes",
+      "%inventoryOptionName_MixexCapitalization_UncapitalizedPrefixes%": "Uncapitalized Prefixes",
+      "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInCrossRefs%": "Check Final Punctuation in Cross References",
+      "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFigures%": "Check Final Punctuation in Figures",
+      "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFootnotes%": "Check Final Punctuation in Footnotes",
+      "%inventoryOptionName_ParagraphFinalPunctuation_IgnoreWhenFollowedByFinalPunctuationParameter%": "Marker Sequences to Ignore",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersCheckedForFinalPunctuation%": "Markers Checked for Final Punctuation",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersSkippedForFinalPunctuation%": "Markers Skipped During Processing",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersStartingNewSentencesForFinalPunctuation%": "Markers that Start New Sentence",
+      "%inventoryOptionName_ParagraphFinalPunctuation_SentenceFinalPunctuation%": "Sentence Final Punctuation",
+      "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": "Abbreviations",
       "%project_settings_platformScripture_booksPresent_description%": "Which books of the Bible are present in this Scripture project",
       "%project_settings_platformScripture_booksPresent_label%": "Scripture Books Present",
       "%project_settings_platformScripture_group1_label%": "Scripture Project Settings",
@@ -141,6 +245,32 @@
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up"
     },
     "es": {
+      "%inventoryName_Character%": "Inventario de caracteres",
+      "%inventoryName_Marker%": "Inventario de marcadores",
+      "%inventoryName_MatchedPairs%": "Puntuación sin par coincidente",
+      "%inventoryName_MixexCapitalization%": "Combinación de mayúsculas y minúsculas",
+      "%inventoryName_ParagraphFinalPunctuation%": "Marcadores que faltan puntuación final",
+      "%inventoryName_Punctuation%": "Inventario de puntuación",
+      "%inventoryName_RepeatedWord%": "Palabras repetidas",
+      "%inventoryName_SentenceFinalCapitalization%": "Puntuación seguida de una letra minúscula",
+      "%inventoryName_StylesCapitalization%": "Marcadores seguidos de minúsculas",
+      "%inventoryOptionName_SetVerseAndNonVerseSeparately%": "Establecer el estado de verso y no verso por separado",
+      "%inventoryOptionName_MatchedPairs_ClosedByParagraph%": "Cerrar antes del final del párrafo",
+      "%inventoryOptionName_MatchedPairs_IntroductionOutlineStyles%": "Marcadores de esquemas de introducción",
+      "%inventoryOptionName_MatchedPairs_Pairs%": "Coincidencia de pares",
+      "%inventoryOptionName_MatchedPairs_PoeticStyles%": "Marcadores poéticos",
+      "%inventoryOptionName_MixexCapitalization_CapitalizedPrefixes%": "Los prefijos en mayúsculas",
+      "%inventoryOptionName_MixexCapitalization_CapitalizedSuffixes%": "Los sufijos en mayúsculas",
+      "%inventoryOptionName_MixexCapitalization_UncapitalizedPrefixes%": "Los prefijos sin mayúsculas",
+      "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInCrossRefs%": "Verificar puntuación final en referencias cruzadas",
+      "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFigures%": "Verificar puntuación final en las ilustraciones",
+      "%inventoryOptionName_ParagraphFinalPunctuation_CheckFinalPunctuationInFootnotes%": "Verificar puntuación final en notas al pie",
+      "%inventoryOptionName_ParagraphFinalPunctuation_IgnoreWhenFollowedByFinalPunctuationParameter%": "Secuencias de marcadores a ignorar",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersCheckedForFinalPunctuation%": "Marcadores verificados para puntuación final",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersSkippedForFinalPunctuation%": "Marcadores omitidos durante el procesamiento",
+      "%inventoryOptionName_ParagraphFinalPunctuation_MarkersStartingNewSentencesForFinalPunctuation%": "Los marcadores que inician una nueva frase",
+      "%inventoryOptionName_ParagraphFinalPunctuation_SentenceFinalPunctuation%": "Puntuación final",
+      "%inventoryOptionName_SentenceFinalCapitalization_Abbreviations%": "Abreviaturas",
       "%project_settings_platformScripture_booksPresent_description%": "Libros de la Biblia que están presentes en este proyecto bíblico",
       "%project_settings_platformScripture_booksPresent_label%": "Libros de las Escrituras presentes",
       "%project_settings_platformScripture_group1_label%": "Configuración del proyecto de Escrituras",
