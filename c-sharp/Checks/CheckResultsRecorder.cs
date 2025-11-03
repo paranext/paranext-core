@@ -166,9 +166,7 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
 
     /// <summary>
     /// After a check has finished running, filter and complete filling in data on the results found.
-    /// This will:<br/>
-    /// 1. Lookup whether each check result was previously denied<br/>
-    /// 2. Calculate actual offsets for each result
+    /// This will look up whether each check result was previously denied
     /// </summary>
     public void PostProcessResults(ErrorMessageDenials? denials)
     {

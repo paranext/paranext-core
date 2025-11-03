@@ -98,6 +98,21 @@ const defaultView: ViewOptions = getDefaultViewOptions();
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
 
+/**
+ * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
+ *
+ * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
+ * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
+ * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
+ * need to change how we're handling this.
+ */
+function correctEditorUsjVersion(editorUsj: Usj): Usj {
+  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
+  // well right now
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { ...editorUsj, version: '3.0' as '3.1' };
+}
+
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
   projectId,
@@ -344,7 +359,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
       if (
         editorUsj &&
-        !areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, editorUsj)
+        !areUsjContentsEqualExceptWhitespace(
+          usjFromPdpWithAnchors.current,
+          correctEditorUsjVersion(editorUsj),
+        )
       )
         saveUsjToPdpInternal(editorUsj);
     }
@@ -359,7 +377,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (currentlyWritingUsjToPdp.current) return;
 
       // Remove the milestones that we inserted before writing back to the PDP
-      const clonedUsj = deepClone(newUsj);
+      const clonedUsj = deepClone(correctEditorUsjVersion(newUsj));
       const usjRW = new UsjReaderWriter(clonedUsj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
       usjRW.removeContentNodes((node: MarkerContent) => {
         if (typeof node === 'string') return false;
@@ -377,8 +395,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
           // chance the editor has more updates since the last attempted save. Let's check and save
           // again if there have been updates
-          const editorUsj = editorRef.current?.getUsj();
-          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+          let editorUsj = editorRef.current?.getUsj();
+          if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
+          if (!deepEqualAcrossIframes(editorUsj, correctEditorUsjVersion(newUsj)))
+            saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
         logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
@@ -440,7 +460,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       legacyCommentsFromPdp.forEach((existingComment) => legacyCommentIds.add(existingComment.id));
 
       // Determine which "new" comments are actually new
-      const usjRW = new UsjReaderWriter(usjWithAnchors, {
+      const usjRW = new UsjReaderWriter(correctEditorUsjVersion(usjWithAnchors), {
         markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
       });
       const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);

@@ -39,6 +39,13 @@ export const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES = [
   'platformScripture.USX_Verse',
 ];
 
+/**
+ * The version of USFM we expect the USX data to be in. For now, Paratext 10 Studio only supports
+ * 3.0. We will adjust the code significantly in many places when we implement supporting other
+ * versions.
+ */
+const USX_EXPECTED_VERSION = '3.0';
+
 export type ScriptureExtenderOverlayPDPs = {
   [ProjectInterface in (typeof SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
 };
@@ -135,7 +142,8 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Book'].setBookUSX(
       verseRef,
-      usjToUsxString(bookUsj),
+      // Set the version back to 3.0 - scripture-utilities isn't handling version well right now
+      usjToUsxString(bookUsj).replace('version="3.1"', `version="${USX_EXPECTED_VERSION}"`),
     );
     if (didSucceed) return true;
     return false;
@@ -150,7 +158,8 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Chapter'].setChapterUSX(
       verseRef,
-      usjToUsxString(chapterUsj),
+      // Set the version back to 3.0 - scripture-utilities isn't handling version well right now
+      usjToUsxString(chapterUsj).replace('version="3.1"', `version="${USX_EXPECTED_VERSION}"`),
     );
     if (didSucceed) return true;
     return false;
@@ -164,23 +173,26 @@ export class ScriptureExtenderProjectDataProviderEngine
 
   async getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-    // Use version 3.0 because `ParatextData.dll` serves 3.0
+    // Use version 3.0 because `ParatextData.dll` serves 3.0 and scripture-utilities isn't handling
+    // version well right now
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return usx ? { ...usxStringToUsj(usx), version: '3.0' as '3.1' } : undefined;
+    return usx ? { ...usxStringToUsj(usx), version: USX_EXPECTED_VERSION as '3.1' } : undefined;
   }
 
   async getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
-    // Use version 3.0 because `ParatextData.dll` serves 3.0
+    // Use version 3.0 because `ParatextData.dll` serves 3.0 and scripture-utilities isn't handling
+    // version well right now
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return usx ? { ...usxStringToUsj(usx), version: '3.0' as '3.1' } : undefined;
+    return usx ? { ...usxStringToUsj(usx), version: USX_EXPECTED_VERSION as '3.1' } : undefined;
   }
 
   async getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Verse'].getVerseUSX(verseRef);
-    // Use version 3.0 because `ParatextData.dll` serves 3.0
+    // Use version 3.0 because `ParatextData.dll` serves 3.0 and scripture-utilities isn't handling
+    // version well right now
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return usx ? { ...usxStringToUsj(usx), version: '3.0' as '3.1' } : undefined;
+    return usx ? { ...usxStringToUsj(usx), version: USX_EXPECTED_VERSION as '3.1' } : undefined;
   }
 
   /**
