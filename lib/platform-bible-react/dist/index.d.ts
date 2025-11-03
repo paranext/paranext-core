@@ -264,28 +264,71 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
-export type CommentData = {
+type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
+type CommentType = "Unspecified" | "Normal" | "Conflict";
+type LegacyComment = {
 	assignedUser?: string;
-	/** Details of the comment in markdown format */
+	biblicalTermId?: string;
+	conflictType?: string;
 	contents: string;
-	date: Date;
-	deleted?: boolean;
+	contextAfter?: string;
+	contextBefore?: string;
+	date: string;
+	deleted: boolean;
+	extraHeadingInfo?: string;
+	hideInTextWindow: boolean;
 	id: string;
-	replies?: CommentData[];
+	language: string;
+	replyToUser?: string;
+	selectedText?: string;
+	shared?: string;
+	startPosition: number;
 	status?: string;
+	tagAdded?: string;
+	tagRemoved?: string;
 	thread: string;
+	type?: string;
 	user: string;
 	verse?: string;
 	verseRef: string;
 };
+type CommentThread = {
+	/** Thread identifier (from first comment) */
+	id: string;
+	/** All comments in this thread */
+	comments: LegacyComment[];
+	/** Thread status (aggregated from most recent non-Unspecified comment) */
+	status: CommentStatus;
+	/** Thread type (from first comment) */
+	type: CommentType;
+	/** User to whom the thread is assigned */
+	assignedUser: string;
+	/** User to reply to */
+	replyToUser: string;
+	/** Last modified date (ISO 8601 string) */
+	modifiedDate: string;
+	/** Scripture reference for this thread */
+	verseRef: string;
+	/** Verse text for this thread */
+	verse: string;
+	/** Name of the context scripture text */
+	contextScrTextName?: string;
+	/** Whether this is a spelling note */
+	isSpellingNote: boolean;
+	/** Whether this is a back translation note */
+	isBTNote: boolean;
+	/** Whether this is a consultant note */
+	isConsultantNote: boolean;
+	/** Biblical term ID if this is a biblical term note */
+	biblicalTermId?: string;
+};
 export interface CommentListProps {
 	className?: string;
-	comments: CommentData[];
-	formatDate?: (date: Date) => string;
-	/** Optional localized strings for the component */
-	localizedStrings?: LanguageStrings;
+	threads: CommentThread[];
+	/** Localized strings for the component */
+	localizedStrings: LanguageStrings;
 }
-export declare function CommentList({ className, formatDate, comments, localizedStrings, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export declare function CommentList({ className, threads, localizedStrings }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
