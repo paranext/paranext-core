@@ -233,7 +233,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (providedMarkersMap) {
       this.markersMap = providedMarkersMap;
 
-      if (this.usj.version !== this.markersMap.version)
+      if (!UsjReaderWriter.areUsjVersionsCompatible(this.usj.version, this.markersMap.version))
         console.warn(
           `Warning: USJ provided has version ${
             this.usj.version
@@ -249,7 +249,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const usjVersion = this.usj.version as string;
 
-      if (usjVersion === '3.0' || usjVersion.startsWith('3.0.'))
+      if (UsjReaderWriter.areUsjVersionsCompatible(usjVersion, USFM_MARKERS_MAP_3_0.version))
         this.markersMap = USFM_MARKERS_MAP_3_0;
       else
         throw new Error(
@@ -273,6 +273,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     this.fragmentsByIndexInUsfmInternal = undefined;
     this.indicesInUsfmByVerseRefInternal = undefined;
     this.usfmInternal = undefined;
+  }
+
+  private static areUsjVersionsCompatible(versionA: string, versionB: string) {
+    if (versionA === '3.0' || versionA.startsWith('3.0.'))
+      return versionB === '3.0' || versionB.startsWith('3.0.');
+    return versionA === versionB;
   }
 
   // #region Directly using the JSONPath package to perform JSONPath query -> USJ node

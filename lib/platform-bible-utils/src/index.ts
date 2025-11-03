@@ -192,13 +192,13 @@ export * from './extension-contributions/theme.model';
 export * from './extension-contributions/theme.util';
 export type {
   AttributeMarkerInfo,
-  NormalMarkerInfo,
-  MarkerInfo,
   CloseableMarkerTypeInfo,
-  NonCloseableMarkerTypeInfo,
+  MarkerInfo,
+  MarkersMap,
   MarkerTypeInfoBase,
   MarkerTypeInfo,
-  MarkersMap,
+  NonCloseableMarkerTypeInfo,
+  NormalMarkerInfo,
 } from './scripture/markers-maps/markers-map-3.0.model';
 export {
   USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
@@ -206,8 +206,8 @@ export {
 } from './scripture/markers-maps/markers-map-3.0.model';
 export type {
   ContentJsonPath,
-  PropertyJsonPath,
   IUsjReaderWriter,
+  PropertyJsonPath,
   UsfmLocation,
   UsfmVerseLocation,
   UsjAttributeKeyLocation,
