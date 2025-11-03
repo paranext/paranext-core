@@ -71,19 +71,24 @@ export function CommentThread({
   );
 
   const handleSubmit = useCallback(() => {
+    // TODO: Handle submitting comment
     console.log('Submit comment:', inputValue);
     setInputValue('');
   }, [inputValue]);
 
   const handleResolveCommentThread = useCallback(() => {
+    // TODO: Handle resolving comment thread
     console.log('Resolve comment thread');
   }, []);
 
   return (
     <Card
       className={cn(
-        'tw-w-full tw-rounded-none tw-p-4 tw-transition-all tw-duration-200',
-        hasReplies && !isSelected && 'hover:tw-shadow-md',
+        'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-transition-all tw-duration-200',
+        {
+          'tw-bg-slate-50 hover:tw-shadow-md': !isSelected,
+        },
+        { 'tw-bg-background': isSelected },
       )}
       onClick={() => {
         handleSelectThread(threadId);
@@ -124,7 +129,11 @@ export function CommentThread({
             )}
           </div>
           <div className="tw-flex tw-flex-row tw-justify-between">
-            <CommentItem comment={firstComment} localizedStrings={localizedStrings} />
+            <CommentItem
+              comment={firstComment}
+              localizedStrings={localizedStrings}
+              isThreadExpanded={isSelected}
+            />
             {isSelected && (
               <Button
                 className="tw-p-1"
@@ -153,7 +162,12 @@ export function CommentThread({
             <>
               {replies.map((reply) => (
                 <div key={reply.id}>
-                  <CommentItem comment={reply} localizedStrings={localizedStrings} isReply />
+                  <CommentItem
+                    comment={reply}
+                    localizedStrings={localizedStrings}
+                    isReply
+                    isThreadExpanded={isSelected}
+                  />
                 </div>
               ))}
 
@@ -174,12 +188,14 @@ export function CommentThread({
                   <Button
                     variant="outline"
                     className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-md"
+                    disabled={!inputValue}
                   >
                     <AtSign />
                   </Button>
                   <Button
                     onClick={handleSubmit}
                     className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-md"
+                    disabled={!inputValue}
                   >
                     <ArrowUp />
                   </Button>

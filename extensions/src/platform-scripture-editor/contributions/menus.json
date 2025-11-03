@@ -59,6 +59,10 @@
           "platformScriptureEditor.checks": {
             "column": "platformScriptureEditor.tools",
             "order": 3
+          },
+          "platformScriptureEditor.comments": {
+            "column": "platformScriptureEditor.tools",
+            "order": 4
           }
         },
         "items": [
@@ -109,6 +113,12 @@
             "group": "platformScriptureEditor.footnotes",
             "order": 2,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
+          },
+          {
+            "label": "%webView_legacyCommentManager_openComments%",
+            "group": "platformScriptureEditor.comments",
+            "order": 1,
+            "command": "legacyCommentManager.openCommentList"
           }
         ]
       },

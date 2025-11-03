@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { CommentList } from '@/components/advanced/comment-list/comment-list.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { LanguageStrings } from 'platform-bible-utils';
+import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample-data';
 
 const commentListLocalizedStrings: LanguageStrings = {
@@ -21,7 +21,7 @@ const meta: Meta<typeof CommentList> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-2xl tw-p-4">
+        <div className="tw-max-w-2xl tw-bg-muted">
           <Story />
         </div>
       </ThemeProvider>
@@ -39,7 +39,7 @@ type Story = StoryObj<typeof CommentList>;
 
 export const Default: Story = {
   args: {
-    threads: sampleComments,
+    threads: sampleComments.filter((thread) => thread.status !== 'Resolved'),
     localizedStrings: commentListLocalizedStrings,
   },
 };

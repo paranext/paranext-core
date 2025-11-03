@@ -19,7 +19,7 @@ export {
 export type { RecentSearchesProps } from './components/advanced/recent-searches.component';
 export type { BookSelectorLocalizedStrings } from './components/advanced/book-selector.component';
 export type { CommentListProps } from './components/advanced/comment-list/comment-list.types';
-export type { CommentList } from './components/advanced/comment-list/comment-list.component';
+export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,

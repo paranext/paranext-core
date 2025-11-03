@@ -267,29 +267,65 @@ export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearc
 type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
 type CommentType = "Unspecified" | "Normal" | "Conflict";
 type LegacyComment = {
+	/** Present in a note when it has been assigned to a particular user */
 	assignedUser?: string;
+	/** Present when there is a Biblical Term Id associated with the note */
 	biblicalTermId?: string;
+	/**
+	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
+	 * message when displaying the note.
+	 */
 	conflictType?: string;
+	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
 	contents: string;
+	/**
+	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
+	 * after the selection.
+	 */
 	contextAfter?: string;
+	/**
+	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
+	 * before the selection.
+	 */
 	contextBefore?: string;
+	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
 	date: string;
+	/** True if the comment has been deleted */
 	deleted: boolean;
+	/** Additional information for the note header, added for Biblical Term notes. */
 	extraHeadingInfo?: string;
+	/** Present in a comment to hide the note when showing notes in teh Scripture text windows. */
 	hideInTextWindow: boolean;
+	/** Unique id of the comment, unchanged by subsequent editing */
 	id: string;
+	/** Language of note */
 	language: string;
+	/** Present in a note when it has been assigned to reply-to a particular user */
 	replyToUser?: string;
+	/** Text which was selected in comment, or "" for none */
 	selectedText?: string;
+	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
 	shared?: string;
+	/** Approximate position where the comment begins. Zero for attached to a verse. */
 	startPosition: number;
+	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
 	status?: string;
+	/** Tags added in this note, joined with (',') */
 	tagAdded?: string;
+	/** Tags removed in this note, joined with (',') */
 	tagRemoved?: string;
+	/** Guid of the thread of comments */
 	thread: string;
+	/**
+	 * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have type
+	 * "conflict."
+	 */
 	type?: string;
+	/** Name of the user who created this comment */
 	user: string;
+	/** Original USFM content of verse */
 	verse?: string;
+	/** Verse reference in which comment appears */
 	verseRef: string;
 };
 type CommentThread = {
@@ -328,7 +364,7 @@ export interface CommentListProps {
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
 }
-export declare function CommentList({ className, threads, localizedStrings }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, localizedStrings, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -362,6 +398,8 @@ interface MarkdownRendererProps {
 	 * adding a `target` to `a` tags
 	 */
 	anchorTarget?: string;
+	/** Optional flag to truncate the content to 3 lines */
+	truncate?: boolean;
 }
 /**
  * This component renders markdown content given a markdown string. It uses typography styles from
@@ -370,7 +408,7 @@ interface MarkdownRendererProps {
  * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
-export declare function MarkdownRenderer({ id, markdown, className, anchorTarget }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkdownRenderer({ id, markdown, className, anchorTarget, truncate, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the

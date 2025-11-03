@@ -5,7 +5,11 @@ import { useCallback, useState } from 'react';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
-export function CommentList({ className = '', threads, localizedStrings }: CommentListProps) {
+export default function CommentList({
+  className = '',
+  threads,
+  localizedStrings,
+}: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
   const handleSelectThread = useCallback((threadId: string) => {
@@ -48,7 +52,7 @@ export function CommentList({ className = '', threads, localizedStrings }: Comme
       // aria-activedescendant={activeId ?? undefined}
       // onKeyDown={handleKeyDown}
       aria-label="Comments"
-      className={cn('tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-4', className)}
+      className={cn('tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3', className)}
     >
       {threads.map((thread) => (
         <div key={`thread-${thread.id}`}>

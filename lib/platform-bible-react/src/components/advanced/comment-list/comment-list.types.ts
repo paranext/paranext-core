@@ -77,8 +77,8 @@ export type LegacyComment = {
   /** Guid of the thread of comments */
   thread: string;
   /**
-   * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have
-   * type "conflict."
+   * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have type
+   * "conflict."
    */
   type?: string;
   /** Name of the user who created this comment */
@@ -149,4 +149,5 @@ export interface CommentItemProps {
   isReply?: boolean;
   /** Localized strings for the component */
   localizedStrings: LanguageStrings;
+  isThreadExpanded?: boolean;
 }

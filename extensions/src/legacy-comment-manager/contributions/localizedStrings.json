@@ -1,6 +1,16 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%no_comments%": "No comments yet",
+      "%comment_thread_single_reply%": "1 reply",
+      "%comment_thread_multiple_replies%": "{count} replies",
+      "%comment_assigned_to%": "Assigned to {assignedUser}",
+      "%comment_date_today%": "today",
+      "%comment_date_yesterday%": "yesterday",
+      "%comment_replyOrAssign%": "Reply or assign with @",
+      "%webView_legacyCommentManager_commentList_title%": "Comments",
+      "%webView_legacyCommentManager_openComments%": "Open Comments"
+    }
   }
 }

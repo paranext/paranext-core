@@ -6,7 +6,12 @@ import { formatRelativeDate } from '@/utils/date.util';
 import { formatReplacementString } from 'platform-bible-utils';
 import { CommentItemProps } from './comment-list.types';
 
-export function CommentItem({ comment, isReply = false, localizedStrings }: CommentItemProps) {
+export function CommentItem({
+  comment,
+  isReply = false,
+  localizedStrings,
+  isThreadExpanded = false,
+}: CommentItemProps) {
   const displayDate = useMemo(() => {
     const date = new Date(comment.date);
     const relativeDate = formatRelativeDate(
@@ -61,7 +66,11 @@ export function CommentItem({ comment, isReply = false, localizedStrings }: Comm
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <MarkdownRenderer markdown={comment.contents} />
+            <MarkdownRenderer
+              className={cn('tw-text-sm tw-font-normal tw-text-primary')}
+              markdown={comment.contents}
+              truncate={!isThreadExpanded}
+            />
           </div>
         </div>
       </div>

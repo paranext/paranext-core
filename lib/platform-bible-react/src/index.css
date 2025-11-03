@@ -33,67 +33,67 @@
    */
   /* ["Slate" base theme by shadcn/ui](https://ui.shadcn.com/docs/theming#slate) */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%; /* black */
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%; /* black */
+    --background: 0 0% 100%; /* white */
+    --foreground: 222.2 84% 4.9%; /* slate-950 */
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 222.2 84% 4.9%; /* slate-950 */
     --popover: 210 20% 98%; /* popover platform */
-    --popover-foreground: 222.2 84% 4.9%; /* black */
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --popover-foreground: 222.2 84% 4.9%; /* slate-950 */
+    --primary: 222.2 47.4% 11.2%; /* slate-900 */
+    --primary-foreground: 210 40% 98%; /* slate-50 */
     --secondary: 210 50% 95%;
     --secondary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
     --muted: 210 50% 95%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted-foreground: 215.4 16.3% 46.9%; /* slate-500 */
     --accent: 210 50% 95%;
     --accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%; /* slate-50 */
     --border: 214.3 31.8% 91.4%; /* slate-200 */
     --input: 214.3 31.8% 91.4%; /* slate-200 */
-    --ring: 222.2 84% 4.9%; /* black */
+    --ring: 222.2 84% 4.9%; /* slate-950 */
 
     --sidebar-background: 210 20% 98%; /* popover platform */
-    --sidebar-foreground: 222.2 84% 4.9%; /* black */
-    --sidebar-primary: 222.2 47.4% 11.2%;
-    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-foreground: 222.2 84% 4.9%; /* slate-950 */
+    --sidebar-primary: 222.2 47.4% 11.2%; /* slate-900 */
+    --sidebar-primary-foreground: 210 40% 98%; /* slate-50 */
     --sidebar-accent: 210 50% 95%;
     --sidebar-accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
     --sidebar-border: 214.3 31.8% 91.4%; /* slate-200 */
-    --sidebar-ring: 222.2 84% 4.9%; /* black */
+    --sidebar-ring: 222.2 84% 4.9%; /* slate-950 */
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%; /* black */
+    --background: 222.2 84% 4.9%; /* slate-950 */
     --foreground: 210 40% 98%; /* slate-50 */
-    --card: 222.2 84% 4.9%; /* black */
+    --card: 222.2 84% 4.9%; /* slate-950 */
     --card-foreground: 210 40% 98%; /* slate-50 */
-    --popover: 222.2 84% 4.9%; /* black */
+    --popover: 222.2 84% 4.9%; /* slate-950 */
     --popover-foreground: 210 40% 98%; /* slate-50 */
     --primary: 210 40% 98%; /* slate-50 */
     --primary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 217.2 32.6% 17.5%; /* slate-800 */
     --secondary-foreground: 210 40% 98%; /* slate-50 */
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --muted: 217.2 32.6% 17.5%; /* slate-800 */
+    --muted-foreground: 215 20.2% 65.1%; /* slate-400 */
+    --accent: 217.2 32.6% 17.5%; /* slate-800 */
     --accent-foreground: 210 40% 98%; /* slate-50 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%; /* slate-50 */
     --border: 215.3 19.3% 34.5%; /* slate-600 */
     --input: 215.3 19.3% 34.5%; /* slate-600 */
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 212.7 26.8% 83.9%; /* slate-300 */
 
-    --sidebar-background: 222.2 84% 4.9%; /* black */
-    --sidebar-foreground: 215 20.2% 65.1%;
+    --sidebar-background: 222.2 84% 4.9%; /* slate-950 */
+    --sidebar-foreground: 215 20.2% 65.1%; /* slate-400 */
     --sidebar-primary: 210 40% 98%; /* slate-50 */
     --sidebar-primary-foreground: 222.2 47.4% 11.2%; /* slate-900 */
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 215 20.2% 65.1%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 212.7 26.8% 83.9%;
+    --sidebar-accent: 217.2 32.6% 17.5%; /* slate-800 */
+    --sidebar-accent-foreground: 215 20.2% 65.1%; /* slate-400 */
+    --sidebar-border: 217.2 32.6% 17.5%; /* slate-800 */
+    --sidebar-ring: 212.7 26.8% 83.9%; /* slate-300 */
   }
 
   /* Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme*/

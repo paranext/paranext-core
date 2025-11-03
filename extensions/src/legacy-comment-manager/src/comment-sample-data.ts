@@ -1,4 +1,4 @@
-import { CommentThread } from './comment-list.types';
+import { LegacyCommentThread } from 'legacy-comment-manager';
 
 const today = new Date();
 const yesterday = new Date(today);
@@ -6,7 +6,7 @@ yesterday.setDate(yesterday.getDate() - 1);
 const twoDaysAgo = new Date(today);
 twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
-export const sampleComments: CommentThread[] = [
+export const sampleComments: LegacyCommentThread[] = [
   {
     id: 'thread-1',
     comments: [
