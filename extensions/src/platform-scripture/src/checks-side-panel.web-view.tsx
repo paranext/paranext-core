@@ -2,20 +2,12 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { ChevronDown } from 'lucide-react';
 import {
   Button,
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+  ComboBox,
+  ComboBoxGroup,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Progress,
   Select,
   SelectContent,
@@ -29,7 +21,6 @@ import {
 import {
   deepEqual,
   formatReplacementString,
-  formatReplacementStringToArray,
   getChaptersForBook,
   getErrorMessage,
   isPlatformError,
@@ -646,29 +637,42 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setSelectedCheckTypeIds(updatedCheckIds);
   };
 
-  // Helper functions for project and scope filters
-  const writeProjectName = useCallback(
-    (fullName: string, shortName: string) => {
-      return formatReplacementStringToArray(
-        localizedStrings['%webView_checksSidePanel_projectFilter_projectName_format%'],
-        { fullName, shortName },
-      );
-    },
-    [localizedStrings],
+  type ProjectEntry = {
+    id: string;
+    fullName: string;
+    shortName: string;
+    label: string;
+    secondaryLabel?: string;
+  };
+
+  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
+    const allProjects = Object.entries(projectIdsAndNames)
+      .sort(([, a], [, b]) =>
+        a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+      )
+      .map(([id, project]) => ({
+        id,
+        fullName: project.fullName,
+        shortName: project.shortName,
+        label: project.shortName,
+        secondaryLabel: project.fullName,
+      }));
+    return [
+      {
+        groupHeading:
+          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
+        options: allProjects,
+      },
+    ];
+  }, [projectIdsAndNames, localizedStrings]);
+
+  const selectedProjectOption = useMemo(
+    () =>
+      projectOptionsGrouped
+        .flatMap((group) => group.options)
+        .find((option) => option.id === projectId),
+    [projectOptionsGrouped, projectId],
   );
-
-  const getProjectShortNameLabel = useCallback(() => {
-    return (
-      projectIdsAndNames[projectId ?? '']?.shortName ??
-      localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-    );
-  }, [localizedStrings, projectIdsAndNames, projectId]);
-
-  const sortedProjectEntries = useMemo(() => {
-    return Object.entries(projectIdsAndNames).sort(([, a], [, b]) =>
-      a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
-    );
-  }, [projectIdsAndNames]);
 
   const getScopeLabel = useCallback(
     (scopeValue: string) => {
@@ -729,52 +733,27 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
-        <Popover open={isSelectProjectsOpen} onOpenChange={setIsSelectProjectsOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="tw-flex-1 tw-min-w-32 tw-font-normal"
-              aria-label={
-                localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-              }
-            >
-              <div className="tw-flex tw-w-full tw-items-center tw-justify-between">
-                {getProjectShortNameLabel()}
-                <ChevronDown className="tw-opacity-50" />
-              </div>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="tw-max-w-sm tw-p-0" align="start">
-            <Command>
-              <CommandInput />
-              <CommandList>
-                <CommandEmpty>
-                  {localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']}
-                </CommandEmpty>
-                <CommandGroup
-                  heading={
-                    localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-                  }
-                >
-                  {sortedProjectEntries.map(([projectIdOption, project]) => (
-                    <CommandItem
-                      key={projectIdOption}
-                      onSelect={() => {
-                        handleSelectProject(projectIdOption);
-                        setIsSelectProjectsOpen(false);
-                      }}
-                      className="tw-flex tw-items-center"
-                    >
-                      <span className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
-                        {writeProjectName(project.fullName, project.shortName)}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        <ComboBox<ProjectEntry>
+          options={projectOptionsGrouped}
+          value={selectedProjectOption}
+          onChange={(newProject) => handleSelectProject(newProject.id)}
+          getButtonLabel={(project) => project.shortName}
+          buttonPlaceholder={
+            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
+          }
+          commandEmptyMessage={
+            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
+          }
+          ariaLabel={
+            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+          }
+          buttonVariant="outline"
+          buttonClassName="tw-flex-1 tw-min-w-32 tw-font-normal"
+          popoverContentClassName="tw-w-[300px]"
+          alignDropDown="start"
+          open={isSelectProjectsOpen}
+          onOpenChange={setIsSelectProjectsOpen}
+        />
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>
