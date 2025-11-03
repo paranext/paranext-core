@@ -1439,8 +1439,13 @@ export type ComboBoxOption = string | number | ComboBoxLabelOption;
 export type ComboBoxProps<T> = {
 	/** Optional unique identifier */
 	id?: string;
-	/** List of available options for the dropdown menu */
-	options?: readonly T[];
+	/**
+	 * List of available options for the dropdown menu. Can be either:
+	 *
+	 * - A flat array of options (single group, no heading)
+	 * - An array of arrays (multiple groups, requires groupHeadings to be provided with same length)
+	 */
+	options?: readonly T[] | readonly (readonly T[])[];
 	/** @deprecated 3 December 2024. Renamed to `buttonClassName` */
 	className?: string;
 	/** Additional css classes to help with unique styling of the combo box button */
@@ -1456,6 +1461,11 @@ export type ComboBoxProps<T> = {
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: T) => string;
+	/**
+	 * Used to determine the string value to display on the button for the selected value. If not
+	 * provided, falls back to `getOptionLabel`.
+	 */
+	getButtonLabel?: (option: T) => string;
 	/** Icon to be displayed on the trigger */
 	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
@@ -1470,6 +1480,16 @@ export type ComboBoxProps<T> = {
 	alignDropDown?: "start" | "center" | "end";
 	/** Optional boolean to set if trigger should be disabled */
 	isDisabled?: boolean;
+	/**
+	 * Optional array of heading texts for groups. If provided:
+	 *
+	 * - Options must be an array of arrays
+	 * - GroupHeadings.length must equal options.length
+	 * - Each heading corresponds to the group at the same index
+	 */
+	groupHeadings?: string[];
+	/** Optional aria-label for the trigger button for accessibility */
+	ariaLabel?: string;
 } & PopoverProps;
 /**
  * Autocomplete input and command palette with a list of suggestions.
@@ -1477,7 +1497,7 @@ export type ComboBoxProps<T> = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, groupHeadings, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;

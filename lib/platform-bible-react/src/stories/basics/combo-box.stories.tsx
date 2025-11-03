@@ -290,6 +290,51 @@ export const WithDifferentIcons: Story = {
   },
 };
 
+export const WithMultipleGroups: Story = {
+  render: () => {
+    const [value, setValue] = useState<string | undefined>(undefined);
+
+    // Grouped options: Old Testament and New Testament books
+    const groupedBookOptions = [
+      ['Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy'],
+      ['Matthew', 'Mark', 'Luke', 'John', 'Acts'],
+      [
+        'This is a very long item that should be truncated properly in the UI',
+        'Another extremely long item to test the truncation behavior of the combo box component',
+      ],
+    ];
+
+    const groupHeadings = ['Old Testament', 'New Testament', 'Long Named Items'];
+
+    return (
+      <div>
+        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+          Combo box with multiple groups and headings
+        </p>
+        <ComboBox<string>
+          options={groupedBookOptions}
+          groupHeadings={groupHeadings}
+          textPlaceholder="Search books..."
+          buttonPlaceholder="Select a book"
+          commandEmptyMessage="No books found"
+          value={value}
+          onChange={setValue}
+          buttonVariant="outline"
+          icon={<BookOpen />}
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A combo box demonstrating multiple groups with headings. The options are organized into Old Testament and New Testament sections.',
+      },
+    },
+  },
+};
+
 export const Interactive: Story = {
   render: (args) => {
     const [value, setValue] = useState<string | undefined>(undefined);
