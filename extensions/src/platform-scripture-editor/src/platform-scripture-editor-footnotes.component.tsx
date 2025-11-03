@@ -1,4 +1,4 @@
-import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   FOOTNOTE_LIST_STRING_KEYS,
