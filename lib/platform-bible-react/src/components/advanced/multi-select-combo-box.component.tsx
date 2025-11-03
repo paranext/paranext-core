@@ -141,7 +141,7 @@ export function MultiSelectComboBox({
             className="tw-group tw-w-full tw-justify-between"
             disabled={isDisabled}
           >
-            <div className="tw-flex tw-items-center tw-gap-2">
+            <div className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2">
               {icon && (
                 <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
                   <span className="tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center">
@@ -149,7 +149,13 @@ export function MultiSelectComboBox({
                   </span>
                 </div>
               )}
-              <div className="tw-font-normal">{getPlaceholderText()}</div>
+              <span
+                className={cn(
+                  'tw-min-w-0 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-text-start tw-font-normal',
+                )}
+              >
+                {getPlaceholderText()}
+              </span>
             </div>
             <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
           </Button>
