@@ -58,24 +58,19 @@ export function FootnotesLayout({
     });
   }, [usj]);
 
-  // Using react's ref api which uses null, so we must use null
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(0);
 
-  useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return;
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return () => {};
 
     const observer = new ResizeObserver(() => {
-      setContainerHeight(element.clientHeight);
+      setContainerHeight(node.clientHeight);
     });
 
-    observer.observe(element);
+    observer.observe(node);
+    setContainerHeight(node.clientHeight);
 
-    setContainerHeight(element.clientHeight);
-
-    return () => observer.disconnect();
+    return () => observer.disconnect(); // cleanup on unmount
   }, []);
 
   const [footnotesPanePosition, setFootnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
@@ -194,14 +189,10 @@ export function FootnotesLayout({
     [footnotes, footnoteListKey, onFootnoteSelected],
   );
 
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => {
-      return Array.from(FOOTNOTE_LIST_STRING_KEYS);
-    }, []),
-  );
+  const [localizedStrings] = useLocalizedStrings(FOOTNOTE_LIST_STRING_KEYS);
 
   return (
-    <div ref={containerRef} className="tw-h-full tw-w-full tw-min-h-0">
+    <div ref={setContainerRef} className="tw-h-full tw-w-full tw-min-h-0">
       <ResizablePanelGroup
         direction={footnotesPanePosition === 'bottom' ? 'vertical' : 'horizontal'}
         className="tw-h-full tw-w-full tw-min-h-0"

@@ -95,7 +95,6 @@ export {
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
 } from './string-util';
-export type { PaneSizeLimitsOptions } from './pane-utils';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
@@ -115,6 +114,7 @@ export type {
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
 } from './lifetime-management/disposal.model';
+export type { PaneSizeLimitsOptions } from './pane-utils';
 export type { PlatformError } from './platform-error';
 export type {
   PlatformEventHandler,

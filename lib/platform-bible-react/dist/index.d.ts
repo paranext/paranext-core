@@ -634,9 +634,7 @@ export declare function FootnoteItem({ footnote, layout, formatCaller, showMarke
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component
  */
-export declare const FOOTNOTE_LIST_STRING_KEYS: readonly [
-	"%webView_footnoteList_header%"
-];
+export declare const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[];
 type FootnoteListLocalizedStrings = {
 	[localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
 };

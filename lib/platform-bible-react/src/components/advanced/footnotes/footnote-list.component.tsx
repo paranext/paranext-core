@@ -1,7 +1,7 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Card } from '@/components/shadcn-ui/card';
-import { getFormatCallerFunction, LocalizedStringValue } from 'platform-bible-utils';
+import { getFormatCallerFunction, LocalizedStringValue, LocalizeKey } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
@@ -11,7 +11,7 @@ import { FootnoteListProps } from './footnotes.types';
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component
  */
-export const FOOTNOTE_LIST_STRING_KEYS = Object.freeze(['%webView_footnoteList_header%'] as const);
+export const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[] = ['%webView_footnoteList_header%'];
 
 export type FootnoteListLocalizedStrings = {
   [localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
