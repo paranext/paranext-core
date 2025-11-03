@@ -278,13 +278,12 @@ export const FootnoteEditorView: Story = {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
-    // const noteKey = useRef<string>();
-    // const noteOps = useRef<DeltaOp[]>();
     const [noteKey, setNoteKey] = useState<string>();
     const [noteOps, setNoteOps] = useState<DeltaOp[]>();
 
     const [popoverX, setPopoverX] = useState<number>();
     const [popoverY, setPopoverY] = useState<number>();
+    const [popoverHeight, setPopoverHeight] = useState<number>();
 
     const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
 
@@ -314,14 +313,11 @@ export const FootnoteEditorView: Story = {
             // they are still apart of the object, accesses them by casting to the original
             // `onClick` event type
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const originalClickEvent = event as unknown as MouseEvent<
-              HTMLButtonElement,
-              MouseEvent
-            >;
-            const clickX = originalClickEvent.clientX;
-            const clickY = originalClickEvent.clientY;
-            setPopoverX(clickX);
-            setPopoverY(clickY + 10);
+            const originalClickEvent = event as MouseEvent<HTMLButtonElement>;
+            const targetRect = originalClickEvent.currentTarget.getBoundingClientRect();
+            setPopoverX(targetRect.left);
+            setPopoverY(targetRect.top);
+            setPopoverHeight(targetRect.height);
 
             if (isCollapsed) {
               // (event as SyntheticEvent<)
@@ -361,7 +357,7 @@ export const FootnoteEditorView: Story = {
         <Popover open={showFootnoteEditor}>
           <PopoverAnchor
             className="tw-absolute"
-            style={{ top: popoverY ?? 0, left: popoverX ?? 0 }}
+            style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
           />
           <PopoverContent className="tw-w-96 tw-p-[10px]">
             <FootnoteEditor

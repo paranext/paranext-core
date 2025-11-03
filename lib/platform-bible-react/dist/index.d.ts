@@ -626,12 +626,16 @@ export interface FootnoteListProps {
 	/** Callback to handle clicking/selecting a footnote in the list */
 	onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
 }
-interface FootnoteEditorProps {
+/** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
+export interface FootnoteEditorProps {
 	/** Delta ops for the current note being edited that are applied to the note editorial */
 	noteOps: DeltaOp[] | undefined;
-	/** Exterial function to handling saving changes to the footnote */
+	/** External function to handling saving changes to the footnote */
 	onSave: (noteOps: DeltaOp[]) => void;
-	/** Exterior function to handling closing the footnote editor */
+	/**
+	 * External function to handling closing the footnote editor. Gets called when the editor is
+	 * closed without saving changes
+	 */
 	onClose: () => void;
 	/** The scripture reference for the parent editor */
 	scrRef: SerializedVerseRef;

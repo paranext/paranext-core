@@ -15,12 +15,15 @@ import '@/components/advanced/footnotes/editor-overrides.css';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
-interface FootnoteEditorProps {
+export interface FootnoteEditorProps {
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOp[] | undefined;
-  /** Exterial function to handling saving changes to the footnote */
+  /** External function to handling saving changes to the footnote */
   onSave: (noteOps: DeltaOp[]) => void;
-  /** Exterior function to handling closing the footnote editor */
+  /**
+   * External function to handling closing the footnote editor. Gets called when the editor is
+   * closed without saving changes
+   */
   onClose: () => void;
   /** The scripture reference for the parent editor */
   scrRef: SerializedVerseRef;
@@ -73,21 +76,20 @@ export default function FootnoteEditor({
 
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
     if (noteOps && !editorRef.current?.getUsj()?.content) {
       // Temporary fix to fix flushSync error in the console
-      const timeout = setTimeout(() => {
+      timeout = setTimeout(() => {
         editorRef.current?.setUsj(EMPTY_USJ);
         editorRef.current?.applyUpdate(noteOps);
       }, 0);
-
-      return () => {
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-      };
     }
 
-    return () => undefined;
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
   }, [noteOps, noteKey]);
 
   const handleSave = () => {
@@ -105,7 +107,7 @@ export default function FootnoteEditor({
   };
 
   return (
-    <div className="tw-grid tw-gap-[12px]">
+    <div className="footnote-editor tw-grid tw-gap-[12px]">
       <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
         <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
           <X />
