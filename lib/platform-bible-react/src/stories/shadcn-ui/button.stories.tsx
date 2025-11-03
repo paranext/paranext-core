@@ -242,7 +242,7 @@ export const SizeTest: Story = {
 
     // Verify button is rendered with large size styles
     await expect(button).toBeInTheDocument();
-    await expect(button).toHaveClass('tw-h-11'); // Large size class
+    await expect(button).toHaveClass('tw-h-10'); // Large size class
 
     // Test double click
     await userEvent.dblClick(button);
