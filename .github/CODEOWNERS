@@ -18,6 +18,9 @@
 # not papi.d.ts
 /lib/papi-dts/papi.d.ts
 /lib/platform-bible-react @jolierabideau @rolfheij-sil @tjcouch-sil @lyonsil @irahopkinson
+# PBR Markdown files have no specific code owners
+/lib/platform-bible-react/**/*.md
+/lib/platform-bible-react/**/*.mdx
 /lib/platform-bible-utils @rolfheij-sil @tjcouch-sil @lyonsil @jolierabideau @irahopkinson
 
 /src/**/services @tjcouch-sil @lyonsil @irahopkinson

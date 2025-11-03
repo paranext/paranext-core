@@ -252,36 +252,31 @@ public class CommentConverter : JsonConverter<Comment>
         writer.WriteString(LANGUAGE, value.Language);
         writer.WriteString(DATE, value.Date);
         writer.WriteBoolean(DELETED, value.Deleted);
-        TryWrite(writer, SELECTED_TEXT, value.SelectedText);
+        JsonConverterUtils.TryWriteString(writer, SELECTED_TEXT, value.SelectedText);
         writer.WriteNumber(START_POSITION, value.StartPosition);
-        TryWrite(writer, CONTEXT_BEFORE, value.ContextBefore);
-        TryWrite(writer, CONTEXT_AFTER, value.ContextAfter);
+        JsonConverterUtils.TryWriteString(writer, CONTEXT_BEFORE, value.ContextBefore);
+        JsonConverterUtils.TryWriteString(writer, CONTEXT_AFTER, value.ContextAfter);
         if (value.Status != NoteStatus.Unspecified)
             writer.WriteString(STATUS, value.Status.ToString());
         if (value.Type != NoteType.Unspecified && value.Type != NoteType.Normal)
             writer.WriteString(TYPE, value.Type.ToString());
         if (value.ConflictType != NoteConflictType.None)
             writer.WriteString(CONFLICT_TYPE, value.ConflictType.ToString());
-        TryWrite(writer, VERSE, value.Verse);
-        TryWrite(writer, SHARED, value.Shared);
-        TryWrite(writer, ASSIGNED_USER, value.AssignedUser);
-        TryWrite(writer, REPLY_TO_USER, value.ReplyToUser);
-        TryWrite(writer, EXTRA_HEADING_INFO, value.ExtraHeadingInfo.ToString());
+        JsonConverterUtils.TryWriteString(writer, VERSE, value.Verse);
+        JsonConverterUtils.TryWriteString(writer, SHARED, value.Shared);
+        JsonConverterUtils.TryWriteString(writer, ASSIGNED_USER, value.AssignedUser);
+        JsonConverterUtils.TryWriteString(writer, REPLY_TO_USER, value.ReplyToUser);
+        JsonConverterUtils.TryWriteString(
+            writer,
+            EXTRA_HEADING_INFO,
+            value.ExtraHeadingInfo.ToString()
+        );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
         writer.WriteString(CONTENTS, value.Contents?.InnerXml ?? "");
-        TryWrite(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
-        TryWrite(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
-        TryWrite(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));
+        JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
+        JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
+        JsonConverterUtils.TryWriteString(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));
         writer.WriteEndObject();
-    }
-
-    /// <summary>
-    /// Write a value if it is not null or empty
-    /// </summary>
-    private static void TryWrite(Utf8JsonWriter writer, string propertyName, string? value)
-    {
-        if (!string.IsNullOrEmpty(value))
-            writer.WriteString(propertyName, value);
     }
 
     private static string? TryJoin(string? separator, string[] stringArray)

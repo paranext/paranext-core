@@ -921,6 +921,25 @@ export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
 /**
+ * Converts a string type from camelCase to kebab-case. Note this simply inserts hyphens before
+ * uppercase letters and converts them to lowercase. It does not handle special cases like acronyms
+ * or symbols. It can result in multiple hyphens in a row, leading hyphens, or trailing hyphens.
+ *
+ * By using this as the type for a string parameter or string property, you can enforce (somewhat)
+ * at compile time that the string is in kebab-case format assuming it is provided as a string
+ * literal.
+ *
+ * @example
+ *
+ * ```typescript
+ * type Kebab1 = KebabCase<'backgroundColor'>; // 'background-color'
+ * type Kebab2 = KebabCase<'HTMLParser'>; // '-h-t-m-l-parser'
+ * type Kebab3 = KebabCase<'simpletest'>; // 'simpletest'
+ * type Kebab4 = KebabCase<'My$Value'>; // '-my$-value'
+ * ```
+ */
+export type KebabCase<T extends string> = T extends `${infer First}${infer Rest}` ? `${First extends Lowercase<First> ? First : `-${Lowercase<First>}`}${KebabCase<Rest>}` : T;
+/**
  * Converts a union type to an intersection type (`|` to `&`).
  *
  * Note: this utility type is for use on object types. It may fail on other types.
