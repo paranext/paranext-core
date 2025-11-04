@@ -141,7 +141,7 @@ export default function TabDropdownMenu({
   return (
     <DropdownMenu variant={variant}>
       <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
-        <Button variant={buttonVariant} size="icon">
+        <Button variant={buttonVariant} size="icon" className="tw-h-8">
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>

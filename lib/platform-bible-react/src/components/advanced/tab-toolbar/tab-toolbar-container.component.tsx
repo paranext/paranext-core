@@ -56,7 +56,7 @@ export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarCo
   ({ id, className, children }, ref) => (
     <div
       ref={ref}
-      className={`tw-sticky tw-top-0 tw-box-border tw-flex tw-h-14 tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar ${className}`}
+      className={`tw-sticky tw-top-0 tw-box-border tw-flex tw-h-[3.2rem] tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar ${className}`}
       id={id}
     >
       {children}

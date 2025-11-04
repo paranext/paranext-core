@@ -68,26 +68,28 @@ export function TabToolbar({
 }: TabToolbarProps) {
   return (
     <TabToolbarContainer className={`tw-w-full tw-border ${className}`} id={id}>
-      {projectMenuData && (
-        <TabDropdownMenu
-          onSelectMenuItem={onSelectProjectMenuItem}
-          menuData={projectMenuData}
-          tabLabel="Project"
-          icon={menuButtonIcon ?? <Menu />}
-          buttonVariant="ghost"
-        />
-      )}
+      <div className="tw-h-full tw-p-[1px]">
+        {projectMenuData && (
+          <TabDropdownMenu
+            onSelectMenuItem={onSelectProjectMenuItem}
+            menuData={projectMenuData}
+            tabLabel="Project"
+            icon={menuButtonIcon ?? <Menu />}
+            buttonVariant="ghost"
+          />
+        )}
+      </div>
       {startAreaChildren && (
-        <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
+        <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-p-[1px] tw-@container/tab-toolbar-start">
           {startAreaChildren}
         </div>
       )}
       {centerAreaChildren && (
-        <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
+        <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-p-[1px] tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
           {centerAreaChildren}
         </div>
       )}
-      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
+      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-p-[1px] tw-@container/tab-toolbar-end">
         {tabViewMenuData && (
           <TabDropdownMenu
             onSelectMenuItem={onSelectViewInfoMenuItem}
