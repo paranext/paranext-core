@@ -13,9 +13,11 @@ import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
 import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
-// TODO: calculate these dynamically:
+// TODO (PT-3657): calculate these dynamically:
 const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is visible.
 const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
+const footnoteHeaderWidthPx = 50;
+const minimumEditorWidthPx = 100;
 
 export type FootnotesLayoutProps = PropsWithChildren<{
   usj: Usj;
@@ -59,6 +61,7 @@ export function FootnotesLayout({
   }, [usj]);
 
   const [containerHeight, setContainerHeight] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   const observerRef = useRef<ResizeObserver | undefined>(undefined);
 
@@ -73,10 +76,12 @@ export function FootnotesLayout({
 
     const observer = new ResizeObserver(() => {
       setContainerHeight(node.clientHeight);
+      setContainerWidth(node.clientWidth);
     });
 
     observer.observe(node);
     setContainerHeight(node.clientHeight);
+    setContainerWidth(node.clientWidth);
 
     observerRef.current = observer;
   }, []);
@@ -141,10 +146,18 @@ export function FootnotesLayout({
   const {
     minPercent: calculatedFootnotesPaneMinPercent,
     maxPercent: calculatedFootnotesPaneMaxPercent,
-  } = getPaneSizeLimits(containerHeight, {
-    secondaryPaneMinHeightPx: footnoteRowHeightPx,
-    mainPaneMinHeightPx: minimumEditorHeightPx,
-  });
+  } =
+    footnotesPanePosition === 'bottom'
+      ? getPaneSizeLimits(containerHeight, {
+          secondaryPaneMinSizePx: footnoteRowHeightPx,
+          mainPaneMinSizePx: minimumEditorHeightPx,
+        })
+      : getPaneSizeLimits(containerWidth, {
+          secondaryPaneMinSizePx: footnoteHeaderWidthPx,
+          mainPaneMinSizePx: minimumEditorWidthPx,
+          absoluteMinPercent: 10,
+          absoluteMaxPercent: 50,
+        });
 
   // Make sure the calculated range accommodates the current saved size. There is an off-chance this
   // could allow for the splitter to get dragged to a size we're not happy about, but it is very
