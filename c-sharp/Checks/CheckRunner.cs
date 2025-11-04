@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects;
-using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data.Checking;
@@ -19,6 +18,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
 {
     #region Internal classes
 
+    // This can be eliminated once RetrieveInventoryData is removed
     private class InventoryItem(string inventoryText, string verse, VerseRef verseRef, int offset)
     {
         public string InventoryText { get; set; } = inventoryText;
@@ -60,15 +60,20 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly CheckCache _checkCache;
     private readonly object _runChecksLock = new();
 
+    // This can be eliminated once RetrieveInventoryData is removed
+    private readonly InventoryDataProvider _inventoryDataProvider;
+
     #endregion
 
     #region Constructor
-    public CheckRunner(PapiClient papiClient)
+
+    public CheckRunner(PapiClient papiClient, InventoryDataProvider inventoryDataProvider)
         : base("dotNetCheckRunner", papiClient, NetworkObjectType.CHECK_RUNNER)
     {
         _allCheckIds = _checkDetailsByCheckId.Keys.ToList();
         _allCheckDetails = _checkDetailsByCheckId.Values.ToList();
         _checkCache = new CheckCache(_allCheckIds, papiClient);
+        _inventoryDataProvider = inventoryDataProvider;
     }
 
     #endregion
@@ -153,60 +158,76 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
+    /// <summary>
+    /// This method is obsolete, but it has been kept temporarily for backward compatibility.
+    /// <br/>
+    /// Normally, you would want to call BuildInventorySummary first and just display that data.
+    /// Then, when a user clicks on an item to see details, you would call BeginItemizedInventoryJob
+    /// followed by RetrieveItemizedInventoryJobUpdate to get the details for that item.
+    /// <br/>
+    /// This method simulates that process for all items and returns the combined results.
+    /// </summary>
+    [Obsolete("Use BuildInventorySummary and BeginItemizedInventoryJob on InventoryDataProvider")]
     private List<InventoryItem> RetrieveInventoryData(
         string checkId,
         string projectId,
-        CheckInputRange checkInputRange
+        InputRange inputRange
     )
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
-        ArgumentNullException.ThrowIfNull(checkInputRange);
+        ArgumentNullException.ThrowIfNull(inputRange);
 
-        var dataSource = DataSourceCache.GetChecksDataSource(projectId);
-        var check = CheckFactory.CreateCheck(checkId, dataSource);
-        if (check is not ScriptureInventoryBase checkWithInventory)
+        var summarizedInventory = _inventoryDataProvider.BuildInventorySummary(
+            checkId,
+            [inputRange]
+        );
+
+        var allKeys = summarizedInventory
+            .InventoryCountLists.SelectMany(list => list.Items)
+            .Select(item => item.Key)
+            .ToHashSet();
+
+        var retVal = new List<InventoryItem>();
+
+        foreach (var key in allKeys)
         {
-            Console.WriteLine(
-                $"Check {checkId} does not support inventories. Cannot retrieve inventory data."
+            var itemizedJobScope = new ItemizedInventoryJobScope
+            {
+                SummarizedInventoryId = summarizedInventory.SummarizedInventoryId,
+                Key = key,
+            };
+            var jobId = _inventoryDataProvider.BeginItemizedInventoryJob(itemizedJobScope);
+
+            ItemizedInventoryJobStatusReport? jobReport = null;
+            List<ItemizedInventoryItem> results = [];
+            do
+            {
+                Thread.Sleep(10);
+                jobReport = _inventoryDataProvider.RetrieveItemizedInventoryJobUpdate(
+                    jobId,
+                    int.MaxValue
+                );
+                results.AddRange(jobReport.NextResults ?? []);
+            } while (jobReport.Status == ItemizedInventoryJobStatus.Running);
+            _inventoryDataProvider.AbandonItemizedInventoryJob(jobId);
+
+            if (results.Count == 0)
+                continue;
+
+            retVal.AddRange(
+                results.Select(result => new InventoryItem(
+                    result.InventoryText,
+                    result.SourceText,
+                    result.Location.VerseRef,
+                    result.Location.Offset
+                ))
             );
-            return [];
         }
 
-        // "GetText" will tokenize the text for checks to use
-        // "0" chapter number means all chapters
-        var chapterNum =
-            checkInputRange.Start.ChapterNum == checkInputRange.End?.ChapterNum
-                ? checkInputRange.Start.ChapterNum
-                : 0;
-        dataSource.GetText(checkInputRange.Start.BookNum, chapterNum, check.NeededFormat);
+        _inventoryDataProvider.DiscardInventorySummary(summarizedInventory.SummarizedInventoryId);
 
-        var textTokens = dataSource.TextTokens;
-        var newReferences = checkWithInventory.GetReferences(textTokens, "");
-
-        var references = new List<TextTokenSubstring>();
-        references.AddRange(newReferences);
-
-        // HACK: This function will be split into 2 separate ones when
-        // https://paratextstudio.atlassian.net/browse/PT-3561 is done. At that point, filtering of
-        // "always valid characters" will be handled by the existing TextInventory class.
-        if (checkId == CheckType.Character.InternalValue)
-        {
-            const string ALWAYS_VALID_CHARACTERS = " \r\n";
-            references = references
-                .Where(r => !ALWAYS_VALID_CHARACTERS.Contains(r.InventoryText))
-                .ToList();
-        }
-
-        return
-        [
-            .. references.Select(reference => new InventoryItem(
-                reference.InventoryText,
-                reference.Token.Text,
-                reference.Token.VerseRef,
-                reference.Offset
-            )),
-        ];
+        return retVal;
     }
 
     private bool IsCheckSetupForProject(string checkId, string projectId)
@@ -214,7 +235,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        var dataSource = DataSourceCache.GetChecksDataSource(projectId);
+        var dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(projectId));
         var check = CheckFactory.CreateCheck(checkId, dataSource);
         return check.SetupComplete;
     }
@@ -284,6 +305,8 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             return;
         }
 
+        ErrorMessageDenials denials = GetOrCreateDenials(job.JobScope.InputRanges[0].ProjectId);
+
         job.Status = CheckJobStatus.Running;
         job.PercentComplete = 0;
         job.StartTimeUtc = DateTime.UtcNow;
@@ -329,7 +352,7 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
                 if (checkIdsToRun.Count == 0)
                     continue;
 
-                RunChecksForProject(range, checkIdsToRun);
+                _checkCache.RunChecksForProject(range, checkIdsToRun, denials);
                 foreach (var checkId in checkIdsToRun)
                 {
                     var check = _checkCache.GetCheck(checkId, range.ProjectId);
@@ -361,64 +384,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             // Avoid problems with floating point precision
             job.PercentComplete = Math.Round(job.PercentComplete, 0);
         }
-    }
-
-    /// <summary>
-    /// Run all provided checks on a project for books within active ranges
-    /// </summary>
-    private void RunChecksForProject(CheckInputRange range, IEnumerable<string> checkIds)
-    {
-        // Text has to be tokenized for the checks before the checks can run
-        var enabledChecksForProject = _checkCache.GetChecks(checkIds, range.ProjectId);
-        CheckDataFormat neededDataFormat = 0;
-        foreach (var check in enabledChecksForProject)
-            neededDataFormat |= check.Check.NeededFormat;
-
-        // "GetText" will tokenize the text for checks to use
-        // "0" chapter number means all chapters
-        var checkDataSource = DataSourceCache.GetChecksDataSource(range.ProjectId);
-        checkDataSource.GetText(range.Start.BookNum, 0, neededDataFormat);
-
-        var scrText = LocalParatextProjects.GetParatextProject(range.ProjectId);
-        var indexer = new UsfmBookIndexer(scrText.GetText(range.Start.BookNum));
-
-        foreach (var checkId in checkIds)
-        {
-            var check = _checkCache.GetCheck(checkId, range.ProjectId);
-            check.ClearResultsForBook(range.Start.BookNum);
-            // Checks have to be reinitialized to pick up changes to inventories
-            // Inventories are stored in the project settings file
-            if (check.SettingsChanged)
-            {
-                check.SettingsChanged = false;
-                check.Check.Initialize(checkDataSource);
-            }
-            RunCheck(check, checkDataSource, range, indexer);
-        }
-    }
-
-    /// <summary>
-    /// Run the given check on the given range
-    /// </summary>
-    private void RunCheck(
-        CheckForProject checkForProject,
-        ChecksDataSource dataSource,
-        CheckInputRange range,
-        UsfmBookIndexer indexer
-    )
-    {
-        ErrorMessageDenials denials = GetOrCreateDenials(range.ProjectId);
-
-        checkForProject.AccessResults(
-            range.Start.BookNum,
-            recorder =>
-            {
-                recorder.ClearResultsFromBook(range.Start.BookNum);
-                checkForProject.Check.Run(range.Start.BookNum, dataSource, recorder);
-                recorder.PostProcessResults(denials, indexer);
-                recorder.ResultsReady = true;
-            }
-        );
     }
 
     private ErrorMessageDenials GetOrCreateDenials(string projectId)

@@ -1,10 +1,10 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { INVENTORY_STRING_KEYS, Scope, usePromise } from 'platform-bible-react';
-import { getChaptersForBook, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CheckInputRange } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
@@ -74,11 +74,16 @@ global.webViewComponent = function InventoryWebView({
       verseNum: 1,
     };
     const start = { ...defaultScrRef };
-    const end = { ...defaultScrRef };
+    let end: SerializedVerseRef | undefined = { ...defaultScrRef };
 
     if (scope === 'book') {
       start.chapterNum = 1;
-      end.chapterNum = getChaptersForBook(Canon.bookIdToNumber(verseRef.book));
+      start.verseNum = 0;
+      end = undefined;
+    } else if (scope === 'chapter') {
+      start.verseNum = 0;
+      // Using 999 as a sentinel value to indicate "end of chapter" (important for BBBCCCVVV values)
+      end.verseNum = 999;
     }
 
     return {

@@ -1,13 +1,19 @@
 using System.Collections.Concurrent;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
+using Paratext.Checks;
+using Paratext.Data.Checking;
 using Paratext.Data.ProjectFileAccess;
 
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// A cache of checks (the executable code and the results) for all Paratext projects.
+/// A cache of checks (executable code, input data, and results) for all Paratext projects.
 /// This ensures that there is only one instance of each check per project.
 /// Also, this automatically clears check results when project text or settings change.
+/// <br/>
+/// Check results are cached because running checks can be time-consuming, and we expect the UI
+/// to frequently request check results for the same project and check multiple times.
 /// </summary>
 internal sealed class CheckCache
 {
@@ -15,6 +21,7 @@ internal sealed class CheckCache
     private const string INVALIDATE_CHECK_RESULTS =
         "command:platformScripture.invalidateCheckResults";
 
+    private readonly ConcurrentDictionary<string, ChecksDataSource> _dataSourcesByProjectId = [];
     private readonly ConcurrentDictionary<
         (string checkId, string projectId),
         CheckForProject
@@ -79,18 +86,80 @@ internal sealed class CheckCache
             (checkId, projectId),
             _ =>
             {
-                var dataSource = DataSourceCache.GetChecksDataSource(projectId);
-                var newCheck = new CheckForProject(
+                var dataSource = GetChecksDataSource(projectId);
+                return new CheckForProject(
                     CheckFactory.CreateCheck(checkId, dataSource),
                     checkId,
                     projectId
                 );
+            }
+        );
+    }
+
+    public IEnumerable<CheckForProject> GetChecks(IEnumerable<string> checkIds, string projectId)
+    {
+        return checkIds.Select((id) => GetCheck(id, projectId));
+    }
+
+    public void RunChecksForProject(
+        InputRange range,
+        IEnumerable<string> checkIds,
+        ErrorMessageDenials denials
+    )
+    {
+        var projectId = range.ProjectId;
+        var bookNum = range.Start.BookNum;
+
+        // Text has to be tokenized for the checks before the checks can run
+        var enabledChecksForProject = GetChecks(checkIds, projectId);
+        CheckDataFormat neededDataFormat = 0;
+        foreach (var check in enabledChecksForProject)
+            neededDataFormat |= check.Check.NeededFormat;
+
+        // "GetText" will tokenize the text for checks to use
+        // "0" chapter number means all chapters
+        var dataSource = GetChecksDataSource(projectId);
+        dataSource.GetText(bookNum, 0, neededDataFormat);
+
+        var scrText = LocalParatextProjects.GetParatextProject(projectId);
+        var indexer = new UsfmBookIndexer(scrText.GetText(bookNum));
+
+        foreach (var checkId in checkIds)
+        {
+            var check = GetCheck(checkId, projectId);
+            if (check.SettingsChanged)
+            {
+                check.SettingsChanged = false;
+                check.Check.Initialize(dataSource);
+                check.ClearResults();
+            }
+            check.Run(dataSource, bookNum, indexer, denials);
+        }
+    }
+
+    private ChecksDataSource GetChecksDataSource(string projectId)
+    {
+        return _dataSourcesByProjectId.GetOrAdd(
+            projectId,
+            id =>
+            {
+                var dataSource = new ChecksDataSource(LocalParatextProjects.GetParatextProject(id));
+
                 dataSource.ScrText.TextChanged += (sender, args) =>
                 {
                     ThreadingUtils.RunTask(
                         Task.Run(async () =>
                         {
-                            newCheck.ClearResultsForBook(args.BookNum);
+                            _checksByIds
+                                .Where((kvp) => kvp.Key.projectId == projectId)
+                                .Select((kvp) => kvp.Value)
+                                .ToList()
+                                .ForEach(
+                                    (check) =>
+                                    {
+                                        check.ClearResultsForBook(args.BookNum);
+                                    }
+                                );
 
                             // Notify the front end that all check results for this project are invalid
                             try
@@ -116,13 +185,8 @@ internal sealed class CheckCache
                         "Text changed - clear check results for book"
                     );
                 };
-                return newCheck;
+                return dataSource;
             }
         );
-    }
-
-    public IEnumerable<CheckForProject> GetChecks(IEnumerable<string> checkIds, string projectId)
-    {
-        return checkIds.Select((id) => GetCheck(id, projectId));
     }
 }
