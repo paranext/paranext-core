@@ -370,3 +370,17 @@ export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) ex
 ) => void
   ? I
   : never;
+
+/**
+ * Force VSCode to expand all the properties of a type by using this type. Useful for making complex
+ * types more readable in hover tooltips.
+ *
+ * @example
+ *
+ * ```ts
+ * type MyType = Prettify<SomeComplexType>;
+ * ```
+ */
+export type Prettify<T> = {
+  [K in keyof T]: T[K];
+} & {};
