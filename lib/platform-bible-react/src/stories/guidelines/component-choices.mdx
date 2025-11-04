@@ -31,6 +31,19 @@ There is a consistent selection and hover style for all lists, that is
 There are consistent interaction patterns for lists, see [Interactions/Scripture editor ↔ Lists](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/guidelines/application-interactions.mdx#scripture-editor--lists)
 
 ## Single and multi select options, Filters
+Using the
+- [Select](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/select.stories.tsx) component - for simple selections with little options
+- Combobox component - where search, grouping and more details are helpful
+  - [Single Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/combo-box.stories.tsx): use a [Chevron Down](https://lucide.dev/icons/chevron-down) icon on the trigger
+  - [Multi Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/multi-select-combo-box.stories.tsx): use the default [Chevrons Up-Down](https://lucide.dev/icons/chevrons-up-down) icon on the trigger
+
+Make sure to
+- Show the selection with a start side checkbox (not like the [default New York style](https://ui.shadcn.com/docs/components/select) on the end side)
+- Provide context by using headings and grouping
+- Apply sorting
+- Do not break the default component's focus and hover styles, overflow and grow-shrink behavior (if any, improve it)
+- Single select and multi select Combobox should behave the same - despite selection mode and different icon
+
 <iframe src="https://embed.figma.com/design/hJirMCWP9O9riw39Gd5zyl/Design-System-Figma?node-id=0-1&embed-host=paratext-design-system" width="100%" height="400" style={{border: "none"}}>
   Your browser does not support iframes.
 </iframe>
