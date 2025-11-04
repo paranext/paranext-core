@@ -1,4 +1,13 @@
-import { Badge, cn, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import {
+  Badge,
+  cn,
+  DropdownMenuItem,
+  ResultsCard,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { Check, Settings, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { CheckRunResult } from 'platform-scripture';
@@ -106,6 +115,7 @@ export function CheckCard({
     useMemo(
       () => [
         '%webView_checksSidePanel_checkRequiresSetup%',
+        '%webView_checksSidePanel_checkRequiresSetup_tooltip%',
         '%webView_checksSidePanel_focusedCheckDropdown_allowItem%',
         '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
         '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
@@ -183,13 +193,24 @@ export function CheckCard({
             checkState === CheckStates.Denied ||
             checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />}
         {!isCheckSetup && (
-          <Badge
-            key={`${checkId}-requires-setup-badge`}
-            className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
-            variant="secondary"
-          >
-            {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
-          </Badge>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  key={`${checkId}-requires-setup-badge`}
+                  className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
+                  variant="secondary"
+                >
+                  {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="tw-font-light">
+                  {localizedStrings['%webView_checksSidePanel_checkRequiresSetup_tooltip%']}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
       <span className="tw-font-regular tw-overflow-hidden tw-text-ellipsis tw-text-xs tw-text-muted-foreground">
