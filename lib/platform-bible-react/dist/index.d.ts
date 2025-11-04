@@ -2482,7 +2482,7 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	listboxRef: React$1.RefObject<HTMLElement>;
 	activeId: string | undefined;
 	selectedId: string | undefined;
-	handleKeyDown: (evt: React$1.KeyboardEvent<HTMLElement>) => void;
+	handleKeyDown: (event: React$1.KeyboardEvent<HTMLElement>) => void;
 	focusOption: (id: string) => void;
 };
 /**

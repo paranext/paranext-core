@@ -1,7 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
-// import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
-// import { RefObject, useState } from 'react';
-import { useCallback, useState } from 'react';
+import { RefObject, useCallback, useEffect, useState } from 'react';
+import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
@@ -12,47 +11,61 @@ export default function CommentList({
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
+  const options: ListboxOption[] = threads.map((thread) => ({
+    id: `thread-${thread.id}`,
+  }));
+
+  const handleKeyboardSelectThread = useCallback((option: ListboxOption) => {
+    setSelectedThreadId((prevId) => (prevId === option.id ? undefined : option.id));
+  }, []);
+
   const handleSelectThread = useCallback((threadId: string) => {
     setSelectedThreadId((prevId) => (prevId === threadId ? undefined : threadId));
   }, []);
 
-  // const options: ListboxOption[] = threads.map((thread) => ({
-  //   id: `thread-${thread.id}`,
-  // }));
+  const { listboxRef, activeId, handleKeyDown } = useListbox({
+    options,
+    onOptionSelect: handleKeyboardSelectThread,
+  });
 
-  // const handleOptionSelect = (option: ListboxOption) => {
-  //   setSelectedThreadId((prevId) => (prevId === option.id ? undefined : option.id));
-  // };
+  // When a thread is expanded, focus the input field
+  useEffect(() => {
+    if (!selectedThreadId) return;
 
-  // const { listboxRef, activeId, handleKeyDown } = useListbox({
-  //   options,
-  //   onOptionSelect: handleOptionSelect,
-  // });
+    const container = document.getElementById(selectedThreadId);
+    if (!container) return;
 
-  if (threads.length === 0) {
-    return (
-      <div
-        className={cn(
-          'tw-w-full tw-max-w-screen-md tw-py-8 tw-text-center tw-text-muted-foreground',
-          className,
-        )}
-      >
-        {localizedStrings['%no_comments%']}
-      </div>
-    );
-  }
+    const requestAnimationFrameScheduled = requestAnimationFrame(() => {
+      const requestAnimationFrameChangesRendered = requestAnimationFrame(() => {
+        const inputField = container.querySelector<HTMLElement>(
+          'input:not([disabled]):not([type="hidden"])',
+        );
+        const fallback = container.querySelector<HTMLElement>(
+          'textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
+        );
+        const toFocus = inputField ?? fallback;
+        toFocus?.focus();
+      });
+      return () => cancelAnimationFrame(requestAnimationFrameChangesRendered);
+    });
+    return () => cancelAnimationFrame(requestAnimationFrameScheduled);
+  }, [selectedThreadId]);
 
   return (
     <div
+      id="comment-thread-list"
       role="listbox"
       tabIndex={0}
-      // The listboxRef is a HTMLElement so that the keyboard navigation can be used with multiple types of elements.
+      // The listboxRef is an HTMLElement so that the keyboard navigation can be used with multiple types of elements
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      // ref={listboxRef as RefObject<HTMLDivElement>}
-      // aria-activedescendant={activeId ?? undefined}
-      // onKeyDown={handleKeyDown}
+      ref={listboxRef as RefObject<HTMLDivElement>}
+      aria-activedescendant={activeId ?? undefined}
       aria-label="Comments"
-      className={cn('tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3', className)}
+      className={cn(
+        'tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        className,
+      )}
+      onKeyDown={handleKeyDown}
     >
       {threads.map((thread) => (
         <div key={`thread-${thread.id}`}>
@@ -62,8 +75,8 @@ export default function CommentList({
             verseRef={thread.verseRef}
             verse={thread.verse}
             handleSelectThread={handleSelectThread}
-            threadId={thread.id}
-            isSelected={selectedThreadId === thread.id}
+            threadId={`thread-${thread.id}`}
+            isSelected={selectedThreadId === `thread-${thread.id}`}
             assignedUser={thread.assignedUser}
           />
         </div>

@@ -83,8 +83,11 @@ export function CommentThread({
 
   return (
     <Card
+      role="option"
+      aria-selected={isSelected}
+      id={threadId}
       className={cn(
-        'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-transition-all tw-duration-200',
+        'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         {
           'tw-bg-slate-50 hover:tw-shadow-md': !isSelected,
         },
@@ -94,6 +97,7 @@ export function CommentThread({
         handleSelectThread(threadId);
         // TODO: Scroll thread into view if not fully visible
       }}
+      tabIndex={-1}
     >
       <CardContent className="tw-space-y-4 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
@@ -102,7 +106,7 @@ export function CommentThread({
               {localizedAssignedToText}
             </Badge>
           )}
-          <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-start tw-gap-2">
+          <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-baseline tw-gap-2">
             <p
               ref={verseTextRef}
               className={`tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal tw-text-muted-foreground ${
@@ -114,37 +118,39 @@ export function CommentThread({
               {verseRef} {verse}
             </p>
             {isVerseOverflowing && (
-              <button
-                onClick={() => setIsVerseExpanded(!isVerseExpanded)}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent triggering the expand/collapse of the thread
+                  setIsVerseExpanded(!isVerseExpanded);
+                }}
                 className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
                 aria-label={isVerseExpanded ? 'Collapse text' : 'Expand text'}
-                type="button"
               >
-                {isVerseExpanded ? (
-                  <ChevronUp className="tw-h-5 tw-w-5" />
-                ) : (
-                  <ChevronDown className="tw-h-5 tw-w-5" />
-                )}
-              </button>
+                {isVerseExpanded ? <ChevronUp /> : <ChevronDown />}
+              </Button>
             )}
           </div>
-          <div className="tw-flex tw-flex-row tw-justify-between">
-            <CommentItem
-              comment={firstComment}
-              localizedStrings={localizedStrings}
-              isThreadExpanded={isSelected}
-            />
+          <div className="tw-flex tw-w-full tw-flex-row tw-items-baseline tw-gap-3">
+            <div className="tw-flex-1">
+              <CommentItem
+                comment={firstComment}
+                localizedStrings={localizedStrings}
+                isThreadExpanded={isSelected}
+              />
+            </div>
             {isSelected && (
               <Button
-                className="tw-p-1"
+                variant="ghost"
+                size="icon"
+                className="tw-shrink-0"
                 onClick={(e) => {
                   e.stopPropagation(); // Prevent triggering the expand/collapse
                   handleResolveCommentThread();
                 }}
-                variant="ghost"
-                size="icon"
               >
-                <Check className="tw-h-6 tw-w-6" />
+                <Check />
               </Button>
             )}
           </div>
@@ -173,10 +179,14 @@ export function CommentThread({
 
               <div
                 role="textbox"
-                tabIndex={0}
+                tabIndex={-1}
                 className="tw-w-full tw-space-y-2"
                 onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                  }
+                }}
               >
                 <Input
                   className="tw-w-full"
@@ -186,15 +196,17 @@ export function CommentThread({
                 />
                 <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
                   <Button
+                    size="icon"
                     variant="outline"
-                    className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-md"
+                    className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
                     disabled={!inputValue}
                   >
                     <AtSign />
                   </Button>
                   <Button
+                    size="icon"
                     onClick={handleSubmit}
-                    className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-md"
+                    className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
                     disabled={!inputValue}
                   >
                     <ArrowUp />

@@ -55,14 +55,14 @@ export function CommentItem({
           <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
         </Avatar>
         <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
-          <div className="tw-flex tw-flex-col">
+          <div className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
             <p className="tw-text-sm tw-font-medium">{userLabel}</p>
             <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
           </div>
+          {/* Needed to prevent highlighting text in a comment from triggering parent click event that de-selects & collapses the comment thread */}
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div
             className="tw-flex tw-flex-row tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground"
-            // Added the following to prevent highlighting text in a comment from triggering parent click event that de-selects & collapses the comment thread
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
