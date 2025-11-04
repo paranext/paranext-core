@@ -1,0 +1,42 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Responsiveness" />
+
+# Responsiveness
+
+Platform.Bible allows users to open multiple tab groups inside of the application, which means that individual tabs can get very small. Given this fact, users still need to be able to work well with those smaller parts of the user interface.
+
+## Design principle
+Design narrow first, wide later. For tabs (technically "webviews") design for a `min-width` of `300px`, at which the ui works without vertical srcollbars.
+Is this narrow view, parts of the ui may not be visible, truncated or wrapped.
+
+Things that get hidden need to be accessible in another way. E.g. when hidden from the toolbar, it could still be accessible from a menu.
+
+## Components
+
+### Popover
+For the time being Platform.Bible does not offer webviews a way to launch popovers that can span across multiple tabs/webviews, which means that
+- popovers can only appear inside of a webview
+- when something outside is needed, a separate webview can be created and launched via the docking framework
+
+#### Individual popvers
+For very individual popovers - e.g. item editors, rich tooltips, ... - design them in a responsive way, so that they are usable at the defined `min-width` of `300px` and bigger
+
+#### Menu-like popovers for selecting a single or multi options
+- For the time beeing there are currently no efforts to design popovers 
+For  - e.g. project selection - menu entries should not wrap, but entries be truncated in small width.
+
+Which component to use for single and multi select popoverse, see
+<iframe src="https://embed.figma.com/design/hJirMCWP9O9riw39Gd5zyl/Design-System-Figma?node-id=0-1&embed-host=paratext-design-system" width="100%" height="400" style={{border: "none"}}>
+  Your browser does not support iframes.
+</iframe>
+
+### Toolbar
+Toolbars shrink and finally hide items in smaller widths. It is imporant to always keep the menu button visible. As mentioned above, hidden items need to be accessible elsewhere.
+
+Toolbars do **not** automatically or partially overflow into overflow menus. Instead duplicate functionality may always exists in there.
+
+Lightweight filter toolbars, may wrap into two, maximum three rows instead of hiding elements.
+
+### Tabs
+Tab Headsers overflow into an overflow menu. Also see [Interactions/Tab Navigation](./guidelines/application-interactions.mdx#tab-navigation)
