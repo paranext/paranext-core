@@ -18,7 +18,7 @@ import {
   Usj,
 } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
