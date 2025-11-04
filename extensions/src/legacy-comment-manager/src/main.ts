@@ -35,7 +35,7 @@ const commentListWebViewProvider: IWebViewProvider = {
 
     return {
       ...savedWebView,
-      title: title,
+      title,
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
