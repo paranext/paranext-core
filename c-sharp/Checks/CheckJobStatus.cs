@@ -4,7 +4,7 @@ namespace Paranext.DataProvider.Checks;
 /// Represents the current status of a check job, including its results. This is the
 /// CheckJobStatusReport plus additional runtime information used internally.
 /// </summary>
-public sealed class CheckJobStatus(CheckJobScope jobScope) : CheckJobStatusReport
+internal sealed class CheckJobStatus(CheckJobScope jobScope) : CheckJobStatusReport
 {
     #region Possible Status Values
 

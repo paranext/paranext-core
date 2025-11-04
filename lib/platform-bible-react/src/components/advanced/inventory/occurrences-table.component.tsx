@@ -7,9 +7,41 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { deepEqual, LanguageStrings } from 'platform-bible-utils';
-import { useMemo } from 'react';
+import { LanguageStrings } from 'platform-bible-utils';
+import { ReactNode, useMemo } from 'react';
 import { InventoryItemOccurrence } from './inventory-utils';
+
+/**
+ * Convert text with `\\word\\` markers to React elements with bold formatting.
+ *
+ * @param text Text containing `\\word\\` markers for bolding
+ * @returns Array of React nodes with text and bold elements
+ */
+function formatTextWithBold(text: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = /\\\\(.+?)\\\\/g;
+  let match;
+
+  // Regex uses null when no match is found
+  // eslint-disable-next-line no-null/no-null, no-cond-assign
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    // Add the bold text
+    parts.push(<b key={match.index}>{match[1]}</b>);
+    lastIndex = regex.lastIndex;
+  }
+
+  // Add any remaining text after the last match
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
+}
 
 /** Props for the OccurrencesTable component */
 type OccurrencesTableProps = {
@@ -41,9 +73,13 @@ export function OccurrencesTable({
 
   const occurrences: InventoryItemOccurrence[] = useMemo(() => {
     const uniqueOccurrences: InventoryItemOccurrence[] = [];
+    const seen = new Set<string>();
 
     occurrenceData.forEach((occurrence) => {
-      if (!uniqueOccurrences.some((uniqueOccurrence) => deepEqual(uniqueOccurrence, occurrence))) {
+      const key = `${occurrence.reference.book}:${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}:${occurrence.text}`;
+
+      if (!seen.has(key)) {
+        seen.add(key);
         uniqueOccurrences.push(occurrence);
       }
     });
@@ -71,7 +107,7 @@ export function OccurrencesTable({
               }}
             >
               <TableCell>{`${Canon.bookIdToEnglishName(occurrence.reference.book)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
-              <TableCell>{occurrence.text}</TableCell>
+              <TableCell>{formatTextWithBold(occurrence.text)}</TableCell>
             </TableRow>
           ))}
       </TableBody>

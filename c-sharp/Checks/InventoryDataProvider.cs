@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
@@ -28,13 +29,14 @@ internal sealed class InventoryDataProvider(
     #region Member variables
 
     private readonly LocalParatextProjects _paratextProjects = paratextProjects;
-
-    private readonly InventoryCache _inventoryCache = new();
-
-    private readonly Dictionary<string, InventoryDetails> _inventoryDetailsByInventoryId = new();
-
-    private readonly List<InventoryDetails> _availableInventories = new();
-
+    private readonly Dictionary<string, InventoryDetails> _inventoryDetailsByInventoryId = [];
+    private readonly List<InventoryDetails> _availableInventories = [];
+    private readonly ConcurrentDictionary<string, InventoryWorker> _inventoryWorkersBySummaryId =
+    [];
+    private readonly ConcurrentDictionary<
+        string,
+        ItemizedInventoryJobStatus
+    > _activeItemizedInventoryJobsByJobId = [];
     private readonly JsonSerializerOptions _serializationOptions =
         SerializationOptions.CreateSerializationOptions();
 
@@ -47,11 +49,17 @@ internal sealed class InventoryDataProvider(
     {
         return
         [
+            ("abandonItemizedInventoryJob", AbandonItemizedInventoryJob),
+            ("beginItemizedInventoryJob", BeginItemizedInventoryJob),
+            ("buildInventorySummary", BuildInventorySummary),
+            ("discardInventorySummary", DiscardInventorySummary),
             ("getAvailableInventories", GetAvailableInventories),
             ("getInventoryItemStatus", GetInventoryItemStatus),
             ("getInventoryOptionValues", GetInventoryOptionValues),
+            ("retrieveItemizedInventoryJobUpdate", RetrieveItemizedInventoryJobUpdate),
             ("setInventoryItemStatus", SetInventoryItemStatus),
             ("setInventoryOptionValues", SetInventoryOptionValues),
+            ("stopItemizedInventoryJob", StopItemizedInventoryJob),
         ];
     }
 
@@ -94,9 +102,10 @@ internal sealed class InventoryDataProvider(
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = _inventoryCache
-            .GetInventoryForProject(selector.InventoryId, selector.ProjectId)
-            .Inventory;
+        var inventory = InventoryFactory.CreateInventory(
+            selector.InventoryId,
+            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+        );
 
         var allItemsStatus = new List<InventoryItemStatus>();
         if (selector.TextType == InventoryTextType.NonVerseText)
@@ -129,9 +138,10 @@ internal sealed class InventoryDataProvider(
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = _inventoryCache
-            .GetInventoryForProject(selector.InventoryId, selector.ProjectId)
-            .Inventory;
+        var inventory = InventoryFactory.CreateInventory(
+            selector.InventoryId,
+            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+        );
 
         // No key was provided, so we were given an array of all items with their statuses
         if (string.IsNullOrEmpty(selector.Key))
@@ -239,9 +249,10 @@ internal sealed class InventoryDataProvider(
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = _inventoryCache
-            .GetInventoryForProject(selector.InventoryId, selector.ProjectId)
-            .Inventory;
+        var inventory = InventoryFactory.CreateInventory(
+            selector.InventoryId,
+            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+        );
         var inventoryOptions = inventory.InventoryOptions ?? [];
         var scrText = LocalParatextProjects.GetParatextProject(selector.ProjectId);
         var inventoryDetails = _inventoryDetailsByInventoryId[selector.InventoryId];
@@ -298,9 +309,10 @@ internal sealed class InventoryDataProvider(
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        var inventory = _inventoryCache
-            .GetInventoryForProject(selector.InventoryId, selector.ProjectId)
-            .Inventory;
+        var inventory = InventoryFactory.CreateInventory(
+            selector.InventoryId,
+            new ChecksDataSource(LocalParatextProjects.GetParatextProject(selector.ProjectId))
+        );
         var inventoryOptions = inventory.InventoryOptions ?? [];
         var scrText = LocalParatextProjects.GetParatextProject(selector.ProjectId);
         var inventoryDetails = _inventoryDetailsByInventoryId[selector.InventoryId];
@@ -368,9 +380,127 @@ internal sealed class InventoryDataProvider(
         return true;
     }
 
+    public SummarizedInventory BuildInventorySummary(string inventoryId, InputRange[] inputRanges)
+    {
+        // InventoryWorker handles parameter validation
+        var worker = new InventoryWorker(inventoryId, inputRanges);
+        var retVal = new SummarizedInventory
+        {
+            InventoryId = inventoryId,
+            ProjectId = worker.ProjectId,
+            InventoryCountLists = worker.GetInventorySummary(),
+        };
+        _inventoryWorkersBySummaryId[retVal.SummarizedInventoryId] = worker;
+        return retVal;
+    }
+
+    public void DiscardInventorySummary(string inventorySummaryId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(inventorySummaryId);
+
+        if (!_inventoryWorkersBySummaryId.TryRemove(inventorySummaryId, out _))
+            throw new ArgumentException($"Inventory summary {inventorySummaryId} not found");
+    }
+
+    public string BeginItemizedInventoryJob(ItemizedInventoryJobScope jobScope)
+    {
+        var summaryId = jobScope.SummarizedInventoryId;
+        if (!_inventoryWorkersBySummaryId.TryGetValue(summaryId, out var worker))
+            throw new ArgumentException($"No inventory summary found for ID {summaryId}");
+
+        var job = new ItemizedInventoryJobStatus(jobScope)
+        {
+            InventoryId = worker.InventoryId,
+            ProjectId = worker.ProjectId,
+            Key = jobScope.Key,
+        };
+        _activeItemizedInventoryJobsByJobId[job.JobId] = job;
+
+        RunItemizedInventoryJob(job);
+        return job.JobId;
+    }
+
+    // Default timeout should match CHECK_STOP_DEFAULT_TIMEOUT_MS in check.model.ts
+    private bool StopItemizedInventoryJob(string jobId, int? timeoutMs = 2000)
+    {
+        var job =
+            (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active inventory job with ID {jobId} (stop)");
+        job.StopRequested = true;
+        // Poll until the job stops or the timeout expires
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        while (stopwatch.ElapsedMilliseconds < timeoutMs.GetValueOrDefault())
+        {
+            if (job.Status != ItemizedInventoryJobStatus.Running)
+                return true;
+            Thread.Sleep(100);
+        }
+        return job.Status != ItemizedInventoryJobStatus.Running;
+    }
+
+    public void AbandonItemizedInventoryJob(string jobId)
+    {
+        var job =
+            (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active inventory job with ID {jobId} (abandon)");
+        job.StopRequested = true;
+        if (!_activeItemizedInventoryJobsByJobId.TryRemove(jobId, out _))
+            Console.WriteLine($"Failed to remove inventory job {jobId} from active jobs");
+    }
+
+    public ItemizedInventoryJobStatusReport RetrieveItemizedInventoryJobUpdate(
+        string jobId,
+        int maxResultsToInclude
+    )
+    {
+        var job =
+            (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active inventory job with ID {jobId} (status)");
+        return job.GenerateStatusReport(maxResultsToInclude);
+    }
+
     #endregion
 
     #region Private Helper methods
+
+    private void RunItemizedInventoryJob(ItemizedInventoryJobStatus job)
+    {
+        ThreadingUtils.RunTask(
+            Task.Run(() =>
+            {
+                try
+                {
+                    if (job.StopRequested)
+                    {
+                        job.Status = ItemizedInventoryJobStatus.Stopped;
+                        return;
+                    }
+
+                    job.Status = ItemizedInventoryJobStatus.Running;
+
+                    var summaryId = job.JobScope.SummarizedInventoryId;
+                    if (!_inventoryWorkersBySummaryId.TryGetValue(summaryId, out var worker))
+                        throw new Exception($"No inventory summary found for ID {summaryId}");
+                    worker.RunItemizedInventoryJob(job);
+
+                    if (job.PercentComplete < 100.0 && job.StopRequested)
+                        job.Status = ItemizedInventoryJobStatus.Stopped;
+                }
+                catch (Exception ex)
+                {
+                    job.Status = ItemizedInventoryJobStatus.Errored;
+                    job.Error = ex.Message;
+                }
+                finally
+                {
+                    job.EndTimeUtc = DateTime.UtcNow;
+                    if (job.Status == ItemizedInventoryJobStatus.Running)
+                        job.Status = ItemizedInventoryJobStatus.Completed;
+                }
+            }),
+            $"Inventory Results Job {job.JobId}"
+        );
+    }
 
     private static void AddItemStatus(
         ScriptureInventoryBase inventory,
