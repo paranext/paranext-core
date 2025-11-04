@@ -965,6 +965,19 @@ export type KebabCase<T extends string> = T extends `${infer First}${infer Rest}
  * ```
  */
 export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
+/**
+ * Force VSCode to expand all the properties of a type by using this type. Useful for making complex
+ * types more readable in hover tooltips.
+ *
+ * @example
+ *
+ * ```ts
+ * type MyType = Prettify<SomeComplexType>;
+ * ```
+ */
+export type Prettify<T> = {
+	[K in keyof T]: T[K];
+} & {};
 /** Identifier for a string that will be localized in a menu based on the user's UI language */
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */

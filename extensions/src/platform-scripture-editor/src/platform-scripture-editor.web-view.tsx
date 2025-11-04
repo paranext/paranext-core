@@ -6,8 +6,10 @@ import {
   Marginal,
   MarginalRef,
   SelectionRange,
-  ViewOptions,
   getDefaultViewOptions,
+  UsjNodeOptions,
+  DeltaOp,
+  ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
@@ -40,7 +42,11 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  FootnoteEditor,
   MarkdownRenderer,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
   Spinner,
 } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
@@ -86,7 +92,7 @@ const defaultProjectName = '';
 
 const defaultTextDirection = 'ltr';
 
-const formattedView: ViewOptions = { ...getDefaultViewOptions(), noteMode: 'expandInline' };
+const defaultView: ViewOptions = getDefaultViewOptions();
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -98,6 +104,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
+
+  // These two control the placement of the note editor popover by setting the location of the anchor
+  const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
+  const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
+  const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
+
+  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
+  const [editingNoteKey, setEditingNoteKey] = useState<string>();
+  const [editingNoteOps, setEditingNoteOps] = useState<DeltaOp[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -648,15 +663,51 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirection;
   }, [projectName, scrRef, textDirection]);
 
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      noteCallerOnClick: isReadOnly
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+
+            if (isCollapsed) {
+              if (editingNoteKey) return;
+
+              setEditingNoteKey(noteNodeKey);
+              setEditingNoteOps(getNoteOps());
+              setShowFootnoteEditor(true);
+            }
+          },
+    }),
+    [isReadOnly, editingNoteKey],
+  );
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
+      nodes: nodeOptions,
       textDirection: textDirectionEffective,
-      view: formattedView,
+      view: defaultView,
     }),
-    [isReadOnly, textDirectionEffective],
+    [isReadOnly, textDirectionEffective, nodeOptions],
   );
+
+  const onFootnoteEditorClose = useCallback(() => {
+    setEditingNoteKey(undefined);
+    setEditingNoteOps(undefined);
+    setShowFootnoteEditor(false);
+  }, []);
+
+  const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
+    if (editingNoteKey) {
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey, newNoteOps);
+    }
+    onFootnoteEditorClose();
+  };
 
   function renderEditor() {
     const commonProps = {
@@ -782,6 +833,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </div>,
         )}
       </div>
+      {/** Footnote editor components */}
+      <Popover open={showFootnoteEditor}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: notePopoverAnchorY,
+            left: notePopoverAnchorX,
+            // This height makes it so that visually the popover displays below the current line where the footnote is
+            height: notePopoverAnchorHeight,
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent className="tw-w-96 tw-p-[10px]">
+          <FootnoteEditor
+            noteOps={editingNoteOps}
+            noteKey={editingNoteKey}
+            onSave={onFootnoteEditorSave}
+            onClose={onFootnoteEditorClose}
+            scrRef={scrRef}
+            viewOptions={options.view ?? defaultView}
+          />
+        </PopoverContent>
+      </Popover>
     </>
   );
 };
