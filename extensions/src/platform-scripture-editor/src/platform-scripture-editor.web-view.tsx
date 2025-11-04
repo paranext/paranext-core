@@ -9,6 +9,7 @@ import {
   getDefaultViewOptions,
   UsjNodeOptions,
   DeltaOp,
+  ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
@@ -88,6 +89,8 @@ const defaultEditorDecorations: EditorDecorations = {};
 const defaultProjectName = '';
 
 const defaultTextDirection = 'ltr';
+
+const defaultView: ViewOptions = getDefaultViewOptions();
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -662,7 +665,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
-      view: getDefaultViewOptions(),
+      view: defaultView,
     }),
     [isReadOnly, textDirectionEffective, nodeOptions],
   );
@@ -810,7 +813,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
-            viewOptions={options.view ?? getDefaultViewOptions()}
+            viewOptions={options.view ?? defaultView}
           />
         </PopoverContent>
       </Popover>

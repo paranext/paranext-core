@@ -18,11 +18,11 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 export interface FootnoteEditorProps {
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOp[] | undefined;
-  /** External function to handling saving changes to the footnote */
+  /** External function to handle saving changes to the footnote */
   onSave: (noteOps: DeltaOp[]) => void;
   /**
-   * External function to handling closing the footnote editor. Gets called when the editor is
-   * closed without saving changes
+   * External function to handle closing the footnote editor. Gets called when the editor is closed
+   * without saving changes
    */
   onClose: () => void;
   /** The scripture reference for the parent editor */
