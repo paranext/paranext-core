@@ -75,7 +75,7 @@ export function ResultsCard({
           {isSelected && dropdownContent && (
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
-                <Button className="tw-h-6 tw-w-6" variant="ghost" size="icon">
+                <Button className="tw-m-1 tw-h-6 tw-w-6" variant="ghost" size="icon">
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
