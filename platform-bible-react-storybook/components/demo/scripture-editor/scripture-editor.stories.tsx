@@ -1,4 +1,5 @@
 import {
+  DeltaOp,
   Editorial,
   EditorOptions,
   EditorRef,
@@ -22,6 +23,8 @@ import {
   usjWeb,
 } from '@/components/demo/scripture-editor/usj.data';
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
+import FootnoteEditor from '@/components/advanced/footnotes/footnote-editor.component';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
@@ -266,6 +269,119 @@ export const CustomMarkerTrigger: Story = {
     options: {
       hasExternalUI: true,
       markerMenuTrigger: '?',
+    },
+  },
+};
+
+export const FootnoteEditorView: Story = {
+  render: (args) => {
+    // eslint-disable-next-line no-null/no-null
+    const editorRef = useRef<EditorRef | null>(null);
+
+    const [noteKey, setNoteKey] = useState<string>();
+    const [noteOps, setNoteOps] = useState<DeltaOp[]>();
+
+    const [popoverX, setPopoverX] = useState<number>();
+    const [popoverY, setPopoverY] = useState<number>();
+    const [popoverHeight, setPopoverHeight] = useState<number>();
+
+    const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
+
+    const viewOptions = useMemo<ViewOptions>(
+      () => ({
+        markerMode: 'hidden',
+        hasSpacing: true,
+        isFormattedFont: true,
+      }),
+      [],
+    );
+
+    const mergedOptions = useMemo<EditorOptions>(() => {
+      const base = args.options ?? {};
+      return {
+        ...base,
+        nodes: {
+          noteCallerOnClick: (
+            event,
+            noteNodeKey,
+            isCollapsed,
+            _getCaller,
+            _setCaller,
+            getNoteOps,
+          ) => {
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setPopoverX(targetRect.left);
+            setPopoverY(targetRect.top);
+            setPopoverHeight(targetRect.height);
+
+            if (isCollapsed) {
+              // (event as SyntheticEvent<)
+              if (noteKey) return;
+
+              setNoteKey(noteNodeKey);
+              setNoteOps(getNoteOps());
+              setShowFootnoteEditor(true);
+            }
+          },
+        },
+        view: viewOptions,
+      };
+    }, [args.options, viewOptions, noteKey]);
+
+    const onEditorClose = () => {
+      setNoteKey(undefined);
+      setNoteOps(undefined);
+      setShowFootnoteEditor(false);
+    };
+
+    const onEditorSave = (newNoteOps: DeltaOp[]) => {
+      if (noteKey) {
+        editorRef.current?.replaceEmbedUpdate(noteKey, newNoteOps);
+      }
+      onEditorClose();
+    };
+
+    return (
+      <div>
+        <Editorial
+          {...args}
+          options={mergedOptions}
+          ref={editorRef}
+          onScrRefChange={() => undefined}
+        />
+        <Popover open={showFootnoteEditor}>
+          <PopoverAnchor
+            className="tw-absolute"
+            style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
+          />
+          <PopoverContent className="tw-w-96 tw-p-[10px]">
+            <FootnoteEditor
+              noteKey={noteKey}
+              noteOps={noteOps}
+              onSave={onEditorSave}
+              onClose={onEditorClose}
+              scrRef={args.scrRef ?? defaultScrRef}
+              viewOptions={viewOptions}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story demonstrates the use of the new footnote editor on the side of the ' +
+          ' editorial component',
+      },
+    },
+  },
+  args: {
+    defaultUsj: usjWeb,
+    scrRef: defaultScrRef,
+    options: {
+      hasExternalUI: false,
     },
   },
 };
