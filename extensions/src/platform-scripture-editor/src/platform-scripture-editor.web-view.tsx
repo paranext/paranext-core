@@ -637,12 +637,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       noteCallerOnClick: isReadOnly
         ? undefined
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            // The event type that its being cast to does not include `clientX` and `clientY` but
-            // they are still apart of the object, accesses them by casting to the original
-            // `onClick` event type
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const originalClickEvent = event as MouseEvent<HTMLButtonElement>;
-            const targetRect = originalClickEvent.currentTarget.getBoundingClientRect();
+            const targetRect = event.currentTarget.getBoundingClientRect();
             setNotePopoverAnchorX(targetRect.left);
             setNotePopoverAnchorY(targetRect.top);
             setNotePopoverAnchorHeight(targetRect.height);
