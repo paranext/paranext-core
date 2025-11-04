@@ -60,8 +60,16 @@ export function FootnotesLayout({
 
   const [containerHeight, setContainerHeight] = useState(0);
 
+  const observerRef = useRef<ResizeObserver | undefined>(undefined);
+
   const setContainerRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return () => {};
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = undefined;
+    }
+
+    // If node is undefined, we're unmounting - cleanup already done above
+    if (!node) return;
 
     const observer = new ResizeObserver(() => {
       setContainerHeight(node.clientHeight);
@@ -70,7 +78,7 @@ export function FootnotesLayout({
     observer.observe(node);
     setContainerHeight(node.clientHeight);
 
-    return () => observer.disconnect(); // cleanup on unmount
+    observerRef.current = observer;
   }, []);
 
   const [footnotesPanePosition, setFootnotesPanePosition] = useWebViewState<'bottom' | 'trailing'>(
@@ -126,6 +134,7 @@ export function FootnotesLayout({
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (observerRef.current) observerRef.current.disconnect();
     };
   }, []);
 
