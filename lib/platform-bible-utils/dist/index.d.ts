@@ -2096,14 +2096,14 @@ export type PaneSizeLimitsOptions = {
  * Calculates the minimum and maximum size (as percentages) for a resizable pane in a two-pane
  * layout based on the total available height and optional constraints.
  *
- * The returned percentages indicate the allowable range for the secondary pane  (the one whose size
+ * The returned percentages indicate the allowable range for the secondary pane (the one whose size
  * limits are being computed). When applied, they ensure that pane never shrinks below its minimum
  * or grows beyond its maximum, leaving adequate space for both panes.
  *
  * @param availableHeightPx - Total height available for both panes, in pixels.
  * @param options - Optional parameters for customizing pane size constraints.
- * @returns An object containing the minimum and maximum percentages the
- *          secondary pane can occupy: `{ minPercent, maxPercent }`.
+ * @returns An object containing the minimum and maximum percentages the secondary pane can occupy:
+ *   `{ minPercent, maxPercent }`.
  */
 export declare function getPaneSizeLimits(availableHeightPx: number, options?: PaneSizeLimitsOptions): {
 	minPercent: number;
