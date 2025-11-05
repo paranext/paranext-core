@@ -195,3 +195,9 @@ export type {
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
+export type {
+  CommentStatus,
+  CommentType,
+  LegacyComment,
+  LegacyCommentThread,
+} from './comments.types';

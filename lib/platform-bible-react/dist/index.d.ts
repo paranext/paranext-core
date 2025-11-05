@@ -346,8 +346,6 @@ type CommentThread = {
 	modifiedDate: string;
 	/** Scripture reference for this thread */
 	verseRef: string;
-	/** Verse text for this thread */
-	verse: string;
 	/** Name of the context scripture text */
 	contextScrTextName?: string;
 	/** Whether this is a spelling note */

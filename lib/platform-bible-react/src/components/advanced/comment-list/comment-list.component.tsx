@@ -73,11 +73,11 @@ export default function CommentList({
             comments={thread.comments}
             localizedStrings={localizedStrings}
             verseRef={thread.verseRef}
-            verse={thread.verse}
             handleSelectThread={handleSelectThread}
             threadId={`thread-${thread.id}`}
             isSelected={selectedThreadId === `thread-${thread.id}`}
             assignedUser={thread.assignedUser}
+            threadStatus={thread.status}
           />
         </div>
       ))}

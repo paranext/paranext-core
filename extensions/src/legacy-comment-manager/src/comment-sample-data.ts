@@ -1,4 +1,4 @@
-import { LegacyCommentThread } from 'legacy-comment-manager';
+import { LegacyCommentThread } from 'platform-bible-utils';
 
 const today = new Date();
 const yesterday = new Date(today);
@@ -62,7 +62,6 @@ export const sampleComments: LegacyCommentThread[] = [
     replyToUser: 'Allison Park',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -123,7 +122,6 @@ export const sampleComments: LegacyCommentThread[] = [
     replyToUser: '',
     modifiedDate: yesterday.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -184,7 +182,6 @@ export const sampleComments: LegacyCommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: true,
@@ -214,7 +211,6 @@ export const sampleComments: LegacyCommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -245,7 +241,6 @@ export const sampleComments: LegacyCommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -275,7 +270,6 @@ export const sampleComments: LegacyCommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,

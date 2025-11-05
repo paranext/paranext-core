@@ -1,4 +1,4 @@
-import { CommentThread } from './comment-list.types';
+import { LegacyCommentThread } from 'platform-bible-utils';
 
 const today = new Date();
 const yesterday = new Date(today);
@@ -6,7 +6,7 @@ yesterday.setDate(yesterday.getDate() - 1);
 const twoDaysAgo = new Date(today);
 twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
-export const sampleComments: CommentThread[] = [
+export const sampleComments: LegacyCommentThread[] = [
   {
     id: 'thread-1',
     comments: [
@@ -62,7 +62,6 @@ export const sampleComments: CommentThread[] = [
     replyToUser: 'Allison Park',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -123,7 +122,6 @@ export const sampleComments: CommentThread[] = [
     replyToUser: '',
     modifiedDate: yesterday.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -184,7 +182,6 @@ export const sampleComments: CommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: true,
@@ -214,7 +211,6 @@ export const sampleComments: CommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -245,7 +241,6 @@ export const sampleComments: CommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,
@@ -275,7 +270,6 @@ export const sampleComments: CommentThread[] = [
     replyToUser: '',
     modifiedDate: today.toISOString(),
     verseRef: 'PSA 46:1',
-    verse: 'God is our refuge and strength, an ever-present help in trouble.',
     contextScrTextName: 'WEB',
     isSpellingNote: false,
     isBTNote: false,

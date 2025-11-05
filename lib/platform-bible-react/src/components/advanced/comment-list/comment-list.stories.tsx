@@ -39,7 +39,7 @@ type Story = StoryObj<typeof CommentList>;
 
 export const Default: Story = {
   args: {
-    threads: sampleComments.filter((thread) => thread.status !== 'Resolved'),
+    threads: sampleComments,
     localizedStrings: commentListLocalizedStrings,
   },
 };

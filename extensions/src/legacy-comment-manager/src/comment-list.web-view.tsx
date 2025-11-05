@@ -22,13 +22,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [scrRef] = useWebViewScrollGroupScrRef();
   const [areThreadsLoading, setAreThreadsLoading] = useState<boolean>(false);
 
-  // TODO: Filter 'Done' out too?
   const unresolvedThreadsForScrRef = useMemo(() => {
     setAreThreadsLoading(true);
     const scrRefString = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}`;
-    const filteredThreads = sampleComments.filter(
-      (thread) => thread.status !== 'Resolved' && scrRefString === thread.verseRef,
-    );
+    const filteredThreads = sampleComments.filter((thread) => scrRefString === thread.verseRef);
     setAreThreadsLoading(false);
     return filteredThreads;
   }, [scrRef]);

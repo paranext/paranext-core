@@ -15,14 +15,16 @@ export function CommentThread({
   localizedStrings,
   isSelected = false,
   verseRef,
-  verse,
   assignedUser,
   handleSelectThread,
   threadId,
+  threadStatus,
 }: CommentThreadProps) {
   const [inputValue, setInputValue] = useState<string>('');
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
   const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
+
+  const firstComment = useMemo(() => comments[0], [comments]);
 
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -39,7 +41,7 @@ export function CommentThread({
     checkOverflow();
     window.addEventListener('resize', checkOverflow);
     return () => window.removeEventListener('resize', checkOverflow);
-  }, [verse]);
+  }, [firstComment.verse]);
 
   const localizedReplies = useMemo(
     () => ({
@@ -57,7 +59,6 @@ export function CommentThread({
     [assignedUser, localizedStrings],
   );
 
-  const firstComment = useMemo(() => comments[0], [comments]);
   const replies = useMemo(() => comments.slice(1), [comments]);
   const replyCount = useMemo(() => replies.length ?? 0, [replies.length]);
   const hasReplies = useMemo(() => replyCount > 0, [replyCount]);
@@ -115,7 +116,7 @@ export function CommentThread({
                   : 'tw-whitespace-nowrap'
               } tw-flex-1`}
             >
-              {verseRef} {verse}
+              {verseRef} {firstComment.verse}
             </p>
             {isVerseOverflowing && (
               <Button
@@ -140,7 +141,7 @@ export function CommentThread({
                 isThreadExpanded={isSelected}
               />
             </div>
-            {isSelected && (
+            {isSelected && threadStatus !== 'Resolved' && (
               <Button
                 variant="ghost"
                 size="icon"
