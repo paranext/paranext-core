@@ -40,10 +40,10 @@ const usjReaderWriterOptionsParatext3_0: UsjReaderWriterOptions = {
 
 // #endregion UsjReaderWriter markers maps
 
-// #region Matthew 1-2 test data
+// #region WEB Matthew 1-2 test data
 
 /**
- * WEB Matthew 1-2 in USFM. (When copied from the file, had to replace `\` with `\\`)
+ * WEB Matthew 1-2 in USFM.
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  *
@@ -68,7 +68,27 @@ const matthew1And2Usj: Usj = JSON.parse(readTestDataFile('web-matthew-1-and-2.us
  */
 const matthew2verseRangeUsj = JSON.parse(readTestDataFile('web-matthew-2-verse-range.usj'));
 
-// #endregion Matthew 1-2 test data
+// #endregion WEB Matthew 1-2 test data
+
+// #region WEB Matthew 5 with section header test data
+
+/**
+ * WEB Matthew 5 in USFM modified by hand to have a section header right after the chapter number.
+ *
+ * Note: this content was fed into Paratext 9 so its whitespace was normalized according to Paratext
+ * 9's rules. We will deal with whitespace normalization issues later.
+ */
+const webMatthew5Usfm = readTestDataFile('web-matthew-5-section-header.usfm');
+
+/**
+ * WEB Matthew 1-2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 (version 3.1 replaced with 3.0
+ * in the USJ marker because that is more accurate. The USJ version handling isn't great yet).
+ *
+ * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
+ */
+const webMatthew5Usj: Usj = JSON.parse(readTestDataFile('web-matthew-5-section-header.usj'));
+
+// #endregion
 
 // #region testUSFM test data - Paratext 9 USFM 3.0
 
@@ -716,6 +736,21 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
     expect(result0.documentLocation).not.toHaveProperty('offset');
   });
 
+  test('Matthew 5 with section header added 3.0', () => {
+    const usjDoc = new UsjReaderWriter(webMatthew5Usj);
+
+    // Test offset conversion when the first marker in the document normally has a newline before it
+    const result0 = usjDoc.usfmLocationToUsjNodeAndDocumentLocation({
+      verseRef: { book: 'MAT', chapterNum: 5, verseNum: 0 },
+      offset: 8,
+    });
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(result0.documentLocation))
+      throw new Error('Expected result0 to be a string');
+    expect(result0.documentLocation.jsonPath).toBe('$.content[1].content[0]');
+    expect(result0.documentLocation.offset).toBe(0);
+    expect(result0.node).toBe('Test heading test test test');
+  });
+
   test('Paratext 2SA 1 testUSFM 3.0', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1Usj, usjReaderWriterOptionsParatext3_0);
 
@@ -1130,6 +1165,13 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(matthew1And2Usfm);
+  });
+
+  test('Matthew 5 with Section Header WEB', () => {
+    const usjDoc = new UsjReaderWriter(webMatthew5Usj, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(webMatthew5Usfm);
   });
 
   test('2SA 1 testUSFM', () => {
