@@ -16,19 +16,19 @@ import {
   NO_BOOK_ID,
   PropertyJsonPath,
   UsfmLocation,
-  UsjNodeAndDocumentLocation,
-  UsjDocumentLocation,
-  UsjReaderWriterOptions,
-  UsjSearchResult,
-  VERSE_TYPE,
-  UsjTextContentLocation,
   UsfmVerseLocation,
-  UsjMarkerLocation,
-  UsjClosingMarkerLocation,
-  UsjPropertyValueLocation,
   UsjAttributeKeyLocation,
   UsjAttributeMarkerLocation,
   UsjClosingAttributeMarkerLocation,
+  UsjClosingMarkerLocation,
+  UsjDocumentLocation,
+  UsjMarkerLocation,
+  UsjNodeAndDocumentLocation,
+  UsjPropertyValueLocation,
+  UsjReaderWriterOptions,
+  UsjSearchResult,
+  UsjTextContentLocation,
+  VERSE_TYPE,
 } from './usj-reader-writer.model';
 import { SortedNumberMap } from '../sorted-number-map';
 import { extractFootnotesFromUsjContent } from './footnote-util';
@@ -90,50 +90,59 @@ const VERSE_MARKER_NUMBER_SPAN_REGEXP = /(\d+)-?(\d+)?/;
  */
 type UsjParentMap = Map<MarkerObject | MarkerContent[] | Usj, MarkerObject | Usj>;
 
-/** Token indicating a marker closed */
-type UsjClosingMarker = { isClosingMarker: true; forMarker: MarkerObject | Usj };
-
-/**
- * A string found in the USJ document, a USJ marker (including top-level USJ marker), or a closing
- * marker indicator.
- *
- * This is not the same as or even similar to `UsfmToken` in `ParatextData.dll`. `UsfmToken` is a
- * class with many methods and divides the data based on the USFM contents. `UsfmToken` is a bit
- * more similar to `UsjFragment`. This does not really have anything particularly similar to it in
- * `ParatextData.dll`.
- *
- * If you think of a better name for this, feel free to replace it.
- */
-type MarkerToken = MarkerContent | UsjClosingMarker | Usj;
-
+/** Fragment indicating a marker closed */
+type UsjClosingMarkerFragment = { isClosingMarker: true; forMarker: MarkerObject | Usj };
 /** Fragment indicating the value for an attribute */
-type UsjAttributeValue = { isAttributeValueForKey: string; forMarker: MarkerObject | Usj };
+type UsjAttributeValueFragment = { attributeValueForKey: string; forMarker: MarkerObject | Usj };
 /** Fragment indicating the key for an attribute */
-type UsjAttributeKey = { isAttributeKey: string; forMarker: MarkerObject | Usj };
+type UsjAttributeKeyFragment = { attributeKey: string; forMarker: MarkerObject | Usj };
 /** Fragment indicating the opening of an attribute marker */
-type UsjAttributeMarker = { isAttributeMarker: string; forMarker: MarkerObject | Usj };
+type UsjAttributeMarkerFragment = { attributeMarker: string; forMarker: MarkerObject | Usj };
 /** Fragment indicating the closing of an attribute marker */
-type UsjAttributeMarkerClosingMarker = {
-  isAttributeMarkerClosingMarker: string;
+type UsjAttributeMarkerClosingMarkerFragment = {
+  attributeMarkerClosingMarker: string;
   forMarker: MarkerObject | Usj;
 };
 
 /**
- * A part of a USJ document ({@link MarkerToken}) or a JSON representation of some piece of USFM that
- * is not in USJ.
+ * A piece of Scripture data in a USJ document. This could be any of the following:
+ *
+ * 1. A marker or content string in a USJ document
+ *
+ *    - `Usj`
+ *    - `MarkerContent`
+ * 2. A JavaScript object representation of some part of a marker that isn't actually a JavaScript
+ *    object
+ *
+ *    - `UsjClosingMarker`
+ *    - `UsjAttributeValue`
+ *    - `UsjAttributeKey` except when the attribute whose key is being pointed to is an attribute marker
+ *         in USFM, in which case this fragment is type 3 below. This fragment represents the USFM
+ *         attribute marker name in USFM (e.g. `ca`), not the attribute key name (e.g. `altnumber`)
+ * 3. Part of a marker as it appears in USFM but that doesn't have a direct equivalence in USJ
+ *
+ *    - `UsjAttributeKey` when pointing to an attribute marker. See fragment type 2 above.
+ *    - `UsjAttributeMarker`
+ *    - `UsjAttributeMarkerClosingMarker`
+ *
+ * This is somewhat similar to `UsfmToken` in `ParatextData.dll`, but there are many differences.
+ * `UsfmToken` is a class with many methods and divides Scripture data based on the USFM contents.
+ * `UsjFragment`, however, is just a union of object types (and `string`) that indicates the
+ * division of Scripture data primarily by USJ contents.
  *
  * This is not the same as or similar to `IFragment` in `ParatextData.dll`. `IFragment` is a bit
- * more similar to `UsjFragmentInfo`. This is a bit more similar to `UsfmToken` in
- * `ParatextData.dll`, but there are still many differences.
+ * more similar to {@link UsjFragmentInfo}.
  *
  * If you think of a better name for this, feel free to replace it.
  */
 type UsjFragment =
-  | MarkerToken
-  | UsjAttributeValue
-  | UsjAttributeKey
-  | UsjAttributeMarker
-  | UsjAttributeMarkerClosingMarker;
+  | Usj
+  | MarkerContent
+  | UsjClosingMarkerFragment
+  | UsjAttributeValueFragment
+  | UsjAttributeKeyFragment
+  | UsjAttributeMarkerFragment
+  | UsjAttributeMarkerClosingMarkerFragment;
 
 /**
  * Information about a fragment including its position in the USFM representation. Built while
@@ -145,10 +154,10 @@ type UsjFragmentInfoMinimal = {
 };
 
 /**
- * The return type for methods that take a {@link MarkerToken} and return some USFM. These methods
- * also return information about what fragments of the marker are where in the USFM.
+ * A snippet of USFM along with information about what fragments of the marker are where in that
+ * USFM snippet
  */
-type TokenToUsfmReturn = {
+type UsfmSnippetAndUsjFragmentsInfo = {
   usfm: string;
   /** USFM position info about the fragments that are represented in this USFM string */
   fragmentsInfo: UsjFragmentInfoMinimal[];
@@ -159,6 +168,10 @@ type TokenToUsfmReturn = {
  * Transformed from {@link UsjFragmentInfoMinimal} in
  * {@link UsjReaderWriter.transferFragmentsInfoArrayToMaps} while sorting the fragments into the
  * right places after finishing determining the USFM representation.
+ *
+ * This is somewhat similar to `IFragment` in `ParatextData.dll` in that both contain information
+ * that connects some position in USFM to some position in USX (`IFragment`) or USJ
+ * (`UsjFragmentInfo`).
  */
 type UsjFragmentInfo = UsjFragmentInfoMinimal & {
   /**
@@ -176,17 +189,39 @@ type FragmentsByIndexInUsfm = SortedNumberMap<UsjFragmentInfo>;
  * representation of the USJ document. Used for taking an index based on the start of a verse and
  * determining the index in the whole USFM document to look up in {@link FragmentsByIndexInUsfm}.
  *
- * Note that all indices before a book id are associated with the first book id present. If there is
- * not a book id present in the USJ data, everything will be in book {@link NO_BOOK_ID}.
+ * Notes:
  *
- * Note that all indices before a chapter number are associated with the first chapter number
- * present. If there is not a chapter number present in the USJ data, everything will be in chapter
- * 0.
+ * - All indices before a book id are associated with the first book id present. If there is not a
+ *   book id present in the USJ data, everything will be in book {@link NO_BOOK_ID}.
+ * - All indices before a chapter number are associated with the first chapter number present. If
+ *   there is not a chapter number present in the USJ data, everything will be in chapter 0.
+ * - Any indices that occur before a verse number will be in verse 0.
+ * - The start of a book is at the book name, chapter 1 (or 0 if no chapter numbers), verse 0. The
+ *   start of a chapter is at the book name, chapter number, verse 0.
+ * - There are no verse ranges in this object. Only the starting verse in any range that is found in
+ *   the USFM is added to this map (in {@link UsjReaderWriter.transferFragmentsInfoArrayToMaps}), so
+ *   we should always look up verse ranges with the starting verse in the range (in
+ *   {@link UsjReaderWriter.getIndexInUsfmForVerseRef}). Presumably, if someone is trying to find the
+ *   index in USFM of a verse that isn't standalone but is in the middle of a range, they are likely
+ *   going to run into less obvious trouble with index in USFM calculations.
  *
- * Note that any indices that occur before a verse number will be in verse 0.
+ * TODO: Should we do something else to support verse ranges? Depending on how we want to support
+ * them, we can do different things:
  *
- * The start of a book is at the book name, chapter 1 (or 0 if no chapter numbers), verse 0. The
- * start of a chapter is at the book name, chapter number, verse 0.
+ * - If we just want to support getting the first verse in a range (`SerializedVerseRef.verseNum`), we
+ *   don't need to change anything as this is how it works currently.
+ * - If we want to support getting the verse range exactly as it appears in the text and _not_ from
+ *   the first verse in the range, we could change the index signature `[verseNum: number]` to be
+ *   accessible by `string | number` and put the `SerializedVerseRef.verse` range text as the key
+ *   instead of `verseNum` when it is defined and looked up (in at least
+ *   {@link UsjReaderWriter.transferFragmentsInfoArrayToMaps} and
+ *   {@link UsjReaderWriter.getIndexInUsfmForVerseRef}; maybe other places as well).
+ * - If we want to support getting any verse in a range, we could add the same index in USFM for all
+ *   the verses within a verse range `SerializedVerseRef.verse` (in
+ *   {@link UsjReaderWriter.transferFragmentsInfoArrayToMaps}).
+ *
+ * In any case, once we come to a clear decision on what we want to do, we should probably document
+ * it in the TSDoc for {@link UsjReaderWriter}.
  */
 type IndicesInUsfmByVerseRef = {
   [book: string]:
@@ -213,7 +248,43 @@ type StackItem = { parent: MarkerObject | Usj; index: number };
  */
 type WorkingStack = StackItem[];
 
-/** Represents USJ formatted scripture with helpful utilities for working with it */
+/**
+ * Represents USJ formatted scripture with helpful utilities for working with it. Some notable
+ * features:
+ *
+ * - Find Scripture text in the USJ document
+ *
+ *   - `extractText`
+ *   - `extractTextBetweenPoints`
+ *   - `findNextLocationOfMatchingText`
+ *   - `search`
+ *   - `verseRefToNextTextLocation`
+ * - Edit the USJ document: `removeContentNodes`
+ * - Transform USJ to USFM: `toUsfm`
+ * - Transform USJ document locations to USFM locations and vice versa
+ *
+ *   - `usfmLocationToUsjDocumentLocation`
+ *   - `usjDocumentLocationToUsfmVerseLocation`
+ * - Use the version of USFM you need by passing in a custom markers map to the constructor if the
+ *   version in your USJ document is not supported by default:
+ *   {@link UsjReaderWriterOptions.markersMap}
+ *
+ * Notes:
+ *
+ * - "node" is a term used in the methods in this class that usually means an object or content string
+ *   somewhere in the USj document, either {@link Usj} or {@link MarkerContent}. However, in specific
+ *   situations, it may refer only to {@link MarkerObject} or {@link MarkerContent}. The TypeScript
+ *   types indicate when this is the case.
+ * - See {@link UsfmLocation} and {@link UsjDocumentLocation} for information about transforming USFM
+ *   locations and USJ locations including what kinds of USFM locations are and are not
+ *   representable in USJ locations, which USJ locations actually correspond to something in USJ,
+ *   etc.
+ * - It is best to reuse the same `UsjReaderWriter` for the same USJ document as long as possible
+ *   because there is a significant amount of processing and caching done internally to facilitate
+ *   various operations. Note that, if the USJ document added to `UsjReaderWriter` changes, you must
+ *   run `usjChanged` to clear the internal caches and receive accurate results from future method
+ *   calls
+ */
 export class UsjReaderWriter implements IUsjReaderWriter {
   private readonly usj: Usj;
   private readonly markersMap: MarkersMap;
@@ -496,23 +567,60 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /**
-   * Look through the USJ document for a token matching some condition
+   * Look through the USJ document for a node or the closing of a node matching some condition. This
+   * will run `searchFunction` for `node`, all nodes encountered in `node.contents` (recursively),
+   * when `node` closes, and all nodes after `node`
    *
-   * @param token Token from which to start looking
-   * @param workingStack Working stack pointing to this token (should not include this token)
-   * @param skipTypes List of marker types to skip
-   * @param searchFunction Function that tokens will be passed into to determine if they are the
-   *   correct token. Stops searching and returns the token if this function returns `true`
-   * @returns Token matching condition tested by the search function
+   * @param node Node from which to start looking
+   * @param workingStack Working stack pointing to this node (should not include this node)
+   * @param skipTypes List of marker types to skip (skips all contents of skipped markers)
+   * @param searchFunction Function that nodes and representations of the closing of nodes will be
+   *   passed into to determine if they are the correct node or representation of the closing of a
+   *   node. Stops searching and returns the node/close if this function returns `true`
+   * @returns Node or representation of the closing of a node matching condition tested by the
+   *   search function
    */
-  private static findNextMatchingTokenUsingWorkingStack(
-    token: MarkerContent | Usj,
+  private static findNextMatchingNodeOrClosingFragmentUsingWorkingStack(
+    node: MarkerContent | Usj,
     workingStack: WorkingStack,
     skipTypes: string[],
-    searchFunction: (potentiallyMatchingToken: MarkerToken, workingStack: WorkingStack) => boolean,
+    searchFunction: (
+      potentiallyMatchingNodeOrClose: MarkerContent | Usj | UsjClosingMarkerFragment,
+      workingStack: WorkingStack,
+    ) => boolean,
   ) {
+    let nextNode: MarkerContent | Usj | undefined = node;
+
+    const topNode = workingStack.length === 0 ? node : workingStack[0].parent;
+    // If the top node is a marker as we would expect, we need to check if `node` is under a
+    // skipped-type node and skip past all that skipped stuff if so. If the top node is a `string`,
+    // don't need to worry about this since we should just be searching against that one string
+    if (!isString(topNode)) {
+      // Determine if we are in a skipped-type node and skip to the next node after it if so
+      // If the top node is skipped, return `undefined` because everything is skipped
+      if (skipTypes.includes(topNode.type)) return undefined;
+
+      // Find the highest (lowest index) stack item level that is skipped so we can go to its next
+      // sibling
+      let highestSkippedNode: MarkerContent | undefined;
+      workingStack.some((stackItem) => {
+        // We know that `content` exists due to its presence in this data structure
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const stackNode = stackItem.parent.content![stackItem.index];
+        if (!isString(stackNode) && skipTypes.includes(stackNode.type)) {
+          highestSkippedNode = stackNode;
+          return true;
+        }
+
+        return false;
+      });
+
+      // Set nextNode to the highest skipped node so it will skip and go to the next sibling in the
+      // following code
+      if (highestSkippedNode) nextNode = highestSkippedNode;
+    }
+
     // Walk the nodes in a depth-first, left-to-right manner until the search function returns true
-    let nextNode: MarkerContent | Usj | undefined = token;
     while (nextNode !== undefined) {
       const skipNextNode = typeof nextNode === 'object' && skipTypes.includes(nextNode.type);
 
@@ -525,15 +633,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // Same as `nextNode = nextNode.content[0];` without triggering 2 different eslint errors
         [nextNode] = nextNode.content;
       } else {
-        // The node has no children, so check the closing marker for this node
-        const nextNodeClosingMarker: UsjClosingMarker | undefined =
-          typeof nextNode === 'object' ? { isClosingMarker: true, forMarker: nextNode } : undefined;
-        if (
-          !skipNextNode &&
-          nextNodeClosingMarker &&
-          searchFunction(nextNodeClosingMarker, workingStack)
-        )
-          return nextNodeClosingMarker;
+        if (!skipNextNode) {
+          // The node has no children, so check the closing marker for this node
+          const nextNodeClosingMarker: UsjClosingMarkerFragment | undefined =
+            typeof nextNode === 'object'
+              ? { isClosingMarker: true, forMarker: nextNode }
+              : undefined;
+          if (nextNodeClosingMarker && searchFunction(nextNodeClosingMarker, workingStack))
+            return nextNodeClosingMarker;
+        }
 
         // Then look at the next sibling, or the parent's next sibling, or the parent's closing
         // marker, etc. up the stack
@@ -552,21 +660,13 @@ export class UsjReaderWriter implements IUsjReaderWriter {
               nextNode = nextLevel.parent.content![nextLevel.index];
               break;
             } else {
-              // There is no next sibling, so check the closing marker for the parent before we continue
-              // to look at the parent's next sibling and etc.
-              const parentClosingMarker: UsjClosingMarker = {
+              // There is no next sibling, so check the closing marker for the parent before we
+              // continue to look at the parent's next sibling and etc.
+              const parentClosingMarker: UsjClosingMarkerFragment = {
                 isClosingMarker: true,
                 forMarker: nextLevel.parent,
               };
-              // Need to check if parent is skipped because we could have started in the middle of a
-              // skipped marker
-              // Does this make sense? Or should we not skip parent closing markers? Not sure. Revisit
-              // once this actually has a use case
-              if (
-                !skipTypes.includes(parentClosingMarker.forMarker.type) &&
-                searchFunction(parentClosingMarker, workingStack)
-              )
-                return parentClosingMarker;
+              if (searchFunction(parentClosingMarker, workingStack)) return parentClosingMarker;
             }
           }
         }
@@ -582,7 +682,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    *
    * @param node Node from which to start looking
    * @param workingStack Working stack pointing to this node (should not include this node)
-   * @param skipTypes List of marker types to skip
+   * @param skipTypes List of marker types to skip (skips all contents of skipped markers)
    * @param searchFunction Function that nodes will be passed into to determine if they are the
    *   correct node. Stops searching and returns the node if this function returns `true`
    * @returns Node matching condition tested by the search function
@@ -598,20 +698,20 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   ): MarkerContent | undefined {
     // We are filtering out closing markers in our search function
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const result = this.findNextMatchingTokenUsingWorkingStack(
+    const result = this.findNextMatchingNodeOrClosingFragmentUsingWorkingStack(
       node,
       workingStack,
       skipTypes,
-      (potentiallyMatchingToken, currentWorkingStack) => {
+      (potentiallyMatchingNodeOrClose, currentWorkingStack) => {
         if (
-          typeof potentiallyMatchingToken === 'object' &&
-          'isClosingMarker' in potentiallyMatchingToken
+          typeof potentiallyMatchingNodeOrClose === 'object' &&
+          'isClosingMarker' in potentiallyMatchingNodeOrClose
         )
           // Skip closing markers
           return false;
 
         // Just search normal markers and text as appropriate for this method
-        return searchFunction(potentiallyMatchingToken, currentWorkingStack);
+        return searchFunction(potentiallyMatchingNodeOrClose, currentWorkingStack);
       },
     ) as MarkerContent | undefined;
 
@@ -705,17 +805,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     const verseIndexInUsfm = this.getIndexInUsfmForVerseRef(verseRef);
 
-    // Add the verse range if the verse marker for this location's verse is a range
-    const verseFragmentInfo = this.fragmentsByIndexInUsfm.get(verseIndexInUsfm);
-    if (
-      verseFragmentInfo &&
-      UsjReaderWriter.isFragmentAMarker(verseFragmentInfo.fragment) &&
-      verseFragmentInfo.fragment.type === VERSE_TYPE &&
-      verseFragmentInfo.fragment.number &&
-      verseFragmentInfo.fragment.number !== `${verseRef.verseNum}`
-    )
-      verseRef.verse = verseFragmentInfo.fragment.number;
-
     if (verseRef.book === NO_BOOK_ID) {
       // Deal with no book ID
       if (!bookIdIfNotFound)
@@ -782,29 +871,23 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (!chapterIndices) throw new Error(`Could not find ${bookId} chapter ${verseRef.chapterNum}`);
 
     // Make sure the requested verse number is in the USJ content
+    // Only look for the verse number even if it is the starting number in a requested verse range
+    // because you are likely going to run into less obvious trouble if you get the index in USFM of
+    // the wrong verse in a range
     const verseIndexInUsfm = chapterIndices[verseRef.verseNum];
     if (verseIndexInUsfm === undefined)
-      // TODO: What should we do about verse ranges? The original code required that the range
-      // given match exactly to the range in the text instead of starting at the first verse in the
-      // range and going from there. Maybe just fill in each verse in the range with the same map?
-      // Maybe too unclear now to do something about?
       throw new Error(`Verse ${verseRef.verseNum} not found in ${bookId} ${verseRef.chapterNum}`);
 
     return verseIndexInUsfm;
   }
 
   /**
-   * Gets the verse ref that the provided index in USFM is in. Finds the closest verse ref before
-   * the index in USFM.
-   *
-   * WARNING: This does not include the verse range if there is one for this verse. If you need it,
-   * consider adding it in here (see {@link UsjReaderWriter.usjDocumentLocationToUsfmVerseLocation}).
-   * It's not already in here because then we would have to run
-   * {@link UsjReaderWriter.getIndexInUsfmForVerseRef} twice unless we did a refactor.
+   * Gets the verse ref that the provided index in USFM is in (including verse range if applicable).
+   * Finds the closest verse ref before the index in USFM.
    */
   private getVerseRefForIndexInUsfm(indexInUsfm: number): SerializedVerseRef {
-    // ENHANCE: This could be sped up significantly by storing a sorted number map of verse refs
-    // by index in USFM like so:
+    // ENHANCE: This could be sped up and simplified significantly by storing a sorted number map of
+    // verse refs by index in USFM like so:
     /**
      * Index in the USFM representation of the USJ document of where the start of each verse ref is
      * (the backslash on the verse marker)
@@ -814,22 +897,23 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const bookEntries = Object.entries(this.indicesInUsfmByVerseRef);
     let bookIndex = 0;
     let lastVerseRef: SerializedVerseRef | undefined;
+    let didFindVerseRef = false;
 
     // Loop through all the books looking for the right book
-    while (bookIndex < bookEntries.length) {
+    while (!didFindVerseRef && bookIndex < bookEntries.length) {
       const [bookId, chapterIndices] = bookEntries[bookIndex];
 
       if (chapterIndices) {
         const chapterEntries = Object.entries(chapterIndices);
         let chapterIndex = 0;
         // Loop through all the chapters looking for the right chapter
-        while (chapterIndex < chapterEntries.length) {
+        while (!didFindVerseRef && chapterIndex < chapterEntries.length) {
           const [chapterNumString, verseIndices] = chapterEntries[chapterIndex];
           if (verseIndices) {
             const verseEntries = Object.entries(verseIndices);
             let verseIndex = 0;
             // Loop through all the verses looking for the right verse
-            while (verseIndex < verseEntries.length) {
+            while (!didFindVerseRef && verseIndex < verseEntries.length) {
               const [verseNumString, verseIndexInUsfm] = verseEntries[verseIndex];
 
               if (verseIndexInUsfm !== undefined) {
@@ -847,7 +931,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
                   // We know the last verse ref, which was the final verse ref before this index.
                   // Return that last verse ref
-                  return lastVerseRef;
+                  didFindVerseRef = true;
+                  break;
                 }
                 // This verse ref is not past the index in USFM to find, so record this current verse
                 // ref to return later if we determine this is the right verse ref
@@ -858,7 +943,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
                 };
                 // If the verse ref index is the same as the index to find, go ahead and return the
                 // current verse ref. No need to look at the next index
-                if (indexInUsfm === verseIndexInUsfm) return lastVerseRef;
+                if (indexInUsfm === verseIndexInUsfm) {
+                  didFindVerseRef = true;
+                  break;
+                }
               }
 
               verseIndex += 1;
@@ -874,8 +962,23 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     if (!lastVerseRef)
       throw new Error(`Did not find any verse refs while looking for index in USFM ${indexInUsfm}`);
-    // The index in USFM to find is greater than all known indices in USFM. That means it's in the
-    // very last verse ref.
+
+    // If `didFindVerseRef` is `false`, the index in USFM to find is greater than all known indices
+    // in USFM. That means it's in the very last verse ref. That's fine; no need to do anything
+    // special.
+
+    // Add the verse range if the verse marker for this location's verse is a range
+    const verseIndexInUsfm = this.getIndexInUsfmForVerseRef(lastVerseRef);
+    const verseFragmentInfo = this.fragmentsByIndexInUsfm.get(verseIndexInUsfm);
+    if (
+      verseFragmentInfo &&
+      UsjReaderWriter.isFragmentAMarker(verseFragmentInfo.fragment) &&
+      verseFragmentInfo.fragment.type === VERSE_TYPE &&
+      verseFragmentInfo.fragment.number &&
+      verseFragmentInfo.fragment.number !== `${lastVerseRef.verseNum}`
+    )
+      lastVerseRef.verse = verseFragmentInfo.fragment.number;
+
     return lastVerseRef;
   }
 
@@ -1297,7 +1400,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           new RegExp(markerRegExp).test(markerName),
         ) ?? [];
 
-    // Didn't find the marker, so just return `undefined
+    // Return the marker info we found or `undefined` if we didn't find one
     return markerInfo;
   }
 
@@ -1496,7 +1599,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /** Converts the text content of a marker to its equivalent in USFM */
-  private textContentToUsfm(textContent: string): TokenToUsfmReturn {
+  private textContentToUsfm(textContent: string): UsfmSnippetAndUsjFragmentsInfo {
     // Special case: NBSP should be replaced with ~ in USFM if invisible characters are not allowed
     return {
       usfm: this.shouldAllowInvisibleCharacters
@@ -1544,7 +1647,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private openingMarkerToUsfm(
     marker: MarkerObject | Usj,
     isInsideMarkerWithSameType: boolean,
-  ): TokenToUsfmReturn {
+  ): UsfmSnippetAndUsjFragmentsInfo {
     let usfm = '';
     const fragmentsInfo: UsjFragmentInfoMinimal[] = [];
 
@@ -1571,7 +1674,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (markerType !== 'optbreak') {
       // Fragment representing the marker name is the `marker` property
       fragmentsInfo.push({
-        fragment: { isAttributeValueForKey: 'marker', forMarker: marker },
+        fragment: { attributeValueForKey: 'marker', forMarker: marker },
         indexInUsfm: usfm.length,
       });
 
@@ -1588,7 +1691,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         if (!attributeValue) return;
 
         fragmentsInfo.push({
-          fragment: { isAttributeValueForKey: attributeName, forMarker: marker },
+          fragment: { attributeValueForKey: attributeName, forMarker: marker },
           indexInUsfm: usfm.length,
         });
         usfm += `${attributeValue} `;
@@ -1601,7 +1704,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       markerWithAnyAttributes[markerInfo.textContentAttribute]
     ) {
       fragmentsInfo.push({
-        fragment: { isAttributeValueForKey: markerInfo.textContentAttribute, forMarker: marker },
+        fragment: { attributeValueForKey: markerInfo.textContentAttribute, forMarker: marker },
         indexInUsfm: usfm.length,
       });
       usfm += `${markerWithAnyAttributes[markerInfo.textContentAttribute]} `;
@@ -1642,7 +1745,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         const { usfm: textContentUsfm } = this.textContentToUsfm(attributeValue);
         fragmentsInfo.push({
           fragment: {
-            isAttributeValueForKey: attributeMarkerInfo.attributeMarkerAttributeName,
+            attributeValueForKey: attributeMarkerInfo.attributeMarkerAttributeName,
             forMarker: marker,
           },
           indexInUsfm: usfm.length,
@@ -1663,7 +1766,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         attributeMarkerFragmentsInfo.forEach((fragmentInfo) => {
           // There should never be such a thing as text content in the opening/closing of an attribute
           // marker or an attribute key for an attribute marker
-          if (isString(fragmentInfo.fragment) || 'isAttributeKey' in fragmentInfo.fragment)
+          if (isString(fragmentInfo.fragment) || 'attributeKey' in fragmentInfo.fragment)
             throw new Error(
               `Attribute marker opening or closing markers generated a text content fragment or an attribute key fragment! This does not make sense. ${JSON.stringify(fragmentInfo)}`,
             );
@@ -1674,7 +1777,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             fragmentsInfo.push({
               ...fragmentInfo,
               fragment: {
-                isAttributeMarker: attributeMarkerInfo.attributeMarkerAttributeName,
+                attributeMarker: attributeMarkerInfo.attributeMarkerAttributeName,
                 forMarker: marker,
               },
             });
@@ -1682,9 +1785,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             return;
           }
 
-          if ('isAttributeValueForKey' in fragmentInfo.fragment) {
+          if ('attributeValueForKey' in fragmentInfo.fragment) {
             // There should never be an attribute value for an attribute marker other than the marker name
-            if (fragmentInfo.fragment.isAttributeValueForKey !== 'marker')
+            if (fragmentInfo.fragment.attributeValueForKey !== 'marker')
               throw new Error(
                 `Attribute marker opening or closing markers generated an attribute value fragment for a key that was not marker! This does not make sense. ${JSON.stringify(fragmentInfo)}`,
               );
@@ -1693,7 +1796,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             fragmentsInfo.push({
               ...fragmentInfo,
               fragment: {
-                isAttributeKey: attributeMarkerInfo.attributeMarkerAttributeName,
+                attributeKey: attributeMarkerInfo.attributeMarkerAttributeName,
                 forMarker: marker,
               },
             });
@@ -1709,10 +1812,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             // eslint-disable-next-line @typescript-eslint/naming-convention, @typescript-eslint/no-unused-vars
             const { isClosingMarker: _, ...partialClosingFragment } = fragmentInfo.fragment;
 
-            const fragment: UsjAttributeMarkerClosingMarker = {
+            const fragment: UsjAttributeMarkerClosingMarkerFragment = {
               ...partialClosingFragment,
               forMarker: marker,
-              isAttributeMarkerClosingMarker: attributeMarkerInfo.attributeMarkerAttributeName,
+              attributeMarkerClosingMarker: attributeMarkerInfo.attributeMarkerAttributeName,
             };
 
             fragmentsInfo.push({
@@ -1770,7 +1873,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private closingMarkerToUsfm(
     marker: MarkerObject | Usj,
     isInsideMarkerWithSameType: boolean,
-  ): TokenToUsfmReturn {
+  ): UsfmSnippetAndUsjFragmentsInfo {
     const {
       markerNameOriginal,
       markerName,
@@ -1928,7 +2031,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         closingMarkerAttributeNames[0] === markerInfo.defaultAttribute
       ) {
         fragmentsInfo.push({
-          fragment: { isAttributeValueForKey: markerInfo.defaultAttribute, forMarker: marker },
+          fragment: { attributeValueForKey: markerInfo.defaultAttribute, forMarker: marker },
           indexInUsfm: usfm.length,
         });
         usfm += markerWithAnyAttributes[markerInfo.defaultAttribute];
@@ -1942,12 +2045,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           // attribute, then the attribute name, then =, then "the attribute value"
           if (index > 0) usfm += ' ';
           fragmentsInfo.push({
-            fragment: { isAttributeKey: attributeName, forMarker: marker },
+            fragment: { attributeKey: attributeName, forMarker: marker },
             indexInUsfm: usfm.length,
           });
           usfm += `${attributeNameUsfm}="`;
           fragmentsInfo.push({
-            fragment: { isAttributeValueForKey: attributeName, forMarker: marker },
+            fragment: { attributeValueForKey: attributeName, forMarker: marker },
             indexInUsfm: usfm.length,
           });
           usfm += `${markerWithAnyAttributes[attributeName]}"`;
@@ -2006,8 +2109,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    *
    * @param usfm The USFM string to add the marker to
    * @param marker The opening or closing marker to add to the USFM
-   * @param tokenParent Parent of the marker being added. Used to determine if this marker is nested
-   *   within another marker of the same type
+   * @param markerParent Parent of the marker being added. Used to determine if this marker is
+   *   nested within another marker of the same type
    * @param fragmentsInfo The array of fragment information built so far for the USFM string passed
    *   in. THIS METHOD WILL MODIFY THE ARRAY PASSED IN; it will add new fragments that correspond to
    *   the marker added.
@@ -2015,8 +2118,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    */
   private addMarkerUsfmToString(
     usfm: string,
-    marker: MarkerObject | Usj | UsjClosingMarker,
-    tokenParent: MarkerObject | Usj | undefined,
+    marker: MarkerObject | Usj | UsjClosingMarkerFragment,
+    markerParent: MarkerObject | Usj | undefined,
     fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string;
   /**
@@ -2033,14 +2136,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    */
   private addMarkerUsfmToString(
     usfm: string,
-    marker: MarkerObject | UsjClosingMarker,
+    marker: MarkerObject | UsjClosingMarkerFragment,
     isInsideMarkerWithSameType: boolean,
     fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string;
   private addMarkerUsfmToString(
     usfm: string,
-    marker: MarkerObject | UsjClosingMarker,
-    tokenParentOrIsInsideMarkerWithSameType: MarkerObject | Usj | boolean | undefined,
+    marker: MarkerObject | UsjClosingMarkerFragment,
+    markerParentOrIsInsideMarkerWithSameType: MarkerObject | Usj | boolean | undefined,
     fragmentsInfo?: UsjFragmentInfoMinimal[],
   ): string {
     let usfmOutput = usfm;
@@ -2056,11 +2159,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // Determine if this marker is a direct child of another marker of the same type
     let isParentSameType = false;
-    if (typeof tokenParentOrIsInsideMarkerWithSameType === 'boolean')
-      isParentSameType = tokenParentOrIsInsideMarkerWithSameType;
-    else if (tokenParentOrIsInsideMarkerWithSameType) {
+    if (typeof markerParentOrIsInsideMarkerWithSameType === 'boolean')
+      isParentSameType = markerParentOrIsInsideMarkerWithSameType;
+    else if (markerParentOrIsInsideMarkerWithSameType) {
       const { markerType: parentMarkerType } = this.getInfoForMarker(
-        tokenParentOrIsInsideMarkerWithSameType,
+        markerParentOrIsInsideMarkerWithSameType,
       );
       if (parentMarkerType === markerType) {
         isParentSameType = true;
@@ -2356,11 +2459,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     // Check if the target is a property value (`marker` or an attribute)
-    if ('isAttributeValueForKey' in fragment) {
+    if ('attributeValueForKey' in fragment) {
       // Get JsonPath to the indicated property on the marker this is a property for
       const jsonPath = UsjReaderWriter.convertWorkingStackAndPropertyToJsonPath(
         workingStack,
-        fragment.isAttributeValueForKey,
+        fragment.attributeValueForKey,
       );
 
       // Location is the jsonPath to the property on the marker and the offset within the property
@@ -2376,14 +2479,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     // Check if the target is an attribute key
-    if ('isAttributeKey' in fragment) {
+    if ('attributeKey' in fragment) {
       // Get JsonPath to the marker this is an attribute key for
       const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
 
       // Location is the jsonPath to the marker, the key, and the offset within that key
       const documentLocation: UsjAttributeKeyLocation = {
         jsonPath,
-        keyName: fragment.isAttributeKey,
+        keyName: fragment.attributeKey,
         keyOffset: offsetWithinFragment,
       };
       return {
@@ -2393,7 +2496,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     // Check if the target is an attribute marker
-    if ('isAttributeMarker' in fragment) {
+    if ('attributeMarker' in fragment) {
       // Get JsonPath to the marker this is an attribute marker for
       const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
 
@@ -2401,7 +2504,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // currently provide a way to represent an offset within the opening marker.
       const documentLocation: UsjAttributeMarkerLocation = {
         jsonPath,
-        keyName: fragment.isAttributeMarker,
+        keyName: fragment.attributeMarker,
       };
       return {
         node: fragment.forMarker,
@@ -2410,14 +2513,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     // Check if the target is an attribute marker closing marker
-    if ('isAttributeMarkerClosingMarker' in fragment) {
+    if ('attributeMarkerClosingMarker' in fragment) {
       // Get JsonPath to the marker this is an attribute marker for
       const jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
 
       // Location is the jsonPath to the marker and the key for the attribute marker
       const documentLocation: UsjClosingAttributeMarkerLocation = {
         jsonPath,
-        keyName: fragment.isAttributeMarkerClosingMarker,
+        keyName: fragment.attributeMarkerClosingMarker,
         keyClosingMarkerOffset: offsetWithinFragment,
       };
       return {
@@ -2441,9 +2544,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    *   OF THIS ARRAY ARE REMOVED IN THIS METHOD
    * @param workingStack Current working stack
    * @param position Object containing properties describing where in the USFM document these
-   *   fragments are. PROPERTIES ON THIS OBJECT ARE MODIFIED IN THIS METHOD
+   *   fragments are. If this method encounters a verse range, only the starting verse number is
+   *   used (hence this is not a {@link SerializedVerseRef}). PROPERTIES ON THIS OBJECT ARE MODIFIED
+   *   IN THIS METHOD
    * @param fragmentsByIndexInUsfm Map to add fragment information to
-   * @param indicesInUsfmByVerseRef Map to add verse start locations to
+   * @param indicesInUsfmByVerseRef Map to add verse start locations to. If this method encounters a
+   *   verse range, only the starting verse number is used. See {@link IndicesInUsfmByVerseRef} for
+   *   potential adjustments to handle verse ranges differently when we know better what we ought to
+   *   do.
    */
   private static transferFragmentsInfoArrayToMaps(
     fragmentsInfo: UsjFragmentInfoMinimal[],
@@ -2455,7 +2563,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     },
     fragmentsByIndexInUsfm: SortedNumberMap<UsjFragmentInfo>,
     indicesInUsfmByVerseRef: IndicesInUsfmByVerseRef,
-  ) {
+  ): void {
     // Add the extra information to each fragment to make it complete
     const fullFragmentsInfo = fragmentsInfo.map((fragmentInfo) => {
       // Adjust current verse ref if we find start of book, chapter, or verse marker
@@ -2596,6 +2704,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region USFM-related cached properties
 
+  /**
+   * Generates USFM representation of the USJ document passed in and returns it along with
+   * information about how various locations in USFM and USJ map to each other
+   */
   private calculateUsfmProperties(): {
     usfm: string;
     fragmentsByIndexInUsfm: FragmentsByIndexInUsfm;
@@ -2633,21 +2745,21 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let topLevelUsjMarker: Usj | undefined;
     // The marker objects we're currently skipping ordered as a stack (last entry is the deepest
     // marker we are skipping and therefore will be the next to close). If this has entries, it
-    // means we are walking through tokens of marker objects whose opening marker we already skipped
+    // means we are walking through contents of marker objects whose opening marker we already skipped
     // and whose closing marker we should also skip outputting to USFM
     const markersToSkipOutput: (MarkerObject | Usj)[] = [];
 
-    UsjReaderWriter.findNextMatchingTokenUsingWorkingStack(
+    UsjReaderWriter.findNextMatchingNodeOrClosingFragmentUsingWorkingStack(
       this.usj,
       // Working stack is empty since the top-level object doesn't have any parents
       [],
       // Don't skip anything
       [],
-      (token, workingStack) => {
-        if (typeof token !== 'object') {
+      (nodeOrClosingFragment, workingStack) => {
+        if (typeof nodeOrClosingFragment !== 'object') {
           // Add the text contents USFM representation
           const { usfm: textContentUsfm, fragmentsInfo: textContentFragmentsInfo } =
-            this.textContentToUsfm(token);
+            this.textContentToUsfm(nodeOrClosingFragment);
           UsjReaderWriter.mergeFragmentsInfoIntoExistingArray(
             textContentFragmentsInfo,
             fragmentsInfo,
@@ -2659,16 +2771,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         }
 
         // Determine this marker's parent
-        let tokenParent: MarkerObject | Usj | undefined;
+        let markerParent: MarkerObject | Usj | undefined;
         if (workingStack.length > 0) {
-          tokenParent = workingStack[workingStack.length - 1].parent;
+          markerParent = workingStack[workingStack.length - 1].parent;
         }
 
-        if ('isClosingMarker' in token) {
+        if ('isClosingMarker' in nodeOrClosingFragment) {
           // If we are supposed to skip this marker in USFM, skip its closing marker
           if (
             markersToSkipOutput.length > 0 &&
-            markersToSkipOutput[markersToSkipOutput.length - 1] === token.forMarker
+            markersToSkipOutput[markersToSkipOutput.length - 1] === nodeOrClosingFragment.forMarker
           ) {
             // Indicate the skipped marker has now closed by removing it from the stack
             markersToSkipOutput.pop();
@@ -2676,13 +2788,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           }
 
           // Add the closing marker USFM representation
-          usfm = this.addMarkerUsfmToString(usfm, token, tokenParent, fragmentsInfo);
+          usfm = this.addMarkerUsfmToString(
+            usfm,
+            nodeOrClosingFragment,
+            markerParent,
+            fragmentsInfo,
+          );
           transferFragmentsInfo(workingStack);
 
           // If this is closing the `id` marker (the only marker whose type is `book`), add the
           // top-level USJ opening marker after it
-          if (token.forMarker.type === 'book' && topLevelUsjMarker) {
-            usfm = this.addMarkerUsfmToString(usfm, topLevelUsjMarker, tokenParent, fragmentsInfo);
+          if (nodeOrClosingFragment.forMarker.type === 'book' && topLevelUsjMarker) {
+            usfm = this.addMarkerUsfmToString(usfm, topLevelUsjMarker, markerParent, fragmentsInfo);
             transferFragmentsInfo(workingStack);
             topLevelUsjMarker = undefined;
           }
@@ -2691,25 +2808,28 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         }
 
         // If we are supposed to skip this marker in USFM, skip its opening marker
-        if (this.shouldSkipOutputMarkerToUsfm(token)) {
-          markersToSkipOutput.push(token);
+        if (this.shouldSkipOutputMarkerToUsfm(nodeOrClosingFragment)) {
+          markersToSkipOutput.push(nodeOrClosingFragment);
           return false;
         }
 
         // If this is the USJ marker at the start of the doc, save it until after `id` marker closes
-        if (UsjReaderWriter.isTopLevelUsjMarker(token, workingStack) && !topLevelUsjMarker) {
+        if (
+          UsjReaderWriter.isTopLevelUsjMarker(nodeOrClosingFragment, workingStack) &&
+          !topLevelUsjMarker
+        ) {
           // The USJ types aren't set up to know about 3.0 right now, but we should handle it anyway
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          if ((token.version as string) !== '3.0') {
+          if ((nodeOrClosingFragment.version as string) !== '3.0') {
             // Don't output the USJ marker if it is 3.0 (3.0 is assumed and should not appear in
             // the USFM)
-            topLevelUsjMarker = token;
+            topLevelUsjMarker = nodeOrClosingFragment;
           }
           return false;
         }
 
         // Add the opening marker USFM representation
-        usfm = this.addMarkerUsfmToString(usfm, token, tokenParent, fragmentsInfo);
+        usfm = this.addMarkerUsfmToString(usfm, nodeOrClosingFragment, markerParent, fragmentsInfo);
         transferFragmentsInfo(workingStack);
 
         // Keep going through the whole document
@@ -2723,6 +2843,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return { usfm, fragmentsByIndexInUsfm, indicesInUsfmByVerseRef };
   }
 
+  /** The USFM representation of the USJ document passed in */
   private get usfm(): string {
     if (this.usfmInternal !== undefined) return this.usfmInternal;
 
@@ -2735,6 +2856,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return this.usfmInternal;
   }
 
+  /** Fragments at each index in the USFM string */
   private get fragmentsByIndexInUsfm(): FragmentsByIndexInUsfm {
     if (this.fragmentsByIndexInUsfmInternal) return this.fragmentsByIndexInUsfmInternal;
 
@@ -2747,6 +2869,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return this.fragmentsByIndexInUsfmInternal;
   }
 
+  /**
+   * String index of the start of each verse (the backslash on the verse marker) in the USFM
+   * representation of the USJ document. See {@link IndicesInUsfmByVerseRef} for more information.
+   */
   private get indicesInUsfmByVerseRef(): IndicesInUsfmByVerseRef {
     if (this.indicesInUsfmByVerseRefInternal) return this.indicesInUsfmByVerseRefInternal;
 
