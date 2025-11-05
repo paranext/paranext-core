@@ -36,6 +36,7 @@ import {
   LocalizeKey,
   serialize,
   UsjReaderWriter,
+  LegacyComment,
 } from 'platform-bible-utils';
 import {
   Alert,
@@ -49,7 +50,6 @@ import {
   PopoverContent,
   Spinner,
 } from 'platform-bible-react';
-import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import {
