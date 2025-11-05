@@ -589,6 +589,8 @@ export interface FootnoteItemProps {
 export interface FootnoteListProps {
 	/** Optional additional class name for styling */
 	className?: string;
+	/** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
+	classNameForItems?: string;
 	/** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
 	footnotes: MarkerObject[];
 	/**
@@ -654,14 +656,17 @@ export interface FootnoteEditorProps {
 export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, viewOptions, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
-declare const FOOTNOTE_LIST_STRING_KEYS: readonly [
-	"%webView_footnoteList_header%"
-];
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[];
 type FootnoteListLocalizedStrings = {
 	[localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ className, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
+export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
 	localizedStrings?: FootnoteListLocalizedStrings;
 }): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";

@@ -44,7 +44,11 @@
             "column": "platformScriptureEditor.options",
             "order": 2
           },
-          "platformScriptureEditor.footnotes": {
+          "platformScriptureEditor.footnotesPane": {
+            "column": "platformScriptureEditor.options",
+            "order": 3
+          },
+          "platformScriptureEditor.insertTextualNotes": {
             "column": "platformScriptureEditor.insert",
             "order": 1
           },
@@ -67,6 +71,18 @@
             "group": "platformScriptureEditor.find",
             "order": 3,
             "command": "platformScripture.openFind"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_showFootnotes%",
+            "group": "platformScriptureEditor.footnotesPane",
+            "order": 1,
+            "command": "platformScripture.toggleFootnotes"
+          },
+          {
+            "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
+            "group": "platformScriptureEditor.footnotesPane",
+            "order": 2,
+            "command": "platformScripture.changeFootnotesPaneLocation"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
@@ -100,13 +116,13 @@
           },
           {
             "label": "%webView_platformScriptureEditor_insertFootnoteAtSelection%",
-            "group": "platformScriptureEditor.footnotes",
+            "group": "platformScriptureEditor.insertTextualNotes",
             "order": 1,
             "command": "platformScriptureEditor.insertFootnoteAtSelection"
           },
           {
             "label": "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%",
-            "group": "platformScriptureEditor.footnotes",
+            "group": "platformScriptureEditor.insertTextualNotes",
             "order": 2,
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
           }

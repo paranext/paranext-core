@@ -52,6 +52,7 @@ export {
 } from './components/advanced/footnotes/footnote-editor.component';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
+export { FOOTNOTE_LIST_STRING_KEYS } from './components/advanced/footnotes/footnote-list.component';
 export {
   default as Inventory,
   type InventoryItem,
