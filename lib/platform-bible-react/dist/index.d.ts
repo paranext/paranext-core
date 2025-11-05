@@ -358,12 +358,18 @@ export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderIt
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 export interface CommentListProps {
+	/** Additional class name for the component */
 	className?: string;
+	/** Comment threads to render */
 	threads: LegacyCommentThread[];
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
+	/** Handler for adding a comment to a thread */
+	handleAddComment: (threadId: string, contents: string) => void;
+	/** Handler for resolving the comment thread */
+	handleResolveCommentThread: (threadId: string) => void;
 }
-export function CommentList({ className, threads, localizedStrings, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, localizedStrings, handleAddComment, handleResolveCommentThread, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

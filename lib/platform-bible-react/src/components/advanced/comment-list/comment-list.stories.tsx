@@ -14,6 +14,14 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_replyOrAssign%': 'Reply or assign with @',
 };
 
+const handleAddComment = (threadId: string, contents: string) => {
+  console.log(`Adding comment to thread ${threadId}: ${contents}`);
+};
+
+const handleResolveCommentThread = (threadId: string) => {
+  console.log(`Resolving thread ${threadId}`);
+};
+
 const meta: Meta<typeof CommentList> = {
   title: 'Advanced/CommentList',
   component: CommentList,
@@ -41,6 +49,8 @@ export const Default: Story = {
   args: {
     threads: sampleComments,
     localizedStrings: commentListLocalizedStrings,
+    handleAddComment,
+    handleResolveCommentThread,
   },
 };
 
@@ -48,5 +58,7 @@ export const NoThreads: Story = {
   args: {
     threads: [],
     localizedStrings: commentListLocalizedStrings,
+    handleAddComment,
+    handleResolveCommentThread,
   },
 };

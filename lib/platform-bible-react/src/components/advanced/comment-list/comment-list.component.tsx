@@ -8,6 +8,8 @@ export default function CommentList({
   className = '',
   threads,
   localizedStrings,
+  handleAddComment,
+  handleResolveCommentThread,
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
@@ -78,6 +80,8 @@ export default function CommentList({
             isSelected={selectedThreadId === `thread-${thread.id}`}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
+            handleAddComment={handleAddComment}
+            handleResolveCommentThread={handleResolveCommentThread}
           />
         </div>
       ))}

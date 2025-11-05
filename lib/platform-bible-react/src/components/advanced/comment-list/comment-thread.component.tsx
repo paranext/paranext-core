@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { formatReplacementString } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
@@ -19,6 +19,8 @@ export function CommentThread({
   handleSelectThread,
   threadId,
   threadStatus,
+  handleResolveCommentThread,
+  handleAddComment,
 }: CommentThreadProps) {
   const [inputValue, setInputValue] = useState<string>('');
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
@@ -71,17 +73,6 @@ export function CommentThread({
     [replyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
   );
 
-  const handleSubmit = useCallback(() => {
-    // TODO: Handle submitting comment
-    console.log('Submit comment:', inputValue);
-    setInputValue('');
-  }, [inputValue]);
-
-  const handleResolveCommentThread = useCallback(() => {
-    // TODO: Handle resolving comment thread
-    console.log('Resolve comment thread');
-  }, []);
-
   return (
     <Card
       role="option"
@@ -96,7 +87,6 @@ export function CommentThread({
       )}
       onClick={() => {
         handleSelectThread(threadId);
-        // TODO: Scroll thread into view if not fully visible
       }}
       tabIndex={-1}
     >
@@ -148,7 +138,7 @@ export function CommentThread({
                 className="tw-shrink-0"
                 onClick={(e) => {
                   e.stopPropagation(); // Prevent triggering the expand/collapse
-                  handleResolveCommentThread();
+                  handleResolveCommentThread(threadId);
                 }}
               >
                 <Check />
@@ -206,7 +196,7 @@ export function CommentThread({
                   </Button>
                   <Button
                     size="icon"
-                    onClick={handleSubmit}
+                    onClick={() => handleAddComment(threadId, inputValue)}
                     className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
                     disabled={!inputValue}
                   >

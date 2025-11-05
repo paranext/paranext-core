@@ -1,7 +1,7 @@
 import { CommentList, Label, Skeleton } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { WebViewProps } from '@papi/core';
 import { sampleComments } from './comment-sample-data';
 
@@ -30,6 +30,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
     return filteredThreads;
   }, [scrRef]);
 
+  const handleAddComment = useCallback((threadId: string, contents: string) => {
+    // Logic to add a new comment would go here
+    console.log(`Adding comment to thread ${threadId}: ${contents}`);
+  }, []);
+
+  const handleResolveCommentThread = useCallback((threadId: string) => {
+    // Logic to resolve a comment thread would go here
+    console.log(`Resolving comment thread ${threadId}`);
+  }, []);
+
   if (unresolvedThreadsForScrRef.length === 0) {
     return (
       <div className="tw-m-4 tw-flex tw-justify-center">
@@ -53,7 +63,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   return (
     <div className="tw-bg-muted">
-      <CommentList threads={unresolvedThreadsForScrRef} localizedStrings={localizedStrings} />
+      <CommentList
+        threads={unresolvedThreadsForScrRef}
+        localizedStrings={localizedStrings}
+        handleAddComment={handleAddComment}
+        handleResolveCommentThread={handleResolveCommentThread}
+      />
     </div>
   );
 };
