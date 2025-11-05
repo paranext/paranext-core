@@ -34,11 +34,11 @@ There are consistent interaction patterns for lists, see [Interactions/Scripture
 Using the
 - [Select](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/select.stories.tsx) component - for simple selections with little options
 - Combobox component - where search, grouping and more details are helpful
-  - [Single Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/combo-box.stories.tsx): use a [Chevron Down](https://lucide.dev/icons/chevron-down) icon on the trigger
-  - [Multi Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/multi-select-combo-box.stories.tsx): use the default [Chevrons Up-Down](https://lucide.dev/icons/chevrons-up-down) icon on the trigger
+  - [Single Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/combo-box.stories.tsx): use a [Chevron Down](https://lucide.dev/icons/chevron-down) icon on the trigger, close on selection
+  - [Multi Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/multi-select-combo-box.stories.tsx): use the default [Chevrons Up-Down](https://lucide.dev/icons/chevrons-up-down) icon on the trigger, do not close on selection
 
 Make sure to
-- Show the selection with a start side checkbox (not like the [default New York style](https://ui.shadcn.com/docs/components/select) on the end side)
+- Show the selection with a start side checkbox (not on the end side like the [default New York style](https://ui.shadcn.com/docs/components/select)) -- up for UX discussion
 - Provide context by using headings and grouping
 - Apply sorting
 - Do not break the default component's focus and hover styles, overflow and grow-shrink behavior (if any, improve it)
