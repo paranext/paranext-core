@@ -637,7 +637,10 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_callerDropdown_label%",
 	"%footnoteEditor_callerDropdown_item_generated%",
 	"%footnoteEditor_callerDropdown_item_hidden%",
-	"%footnoteEditor_callerDropdown_item_custom%"
+	"%footnoteEditor_callerDropdown_item_custom%",
+	"%footnoteEditor_noteType_crossReference_label%",
+	"%footnoteEditor_noteType_endNote_label%",
+	"%footnoteEditor_noteType_footnote_label%"
 ];
 export type FootnoteEditorLocalizedStrings = {
 	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]?: string;

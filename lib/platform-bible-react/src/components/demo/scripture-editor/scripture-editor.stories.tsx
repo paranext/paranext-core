@@ -280,6 +280,9 @@ const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
   '%footnoteEditor_callerDropdown_item_generated%': 'Auto-generated',
   '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
   '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
+  '%footnoteEditor_noteType_crossReference_label%': 'Cross reference',
+  '%footnoteEditor_noteType_endNote_label%': 'End note',
+  '%footnoteEditor_noteType_footnote_label%': 'Footnote',
 };
 
 export const FootnoteEditorView: Story = {
