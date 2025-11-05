@@ -255,12 +255,15 @@ export type NormalMarkerInfo = {
    * Marker to use when operating on the USFM representation of this marker. For example, when
    * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
    * instead of the marker info for the marker as listed in USX or USJ.
+   *
+   * For example, when when the `usx` marker is output to USFM, it should be transformed to the
+   * `usfm` marker.
    */
   markerUsfm?: string;
   /**
-   * Instructions regarding special handling required for this marker when transforming from USFM to
-   * USX or USJ. These instructions are an explanation of what needs to be done to this marker to
-   * properly transform it to USX or USJ.
+   * Instructions written in plain text regarding special handling required for this marker when
+   * transforming from USFM to USX or USJ. These instructions are an explanation of what needs to be
+   * done to this marker to properly transform it to USX or USJ.
    *
    * This property is generally only included when it is exceptionally difficult to parse a marker
    * properly from USFM; the markers map attempts to use this property as little as possible,
@@ -269,12 +272,25 @@ export type NormalMarkerInfo = {
   parseUsfmInstructions?: string;
 };
 
-/** Information about a USFM/USX/USJ marker that is essential for proper translation between formats */
+/**
+ * Information about a USFM/USX/USJ marker that is essential for proper translation between formats.
+ *
+ * For example, `w` is a `char`-type marker, so it shares the characteristics of the `char`
+ * {@link MarkerTypeInfo} with other `char`-type markers and has its own set of characteristics.
+ * `w`'s `MarkerInfo` is as follows:
+ *
+ * ```json
+ * {
+ *   "type": "char",
+ *   "defaultAttribute": "lemma"
+ * }
+ * ```
+ */
 export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
 
 /**
- * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
- * {@link MarkerInfo} for other kinds of marker types.
+ * Information about a USFM/USX/USJ marker type that has a closing marker. See {@link MarkerTypeInfo}
+ * for other kinds of marker types.
  *
  * For example, `char` marker types such as `nd` markers have closing markers, but `para` markers
  * such as `p` do not:
@@ -286,7 +302,7 @@ export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
  *
  * If the marker type has a closing marker but the closing marker is not present in the USFM for a
  * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
- * `false` unless {@link CloseableMarkerTypeInfo.isClosingMarkerOptional} is `true`.
+ * `false` unless {@link NormalMarkerInfo.isClosingMarkerOptional} is `true`.
  */
 export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
   /**
@@ -294,7 +310,8 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
    * closing markers like `\wj*`, not independent closing markers like
    * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
    *
-   * If not present, defaults to `false`
+   * If not present, defaults to `false` (meaning this `MarkerTypeInfo` is a
+   * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
    */
   hasClosingMarker: true;
   /**
@@ -330,7 +347,7 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 
 /**
  * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
- * {@link MarkerInfo} for other kinds of marker types.
+ * {@link MarkerTypeInfo} for other kinds of marker types.
  *
  * For example, `char` marker types such as `nd` markers have closing markers, but `para` marker
  * types such as `p` do not:
@@ -339,16 +356,15 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  * \p This is a plain paragraph.
  * \p This is a paragraph \nd with some special text\nd* in it.
  * ```
- *
- * If the marker type has a closing marker but the closing marker is not present in the USFM for a
- * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
- * `false` unless {@link CloseableMarkerTypeInfo.isClosingMarkerOptional} is `true`.
  */
 export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
   /**
-   * Whether markers of this type need a closing marker in USFM.
+   * Whether markers of this type have a closing marker in USFM. This property concerns normal
+   * closing markers like `\wj*`, not independent closing markers like
+   * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
    *
-   * If not present, defaults to `false`
+   * If not present, defaults to `false` (meaning this `MarkerTypeInfo` is a
+   * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
    */
   hasClosingMarker?: false;
 };
@@ -431,9 +447,9 @@ export type MarkerTypeInfoBase = {
    */
   skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
   /**
-   * Whether to always skip outputting this marker to USFM. Skip outputting this marker when
-   * converting to USFM. Only skip outputting the opening and closing marker representations,
-   * though; the content inside the marker (if present) should not be skipped.
+   * Whether to always skip outputting this marker when converting to USFM. Only skip outputting the
+   * opening and closing marker representations, though; the content inside the marker (if present)
+   * should not be skipped.
    *
    * This is used for marker types that have no representation in USFM in a given version, likely
    * meaning they are derived metadata and are not present in USFM.
@@ -525,9 +541,9 @@ export type MarkerTypeInfoBase = {
    */
   nestedPrefix?: string;
   /**
-   * Instructions regarding special handling required for this marker type when transforming to
-   * USFM. These instructions are an explanation of what needs to be done to markers of this type to
-   * properly transform the marker to USFM.
+   * Instructions written in plain text regarding special handling required for this marker type
+   * when transforming to USFM. These instructions are an explanation of what needs to be done to
+   * markers of this type to properly transform the marker to USFM.
    *
    * This property is generally only included when it is exceptionally difficult to output a marker
    * properly to USFM; the markers map attempts to use this property as little as possible, favoring
@@ -535,9 +551,9 @@ export type MarkerTypeInfoBase = {
    */
   outputToUsfmInstructions?: string;
   /**
-   * Instructions regarding special handling required for this marker type when transforming from
-   * USFM to USX or USJ. These instructions are an explanation of what needs to be done to markers
-   * of this type to properly transform the marker to USX or USJ.
+   * Instructions written in plain text regarding special handling required for this marker type
+   * when transforming from USFM to USX or USJ. These instructions are an explanation of what needs
+   * to be done to markers of this type to properly transform the marker to USX or USJ.
    *
    * This property is generally only included when it is exceptionally difficult to parse a marker
    * properly from USFM; the markers map attempts to use this property as little as possible,
@@ -548,7 +564,18 @@ export type MarkerTypeInfoBase = {
 
 /**
  * Information about a USFM/USX/USJ marker type that is essential for proper translation between
- * formats
+ * formats.
+ *
+ * For example, `char` is a marker type, which means markers like `w` whose marker type is `char`
+ * share some characteristics, and each marker also has its own set of characteristics which are
+ * presented with type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
+ *
+ * ```json
+ * {
+ *   "hasClosingMarker": true,
+ *   "nestedPrefix": "+"
+ * }
+ * ```
  */
 export type MarkerTypeInfo = CloseableMarkerTypeInfo | NonCloseableMarkerTypeInfo;
 
@@ -556,29 +583,36 @@ export type MarkerTypeInfo = CloseableMarkerTypeInfo | NonCloseableMarkerTypeInf
 export type MarkersMap = {
   /** Which version of USFM/USX/USJ this map represents */
   version: string;
+  /** Which repository this map came from. */
+  schemaRepo: string;
   /**
    * Which commit this map came from. This is necessary because the schema file seems to be
    * distributed multiple times in one release version. As such, this specifies the exact version of
    * the schema file.
    */
-  commit: string;
+  schemaCommit: string;
   /**
    * Which version of the markers map types this markers map conforms to. Follows [Semantic
    * versioning](https://semver.org/); the same major version contains no breaking changes.
    */
   markersMapVersion: `1.${number}.${number}${string}`;
   /**
-   * Which tag or commit of `usfm-tools` repo this map is generated from.
+   * Which tag or commit in the `https://github.com/paranext/usfm-tools` repo this map is generated
+   * from.
    *
    * Contains the output from `git tag --points-at HEAD` or `git rev-parse HEAD`
    *
    * Will also have a `+` at the end if there were working changes outside the `src/test-data`
    * folder when this was generated.
    */
-  usfmToolsVersion: string;
+  usfmToolsCommit: string;
   /**
    * Whether any whitespace after attribute markers and before the next content is not just
    * structural but should actually be considered part of the content of the marker.
+   *
+   * Structural whitespace is whitespace in the USFM that is required as part of the USFM syntax and
+   * usually acts as a delimiter between markers and other things. Content whitespace is whitespace
+   * in USFM that is part of the actual Scripture text or the "content" of the marker.
    *
    * According to specification, whitespace after attribute markers is not content but is just
    * structural.
@@ -672,9 +706,10 @@ function deepFreeze(o: any) {
  */
 export const USFM_MARKERS_MAP: MarkersMap = deepFreeze({
   version: '3.0.7',
-  commit: '6c490bb5675d281b0fa01876fe67f6e3fd50a4ce',
+  schemaRepo: 'https://github.com/ubsicap/usx.git',
+  schemaCommit: '6c490bb5675d281b0fa01876fe67f6e3fd50a4ce',
   markersMapVersion: '1.0.0',
-  usfmToolsVersion: '39dc10f26a33da0de4eb5b269f5bba1f2fd35c48',
+  usfmToolsCommit: '7f7d781a0da0001f61892d134a2c923496a310c9',
   markers: {
     add: {
       type: 'char',
