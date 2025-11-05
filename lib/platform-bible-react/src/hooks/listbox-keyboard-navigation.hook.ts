@@ -211,9 +211,14 @@ export const useListbox = ({
           break;
         }
         default:
+          // Only handle character keys when not inside an interactive element
           if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
-            onCharacterPress?.(event.key);
-            event.preventDefault();
+            // Don't intercept typing in interactive elements
+            const isInInteractiveElement = isInteractiveElement(targetElement);
+            if (!isInInteractiveElement) {
+              onCharacterPress?.(event.key);
+              event.preventDefault();
+            }
           }
           return;
       }
