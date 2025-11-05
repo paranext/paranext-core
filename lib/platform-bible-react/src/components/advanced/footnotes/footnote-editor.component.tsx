@@ -43,6 +43,9 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   '%footnoteEditor_callerDropdown_item_generated%',
   '%footnoteEditor_callerDropdown_item_hidden%',
   '%footnoteEditor_callerDropdown_item_custom%',
+  '%footnoteEditor_noteType_crossReference_label%',
+  '%footnoteEditor_noteType_endNote_label%',
+  '%footnoteEditor_noteType_footnote_label%',
 ] as const);
 
 export type FootnoteEditorLocalizedStrings = {
@@ -230,14 +233,14 @@ export default function FootnoteEditor({
 
   const formatNoteTypeTooltip = () => {
     if (noteType === 'f') {
-      return 'Footnote';
+      return localizedStrings['%footnoteEditor_noteType_footnote_label%'];
     }
 
     if (noteType === 'fe') {
-      return 'End note';
+      return localizedStrings['%footnoteEditor_noteType_endNote_label%'];
     }
 
-    return 'Cross reference';
+    return localizedStrings['%footnoteEditor_noteType_crossReference_label%'];
   };
 
   return (
@@ -263,13 +266,13 @@ export default function FootnoteEditor({
                     <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
                       <SquareSigma />
                     </Button>
-                    <span>End note</span>
+                    <span>{localizedStrings['%footnoteEditor_noteType_footnote_label%']}</span>
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="f" className="tw-gap-2">
                     <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
                       <FunctionSquare />
                     </Button>
-                    <span>Footnote</span>
+                    <span>{localizedStrings['%footnoteEditor_noteType_endNote_label%']}</span>
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
