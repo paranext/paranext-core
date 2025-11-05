@@ -116,6 +116,22 @@ export type UsfmVerseLocation = {
  * - The quotes around closing marker attribute values (no official representation)
  * - The space between closing marker attributes (no official representation)
  *
+ * Also note that the following types do not specify a concrete location that is actually in the USJ
+ * document but represent a USFM location relative to the most similar thing in USJ that there is:
+ *
+ * - {@link UsjClosingMarkerLocation} - there are no distinct closing objects in JSON; there is a
+ *   common syntax for closing every object, but it is only one character and is on every single
+ *   object as opposed to USFM closing markers which are multiple characters long and are only
+ *   sometimes present.
+ * - {@link UsjAttributeKeyLocation} - when the attribute whose key is being pointed to is an attribute
+ *   marker in USFM, the `keyOffset` does not apply to the USJ attribute name (e.g. `altnumber`) but
+ *   to the USFM attribute marker name (e.g. `ca`).
+ * - {@link UsjAttributeMarkerLocation} - attribute markers are just properties in JSON; they do not
+ *   have their own object such that they would have an opening that can be pointed to in the JSON
+ *   like they have their own opening in USFM.
+ * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
+ *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
+ *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
  */
@@ -417,8 +433,7 @@ export interface IUsjReaderWriter {
    * @param usfmLocation Location in USFM space - a book, chapter, verse, and character offset
    *   within the verse's USFM
    * @returns Object containing the USJ location within the USJ document indicated by
-   *   `usfmLocation`. Note that if the USJ node returned is an object, it is the same object that
-   *   is within this USJ data. So if you change it, you are changing this USJ data.
+   *   `usfmLocation`.
    */
   usfmLocationToUsjDocumentLocation(
     usfmLocation: UsfmLocation | SerializedVerseRef,

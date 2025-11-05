@@ -6,7 +6,7 @@
 // Disabling camelcase and @typescript-eslint/naming-convention so we can use 3_1 indicating USFM 3.1
 import fs from 'fs';
 import path from 'path';
-import { Usj, USJ_TYPE } from '@eten-tech-foundation/scripture-utilities';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { UsjReaderWriter } from './usj-reader-writer';
 import { usjMat1 } from './footnote-util-test.usj.data';
 import { USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0 } from './markers-maps/markers-map-3.0.model';
@@ -58,7 +58,7 @@ const matthew1And2Usfm = readTestDataFile('web-matthew-1-and-2.usfm');
  *
  * Also includes the chapter marker for chapter 3 but no contents of chapter 3.
  */
-const matthew1And2Usj: Usj = JSON.parse(readTestDataFile('web-matthew-1-and-2.json'));
+const matthew1And2Usj: Usj = JSON.parse(readTestDataFile('web-matthew-1-and-2.usj'));
 
 /**
  * Small portion of WEB Matthew 2 output in USJ from Paratext 10 Studio 0.3.0-rc.0 and modified by
@@ -66,7 +66,7 @@ const matthew1And2Usj: Usj = JSON.parse(readTestDataFile('web-matthew-1-and-2.js
  *
  * Includes the first paragraph and last two paragraphs of chapter 2 with verses 21 and 22 combined.
  */
-const matthew2verseRangeUsj = JSON.parse(readTestDataFile('web-matthew-2-verse-range.json'));
+const matthew2verseRangeUsj = JSON.parse(readTestDataFile('web-matthew-2-verse-range.usj'));
 
 // #endregion Matthew 1-2 test data
 
@@ -106,19 +106,19 @@ const testUSFM2SACh3Usfm = readTestDataFile('testUSFM-2SA-3.usfm');
  * WARNING: I also had to add `" ",` to the start of the content array in the `ef` marker because it
  * seems that `usxStringToUsj` is incorrectly removing it.
  */
-const testUSFM2SACh1Usj = JSON.parse(readTestDataFile('testUSFM-2SA-1.json'));
+const testUSFM2SACh1Usj = JSON.parse(readTestDataFile('testUSFM-2SA-1.usj'));
 
 /**
  * TestUSFM 2 Samuel 2 output in USJ from Platform.Bible (version 3.1 replaced with 3.0 in the USJ
  * marker because that is more accurate. The USJ version handling isn't great yet).
  */
-const testUSFM2SACh2Usj = JSON.parse(readTestDataFile('testUSFM-2SA-2.json'));
+const testUSFM2SACh2Usj = JSON.parse(readTestDataFile('testUSFM-2SA-2.usj'));
 
 /**
  * TestUSFM 2 Samuel 3 output in USJ from Platform.Bible (version 3.1 replaced with 3.0 in the USJ
  * marker because that is more accurate. The USJ version handling isn't great yet).
  */
-const testUSFM2SACh3Usj = JSON.parse(readTestDataFile('testUSFM-2SA-3.json'));
+const testUSFM2SACh3Usj = JSON.parse(readTestDataFile('testUSFM-2SA-3.usj'));
 
 /**
  * TestUSFM 2 Samuel 3 output in USJ from Platform.Bible with the following modifications:
@@ -129,7 +129,7 @@ const testUSFM2SACh3Usj = JSON.parse(readTestDataFile('testUSFM-2SA-3.json'));
  *   until the next `para` marker. TJ believes this is how the USJ is supposed to look, but he
  *   thinks Paratext 9 is not transforming USFM to USX properly in this case.
  */
-const testUSFM2SACh3UsjCorrected = JSON.parse(readTestDataFile('testUSFM-2SA-3-corrected.json'));
+const testUSFM2SACh3UsjCorrected = JSON.parse(readTestDataFile('testUSFM-2SA-3-corrected.usj'));
 
 // #endregion testUSFM test data - in Paratext 9 USFM 3.0 format
 
@@ -157,7 +157,7 @@ const testUSFM2SACh1UsfmCanonical3_1 = readTestDataFile('testUSFM-2SA-1-canonica
  * Paratext 3.0 content.
  */
 const testUSFM2SACh1UsjCanonical3_1 = JSON.parse(
-  readTestDataFile('testUSFM-2SA-1-canonical-3.1.json'),
+  readTestDataFile('testUSFM-2SA-1-canonical-3.1.usj'),
 );
 
 /**
@@ -197,7 +197,7 @@ const testUSFM2SACh3UsfmCanonical3_1 = readTestDataFile('testUSFM-2SA-3-canonica
  * Paratext 3.0 content.
  */
 const testUSFM2SACh3UsjCanonical3_1 = JSON.parse(
-  readTestDataFile('testUSFM-2SA-3-canonical-3.1.json'),
+  readTestDataFile('testUSFM-2SA-3-canonical-3.1.usj'),
 );
 
 // #endregion testUSFM test data - in canonical 3.1 format
@@ -210,7 +210,7 @@ const testUSFM2SACh3UsjCanonical3_1 = JSON.parse(
  *
  * - Single backslash replaced with double backslash to properly escape quotes
  * - `usfm` 3.1 marker added to conform with requirements
- * - Chapter number changed to 13 to match the verse number in the example
+ * - Chapter number changed to 5 to match the chapter number in the example USJ
  * - Normalized whitespace
  *
  *   - Replaced newlines with spaces in the paragraphs
@@ -324,7 +324,7 @@ const exampleGeneratedRefsUsj = JSON.parse(`{
  *
  * - Single backslash replaced with double backslash to properly escape quotes
  * - `usfm` 3.1 marker added to conform with requirements
- * - Chapter number changed to 13 to match the verse number in the example
+ * - Chapter number changed to 5 to match the chapter number in the example USJ
  * - Normalized whitespace
  *
  *   - Replaced newlines with spaces in the paragraphs
@@ -521,7 +521,7 @@ describe('jsonPathToUsfmVerseLocation translates USJ jsonPath to UsfmVerseLocati
         type: USJ_TYPE,
         // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        version: '3.0' as '3.1',
+        version: '3.0' as typeof USJ_VERSION,
         content: [],
       }).jsonPathToUsfmVerseLocation('');
     }).toThrow('No result found for JSONPath query: ');
@@ -582,7 +582,7 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
       type: USJ_TYPE,
       // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      version: '3.0' as '3.1',
+      version: '3.0' as typeof USJ_VERSION,
       content: ['This USJ document has no book'],
     });
 
@@ -690,7 +690,7 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
         type: USJ_TYPE,
         // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        version: '3.0' as '3.1',
+        version: '3.0' as typeof USJ_VERSION,
         content: [],
       }).usfmLocationToUsjNodeAndDocumentLocation({
         verseRef: { book: 'JHN', chapterNum: 1, verseNum: 1 },
@@ -772,7 +772,7 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
       type: USJ_TYPE,
       // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      version: '3.0' as '3.1',
+      version: '3.0' as typeof USJ_VERSION,
       content: ['This USJ document has no book'],
     });
 
@@ -959,6 +959,26 @@ describe('Find USJ details for text searches', () => {
     expect(result10.node).toBe(' became the father of Solomon by her who had been Uriah’s wife. ');
     expect(result10.documentLocation.jsonPath).toBe('$.content[10].content[11]');
     expect(result10.documentLocation.offset).toBe(22);
+
+    // Start in a node that is nested in a skipped node
+    const startingPoint3 = usjDoc.usfmLocationToUsjNodeAndDocumentLocation({
+      verseRef: { book: 'MAT', chapterNum: 1, verseNum: 6 },
+      offset: 78,
+    });
+    expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(startingPoint3)).toBe(true);
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(startingPoint3)) return;
+    expect(startingPoint3.documentLocation.jsonPath).toBe(
+      '$.content[10].content[10].content[1].content[0]',
+    );
+    expect(startingPoint3.documentLocation.offset).toBe(3);
+
+    const result11 = usjDoc.findNextLocationOfMatchingText(startingPoint3, 'the');
+    expect(result11).toBeTruthy();
+    if (typeof result11?.node !== 'string')
+      throw new Error('Expected result11 node to be a string');
+    expect(result11.node).toBe(' became the father of Solomon by her who had been Uriah’s wife. ');
+    expect(result11.documentLocation.jsonPath).toBe('$.content[10].content[11]');
+    expect(result11.documentLocation.offset).toBe(8);
   });
 
   test('search with various regex patterns finds USJ details for match(es) 3.0', () => {

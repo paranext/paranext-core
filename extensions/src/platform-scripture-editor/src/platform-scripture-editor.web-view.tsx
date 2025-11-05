@@ -110,7 +110,7 @@ function correctEditorUsjVersion(editorUsj: Usj): Usj {
   // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
   // well right now
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { ...editorUsj, version: '3.0' as '3.1' };
+  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({

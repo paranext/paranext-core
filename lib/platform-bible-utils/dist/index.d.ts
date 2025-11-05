@@ -1812,12 +1812,15 @@ export type NormalMarkerInfo = {
 	 * Marker to use when operating on the USFM representation of this marker. For example, when
 	 * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
 	 * instead of the marker info for the marker as listed in USX or USJ.
+	 *
+	 * For example, when when the `usx` marker is output to USFM, it should be transformed to the
+	 * `usfm` marker.
 	 */
 	markerUsfm?: string;
 	/**
-	 * Instructions regarding special handling required for this marker when transforming from USFM to
-	 * USX or USJ. These instructions are an explanation of what needs to be done to this marker to
-	 * properly transform it to USX or USJ.
+	 * Instructions written in plain text regarding special handling required for this marker when
+	 * transforming from USFM to USX or USJ. These instructions are an explanation of what needs to be
+	 * done to this marker to properly transform it to USX or USJ.
 	 *
 	 * This property is generally only included when it is exceptionally difficult to parse a marker
 	 * properly from USFM; the markers map attempts to use this property as little as possible,
@@ -1825,11 +1828,24 @@ export type NormalMarkerInfo = {
 	 */
 	parseUsfmInstructions?: string;
 };
-/** Information about a USFM/USX/USJ marker that is essential for proper translation between formats */
+/**
+ * Information about a USFM/USX/USJ marker that is essential for proper translation between formats.
+ *
+ * For example, `w` is a `char`-type marker, so it shares the characteristics of the `char`
+ * {@link MarkerTypeInfo} with other `char`-type markers and has its own set of characteristics.
+ * `w`'s `MarkerInfo` is as follows:
+ *
+ * ```json
+ * {
+ *   "type": "char",
+ *   "defaultAttribute": "lemma"
+ * }
+ * ```
+ */
 export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
 /**
- * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
- * {@link MarkerInfo} for other kinds of marker types.
+ * Information about a USFM/USX/USJ marker type that has a closing marker. See {@link MarkerTypeInfo}
+ * for other kinds of marker types.
  *
  * For example, `char` marker types such as `nd` markers have closing markers, but `para` markers
  * such as `p` do not:
@@ -1841,7 +1857,7 @@ export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
  *
  * If the marker type has a closing marker but the closing marker is not present in the USFM for a
  * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
- * `false` unless {@link CloseableMarkerTypeInfo.isClosingMarkerOptional} is `true`.
+ * `false` unless {@link NormalMarkerInfo.isClosingMarkerOptional} is `true`.
  */
 export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	/**
@@ -1849,7 +1865,8 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	 * closing markers like `\wj*`, not independent closing markers like
 	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
 	 *
-	 * If not present, defaults to `false`
+	 * If not present, defaults to `false` (meaning this `MarkerTypeInfo` is a
+	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
 	 */
 	hasClosingMarker: true;
 	/**
@@ -1884,7 +1901,7 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 };
 /**
  * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
- * {@link MarkerInfo} for other kinds of marker types.
+ * {@link MarkerTypeInfo} for other kinds of marker types.
  *
  * For example, `char` marker types such as `nd` markers have closing markers, but `para` marker
  * types such as `p` do not:
@@ -1893,16 +1910,15 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  * \p This is a plain paragraph.
  * \p This is a paragraph \nd with some special text\nd* in it.
  * ```
- *
- * If the marker type has a closing marker but the closing marker is not present in the USFM for a
- * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
- * `false` unless {@link CloseableMarkerTypeInfo.isClosingMarkerOptional} is `true`.
  */
 export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	/**
-	 * Whether markers of this type need a closing marker in USFM.
+	 * Whether markers of this type have a closing marker in USFM. This property concerns normal
+	 * closing markers like `\wj*`, not independent closing markers like
+	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
 	 *
-	 * If not present, defaults to `false`
+	 * If not present, defaults to `false` (meaning this `MarkerTypeInfo` is a
+	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
 	 */
 	hasClosingMarker?: false;
 };
@@ -1984,9 +2000,9 @@ export type MarkerTypeInfoBase = {
 	 */
 	skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
 	/**
-	 * Whether to always skip outputting this marker to USFM. Skip outputting this marker when
-	 * converting to USFM. Only skip outputting the opening and closing marker representations,
-	 * though; the content inside the marker (if present) should not be skipped.
+	 * Whether to always skip outputting this marker when converting to USFM. Only skip outputting the
+	 * opening and closing marker representations, though; the content inside the marker (if present)
+	 * should not be skipped.
 	 *
 	 * This is used for marker types that have no representation in USFM in a given version, likely
 	 * meaning they are derived metadata and are not present in USFM.
@@ -2078,9 +2094,9 @@ export type MarkerTypeInfoBase = {
 	 */
 	nestedPrefix?: string;
 	/**
-	 * Instructions regarding special handling required for this marker type when transforming to
-	 * USFM. These instructions are an explanation of what needs to be done to markers of this type to
-	 * properly transform the marker to USFM.
+	 * Instructions written in plain text regarding special handling required for this marker type
+	 * when transforming to USFM. These instructions are an explanation of what needs to be done to
+	 * markers of this type to properly transform the marker to USFM.
 	 *
 	 * This property is generally only included when it is exceptionally difficult to output a marker
 	 * properly to USFM; the markers map attempts to use this property as little as possible, favoring
@@ -2088,9 +2104,9 @@ export type MarkerTypeInfoBase = {
 	 */
 	outputToUsfmInstructions?: string;
 	/**
-	 * Instructions regarding special handling required for this marker type when transforming from
-	 * USFM to USX or USJ. These instructions are an explanation of what needs to be done to markers
-	 * of this type to properly transform the marker to USX or USJ.
+	 * Instructions written in plain text regarding special handling required for this marker type
+	 * when transforming from USFM to USX or USJ. These instructions are an explanation of what needs
+	 * to be done to markers of this type to properly transform the marker to USX or USJ.
 	 *
 	 * This property is generally only included when it is exceptionally difficult to parse a marker
 	 * properly from USFM; the markers map attempts to use this property as little as possible,
@@ -2100,36 +2116,54 @@ export type MarkerTypeInfoBase = {
 };
 /**
  * Information about a USFM/USX/USJ marker type that is essential for proper translation between
- * formats
+ * formats.
+ *
+ * For example, `char` is a marker type, which means markers like `w` whose marker type is `char`
+ * share some characteristics, and each marker also has its own set of characteristics which are
+ * presented with type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
+ *
+ * ```json
+ * {
+ *   "hasClosingMarker": true,
+ *   "nestedPrefix": "+"
+ * }
+ * ```
  */
 export type MarkerTypeInfo = CloseableMarkerTypeInfo | NonCloseableMarkerTypeInfo;
 /** A map of all USFM/USX/USJ markers and some information about them */
 export type MarkersMap = {
 	/** Which version of USFM/USX/USJ this map represents */
 	version: string;
+	/** Which repository this map came from. */
+	schemaRepo: string;
 	/**
 	 * Which commit this map came from. This is necessary because the schema file seems to be
 	 * distributed multiple times in one release version. As such, this specifies the exact version of
 	 * the schema file.
 	 */
-	commit: string;
+	schemaCommit: string;
 	/**
 	 * Which version of the markers map types this markers map conforms to. Follows [Semantic
 	 * versioning](https://semver.org/); the same major version contains no breaking changes.
 	 */
 	markersMapVersion: `1.${number}.${number}${string}`;
 	/**
-	 * Which tag or commit of `usfm-tools` repo this map is generated from.
+	 * Which tag or commit in the `https://github.com/paranext/usfm-tools` repo this map is generated
+	 * from.
 	 *
 	 * Contains the output from `git tag --points-at HEAD` or `git rev-parse HEAD`
 	 *
 	 * Will also have a `+` at the end if there were working changes outside the `src/test-data`
 	 * folder when this was generated.
 	 */
-	usfmToolsVersion: string;
+	usfmToolsCommit: string;
 	/**
 	 * Whether any whitespace after attribute markers and before the next content is not just
 	 * structural but should actually be considered part of the content of the marker.
+	 *
+	 * Structural whitespace is whitespace in the USFM that is required as part of the USFM syntax and
+	 * usually acts as a delimiter between markers and other things. Content whitespace is whitespace
+	 * in USFM that is part of the actual Scripture text or the "content" of the marker.
 	 *
 	 * According to specification, whitespace after attribute markers is not content but is just
 	 * structural.
@@ -2278,6 +2312,22 @@ export type UsfmVerseLocation = {
  * - The equals sign for closing marker attributes (no official representation)
  * - The quotes around closing marker attribute values (no official representation)
  * - The space between closing marker attributes (no official representation)
+ *
+ * Also note that the following types do not specify a concrete location that is actually in the USJ
+ * document but represent a USFM location relative to the most similar thing in USJ that there is:
+ *
+ * - {@link UsjClosingMarkerLocation} - there are no distinct closing objects in JSON; there is a
+ *   common syntax for closing every object, but it is only one character and is on every single
+ *   object as opposed to USFM closing markers which are multiple characters long and are only
+ *   sometimes present.
+ * - {@link UsjAttributeKeyLocation} - when the attribute whose key is being pointed to is an attribute
+ *   marker in USFM, the `keyOffset` does not apply to the USJ attribute name (e.g. `altnumber`) but
+ *   to the USFM attribute marker name (e.g. `ca`).
+ * - {@link UsjAttributeMarkerLocation} - attribute markers are just properties in JSON; they do not
+ *   have their own object such that they would have an opening that can be pointed to in the JSON
+ *   like they have their own opening in USFM.
+ * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
+ *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
  *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
@@ -2546,8 +2596,7 @@ export interface IUsjReaderWriter {
 	 * @param usfmLocation Location in USFM space - a book, chapter, verse, and character offset
 	 *   within the verse's USFM
 	 * @returns Object containing the USJ location within the USJ document indicated by
-	 *   `usfmLocation`. Note that if the USJ node returned is an object, it is the same object that
-	 *   is within this USJ data. So if you change it, you are changing this USJ data.
+	 *   `usfmLocation`.
 	 */
 	usfmLocationToUsjDocumentLocation(usfmLocation: UsfmLocation | SerializedVerseRef): UsjDocumentLocation;
 	/**
@@ -4511,7 +4560,43 @@ export type StackItem = {
  * be the root Usj object.
  */
 export type WorkingStack = StackItem[];
-/** Represents USJ formatted scripture with helpful utilities for working with it */
+/**
+ * Represents USJ formatted scripture with helpful utilities for working with it. Some notable
+ * features:
+ *
+ * - Find Scripture text in the USJ document
+ *
+ *   - `extractText`
+ *   - `extractTextBetweenPoints`
+ *   - `findNextLocationOfMatchingText`
+ *   - `search`
+ *   - `verseRefToNextTextLocation`
+ * - Edit the USJ document: `removeContentNodes`
+ * - Transform USJ to USFM: `toUsfm`
+ * - Transform USJ document locations to USFM locations and vice versa
+ *
+ *   - `usfmLocationToUsjDocumentLocation`
+ *   - `usjDocumentLocationToUsfmVerseLocation`
+ * - Use the version of USFM you need by passing in a custom markers map to the constructor if the
+ *   version in your USJ document is not supported by default:
+ *   {@link UsjReaderWriterOptions.markersMap}
+ *
+ * Notes:
+ *
+ * - "node" is a term used in the methods in this class that usually means an object or content string
+ *   somewhere in the USj document, either {@link Usj} or {@link MarkerContent}. However, in specific
+ *   situations, it may refer only to {@link MarkerObject} or {@link MarkerContent}. The TypeScript
+ *   types indicate when this is the case.
+ * - See {@link UsfmLocation} and {@link UsjDocumentLocation} for information about transforming USFM
+ *   locations and USJ locations including what kinds of USFM locations are and are not
+ *   representable in USJ locations, which USJ locations actually correspond to something in USJ,
+ *   etc.
+ * - It is best to reuse the same `UsjReaderWriter` for the same USJ document as long as possible
+ *   because there is a significant amount of processing and caching done internally to facilitate
+ *   various operations. Note that, if the USJ document added to `UsjReaderWriter` changes, you must
+ *   run `usjChanged` to clear the internal caches and receive accurate results from future method
+ *   calls
+ */
 export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly usj;
 	private readonly markersMap;
@@ -4522,6 +4607,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private usfmInternal;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
+	private static areUsjVersionsCompatible;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
 	/**
@@ -4565,22 +4651,26 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 */
 	findAllNotes(): MarkerObject[];
 	/**
-	 * Look through the USJ document for a token matching some condition
+	 * Look through the USJ document for a node or the closing of a node matching some condition. This
+	 * will run `searchFunction` for `node`, all nodes encountered in `node.contents` (recursively),
+	 * when `node` closes, and all nodes after `node`
 	 *
-	 * @param token Token from which to start looking
-	 * @param workingStack Working stack pointing to this token (should not include this token)
-	 * @param skipTypes List of marker types to skip
-	 * @param searchFunction Function that tokens will be passed into to determine if they are the
-	 *   correct token. Stops searching and returns the token if this function returns `true`
-	 * @returns Token matching condition tested by the search function
+	 * @param node Node from which to start looking
+	 * @param workingStack Working stack pointing to this node (should not include this node)
+	 * @param skipTypes List of marker types to skip (skips all contents of skipped markers)
+	 * @param searchFunction Function that nodes and representations of the closing of nodes will be
+	 *   passed into to determine if they are the correct node or representation of the closing of a
+	 *   node. Stops searching and returns the node/close if this function returns `true`
+	 * @returns Node or representation of the closing of a node matching condition tested by the
+	 *   search function
 	 */
-	private static findNextMatchingTokenUsingWorkingStack;
+	private static findNextMatchingNodeOrClosingFragmentUsingWorkingStack;
 	/**
 	 * Look through the USJ document for a node matching some condition
 	 *
 	 * @param node Node from which to start looking
 	 * @param workingStack Working stack pointing to this node (should not include this node)
-	 * @param skipTypes List of marker types to skip
+	 * @param skipTypes List of marker types to skip (skips all contents of skipped markers)
 	 * @param searchFunction Function that nodes will be passed into to determine if they are the
 	 *   correct node. Stops searching and returns the node if this function returns `true`
 	 * @returns Node matching condition tested by the search function
@@ -4605,13 +4695,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 */
 	private getIndexInUsfmForVerseRef;
 	/**
-	 * Gets the verse ref that the provided index in USFM is in. Finds the closest verse ref before
-	 * the index in USFM.
-	 *
-	 * WARNING: This does not include the verse range if there is one for this verse. If you need it,
-	 * consider adding it in here (see {@link UsjReaderWriter.usjDocumentLocationToUsfmVerseLocation}).
-	 * It's not already in here because then we would have to run
-	 * {@link UsjReaderWriter.getIndexInUsfmForVerseRef} twice unless we did a refactor.
+	 * Gets the verse ref that the provided index in USFM is in (including verse range if applicable).
+	 * Finds the closest verse ref before the index in USFM.
 	 */
 	private getVerseRefForIndexInUsfm;
 	usfmLocationToUsjNodeAndDocumentLocation(usfmLocation: UsfmLocation | SerializedVerseRef): UsjNodeAndDocumentLocation;
@@ -4731,8 +4816,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *
 	 * @param usfm The USFM string to add the marker to
 	 * @param marker The opening or closing marker to add to the USFM
-	 * @param tokenParent Parent of the marker being added. Used to determine if this marker is nested
-	 *   within another marker of the same type
+	 * @param markerParent Parent of the marker being added. Used to determine if this marker is
+	 *   nested within another marker of the same type
 	 * @param fragmentsInfo The array of fragment information built so far for the USFM string passed
 	 *   in. THIS METHOD WILL MODIFY THE ARRAY PASSED IN; it will add new fragments that correspond to
 	 *   the marker added.
@@ -4800,14 +4885,29 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   OF THIS ARRAY ARE REMOVED IN THIS METHOD
 	 * @param workingStack Current working stack
 	 * @param position Object containing properties describing where in the USFM document these
-	 *   fragments are. PROPERTIES ON THIS OBJECT ARE MODIFIED IN THIS METHOD
+	 *   fragments are. If this method encounters a verse range, only the starting verse number is
+	 *   used (hence this is not a {@link SerializedVerseRef}). PROPERTIES ON THIS OBJECT ARE MODIFIED
+	 *   IN THIS METHOD
 	 * @param fragmentsByIndexInUsfm Map to add fragment information to
-	 * @param indicesInUsfmByVerseRef Map to add verse start locations to
+	 * @param indicesInUsfmByVerseRef Map to add verse start locations to. If this method encounters a
+	 *   verse range, only the starting verse number is used. See {@link IndicesInUsfmByVerseRef} for
+	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
+	 *   do.
 	 */
 	private static transferFragmentsInfoArrayToMaps;
+	/**
+	 * Generates USFM representation of the USJ document passed in and returns it along with
+	 * information about how various locations in USFM and USJ map to each other
+	 */
 	private calculateUsfmProperties;
+	/** The USFM representation of the USJ document passed in */
 	private get usfm();
+	/** Fragments at each index in the USFM string */
 	private get fragmentsByIndexInUsfm();
+	/**
+	 * String index of the start of each verse (the backslash on the verse marker) in the USFM
+	 * representation of the USJ document. See {@link IndicesInUsfmByVerseRef} for more information.
+	 */
 	private get indicesInUsfmByVerseRef();
 }
 /** Possible status of a comment/note as defined in Paratext 9 */
