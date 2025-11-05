@@ -301,9 +301,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     const { markersMap: providedMarkersMap, shouldAllowInvisibleCharacters } = options ?? {};
 
+    // If they passed in a markers map, use it
     if (providedMarkersMap) {
       this.markersMap = providedMarkersMap;
 
+      // Warn if the passed in markers map is not compatible
       if (!UsjReaderWriter.areUsjVersionsCompatible(this.usj.version, this.markersMap.version))
         console.warn(
           `Warning: USJ provided has version ${
@@ -312,21 +314,16 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             this.markersMap.version
           }. This may cause unexpected issues when transforming between formats.`,
         );
-    } else {
-      // Use a built-in markers map based on the USJ version
-
-      // Get the USJ version from the USJ. The `Usj` type doesn't realize you can have a different
-      // version from 3.1, but it can have whatever version in it
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const usjVersion = this.usj.version as string;
-
-      if (UsjReaderWriter.areUsjVersionsCompatible(usjVersion, USFM_MARKERS_MAP_3_0.version))
-        this.markersMap = USFM_MARKERS_MAP_3_0;
-      else
-        throw new Error(
-          'USJ version is not 3.0 or 3.0.x! Not equipped to handle yet without passing in a markers map',
-        );
     }
+    // They didn't pass in a markers map, so try to use a built-in markers map matching the USJ version
+    else if (
+      UsjReaderWriter.areUsjVersionsCompatible(this.usj.version, USFM_MARKERS_MAP_3_0.version)
+    )
+      this.markersMap = USFM_MARKERS_MAP_3_0;
+    else
+      throw new Error(
+        'USJ version is not 3.0 or 3.0.x! Not equipped to handle yet without passing in a markers map',
+      );
 
     if (!this.markersMap.markersMapVersion.startsWith('1.'))
       throw new Error(
@@ -2203,7 +2200,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (markerUsfmOutput.startsWith('\n')) {
       if (usfmOutput.length === 0) {
         // If the USFM is empty, don't add a newline at the start
-        markerFragmentsInfo.map((fragmentInfo) => ({
+        markerFragmentsInfo = markerFragmentsInfo.map((fragmentInfo) => ({
           ...fragmentInfo,
           indexInUsfm: fragmentInfo.indexInUsfm - 1,
         }));
