@@ -1,7 +1,7 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Card } from '@/components/shadcn-ui/card';
-import { getFormatCallerFunction, LocalizedStringValue } from 'platform-bible-utils';
+import { getFormatCallerFunction, LocalizedStringValue, LocalizeKey } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
@@ -11,7 +11,7 @@ import { FootnoteListProps } from './footnotes.types';
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component
  */
-export const FOOTNOTE_LIST_STRING_KEYS = Object.freeze(['%webView_footnoteList_header%'] as const);
+export const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[] = ['%webView_footnoteList_header%'];
 
 export type FootnoteListLocalizedStrings = {
   [localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
@@ -35,6 +35,7 @@ const localizeString = (
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
   className,
+  classNameForItems,
   footnotes,
   layout = 'horizontal',
   listId,
@@ -103,7 +104,7 @@ export function FootnoteList({
       >
         <div
           className={cn(
-            'tw-p-0.5',
+            'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
             layout === 'horizontal' ? 'tw-table' : 'tw-flex tw-flex-col tw-gap-1',
             !suppressFormatting && 'formatted-font',
           )}
@@ -124,11 +125,19 @@ export function FootnoteList({
                 tabIndex={-1}
                 className={cn(
                   'data-[state=selected]:tw-bg-muted',
-                  onFootnoteSelected && 'tw-cursor-pointer hover:tw-bg-muted/50',
-                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-py-0 tw-shadow-none',
+                  onFootnoteSelected && 'hover:tw-bg-muted/50',
+                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
+                  'focus:tw-outline-none focus-visible:tw-outline-none',
+                  /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
+                     that looks great in Storybook. However, the left edge of the ring is clipped in
+                     P.B app. These are similar, but not identical to, the customizations made in
+                     our shadcn table component.
+                  */
+                  'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
                   layout === 'horizontal'
                     ? 'horizontal tw-table-row'
                     : 'vertical tw-block tw-text-sm',
+                  classNameForItems,
                 )}
                 onClick={() => handleFootnoteClick(footnote, idx)}
               >
