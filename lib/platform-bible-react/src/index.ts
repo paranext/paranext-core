@@ -48,6 +48,8 @@ export type {
 } from './components/advanced/footnotes/footnotes.types';
 export {
   default as FootnoteEditor,
+  FOOTNOTE_EDITOR_STRING_KEYS,
+  type FootnoteEditorLocalizedStrings,
   type FootnoteEditorProps,
 } from './components/advanced/footnotes/footnote-editor.component';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';

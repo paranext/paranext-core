@@ -8,6 +8,10 @@
     "en": {
       "%mainMenu_openPlatformScriptureEditor%": "Open Scripture Editor",
       "%mainMenu_openPlatformResourceViewer%": "Open Resource Viewer",
+      "%footnoteEditor_callerDropdown_label%": "Footnote caller",
+      "%footnoteEditor_callerDropdown_item_generated%": "Auto-generated",
+      "%footnoteEditor_callerDropdown_item_hidden%": "Hidden",
+      "%footnoteEditor_callerDropdown_item_custom%": "Custom",
       "%webView_platformScriptureEditor_edit%": "Edit",
       "%webView_platformScriptureEditor_options%": "Options",
       "%webView_platformScriptureEditor_tools%": "Tools",
