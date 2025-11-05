@@ -18,6 +18,8 @@ const footnoteRowHeightPx = 20; // DOM says 32, and yet at 20, a full row is vis
 const minimumEditorHeightPx = 60; // This has to account for toolbar height + some text.
 const footnoteHeaderWidthPx = 50;
 const minimumEditorWidthPx = 100;
+const minimumFootnotesPaneWidthPercent = 10;
+const maximumFootnotesPaneWidthPercent = 50;
 
 export type FootnotesLayoutProps = PropsWithChildren<{
   usj: Usj;
@@ -155,8 +157,8 @@ export function FootnotesLayout({
       : getPaneSizeLimits(containerWidth, {
           secondaryPaneMinSizePx: footnoteHeaderWidthPx,
           mainPaneMinSizePx: minimumEditorWidthPx,
-          absoluteMinPercent: 10,
-          absoluteMaxPercent: 50,
+          absoluteMinPercent: minimumFootnotesPaneWidthPercent,
+          absoluteMaxPercent: maximumFootnotesPaneWidthPercent,
         });
 
   // Make sure the calculated range accommodates the current saved size. There is an off-chance this
