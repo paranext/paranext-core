@@ -122,6 +122,98 @@ type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
+type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
+type CommentType = "Unspecified" | "Normal" | "Conflict";
+type LegacyComment = {
+	/** Present in a note when it has been assigned to a particular user */
+	assignedUser?: string;
+	/** Present when there is a Biblical Term Id associated with the note */
+	biblicalTermId?: string;
+	/**
+	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
+	 * message when displaying the note.
+	 */
+	conflictType?: string;
+	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
+	contents: string;
+	/**
+	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
+	 * after the selection.
+	 */
+	contextAfter?: string;
+	/**
+	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
+	 * before the selection.
+	 */
+	contextBefore?: string;
+	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
+	date: string;
+	/** True if the comment has been deleted */
+	deleted: boolean;
+	/** Additional information for the note header, added for Biblical Term notes. */
+	extraHeadingInfo?: string;
+	/** Present in a comment to hide the note when showing notes in teh Scripture text windows. */
+	hideInTextWindow: boolean;
+	/** Unique id of the comment, unchanged by subsequent editing */
+	id: string;
+	/** Language of note */
+	language: string;
+	/** Present in a note when it has been assigned to reply-to a particular user */
+	replyToUser?: string;
+	/** Text which was selected in comment, or "" for none */
+	selectedText?: string;
+	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
+	shared?: string;
+	/** Approximate position where the comment begins. Zero for attached to a verse. */
+	startPosition: number;
+	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
+	status?: string;
+	/** Tags added in this note, joined with (',') */
+	tagAdded?: string;
+	/** Tags removed in this note, joined with (',') */
+	tagRemoved?: string;
+	/** Guid of the thread of comments */
+	thread: string;
+	/**
+	 * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have type
+	 * "conflict."
+	 */
+	type?: string;
+	/** Name of the user who created this comment */
+	user: string;
+	/** Original USFM content of verse */
+	verse?: string;
+	/** Verse reference in which comment appears */
+	verseRef: string;
+};
+type LegacyCommentThread = {
+	/** Thread identifier (from first comment) */
+	id: string;
+	/** All comments in this thread */
+	comments: LegacyComment[];
+	/** Thread status (aggregated from most recent non-Unspecified comment) */
+	status: CommentStatus;
+	/** Thread type (from first comment) */
+	type: CommentType;
+	/** User to whom the thread is assigned */
+	assignedUser: string;
+	/** User to reply to */
+	replyToUser: string;
+	/** Last modified date (ISO 8601 string) */
+	modifiedDate: string;
+	/** Scripture reference for this thread */
+	verseRef: string;
+	/** Name of the context scripture text */
+	contextScrTextName?: string;
+	/** Whether this is a spelling note */
+	isSpellingNote: boolean;
+	/** Whether this is a back translation note */
+	isBTNote: boolean;
+	/** Whether this is a consultant note */
+	isConsultantNote: boolean;
+	/** Biblical term ID if this is a biblical term note */
+	biblicalTermId?: string;
+};
 /**
  * Object containing all keys used for localization in the BookChapterControl component. If you're
  * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -265,101 +357,9 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
-type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
-type CommentType = "Unspecified" | "Normal" | "Conflict";
-type LegacyComment = {
-	/** Present in a note when it has been assigned to a particular user */
-	assignedUser?: string;
-	/** Present when there is a Biblical Term Id associated with the note */
-	biblicalTermId?: string;
-	/**
-	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-	 * message when displaying the note.
-	 */
-	conflictType?: string;
-	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
-	contents: string;
-	/**
-	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
-	 * after the selection.
-	 */
-	contextAfter?: string;
-	/**
-	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
-	 * before the selection.
-	 */
-	contextBefore?: string;
-	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
-	date: string;
-	/** True if the comment has been deleted */
-	deleted: boolean;
-	/** Additional information for the note header, added for Biblical Term notes. */
-	extraHeadingInfo?: string;
-	/** Present in a comment to hide the note when showing notes in teh Scripture text windows. */
-	hideInTextWindow: boolean;
-	/** Unique id of the comment, unchanged by subsequent editing */
-	id: string;
-	/** Language of note */
-	language: string;
-	/** Present in a note when it has been assigned to reply-to a particular user */
-	replyToUser?: string;
-	/** Text which was selected in comment, or "" for none */
-	selectedText?: string;
-	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
-	shared?: string;
-	/** Approximate position where the comment begins. Zero for attached to a verse. */
-	startPosition: number;
-	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
-	status?: string;
-	/** Tags added in this note, joined with (',') */
-	tagAdded?: string;
-	/** Tags removed in this note, joined with (',') */
-	tagRemoved?: string;
-	/** Guid of the thread of comments */
-	thread: string;
-	/**
-	 * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have type
-	 * "conflict."
-	 */
-	type?: string;
-	/** Name of the user who created this comment */
-	user: string;
-	/** Original USFM content of verse */
-	verse?: string;
-	/** Verse reference in which comment appears */
-	verseRef: string;
-};
-type CommentThread = {
-	/** Thread identifier (from first comment) */
-	id: string;
-	/** All comments in this thread */
-	comments: LegacyComment[];
-	/** Thread status (aggregated from most recent non-Unspecified comment) */
-	status: CommentStatus;
-	/** Thread type (from first comment) */
-	type: CommentType;
-	/** User to whom the thread is assigned */
-	assignedUser: string;
-	/** User to reply to */
-	replyToUser: string;
-	/** Last modified date (ISO 8601 string) */
-	modifiedDate: string;
-	/** Scripture reference for this thread */
-	verseRef: string;
-	/** Name of the context scripture text */
-	contextScrTextName?: string;
-	/** Whether this is a spelling note */
-	isSpellingNote: boolean;
-	/** Whether this is a back translation note */
-	isBTNote: boolean;
-	/** Whether this is a consultant note */
-	isConsultantNote: boolean;
-	/** Biblical term ID if this is a biblical term note */
-	biblicalTermId?: string;
-};
 export interface CommentListProps {
 	className?: string;
-	threads: CommentThread[];
+	threads: LegacyCommentThread[];
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
 }
