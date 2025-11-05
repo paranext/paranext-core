@@ -23,7 +23,9 @@ import {
   usjWeb,
 } from '@/components/demo/scripture-editor/usj.data';
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
-import FootnoteEditor from '@/components/advanced/footnotes/footnote-editor.component';
+import FootnoteEditor, {
+  FootnoteEditorLocalizedStrings,
+} from '@/components/advanced/footnotes/footnote-editor.component';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
@@ -273,6 +275,13 @@ export const CustomMarkerTrigger: Story = {
   },
 };
 
+const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
+  '%footnoteEditor_callerDropdown_label%': 'Footnote caller',
+  '%footnoteEditor_callerDropdown_item_generated%': 'Auto-generated',
+  '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
+  '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
+};
+
 export const FootnoteEditorView: Story = {
   render: (args) => {
     // eslint-disable-next-line no-null/no-null
@@ -290,6 +299,7 @@ export const FootnoteEditorView: Story = {
     const viewOptions = useMemo<ViewOptions>(
       () => ({
         markerMode: 'hidden',
+        noteMode: 'collapsed',
         hasSpacing: true,
         isFormattedFont: true,
       }),
@@ -362,6 +372,7 @@ export const FootnoteEditorView: Story = {
               onClose={onEditorClose}
               scrRef={args.scrRef ?? defaultScrRef}
               viewOptions={viewOptions}
+              localizedStrings={sampleFootnoteEditorLocalizedStrings}
             />
           </PopoverContent>
         </Popover>

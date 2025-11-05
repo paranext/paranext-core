@@ -628,6 +628,20 @@ export interface FootnoteListProps {
 	/** Callback to handle clicking/selecting a footnote in the list */
 	onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
 }
+/**
+ * Object containing all keys used for localization in the FootnoteEditor component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
+	"%footnoteEditor_callerDropdown_label%",
+	"%footnoteEditor_callerDropdown_item_generated%",
+	"%footnoteEditor_callerDropdown_item_hidden%",
+	"%footnoteEditor_callerDropdown_item_custom%"
+];
+export type FootnoteEditorLocalizedStrings = {
+	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]?: string;
+};
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
 	/** Delta ops for the current note being edited that are applied to the note editorial */
@@ -645,6 +659,8 @@ export interface FootnoteEditorProps {
 	noteKey: string | undefined;
 	/** View options of the parent editor */
 	viewOptions: ViewOptions;
+	/** Localized strings to be passed to the footnote editor component */
+	localizedStrings: FootnoteEditorLocalizedStrings;
 }
 /**
  * Component to edit footnotes from within the editor component
@@ -653,7 +669,7 @@ export interface FootnoteEditorProps {
  * @param parentRef The ref of the parent editor component
  * @returns
  */
-export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, viewOptions, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, viewOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /**
