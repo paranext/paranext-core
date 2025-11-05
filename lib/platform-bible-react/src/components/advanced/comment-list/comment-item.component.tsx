@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Avatar, AvatarFallback } from '@/components/shadcn-ui/avatar';
 import { cn } from '@/utils/shadcn-ui.util';
-import { formatRelativeDate } from '@/utils/date.util';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatReplacementString, formatRelativeDate } from 'platform-bible-utils';
 import { CommentItemProps } from './comment-list.types';
 
 export function CommentItem({

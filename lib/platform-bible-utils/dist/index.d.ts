@@ -2234,6 +2234,15 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
  */
 export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
 /**
+ * Formats a date relative to today, showing "Today" or "Yesterday" when applicable, otherwise
+ * returns the date in the specified format
+ *
+ * @param date The date to format
+ * @param locale The locale to use for date formatting (defaults to user's locale)
+ * @param options The Intl.DateTimeFormatOptions to use for date formatting when not today/yesterday
+ */
+export declare function formatRelativeDate(date: Date, todayString: string, yesterdayString: string, locale?: string, options?: Intl.DateTimeFormatOptions): string;
+/**
  * Modifier keys that don't constitute typed input
  *
  * Sourced from
