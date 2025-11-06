@@ -1663,6 +1663,13 @@ export interface IUsjReaderWriter {
 	 */
 	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
 }
+/**
+ * Parse Paratext specific HTML tags to standard HTML
+ *
+ * @param html - HTML string to parse
+ * @returns Parsed HTML string
+ */
+export declare function parseParatextHtml(html: string): string;
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export declare function getDefaultCallerSequence(): string[];
 /**
