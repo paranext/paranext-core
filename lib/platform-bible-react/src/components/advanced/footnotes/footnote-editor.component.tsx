@@ -5,14 +5,16 @@ import {
   EditorOptions,
   EditorRef,
   GENERATOR_NOTE_CALLER,
+  getDefaultViewOptions,
   HIDDEN_NOTE_CALLER,
-  ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ, Usj } from '@eten-tech-foundation/scripture-utilities';
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  Asterisk,
   Check,
   Copy,
   FunctionSquare,
+  Minus,
   Plus,
   SquareFunction,
   SquareSigma,
@@ -32,6 +34,13 @@ import {
   DropdownMenuRadioItem,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Input } from '@/components/shadcn-ui/input';
+import {
+  Tooltip,
+  TooltipProvider,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/shadcn-ui/tooltip';
+import { formatReplacementString } from 'platform-bible-utils';
 
 /**
  * Object containing all keys used for localization in the FootnoteEditor component. If you're using
@@ -43,9 +52,14 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   '%footnoteEditor_callerDropdown_item_generated%',
   '%footnoteEditor_callerDropdown_item_hidden%',
   '%footnoteEditor_callerDropdown_item_custom%',
+  '%footnoteEditor_callerDropdown_tooltip%',
+  '%footnoteEditor_cancelButton_tooltip%',
+  '%footnoteEditor_copyButton_tooltip%',
   '%footnoteEditor_noteType_crossReference_label%',
   '%footnoteEditor_noteType_endNote_label%',
   '%footnoteEditor_noteType_footnote_label%',
+  '%footnoteEditor_noteType_tooltip%',
+  '%footnoteEditor_saveButton_tooltip%',
 ] as const);
 
 export type FootnoteEditorLocalizedStrings = {
@@ -68,7 +82,7 @@ export interface FootnoteEditorProps {
   /** The unique note key to identify the note being edited used to apply changes to the note */
   noteKey: string | undefined;
   /** View options of the parent editor */
-  viewOptions: ViewOptions;
+  editorOptions: EditorOptions;
   /** Localized strings to be passed to the footnote editor component */
   localizedStrings: FootnoteEditorLocalizedStrings;
 }
@@ -99,7 +113,7 @@ export default function FootnoteEditor({
   onClose,
   scrRef,
   noteKey,
-  viewOptions,
+  editorOptions,
   localizedStrings,
 }: FootnoteEditorProps) {
   // The editor ref component must be this
@@ -117,43 +131,47 @@ export default function FootnoteEditor({
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
     () => ({
-      isReadonly: false,
-      hasSpellCheck: false,
+      ...editorOptions,
+      markerMenuTrigger: editorOptions.markerMenuTrigger ?? '\\',
       hasExternalUI: true,
-      // Might need to change this later
-      textDirection: 'auto',
-      view: { ...viewOptions, noteMode: 'expanded' },
+      view: { ...(editorOptions.view ?? getDefaultViewOptions()), noteMode: 'expanded' },
     }),
-    [viewOptions],
+    [editorOptions],
   );
+
+  // Makes it so that the footnote type change tooltip doesn't automatically focus when the
+  // component opens by focusing the editor
+  useEffect(() => {
+    editorRef.current?.focus();
+  });
 
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     if (noteOps && !editorRef.current?.getUsj()?.content) {
       // Temporary fix to fix flushSync error in the console
+      // Need to cast to the actual type structure of the ops to get the caller
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const typedNoteOps = noteOps as NoteOperations[];
+      const rawCaller = typedNoteOps[0].insert.note.caller;
+      // Parses the current caller
+      let parsedCallerType: string = 'custom';
+      if (rawCaller === GENERATOR_NOTE_CALLER) {
+        parsedCallerType = 'generated';
+      } else if (rawCaller === HIDDEN_NOTE_CALLER) {
+        parsedCallerType = 'hidden';
+      } else {
+        setCustomCaller(rawCaller);
+      }
+      setCallerType(parsedCallerType);
+      setSelectedCallerType(parsedCallerType);
+      // Assigns note type
+      setNoteType(typedNoteOps[0].insert.note.style);
+      // Sets the caller to empty in the footnote editor so that it doesn't show
+      typedNoteOps[0].insert.note.caller = '';
+      // Applies timeout for the apply update operation to avoid flush sync warning
       timeout = setTimeout(() => {
-        editorRef.current?.setUsj(EMPTY_USJ);
-        // Need to cast to the actual type structure of the ops to get the caller
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const typedNoteOps = noteOps as NoteOperations[];
-        const rawCaller = typedNoteOps[0].insert.note.caller;
-        // Parses the current caller
-        let parsedCallerType: string = 'custom';
-        if (rawCaller === GENERATOR_NOTE_CALLER) {
-          parsedCallerType = 'generated';
-        } else if (rawCaller === HIDDEN_NOTE_CALLER) {
-          parsedCallerType = 'hidden';
-        } else {
-          setCustomCaller(rawCaller);
-        }
-        setCallerType(parsedCallerType);
-        setSelectedCallerType(parsedCallerType);
-        // Assigns note type
-        setNoteType(typedNoteOps[0].insert.note.style);
-        // Sets the caller to empty in the footnote editor so that it doesn't show
-        typedNoteOps[0].insert.note.caller = '';
-        editorRef.current?.applyUpdate(typedNoteOps);
+        editorRef.current?.applyUpdate([{ delete: 1 }, typedNoteOps[0]]);
       }, 0);
     }
 
@@ -205,16 +223,52 @@ export default function FootnoteEditor({
     }
   };
 
-  const renderNoteTypeIcon = () => {
+  const renderNoteTypeButtonContent = () => {
     if (noteType === 'f') {
-      return <SquareFunction />;
+      return (
+        <>
+          <SquareFunction /> {localizedStrings['%footnoteEditor_noteType_footnote_label%']}
+        </>
+      );
     }
 
     if (noteType === 'fe') {
-      return <SquareSigma />;
+      return (
+        <>
+          <SquareSigma /> {localizedStrings['%footnoteEditor_noteType_endNote_label%']}
+        </>
+      );
     }
 
-    return <SquareX />;
+    return (
+      <>
+        <SquareX /> {localizedStrings['%footnoteEditor_noteType_crossReference_label%']}
+      </>
+    );
+  };
+
+  const renderCallerButtonContent = () => {
+    if (callerType === 'generated') {
+      return (
+        <>
+          <Plus /> {localizedStrings['%footnoteEditor_callerDropdown_item_generated%']}
+        </>
+      );
+    }
+
+    if (callerType === 'hidden') {
+      return (
+        <>
+          <Minus /> {localizedStrings['%footnoteEditor_callerDropdown_item_hidden%']}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <Asterisk /> {localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}
+      </>
+    );
   };
 
   const handleNoteTypeChange = (value: string) => {
@@ -232,15 +286,18 @@ export default function FootnoteEditor({
   };
 
   const formatNoteTypeTooltip = () => {
+    if (noteType === 'x') {
+      return localizedStrings['%footnoteEditor_noteType_crossReference_label%'];
+    }
+
+    let noteTypeString = localizedStrings['%footnoteEditor_noteType_endNote_label%'];
     if (noteType === 'f') {
-      return localizedStrings['%footnoteEditor_noteType_footnote_label%'];
+      noteTypeString = localizedStrings['%footnoteEditor_noteType_footnote_label%'];
     }
 
-    if (noteType === 'fe') {
-      return localizedStrings['%footnoteEditor_noteType_endNote_label%'];
-    }
-
-    return localizedStrings['%footnoteEditor_noteType_crossReference_label%'];
+    return formatReplacementString(localizedStrings['%footnoteEditor_noteType_tooltip%'] ?? '', {
+      noteType: noteTypeString,
+    });
   };
 
   return (
@@ -248,30 +305,33 @@ export default function FootnoteEditor({
       <div className="tw-flex">
         <div className="tw-flex tw-gap-4">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                variant="outline"
-                className="tw-h-6 tw-w-6 disabled:tw-pointer-events-auto"
-                disabled={noteType === 'x'}
-                title={formatNoteTypeTooltip()}
-              >
-                {renderNoteTypeIcon()}
-              </Button>
-            </DropdownMenuTrigger>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="tw-h-6 disabled:tw-pointer-events-auto"
+                      disabled={noteType === 'x'}
+                    >
+                      {renderNoteTypeButtonContent()}
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{formatNoteTypeTooltip()}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {noteType !== 'x' && (
               <DropdownMenuContent className="tw-z-[300]">
                 <DropdownMenuRadioGroup value={noteType} onValueChange={handleNoteTypeChange}>
                   <DropdownMenuRadioItem value="fe" className="tw-gap-2">
-                    <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
-                      <SquareSigma />
-                    </Button>
+                    <SquareSigma />
                     <span>{localizedStrings['%footnoteEditor_noteType_footnote_label%']}</span>
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="f" className="tw-gap-2">
-                    <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
-                      <FunctionSquare />
-                    </Button>
+                    <FunctionSquare />
                     <span>{localizedStrings['%footnoteEditor_noteType_endNote_label%']}</span>
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
@@ -279,11 +339,20 @@ export default function FootnoteEditor({
             )}
           </DropdownMenu>
           <DropdownMenu onOpenChange={handleDropdownOpenChange}>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
-                <Plus />
-              </Button>
-            </DropdownMenuTrigger>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="tw-h-6">
+                      {renderCallerButtonContent()}
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {localizedStrings['%footnoteEditor_callerDropdown_tooltip%']}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <DropdownMenuContent className="tw-z-[300]">
               <DropdownMenuLabel>
                 {localizedStrings['%footnoteEditor_callerDropdown_label%']}
@@ -323,12 +392,35 @@ export default function FootnoteEditor({
           </DropdownMenu>
         </div>
         <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
-          <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
-            <X />
-          </Button>
-          <Button onClick={handleSave} className="tw-h-6 tw-w-6" size="icon" variant="default">
-            <Check />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
+                  <X />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSave}
+                  className="tw-h-6 tw-w-6"
+                  size="icon"
+                  variant="default"
+                >
+                  <Check />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       <div
@@ -343,9 +435,18 @@ export default function FootnoteEditor({
           ref={editorRef}
         />
         <div className="tw-absolute tw-bottom-0 tw-right-0">
-          <Button onClick={handleCopy} className="tw-h-6 tw-w-6" variant="ghost" size="icon">
-            <Copy />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleCopy} className="tw-h-6 tw-w-6" variant="ghost" size="icon">
+                  <Copy />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{localizedStrings['%footnoteEditor_copyButton_tooltip%']}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
     </div>

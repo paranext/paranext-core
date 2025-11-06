@@ -1,5 +1,9 @@
-/* By default the editor is too tall for the footnote editor, even while empty, so this makes it 
+/* By default the editor is too tall for the footnote editor, even while empty, so this makes it
    shorter. */
 .footnote-editor .editor-input {
   min-height: 75px;
+}
+
+.footnote-editor .typeahead-popover {
+  z-index: 300;
 }
