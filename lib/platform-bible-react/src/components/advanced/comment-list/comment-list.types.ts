@@ -4,6 +4,7 @@ import {
   LegacyComment,
   LegacyCommentThread,
 } from 'platform-bible-utils';
+import { MouseEvent } from 'react';
 
 /**
  * Object containing all keys used for localization in the CommentList component. If you're using
@@ -70,4 +71,8 @@ export interface CommentItemProps {
   localizedStrings: LanguageStrings;
   /** Whether the thread is expanded */
   isThreadExpanded?: boolean;
+  /** Handler for clicking the comment text */
+  handleClickCommentText?: (event: MouseEvent<HTMLDivElement>) => void;
+  /** Handler for mousedown on the comment text */
+  handleMouseDownCommentText?: (event: MouseEvent<HTMLDivElement>) => void;
 }

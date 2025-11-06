@@ -10,6 +10,8 @@ export function CommentItem({
   isReply = false,
   localizedStrings,
   isThreadExpanded = false,
+  handleClickCommentText,
+  handleMouseDownCommentText,
 }: CommentItemProps) {
   const displayDate = useMemo(() => {
     const date = new Date(comment.date);
@@ -55,18 +57,34 @@ export function CommentItem({
         </Avatar>
         <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
           <div className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
-            <p className="tw-text-sm tw-font-medium">{userLabel}</p>
-            <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
+            {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+            <p
+              className="tw-text-sm tw-font-medium"
+              onClick={handleClickCommentText}
+              onMouseDown={handleMouseDownCommentText}
+            >
+              {userLabel}
+            </p>
+            {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
+            <p
+              className="tw-text-xs tw-font-normal tw-text-muted-foreground"
+              onClick={handleClickCommentText}
+              onMouseDown={handleMouseDownCommentText}
+            >
+              {displayDate}
+            </p>
           </div>
-          {/* Needed to prevent highlighting text in a comment from triggering parent click event that de-selects & collapses the comment thread */}
+          {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div
             className="tw-flex tw-flex-row tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground"
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
+            onClick={handleClickCommentText}
+            onMouseDown={handleMouseDownCommentText}
           >
             <MarkdownRenderer
-              className={cn('tw-text-sm tw-font-normal tw-text-primary')}
+              className="tw-text-sm tw-font-normal tw-text-primary"
               markdown={comment.contents}
               truncate={!isThreadExpanded}
             />

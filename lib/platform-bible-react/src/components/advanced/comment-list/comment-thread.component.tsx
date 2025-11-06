@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { formatReplacementString } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, MouseEvent, useCallback } from 'react';
 import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
@@ -73,6 +73,29 @@ export function CommentThread({
     [replyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
   );
 
+  const handleClickThreadText = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (isSelected) {
+        // When expanded, prevent parent click only if user is selecting text
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) {
+          event.stopPropagation();
+        }
+      }
+    },
+    [isSelected],
+  );
+
+  const handleMouseDownThreadText = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (isSelected) {
+        // When expanded, always prevent mousedown propagation to allow text selection
+        event.stopPropagation();
+      }
+    },
+    [isSelected],
+  );
+
   return (
     <Card
       role="option"
@@ -81,7 +104,7 @@ export function CommentThread({
       className={cn(
         'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         {
-          'tw-bg-slate-50 hover:tw-shadow-md': !isSelected,
+          'tw-cursor-pointer tw-bg-slate-50 hover:tw-shadow-md': !isSelected,
         },
         { 'tw-bg-background': isSelected },
       )}
@@ -93,18 +116,29 @@ export function CommentThread({
       <CardContent className="tw-space-y-4 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
           {localizedAssignedToText && (
-            <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
+            <Badge
+              onClick={handleClickThreadText}
+              onMouseDown={handleMouseDownThreadText}
+              className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input"
+            >
               {localizedAssignedToText}
             </Badge>
           )}
           <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-baseline tw-gap-2">
+            {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
             <p
               ref={verseTextRef}
-              className={`tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal tw-text-muted-foreground ${
-                isVerseExpanded
-                  ? 'tw-overflow-visible tw-text-clip tw-whitespace-normal tw-break-words'
-                  : 'tw-whitespace-nowrap'
-              } tw-flex-1`}
+              className={cn(
+                'tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal tw-text-muted-foreground',
+                {
+                  'tw-overflow-visible tw-text-clip tw-whitespace-normal tw-break-words':
+                    isVerseExpanded,
+                },
+                { 'tw-whitespace-nowrap': !isVerseExpanded },
+              )}
+              onClick={handleClickThreadText}
+              onMouseDown={handleMouseDownThreadText}
             >
               {verseRef} {firstComment.verse}
             </p>
@@ -129,6 +163,8 @@ export function CommentThread({
                 comment={firstComment}
                 localizedStrings={localizedStrings}
                 isThreadExpanded={isSelected}
+                handleClickCommentText={handleClickThreadText}
+                handleMouseDownCommentText={handleMouseDownThreadText}
               />
             </div>
             {isSelected && threadStatus !== 'Resolved' && (
@@ -164,6 +200,8 @@ export function CommentThread({
                     localizedStrings={localizedStrings}
                     isReply
                     isThreadExpanded={isSelected}
+                    handleClickCommentText={handleClickThreadText}
+                    handleMouseDownCommentText={handleMouseDownThreadText}
                   />
                 </div>
               ))}

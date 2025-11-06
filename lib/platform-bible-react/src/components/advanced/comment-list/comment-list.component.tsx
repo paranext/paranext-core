@@ -18,11 +18,11 @@ export default function CommentList({
   }));
 
   const handleKeyboardSelectThread = useCallback((option: ListboxOption) => {
-    setSelectedThreadId((prevId) => (prevId === option.id ? undefined : option.id));
+    setSelectedThreadId(option.id);
   }, []);
 
   const handleSelectThread = useCallback((threadId: string) => {
-    setSelectedThreadId((prevId) => (prevId === threadId ? undefined : threadId));
+    setSelectedThreadId(threadId);
   }, []);
 
   const { listboxRef, activeId, handleKeyDown } = useListbox({
