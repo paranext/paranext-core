@@ -134,7 +134,7 @@ type LegacyComment = {
 	 * message when displaying the note.
 	 */
 	conflictType?: string;
-	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
+	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
 	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
@@ -365,8 +365,11 @@ export interface CommentListProps {
 	threads: LegacyCommentThread[];
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
-	/** Handler for adding a comment to a thread */
-	handleAddComment: (threadId: string, contents: string) => void;
+	/**
+	 * Handler for adding a comment to a thread. If successful, returns the auto-generated comment ID
+	 * (format: "threadId/userName/date"). Otherwise, returns undefined.
+	 */
+	handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
 	/** Handler for resolving the comment thread */
 	handleResolveCommentThread: (threadId: string) => void;
 }
