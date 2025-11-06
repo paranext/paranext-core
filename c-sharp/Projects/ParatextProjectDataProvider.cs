@@ -1003,6 +1003,56 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             scrText,
             scrText.ScrStylesheet(verseRef.BookNum),
             usfmData,
+            // We should convert with "forExport" because of some of the following differences
+            // between for and not for export:
+            // - not for export
+            //   - sid, eid, and vid derived metadata is absent
+            //   - char marker with `link-href` attribute gets changed to `link` marker type, which
+            // `   is an internal Paratext marker used for detecting where to put link anchors
+            //   - figure `src` attribute stays `src` instead of changing to `file` which is the
+            //     name of this attribute in USX/USJ
+            // - for export
+            //   - sid, eid, and vid derived metadata is present (not really important for us, most
+            //     likely)
+            //   - char markers with `link-href` attribute stay normal and don't get changed
+            //     (important for us because we don't want to pass around this non-standard `link`
+            //     marker type)
+            //   - figure `src` attribute appropriately changes to `file` (important)
+            //
+            // Note: it appears UsfmToUsx.ConvertToXmlDocument wasn't particularly written for
+            // exporting one chapter at a time. When exporting any chapter after chapter 1, the sid,
+            // eid, and vid attributes will be missing the book ID (for chapter markers) or be
+            // completely empty (for verse and para markers). This happens because the parser state
+            // verse ref doesn't get set up right because we're just getting the chapter; it doesn't
+            // see the book ID because the id marker is not in chapters after chapter 1. We may need
+            // to change ParatextData.dll if we ever actually need these to be right. Probably need
+            // to pass a VerseRef with the right book ID into the third parameter of
+            // `new UsfmParserState(...)` in `UsfmToUsx.RunConverter`.
+            // TJ doesn't think this really matters for us, but we can fix it one day if we find we
+            // need to.
+            //
+            // Note: `xt` markers get `ref`s wrapped around their contents in `JumpDecorater.cs`,
+            // used in `ExportUsxForm.cs`. `JumpDecorater.cs` also makes independent `ref` markers
+            // get properly translated to USX as `ref`-type markers as well. This seems nice for
+            // accurately translating to USX; however, TJ thinks we should not do this right now
+            // because Paratext 9.4 always removes `ref`-type markers when transforming to USFM. It
+            // does not support adding the `gen` attribute to generated `ref`s or only removing
+            // `ref`s with `gen` attribute, so there is no way to know which `ref`s to automatically
+            // remove and which to preserve when transforming back to USFM. Hopefully, when Paratext
+            // supports 3.1+, this whole situation will be fixed, and we won't need to worry about
+            // accidentally deleting user data.
+            // - Without `JumpDecorater.cs`, we can preserve USFM `ref`s because of the following:
+            //   - unclosed `ref` markers get set to `para` type because they are unknown
+            //   - closed `ref` markers get split into `para` type for opening and `unmatched` for
+            //     closing because `ref` is unknown as they are not in USFM 3.0
+            // - With `JumpDecorater.cs`, we cannot preserve USFM `ref`s because `ref`s are removed
+            //   when importing USX into USFM because `ref` marker is not in USFM 3.0 and therefore
+            //   Paratext always removes them regardless of `gen` attribute:
+            //   - unclosed `ref` markers get set to `char` type because the `ref` marker gets added
+            //     as a `char`-type marker in `JumpDecorater.cs` (these probably
+            //     would round trip; just including this as a note about the differences)
+            //   - closed `ref` markers get transformed into normal `ref` markers (this causes these
+            //     markers to be removed when importing back into USFM)
             true
         );
         return xmlDoc.OuterXml;
