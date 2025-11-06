@@ -2943,6 +2943,20 @@ export interface IUsjReaderWriter {
 	 */
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
+/**
+ * Parse Paratext specific HTML tags to standard HTML
+ *
+ * @param html - HTML string to parse
+ * @returns Parsed HTML string
+ */
+export declare function parseParatextHtml(html: string): string;
+/**
+ * Sanitizes HTML content to prevent security risks while preserving safe formatting.
+ *
+ * @param html - The HTML string to sanitize
+ * @returns Sanitized HTML string safe for rendering
+ */
+export declare function sanitizeHtml(html: string): string;
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export declare function getDefaultCallerSequence(): string[];
 /**
@@ -5300,7 +5314,7 @@ export type LegacyComment = {
 	 * message when displaying the note.
 	 */
 	conflictType?: string;
-	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
+	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
 	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
