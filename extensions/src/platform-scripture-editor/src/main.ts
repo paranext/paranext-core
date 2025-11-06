@@ -63,7 +63,7 @@ async function openPlatformScriptureEditor(
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
-  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(false, projectId, existingTabIdToReplace, options);
 }
 
@@ -73,7 +73,7 @@ async function openPlatformResourceViewer(
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
-  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
@@ -185,7 +185,67 @@ async function open(
   return undefined;
 }
 
-/** Simple web view provider that provides Resource web views when papi requests them */
+async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.toggleFootnotesPaneVisibility();
+}
+
+async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.changeFootnotesPaneLocation();
+}
+
+/** Simple WebView provider so PAPI can get a Scripture Editor upon request */
 class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
   constructor() {
     super(scriptureEditorWebViewType);
@@ -197,7 +257,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== scriptureEditorWebViewType)
       throw new Error(
-        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
@@ -260,7 +320,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async selectRange(range) {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
@@ -354,7 +414,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
               if (endOffset < (range.end.offset ?? 0) - 50) {
                 logger.warn(
-                  `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
+                  `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
                 );
                 endJsonPath = startJsonPath;
                 endOffset = startOffset + 1;
@@ -396,7 +456,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -404,7 +464,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async updateDecorations(decorationsToAdd, decorationsToRemove) {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
@@ -420,7 +480,59 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async toggleFootnotesPaneVisibility() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to toggleFootnotesPaneVisibility`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'toggleFootnotesPaneVisibility',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'> {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to changeFootnotesPaneLocation`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          // Determine current location from saved state (default to 'bottom') and toggle it
+          const currentLocation = currentWebViewDefinition.state?.footnotesPanePosition ?? 'bottom';
+          const newLocation: 'bottom' | 'trailing' =
+            currentLocation === 'bottom' ? 'trailing' : 'bottom';
+
+          const message: EditorWebViewMessage = {
+            method: 'changeFootnotesPaneLocation',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+
+          // Return the new location as required by the interface
+          return newLocation;
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeFootnotesPaneLocation! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -478,7 +590,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened web view',
+          summary: 'The ID of the opened WebView',
           schema: { type: 'string' },
         },
       },
@@ -551,7 +663,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened web view',
+          summary: 'The ID of the opened WebView',
           schema: { type: 'string' },
         },
       },
@@ -568,11 +680,58 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     scriptureEditorWebViewProvider,
   );
 
+  const toggleFootnotesPanePromise = papi.commands.registerCommand(
+    'platformScripture.toggleFootnotes',
+    toggleFootnotesPane,
+    {
+      method: {
+        summary: 'Toggle the visibility of the footnotes pane',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView to toggle the footnotes pane for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
+    'platformScripture.changeFootnotesPaneLocation',
+    changeFootnotesPaneLocation,
+    {
+      method: {
+        summary: 'Toggle the location of the footnotes pane (bottom vs. side-by-side)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose footnotes pane location is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The new location of the footnotes pane',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
+    await toggleFootnotesPanePromise,
+    await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
     await annotationStyleDataProviderPromise,

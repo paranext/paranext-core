@@ -390,6 +390,7 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewType,
     checksSidePanelWebViewProvider,
   );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
