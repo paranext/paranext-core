@@ -18,7 +18,7 @@ if (!areExtensionsPresent) {
 
 const isDev = process.env.NODE_ENV !== 'production';
 const shouldGenerateSourceMaps =
-  (isDev || process.env.DEBUG_PROD) && process.env.DISABLE_SOURCE_MAPS !== 'true';
+  (isDev || process.env.DEBUG_PROD) && process.env.PT_DISABLE_SOURCE_MAPS !== 'true';
 
 /** The base directory from which webpack should operate (should be the root repo folder) */
 export const rootDir = path.resolve(__dirname, '..');
