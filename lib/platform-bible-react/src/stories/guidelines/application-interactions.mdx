@@ -38,20 +38,20 @@ Floating tabs can be docked back into the main window by dragging and dropping t
 ## Scripture reference selection
 Scripture reference selection and displaying is done using the [Book-Chapter-Verse (BCV) control](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/book-chapter-control.stories.tsx). Scripture references can be entered via mouse or keyboard. There is
 - a global BCV control on the application title bar - always showing all books
-- an in-tab BCV control on the tab toolbar of every tab that holds scripture or content relating to some part of scripture - showing only books of the project in the respective tab
+- an in-tab BCV control on the tab toolbar of every tab that holds Scripture or content relating to some part of Scripture - showing only books of the project in the respective tab
 
-All BCV controls can be used for navigation. Tabs inside Platform.Bible that hold or relate to scripture content automatically follow the selected new scriture reference.
+All BCV controls can be used for navigation. Tabs inside Platform.Bible that hold or relate to Scripture content automatically follow the selected new scriture reference.
 
 Scroll groups can be selected via the [Scroll Group Selector](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/scroll-group-selector.stories.tsx) on the end side of the tab toolbar, respectively in the center of the application title bar. When doing this on a tab, the respective tab gets disconnected from the original scroll group and now scrolls with other tabs assigned to the respective scroll group. When doing this on the application title bar, only the scroll group selection of the global BCV control switches.
 
-In future Scroll groups should be synced with other applications, like Paratext 9 and Logos.
+In future scroll groups should be synced with other applications, like Paratext 9 and Logos.
 
-## Scripture editor ↔ lists
-Following diagram shows how the scripture editor interacts with lists of items in projects / resources or list of scripture pieces.
+## Scripture Editor ↔ lists
+Following diagram shows how the Scripture Editor interacts with lists of items in projects / resources or list of Scripture pieces.
 Examples: Comments, Check Results, Find Results, Footnotes, Occurrences, etc.
 
 Interactions exist in both directions:
-- from scripture editor: `on scripture reference change`, `on annotation or caller selection`, `on command / shortcut key press`
+- from Scripture Editor: `on Scripture reference change`, `on annotation or caller selection`, `on command / shortcut key press`
 - from list: `on hover`, `on single click`, `on double click`, `on reference click`
 and respective keyboard interactions
 
