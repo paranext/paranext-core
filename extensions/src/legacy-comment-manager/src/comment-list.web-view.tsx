@@ -3,8 +3,8 @@ import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { WebViewProps } from '@papi/core';
-import { sampleComments } from './comment-sample-data';
 import { logger } from '@papi/frontend';
+import { sampleComments } from './comment-sample-data';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%no_comments%',
