@@ -59,6 +59,7 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   '%footnoteEditor_noteType_endNote_label%',
   '%footnoteEditor_noteType_footnote_label%',
   '%footnoteEditor_noteType_tooltip%',
+  '%footnoteEditor_noteTypeDropdown_label%',
   '%footnoteEditor_saveButton_tooltip%',
 ] as const);
 
@@ -325,6 +326,10 @@ export default function FootnoteEditor({
             </TooltipProvider>
             {noteType !== 'x' && (
               <DropdownMenuContent className="tw-z-[300]">
+                <DropdownMenuLabel>
+                  {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 <DropdownMenuRadioGroup value={noteType} onValueChange={handleNoteTypeChange}>
                   <DropdownMenuRadioItem value="fe" className="tw-gap-2">
                     <SquareSigma />

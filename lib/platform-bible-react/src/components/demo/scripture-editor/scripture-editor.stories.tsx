@@ -287,6 +287,7 @@ const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
   '%footnoteEditor_noteType_endNote_label%': 'Endnote',
   '%footnoteEditor_noteType_footnote_label%': 'Footnote',
   '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
+  '%footnoteEditor_noteTypeDropdown_label%': 'Type',
   '%footnoteEditor_saveButton_tooltip%': 'Save',
 };
 
@@ -295,8 +296,6 @@ export const FootnoteEditorView: Story = {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
-    // const [noteKey, setNoteKey] = useState<string>();
-    // const [noteOps, setNoteOps] = useState<DeltaOp[]>();
     const noteKey = useRef<string>();
     const noteOps = useRef<DeltaOp[]>();
 
@@ -338,8 +337,6 @@ export const FootnoteEditorView: Story = {
               // (event as SyntheticEvent<)
               if (noteKey.current) return;
 
-              // setNoteKey(noteNodeKey);
-              // setNoteOps(getNoteOps());
               noteKey.current = noteNodeKey;
               noteOps.current = getNoteOps();
               setShowFootnoteEditor(true);
@@ -351,8 +348,6 @@ export const FootnoteEditorView: Story = {
     }, [args.options, viewOptions, noteKey]);
 
     const onEditorClose = () => {
-      // setNoteKey(undefined);
-      // setNoteOps(undefined);
       noteKey.current = undefined;
       noteOps.current = undefined;
       setShowFootnoteEditor(false);
