@@ -5,10 +5,42 @@ import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
-import { Input } from '@/components/shadcn-ui/input';
 import { Button } from '@/components/shadcn-ui/button';
 import { CommentItem } from './comment-item.component';
 import { CommentThreadProps } from './comment-list.types';
+import { Editor } from '@/components/blocks/editor-00/editor';
+import { SerializedEditorState } from 'lexical';
+import { Input } from '@/components/shadcn-ui/input';
+
+const initialValue = {
+  root: {
+    children: [
+      {
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: '',
+            type: 'text',
+            version: 1,
+          },
+        ],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+      },
+    ],
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+} as unknown as SerializedEditorState;
 
 export function CommentThread({
   comments,
@@ -23,6 +55,7 @@ export function CommentThread({
   handleAddComment,
 }: CommentThreadProps) {
   const [inputValue, setInputValue] = useState<string>('');
+  const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
   const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
 
@@ -217,11 +250,10 @@ export function CommentThread({
                   }
                 }}
               >
-                <Input
-                  className="tw-w-full"
+                <Editor
+                  editorSerializedState={editorState}
+                  onSerializedChange={(value) => setEditorState(value)}
                   placeholder={localizedStrings['%comment_replyOrAssign%']}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
                 />
                 <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
                   <Button
