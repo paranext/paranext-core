@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { LanguageStrings } from 'platform-bible-utils';
+import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
+import { useState } from 'react';
 import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample-data';
 
@@ -14,13 +15,62 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_replyOrAssign%': 'Reply or assign with @',
 };
 
-const handleAddComment = (threadId: string, contents: string) => {
-  console.log(`Adding comment to thread ${threadId}: ${contents}`);
-};
+function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThread[] }) {
+  const [threads, setThreads] = useState<LegacyCommentThread[]>(initialThreads);
 
-const handleResolveCommentThread = (threadId: string) => {
-  console.log(`Resolving thread ${threadId}`);
-};
+  const handleAddComment = async (
+    threadId: string,
+    contents: string,
+  ): Promise<string | undefined> => {
+    console.log(`Adding comment to thread ${threadId}: ${contents}`);
+
+    let newCommentId: string | undefined;
+
+    // Find the thread and add the comment
+    setThreads((prevThreads) =>
+      prevThreads.map((thread) => {
+        if (`thread-${thread.id}` === threadId) {
+          newCommentId = `${thread.id}-${Date.now()}`;
+          const newComment: LegacyComment = {
+            id: newCommentId,
+            user: 'Current User',
+            date: new Date().toISOString(),
+            contents,
+            deleted: false,
+            hideInTextWindow: false,
+            language: 'en',
+            startPosition: 0,
+            selectedText: '',
+            contextBefore: '',
+            contextAfter: '',
+            thread: thread.id,
+            verseRef: thread.verseRef,
+          };
+          return {
+            ...thread,
+            comments: [...thread.comments, newComment],
+          };
+        }
+        return thread;
+      }),
+    );
+
+    return newCommentId;
+  };
+
+  const handleResolveCommentThread = (threadId: string) => {
+    console.log(`Resolving thread ${threadId}`);
+  };
+
+  return (
+    <CommentList
+      threads={threads}
+      localizedStrings={commentListLocalizedStrings}
+      handleAddComment={handleAddComment}
+      handleResolveCommentThread={handleResolveCommentThread}
+    />
+  );
+}
 
 const meta: Meta<typeof CommentList> = {
   title: 'Advanced/CommentList',
@@ -43,22 +93,12 @@ const meta: Meta<typeof CommentList> = {
 
 export default meta;
 
-type Story = StoryObj<typeof CommentList>;
+type Story = StoryObj<typeof CommentListStory>;
 
 export const Default: Story = {
-  args: {
-    threads: sampleComments,
-    localizedStrings: commentListLocalizedStrings,
-    handleAddComment,
-    handleResolveCommentThread,
-  },
+  render: () => <CommentListStory initialThreads={sampleComments} />,
 };
 
 export const NoThreads: Story = {
-  args: {
-    threads: [],
-    localizedStrings: commentListLocalizedStrings,
-    handleAddComment,
-    handleResolveCommentThread,
-  },
+  render: () => <CommentListStory initialThreads={[]} />,
 };
