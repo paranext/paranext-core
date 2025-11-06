@@ -17,7 +17,8 @@ if (!areExtensionsPresent) {
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.config.base.ts
 
 const isDev = process.env.NODE_ENV !== 'production';
-const shouldGenerateSourceMaps = isDev || process.env.DEBUG_PROD;
+const shouldGenerateSourceMaps =
+  (isDev || process.env.DEBUG_PROD) && process.env.PT_DISABLE_SOURCE_MAPS !== 'true';
 
 /** The base directory from which webpack should operate (should be the root repo folder) */
 export const rootDir = path.resolve(__dirname, '..');
@@ -34,6 +35,20 @@ const configBase: webpack.Configuration = {
   devtool: shouldGenerateSourceMaps ? 'inline-source-map' : false,
   watchOptions: {
     ignored: ['**/node_modules'],
+  },
+  // Enable persistent caching for faster rebuilds
+  cache: {
+    type: 'filesystem',
+    cacheDirectory: path.resolve(rootDir, '..', 'node_modules', '.cache', 'webpack-extensions'),
+    buildDependencies: {
+      config: [__filename],
+      postcss: [path.resolve(rootDir, 'postcss.config.ts')],
+      tailwind: [path.resolve(rootDir, 'tailwind.config.ts')],
+      tsconfig: [path.resolve(rootDir, 'tsconfig.json')],
+      webpack: [path.resolve(rootDir, 'webpack.config.ts')],
+    },
+    compression: 'gzip',
+    maxMemoryGenerations: 5,
   },
   // Use require for externals as it is the only type of importing that Platform.Bible supports
   // https://webpack.js.org/configuration/externals/#externalstypecommonjs
