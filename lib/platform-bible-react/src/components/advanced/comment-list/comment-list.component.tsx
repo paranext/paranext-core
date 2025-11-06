@@ -1,5 +1,5 @@
 import { cn } from '@/utils/shadcn-ui.util';
-import { RefObject, useCallback, useEffect, useState } from 'react';
+import React, { RefObject, useCallback, useEffect, useState } from 'react';
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
@@ -37,7 +37,21 @@ export default function CommentList({
     onOptionSelect: handleKeyboardSelectThread,
   });
 
-  // When a thread is expanded, focus the input field
+  // Set selected thread it to undefined when Escape is pressed
+  const handleKeyDownWithEscape = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        setSelectedThreadId(undefined);
+        event.preventDefault();
+        event.stopPropagation();
+      } else {
+        handleKeyDown(event);
+      }
+    },
+    [handleKeyDown],
+  );
+
+  // When a thread is expanded, focus the editor and place cursor at the end
   useEffect(() => {
     if (!selectedThreadId) return;
 
@@ -46,14 +60,25 @@ export default function CommentList({
 
     const requestAnimationFrameScheduled = requestAnimationFrame(() => {
       const requestAnimationFrameChangesRendered = requestAnimationFrame(() => {
-        const inputField = container.querySelector<HTMLElement>(
-          'input:not([disabled]):not([type="hidden"])',
+        const contentEditableField = container.querySelector<HTMLElement>(
+          '[contenteditable="true"]',
         );
         const fallback = container.querySelector<HTMLElement>(
           'textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
         );
-        const toFocus = inputField ?? fallback;
-        toFocus?.focus();
+        const toFocus = contentEditableField ?? fallback;
+        if (toFocus) {
+          toFocus.focus();
+          // Move cursor to the end of the contentEditable element
+          if (contentEditableField && toFocus === contentEditableField) {
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(contentEditableField);
+            range.collapse(false); // false = collapse to end
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+        }
       });
       return () => cancelAnimationFrame(requestAnimationFrameChangesRendered);
     });
@@ -74,7 +99,7 @@ export default function CommentList({
         'tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         className,
       )}
-      onKeyDown={handleKeyDown}
+      onKeyDown={handleKeyDownWithEscape}
     >
       {threads.map((thread) => (
         <div key={getUniqueThreadId(thread.id)}>
