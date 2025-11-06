@@ -1,8 +1,12 @@
-import { useMemo } from 'react';
-import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Avatar, AvatarFallback } from '@/components/shadcn-ui/avatar';
 import { cn } from '@/utils/shadcn-ui.util';
-import { formatReplacementString, formatRelativeDate } from 'platform-bible-utils';
+import {
+  formatRelativeDate,
+  formatReplacementString,
+  parseParatextHtml,
+  sanitizeHtml,
+} from 'platform-bible-utils';
+import { useMemo } from 'react';
 import { CommentItemProps } from './comment-list.types';
 
 /**
@@ -55,8 +59,17 @@ export function CommentItem({
     [comment.user],
   );
 
+  const sanitizedContent = useMemo(
+    () => sanitizeHtml(parseParatextHtml(comment.contents)),
+    [comment.contents],
+  );
+
   return (
-    <div className={cn('tw-flex tw-flex-row tw-gap-3 tw-space-y-3', { 'tw-text-sm': isReply })}>
+    <div
+      className={cn('tw-flex tw-flex-row tw-items-baseline tw-gap-3 tw-space-y-3', {
+        'tw-text-sm': isReply,
+      })}
+    >
       <Avatar className="tw-h-8 tw-w-8">
         <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
       </Avatar>
@@ -65,13 +78,17 @@ export function CommentItem({
           <p className="tw-text-sm tw-font-medium">{userLabel}</p>
           <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
         </div>
-        <div className="tw-flex tw-flex-row tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground">
-          <MarkdownRenderer
-            className="tw-text-sm tw-font-normal tw-text-primary"
-            markdown={comment.contents}
-            truncate={!isThreadExpanded}
-          />
-        </div>
+        <div
+          className={cn(
+            'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
+            {
+              'tw-line-clamp-3': !isThreadExpanded,
+            },
+          )}
+          // Content is sanitized via DOMPurify
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+        />
       </div>
     </div>
   );

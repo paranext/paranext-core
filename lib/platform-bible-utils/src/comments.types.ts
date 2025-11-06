@@ -25,7 +25,7 @@ export type LegacyComment = {
    * message when displaying the note.
    */
   conflictType?: string;
-  /** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
+  /** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
   contents: string;
   /**
    * If SelectedText is not empty, some optional context of the selected text occurs immediately
