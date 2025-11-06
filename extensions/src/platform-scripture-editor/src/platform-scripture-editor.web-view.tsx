@@ -125,8 +125,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
-  const [editingNoteKey, setEditingNoteKey] = useState<string>();
-  const [editingNoteOps, setEditingNoteOps] = useState<DeltaOp[]>();
+  const editingNoteKey = useRef<string>();
+  const editingNoteOps = useRef<DeltaOp[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -466,7 +466,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
       if (insertedNodeKey && ops) {
         // If we are already editing a note, then returns
-        if (editingNoteKey) return;
+        if (editingNoteKey.current) return;
 
         // Makes sure the node is a note
         const noteOp = ops[1];
@@ -480,8 +480,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         setNotePopoverAnchorX(targetRect.left);
         setNotePopoverAnchorY(targetRect.top);
         setNotePopoverAnchorHeight(targetRect.height);
-        setEditingNoteKey(insertedNodeKey);
-        setEditingNoteOps([noteOp]);
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteOps.current = [noteOp];
         setShowFootnoteEditor(true);
       }
     },
@@ -683,14 +683,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         ? undefined
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
             if (isCollapsed) {
-              if (editingNoteKey) return;
+              if (editingNoteKey.current) return;
 
               const targetRect = event.currentTarget.getBoundingClientRect();
               setNotePopoverAnchorX(targetRect.left);
               setNotePopoverAnchorY(targetRect.top);
               setNotePopoverAnchorHeight(targetRect.height);
-              setEditingNoteKey(noteNodeKey);
-              setEditingNoteOps(getNoteOps());
+              editingNoteKey.current = noteNodeKey;
+              editingNoteOps.current = getNoteOps();
               setShowFootnoteEditor(true);
             }
           },
@@ -710,14 +710,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const onFootnoteEditorClose = useCallback(() => {
-    setEditingNoteKey(undefined);
-    setEditingNoteOps(undefined);
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
     setShowFootnoteEditor(false);
   }, []);
 
   const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey, newNoteOps);
+    if (editingNoteKey.current) {
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
     }
     onFootnoteEditorClose();
   };
@@ -848,14 +848,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-96 tw-p-[10px]">
+        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
           <FootnoteEditor
-            noteOps={editingNoteOps}
-            noteKey={editingNoteKey}
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
             onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
-            viewOptions={options.view ?? defaultView}
+            editorOptions={options}
             localizedStrings={localizedStrings}
           />
         </PopoverContent>
