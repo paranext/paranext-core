@@ -4,6 +4,7 @@ import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { WebViewProps } from '@papi/core';
 import { sampleComments } from './comment-sample-data';
+import { logger } from '@papi/frontend';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%no_comments%',
@@ -32,12 +33,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const handleAddComment = useCallback((threadId: string, contents: string) => {
     // Logic to add a new comment would go here
-    console.log(`Adding comment to thread ${threadId}: ${contents}`);
+    logger.debug(`Adding comment to thread ${threadId}: ${contents}`);
   }, []);
 
   const handleResolveCommentThread = useCallback((threadId: string) => {
     // Logic to resolve a comment thread would go here
-    console.log(`Resolving comment thread ${threadId}`);
+    logger.debug(`Resolving comment thread ${threadId}`);
   }, []);
 
   if (unresolvedThreadsForScrRef.length === 0) {
