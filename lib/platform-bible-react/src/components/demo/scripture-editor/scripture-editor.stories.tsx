@@ -280,9 +280,14 @@ const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
   '%footnoteEditor_callerDropdown_item_generated%': 'Auto-generated',
   '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
   '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
-  '%footnoteEditor_noteType_crossReference_label%': 'Cross reference',
-  '%footnoteEditor_noteType_endNote_label%': 'End note',
+  '%footnoteEditor_callerDropdown_tooltip%': 'Footnote caller',
+  '%footnoteEditor_cancelButton_tooltip%': 'Cancel',
+  '%footnoteEditor_copyButton_tooltip%': 'Copy footnote',
+  '%footnoteEditor_noteType_crossReference_label%': 'Cross-reference',
+  '%footnoteEditor_noteType_endNote_label%': 'Endnote',
   '%footnoteEditor_noteType_footnote_label%': 'Footnote',
+  '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
+  '%footnoteEditor_saveButton_tooltip%': 'Save',
 };
 
 export const FootnoteEditorView: Story = {
@@ -290,8 +295,10 @@ export const FootnoteEditorView: Story = {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
-    const [noteKey, setNoteKey] = useState<string>();
-    const [noteOps, setNoteOps] = useState<DeltaOp[]>();
+    // const [noteKey, setNoteKey] = useState<string>();
+    // const [noteOps, setNoteOps] = useState<DeltaOp[]>();
+    const noteKey = useRef<string>();
+    const noteOps = useRef<DeltaOp[]>();
 
     const [popoverX, setPopoverX] = useState<number>();
     const [popoverY, setPopoverY] = useState<number>();
@@ -329,10 +336,12 @@ export const FootnoteEditorView: Story = {
 
             if (isCollapsed) {
               // (event as SyntheticEvent<)
-              if (noteKey) return;
+              if (noteKey.current) return;
 
-              setNoteKey(noteNodeKey);
-              setNoteOps(getNoteOps());
+              // setNoteKey(noteNodeKey);
+              // setNoteOps(getNoteOps());
+              noteKey.current = noteNodeKey;
+              noteOps.current = getNoteOps();
               setShowFootnoteEditor(true);
             }
           },
@@ -342,14 +351,16 @@ export const FootnoteEditorView: Story = {
     }, [args.options, viewOptions, noteKey]);
 
     const onEditorClose = () => {
-      setNoteKey(undefined);
-      setNoteOps(undefined);
+      // setNoteKey(undefined);
+      // setNoteOps(undefined);
+      noteKey.current = undefined;
+      noteOps.current = undefined;
       setShowFootnoteEditor(false);
     };
 
     const onEditorSave = (newNoteOps: DeltaOp[]) => {
-      if (noteKey) {
-        editorRef.current?.replaceEmbedUpdate(noteKey, newNoteOps);
+      if (noteKey.current) {
+        editorRef.current?.replaceEmbedUpdate(noteKey.current, newNoteOps);
       }
       onEditorClose();
     };
@@ -367,14 +378,14 @@ export const FootnoteEditorView: Story = {
             className="tw-absolute"
             style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
           />
-          <PopoverContent className="tw-w-96 tw-p-[10px]">
+          <PopoverContent className="tw-w-[500px] tw-p-[10px]">
             <FootnoteEditor
-              noteKey={noteKey}
-              noteOps={noteOps}
+              noteKey={noteKey.current}
+              noteOps={noteOps.current}
               onSave={onEditorSave}
               onClose={onEditorClose}
               scrRef={args.scrRef ?? defaultScrRef}
-              viewOptions={viewOptions}
+              editorOptions={mergedOptions}
               localizedStrings={sampleFootnoteEditorLocalizedStrings}
             />
           </PopoverContent>
