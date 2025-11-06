@@ -56,7 +56,11 @@ export function CommentItem({
   );
 
   return (
-    <div className={cn('tw-flex tw-flex-row tw-gap-3 tw-space-y-3', { 'tw-text-sm': isReply })}>
+    <div
+      className={cn('tw-flex tw-flex-row tw-items-baseline tw-gap-3 tw-space-y-3', {
+        'tw-text-sm': isReply,
+      })}
+    >
       <Avatar className="tw-h-8 tw-w-8">
         <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
       </Avatar>

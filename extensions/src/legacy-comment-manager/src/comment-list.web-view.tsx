@@ -1,5 +1,5 @@
 import { CommentList, Label, Skeleton } from 'platform-bible-react';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { WebViewProps } from '@papi/core';
@@ -19,10 +19,13 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
+  projectId,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
   const [scrRef] = useWebViewScrollGroupScrRef();
   const [areThreadsLoading, setAreThreadsLoading] = useState<boolean>(false);
+
+  const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
   const unresolvedThreadsForScrRef = useMemo(() => {
     setAreThreadsLoading(true);
@@ -32,10 +35,20 @@ global.webViewComponent = function CommentListWebView({
     return filteredThreads;
   }, [scrRef]);
 
-  const handleAddComment = useCallback((threadId: string, contents: string) => {
-    // Logic to add a new comment would go here
-    logger.debug(`Adding comment to thread ${threadId}: ${contents}`);
-  }, []);
+  const handleAddComment = useCallback(
+    async (threadId: string, contents: string): Promise<string | undefined> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return undefined;
+      }
+      const newCommentId = await commentsPdp.createComment({
+        thread: threadId,
+        contents,
+      });
+      return newCommentId;
+    },
+    [commentsPdp],
+  );
 
   const handleResolveCommentThread = useCallback((threadId: string) => {
     // Logic to resolve a comment thread would go here
