@@ -4,7 +4,7 @@ import { Meta } from '@storybook/addon-docs/blocks';
 
 # Component Choices
 
-Consistent usage of components accross the application allows users to easily learn and use the application. They will know how to interact with the controls and what to expect from them.
+Consistent usage of components across the application allows users to easily learn and use the application. They will know how to interact with the controls and what to expect from them.
 
 It is an ongoing effort to review and agree on components and variants for common usage. Internal notes about this can be found [here](https://docs.google.com/document/d/1gKmb2PnCWtRAbVN8ERskRRy-IoTRTsEpC4-kpgEvzxY/edit?tab=t.cmhqjv2sbcd#heading=h.feldja1s1r8b)
 
@@ -13,14 +13,14 @@ For lists and tables, apply the [listbox pattern](https://www.w3.org/WAI/ARIA/ap
 - Code: [listbox-keyboard-navigation.hook.ts](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/hooks/listbox-keyboard-navigation.hook.ts)
 
 For tables, use
-- [Table](./shadcn-ui/table.stories.tsx)
+- [Table](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-table--docs)
 - Data Table
 
 For lists, use
 - [Item](https://ui.shadcn.com/docs/components/item)
 
 Lists may be styled like a single column table **or** as a list of Card-like items.
-- See [results-card.stories.tsx](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/components/basics/results-card.stories.tsx)
+- See [Result Card](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-resultscard--docs)
 
 List entries and table rows may use context menus and [Ellipsis](https://lucide.dev/icons/ellipsis) button to display more options in context of the item under the cursor.
 
@@ -32,10 +32,10 @@ There are consistent interaction patterns for lists, see [Interactions/Scripture
 
 ## Single and multi select options, Filters
 Using the
-- [Select](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/select.stories.tsx) component - for simple selections with little options
+- [Select](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-select--docs) component - for simple selections with little options
 - Combobox component - where search, grouping and more details are helpful
-  - [Single Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/combo-box.stories.tsx): use a [Chevron Down](https://lucide.dev/icons/chevron-down) icon on the trigger, close on selection
-  - [Multi Select Combobox](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/multi-select-combo-box.stories.tsx): use the default [Chevrons Up-Down](https://lucide.dev/icons/chevrons-up-down) icon on the trigger, do not close on selection
+  - [Single Select Combobox](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-combobox--docs): use a [Chevron Down](https://lucide.dev/icons/chevron-down) icon on the trigger, close on selection
+  - [Multi Select Combobox](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/advanced-multiselectcombobox--docs): use the default [Chevrons Up-Down](https://lucide.dev/icons/chevrons-up-down) icon on the trigger, do not close on selection
 
 Make sure to
 - Show the selection with a start side checkbox (not on the end side like the [default New York style](https://ui.shadcn.com/docs/components/select)) -- up for UX discussion
