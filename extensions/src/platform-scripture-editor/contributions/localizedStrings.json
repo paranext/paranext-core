@@ -26,6 +26,7 @@
       "%footnoteEditor_noteType_endNote_label%": "Endnote",
       "%footnoteEditor_noteType_footnote_label%": "Footnote",
       "%footnoteEditor_noteType_tooltip%": "Change type: Footnote",
+      "%footnoteEditor_noteTypeDropdown_label%": "Type",
       "%footnoteEditor_saveButton_tooltip%": "Save",
       "%webView_platformScriptureEditor_edit%": "Edit",
       "%webView_platformScriptureEditor_options%": "Options",
