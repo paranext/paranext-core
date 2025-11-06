@@ -2629,14 +2629,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
                   position.verseNum
                 }`,
               );
-            } else if (position.verseNum === nextVerseNum) {
-              console.warn(
-                `Found multiple ${VERSE_TYPE} markers in a row with same number ${
-                  position.verseNum
-                }! Not updating verse start index. All positions will be based on the first ${
-                  VERSE_TYPE
-                } marker index.`,
-              );
             } else if (
               indicesInUsfmByVerseRef[position.bookId]?.[position.chapterNum]?.[nextVerseNum]
             ) {

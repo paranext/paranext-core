@@ -26,7 +26,7 @@ export class SortedNumberMap<T> {
   private sortedKeys: number[] = [];
 
   /**
-   * Returns an iterable of keys in the map. These keys are not necessarily sorted.
+   * Returns an iterable of keys in the map sorted in ascending order.
    *
    * Time complexity: internal detail to JavaScript engine. Reasonable expectation:
    *
@@ -40,7 +40,7 @@ export class SortedNumberMap<T> {
    * TSDoc adapted from {@link Map.keys}
    */
   keys() {
-    return this.map.keys();
+    return this.sortedKeys.values();
   }
 
   /**

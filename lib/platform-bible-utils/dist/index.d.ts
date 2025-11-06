@@ -578,7 +578,7 @@ export declare class SortedNumberMap<T> {
 	private map;
 	private sortedKeys;
 	/**
-	 * Returns an iterable of keys in the map. These keys are not necessarily sorted.
+	 * Returns an iterable of keys in the map sorted in ascending order.
 	 *
 	 * Time complexity: internal detail to JavaScript engine. Reasonable expectation:
 	 *
@@ -591,7 +591,7 @@ export declare class SortedNumberMap<T> {
 	 *
 	 * TSDoc adapted from {@link Map.keys}
 	 */
-	keys(): MapIterator<number>;
+	keys(): ArrayIterator<number>;
 	/**
 	 * Returns a specified element from the Map object. If the value that is associated to the
 	 * provided key is an object, then you will get a reference to that object and any change made to
@@ -1563,7 +1563,7 @@ export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, 
  * An attribute marker is a marker that adds information to a previous marker in USFM and is an
  * attribute on that previous marker instead in USX/USJ.
  *
- * For example, `ca` and `cp` are attribute markers for `c`. `va` and `vp` are attribute markers for
+ * @example `ca` and `cp` are attribute markers for `c`. `va` and `vp` are attribute markers for
  * `v`. `cat` is an attribute marker for `f`, `esb`, and more.
  *
  * Following is an example of using the `ca` and `cp` attribute markers in USFM:
@@ -1586,22 +1586,22 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	/**
 	 * List of normal marker names for which this marker is an attribute marker.
 	 *
-	 * For example, `ca` and `cp` are attribute markers for `c`. `isAttributeMarkerFor` would be
-	 * `['c']` for both `ca` and `cp`.
+	 * @example `ca` and `cp` are attribute markers for `c`. `isAttributeMarkerFor` would be `['c']`
+	 * for both `ca` and `cp`.
 	 */
 	isAttributeMarkerFor?: string[];
 	/**
 	 * List of RegExp patterns matching marker names for which this marker is an attribute marker.
 	 *
-	 * For example, pretend `ex1` and `ex2` are attribute markers for markers matching RegExp
-	 * `/test/`. `isAttributeMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
+	 * @example Pretend `ex1` and `ex2` are attribute markers for markers matching RegExp `/test/`.
+	 * `isAttributeMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
 	 */
 	isAttributeMarkerForRegExp?: string[];
 	/**
 	 * The name of the USX/USJ attribute this attribute marker represents.
 	 *
-	 * For example, `ca` is an attribute marker for `c` and represents the `altnumber` attribute on
-	 * the `c` marker in USX/USJ. `attributeMarkerAttributeName` would be `altnumber` for the `ca`
+	 * @example `ca` is an attribute marker for `c` and represents the `altnumber` attribute on the
+	 * `c` marker in USX/USJ. `attributeMarkerAttributeName` would be `altnumber` for the `ca`
 	 * marker.
 	 */
 	attributeMarkerAttributeName: string;
@@ -1614,12 +1614,14 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	 * because this space is only supposed to be added in contexts in which the space here is
 	 * structural. Otherwise we would be mistakenly adding content to the USFM.
 	 *
-	 * Note that, if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `true` (which is the
+	 * Note that, if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `false` (which is the
 	 * case according to spec), horizontal spaces after attribute markers are always considered
-	 * structural. This property only indicates whether there should be a space after the attribute
-	 * marker when outputting USFM.
+	 * structural; this property only indicates whether there should be a space after the attribute
+	 * marker when outputting USFM as opposed to parsing it.
 	 *
-	 * For example, according to specification, the `va` and `vp` attribute markers have a space after
+	 * If not present or `undefined`, defaults to `false`.
+	 *
+	 * @example According to specification, the `va` and `vp` attribute markers have a space after
 	 * their closing markers:
 	 *
 	 * ```usfm
@@ -1638,15 +1640,13 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	 *
 	 * The verse text in this example is " Some verse text" including a space at the start.
 	 *
-	 * The `cat` attribute marker does not have a structural space after its closing marker:
+	 * @example The `cat` attribute marker does not have a structural space after its closing marker:
 	 *
 	 * ```usfm
 	 * \f + \cat category here\cat*\fr 1:2 \ft Some footnote text\f*
 	 * ```
 	 *
 	 * The verse text in this example is just "Some verse text" without a space at the start.
-	 *
-	 * If not present, defaults to `false`.
 	 */
 	hasStructuralSpaceAfterCloseAttributeMarker?: boolean;
 };
@@ -1671,14 +1671,13 @@ export type NormalMarkerInfo = {
 	 * An attribute can be provided with default syntax in the USFM only if it is the only attribute
 	 * provided for the marker.
 	 *
-	 * Following is an example of a marker with a default attribute:
+	 * @example A marker with a default attribute:
 	 *
 	 * ```usfm
 	 * \w stuff|thisIsTheLemmaDefaultAttribute\w*
 	 * ```
 	 *
-	 * Following is an example of a marker with multiple attributes (cannot use default attribute
-	 * syntax):
+	 * @example A marker with multiple attributes (cannot use default attribute syntax):
 	 *
 	 * ```usfm
 	 * \w stuff|lemma="thisIsTheLemma" strong="H1234,G1234"\w*
@@ -1692,8 +1691,8 @@ export type NormalMarkerInfo = {
 	 * Text content attributes are attributes in USX/USJ that are represented in USFM as the actual
 	 * text content of the marker.
 	 *
-	 * For example, `alt` is a text content attribute on the `periph` marker. This value would be
-	 * `alt` for the `periph` marker.
+	 * @example `alt` is a text content attribute on the `periph` marker. This value would be `alt`
+	 * for the `periph` marker.
 	 *
 	 * Following is an example of a `periph` marker in USFM:
 	 *
@@ -1719,8 +1718,8 @@ export type NormalMarkerInfo = {
 	 * Leading attributes are attributes in USJ/USX that are listed in USFM directly after the marker
 	 * and separated only by a space.
 	 *
-	 * For example, `code` is a leading attribute on the `id` marker. This value would be `['code']`
-	 * for the `id` marker.
+	 * @example `code` is a leading attribute on the `id` marker. This value would be `['code']` for
+	 * the `id` marker.
 	 *
 	 * Following is an example of an `id` marker in USFM:
 	 *
@@ -1743,11 +1742,11 @@ export type NormalMarkerInfo = {
 	 * An attribute marker is a marker that adds information to a previous marker in USFM and is an
 	 * attribute on that previous marker in USX/USJ.
 	 *
-	 * For example, `ca` and `cp` are attribute markers for `c`. This value would be `['ca', 'cp']`
-	 * for `c`.
-	 *
 	 * Note: the attribute names for attribute markers may be different than the marker names. See
 	 * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
+	 *
+	 * @example `ca` and `cp` are attribute markers for `c`. This value would be `['ca', 'cp']` for
+	 * `c`.
 	 */
 	attributeMarkers?: string[];
 	/**
@@ -1761,7 +1760,7 @@ export type NormalMarkerInfo = {
 	 * for this marker in USFM does not match the assumption implied by
 	 * {@link MarkersMap.shouldOptionalClosingMarkersBePresent}.
 	 *
-	 * If not present, defaults to `false`
+	 * If not present or `undefined`, defaults to `false`
 	 */
 	isClosingMarkerOptional?: boolean;
 	/**
@@ -1771,7 +1770,11 @@ export type NormalMarkerInfo = {
 	 * are contents of this marker. In USX and USJ, this marker is closed normally like any other
 	 * object because USX and USJ have clear hierarchical structure.
 	 *
-	 * For example, `esb` (a sidebar) is closed by the independent closing marker `esbe`.
+	 * Note that independent closing markers do not have a `*` at the end because they are not normal
+	 * closing marker for but rather are completely separate markers that close the corresponding
+	 * opening marker.
+	 *
+	 * @example `esb` (a sidebar) is closed by the independent closing marker `esbe`.
 	 * `independentClosingMarkers` would be `['esbe']` for `esb`. Following is an example of a
 	 * sidebar:
 	 *
@@ -1781,12 +1784,6 @@ export type NormalMarkerInfo = {
 	 * \p The sidebar can contain multiple paragraphs.
 	 * \esbe
 	 * ```
-	 *
-	 * Note that the independent closing marker does not have a `*` at the end because it is not a
-	 * closing marker for `esb` but rather a completely separate marker that closes the `esb` marker.
-	 *
-	 * When outputting to USFM, the first independent closing marker listed in this array should be
-	 * used.
 	 */
 	independentClosingMarkers?: string[];
 	/**
@@ -1794,7 +1791,7 @@ export type NormalMarkerInfo = {
 	 * {@link NormalMarkerInfo.independentClosingMarker} for more information on independent closing
 	 * markers and their syntax.
 	 *
-	 * For example, `esbe` is an independent closing marker for `esb`. `isIndependentClosingMarkerFor`
+	 * @example `esbe` is an independent closing marker for `esb`. `isIndependentClosingMarkerFor`
 	 * would be `['esb']` for `esbe`.
 	 */
 	isIndependentClosingMarkerFor?: string[];
@@ -1803,9 +1800,8 @@ export type NormalMarkerInfo = {
 	 * marker. See {@link NormalMarkerInfo.independentClosingMarker} for more information on
 	 * independent closing markers and their syntax.
 	 *
-	 * For example, pretend `ex1` and `ex2` are independent closing markers for markers matching
-	 * RegExp `/test/`. `isIndependentClosingMarkerForRegExp` would be `['test']` for both `ex1` and
-	 * `ex2`.
+	 * @example Pretend `ex1` and `ex2` are independent closing markers for markers matching RegExp
+	 * `/test/`. `isIndependentClosingMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
 	 */
 	isIndependentClosingMarkerForRegExp?: string[];
 	/**
@@ -1813,8 +1809,8 @@ export type NormalMarkerInfo = {
 	 * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
 	 * instead of the marker info for the marker as listed in USX or USJ.
 	 *
-	 * For example, when when the `usx` marker is output to USFM, it should be transformed to the
-	 * `usfm` marker.
+	 * @example When the `usx` marker is output to USFM, it should be transformed to the `usfm`
+	 * marker.
 	 */
 	markerUsfm?: string;
 	/**
@@ -1831,7 +1827,7 @@ export type NormalMarkerInfo = {
 /**
  * Information about a USFM/USX/USJ marker that is essential for proper translation between formats.
  *
- * For example, `w` is a `char`-type marker, so it shares the characteristics of the `char`
+ * @example `w` is a `char`-type marker, so it shares the characteristics of the `char`
  * {@link MarkerTypeInfo} with other `char`-type markers and has its own set of characteristics.
  * `w`'s `MarkerInfo` is as follows:
  *
@@ -1847,17 +1843,17 @@ export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
  * Information about a USFM/USX/USJ marker type that has a closing marker. See {@link MarkerTypeInfo}
  * for other kinds of marker types.
  *
- * For example, `char` marker types such as `nd` markers have closing markers, but `para` markers
- * such as `p` do not:
+ * If the marker type has a closing marker but the closing marker is not present in the USFM for a
+ * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
+ * `false` unless {@link NormalMarkerInfo.isClosingMarkerOptional} is `true`.
+ *
+ * @example `char` marker types such as `nd` markers have closing markers, but `para` markers such
+ * as `p` do not:
  *
  * ```usfm
  * \p This is a plain paragraph.
  * \p This is a paragraph \nd with some special text\nd* in it.
  * ```
- *
- * If the marker type has a closing marker but the closing marker is not present in the USFM for a
- * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
- * `false` unless {@link NormalMarkerInfo.isClosingMarkerOptional} is `true`.
  */
 export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	/**
@@ -1865,7 +1861,7 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	 * closing markers like `\wj*`, not independent closing markers like
 	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
 	 *
-	 * If not present, defaults to `false` (meaning this `MarkerTypeInfo` is a
+	 * If not present or `undefined`, defaults to `false` (meaning this `MarkerTypeInfo` is a
 	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
 	 */
 	hasClosingMarker: true;
@@ -1875,7 +1871,9 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	 * between the opening and the closing markers in USFM if there are no attributes listed on the
 	 * marker.
 	 *
-	 * For example, markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
+	 * If not present or `undefined`, defaults to `false`
+	 *
+	 * @example Markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
 	 *
 	 * ```usfm
 	 * \qt1-s\*
@@ -1894,8 +1892,6 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	 * ...
 	 * \qt1-e\*
 	 * ```
-	 *
-	 * If not present, defaults to `false`
 	 */
 	isClosingMarkerEmpty?: boolean;
 };
@@ -1903,8 +1899,8 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
  * {@link MarkerTypeInfo} for other kinds of marker types.
  *
- * For example, `char` marker types such as `nd` markers have closing markers, but `para` marker
- * types such as `p` do not:
+ * @example `char` marker types such as `nd` markers have closing markers, but `para` marker types
+ * such as `p` do not:
  *
  * ```usfm
  * \p This is a plain paragraph.
@@ -1917,7 +1913,7 @@ export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	 * closing markers like `\wj*`, not independent closing markers like
 	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
 	 *
-	 * If not present, defaults to `false` (meaning this `MarkerTypeInfo` is a
+	 * If not present or `undefined`, defaults to `false` (meaning this `MarkerTypeInfo` is a
 	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
 	 */
 	hasClosingMarker?: false;
@@ -1934,17 +1930,18 @@ export type MarkerTypeInfoBase = {
 	 *
 	 * If this is `false`, it also means the marker type is the same as the marker name.
 	 *
-	 * If not present, defaults to `true`.
+	 * If not present or `undefined`, defaults to `true`.
 	 */
 	hasStyleAttribute?: boolean;
 	/**
 	 * List of attributes that should not be output to USFM on markers of this type.
 	 *
-	 * This is used for attributes that are not present in USFM. For example, the `sid` attribute on
-	 * the `verse` type marker is not present in USFM because it is derived metadata in USX/USJ and is
-	 * not present in USFM.
+	 * This is used for attributes that are not present in USFM.
 	 *
 	 * This property is not used when converting to USX or USJ.
+	 *
+	 * @example The `sid` attribute on the `verse` type marker is not present in USFM because it is
+	 * derived metadata in USX/USJ and is not present in USFM.
 	 */
 	skipOutputAttributeToUsfm?: string[];
 	/**
@@ -1957,9 +1954,11 @@ export type MarkerTypeInfoBase = {
 	 * metadata and are not present in USFM. These derived metadata markers are identified by whether
 	 * they have specific attributes on them.
 	 *
-	 * For example, if the `verse` marker has an `eid` attribute, it indicates it is a marker denoting
-	 * the end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that
-	 * the `verse` marker does not have the `style="v"` attribute in this situation, so this list of
+	 * This property is not used when converting to USX or USJ.
+	 *
+	 * @example If the `verse` marker has an `eid` attribute, it indicates it is a marker denoting the
+	 * end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that the
+	 * `verse` marker does not have the `style="v"` attribute in this situation, so this list of
 	 * attributes is on the marker type.
 	 *
 	 * Following is an example of a derived metadata `verse` marker in USX:
@@ -1978,10 +1977,11 @@ export type MarkerTypeInfoBase = {
 	 * \v 21 This is verse 21.
 	 * ```
 	 *
-	 * An example with content inside the marker that should not be skipped is generated `ref`s. These
-	 * `ref`s wrap project-localized Scripture references in `xt` markers and have computer-readable
-	 * Scripture References as their `loc` attribute. These `ref`s that are derived metadata have the
-	 * `gen` attribute set to `"true"` and can be removed if `gen="true"` is present.
+	 * @example Generated `ref`s should be skipped but have content inside the marker that should not
+	 * be skipped. These `ref`s wrap project-localized Scripture references in `xt` markers and have
+	 * computer-readable Scripture References as their `loc` attribute. These `ref`s that are derived
+	 * metadata have the `gen` attribute set to `"true"` and can be removed if `gen="true"` is
+	 * present.
 	 *
 	 * Following is an example of a generated `ref` in USX:
 	 *
@@ -1995,8 +1995,6 @@ export type MarkerTypeInfoBase = {
 	 * ```usfm
 	 * \xt 2Sam 1:1; 2Sam 1:2-3.\xt*
 	 * ```
-	 *
-	 * This property is not used when converting to USX or USJ.
 	 */
 	skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
 	/**
@@ -2007,8 +2005,12 @@ export type MarkerTypeInfoBase = {
 	 * This is used for marker types that have no representation in USFM in a given version, likely
 	 * meaning they are derived metadata and are not present in USFM.
 	 *
-	 * For example, in USFM 3.1, the `table` marker type is generated while transforming USFM into
-	 * USX/USJ and is not preserved when transforming from USX/USJ to USFM.
+	 * This property is not used when converting to USX or USJ.
+	 *
+	 * If not present or `undefined`, defaults to `false`
+	 *
+	 * @example In USFM 3.1, the `table` marker type is generated while transforming USFM into USX/USJ
+	 * and is not preserved when transforming from USX/USJ to USFM.
 	 *
 	 * Following is an example of a derived metadata `table` marker in USX:
 	 *
@@ -2041,27 +2043,23 @@ export type MarkerTypeInfoBase = {
 	 * \tr \tc1 Row 1 cell 1\tc2 Row 1 cell 2 space after \thc3 Row 1 cell 3 centered\thr4-5 Row 1 cell 4-5 right
 	 * \tr \tcr1-4 Row 2 cell 1-4 right\tc5 Row 2 cell 5
 	 * ```
-	 *
-	 * This property is not used when converting to USX or USJ.
-	 *
-	 * If not present, defaults to `false`
 	 */
 	skipOutputMarkerToUsfm?: boolean;
 	/**
 	 * Whether markers of this type should have a newline before them in USFM.
 	 *
-	 * For example, `para` marker types such as `p` should have a newline, but `char` marker types
-	 * such as `nd` markers should not:
+	 * Note that the newline is never strictly necessary, and it is not usually present if the very
+	 * first marker in the file (or in examples such as the following example) should have a newline.
+	 *
+	 * If not present or `undefined`, defaults to `false`
+	 *
+	 * @example `para` marker types such as `p` should have a newline, but `char` marker types such as
+	 * `nd` markers should not:
 	 *
 	 * ```usfm
 	 * \p This is a plain paragraph.
 	 * \p This is a paragraph \nd with some special text\nd* in it.
 	 * ```
-	 *
-	 * Note that the newline is never strictly necessary, and it is not usually present if the very
-	 * first marker in the file (or in examples such as this) should have a newline.
-	 *
-	 * If not present, defaults to `false`
 	 */
 	hasNewlineBefore?: boolean;
 	/**
@@ -2086,7 +2084,8 @@ export type MarkerTypeInfoBase = {
 	 * Prefix to add to the opening and closing marker before the marker name if a marker of this type
 	 * occurs within another marker of this type when outputting to USFM.
 	 *
-	 * Following is an example of `nd` inside `wj` (both are `char`-type markers) in USFM:
+	 * @example In USFM 3.0, `char`-type markers that are nested must have a `+` prefix. Following is
+	 * an example of `nd` inside `wj` (both are `char`-type markers) in USFM:
 	 *
 	 * ```usfm
 	 * \p \wj This is \+nd nested\+nd*!\wj*
@@ -2118,9 +2117,9 @@ export type MarkerTypeInfoBase = {
  * Information about a USFM/USX/USJ marker type that is essential for proper translation between
  * formats.
  *
- * For example, `char` is a marker type, which means markers like `w` whose marker type is `char`
- * share some characteristics, and each marker also has its own set of characteristics which are
- * presented with type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
+ * @example `char` is a marker type, which means markers like `w` whose marker type is `char` share
+ * some characteristics, and each marker also has its own set of characteristics which are presented
+ * with type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
  *
  * ```json
  * {
@@ -2173,7 +2172,7 @@ export type MarkersMap = {
 	 *
 	 * This setting determines which interpretation to use when converting from USFM to USX/USJ.
 	 *
-	 * If not present, defaults to `false`.
+	 * If not present or `undefined`, defaults to `false`.
 	 */
 	isSpaceAfterAttributeMarkersContent?: boolean;
 	/**
@@ -2204,7 +2203,7 @@ export type MarkersMap = {
 	 *       output to USFM. It is possible that `usx.rng` considers this to be a case where
 	 *       preserving the exact USFM is not important.
 	 *
-	 * If not present, defaults to `false`.
+	 * If not present or `undefined`, defaults to `false`.
 	 */
 	shouldOptionalClosingMarkersBePresent?: boolean;
 	/**
@@ -3056,7 +3055,8 @@ export type PaneSizeLimitsOptions = {
 	splitterThicknessPx?: number;
 	/**
 	 * Minimum size (height or width) of the secondary pane (the pane whose size is to be
-	 * constrained), in pixels. Ensures the secondary pane never shrinks below this size, if possible.
+	 * constrained), in pixels. Ensures the secondary pane never shrinks below this size, if
+	 * possible.
 	 *
 	 * @default 20
 	 */
@@ -3077,8 +3077,8 @@ export type PaneSizeLimitsOptions = {
 	 */
 	absoluteMinPercent?: number;
 	/**
-	 * Absolute maximum percentage of the total available that the secondary pane can occupy.
-	 * Can be used to keep the "main" pane from being overwhelmed by the size of the secondary pane.
+	 * Absolute maximum percentage of the total available that the secondary pane can occupy. Can be
+	 * used to keep the "main" pane from being overwhelmed by the size of the secondary pane.
 	 *
 	 * @default 90
 	 */
