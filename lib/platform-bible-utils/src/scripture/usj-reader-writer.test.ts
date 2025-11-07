@@ -844,11 +844,15 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
 });
 
 describe('Find USJ details for text searches', () => {
-  test('verseRefToNextTextLocation takes USJ location and finds USJ details for next text 3.0', () => {
+  test('usfmLocationToNextTextLocation takes USJ location and finds USJ details for next text 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
     // Start from a verse node
-    const result1 = usjDoc.verseRefToNextTextLocation({ book: 'MAT', chapterNum: 1, verseNum: 2 });
+    const result1 = usjDoc.usfmLocationToNextTextLocation({
+      book: 'MAT',
+      chapterNum: 1,
+      verseNum: 2,
+    });
     if (typeof result1.node !== 'string') throw new Error('Expected result1 to be a string');
     expect(result1.documentLocation.jsonPath).toBe('$.content[10].content[1]');
     expect(result1.documentLocation.offset).toBe(0);
@@ -856,7 +860,11 @@ describe('Find USJ details for text searches', () => {
       'Abraham became the father of Isaac. Isaac became the father of Jacob. Jacob became the father of Judah and his brothers. ',
     );
 
-    const result2 = usjDoc.verseRefToNextTextLocation({ book: 'MAT', chapterNum: 2, verseNum: 19 });
+    const result2 = usjDoc.usfmLocationToNextTextLocation({
+      book: 'MAT',
+      chapterNum: 2,
+      verseNum: 19,
+    });
     if (typeof result2.node !== 'string') throw new Error('Expected result2 to be a string');
     expect(result2.documentLocation.jsonPath).toBe('$.content[36].content[1]');
     expect(result2.documentLocation.offset).toBe(0);
@@ -865,7 +873,7 @@ describe('Find USJ details for text searches', () => {
     );
 
     expect(() => {
-      usjDoc.verseRefToNextTextLocation({ book: 'MAT', chapterNum: 3, verseNum: 1 });
+      usjDoc.usfmLocationToNextTextLocation({ book: 'MAT', chapterNum: 3, verseNum: 1 });
     }).toThrow('Verse 1 not found in MAT 3');
   });
 

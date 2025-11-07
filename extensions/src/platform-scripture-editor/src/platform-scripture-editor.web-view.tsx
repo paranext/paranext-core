@@ -594,7 +594,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         try {
           nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
             markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          }).verseRefToNextTextLocation(scrRef).documentLocation.jsonPath;
+          }).usfmLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }

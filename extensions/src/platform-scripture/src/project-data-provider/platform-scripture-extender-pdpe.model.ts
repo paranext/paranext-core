@@ -11,12 +11,8 @@ import {
   USJChapterProjectInterfaceDataTypes,
   USJVerseProjectInterfaceDataTypes,
 } from 'platform-scripture';
-import {
-  Usj,
-  USJ_VERSION,
-  usjToUsxString,
-  usxStringToUsj,
-} from '@eten-tech-foundation/scripture-utilities';
+import { Usj, usjToUsxString, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
+import { correctUsjVersion, correctUsxStringVersion } from './scripture.util';
 
 /** The `projectInterface`s the Scripture Extender PDPF serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -43,13 +39,6 @@ export const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES = [
   'platformScripture.USX_Chapter',
   'platformScripture.USX_Verse',
 ];
-
-/**
- * The version of USFM we expect the USX data to be in. For now, Paratext 10 Studio only supports
- * 3.0. We will adjust the code significantly in many places when we implement supporting other
- * versions.
- */
-const PARATEXT_USX_EXPECTED_VERSION = '3.0';
 
 export type ScriptureExtenderOverlayPDPs = {
   [ProjectInterface in (typeof SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
@@ -147,11 +136,7 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Book'].setBookUSX(
       verseRef,
-      // Set the version back to 3.0 - scripture-utilities isn't handling version well right now
-      usjToUsxString(bookUsj).replace(
-        `version="${USJ_VERSION}"`,
-        `version="${PARATEXT_USX_EXPECTED_VERSION}"`,
-      ),
+      correctUsxStringVersion(usjToUsxString(bookUsj)),
     );
     if (didSucceed) return true;
     return false;
@@ -166,11 +151,7 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Chapter'].setChapterUSX(
       verseRef,
-      // Set the version back to 3.0 - scripture-utilities isn't handling version well right now
-      usjToUsxString(chapterUsj).replace(
-        `version="${USJ_VERSION}"`,
-        `version="${PARATEXT_USX_EXPECTED_VERSION}"`,
-      ),
+      correctUsxStringVersion(usjToUsxString(chapterUsj)),
     );
     if (didSucceed) return true;
     return false;
@@ -184,32 +165,17 @@ export class ScriptureExtenderProjectDataProviderEngine
 
   async getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-    // Use version 3.0 because `ParatextData.dll` serves 3.0 and scripture-utilities isn't handling
-    // version well right now
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return usx
-      ? { ...usxStringToUsj(usx), version: PARATEXT_USX_EXPECTED_VERSION as typeof USJ_VERSION }
-      : undefined;
+    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
   }
 
   async getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
-    // Use version 3.0 because `ParatextData.dll` serves 3.0 and scripture-utilities isn't handling
-    // version well right now
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return usx
-      ? { ...usxStringToUsj(usx), version: PARATEXT_USX_EXPECTED_VERSION as typeof USJ_VERSION }
-      : undefined;
+    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
   }
 
   async getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Verse'].getVerseUSX(verseRef);
-    // Use version 3.0 because `ParatextData.dll` serves 3.0 and scripture-utilities isn't handling
-    // version well right now
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return usx
-      ? { ...usxStringToUsj(usx), version: PARATEXT_USX_EXPECTED_VERSION as typeof USJ_VERSION }
-      : undefined;
+    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
   }
 
   /**
