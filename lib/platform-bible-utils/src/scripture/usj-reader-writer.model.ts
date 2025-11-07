@@ -65,7 +65,8 @@ export type PropertyJsonPath =
   | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
 
 /**
- * A verse ref and an offset in USFM space that point to a specific location in USFM.
+ * A verse ref and an offset in USFM space that point to a specific location in USFM. If only a
+ * verse ref is provided, the offset is assumed to be 0.
  *
  * The USJ representation of the positions represented by this type are {@link UsjDocumentLocation}.
  * Note, however, that those locations are relative to a specific USJ document rather than being
@@ -78,7 +79,7 @@ export type PropertyJsonPath =
  * locations than a specific verse like from the start of a chapter or book. If you do not want to
  * offer such features, use {@link UsfmVerseLocation}, whose offset is based on a specific verse.
  */
-export type UsfmLocation = UsfmVerseLocation;
+export type UsfmLocation = UsfmVerseLocation | SerializedVerseRef;
 
 /**
  * A verse ref and an offset within that verse in USFM space that point to a specific location in
@@ -472,19 +473,20 @@ export interface IUsjReaderWriter {
   ): UsfmVerseLocation;
   /**
    * Get the node + offset and JSONPath query within this USJ data of the first encountered string
-   * after the verse marker for a specific verse in a USJ chapter.
+   * after the provided USFM location for a specific verse in a USJ document.
    *
    * Note: this may return a node that is in a subsequent verse or even chapter depending on how
    * much content the USJ data contains. It simply looks through the rest of the USJ data for the
    * first text node and returns that.
    *
-   * @param verseRef Indicates the book, chapter, and verse of interest to find the next text for
+   * @param usfmLocation Indicates the location in USFM space (book, chapter, verse, character
+   *   offset) to find the next text for
    * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
    *   indicates the location of the of USJ text node within this USJ data.
-   * @throws Error if there is no text after the verse marker for `verseRef`
-   * @throws Error if `verseRef` does not point to a valid verse in this USJ data
+   * @throws Error if there is no text after `usfmLocation`
+   * @throws Error if `usfmLocation` does not point to a valid location in this USJ data
    */
-  verseRefToNextTextLocation(
-    verseRef: SerializedVerseRef,
+  usfmLocationToNextTextLocation(
+    usfmLocation: UsfmLocation,
   ): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 }

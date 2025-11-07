@@ -2263,7 +2263,8 @@ export type ContentJsonPath = "" | `$` | `$.content[${number}]` | `$.content[${n
  */
 export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.content[${number}].${string}` | `$.content[${number}]['${string}']` | `$.content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
 /**
- * A verse ref and an offset in USFM space that point to a specific location in USFM.
+ * A verse ref and an offset in USFM space that point to a specific location in USFM. If only a
+ * verse ref is provided, the offset is assumed to be 0.
  *
  * The USJ representation of the positions represented by this type are {@link UsjDocumentLocation}.
  * Note, however, that those locations are relative to a specific USJ document rather than being
@@ -2276,7 +2277,7 @@ export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.conten
  * locations than a specific verse like from the start of a chapter or book. If you do not want to
  * offer such features, use {@link UsfmVerseLocation}, whose offset is based on a specific verse.
  */
-export type UsfmLocation = UsfmVerseLocation;
+export type UsfmLocation = UsfmVerseLocation | SerializedVerseRef;
 /**
  * A verse ref and an offset within that verse in USFM space that point to a specific location in
  * USFM
@@ -2627,19 +2628,20 @@ export interface IUsjReaderWriter {
 	usjDocumentLocationToUsfmVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseLocation;
 	/**
 	 * Get the node + offset and JSONPath query within this USJ data of the first encountered string
-	 * after the verse marker for a specific verse in a USJ chapter.
+	 * after the provided USFM location for a specific verse in a USJ document.
 	 *
 	 * Note: this may return a node that is in a subsequent verse or even chapter depending on how
 	 * much content the USJ data contains. It simply looks through the rest of the USJ data for the
 	 * first text node and returns that.
 	 *
-	 * @param verseRef Indicates the book, chapter, and verse of interest to find the next text for
+	 * @param usfmLocation Indicates the location in USFM space (book, chapter, verse, character
+	 *   offset) to find the next text for
 	 * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
 	 *   indicates the location of the of USJ text node within this USJ data.
-	 * @throws Error if there is no text after the verse marker for `verseRef`
-	 * @throws Error if `verseRef` does not point to a valid verse in this USJ data
+	 * @throws Error if there is no text after `usfmLocation`
+	 * @throws Error if `usfmLocation` does not point to a valid location in this USJ data
 	 */
-	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	usfmLocationToNextTextLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 }
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export declare function getDefaultCallerSequence(): string[];
@@ -4556,7 +4558,7 @@ export type WorkingStack = StackItem[];
  *   - `extractTextBetweenPoints`
  *   - `findNextLocationOfMatchingText`
  *   - `search`
- *   - `verseRefToNextTextLocation`
+ *   - `usfmLocationToNextTextLocation`
  * - Edit the USJ document: `removeContentNodes`
  * - Transform USJ to USFM: `toUsfm`
  * - Transform USJ document locations to USFM locations and vice versa
@@ -4589,6 +4591,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly shouldAllowInvisibleCharacters;
 	private parentMapInternal;
 	private fragmentsByIndexInUsfmInternal;
+	private fragmentsByJsonPathInternal;
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
@@ -4627,7 +4630,17 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private static areStackItemsShallowEqual;
 	/** Return the working stack applicable to the given node */
 	private createWorkingStack;
+	/** "Normalize" the JSONPath passed in so we can use it for lookups in {@link FragmentsByJsonPath} */
+	private static normalizeJsonPath;
+	/**
+	 * Returns a "normalized" JSONPath transformed from the working stack. We can use this JSONPath
+	 * for lookups in {@link FragmentsByJsonPath}
+	 */
 	private static convertWorkingStackToJsonPath;
+	/**
+	 * Returns a "normalized" JSONPath transformed from the working stack and property. We can use
+	 * this JSONPath for lookups in {@link FragmentsByJsonPath}
+	 */
 	private static convertWorkingStackAndPropertyToJsonPath;
 	private convertJsonPathToWorkingStack;
 	/**
@@ -4685,7 +4698,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * Finds the closest verse ref before the index in USFM.
 	 */
 	private getVerseRefForIndexInUsfm;
-	usfmLocationToUsjNodeAndDocumentLocation(usfmLocation: UsfmLocation | SerializedVerseRef): UsjNodeAndDocumentLocation;
+	private static usfmLocationToUsfmVerseLocation;
+	usfmLocationToUsjNodeAndDocumentLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation;
 	usfmLocationToUsjDocumentLocation(usfmLocation: UsfmLocation | SerializedVerseRef): UsjDocumentLocation;
 	/**
 	 * Determine if the USJ document location is pointing to a text content location instead of some
@@ -4703,7 +4717,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @returns `true` if the location is for text content; `false` otherwise
 	 */
 	static isUsjDocumentLocationForTextContent(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjTextContentLocation>;
-	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	usfmLocationToNextTextLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 	findNextLocationOfMatchingText(startingPoint: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch?: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
 	search(regex: RegExp): UsjSearchResult[];
 	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
@@ -4823,17 +4837,14 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 */
 	private static getOffsetInUsjDocumentLocation;
 	/**
-	 * Split a USJ document JSONPath into the part before the property accessor (presumably
-	 * `ContentJsonPath`, but this method does not check that this is true) and the property being
-	 * accessed
+	 * Compares two UsjDocumentLocations to determine if they are pointing to the same location
 	 *
-	 * @param jsonPath USJ document JSONPath that may include a property accessor at the end
-	 * @returns The part before any property accessor (whole original `jsonPath` if there is no
-	 *   property accessor) and the property being accessed in the `jsonPath` (`undefined` if there is
-	 *   no property accessor)
+	 * @param a The first location to compare
+	 * @param b The second location to compare
+	 * @param ignoreJsonPath If `true`, the JSONPath properties of the locations will be ignored in
+	 *   the comparison. This is useful if you have already determined that the JSONPaths are the
+	 *   same
 	 */
-	private static splitJsonPathIntoContentAndProperty;
-	/** Compares two UsjDocumentLocations to determine if they are pointing to the same location */
 	private static areUsjDocumentLocationsEqual;
 	/** Find the fragment info corresponding to the specified USJ Document location. */
 	private findFragmentInfoAtUsjDocumentLocation;
@@ -4874,7 +4885,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   fragments are. If this method encounters a verse range, only the starting verse number is
 	 *   used (hence this is not a {@link SerializedVerseRef}). PROPERTIES ON THIS OBJECT ARE MODIFIED
 	 *   IN THIS METHOD
-	 * @param fragmentsByIndexInUsfm Map to add fragment information to
+	 * @param fragmentsByIndexInUsfm Map to add fragment information to by index in USFM
+	 * @param fragmentsByJsonPath Map to add fragment information to by JSONPath
 	 * @param indicesInUsfmByVerseRef Map to add verse start locations to. If this method encounters a
 	 *   verse range, only the starting verse number is used. See {@link IndicesInUsfmByVerseRef} for
 	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
@@ -4890,6 +4902,8 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private get usfm();
 	/** Fragments at each index in the USFM string */
 	private get fragmentsByIndexInUsfm();
+	/** Fragments at each index in the USFM string */
+	private get fragmentsByJsonPath();
 	/**
 	 * String index of the start of each verse (the backslash on the verse marker) in the USFM
 	 * representation of the USJ document. See {@link IndicesInUsfmByVerseRef} for more information.

@@ -1008,7 +1008,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // - not for export
             //   - sid, eid, and vid derived metadata is absent
             //   - char marker with `link-href` attribute gets changed to `link` marker type, which
-            // `   is an internal Paratext marker used for detecting where to put link anchors
+            //     is an internal Paratext marker used for detecting where to put link anchors
             //   - figure `src` attribute stays `src` instead of changing to `file` which is the
             //     name of this attribute in USX/USJ
             // - for export

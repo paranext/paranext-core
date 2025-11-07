@@ -18,6 +18,7 @@ import {
   FindResult,
   FindScope,
 } from 'platform-scripture';
+import { correctUsjVersion } from './scripture.util';
 
 // This interface doesn't provide any normal data types that PDPs use
 export const SCRIPTURE_FINDER_PROJECT_INTERFACES = [
@@ -187,12 +188,15 @@ export class ScriptureFinderProjectDataProviderEngine
       chapterNum: scope.chapter ?? 1,
       verseNum: 0,
     };
+    // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of asking USJ
+    // PDPs for the data because of the following layering PDP wait bug. Turtles all the way down.
+    // https://paratextstudio.atlassian.net/browse/PT-3233
     const usx =
       scope.chapter !== undefined
         ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
         : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
     if (!usx) throw new Error(`No scripture found for: ${JSON.stringify(scope)}`);
-    const scripture: Usj | undefined = usxStringToUsj(usx);
+    const scripture: Usj | undefined = correctUsjVersion(usxStringToUsj(usx));
 
     const usj = new UsjReaderWriter(scripture, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
     const regexString = job.options.useRegex
