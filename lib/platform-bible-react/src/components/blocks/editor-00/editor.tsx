@@ -25,12 +25,14 @@ export function Editor({
   onChange,
   onSerializedChange,
   placeholder = 'Start typing ...',
+  autoFocus = false,
 }: {
   editorState?: EditorState;
   editorSerializedState?: SerializedEditorState;
   onChange?: (editorState: EditorState) => void;
   onSerializedChange?: (editorSerializedState: SerializedEditorState) => void;
   placeholder?: string;
+  autoFocus?: boolean;
 }) {
   return (
     <div className="pr-twp tw-overflow-hidden tw-rounded-lg tw-border tw-bg-background tw-shadow">
@@ -42,7 +44,7 @@ export function Editor({
         }}
       >
         <TooltipProvider>
-          <Plugins placeholder={placeholder} />
+          <Plugins placeholder={placeholder} autoFocus={autoFocus} />
 
           <OnChangePlugin
             ignoreSelectionChange={true}

@@ -30,6 +30,19 @@ export default function CommentList({
     onOptionSelect: handleKeyboardSelectThread,
   });
 
+  const handleKeyDownWithEscape = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        setSelectedThreadId(undefined);
+        event.preventDefault();
+        event.stopPropagation();
+      } else {
+        handleKeyDown(event);
+      }
+    },
+    [handleKeyDown],
+  );
+
   // When a thread is expanded, focus the input field
   useEffect(() => {
     if (!selectedThreadId) return;
@@ -67,7 +80,7 @@ export default function CommentList({
         'tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         className,
       )}
-      onKeyDown={handleKeyDown}
+      onKeyDown={handleKeyDownWithEscape}
     >
       {threads.map((thread) => (
         <div key={`thread-${thread.id}`}>

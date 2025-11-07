@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { SerializedEditorState } from 'lexical';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Editor } from './editor';
-import { htmlToEditorState, editorStateToHtml } from './editor-html-utils';
+import { htmlToEditorState, editorStateToHtml } from './editor-utils';
 
 const meta: Meta<typeof Editor> = {
   title: 'Blocks/Editor',

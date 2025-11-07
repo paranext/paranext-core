@@ -13,7 +13,7 @@ export const editorTheme: EditorThemeClasses = {
     h5: 'tw-scroll-m-20 tw-text-lg tw-font-semibold tw-tracking-tight',
     h6: 'tw-scroll-m-20 tw-text-base tw-font-semibold tw-tracking-tight',
   },
-  paragraph: '',
+  paragraph: 'tw-outline-none',
   quote: 'tw-mt-6 tw-border-l-2 tw-pl-6 tw-italic',
   link: 'tw-text-blue-600 hover:tw-underline hover:tw-cursor-pointer',
   list: {

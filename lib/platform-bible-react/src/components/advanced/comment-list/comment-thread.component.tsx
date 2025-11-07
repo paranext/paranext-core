@@ -9,8 +9,8 @@ import { Button } from '@/components/shadcn-ui/button';
 import { CommentItem } from './comment-item.component';
 import { CommentThreadProps } from './comment-list.types';
 import { Editor } from '@/components/blocks/editor-00/editor';
+import { editorStateToHtml, hasEditorContent } from '@/components/blocks/editor-00/editor-utils';
 import { SerializedEditorState } from 'lexical';
-import { Input } from '@/components/shadcn-ui/input';
 
 const initialValue = {
   root: {
@@ -54,10 +54,11 @@ export function CommentThread({
   handleResolveCommentThread,
   handleAddComment,
 }: CommentThreadProps) {
-  const [inputValue, setInputValue] = useState<string>('');
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
   const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
+  const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
+  const [editorKey, setEditorKey] = useState<number>(0);
 
   const firstComment = useMemo(() => comments[0], [comments]);
 
@@ -77,6 +78,10 @@ export function CommentThread({
     window.addEventListener('resize', checkOverflow);
     return () => window.removeEventListener('resize', checkOverflow);
   }, [firstComment.verse]);
+
+  useEffect(() => {
+    setShowAllReplies(false);
+  }, [isSelected]);
 
   const localizedReplies = useMemo(
     () => ({
@@ -98,12 +103,36 @@ export function CommentThread({
   const replyCount = useMemo(() => replies.length ?? 0, [replies.length]);
   const hasReplies = useMemo(() => replyCount > 0, [replyCount]);
 
+  // For expanded threads with more than 2 replies, show only the last 2 replies
+  const visibleReplies = useMemo(() => {
+    if (!isSelected || showAllReplies || replyCount <= 2) {
+      return replies;
+    }
+    // Show only the last 2 replies
+    return replies.slice(-2);
+  }, [replies, replyCount, isSelected, showAllReplies]);
+
+  const hiddenReplyCount = useMemo(() => {
+    if (!isSelected || showAllReplies || replyCount <= 2) {
+      return 0;
+    }
+    return replyCount - 2;
+  }, [replyCount, isSelected, showAllReplies]);
+
   const replyText = useMemo(
     () =>
       replyCount === 1
         ? localizedReplies.singleReply
         : formatReplacementString(localizedReplies.multipleReplies, { count: replyCount }),
     [replyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
+  );
+
+  const hiddenReplyText = useMemo(
+    () =>
+      hiddenReplyCount === 1
+        ? localizedReplies.singleReply
+        : formatReplacementString(localizedReplies.multipleReplies, { count: hiddenReplyCount }),
+    [hiddenReplyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
   );
 
   const handleClickThreadText = useCallback(
@@ -129,6 +158,14 @@ export function CommentThread({
     [isSelected],
   );
 
+  const handleSubmitComment = useCallback(() => {
+    const success = handleAddComment(threadId, editorStateToHtml(editorState));
+    if (success) {
+      setEditorState(initialValue);
+      setEditorKey((prev) => prev + 1);
+    }
+  }, [editorState, handleAddComment, threadId]);
+
   return (
     <Card
       role="option"
@@ -146,7 +183,7 @@ export function CommentThread({
       }}
       tabIndex={-1}
     >
-      <CardContent className="tw-space-y-4 tw-p-0">
+      <CardContent className="tw-flex tw-flex-col tw-gap-2 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
           {localizedAssignedToText && (
             <Badge
@@ -224,9 +261,43 @@ export function CommentThread({
               <p className="tw-text-sm tw-text-muted-foreground">{replyText}</p>
             </div>
           )}
+          {!isSelected && hasEditorContent(editorState) && (
+            <Editor
+              editorSerializedState={editorState}
+              onSerializedChange={(value) => setEditorState(value)}
+              placeholder={localizedStrings['%comment_replyOrAssign%']}
+            />
+          )}
           {isSelected && (
             <>
-              {replies.map((reply) => (
+              {/* Show "hidden replies" separator before the visible replies if there are hidden replies */}
+              {hiddenReplyCount > 0 && (
+                <div
+                  className="tw-flex tw-cursor-pointer tw-items-center tw-gap-5 tw-py-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAllReplies(true);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowAllReplies(true);
+                    }
+                  }}
+                >
+                  <div className="tw-w-8">
+                    <Separator />
+                  </div>
+                  <div className="tw-flex tw-items-center tw-gap-2">
+                    <p className="tw-text-sm tw-text-muted-foreground">{hiddenReplyText}</p>
+                    {showAllReplies ? <ChevronUp /> : <ChevronDown />}
+                  </div>
+                </div>
+              )}
+              {visibleReplies.map((reply) => (
                 <div key={reply.id}>
                   <CommentItem
                     comment={reply}
@@ -244,6 +315,15 @@ export function CommentThread({
                 tabIndex={-1}
                 className="tw-w-full tw-space-y-2"
                 onClick={(e) => e.stopPropagation()}
+                onKeyDownCapture={(e) => {
+                  if (e.key === 'Enter' && e.shiftKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (hasEditorContent(editorState)) {
+                      handleSubmitComment();
+                    }
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.stopPropagation();
@@ -251,24 +331,26 @@ export function CommentThread({
                 }}
               >
                 <Editor
+                  key={editorKey}
                   editorSerializedState={editorState}
                   onSerializedChange={(value) => setEditorState(value)}
                   placeholder={localizedStrings['%comment_replyOrAssign%']}
+                  autoFocus
                 />
                 <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
                   <Button
                     size="icon"
                     variant="outline"
                     className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                    disabled={!inputValue}
+                    disabled={!hasEditorContent(editorState)}
                   >
                     <AtSign />
                   </Button>
                   <Button
                     size="icon"
-                    onClick={() => handleAddComment(threadId, inputValue)}
+                    onClick={handleSubmitComment}
                     className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                    disabled={!inputValue}
+                    disabled={!hasEditorContent(editorState)}
                   >
                     <ArrowUp />
                   </Button>

@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { AutoFocusPlugin } from '@lexical/react/LexicalAutoFocusPlugin';
 
 import { ContentEditable } from '@/components/editor/editor-ui/content-editable';
 import { ToolbarPlugin } from '@/components/editor/plugins/toolbar/toolbar-plugin';
 import { FontFormatToolbarPlugin } from '@/components/editor/plugins/toolbar/font-format-toolbar-plugin';
 
-export function Plugins({ placeholder = 'Start typing ...' }: { placeholder?: string }) {
+export function Plugins({
+  placeholder = 'Start typing ...',
+  autoFocus = false,
+}: {
+  placeholder?: string;
+  autoFocus?: boolean;
+}) {
   const [floatingAnchorElem, setFloatingAnchorElem] = useState<HTMLDivElement | null>(null);
 
   const onRef = (_floatingAnchorElem: HTMLDivElement) => {
@@ -29,14 +36,13 @@ export function Plugins({ placeholder = 'Start typing ...' }: { placeholder?: st
       <div className="tw-relative">
         <RichTextPlugin
           contentEditable={
-            <div className="pr-twp">
-              <div ref={onRef}>
-                <ContentEditable placeholder={placeholder} />
-              </div>
+            <div ref={onRef}>
+              <ContentEditable placeholder={placeholder} />
             </div>
           }
           ErrorBoundary={LexicalErrorBoundary}
         />
+        {autoFocus && <AutoFocusPlugin defaultSelection="rootStart" />}
         {/* editor plugins */}
       </div>
       {/* actions plugins */}
