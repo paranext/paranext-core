@@ -1,0 +1,19 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Terminology" />
+
+# Terminology
+- `Window`: An operating system window that contains some interface. We currently support having only one of these in Platform.Bible (and therefore Paratext 10 Studio) right now. We call it the app window.
+- `App title bar`: The horizontal bar at the top of the application, holding the [App Menu](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/guidelines/application-interactions.mdx#menus), other controls (e.g. for [Scripture Reference Selection](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/guidelines/application-interactions.mdx#scripture-reference-selection) and the OS window controls.
+- `Dock layout`: A feature of an interface that lets you have multiple independent sub-interfaces that share space within it and can be laid out together, dragged around, popped out to floating so they don't share space with the others anymore, etc. We use a significantly customized [rc-dock](https://ticlo.github.io/rc-dock/) for this in Platform.Bible.
+- `Tab`: The combination of a `tab content` and a `tab header`
+- `Tab header`: Holds a title for the tab and represents that tab, can be used for dragging and has a [Context Menu](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-contextmenu--docs).
+- `Tab content`: The sub-interface of a tab in the dock layout (basically, a rectangle that is resizeable and in which you can put some UI)
+- `Tab group`: A set of tabs that are sharing the same space in the dock layout, so you can see all of their tab headers but only one tab content at a time
+- `Floating tab group`: A tab group that is not within the shared space of the dock layout but is popped out of that shared space and is instead in front of the other tabs. It kinda feels like a separate window in that it has its own independent rectangle, but it's not literally a separate window; it's still in the same app window.
+- `WebView`: A specific type of tab content whose contents are wrapped in an iframe. You can generally think of all extension-provided UI as a WebView.
+- `webViewType`: ID indicating what type of content a WebView has and from where it gets that content. There may be multiple WebViews with the same webViewType.
+- `WebView Provider`: An object registered with the PAPI that the PAPI calls to get the content of a WebView of a particular webViewType. Right now (and possibly forever), all WebViews are provided by extensions' WebView Providers. There is one WebView Provider for each webViewType.
+- `Extension`: A bundle of code and assets that runs on the extension host, a backend node process. An extension may register multiple WebView Providers with different webViewTypes, which means an extension can provide multiple tabs, some or all of which may have completely different interfaces.
+
+More details and discussion in this internal [document](https://docs.google.com/document/d/1djCkT40xeEI2PAzi6tqHy44ckPoH9YsE2RZtdXy85MU/edit?tab=t.0#heading=h.geb49wjf7nkv)
