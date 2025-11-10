@@ -50,10 +50,13 @@ export type {
 } from './components/advanced/footnotes/footnotes.types';
 export {
   default as FootnoteEditor,
+  type FootnoteEditorProps,
+} from './components/advanced/footnote-editor/footnote-editor.component';
+export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
-  type FootnoteEditorProps,
-} from './components/advanced/footnotes/footnote-editor.component';
+  type FootnoteCallerType,
+} from './components/advanced/footnote-editor/footnote-editor.types';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export { FOOTNOTE_LIST_STRING_KEYS } from './components/advanced/footnotes/footnote-list.component';

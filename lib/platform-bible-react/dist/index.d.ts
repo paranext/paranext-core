@@ -758,11 +758,13 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_noteType_endNote_label%",
 	"%footnoteEditor_noteType_footnote_label%",
 	"%footnoteEditor_noteType_tooltip%",
+	"%footnoteEditor_noteTypeDropdown_label%",
 	"%footnoteEditor_saveButton_tooltip%"
 ];
 export type FootnoteEditorLocalizedStrings = {
 	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]?: string;
 };
+export type FootnoteCallerType = "generated" | "hidden" | "custom";
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
 	/** Delta ops for the current note being edited that are applied to the note editorial */
