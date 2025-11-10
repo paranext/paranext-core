@@ -47,10 +47,10 @@ export function Editor({
           <Plugins placeholder={placeholder} autoFocus={autoFocus} />
 
           <OnChangePlugin
-            ignoreSelectionChange={true}
-            onChange={(editorState) => {
-              onChange?.(editorState);
-              onSerializedChange?.(editorState.toJSON());
+            ignoreSelectionChange
+            onChange={(latestEditorState) => {
+              onChange?.(latestEditorState);
+              onSerializedChange?.(latestEditorState.toJSON());
             }}
           />
         </TooltipProvider>

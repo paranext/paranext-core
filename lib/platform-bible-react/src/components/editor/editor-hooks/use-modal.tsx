@@ -1,34 +1,31 @@
-import { JSX, useCallback, useMemo, useState } from "react"
-import * as React from "react"
+import { ReactNode, useCallback, useMemo, useState } from 'react';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/shadcn-ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
 
 export function useEditorModal(): [
-  JSX.Element | null,
-  (title: string, showModal: (onClose: () => void) => JSX.Element) => void,
+  ReactNode | undefined,
+  (title: string, showModal: (onClose: () => void) => ReactNode) => void,
 ] {
-  const [modalContent, setModalContent] = useState<null | {
-    closeOnClickOutside: boolean
-    content: JSX.Element
-    title: string
-  }>(null)
+  const [modalContent, setModalContent] = useState<
+    | {
+        closeOnClickOutside: boolean;
+        content: ReactNode;
+        title: string;
+      }
+    | undefined
+  >(undefined);
 
   const onClose = useCallback(() => {
-    setModalContent(null)
-  }, [])
+    setModalContent(undefined);
+  }, []);
 
   const modal = useMemo(() => {
-    if (modalContent === null) {
-      return null
+    if (modalContent === undefined) {
+      return undefined;
     }
-    const { title, content } = modalContent
+    const { title, content } = modalContent;
     return (
-      <Dialog open={true} onOpenChange={onClose}>
+      <Dialog open onOpenChange={onClose}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -36,23 +33,23 @@ export function useEditorModal(): [
           {content}
         </DialogContent>
       </Dialog>
-    )
-  }, [modalContent, onClose])
+    );
+  }, [modalContent, onClose]);
 
   const showModal = useCallback(
     (
       title: string,
-      getContent: (onClose: () => void) => JSX.Element,
-      closeOnClickOutside = false
+      getContent: (onClose: () => void) => ReactNode,
+      closeOnClickOutside = false,
     ) => {
       setModalContent({
         closeOnClickOutside,
         content: getContent(onClose),
         title,
-      })
+      });
     },
-    [onClose]
-  )
+    [onClose],
+  );
 
-  return [modal, showModal]
+  return [modal, showModal];
 }

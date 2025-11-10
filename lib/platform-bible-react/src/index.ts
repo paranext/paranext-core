@@ -27,7 +27,7 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
+export { default as MarkdownRenderer } from './components/advanced/markdown-renderer.component';
 export {
   ErrorPopover,
   ERROR_POPOVER_STRING_KEYS,

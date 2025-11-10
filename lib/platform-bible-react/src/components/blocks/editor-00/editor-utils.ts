@@ -1,6 +1,5 @@
-import { createEditor, SerializedEditorState } from 'lexical';
+import { createEditor, SerializedEditorState, $getRoot, $insertNodes } from 'lexical';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
-import { $getRoot, $insertNodes } from 'lexical';
 import { editorTheme } from '@/components/editor/themes/editor-theme';
 import { nodes } from './nodes';
 
@@ -44,7 +43,7 @@ export function hasEditorContent(editorState: SerializedEditorState | undefined)
  */
 export function htmlToEditorState(html: string): SerializedEditorState {
   // Clean up the HTML to replace PT9-specific attributes and simplify structure
-  html = html
+  const cleanedHtml = html
     // Replace `<strikethrough>` with `<s>`
     .replace(/<strikethrough>([\s\S]*?)<\/strikethrough>/gi, '<s>$1</s>')
     // Remove `<color>` tags but keep their content
@@ -61,12 +60,12 @@ export function htmlToEditorState(html: string): SerializedEditorState {
     },
   });
 
-  let serializedState: SerializedEditorState | null = null;
+  let serializedState: SerializedEditorState | undefined;
 
   editor.update(
     () => {
       const parser = new DOMParser();
-      const dom = parser.parseFromString(html, 'text/html');
+      const dom = parser.parseFromString(cleanedHtml, 'text/html');
       const generatedNodes = $generateNodesFromDOM(editor, dom);
 
       $getRoot().clear();

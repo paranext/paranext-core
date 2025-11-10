@@ -1,24 +1,25 @@
-"use client"
+'use client';
 
-import { createContext, JSX, useContext } from "react"
-import { LexicalEditor } from "lexical"
+import { createContext, ReactNode, useContext, useMemo } from 'react';
+import { LexicalEditor } from 'lexical';
+
+function createDefaultEditor(): LexicalEditor {
+  throw new Error('ToolbarContext not initialized');
+}
 
 const Context = createContext<{
-  activeEditor: LexicalEditor
-  $updateToolbar: () => void
-  blockType: string
-  setBlockType: (blockType: string) => void
-  showModal: (
-    title: string,
-    showModal: (onClose: () => void) => JSX.Element
-  ) => void
+  activeEditor: LexicalEditor;
+  $updateToolbar: () => void;
+  blockType: string;
+  setBlockType: (blockType: string) => void;
+  showModal: (title: string, showModal: (onClose: () => void) => ReactNode) => void;
 }>({
-  activeEditor: {} as LexicalEditor,
+  activeEditor: createDefaultEditor(),
   $updateToolbar: () => {},
-  blockType: "paragraph",
+  blockType: 'paragraph',
   setBlockType: () => {},
   showModal: () => {},
-})
+});
 
 export function ToolbarContext({
   activeEditor,
@@ -28,31 +29,27 @@ export function ToolbarContext({
   showModal,
   children,
 }: {
-  activeEditor: LexicalEditor
-  $updateToolbar: () => void
-  blockType: string
-  setBlockType: (blockType: string) => void
-  showModal: (
-    title: string,
-    showModal: (onClose: () => void) => JSX.Element
-  ) => void
-  children: React.ReactNode
+  activeEditor: LexicalEditor;
+  $updateToolbar: () => void;
+  blockType: string;
+  setBlockType: (blockType: string) => void;
+  showModal: (title: string, showModal: (onClose: () => void) => ReactNode) => void;
+  children: ReactNode;
 }) {
-  return (
-    <Context.Provider
-      value={{
-        activeEditor,
-        $updateToolbar,
-        blockType,
-        setBlockType,
-        showModal,
-      }}
-    >
-      {children}
-    </Context.Provider>
-  )
+  const contextValue = useMemo(
+    () => ({
+      activeEditor,
+      $updateToolbar,
+      blockType,
+      setBlockType,
+      showModal,
+    }),
+    [activeEditor, $updateToolbar, blockType, setBlockType, showModal],
+  );
+
+  return <Context.Provider value={contextValue}>{children}</Context.Provider>;
 }
 
 export function useToolbarContext() {
-  return useContext(Context)
+  return useContext(Context);
 }

@@ -116,7 +116,10 @@ export const useListbox = ({
 
       // When focus is inside a selected option, don't hijack typical keys; allow an escape hatch back to the option
       if (isInteractiveInsideSelected) {
-        if (event.key === 'Escape' || event.key === 'ArrowLeft') {
+        if (
+          event.key === 'Escape' ||
+          (event.key === 'ArrowLeft' && !targetElement.isContentEditable)
+        ) {
           if (selectedId) {
             // Return focus to the selected option root
             event.preventDefault();

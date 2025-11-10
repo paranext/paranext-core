@@ -14,10 +14,10 @@ export function Plugins({
   placeholder?: string;
   autoFocus?: boolean;
 }) {
-  const [floatingAnchorElem, setFloatingAnchorElem] = useState<HTMLDivElement | null>(null);
+  const [, setFloatingAnchorElem] = useState<HTMLDivElement | undefined>(undefined);
 
   const onRef = (_floatingAnchorElem: HTMLDivElement) => {
-    if (_floatingAnchorElem !== null) {
+    if (_floatingAnchorElem !== undefined) {
       setFloatingAnchorElem(_floatingAnchorElem);
     }
   };
@@ -26,7 +26,7 @@ export function Plugins({
     <div className="tw-relative">
       {/* toolbar plugins */}
       <ToolbarPlugin>
-        {({ blockType }) => (
+        {() => (
           <div className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-gap-2 tw-overflow-auto tw-border-b tw-p-1">
             <FontFormatToolbarPlugin />
           </div>

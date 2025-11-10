@@ -6,12 +6,14 @@ import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
-import { CommentItem } from './comment-item.component';
-import { CommentThreadProps } from './comment-list.types';
 import { Editor } from '@/components/blocks/editor-00/editor';
 import { editorStateToHtml, hasEditorContent } from '@/components/blocks/editor-00/editor-utils';
 import { SerializedEditorState } from 'lexical';
+import { CommentThreadProps } from './comment-list.types';
+import { CommentItem } from './comment-item.component';
 
+// SerializedEditorState type is complex, so we use type assertion for the initial empty state
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 const initialValue = {
   root: {
     children: [

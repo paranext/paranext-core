@@ -1,3 +1,6 @@
+/* stylelint-disable selector-class-pattern */
+/* Lexical editor theme classes use camelCase naming convention */
+
 .EditorTheme__code {
   background-color: transparent;
   font-family: Menlo, Consolas, Monaco, monospace;
@@ -14,7 +17,8 @@
   border-radius: 8px;
   tab-size: 2;
 }
-.EditorTheme__code:before {
+
+.EditorTheme__code::before {
   content: attr(data-gutter);
   position: absolute;
   background-color: transparent;
@@ -27,6 +31,7 @@
   text-align: right;
   min-width: 25px;
 }
+
 .EditorTheme__table {
   border-collapse: collapse;
   border-spacing: 0;
@@ -35,29 +40,37 @@
   table-layout: fixed;
   width: fit-content;
   width: 100%;
-  margin: 0px 0px 30px 0px;
+  margin: 0 0 30px;
 }
+
 .EditorTheme__tokenComment {
   color: slategray;
 }
+
 .EditorTheme__tokenPunctuation {
   color: #999;
 }
+
 .EditorTheme__tokenProperty {
   color: #905;
 }
+
 .EditorTheme__tokenSelector {
   color: #690;
 }
+
 .EditorTheme__tokenOperator {
   color: #9a6e3a;
 }
+
 .EditorTheme__tokenAttr {
   color: #07a;
 }
+
 .EditorTheme__tokenVariable {
   color: #e90;
 }
+
 .EditorTheme__tokenFunction {
   color: #dd4a68;
 }
@@ -83,9 +96,11 @@
 .Collapsible__title p {
   display: inline-flex;
 }
+
 .Collapsible__title::marker {
   color: lightgray;
 }
+
 .Collapsible__container[open] > .Collapsible__title {
   list-style-type: disclosure-open;
 }

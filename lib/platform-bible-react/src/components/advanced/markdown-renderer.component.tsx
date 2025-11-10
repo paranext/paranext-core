@@ -19,19 +19,31 @@ interface MarkdownRendererProps {
 }
 
 /**
- * Clean up HTML to handle tags that are specific to Paratext comments/notes
+ * Parse Paratext specific HTML tags
  *
  * @param html - HTML string to clean
  * @returns Cleaned HTML string
  */
-function cleanParatextHtml(html: string): string {
+function parseParatextHtml(html: string): string {
   return (
     html
       // Replace `<strikethrough>` with `<s>`
       .replace(/<strikethrough>([\s\S]*?)<\/strikethrough>/gi, '<s>$1</s>')
-      // Remove `<color>` tags but keep their content
-      // TODO: This needs to be revisited when we support colored text
-      .replace(/<color[^>]*>([\s\S]*?)<\/color>/gi, '$1')
+      // Convert `<color>` tags to `<span>` with inline color styles
+      .replace(
+        /<color[^>]*name="([^"]+)"[^>]*>([\s\S]*?)<\/color>/gi,
+        (_match, colorName, content) => {
+          // Map common color names to CSS colors
+          const colorMap: Record<string, string> = {
+            red: '#ef4444',
+            green: '#22c55e',
+            blue: '#3b82f6',
+          };
+
+          const cssColor = colorMap[colorName.toLowerCase()] || colorName;
+          return `<span style="color: ${cssColor}">${content}</span>`;
+        },
+      )
       // Remove `<language>` tags but keep their content
       // TODO: This needs to be revisited when we support multilingual content
       .replace(/<language[^>]*>([\s\S]*?)<\/language>/gi, '$1')
@@ -63,18 +75,24 @@ function truncateMarkdown(markdown: string): string {
   const breakPoints = ['. ', '! ', '? ', '\n', ' '];
 
   // Try to find a natural break point near the limit
-  for (const breakPoint of breakPoints) {
+  const foundBreak = breakPoints.find((breakPoint) => {
     const lastBreak = plainText.lastIndexOf(breakPoint, charLimit);
     if (lastBreak > charLimit * 0.7) {
       // Accept break if it's at least 70% of desired length
       truncateAt = lastBreak + breakPoint.length;
-      break;
+      return true;
     }
+    return false;
+  });
+
+  // If we didn't find a good break point, truncateAt remains charLimit
+  if (!foundBreak) {
+    truncateAt = charLimit;
   }
 
   // Truncate the original markdown at approximately the same position
   // This is approximate since markdown has formatting characters
-  return markdown.slice(0, truncateAt).trim() + '...';
+  return `${markdown.slice(0, truncateAt).trim()}...`;
 }
 
 /**
@@ -92,7 +110,7 @@ export function MarkdownRenderer({
   truncate,
 }: MarkdownRendererProps) {
   // Clean up Paratext-specific HTML before rendering
-  const cleanedMarkdown = useMemo(() => cleanParatextHtml(markdown), [markdown]);
+  const cleanedMarkdown = useMemo(() => parseParatextHtml(markdown), [markdown]);
 
   // Truncate content if needed
   const processedMarkdown = useMemo(
@@ -113,7 +131,7 @@ export function MarkdownRenderer({
     [anchorTarget],
   );
   return (
-    <div id={id} className={cn('pr-twp tw-prose', className)}>
+    <div id={id} className={cn('pr-twp', className)}>
       <Markdown options={options}>{processedMarkdown}</Markdown>
     </div>
   );
