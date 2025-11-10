@@ -280,6 +280,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const internalVerseLocationRef = useRef<SerializedVerseRef | undefined>(undefined);
 
+  // When true, allow the next scrRef change that matches `internalVerseLocationRef` to
+  // trigger scrolling/highlighting. This is used when the editor initiates a selection change
+  // (e.g., via `selectNote`) and we want to treat that internal change like an external one
+  // for the purposes of scrolling.
+  const allowScrollForInternalRef = useRef(false);
+
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
       internalVerseLocationRef.current = newVerseLocation;
@@ -335,6 +341,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [usjForFootnoteDisplay, setUsjForFootnoteDisplay] = useState<Usj | undefined>();
 
   const handleFootnoteSelected = useCallback((index: number) => {
+    // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
+    // to trigger scrolling/highlighting. This volatile flag is cleared the first time the
+    // scrRef-useEffect observes it.
+    allowScrollForInternalRef.current = true;
     editorRef.current?.selectNote(index);
   }, []);
 
@@ -585,6 +595,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
+      !allowScrollForInternalRef.current &&
       internalVerseLocationRef.current &&
       internalVerseLocationRef.current.book === scrRef.book &&
       internalVerseLocationRef.current.chapterNum === scrRef.chapterNum &&
@@ -608,7 +619,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement = scrollToVerse(scrRef);
       highlightedVerseElement?.classList.add('highlighted');
 
+      // Clear the internal verse ref since we've handled it and also clear the volatile
+      // allow-scroll flag so this special-casing only happens once.
       internalVerseLocationRef.current = undefined;
+      allowScrollForInternalRef.current = false;
 
       // Set the selection if the selection was set to something as part of this scr ref change
       if (nextRange) editorRef.current?.setSelection(nextRange);
