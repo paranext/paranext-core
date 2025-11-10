@@ -713,17 +713,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       noteCallerOnClick: isReadOnly
         ? undefined
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            if (isCollapsed) {
-              if (editingNoteKey.current) return;
+            if (!isCollapsed || editingNoteKey.current) return;
 
-              const targetRect = event.currentTarget.getBoundingClientRect();
-              setNotePopoverAnchorX(targetRect.left);
-              setNotePopoverAnchorY(targetRect.top);
-              setNotePopoverAnchorHeight(targetRect.height);
-              editingNoteKey.current = noteNodeKey;
-              editingNoteOps.current = getNoteOps();
-              setShowFootnoteEditor(true);
-            }
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = getNoteOps();
+            setShowFootnoteEditor(true);
           },
     }),
     [isReadOnly, editingNoteKey],
@@ -734,6 +732,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
       nodes: nodeOptions,
+      markerMenuTrigger: '\\',
       textDirection: textDirectionEffective,
       view: defaultView,
     }),

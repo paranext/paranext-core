@@ -23,10 +23,9 @@ import {
   usjWeb,
 } from '@/components/demo/scripture-editor/usj.data';
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
-import FootnoteEditor, {
-  FootnoteEditorLocalizedStrings,
-} from '@/components/advanced/footnotes/footnote-editor.component';
+import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
+import { FootnoteEditorLocalizedStrings } from '@/components/advanced/footnote-editor/footnote-editor.types';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
@@ -283,7 +282,7 @@ const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
   '%footnoteEditor_callerDropdown_tooltip%': 'Footnote caller',
   '%footnoteEditor_cancelButton_tooltip%': 'Cancel',
   '%footnoteEditor_copyButton_tooltip%': 'Copy footnote',
-  '%footnoteEditor_noteType_crossReference_label%': 'Cross-reference',
+  '%footnoteEditor_noteType_crossReference_label%': 'Cross reference',
   '%footnoteEditor_noteType_endNote_label%': 'Endnote',
   '%footnoteEditor_noteType_footnote_label%': 'Footnote',
   '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
@@ -402,6 +401,7 @@ export const FootnoteEditorView: Story = {
     scrRef: defaultScrRef,
     options: {
       hasExternalUI: false,
+      markerMenuTrigger: '\\',
     },
   },
 };

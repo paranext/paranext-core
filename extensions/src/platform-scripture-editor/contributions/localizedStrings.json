@@ -19,7 +19,7 @@
       "%footnoteEditor_callerDropdown_tooltip%": "Footnote caller",
       "%footnoteEditor_cancelButton_tooltip%": "Cancel",
       "%footnoteEditor_copyButton_tooltip%": "Copy footnote",
-      "%footnoteEditor_noteType_crossReference_label%": "Cross-reference",
+      "%footnoteEditor_noteType_crossReference_label%": "Cross reference",
       "%footnoteEditor_noteType_endNote_label%": "Endnote",
       "%footnoteEditor_noteType_footnote_label%": "Footnote",
       "%footnoteEditor_noteType_tooltip%": "Change type: Footnote",
