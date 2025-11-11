@@ -6,7 +6,7 @@ import { sampleComments } from './comment-sample-data';
 
 const commentListLocalizedStrings: LanguageStrings = {
   '%comment_assigned_to%': 'Assigned to {assignedUser}',
-  '%comment_date_at%': 'at',
+  '%comment_dateAtTime%': '{date} at {time}',
   '%comment_date_today%': 'today',
   '%comment_date_yesterday%': 'yesterday',
   '%comment_replyOrAssign%': 'Reply or assign with @',

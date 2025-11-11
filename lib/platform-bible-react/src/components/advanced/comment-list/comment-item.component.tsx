@@ -27,8 +27,10 @@ export function CommentItem({
       hour: 'numeric',
       minute: '2-digit',
     });
-    const atText = localizedStrings['%comment_date_at%'];
-    return `${relativeDate} ${atText} ${time}`;
+    return formatReplacementString(localizedStrings['%comment_dateAtTime%'], {
+      date: relativeDate,
+      time,
+    });
   }, [comment.date, localizedStrings]);
 
   const userLabel = useMemo(

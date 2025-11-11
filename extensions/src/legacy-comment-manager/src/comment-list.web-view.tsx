@@ -8,7 +8,7 @@ import { sampleComments } from './comment-sample-data';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%comment_assigned_to%',
-  '%comment_date_at%',
+  '%comment_dateAtTime%',
   '%comment_date_today%',
   '%comment_date_yesterday%',
   '%comment_replyOrAssign%',

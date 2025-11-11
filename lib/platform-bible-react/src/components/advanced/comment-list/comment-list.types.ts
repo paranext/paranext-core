@@ -12,7 +12,7 @@ import {
  */
 export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_assigned_to%',
-  '%comment_date_at%',
+  '%comment_dateAtTime%',
   '%comment_date_today%',
   '%comment_date_yesterday%',
   '%comment_replyOrAssign%',

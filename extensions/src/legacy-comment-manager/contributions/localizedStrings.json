@@ -3,7 +3,7 @@
   "localizedStrings": {
     "en": {
       "%comment_assigned_to%": "Assigned to {assignedUser}",
-      "%comment_date_at%": "at",
+      "%comment_dateAtTime%": "{date} at {time}",
       "%comment_date_today%": "today",
       "%comment_date_yesterday%": "yesterday",
       "%comment_replyOrAssign%": "Reply or assign with @",
@@ -15,7 +15,7 @@
     },
     "es": {
       "%comment_assigned_to%": "Asignado a {assignedUser}",
-      "%comment_date_at%": "a las",
+      "%comment_dateAtTime%": "{date} a las {time}",
       "%comment_date_today%": "hoy",
       "%comment_date_yesterday%": "ayer",
       "%comment_replyOrAssign%": "Responder o asignar con @",
