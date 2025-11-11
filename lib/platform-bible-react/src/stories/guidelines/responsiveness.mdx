@@ -1,0 +1,71 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Responsiveness" />
+
+# Responsiveness
+
+Platform.Bible allows users to open multiple tab groups inside of the application, which means that individual tabs can get very small. Given this fact, users still need to be able to work well with those smaller parts of the user interface.
+
+## Design principle
+Prefer the need for vertical scrolling over the need for horizontal scrolling.
+
+Design narrow-first, wide later. For tabs (technically "webviews") design for a `min-width` of `300px`, at which the ui works without horizontal srcollbars.
+Is this narrow view, parts of the ui may not be visible, truncated or wrapped.
+
+Things that get hidden need to be accessible in another way. Examples
+- When controls are hidden from a [toolbar](#toolbar), they are still accessible from e.g. a menu
+- When text is truncated or table columns are hidden, there is either a [Tooltip](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-tooltip--docs) or any details view, that shows the full information
+
+When width is small, there should be maximum one horizontal scrollbar. When height is small, there should be maximum two vertical scrollbars (if content includes a list or table, otherwise one)
+
+## Components
+
+### Buttons
+In narrow widths use icon-only buttons; when width allows for, use icon and text. Use container querys to determine available width.
+Always use [Tooltips](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-tooltip--docs).
+
+### Lists
+List or table bodys define a minimum height of 1-3 item heights (depending on the indivudal context), to remain scrollable.
+
+Show lists that have a list part and a details part according to the available width (use container / media query)
+- narrow: show details using a Drawer (opening from the [end side](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-direction--docs))
+- wide: show list and details side by side
+
+Show lists with 2 nested levels of details also according to the available width (use container / media query)
+- narrow: show first-level details using a Drawer (opening from the [end side](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-direction--docs)), show second-level details on the drawer, below the first-level details
+- medium: decide individually
+- wide: show all 3 parts side by side
+
+When the second-level details have the most important information or most interaction, think about reducing the first or second level into a space-saving selection, e.g. a combobox, toggle group or filter above, or sidebar on the [start side](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-direction--docs).
+
+### Table
+Decide by importance of each column's content.
+Prefer reducing column width or hiding less important columns over vertical scrolling.
+Prefer wrapping content inside a cell wherever the full content is important to be visible. Use a `max-height` for wrapped text.  Have a reasonable `min-width` for each column that is visible. Otherwise truncate with Ellipsis.
+
+### Popover
+For the time being Platform.Bible does not offer webviews a way to launch popovers that can span across multiple tabs/webviews, which means that
+- popovers can only appear inside of a webview
+- when something outside is needed, a separate webview can be created and launched via the docking framework
+
+#### Individual popvers
+For very individual popovers - e.g. item editors, rich tooltips, ... - design them in a responsive way, so that they are usable at the defined `min-width` of `300px` and bigger
+
+#### Menu-like popovers for selecting a single or multi options
+- Menu entries should not wrap, but be truncated in small width.
+- There are currently no implementation for a responsive popover menu solution. A solution might be to [use a Drawer](https://ui.shadcn.com/docs/components/combobox#responsive) (opening location/direction to be defined). Once this is decided, we should likely add code to the menu-like popover implementations and document it here.
+
+Which component to use for single and multi select popoverse, see
+<iframe src="https://embed.figma.com/design/hJirMCWP9O9riw39Gd5zyl/Design-System-Figma?node-id=0-1&embed-host=paratext-design-system" width="100%" height="400" style={{border: "none"}}>
+  Your browser does not support iframes.
+</iframe>
+
+### Toolbar
+Toolbars shrink and finally hide items in smaller widths. It is imporant to always keep the menu button visible. As mentioned above, hidden items need to be accessible elsewhere.
+
+Toolbars do **not** automatically or partially overflow into overflow menus. Instead duplicate functionality may always exists in there.
+
+Lightweight filter toolbars, may wrap into two, maximum three rows instead of hiding elements.
+
+### Tabs
+Tab Headsers overflow into an overflow menu. Also see [Interactions/Tab Navigation](./guidelines/application-interactions.mdx#tab-navigation)

@@ -39,7 +39,7 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@eten-tech-foundation/platform-editor": "~0.8.9",
+    "@eten-tech-foundation/platform-editor": "~0.8.10",
     "@eten-tech-foundation/scripture-utilities": "~0.1.4",
     "@swc/core": "1.13.3",
     "@tailwindcss/typography": "^0.5.16",

@@ -117,8 +117,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useCallback(async () => {
       const projectDict: { [projectId: string]: ProjectOption } = {};
 
-      // Fetch projects metadata to get ids
-      const allMetadata = await papi.projectLookup.getMetadataForAllProjects();
+      // Fetch only scripture projects metadata - those with Scripture or Paratext interfaces
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['Scripture', 'Paratext'],
+      });
 
       // Map through all metadata to get ids and names
       await Promise.all(
