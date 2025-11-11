@@ -107,26 +107,26 @@ export function CommentThread({
 
   // For expanded threads with more than 2 replies, show only the last 2 replies
   const visibleReplies = useMemo(() => {
-    if (!isSelected || showAllReplies || replyCount <= 2) {
+    if (showAllReplies || replyCount <= 2) {
       return replies;
     }
     // Show only the last 2 replies
     return replies.slice(-2);
-  }, [replies, replyCount, isSelected, showAllReplies]);
+  }, [replies, replyCount, showAllReplies]);
 
   const hiddenReplyCount = useMemo(() => {
-    if (!isSelected || showAllReplies || replyCount <= 2) {
+    if (showAllReplies || replyCount <= 2) {
       return 0;
     }
     return replyCount - 2;
-  }, [replyCount, isSelected, showAllReplies]);
+  }, [replyCount, showAllReplies]);
 
   const replyText = useMemo(
     () =>
       replyCount === 1
         ? localizedReplies.singleReply
         : formatReplacementString(localizedReplies.multipleReplies, { count: replyCount }),
-    [replyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
+    [replyCount, localizedReplies],
   );
 
   const hiddenReplyText = useMemo(
@@ -134,7 +134,7 @@ export function CommentThread({
       hiddenReplyCount === 1
         ? localizedReplies.singleReply
         : formatReplacementString(localizedReplies.multipleReplies, { count: hiddenReplyCount }),
-    [hiddenReplyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
+    [hiddenReplyCount, localizedReplies],
   );
 
   const handleClickThreadText = useCallback(
@@ -161,9 +161,10 @@ export function CommentThread({
   );
 
   const handleSubmitComment = useCallback(() => {
-    const success = handleAddComment(threadId, editorStateToHtml(editorState));
-    if (success) {
+    const newCommentId = handleAddComment(threadId, editorStateToHtml(editorState));
+    if (newCommentId) {
       setEditorState(initialValue);
+      // To properly reset the editor, we need to change the key so that it remounts
       setEditorKey((prev) => prev + 1);
     }
   }, [editorState, handleAddComment, threadId]);
@@ -263,6 +264,7 @@ export function CommentThread({
               <p className="tw-text-sm tw-text-muted-foreground">{replyText}</p>
             </div>
           )}
+          {/* Show Editor on an unselected thread when it has drafted content */}
           {!isSelected && hasEditorContent(editorState) && (
             <Editor
               editorSerializedState={editorState}

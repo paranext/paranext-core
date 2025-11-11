@@ -18,15 +18,18 @@ const commentListLocalizedStrings: LanguageStrings = {
 function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThread[] }) {
   const [threads, setThreads] = useState<LegacyCommentThread[]>(initialThreads);
 
-  const handleAddComment = (threadId: string, contents: string): boolean => {
+  const handleAddComment = (threadId: string, contents: string): string | undefined => {
     console.log(`Adding comment to thread ${threadId}: ${contents}`);
+
+    let newCommentId: string | undefined;
 
     // Find the thread and add the comment
     setThreads((prevThreads) =>
       prevThreads.map((thread) => {
         if (`thread-${thread.id}` === threadId) {
+          newCommentId = `${thread.id}-${Date.now()}`;
           const newComment: LegacyComment = {
-            id: `${thread.id}-${Date.now()}`,
+            id: newCommentId,
             user: 'Current User',
             date: new Date().toISOString(),
             contents,
@@ -49,7 +52,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
       }),
     );
 
-    return true;
+    return newCommentId;
   };
 
   const handleResolveCommentThread = (threadId: string) => {

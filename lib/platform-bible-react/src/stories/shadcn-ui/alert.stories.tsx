@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { MarkdownRenderer } from '@/components/advanced/markdown-renderer.component';
+import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn-ui/alert';
 import { AlertCircle, Terminal, Info, CheckCircle2, XCircle } from 'lucide-react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';

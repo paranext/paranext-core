@@ -3,23 +3,16 @@
 import { createContext, ReactNode, useContext, useMemo } from 'react';
 import { LexicalEditor } from 'lexical';
 
-function createDefaultEditor(): LexicalEditor {
-  throw new Error('ToolbarContext not initialized');
-}
-
-const Context = createContext<{
-  activeEditor: LexicalEditor;
-  $updateToolbar: () => void;
-  blockType: string;
-  setBlockType: (blockType: string) => void;
-  showModal: (title: string, showModal: (onClose: () => void) => ReactNode) => void;
-}>({
-  activeEditor: createDefaultEditor(),
-  $updateToolbar: () => {},
-  blockType: 'paragraph',
-  setBlockType: () => {},
-  showModal: () => {},
-});
+const Context = createContext<
+  | {
+      activeEditor: LexicalEditor;
+      $updateToolbar: () => void;
+      blockType: string;
+      setBlockType: (blockType: string) => void;
+      showModal: (title: string, showModal: (onClose: () => void) => ReactNode) => void;
+    }
+  | undefined
+>(undefined);
 
 export function ToolbarContext({
   activeEditor,
@@ -51,5 +44,9 @@ export function ToolbarContext({
 }
 
 export function useToolbarContext() {
-  return useContext(Context);
+  const context = useContext(Context);
+  if (!context) {
+    throw new Error('useToolbarContext must be used within a ToolbarContext provider');
+  }
+  return context;
 }

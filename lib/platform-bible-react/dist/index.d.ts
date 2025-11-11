@@ -364,8 +364,11 @@ export interface CommentListProps {
 	threads: LegacyCommentThread[];
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
-	/** Handler for adding a comment to a thread. Returns true if the comment was successfully added. */
-	handleAddComment: (threadId: string, contents: string) => boolean;
+	/**
+	 * Handler for adding a comment to a thread. If successful, returns the auto-generated comment ID
+	 * (format: "threadId/userName/date"). Otherwise, returns undefined.
+	 */
+	handleAddComment: (threadId: string, contents: string) => string | undefined;
 	/** Handler for resolving the comment thread */
 	handleResolveCommentThread: (threadId: string) => void;
 }

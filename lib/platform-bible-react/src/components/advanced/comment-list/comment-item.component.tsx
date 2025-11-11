@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MarkdownRenderer } from '@/components/advanced/markdown-renderer.component';
+import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Avatar, AvatarFallback } from '@/components/shadcn-ui/avatar';
 import { cn } from '@/utils/shadcn-ui.util';
 import { formatReplacementString, formatRelativeDate } from 'platform-bible-utils';

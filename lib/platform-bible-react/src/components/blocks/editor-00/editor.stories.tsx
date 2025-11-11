@@ -46,11 +46,10 @@ export const WithCustomPlaceholder: Story = {
  */
 export const WithHtmlContent: StoryObj = {
   render: () => {
+    const originalHtml = `<p>This is a note with <b>bold text</b> and <i>italic text</i>.</p><p>It also has <u>underlined</u> and <s>strikethrough</s> text.</p><p>This is a <color name="red">paragraph</color> with some <language name="es-015-vaidika">Paratext</language> <strikethrough>specific</strikethrough> tags</p>`;
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [editorState, setEditorState] = useState<SerializedEditorState>(
-      htmlToEditorState(
-        '<p>This is a note with <b>bold text</b> and <i>italic text</i>.</p><p>It also has <u>underlined</u> and <s>strikethrough</s> text.</p>',
-      ),
+      htmlToEditorState(originalHtml),
     );
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [htmlOutput, setHtmlOutput] = useState<string>('');
@@ -78,17 +77,15 @@ export const WithHtmlContent: StoryObj = {
         </div>
         <div className="tw-space-y-2">
           <h4 className="tw-text-sm tw-font-semibold">HTML Output:</h4>
-          <pre className="tw-overflow-x-auto tw-rounded-md tw-border tw-border-border tw-bg-muted tw-p-3 tw-text-xs">
+          <p className="tw-overflow-x-auto tw-rounded-md tw-border tw-border-border tw-bg-muted tw-p-3 tw-text-xs">
             {htmlOutput || '(Edit the content above to see HTML output)'}
-          </pre>
+          </p>
         </div>
         <div className="tw-space-y-2">
           <h4 className="tw-text-sm tw-font-semibold">Original HTML Input:</h4>
-          <pre className="tw-overflow-x-auto tw-rounded-md tw-border tw-border-border tw-bg-muted tw-p-3 tw-text-xs">
-            {
-              '<p>This is a note with <b>bold text</b> and <i>italic text</i>.</p><p>It also has <u>underlined</u> and <s>strikethrough</s> text.</p>'
-            }
-          </pre>
+          <p className="tw-overflow-x-auto tw-rounded-md tw-border tw-border-border tw-bg-muted tw-p-3 tw-text-xs">
+            {originalHtml}
+          </p>
         </div>
       </div>
     );

@@ -21,8 +21,8 @@ interface MarkdownRendererProps {
 /**
  * Parse Paratext specific HTML tags
  *
- * @param html - HTML string to clean
- * @returns Cleaned HTML string
+ * @param html - HTML string to parse
+ * @returns Parsed HTML string
  */
 function parseParatextHtml(html: string): string {
   return (

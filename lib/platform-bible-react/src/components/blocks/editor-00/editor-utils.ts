@@ -1,10 +1,8 @@
-import { createEditor, SerializedEditorState, $getRoot, $insertNodes } from 'lexical';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
-import { editorTheme } from '@/components/editor/themes/editor-theme';
-import { nodes } from './nodes';
+import { $getRoot, $insertNodes, createEditor, SerializedEditorState } from 'lexical';
 
 /**
- * Check if the editor state has any meaningful content (non-empty text)
+ * Check if the editor state has any meaningful content
  *
  * @param editorState - SerializedEditorState to check
  * @returns True if the editor has content, false if it's empty
@@ -12,17 +10,10 @@ import { nodes } from './nodes';
 export function hasEditorContent(editorState: SerializedEditorState | undefined): boolean {
   if (!editorState) return false;
 
-  const editor = createEditor({
-    namespace: 'EditorUtils',
-    theme: editorTheme,
-    nodes,
-    onError: (error: Error) => {
-      console.error(error);
-    },
-  });
+  const editor = createEditor();
 
-  const initialEditorState = editor.parseEditorState(JSON.stringify(editorState));
-  editor.setEditorState(initialEditorState);
+  const parsedEditorState = editor.parseEditorState(JSON.stringify(editorState));
+  editor.setEditorState(parsedEditorState);
 
   let hasContent = false;
 
@@ -36,36 +27,35 @@ export function hasEditorContent(editorState: SerializedEditorState | undefined)
 }
 
 /**
- * Convert HTML string to Lexical SerializedEditorState
+ * Convert Paratext specific HTML string to Lexical SerializedEditorState
  *
  * @param html - HTML string to convert
  * @returns SerializedEditorState that can be used with the Editor component
  */
 export function htmlToEditorState(html: string): SerializedEditorState {
+  if (!html || html.trim() === '') {
+    throw new Error('Input HTML is empty');
+  }
+
   // Clean up the HTML to replace PT9-specific attributes and simplify structure
-  const cleanedHtml = html
+  const cleanHtml = html
     // Replace `<strikethrough>` with `<s>`
     .replace(/<strikethrough>([\s\S]*?)<\/strikethrough>/gi, '<s>$1</s>')
     // Remove `<color>` tags but keep their content
+    // TODO: This needs to be revisited when we know how we want to handle the <color> tag
     .replace(/<color[^>]*>([\s\S]*?)<\/color>/gi, '$1')
     // Remove `<language>` tags but keep their content
+    // TODO: This needs to be revisited when we know how we want to handle the <language> tag
     .replace(/<language[^>]*>([\s\S]*?)<\/language>/gi, '$1');
 
-  const editor = createEditor({
-    namespace: 'EditorUtils',
-    theme: editorTheme,
-    nodes,
-    onError: (error: Error) => {
-      console.error(error);
-    },
-  });
+  const editor = createEditor();
 
   let serializedState: SerializedEditorState | undefined;
 
   editor.update(
     () => {
       const parser = new DOMParser();
-      const dom = parser.parseFromString(cleanedHtml, 'text/html');
+      const dom = parser.parseFromString(cleanHtml, 'text/html');
       const generatedNodes = $generateNodesFromDOM(editor, dom);
 
       $getRoot().clear();
@@ -94,17 +84,10 @@ export function htmlToEditorState(html: string): SerializedEditorState {
  * @returns HTML string
  */
 export function editorStateToHtml(editorState: SerializedEditorState): string {
-  const editor = createEditor({
-    namespace: 'EditorUtils',
-    theme: editorTheme,
-    nodes,
-    onError: (error: Error) => {
-      console.error(error);
-    },
-  });
+  const editor = createEditor();
 
-  const initialEditorState = editor.parseEditorState(JSON.stringify(editorState));
-  editor.setEditorState(initialEditorState);
+  const parsedEditorState = editor.parseEditorState(JSON.stringify(editorState));
+  editor.setEditorState(parsedEditorState);
 
   let html = '';
 
@@ -114,17 +97,12 @@ export function editorStateToHtml(editorState: SerializedEditorState): string {
 
   // Clean up the HTML to remove Shadcn/Lexical-specific attributes and simplify structure
   html = html
-    // Remove class attributes
-    .replace(/\s+class="[^"]*"/g, '')
     // Remove style attributes
     .replace(/\s+style="[^"]*"/g, '')
     // Remove empty spans
     .replace(/<span>(.*?)<\/span>/g, '$1')
     // Simplify nested formatting tags (e.g., <b><strong>text</strong></b> -> <b>text</b>)
-    .replace(/<b><strong>(.*?)<\/strong><\/b>/g, '<b>$1</b>')
-    .replace(/<i><em>(.*?)<\/em><\/i>/g, '<i>$1</i>')
-    .replace(/<u><span>(.*?)<\/span><\/u>/g, '<u>$1</u>')
-    .replace(/<s><span>(.*?)<\/span><\/s>/g, '<s>$1</s>');
+    .replace(/<b><strong>(.*?)<\/strong><\/b>/g, '<b>$1</b>');
 
   return html;
 }

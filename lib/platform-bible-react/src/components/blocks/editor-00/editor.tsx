@@ -19,12 +19,17 @@ const editorConfig: InitialConfigType = {
   },
 };
 
+/**
+ * Shadcn UI based Lexical Editor component
+ *
+ * Documentation: https://shadcn-editor.vercel.app/docs/
+ */
 export function Editor({
   editorState,
   editorSerializedState,
   onChange,
   onSerializedChange,
-  placeholder = 'Start typing ...',
+  placeholder = 'Start typing…',
   autoFocus = false,
 }: {
   editorState?: EditorState;

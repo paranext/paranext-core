@@ -31,9 +31,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     return filteredThreads;
   }, [scrRef]);
 
-  const handleAddComment = useCallback((threadId: string, contents: string) => {
+  const handleAddComment = useCallback((threadId: string, contents: string): string | undefined => {
     // Logic to add a new comment would go here
     logger.debug(`Adding comment to thread ${threadId}: ${contents}`);
+    return undefined;
   }, []);
 
   const handleResolveCommentThread = useCallback((threadId: string) => {

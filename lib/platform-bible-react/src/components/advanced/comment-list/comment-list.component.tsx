@@ -30,6 +30,7 @@ export default function CommentList({
     onOptionSelect: handleKeyboardSelectThread,
   });
 
+  // Set selected thread it to undefined when Escape is pressed
   const handleKeyDownWithEscape = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Escape') {
