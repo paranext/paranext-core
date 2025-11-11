@@ -12,6 +12,7 @@ import {
   ViewOptions,
   DeltaSource,
   isInsertEmbedOpOfType,
+  DeltaOpInsertNoteEmbed,
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
@@ -116,7 +117,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
   const editingNoteKey = useRef<string>();
-  const editingNoteOps = useRef<DeltaOp[]>();
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -715,12 +716,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
             if (!isCollapsed || editingNoteKey.current) return;
 
+            const noteOp = getNoteOps()?.at(0);
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
             const targetRect = event.currentTarget.getBoundingClientRect();
             setNotePopoverAnchorX(targetRect.left);
             setNotePopoverAnchorY(targetRect.top);
             setNotePopoverAnchorHeight(targetRect.height);
             editingNoteKey.current = noteNodeKey;
-            editingNoteOps.current = getNoteOps();
+            editingNoteOps.current = [noteOp];
             setShowFootnoteEditor(true);
           },
     }),

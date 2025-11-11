@@ -1,11 +1,13 @@
 import {
   DeltaOp,
+  DeltaOpInsertNoteEmbed,
   Editorial,
   EditorOptions,
   EditorRef,
   GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
   HIDDEN_NOTE_CALLER,
+  isInsertEmbedOpOfType,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
@@ -296,7 +298,7 @@ export const FootnoteEditorView: Story = {
     const editorRef = useRef<EditorRef | null>(null);
 
     const noteKey = useRef<string>();
-    const noteOps = useRef<DeltaOp[]>();
+    const noteOps = useRef<DeltaOpInsertNoteEmbed[]>();
 
     const [popoverX, setPopoverX] = useState<number>();
     const [popoverY, setPopoverY] = useState<number>();
@@ -336,8 +338,12 @@ export const FootnoteEditorView: Story = {
               // (event as SyntheticEvent<)
               if (noteKey.current) return;
 
+              // Makes sure the note op is the correct type and is defined
+              const noteOp = getNoteOps()?.at(0);
+              if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
               noteKey.current = noteNodeKey;
-              noteOps.current = getNoteOps();
+              noteOps.current = [noteOp];
               setShowFootnoteEditor(true);
             }
           },

@@ -16,7 +16,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
 import { useEffect, useState } from 'react';
-import { Asterisk, Minus, Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
@@ -35,6 +35,7 @@ interface FootnoteCallerDropdownProps {
 const renderCallerButtonContent = (
   callerType: FootnoteCallerType,
   localizedStrings: FootnoteEditorLocalizedStrings,
+  customCaller: string,
 ) => {
   if (callerType === 'generated') {
     return (
@@ -54,12 +55,12 @@ const renderCallerButtonContent = (
 
   return (
     <>
-      <Asterisk /> {localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}
+      {customCaller} {localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}
     </>
   );
 };
 
-export default function FootnoteCallerDropdown({
+export function FootnoteCallerDropdown({
   callerType,
   updateCallerType,
   customCaller,
@@ -92,7 +93,7 @@ export default function FootnoteCallerDropdown({
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="tw-h-6">
-                {renderCallerButtonContent(callerType, localizedStrings)}
+                {renderCallerButtonContent(callerType, localizedStrings, customCaller)}
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>

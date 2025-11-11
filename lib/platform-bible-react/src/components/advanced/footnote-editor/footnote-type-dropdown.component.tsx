@@ -64,7 +64,7 @@ const formatNoteTypeTooltip = (
   });
 };
 
-export default function FootnoteTypeDropdown({
+export function FootnoteTypeDropdown({
   noteType,
   handleNoteTypeChange,
   localizedStrings,
