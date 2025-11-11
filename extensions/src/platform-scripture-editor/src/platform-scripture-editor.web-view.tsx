@@ -283,7 +283,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // When true, allow the next scrRef change that matches `internalVerseLocationRef` to
   // trigger scrolling/highlighting. This is used when the editor initiates a selection change
   // (e.g., via `selectNote`) and we want to treat that internal change like an external one
-  // for the purposes of scrolling.
+  // for the purposes of scrolling. This volatile flag is cleared the first time the
+  // scrRef-useEffect observes it, so there is a risk of a race condition.
   const allowScrollForInternalRef = useRef(false);
 
   const setScrRefNoScroll = useCallback(
@@ -343,7 +344,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const handleFootnoteSelected = useCallback((index: number) => {
     // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
     // to trigger scrolling/highlighting. This volatile flag is cleared the first time the
-    // scrRef-useEffect observes it.
+    // scrRef-useEffect observes it, so there is a risk of a race condition. It would be better to
+    // note the Scripture reference of this note and check for that in the scrRef-useEffect, but at
+    // this time, notes don't have Scripture references filled in and `selectNote` does not return
+    // that information.
     allowScrollForInternalRef.current = true;
     editorRef.current?.selectNote(index);
   }, []);
