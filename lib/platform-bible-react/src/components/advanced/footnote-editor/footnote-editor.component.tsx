@@ -1,6 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import {
-  DeltaOp,
+  DeltaOpInsertNoteEmbed,
   Editorial,
   EditorOptions,
   EditorRef,
@@ -19,16 +19,16 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@/components/shadcn-ui/tooltip';
-import FootnoteCallerDropdown from './footnote-caller-dropdown.component';
-import FootnoteTypeDropdown from './footnote-type-dropdown.component';
+import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
+import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
   /** Delta ops for the current note being edited that are applied to the note editorial */
-  noteOps: DeltaOp[] | undefined;
+  noteOps: DeltaOpInsertNoteEmbed[] | undefined;
   /** External function to handle saving changes to the footnote */
-  onSave: (noteOps: DeltaOp[]) => void;
+  onSave: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
   /**
    * External function to handle closing the footnote editor. Gets called when the editor is closed
    * without saving changes
@@ -90,8 +90,9 @@ export default function FootnoteEditor({
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
-    if (noteOps && isInsertEmbedOpOfType('note', noteOps[0])) {
-      const rawCaller = noteOps[0].insert.note?.caller;
+    const noteOp = noteOps?.at(0);
+    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+      const rawCaller = noteOp.insert.note?.caller;
       // Parses the current caller
       let parsedCallerType: FootnoteCallerType = 'custom';
       if (rawCaller === GENERATOR_NOTE_CALLER) {
@@ -103,12 +104,12 @@ export default function FootnoteEditor({
       }
       setCallerType(parsedCallerType);
       // Assigns note type
-      setNoteType(noteOps[0].insert.note?.style ?? 'f');
+      setNoteType(noteOp.insert.note?.style ?? 'f');
       // Sets the caller to empty in the footnote editor so that it doesn't show
-      if (noteOps[0].insert.note) noteOps[0].insert.note.caller = '';
+      if (noteOp.insert.note) noteOp.insert.note.caller = '';
       // Applies timeout for the apply update operation to avoid flush sync warning
       timeout = setTimeout(() => {
-        editorRef.current?.applyUpdate([{ delete: 1 }, noteOps[0]]);
+        editorRef.current?.applyUpdate([{ delete: 1 }, noteOp]);
       }, 0);
     }
 
@@ -120,17 +121,17 @@ export default function FootnoteEditor({
   }, [noteOps, noteKey]);
 
   const handleSave = useCallback(() => {
-    const currentNoteOps = editorRef.current?.getNoteOps(0);
-    if (currentNoteOps && isInsertEmbedOpOfType('note', currentNoteOps[0])) {
-      if (currentNoteOps[0].insert.note) {
+    const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
+    if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
+      if (currentNoteOp.insert.note) {
         if (callerType === 'custom') {
-          currentNoteOps[0].insert.note.caller = customCaller;
+          currentNoteOp.insert.note.caller = customCaller;
         } else {
-          currentNoteOps[0].insert.note.caller =
+          currentNoteOp.insert.note.caller =
             callerType === 'generated' ? GENERATOR_NOTE_CALLER : HIDDEN_NOTE_CALLER;
         }
       }
-      onSave(currentNoteOps);
+      onSave([currentNoteOp]);
     }
   }, [callerType, customCaller, onSave]);
 
@@ -145,17 +146,12 @@ export default function FootnoteEditor({
     setNoteType(value);
 
     // Changes the note type for the current note that is being edited
-    const currentNoteOps = editorRef.current?.getNoteOps(0);
-    if (currentNoteOps && isInsertEmbedOpOfType('note', currentNoteOps[0])) {
-      if (currentNoteOps[0].insert.note) currentNoteOps[0].insert.note.style = value;
-      editorRef.current?.applyUpdate([]);
-      editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOps[0]]);
+    const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
+    if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
+      if (currentNoteOp.insert.note) currentNoteOp.insert.note.style = value;
+      editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOp]);
     }
   };
-
-  useEffect(() => {
-    console.log('new caller type', callerType);
-  }, [callerType]);
 
   return (
     <div className="footnote-editor tw-grid tw-gap-[12px]">
@@ -168,9 +164,9 @@ export default function FootnoteEditor({
           />
           <FootnoteCallerDropdown
             callerType={callerType}
-            updateCallerType={(newCallerType) => setCallerType(newCallerType)}
+            updateCallerType={setCallerType}
             customCaller={customCaller}
-            updateCustomCaller={(newCustomCaller: string) => setCustomCaller(newCustomCaller)}
+            updateCustomCaller={setCustomCaller}
             localizedStrings={localizedStrings}
           />
         </div>
