@@ -16,7 +16,6 @@ import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
 import { useEffect, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
@@ -40,7 +39,7 @@ const renderCallerButtonContent = (
   if (callerType === 'generated') {
     return (
       <>
-        <Plus /> {localizedStrings['%footnoteEditor_callerDropdown_item_generated%']}
+        <p>+</p> {localizedStrings['%footnoteEditor_callerDropdown_item_generated%']}
       </>
     );
   }
@@ -48,14 +47,14 @@ const renderCallerButtonContent = (
   if (callerType === 'hidden') {
     return (
       <>
-        <Minus /> {localizedStrings['%footnoteEditor_callerDropdown_item_hidden%']}
+        <p>-</p> {localizedStrings['%footnoteEditor_callerDropdown_item_hidden%']}
       </>
     );
   }
 
   return (
     <>
-      {customCaller} {localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}
+      <p>{customCaller}</p> {localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}
     </>
   );
 };
@@ -68,11 +67,22 @@ export function FootnoteCallerDropdown({
   localizedStrings,
 }: FootnoteCallerDropdownProps) {
   const [selectedCallerType, setSelectedCallerType] = useState<FootnoteCallerType>(callerType);
+  const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
 
   // If the caller type changes, the selected caller type needs to change also
   useEffect(() => {
     setSelectedCallerType(callerType);
   }, [callerType]);
+
+  // If the parent custom caller changes, then the new custom caller should reflect the changes
+  useEffect(() => {
+    if (newCustomCaller !== customCaller) {
+      setNewCustomCaller(customCaller);
+    }
+    // This can't be triggered when the new custom caller updates because otherwise this will
+    // completely prevent the input field from being edited
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customCaller]);
 
   const handleDropdownOpenChange = (open: boolean) => {
     if (!open) {
@@ -80,8 +90,10 @@ export function FootnoteCallerDropdown({
       // selected caller
       if (selectedCallerType !== 'custom' || customCaller) {
         updateCallerType(selectedCallerType);
+        updateCustomCaller(newCustomCaller);
       } else {
         setSelectedCallerType(callerType);
+        setNewCustomCaller(customCaller);
       }
     }
   };
@@ -134,9 +146,9 @@ export function FootnoteCallerDropdown({
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}</span>
             <Input
               className="tw-h-auto tw-w-10 tw-p-0 tw-text-center"
-              value={customCaller}
+              value={newCustomCaller}
               maxLength={1}
-              onChange={(event) => updateCustomCaller(event.target.value)}
+              onChange={(event) => setNewCustomCaller(event.target.value)}
             />
           </div>
         </DropdownMenuCheckboxItem>
