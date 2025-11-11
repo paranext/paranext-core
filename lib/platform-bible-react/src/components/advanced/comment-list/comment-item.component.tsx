@@ -5,13 +5,16 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { formatReplacementString, formatRelativeDate } from 'platform-bible-utils';
 import { CommentItemProps } from './comment-list.types';
 
+/**
+ * A single comment item in the comment list.
+ *
+ * @param CommentItemProps The properties for the CommentItem component
+ */
 export function CommentItem({
   comment,
   isReply = false,
   localizedStrings,
   isThreadExpanded = false,
-  handleClickCommentText,
-  handleMouseDownCommentText,
 }: CommentItemProps) {
   const displayDate = useMemo(() => {
     const date = new Date(comment.date);
@@ -24,7 +27,8 @@ export function CommentItem({
       hour: 'numeric',
       minute: '2-digit',
     });
-    return `${relativeDate} at ${time}`;
+    const atText = localizedStrings['%comment_date_at%'];
+    return `${relativeDate} ${atText} ${time}`;
   }, [comment.date, localizedStrings]);
 
   const userLabel = useMemo(
@@ -50,45 +54,21 @@ export function CommentItem({
   );
 
   return (
-    <div className={cn('tw-space-y-3', isReply && 'tw-text-sm')}>
-      <div className="tw-flex tw-flex-row tw-gap-3">
-        <Avatar className={cn(isReply ? 'tw-h-8 tw-w-8' : 'tw-h-8 tw-w-8')}>
-          <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
-        </Avatar>
-        <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
-          <div className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
-            {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-            <p
-              className="tw-text-sm tw-font-medium"
-              onClick={handleClickCommentText}
-              onMouseDown={handleMouseDownCommentText}
-            >
-              {userLabel}
-            </p>
-            {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
-            <p
-              className="tw-text-xs tw-font-normal tw-text-muted-foreground"
-              onClick={handleClickCommentText}
-              onMouseDown={handleMouseDownCommentText}
-            >
-              {displayDate}
-            </p>
-          </div>
-          {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-          <div
-            className="tw-flex tw-flex-row tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground"
-            onClick={handleClickCommentText}
-            onMouseDown={handleMouseDownCommentText}
-          >
-            <MarkdownRenderer
-              className="tw-text-sm tw-font-normal tw-text-primary"
-              markdown={comment.contents}
-              truncate={!isThreadExpanded}
-            />
-          </div>
+    <div className={cn('tw-flex tw-flex-row tw-gap-3 tw-space-y-3', { 'tw-text-sm': isReply })}>
+      <Avatar className="tw-h-8 tw-w-8">
+        <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
+      </Avatar>
+      <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
+        <div className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
+          <p className="tw-text-sm tw-font-medium">{userLabel}</p>
+          <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
+        </div>
+        <div className="tw-flex tw-flex-row tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground">
+          <MarkdownRenderer
+            className="tw-text-sm tw-font-normal tw-text-primary"
+            markdown={comment.contents}
+            truncate={!isThreadExpanded}
+          />
         </div>
       </div>
     </div>

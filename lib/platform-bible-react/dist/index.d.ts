@@ -357,6 +357,7 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
+/** Props for the CommentList component */
 export interface CommentListProps {
 	/** Additional class name for the component */
 	className?: string;
@@ -369,6 +370,11 @@ export interface CommentListProps {
 	/** Handler for resolving the comment thread */
 	handleResolveCommentThread: (threadId: string) => void;
 }
+/**
+ * Component for rendering a list of comment threads
+ *
+ * @param CommentListProps Props for the CommentList component
+ */
 export function CommentList({ className, threads, localizedStrings, handleAddComment, handleResolveCommentThread, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
@@ -2520,7 +2526,9 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	listboxRef: React$1.RefObject<HTMLElement>;
 	activeId: string | undefined;
 	selectedId: string | undefined;
+	/** Keyboard event handler for listbox navigation and selection */
 	handleKeyDown: (event: React$1.KeyboardEvent<HTMLElement>) => void;
+	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
 /**

@@ -5,13 +5,14 @@ import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample-data';
 
 const commentListLocalizedStrings: LanguageStrings = {
-  '%no_comments%': 'No comments yet',
-  '%comment_thread_single_reply%': '1 reply',
-  '%comment_thread_multiple_replies%': '{count} replies',
   '%comment_assigned_to%': 'Assigned to {assignedUser}',
+  '%comment_date_at%': 'at',
   '%comment_date_today%': 'today',
   '%comment_date_yesterday%': 'yesterday',
   '%comment_replyOrAssign%': 'Reply or assign with @',
+  '%comment_thread_multiple_replies%': '{count} replies',
+  '%comment_thread_single_reply%': '1 reply',
+  '%no_comments%': 'No comments yet',
 };
 
 const handleAddComment = (threadId: string, contents: string) => {
@@ -48,15 +49,6 @@ type Story = StoryObj<typeof CommentList>;
 export const Default: Story = {
   args: {
     threads: sampleComments,
-    localizedStrings: commentListLocalizedStrings,
-    handleAddComment,
-    handleResolveCommentThread,
-  },
-};
-
-export const NoThreads: Story = {
-  args: {
-    threads: [],
     localizedStrings: commentListLocalizedStrings,
     handleAddComment,
     handleResolveCommentThread,

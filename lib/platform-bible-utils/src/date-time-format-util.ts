@@ -42,8 +42,12 @@ export function formatTimeSpan(
  * returns the date in the specified format
  *
  * @param date The date to format
+ * @param todayString The string to display when the date is today
+ * @param yesterdayString The string to display when the date is yesterday
  * @param locale The locale to use for date formatting (defaults to user's locale)
- * @param options The Intl.DateTimeFormatOptions to use for date formatting when not today/yesterday
+ * @param options The Intl.DateTimeFormatOptions to use for date formatting when not
+ *   today/yesterday. Defaults to `{ year: 'numeric', month: 'short', day: 'numeric' }` which
+ *   produces formats like "Nov 9, 2025"
  */
 export function formatRelativeDate(
   date: Date,

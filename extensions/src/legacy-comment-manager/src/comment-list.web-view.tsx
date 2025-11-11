@@ -7,16 +7,17 @@ import { logger } from '@papi/frontend';
 import { sampleComments } from './comment-sample-data';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%no_comments%',
-  '%comment_thread_single_reply%',
-  '%comment_thread_multiple_replies%',
   '%comment_assigned_to%',
+  '%comment_date_at%',
   '%comment_date_today%',
   '%comment_date_yesterday%',
   '%comment_replyOrAssign%',
+  '%comment_thread_multiple_replies%',
+  '%comment_thread_single_reply%',
+  '%no_comments%',
 ];
 
-global.webViewComponent = function ChecksSidePanelWebView({
+global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
@@ -50,16 +51,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   if (areThreadsLoading) {
-    <div className="tw-bg-muted tw-flex-1 tw-p-2 tw-space-y-4">
-      {[...Array(10)].map((_, index) => (
-        <Skeleton
-          // There are no other unique identifiers for these items
-          // eslint-disable-next-line react/no-array-index-key
-          key={`comment-thread-skeleton-${index}`}
-          className="tw-h-48 tw-w-full"
-        />
-      ))}
-    </div>;
+    return (
+      <div className="tw-bg-muted tw-flex-1 tw-p-2 tw-space-y-4">
+        {[...Array(10)].map((_, index) => (
+          <Skeleton
+            // There are no other unique identifiers for these items
+            // eslint-disable-next-line react/no-array-index-key
+            key={`comment-thread-skeleton-${index}`}
+            className="tw-h-48 tw-w-full"
+          />
+        ))}
+      </div>
+    );
   }
 
   return (

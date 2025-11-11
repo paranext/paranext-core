@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { formatReplacementString } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState, MouseEvent, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
@@ -10,6 +10,11 @@ import { Button } from '@/components/shadcn-ui/button';
 import { CommentItem } from './comment-item.component';
 import { CommentThreadProps } from './comment-list.types';
 
+/**
+ * Represents a thread of comments
+ *
+ * @props CommentThreadProps
+ */
 export function CommentThread({
   comments,
   localizedStrings,
@@ -73,29 +78,6 @@ export function CommentThread({
     [replyCount, localizedReplies.singleReply, localizedReplies.multipleReplies],
   );
 
-  const handleClickThreadText = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      if (isSelected) {
-        // When expanded, prevent parent click only if user is selecting text
-        const selection = window.getSelection();
-        if (selection && selection.toString().length > 0) {
-          event.stopPropagation();
-        }
-      }
-    },
-    [isSelected],
-  );
-
-  const handleMouseDownThreadText = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      if (isSelected) {
-        // When expanded, always prevent mousedown propagation to allow text selection
-        event.stopPropagation();
-      }
-    },
-    [isSelected],
-  );
-
   return (
     <Card
       role="option"
@@ -116,11 +98,7 @@ export function CommentThread({
       <CardContent className="tw-space-y-4 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
           {localizedAssignedToText && (
-            <Badge
-              onClick={handleClickThreadText}
-              onMouseDown={handleMouseDownThreadText}
-              className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input"
-            >
+            <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
               {localizedAssignedToText}
             </Badge>
           )}
@@ -137,8 +115,6 @@ export function CommentThread({
                 },
                 { 'tw-whitespace-nowrap': !isVerseExpanded },
               )}
-              onClick={handleClickThreadText}
-              onMouseDown={handleMouseDownThreadText}
             >
               {verseRef} {firstComment.verse}
             </p>
@@ -163,8 +139,6 @@ export function CommentThread({
                 comment={firstComment}
                 localizedStrings={localizedStrings}
                 isThreadExpanded={isSelected}
-                handleClickCommentText={handleClickThreadText}
-                handleMouseDownCommentText={handleMouseDownThreadText}
               />
             </div>
             {isSelected && threadStatus !== 'Resolved' && (
@@ -200,8 +174,6 @@ export function CommentThread({
                     localizedStrings={localizedStrings}
                     isReply
                     isThreadExpanded={isSelected}
-                    handleClickCommentText={handleClickThreadText}
-                    handleMouseDownCommentText={handleMouseDownThreadText}
                   />
                 </div>
               ))}

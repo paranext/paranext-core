@@ -4,6 +4,11 @@ import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.h
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
+/**
+ * Component for rendering a list of comment threads
+ *
+ * @param CommentListProps Props for the CommentList component
+ */
 export default function CommentList({
   className = '',
   threads,
@@ -12,9 +17,10 @@ export default function CommentList({
   handleResolveCommentThread,
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
+  const uniqueThreadId = (id: string) => `thread-${id}`;
 
   const options: ListboxOption[] = threads.map((thread) => ({
-    id: `thread-${thread.id}`,
+    id: uniqueThreadId(thread.id),
   }));
 
   const handleKeyboardSelectThread = useCallback((option: ListboxOption) => {
@@ -55,7 +61,7 @@ export default function CommentList({
 
   return (
     <div
-      id="comment-thread-list"
+      id="comment-list"
       role="listbox"
       tabIndex={0}
       // The listboxRef is an HTMLElement so that the keyboard navigation can be used with multiple types of elements
@@ -70,14 +76,14 @@ export default function CommentList({
       onKeyDown={handleKeyDown}
     >
       {threads.map((thread) => (
-        <div key={`thread-${thread.id}`}>
+        <div key={uniqueThreadId(thread.id)}>
           <CommentThread
             comments={thread.comments}
             localizedStrings={localizedStrings}
             verseRef={thread.verseRef}
             handleSelectThread={handleSelectThread}
-            threadId={`thread-${thread.id}`}
-            isSelected={selectedThreadId === `thread-${thread.id}`}
+            threadId={uniqueThreadId(thread.id)}
+            isSelected={selectedThreadId === uniqueThreadId(thread.id)}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
             handleAddComment={handleAddComment}

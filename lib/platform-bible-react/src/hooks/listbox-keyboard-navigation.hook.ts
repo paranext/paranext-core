@@ -233,7 +233,9 @@ export const useListbox = ({
     listboxRef,
     activeId,
     selectedId,
+    /** Keyboard event handler for listbox navigation and selection */
     handleKeyDown,
+    /** Focus an option by its ID */
     focusOption,
   };
 };
