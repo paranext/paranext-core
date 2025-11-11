@@ -2,13 +2,13 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
+/** Interface containing the types of the properties that are passed to the `FootnoteItem` */
 export interface FootnoteItemProps {
   /**
-   * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
-   * array of {@link MarkerObject}, in practice, for footnotes that array contains only one
-   * additional level of `MarkerObject` objects. The `content` of those nested objects will be plain
-   * strings, containing the text of the individual footnote data (reference, quoted text, footnote
-   * text, etc.).
+   * The footnote to display (typically from JSX). Note: Although `MarkerObject.content` is an array
+   * of `MarkerObject`, in practice, for footnotes that array contains only one additional level of
+   * `MarkerObject` objects. The `content` of those nested objects will be plain strings, containing
+   * the text of the individual footnote data (reference, quoted text, footnote text, etc.).
    */
   footnote: MarkerObject;
   /**
@@ -32,12 +32,13 @@ export interface FootnoteItemProps {
   formatCaller?: (caller: string | undefined) => string | undefined;
 }
 
+/** Interface containing the types of the properties that are passed to the `FootnoteList` */
 export interface FootnoteListProps {
   /** Optional additional class name for styling */
   className?: string;
   /** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
   classNameForItems?: string;
-  /** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
+  /** The footnotes to display (typically from JSX). See `FootnoteItemProps.footnote` */
   footnotes: MarkerObject[];
   /**
    * Determines how footnotes are displayed:

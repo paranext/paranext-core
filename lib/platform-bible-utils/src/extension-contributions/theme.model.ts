@@ -179,7 +179,7 @@ const themeDefs = {
 
 removeJsonToTypeScriptTypesStuff(themeDefs);
 
-// JSON schema object for ThemeContribution
+/** JSON schema object for ThemeContribution */
 export const themeDocumentSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   title: 'Theme Contribution',

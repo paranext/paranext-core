@@ -36,9 +36,7 @@ export interface FootnoteEditorProps {
 /**
  * Component to edit footnotes from within the editor component
  *
- * @param usj The raw usj of the footnote to edit
- * @param parentRef The ref of the parent editor component
- * @returns
+ * @param FootnoteEditorProps - The properties for configuring the footnote editor behavior.
  */
 export default function FootnoteEditor({
   noteOps,

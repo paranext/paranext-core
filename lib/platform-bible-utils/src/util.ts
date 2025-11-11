@@ -36,8 +36,8 @@ export function deepClone<T>(obj: T): T {
 /**
  * Get a function that reduces calls to the function passed in
  *
- * @template T - A function type that takes any arguments and returns void. This is the type of the
- *   function being debounced.
+ * @template TFunc - A function type that takes any arguments and returns any value. This is the
+ *   type of the function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function

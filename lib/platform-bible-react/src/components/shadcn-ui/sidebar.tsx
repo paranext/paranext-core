@@ -59,6 +59,7 @@ const SidebarProvider = React.forwardRef<
   React.ComponentProps<'div'> & {
     defaultOpen?: boolean;
     open?: boolean;
+    /** Callback fired when the open state changes */
     onOpenChange?: (open: boolean) => void;
     side?: Side;
   }

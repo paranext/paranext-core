@@ -821,8 +821,8 @@ export declare function deepClone<T>(obj: T): T;
 /**
  * Get a function that reduces calls to the function passed in
  *
- * @template T - A function type that takes any arguments and returns void. This is the type of the
- *   function being debounced.
+ * @template TFunc - A function type that takes any arguments and returns any value. This is the
+ *   type of the function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
@@ -2077,7 +2077,8 @@ export type PaneSizeLimitsOptions = {
 	splitterThicknessPx?: number;
 	/**
 	 * Minimum size (height or width) of the secondary pane (the pane whose size is to be
-	 * constrained), in pixels. Ensures the secondary pane never shrinks below this size, if possible.
+	 * constrained), in pixels. Ensures the secondary pane never shrinks below this size, if
+	 * possible.
 	 *
 	 * @default 20
 	 */
@@ -2098,8 +2099,8 @@ export type PaneSizeLimitsOptions = {
 	 */
 	absoluteMinPercent?: number;
 	/**
-	 * Absolute maximum percentage of the total available that the secondary pane can occupy.
-	 * Can be used to keep the "main" pane from being overwhelmed by the size of the secondary pane.
+	 * Absolute maximum percentage of the total available that the secondary pane can occupy. Can be
+	 * used to keep the "main" pane from being overwhelmed by the size of the secondary pane.
 	 *
 	 * @default 90
 	 */
@@ -3324,6 +3325,7 @@ export interface ThemeCssVariables {
 	"sidebar-ring"?: string;
 	radius?: string;
 }
+/** JSON schema object for ThemeContribution */
 export declare const themeDocumentSchema: {
 	$schema: string;
 	title: string;
