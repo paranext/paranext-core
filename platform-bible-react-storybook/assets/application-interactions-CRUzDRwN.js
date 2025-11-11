@@ -1,0 +1,41 @@
+import{j as e}from"./jsx-runtime-CvGToidP.js";import{useMDXComponents as o}from"./index-CNm5GXnS.js";import{M as i}from"./blocks-bGJDhVXO.js";import"./iframe-FHgAwj54.js";import"./index-CgTHgj0j.js";import"./index-BJ-VzaQi.js";function r(n){const t={a:"a",code:"code",h1:"h1",h2:"h2",li:"li",p:"p",table:"table",tbody:"tbody",td:"td",th:"th",thead:"thead",tr:"tr",ul:"ul",...o(),...n.components};return e.jsxs(e.Fragment,{children:[e.jsx(i,{title:"Guidelines/Interactions"}),`
+`,e.jsx(t.h1,{id:"application-wide-interaction-patterns",children:"Application wide interaction patterns"}),`
+`,e.jsx(t.p,{children:"Consistent interaction patterns are important for users to feel comfortable and confident while using the application."}),`
+`,e.jsx(t.h2,{id:"menus",children:"Menus"}),`
+`,e.jsx(t.p,{children:"Platform.Bible embraces the following menu patterns"}),`
+`,e.jsxs(t.table,{children:[e.jsx(t.thead,{children:e.jsxs(t.tr,{children:[e.jsx(t.th,{children:"Menu"}),e.jsx(t.th,{children:"Description"}),e.jsx(t.th,{children:"Use"})]})}),e.jsxs(t.tbody,{children:[e.jsxs(t.tr,{children:[e.jsx(t.td,{children:"Main application menu"}),e.jsxs(t.td,{children:["A ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/menubar.stories.tsx",rel:"nofollow",children:"Menubar"})," on the application title bar's start side, that has individual dropdown menus per menu category. This menu hosts all menu items that apply to the application as a whole."]}),e.jsx(t.td,{children:"in use"})]}),e.jsxs(t.tr,{children:[e.jsx(t.td,{children:"Tab menu"}),e.jsxs(t.td,{children:["A ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/dropdown-menu.stories.tsx",rel:"nofollow",children:"Dropdown menu"})," under a ",e.jsx(t.a,{href:"https://lucide.dev/icons/menu",rel:"nofollow",children:"Hamburger"})," icon button at the start side of the ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/tab-navigation/toolbar.stories.tsx",rel:"nofollow",children:"Tab Toolbar"}),". This menu hosts all cross-launch and insert related menu entries that relate to the current tab."]}),e.jsx(t.td,{children:"in use"})]}),e.jsxs(t.tr,{children:[e.jsx(t.td,{children:"Tab view options menu"}),e.jsxs(t.td,{children:["A ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/dropdown-menu.stories.tsx",rel:"nofollow",children:"Dropdown menu"})," under a ",e.jsx(t.a,{href:"https://lucide.dev/icons/ellipsis-vertical",rel:"nofollow",children:"Vertical Ellipsis"})," button on the end side of the ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/tab-navigation/toolbar.stories.tsx",rel:"nofollow",children:"Tab Toolbar"}),". This menu host options to configure how the current tab should display."]}),e.jsx(t.td,{children:"planned"})]}),e.jsxs(t.tr,{children:[e.jsx(t.td,{children:"Context menu"}),e.jsxs(t.td,{children:["A ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/context-menu.stories.tsx",rel:"nofollow",children:"Context menu"}),", that launches on right click and offers actions in the context of the text or ui part under the cursor"]}),e.jsx(t.td,{children:"partially used"})]}),e.jsxs(t.tr,{children:[e.jsx(t.td,{children:"Text overlay menu"}),e.jsx(t.td,{children:"Actions offered next to text selection, without the need to do another right click or the like"}),e.jsx(t.td,{children:"idea"})]})]})]}),`
+`,e.jsx(t.h2,{id:"tab-navigation",children:"Tab navigation"}),`
+`,e.jsx(t.p,{children:"Tabs can be navigated using keyboard shortcuts:"}),`
+`,e.jsxs(t.ul,{children:[`
+`,e.jsxs(t.li,{children:[e.jsx(t.code,{children:"Ctrl + Tab"})," to move to the next tab"]}),`
+`,e.jsxs(t.li,{children:[e.jsx(t.code,{children:"Ctrl + Shift + Tab"})," to move to the previous tab"]}),`
+`]}),`
+`,e.jsx(t.p,{children:"New Tabs can be opened by"}),`
+`,e.jsxs(t.ul,{children:[`
+`,e.jsxs(t.li,{children:["Pressing the ",e.jsx(t.code,{children:"+"})," button. This will bring up the ",e.jsx(t.code,{children:"New Tab"})," dialog on the newly opened tab."]}),`
+`,e.jsx(t.li,{children:"Pressing the Home button or selecting any option from the menu that launches a specific new tab."}),`
+`]}),`
+`,e.jsxs(t.p,{children:["If more tabs are present they will overflow into a menu accessible on hover of the ",e.jsx(t.code,{children:"↕"})," button."]}),`
+`,e.jsx(t.h2,{id:"layout",children:"Layout"}),`
+`,e.jsx(t.p,{children:"Tabs can be rearranged by dragging and dropping them into the desired position."}),`
+`,e.jsxs(t.p,{children:["Tabs can be floated by right clicking on the tab header and selecting ",e.jsx(t.code,{children:"Float Tab"})," from the context menu."]}),`
+`,e.jsx(t.p,{children:"Floating tabs can be docked back into the main window by dragging and dropping them back into the tab header bar."}),`
+`,e.jsx(t.h2,{id:"scripture-reference-selection",children:"Scripture reference selection"}),`
+`,e.jsxs(t.p,{children:["Scripture reference selection and displaying is done using the ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/book-chapter-control.stories.tsx",rel:"nofollow",children:"Book-Chapter-Verse (BCV) control"}),". Scripture references can be entered via mouse or keyboard. There is"]}),`
+`,e.jsxs(t.ul,{children:[`
+`,e.jsx(t.li,{children:"a global BCV control on the application title bar - always showing all books"}),`
+`,e.jsx(t.li,{children:"an in-tab BCV control on the tab toolbar of every tab that holds Scripture or content relating to some part of Scripture - showing only books of the project in the respective tab"}),`
+`]}),`
+`,e.jsx(t.p,{children:"All BCV controls can be used for navigation. Tabs inside Platform.Bible that hold or relate to Scripture content automatically follow the selected new scriture reference."}),`
+`,e.jsxs(t.p,{children:["Scroll groups can be selected via the ",e.jsx(t.a,{href:"https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/scroll-group-selector.stories.tsx",rel:"nofollow",children:"Scroll Group Selector"})," on the end side of the tab toolbar, respectively in the center of the application title bar. When doing this on a tab, the respective tab gets disconnected from the original scroll group and now scrolls with other tabs assigned to the respective scroll group. When doing this on the application title bar, only the scroll group selection of the global BCV control switches."]}),`
+`,e.jsx(t.p,{children:"In future scroll groups should be synced with other applications, like Paratext 9 and Logos."}),`
+`,e.jsx(t.h2,{id:"scripture-editor--lists",children:"Scripture Editor ↔ lists"}),`
+`,e.jsx(t.p,{children:`Following diagram shows how the Scripture Editor interacts with lists of items in projects / resources or list of Scripture pieces.
+Examples: Comments, Check Results, Find Results, Footnotes, Occurrences, etc.`}),`
+`,e.jsx(t.p,{children:"Interactions exist in both directions:"}),`
+`,e.jsxs(t.ul,{children:[`
+`,e.jsxs(t.li,{children:["from Scripture Editor: ",e.jsx(t.code,{children:"on Scripture reference change"}),", ",e.jsx(t.code,{children:"on annotation or caller selection"}),", ",e.jsx(t.code,{children:"on command / shortcut key press"})]}),`
+`,e.jsxs(t.li,{children:["from list: ",e.jsx(t.code,{children:"on hover"}),", ",e.jsx(t.code,{children:"on single click"}),", ",e.jsx(t.code,{children:"on double click"}),", ",e.jsx(t.code,{children:"on reference click"}),`
+and respective keyboard interactions`]}),`
+`]}),`
+`,e.jsx("iframe",{src:"https://embed.figma.com/board/qAjw7U4EcXbi7UDpMwYGsD/Design-System-Content?node-id=1-2&t=QZDawBfx1n2dOTjC-4&embed-host=paratext-design-system",width:"100%",height:"400",style:{border:"none"},children:e.jsx(t.p,{children:"Your browser does not support iframes."})})]})}function p(n={}){const{wrapper:t}={...o(),...n.components};return t?e.jsx(t,{...n,children:e.jsx(r,{...n})}):r(n)}export{p as default};
