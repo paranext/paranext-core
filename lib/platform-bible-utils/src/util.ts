@@ -90,25 +90,32 @@ export function debounce<TFunc extends (...args: any[]) => any>(
  *
  * @param items - Array of items to group by.
  * @param keySelector - Function to run on each item to get the key for the group to which it
- *   belongs
+ *   belongs. The first argument is the item, and the second argument is the index of the item in
+ *   the original array.
+ * @param valueSelector - Optional function to run on each item to get the value to store in the
+ *   group. The first argument is the item, the second argument is the key for the group to which
+ *   this item belongs, and the third argument is the index of the item in the original array.
  * @returns Map of keys to groups of values corresponding to each item.
  */
-export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
+export function groupBy<T, K>(
+  items: T[],
+  keySelector: (item: T, index: number) => K,
+): Map<K, Array<T>>;
 export function groupBy<T, K, V>(
   items: T[],
-  keySelector: (item: T) => K,
-  valueSelector: (item: T, key: K) => V,
+  keySelector: (item: T, index: number) => K,
+  valueSelector: (item: T, key: K, index: number) => V,
 ): Map<K, Array<V>>;
 export function groupBy<T, K, V = T>(
   items: T[],
-  keySelector: (item: T) => K,
-  valueSelector?: (item: T, key: K) => V,
+  keySelector: (item: T, index: number) => K,
+  valueSelector?: (item: T, key: K, index: number) => V,
 ): Map<K, Array<V | T>> {
   const map = new Map<K, Array<V | T>>();
-  items.forEach((item) => {
-    const key = keySelector(item);
+  items.forEach((item, index) => {
+    const key = keySelector(item, index);
     const group = map.get(key);
-    const value = valueSelector ? valueSelector(item, key) : item;
+    const value = valueSelector ? valueSelector(item, key, index) : item;
     if (group) group.push(value);
     else map.set(key, [value]);
   });

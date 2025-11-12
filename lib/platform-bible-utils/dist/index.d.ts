@@ -871,11 +871,15 @@ export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFun
  *
  * @param items - Array of items to group by.
  * @param keySelector - Function to run on each item to get the key for the group to which it
- *   belongs
+ *   belongs. The first argument is the item, and the second argument is the index of the item in
+ *   the original array.
+ * @param valueSelector - Optional function to run on each item to get the value to store in the
+ *   group. The first argument is the item, the second argument is the key for the group to which
+ *   this item belongs, and the third argument is the index of the item in the original array.
  * @returns Map of keys to groups of values corresponding to each item.
  */
-export declare function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T) => K, valueSelector: (item: T, key: K) => V): Map<K, Array<V>>;
+export declare function groupBy<T, K>(items: T[], keySelector: (item: T, index: number) => K): Map<K, Array<T>>;
+export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T, index: number) => K, valueSelector: (item: T, key: K, index: number) => V): Map<K, Array<V>>;
 /**
  * Function to get an error message from the object (useful for getting error message in a catch
  * block)
@@ -2266,9 +2270,12 @@ export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.conten
  * A verse ref and an offset in USFM space that point to a specific location in USFM. If only a
  * verse ref is provided, the offset is assumed to be 0.
  *
- * The USJ representation of the positions represented by this type are {@link UsjDocumentLocation}.
- * Note, however, that those locations are relative to a specific USJ document rather than being
- * absolute verse reference locations like this type.
+ * The USJ representation of the positions represented by this type are {@link UsjVerseRefLocation}.
+ * Both are absolute verse reference locations.
+ *
+ * {@link UsjDocumentLocation} also represents positions of this type, but those locations are
+ * relative to a specific USJ document rather than being absolute verse reference locations like
+ * this type.
  *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
@@ -2296,11 +2303,42 @@ export type UsfmVerseLocation = {
 	offset?: number;
 };
 /**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space starts from the start of the chapter specified in the verse ref. The rest of the verse
+ * ref is meaningless and can be disregarded.
+ */
+export type UsjVerseRefChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = {
+	/** Verse reference indicating which chapter in which book the document location is in */
+	verseRef: SerializedVerseRef;
+	/**
+	 * Specifies which part of the verse reference the document location is relative to:
+	 *
+	 * - `book` = document location is specified relative to the start of the book. The first content
+	 *   entry of the top-level `USJ` marker is the `id` marker of the book
+	 * - `chapter` = document location is specified relative to the start of the chapter in the
+	 *   specified book. If the chapter number is 1, the first content entry of the top-level `USJ`
+	 *   marker is the `id` marker of the book. If the chapter number is greater than 1, the first
+	 *   content entry of the top-level `USJ` marker is the `c` marker of the chapter
+	 *
+	 *   - Note: this is likely to be the case with peripheral books as well, but these books have
+	 *       `periph` markers between `id` and chapters, so this may need to be revised when
+	 *       peripheral books are more fully supported
+	 *
+	 * When using {@link UsjVerseRefLocation}, defaults to 'chapter' (can alternatively be 'book';
+	 * {@link UsjVerseRefBookLocation})
+	 */
+	granularity?: "chapter";
+	/** USJ document location specifying where in the chapter the location is pointing to */
+	documentLocation: TDocumentLocation;
+};
+/**
  * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
  * additional information that point to a specific location in USJ.
  *
  * This type does not include a verse reference because the JSONPath is relative to a specific USJ
- * document; that USJ document may have a book, a chapter, or something else in it.
+ * document; that USJ document may have a book, a chapter, or something else in it. Use
+ * {@link UsjVerseRefLocation} to specify which Usj document this location is relative to, making the
+ * location an absolute verse reference location.
  *
  * This type intends to represent USFM positions ({@link UsfmLocation}) in USJ space. However, there
  * are some USFM positions that are not currently representable with these types:
@@ -2470,8 +2508,20 @@ export type UsjNodeAndDocumentLocation<TDocumentLocation extends UsjDocumentLoca
 };
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
-	location: UsjNodeAndDocumentLocation<UsjTextContentLocation>;
-	/** The matching text that was found at the location */
+	/**
+	 * Beginning location in the USJ document of the search result. The text is inclusive of this
+	 * location, meaning this is the location of the first character of the found text
+	 */
+	start: UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * Ending location in the USJ document of the search result. The text is exclusive of this
+	 * location, meaning this is the location right after the last character of the found text
+	 */
+	end: UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * The matching Scripture text (not USFM string) that was found between the start and end
+	 * locations
+	 */
 	text: string;
 };
 /**
@@ -2543,6 +2593,8 @@ export interface IUsjReaderWriter {
 	 *   is not found in the USJ document)
 	 * @returns SerializedVerseRef and offset that represents the location within this USJ data
 	 *   indicated by `jsonPathQuery`
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
 	 */
 	jsonPathToUsfmVerseLocation(jsonPathQuery: string, bookIdIfNotFound?: string): UsfmVerseLocation;
 	/** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
@@ -2582,10 +2634,29 @@ export interface IUsjReaderWriter {
 	/** Transforms the USJ document into USFM */
 	toUsfm(): string;
 	/**
-	 * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
-	 * caches used when querying.
+	 * Get the index in the USFM representation of this data relative to the start of the document
+	 * that corresponds to the absolute location in USFM space passed in
+	 *
+	 * @param usfmLocation The location in USFM space to get the index for
+	 * @returns Index in the USFM representation of this data relative to the start of the document
 	 */
-	usjChanged(): void;
+	usfmLocationToIndexInUsfm(usfmLocation: UsfmLocation): number;
+	/**
+	 * Get the node + offset and JSONPath query within this USJ data of the first encountered string
+	 * after the provided USFM location for a specific verse in a USJ document.
+	 *
+	 * Note: this may return a node that is in a subsequent verse or even chapter depending on how
+	 * much content the USJ data contains. It simply looks through the rest of the USJ data for the
+	 * first text node and returns that.
+	 *
+	 * @param usfmLocation Indicates the location in USFM space (book, chapter, verse, character
+	 *   offset) to find the next text for
+	 * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
+	 *   indicates the location of the of USJ text node within this USJ data.
+	 * @throws Error if there is no text after `usfmLocation`
+	 * @throws Error if `usfmLocation` does not point to a valid location in this USJ data
+	 */
+	usfmLocationToNextTextLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 	/**
 	 * Convert a location in USFM space into a location in USJ space within this USJ data.
 	 *
@@ -2614,6 +2685,11 @@ export interface IUsjReaderWriter {
 	 */
 	usfmLocationToUsjNodeAndDocumentLocation(usfmLocation: UsfmLocation | SerializedVerseRef): UsjNodeAndDocumentLocation;
 	/**
+	 * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
+	 * caches used when querying.
+	 */
+	usjChanged(): void;
+	/**
 	 * Convert a location in USJ space within this USJ data into a location in USFM space.
 	 *
 	 * @param usjLocation Location in USJ space - a jsonPath and other information about where the
@@ -2627,21 +2703,25 @@ export interface IUsjReaderWriter {
 	 */
 	usjDocumentLocationToUsfmVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseLocation;
 	/**
-	 * Get the node + offset and JSONPath query within this USJ data of the first encountered string
-	 * after the provided USFM location for a specific verse in a USJ document.
+	 * Transforms a relative USJ document location into an absolute chapter-based USJ location that
+	 * includes which chapter the USJ location is relative to.
 	 *
-	 * Note: this may return a node that is in a subsequent verse or even chapter depending on how
-	 * much content the USJ data contains. It simply looks through the rest of the USJ data for the
-	 * first text node and returns that.
+	 * Note: this method property transforms book-based USJ document locations to chapter-based USJ
+	 * locations as well.
 	 *
-	 * @param usfmLocation Indicates the location in USFM space (book, chapter, verse, character
-	 *   offset) to find the next text for
-	 * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
-	 *   indicates the location of the of USJ text node within this USJ data.
-	 * @throws Error if there is no text after `usfmLocation`
-	 * @throws Error if `usfmLocation` does not point to a valid location in this USJ data
+	 * Note: This may work with peripheral books as well, but these books have `periph` markers
+	 * between `id` and chapters, so this may need to be revised when peripheral books are more fully
+	 * supported
+	 *
+	 * @param usjLocation Location in USJ space relative to the USJ document
+	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+	 *   is not found in the USJ document)
+	 * @returns Location in USJ space relative to the chapter that the USJ document location is in
+	 * @throws If not able to find the location in the USJ document
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
 	 */
-	usfmLocationToNextTextLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	usjDocumentLocationToUsjVerseRefChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation>(usjLocation: TDocumentLocation, bookIdIfNotFound?: string): UsjVerseRefChapterLocation<TDocumentLocation>;
 }
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export declare function getDefaultCallerSequence(): string[];
@@ -4643,8 +4723,27 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private static areStackItemsShallowEqual;
 	/** Return the working stack applicable to the given node */
 	private createWorkingStack;
+	/**
+	 * Transform a JSONPath array (`JSONPath.toPathArray`) to a "normalized" JSONPath. We can use this
+	 * JSONPath for lookups in {@link FragmentsByJsonPath}
+	 */
+	private static jsonPathArrayToJsonPath;
 	/** "Normalize" the JSONPath passed in so we can use it for lookups in {@link FragmentsByJsonPath} */
 	private static normalizeJsonPath;
+	/**
+	 * Move a JSONPath to be relative to a chapter marker JSONPath by removing the chapter path parts
+	 * from the front of the JSONPath and adjusting the content index.
+	 *
+	 * @example Taking JSONPath `$.content[0].content[2].content[5].content[7]['caller']` and moving
+	 * it relative to chapter JSONPath `$.content[0].content[2].content[3]` would return
+	 * `$.content[2].content[7]['caller']`
+	 *
+	 * @param jsonPath JSONPath to move to be relative to the chapter
+	 * @param chapterJsonPath JSONPath to use as the chapter from which to make the other JSONPath
+	 *   relative
+	 * @returns `jsonPath` made relative to the chapter JSONPath
+	 */
+	private static moveJsonPathRelativeToChapter;
 	/**
 	 * Returns a "normalized" JSONPath transformed from the working stack. We can use this JSONPath
 	 * for lookups in {@link FragmentsByJsonPath}
@@ -4709,9 +4808,18 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	/**
 	 * Gets the verse ref that the provided index in USFM is in (including verse range if applicable).
 	 * Finds the closest verse ref before the index in USFM.
+	 *
+	 * @param indexInUsfm The index in USFM from the beginning of this document
+	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+	 *   is not found in the USJ document)
+	 * @returns Closest verse reference before or at the index in USFM
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
 	 */
 	private getVerseRefForIndexInUsfm;
+	usfmLocationToIndexInUsfm(usfmLocation: UsfmLocation): number;
 	private static usfmLocationToUsfmVerseLocation;
+	usjDocumentLocationToUsjVerseRefChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation>(usjLocation: TDocumentLocation, bookIdIfNotFound?: string): UsjVerseRefChapterLocation<TDocumentLocation>;
 	usfmLocationToUsjNodeAndDocumentLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation;
 	usfmLocationToUsjDocumentLocation(usfmLocation: UsfmLocation | SerializedVerseRef): UsjDocumentLocation;
 	/**

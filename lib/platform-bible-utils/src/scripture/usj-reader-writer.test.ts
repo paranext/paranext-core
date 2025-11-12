@@ -14,7 +14,11 @@ import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-maps/markers
 import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.model';
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
-import { UsjNodeAndDocumentLocation, UsjReaderWriterOptions } from './usj-reader-writer.model';
+import {
+  UsjNodeAndDocumentLocation,
+  UsjPropertyValueLocation,
+  UsjReaderWriterOptions,
+} from './usj-reader-writer.model';
 
 // #region set up file path variables
 
@@ -560,7 +564,7 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
         offset: -1,
       });
     }).toThrow(
-      'Could not find fragment info at USJ document location {"jsonPath":"$.content[0]","offset":-1}',
+      'Could not find fragment info at USJ document location while transforming to USFM verse location: {"jsonPath":"$.content[0]","offset":-1}',
     );
   });
 
@@ -593,7 +597,7 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
         keyOffset: 1234,
       });
     }).toThrow(
-      'Could not find fragment info at USJ document location {"jsonPath":"$.content[0]","keyOffset":1234}',
+      'Could not find fragment info at USJ document location while transforming to USFM verse location: {"jsonPath":"$.content[0]","keyOffset":1234}',
     );
   });
 
@@ -622,7 +626,7 @@ describe('usjDocumentLocationToUsfmVerseLocation translates USJ document locatio
         offset: 5,
       });
     }).toThrow(
-      'Could not find book ID and no book ID provided when finding USFM verse location for USJ document location {"jsonPath":"$.content[0]","offset":5}',
+      'Could not find book ID and no book ID provided when finding USFM verse ref for index in USFM 0',
     );
   });
 });
@@ -843,6 +847,137 @@ describe('usfmLocationToUsjNodeAndDocumentLocation translates USFM locations to 
   });
 });
 
+describe('usjDocumentLocationToUsjVerseRefChapterLocation translates USJ document locations to USJ chapter locations', () => {
+  test('Matthew 1-2 WEB 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // The very beginning
+    const result0 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
+      jsonPath: '$.content[0]',
+    });
+    expect(result0.verseRef.book).toBe('MAT');
+    expect(result0.verseRef.chapterNum).toBe(1);
+    expect(result0.granularity === undefined || result0.granularity === 'chapter').toBe(true);
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result0.documentLocation))
+      throw new Error('Expected result0 not to be a string');
+    expect(result0.documentLocation.jsonPath).toBe('$.content[0]');
+    expect(result0.documentLocation).not.toHaveProperty('offset');
+
+    // String inside the very beginning
+    const result1 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
+      jsonPath: '$.content[0].content[0]',
+      offset: 6,
+    });
+    expect(result1.verseRef.book).toBe('MAT');
+    expect(result1.verseRef.chapterNum).toBe(1);
+    expect(result1.granularity === undefined || result1.granularity === 'chapter').toBe(true);
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(result1.documentLocation))
+      throw new Error('Expected result1 to be a string');
+    expect(result1.documentLocation.jsonPath).toBe('$.content[0].content[0]');
+    expect(result1.documentLocation.offset).toBe(6);
+
+    // First chapter marker
+    const result2 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
+      jsonPath: '$.content[8]',
+    });
+    expect(result2.verseRef.book).toBe('MAT');
+    expect(result2.verseRef.chapterNum).toBe(1);
+    expect(result2.granularity === undefined || result2.granularity === 'chapter').toBe(true);
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result2.documentLocation))
+      throw new Error('Expected result2 not to be a string');
+    expect(result2.documentLocation.jsonPath).toBe('$.content[8]');
+    expect(result2.documentLocation).not.toHaveProperty('offset');
+
+    // Some random spot in chapter 1
+    const result3 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
+      jsonPath: "$.content[9].content[2]['caller']",
+      propertyOffset: 3,
+    });
+    expect(result3.verseRef.book).toBe('MAT');
+    expect(result3.verseRef.chapterNum).toBe(1);
+    expect(result3.granularity === undefined || result3.granularity === 'chapter').toBe(true);
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result3.documentLocation))
+      throw new Error('Expected result3 not to be a string');
+    expect(result3.documentLocation.jsonPath).toBe("$.content[9].content[2]['caller']");
+    expect(result3.documentLocation).not.toHaveProperty('offset');
+    expect(result3.documentLocation).toHaveProperty('propertyOffset');
+    // We just checked that it has `propertyOffset`, so just casting it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    expect((result3.documentLocation as UsjPropertyValueLocation).propertyOffset).toBe(3);
+
+    // Second chapter marker
+    const result4 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
+      jsonPath: '$.content[20]',
+    });
+    expect(result4.verseRef.book).toBe('MAT');
+    expect(result4.verseRef.chapterNum).toBe(2);
+    expect(result4.granularity === undefined || result4.granularity === 'chapter').toBe(true);
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result4.documentLocation))
+      throw new Error('Expected result4 not to be a string');
+    expect(result4.documentLocation.jsonPath).toBe('$.content[0]');
+    expect(result4.documentLocation).not.toHaveProperty('offset');
+
+    // Some random spot in chapter 2
+    const result5 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
+      jsonPath: "$.content[25].content[1].content[1]['marker']",
+      propertyOffset: 1,
+    });
+    expect(result5.verseRef.book).toBe('MAT');
+    expect(result5.verseRef.chapterNum).toBe(2);
+    expect(result5.granularity === undefined || result5.granularity === 'chapter').toBe(true);
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result5.documentLocation))
+      throw new Error('Expected result5 not to be a string');
+    expect(result5.documentLocation.jsonPath).toBe("$.content[5].content[1].content[1]['marker']");
+    expect(result5.documentLocation).not.toHaveProperty('offset');
+    expect(result5.documentLocation).toHaveProperty('propertyOffset');
+    // We just checked that it has `propertyOffset`, so just casting it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    expect((result5.documentLocation as UsjPropertyValueLocation).propertyOffset).toBe(1);
+  });
+});
+
+describe('usfmLocationToIndexInUsfm translates USFM locations to indices in USFM', () => {
+  test('Matthew 1-2 WEB 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // The very beginning
+    const result0 = usjDoc.usfmLocationToIndexInUsfm({ book: 'MAT', chapterNum: 1, verseNum: 0 });
+    expect(result0).toBe(0);
+
+    // String inside the very beginning
+    const result1 = usjDoc.usfmLocationToIndexInUsfm({
+      verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
+      offset: 6,
+    });
+    expect(result1).toBe(6);
+
+    // First chapter marker
+    const result2 = usjDoc.usfmLocationToIndexInUsfm({
+      verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
+      offset: 185,
+    });
+    expect(result2).toBe(185);
+
+    // Some random spot in chapter 1
+    const result3 = usjDoc.usfmLocationToIndexInUsfm({
+      verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 },
+      offset: 51,
+    });
+    expect(result3).toBe(244);
+
+    // Second chapter marker
+    const result4 = usjDoc.usfmLocationToIndexInUsfm({ book: 'MAT', chapterNum: 2, verseNum: 0 });
+    expect(result4).toBe(3798);
+
+    // Some random spot in chapter 2
+    const result5 = usjDoc.usfmLocationToIndexInUsfm({
+      verseRef: { book: 'MAT', chapterNum: 2, verseNum: 6 },
+      offset: 187,
+    });
+    expect(result5).toBe(4685);
+  });
+});
+
 describe('Find USJ details for text searches', () => {
   test('usfmLocationToNextTextLocation takes USJ location and finds USJ details for next text 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
@@ -1035,12 +1170,33 @@ describe('Find USJ details for text searches', () => {
     // Verify that all matches contain the text "father"
     fatherMatches.forEach((match) => {
       expect(match.text).toBe('father');
-      expect(typeof match.location.node).toBe('string');
-      expect(match.location.documentLocation.offset).toBeGreaterThanOrEqual(0);
-      expect(match.location.documentLocation.jsonPath).toMatch(
-        /^\$\.content\[\d+\]\.content\[\d+\]$/,
-      );
+      expect(typeof match.start.node).toBe('string');
+      expect(match.start.documentLocation.offset).toBeGreaterThanOrEqual(0);
+      expect(match.start.documentLocation.jsonPath).toMatch(/^\$\.content\[\d+\]\.content\[\d+\]$/);
+      expect(match.end.documentLocation.offset).toBeGreaterThanOrEqual(0);
+      expect(match.end.documentLocation.jsonPath).toMatch(/^\$\.content\[\d+\]\.content\[\d+\]$/);
     });
+
+    // Make sure the first few matches are exactly what we expect
+    expect(fatherMatches[0].start.documentLocation.jsonPath).toBe('$.content[10].content[1]');
+    expect(fatherMatches[0].start.documentLocation.offset).toBe(19);
+    expect(fatherMatches[0].end.documentLocation.jsonPath).toBe('$.content[10].content[1]');
+    expect(fatherMatches[0].end.documentLocation.offset).toBe(25);
+
+    expect(fatherMatches[1].start.documentLocation.jsonPath).toBe('$.content[10].content[1]');
+    expect(fatherMatches[1].start.documentLocation.offset).toBe(53);
+    expect(fatherMatches[1].end.documentLocation.jsonPath).toBe('$.content[10].content[1]');
+    expect(fatherMatches[1].end.documentLocation.offset).toBe(59);
+
+    expect(fatherMatches[2].start.documentLocation.jsonPath).toBe('$.content[10].content[1]');
+    expect(fatherMatches[2].start.documentLocation.offset).toBe(87);
+    expect(fatherMatches[2].end.documentLocation.jsonPath).toBe('$.content[10].content[1]');
+    expect(fatherMatches[2].end.documentLocation.offset).toBe(93);
+
+    expect(fatherMatches[3].start.documentLocation.jsonPath).toBe('$.content[10].content[3]');
+    expect(fatherMatches[3].start.documentLocation.offset).toBe(17);
+    expect(fatherMatches[3].end.documentLocation.jsonPath).toBe('$.content[10].content[3]');
+    expect(fatherMatches[3].end.documentLocation.offset).toBe(23);
 
     // Test 2: Find all occurrences of "became" with case-insensitive global regex
     const becameRegex = /became/gi;
@@ -1050,8 +1206,10 @@ describe('Find USJ details for text searches', () => {
     // Verify that all matches contain "became" (case-insensitive)
     becameMatches.forEach((match) => {
       expect(match.text.toLowerCase()).toBe('became');
-      expect(typeof match.location.node).toBe('string');
-      expect(match.location.documentLocation.offset).toBeGreaterThanOrEqual(0);
+      expect(typeof match.start.node).toBe('string');
+      expect(match.start.documentLocation.offset).toBeGreaterThanOrEqual(0);
+      expect(typeof match.end.node).toBe('string');
+      expect(match.end.documentLocation.offset).toBeGreaterThanOrEqual(0);
     });
 
     // Test 3: Search for a pattern that should not exist
@@ -1067,7 +1225,8 @@ describe('Find USJ details for text searches', () => {
     // Verify that all matches are numbers
     numberMatches.forEach((match) => {
       expect(match.text).toMatch(/^\d+$/);
-      expect(typeof match.location.node).toBe('string');
+      expect(typeof match.start.node).toBe('string');
+      expect(typeof match.end.node).toBe('string');
     });
 
     // Test 5: Test word boundaries
@@ -1088,7 +1247,8 @@ describe('Find USJ details for text searches', () => {
     // Verify that matches are capitalized names/phrases
     nameMatches.forEach((match) => {
       expect(match.text).toMatch(/^[A-Z]/);
-      expect(typeof match.location.node).toBe('string');
+      expect(typeof match.start.node).toBe('string');
+      expect(typeof match.end.node).toBe('string');
     });
 
     // Test 7: Regex without global flag should only return 1 match
@@ -1101,8 +1261,8 @@ describe('Find USJ details for text searches', () => {
     const davidMatches = usjDoc.search(davidRegex);
 
     // Compare JSON paths to ensure they're in document order
-    const firstPath = davidMatches[0].location.documentLocation.jsonPath;
-    const secondPath = davidMatches[1].location.documentLocation.jsonPath;
+    const firstPath = davidMatches[0].start.documentLocation.jsonPath;
+    const secondPath = davidMatches[1].start.documentLocation.jsonPath;
 
     // Extract content indices for comparison
     const firstPathMatch = firstPath.match(/content\[(\d+)\]\.content\[(\d+)\]/);
@@ -1131,13 +1291,41 @@ describe('Find USJ details for text searches', () => {
     // Verify that match.text contains the full match (not just capture groups)
     captureMatches.forEach((match) => {
       expect(match.text).toMatch(/father\s+of\s+\w+/);
-      expect(typeof match.location.node).toBe('string');
+      expect(typeof match.start.node).toBe('string');
+      expect(typeof match.end.node).toBe('string');
     });
 
     // Test 10: Search finds text within a note
     const textWithinNoteRegex = /NU omits /g;
     const noteMatches = usjDoc.search(textWithinNoteRegex);
     expect(noteMatches.length).toBeGreaterThan(0);
+
+    // Test 11: Search finds text that spans across content nodes
+    const textAcrossContent = /the father of Salmon. Salmon became the father of Boaz by Rahab/g;
+    const acrossContentMatches = usjDoc.search(textAcrossContent);
+    expect(acrossContentMatches.length).toBe(1);
+    const acrossContentMatch = acrossContentMatches[0];
+    expect(acrossContentMatch.text).toBe(
+      'the father of Salmon. Salmon became the father of Boaz by Rahab',
+    );
+    expect(typeof acrossContentMatch.start.node).toBe('string');
+    expect(acrossContentMatch.start.documentLocation.jsonPath).toBe('$.content[10].content[5]');
+    expect(acrossContentMatch.start.documentLocation.offset).toBe(91);
+    expect(acrossContentMatch.end.documentLocation.jsonPath).toBe('$.content[10].content[7]');
+    expect(acrossContentMatch.end.documentLocation.offset).toBe(41);
+
+    // Test 12: Search finds text at the very end of a text node and returns the same text node at
+    // start and end rather than returning the next text node at the end
+    const textAtEnd = / at the time of the exile to Babylon./g;
+    const atEndMatches = usjDoc.search(textAtEnd);
+    expect(atEndMatches.length).toBe(1);
+    const atEndMatch = atEndMatches[0];
+    expect(atEndMatch.text).toBe(' at the time of the exile to Babylon.');
+    expect(typeof atEndMatch.start.node).toBe('string');
+    expect(atEndMatch.start.documentLocation.jsonPath).toBe('$.content[10].content[21]');
+    expect(atEndMatch.start.documentLocation.offset).toBe(54);
+    expect(atEndMatch.end.documentLocation.jsonPath).toBe('$.content[10].content[21]');
+    expect(atEndMatch.end.documentLocation.offset).toBe(91);
   });
 });
 
