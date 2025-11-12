@@ -206,7 +206,7 @@ export type UsjVerseRefChapterLocation<
  *
  * This type does not include a verse reference because the JSONPath is relative to a specific USJ
  * document; that USJ document may have a book, a chapter, or something else in it. Use
- * {@link UsjVerseRefLocation} to specify which Usj document this location is relative to, making the
+ * {@link UsjVerseRefLocation} to specify which USJ document this location is relative to, making the
  * location an absolute verse reference location.
  *
  * This type intends to represent USFM positions ({@link UsfmLocation}) in USJ space. However, there
@@ -555,7 +555,7 @@ export interface IUsjReaderWriter {
    * @param usfmLocation Indicates the location in USFM space (book, chapter, verse, character
    *   offset) to find the next text for
    * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
-   *   indicates the location of the of USJ text node within this USJ data.
+   *   indicates the location of the USJ text node within this USJ data.
    * @throws Error if there is no text after `usfmLocation`
    * @throws Error if `usfmLocation` does not point to a valid location in this USJ data
    */

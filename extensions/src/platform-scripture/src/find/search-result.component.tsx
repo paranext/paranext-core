@@ -34,7 +34,7 @@ interface SearchResultProps {
   isSelected: boolean;
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
-  /** Map of book ids to their localized display names */
+  /** Map of book IDs to their localized display names */
   localizedBookData: Map<string, { localizedId: string }>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;

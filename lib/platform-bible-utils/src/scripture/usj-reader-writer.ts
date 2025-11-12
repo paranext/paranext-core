@@ -2145,8 +2145,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       !this.markersMap.shouldOptionalClosingMarkersBePresent &&
       markerWithAnyAttributes.closed !== 'true'
     ) {
-      // If the closing marker is optional, optional closing markers should be left out, and it is
-      // not specified as closed, it should not have a closing marker
+      // If the closing marker is optional, if optional closing markers should be left out, and
+      // if it is not specified as closed, then it should not have a closing marker
       hasExplicitClosingMarker = false;
     }
 
