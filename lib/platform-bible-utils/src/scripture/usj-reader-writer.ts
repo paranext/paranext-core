@@ -2126,7 +2126,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // We don't have examples of markers that have both normal closing markers and independent
     // closing markers, so just throw an error if we encounter this situation
     if (
-      markerTypeInfo.hasClosingMarker &&
+      markerTypeInfo.isCloseable &&
       markerInfo.independentClosingMarkers &&
       markerInfo.independentClosingMarkers.length > 0
     )
@@ -2138,25 +2138,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // Determine if the marker is supposed to have an explicit closing marker
     let hasExplicitClosingMarker = true;
-    // If the closing marker is required
-    if (!markerInfo.isClosingMarkerOptional) {
-      // If it is specified as not closed, it should not have a closing marker
-      if (markerWithAnyAttributes.closed === 'false') hasExplicitClosingMarker = false;
-    } else if (
+    // If the closing marker is specified as not present, it should not be present no matter what
+    if (markerWithAnyAttributes.closed === 'false') hasExplicitClosingMarker = false;
+    else if (
+      markerInfo.isClosingMarkerOptional &&
       !this.markersMap.shouldOptionalClosingMarkersBePresent &&
       markerWithAnyAttributes.closed !== 'true'
-    )
-      // The closing marker is optional
-      // If optional closing markers should be left out and it is not specified as closed, it
-      // should not have a closing marker
+    ) {
+      // If the closing marker is optional, optional closing markers should be left out, and is it
+      // not specified as closed, it should not have a closing marker
       hasExplicitClosingMarker = false;
-    else if (
-      this.markersMap.shouldOptionalClosingMarkersBePresent &&
-      markerWithAnyAttributes.closed === 'false'
-    )
-      // If optional closing markers should still be explicitly closed and it is specified as not
-      // closed, it should not have a closing marker
-      hasExplicitClosingMarker = false;
+    }
 
     // If this marker has an independent closing marker, create that
     if (
@@ -2263,7 +2255,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     }
 
     // Add the normal closing marker
-    if (markerTypeInfo.hasClosingMarker && hasExplicitClosingMarker) {
+    if (markerTypeInfo.isCloseable && hasExplicitClosingMarker) {
       const closingMarkerName = markerTypeInfo.isClosingMarkerEmpty ? '' : markerName;
 
       // Add the nested prefix if the marker is in a marker of the same type
@@ -2386,7 +2378,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // there are no closing marker attributes present, we need to remove the structural space after
       // the opening marker
       if (
-        markerTypeInfo.hasClosingMarker &&
+        markerTypeInfo.isCloseable &&
         markerTypeInfo.isClosingMarkerEmpty &&
         // No contents
         (!marker.forMarker.content || marker.forMarker.content.length === 0) &&

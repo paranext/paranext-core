@@ -1610,9 +1610,9 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	 */
 	attributeMarkerAttributeName: string;
 	/**
-	 * Whether there should be a structural space after the closing marker in output USFM if this
-	 * marker is an attribute marker. If this marker is not an attribute marker, it should not have a
-	 * structural space after the closing marker.
+	 * Whether there should be a structural space after the normal closing marker in output USFM if
+	 * this marker is an attribute marker. If this marker is not an attribute marker, it should not
+	 * have a structural space after the normal closing marker.
 	 *
 	 * This field should be ignored if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `true`
 	 * because this space is only supposed to be added in contexts in which the space here is
@@ -1626,7 +1626,7 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	 * If not present or `undefined`, defaults to `false`.
 	 *
 	 * @example According to specification, the `va` and `vp` attribute markers have a space after
-	 * their closing markers:
+	 * their normal closing markers:
 	 *
 	 * ```usfm
 	 * \p \v 10 \va 10 va\va* \vp 10 vp\vp* Some verse text
@@ -1635,8 +1635,8 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	 * The verse text in this example is just "Some verse text" without a space at the start.
 	 *
 	 * However, when the `vp` marker is not an attribute marker, such as when it has markers in its
-	 * contents, there should not be a structural space after the closing marker, and any space should
-	 * be considered content:
+	 * contents, there should not be a structural space after the normal closing marker, and any space
+	 * should be considered content:
 	 *
 	 * ```usfm
 	 * \p \v 10 \va 10 va\va* \vp \+wj 10 vp\+wj*\vp* Some verse text.
@@ -1644,7 +1644,8 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
 	 *
 	 * The verse text in this example is " Some verse text" including a space at the start.
 	 *
-	 * @example The `cat` attribute marker does not have a structural space after its closing marker:
+	 * @example The `cat` attribute marker does not have a structural space after its normal closing
+	 * marker:
 	 *
 	 * ```usfm
 	 * \f + \cat category here\cat*\fr 1:2 \ft Some footnote text\f*
@@ -1754,15 +1755,29 @@ export type NormalMarkerInfo = {
 	 */
 	attributeMarkers?: string[];
 	/**
-	 * Whether the closing marker for this marker is considered optional in USFM. This should always
-	 * be not present or `false` if there is no closing marker for the marker type of this marker.
+	 * Whether the normal closing marker for this marker is considered optional in USFM, meaning in
+	 * some cases that the normal closing marker would be expected not to be present.
 	 *
-	 * If this is `false` and a closing marker for this marker in USFM is _not_ present, the USX/USJ
-	 * for this marker should have the attribute `closed` set to `false`.
+	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `true`, this marker
+	 * may or may not be expected to have a normal closing marker actually present in USFM depending
+	 * on the value of this property.
 	 *
-	 * If this is `true`, the `closed` attribute should be present if the presence of a closing marker
-	 * for this marker in USFM does not match the assumption implied by
-	 * {@link MarkersMap.shouldOptionalClosingMarkersBePresent}.
+	 * - If this is `true`, the normal closing marker for this marker in USFM may be expected to be
+	 *   present or absent depending on the value of
+	 *   {@link MarkersMap.shouldOptionalClosingMarkersBePresent}. If
+	 *   {@link MarkersMap.shouldOptionalClosingMarkersBePresent} is `true`, this marker is expected to
+	 *   have the normal closing marker actually present in USFM just like markers for which this
+	 *   property is `false`. If {@link MarkersMap.shouldOptionalClosingMarkersBePresent} is `false`,
+	 *   this marker is expected not to have the normal closing marker actually present in USFM. The
+	 *   `closed` attribute should be present if the presence of a normal closing marker for this
+	 *   marker in USFM does not match the presence implied by
+	 *   {@link MarkersMap.shouldOptionalClosingMarkersBePresent}.
+	 * - If this is `false`, the normal closing marker for this marker in USFM is expected to always be
+	 *   present. If the normal closing marker is absent in USFM, the USX/USJ for this marker should
+	 *   have the attribute `closed` set to `false`.
+	 *
+	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `false`, this
+	 * property is unused; markers of that type do not have a normal closing marker.
 	 *
 	 * If not present or `undefined`, defaults to `false`
 	 */
@@ -1861,14 +1876,26 @@ export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
  */
 export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	/**
-	 * Whether markers of this type have a closing marker in USFM. This property concerns normal
-	 * closing markers like `\wj*`, not independent closing markers like
+	 * Whether markers of this type can have a normal closing marker in USFM. This property concerns
+	 * normal closing markers like `\wj*`, not independent closing markers like
 	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
+	 *
+	 * If this is `true`, markers of this type _may_ have a normal closing marker present in USFM.
+	 * Usually, markers whose type has `isCloseable` set to `true` are expected to have a normal
+	 * closing marker actually present in USFM unless otherwise specified using the `closed`
+	 * attribute. However, some markers are expected _not_ to have a normal closing marker actually
+	 * present in USFM unless otherwise specified using the `closed` attribute. To determine whether a
+	 * specific marker of this type is expected not to have a closing marker present in USFM, see
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional}.
+	 *
+	 * If this is `false`, markers of this type do not have a normal closing marker; there is never
+	 * expected to be a normal closing marker in USFM for markers of this type. In this case,
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional} is unused.
 	 *
 	 * If not present or `undefined`, defaults to `false` (meaning this `MarkerTypeInfo` is a
 	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
 	 */
-	hasClosingMarker: true;
+	isCloseable: true;
 	/**
 	 * Whether the closing marker for markers of this type is "empty" in USFM, meaning the marker name
 	 * is absent from the closing marker. This also means that there should not be a structural space
@@ -1913,14 +1940,26 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  */
 export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
 	/**
-	 * Whether markers of this type have a closing marker in USFM. This property concerns normal
-	 * closing markers like `\wj*`, not independent closing markers like
+	 * Whether markers of this type can have a normal closing marker in USFM. This property concerns
+	 * normal closing markers like `\wj*`, not independent closing markers like
 	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
+	 *
+	 * If this is `true`, markers of this type _may_ have a normal closing marker present in USFM.
+	 * Usually, markers whose type has `isCloseable` set to `true` are expected to have a normal
+	 * closing marker actually present in USFM unless otherwise specified using the `closed`
+	 * attribute. However, some markers are expected _not_ to have a normal closing marker actually
+	 * present in USFM unless otherwise specified using the `closed` attribute. To determine whether a
+	 * specific marker of this type is expected not to have a closing marker present in USFM, see
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional}.
+	 *
+	 * If this is `false`, markers of this type do not have a normal closing marker; there is never
+	 * expected to be a normal closing marker in USFM for markers of this type. In this case,
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional} is unused.
 	 *
 	 * If not present or `undefined`, defaults to `false` (meaning this `MarkerTypeInfo` is a
 	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
 	 */
-	hasClosingMarker?: false;
+	isCloseable?: false;
 };
 /**
  * Information about a USFM/USX/USJ marker type that is common to all marker types. See
@@ -2127,7 +2166,7 @@ export type MarkerTypeInfoBase = {
  *
  * ```json
  * {
- *   "hasClosingMarker": true,
+ *   "isCloseable": true,
  *   "nestedPrefix": "+"
  * }
  * ```
@@ -2185,19 +2224,19 @@ export type MarkersMap = {
 	 * That is, whether markers with optional closing markers still need the `closed` attribute set to
 	 * `"false"` in USX/USJ if the closing marker is not present in USFM.
 	 *
-	 * In other words, this setting determines whether markers with optional closing markers should be
-	 * assumed to be explicitly closed (meaning the closing marker is present in USFM) when
+	 * In other words, this setting determines whether markers with optional closing markers should
+	 * still be expected to be explicitly closed (meaning the closing marker is present in USFM) when
 	 * transforming USX/USJ to USFM unless otherwise indicated by the `closed` attribute.
 	 *
 	 * If this is `true` (matches Paratext 9.4), markers with optional closing markers are treated
-	 * like other markers in that they are assumed to be explicitly closed in USFM unless otherwise
-	 * indicated:
+	 * like markers whose normal closing marker is not optional in that they are expected to be
+	 * explicitly closed in USFM unless otherwise indicated:
 	 *
 	 * - If they are not explicitly closed in USFM, they should have `closed="false"`
 	 * - If they are explicitly closed in USFM, they do not need `closed="true"`
 	 *
-	 * If this is `false` (matches specification), markers with optional closing markers are assumed
-	 * not to be explicitly closed in USFM unless otherwise indicated:
+	 * If this is `false` (matches specification), markers with optional closing markers are expected
+	 * _not_ to be explicitly closed in USFM unless otherwise indicated:
 	 *
 	 * - If they are not explicitly closed in USFM, they do not need `closed="false"`
 	 * - If they are explicitly closed in USFM, they should have `closed="true"`

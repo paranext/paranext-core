@@ -15,9 +15,6 @@ declare module 'platform-scripture' {
     PlatformError,
     UnsubscriberAsync,
     UsfmVerseLocation,
-    UsjSearchResult,
-    UsjTextContentLocation,
-    UsjVerseRefChapterLocation,
   } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
   import { InventoryItem } from 'platform-bible-react';
