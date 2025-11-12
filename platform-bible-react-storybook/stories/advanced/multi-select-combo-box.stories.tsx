@@ -298,3 +298,53 @@ export const AllSelected: Story = {
     },
   },
 };
+
+export const ResizableContainer: Story = {
+  render: () => {
+    const [selected, setSelected] = useState<string[]>(['resources', 'dictionaries']);
+
+    const getCustomSelectedText = () => {
+      if (selected.length === types.length || selected.length === 0) return 'Any type';
+      if (selected.length === 1) {
+        const matchingType = types.find((type) => type.value === selected[0]);
+        if (matchingType) return matchingType.label;
+      }
+      return `${selected.length} type${selected.length > 1 ? 's' : ''} selected`;
+    };
+
+    return (
+      <div className="tw-flex tw-flex-col tw-gap-4">
+        <p className="tw-text-sm tw-text-muted-foreground">
+          Resize the container below to test overflow behavior. The text should truncate with
+          ellipsis when the container becomes too narrow.
+        </p>
+        <div
+          className="tw-resize tw-overflow-auto tw-rounded tw-border-2 tw-border-dashed tw-border-muted-foreground tw-p-4"
+          style={{ minWidth: '150px', width: '300px', maxWidth: '600px' }}
+        >
+          <MultiSelectComboBox
+            entries={types}
+            selected={selected}
+            onChange={setSelected}
+            placeholder="Select resource types"
+            customSelectedText={getCustomSelectedText()}
+            icon={<Blocks />}
+            hasToggleAllFeature
+          />
+        </div>
+        <div className="tw-mt-4">
+          <p className="tw-font-semibold">Selected values:</p>
+          <p className="tw-text-sm">{selected.length > 0 ? selected.join(', ') : 'None'}</p>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A resizable container demonstrating text truncation and overflow handling. Drag the bottom-right corner to resize.',
+      },
+    },
+  },
+};

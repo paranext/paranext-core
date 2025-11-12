@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { ComboBox } from '@/components/basics/combo-box.component';
-import { BookOpen, Calendar, User, Settings } from 'lucide-react';
+import { ComboBox, type ComboBoxLabelOption } from '@/components/basics/combo-box.component';
+import { BookOpen, Calendar, User, Settings, Folder } from 'lucide-react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { useState } from 'react';
 
@@ -23,6 +23,17 @@ const bookOptions = [
   'Joshua',
   'Judges',
   'Ruth',
+];
+
+type Project = ComboBoxLabelOption & {
+  id: string;
+};
+
+const projectOptions: Project[] = [
+  { id: '1', label: 'WEB', secondaryLabel: 'World English Bible' },
+  { id: '2', label: 'BSB', secondaryLabel: 'Berean Standard Bible' },
+  { id: '3', label: 'NET', secondaryLabel: 'New English Translation' },
+  { id: '4', label: 'ESV', secondaryLabel: 'English Standard Version' },
 ];
 
 const meta: Meta<typeof ComboBox<string>> = {
@@ -290,6 +301,175 @@ export const WithDifferentIcons: Story = {
   },
 };
 
+export const WithMultipleGroups: Story = {
+  render: () => {
+    const [value, setValue] = useState<string | undefined>(undefined);
+
+    // Grouped options: Old Testament and New Testament books
+    const groupedBookOptions = [
+      {
+        groupHeading: 'Old Testament',
+        options: ['Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy'],
+      },
+      {
+        groupHeading: 'New Testament',
+        options: ['Matthew', 'Mark', 'Luke', 'John', 'Acts'],
+      },
+      {
+        groupHeading: 'Long Named Items',
+        options: [
+          'This is a very long item that should be truncated properly in the UI',
+          'Another extremely long item to test the truncation behavior of the combo box component',
+        ],
+      },
+    ];
+
+    return (
+      <div>
+        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+          Combo box with multiple groups and headings
+        </p>
+        <ComboBox<string>
+          options={groupedBookOptions}
+          textPlaceholder="Search books..."
+          buttonPlaceholder="Select a book"
+          commandEmptyMessage="No books found"
+          value={value}
+          onChange={setValue}
+          buttonVariant="outline"
+          icon={<BookOpen />}
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A combo box demonstrating multiple groups with headings. The options are organized into Old Testament and New Testament sections.',
+      },
+    },
+  },
+};
+
+export const WithSecondaryLabel: Story = {
+  render: () => {
+    const [value, setValue] = useState<Project | undefined>(undefined);
+
+    return (
+      <div>
+        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+          Combo box with primary and secondary labels - short name in normal text, full name in
+          muted text
+        </p>
+        <ComboBox<Project>
+          options={projectOptions}
+          textPlaceholder="Search projects..."
+          buttonPlaceholder="Select a project"
+          commandEmptyMessage="No projects found"
+          value={value}
+          onChange={setValue}
+          getButtonLabel={(project) => project.secondaryLabel || project.label}
+          buttonVariant="outline"
+          icon={<Folder />}
+        />
+        {value && (
+          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">
+            Selected: {value.label} - {value.secondaryLabel}
+          </p>
+        )}
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A combo box using the ComboBoxLabelOption interface to display a short name as the primary label and a full name as muted secondary label, separated by a middot (·).',
+      },
+    },
+  },
+};
+
+type StoryProject = StoryObj<typeof ComboBox<Project>>;
+
+export const WithSecondaryLabelGrouped: StoryProject = {
+  render: () => {
+    const [value, setValue] = useState<Project | undefined>(undefined);
+
+    const groupedProjects = [
+      {
+        groupHeading: 'Recently Opened',
+        options: [
+          {
+            id: '1',
+            label: 'WEB',
+            secondaryLabel: 'World English Bible',
+          },
+          {
+            id: '2',
+            label: 'BSB',
+            secondaryLabel: 'Berean Standard Bible',
+          },
+        ],
+      },
+      {
+        groupHeading: 'All Projects',
+        options: [
+          {
+            id: '3',
+            label: 'NET',
+            secondaryLabel: 'New English Translation',
+          },
+          {
+            id: '4',
+            label: 'ESV',
+            secondaryLabel: 'English Standard Version',
+          },
+          {
+            id: '5',
+            label: 'NASB',
+            secondaryLabel: 'New American Standard Bible',
+          },
+        ],
+      },
+    ];
+
+    return (
+      <div>
+        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+          Grouped combo box with secondary labels - demonstrating project selector with recent and
+          all projects
+        </p>
+        <ComboBox<Project>
+          options={groupedProjects}
+          textPlaceholder="Search projects..."
+          buttonPlaceholder="Select a project"
+          commandEmptyMessage="No projects found"
+          value={value}
+          onChange={setValue}
+          getButtonLabel={(project) => project.secondaryLabel || project.label}
+          buttonVariant="outline"
+          icon={<Folder />}
+        />
+        {value && (
+          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">
+            Selected: {value.label} - {value.secondaryLabel}
+          </p>
+        )}
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A combo box combining group headings with secondary labels. Shows how to build a project selector with "Recently Opened" and "All Projects" sections, where each project displays its short name prominently with the full name in muted text.',
+      },
+    },
+  },
+};
+
 export const Interactive: Story = {
   render: (args) => {
     const [value, setValue] = useState<string | undefined>(undefined);
@@ -317,6 +497,50 @@ export const Interactive: Story = {
       description: {
         story:
           'An interactive combo box where you can experiment with all the available properties using the controls panel.',
+      },
+    },
+  },
+};
+
+export const ResizableContainer: Story = {
+  render: () => {
+    const [value, setValue] = useState<string | undefined>(
+      '08/24/24 05:50PM - Revision author with very long name',
+    );
+
+    return (
+      <div className="tw-flex tw-flex-col tw-gap-4">
+        <p className="tw-text-sm tw-text-muted-foreground">
+          Resize the container below to test overflow behavior. The text should truncate with
+          ellipsis when the container becomes too narrow.
+        </p>
+        <div
+          className="tw-resize tw-overflow-auto tw-rounded tw-border-2 tw-border-dashed tw-border-muted-foreground tw-p-4"
+          style={{ minWidth: '150px', width: '300px', maxWidth: '600px' }}
+        >
+          <ComboBox<string>
+            options={revisionOptions}
+            textPlaceholder="Select revision..."
+            buttonPlaceholder="Select revision..."
+            commandEmptyMessage="No revisions found"
+            value={value}
+            onChange={setValue}
+            buttonVariant="outline"
+            buttonClassName="tw-w-full"
+          />
+        </div>
+        <div className="tw-mt-4">
+          <p className="tw-font-semibold">Selected value:</p>
+          <p className="tw-text-sm">{value || 'None'}</p>
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A resizable container demonstrating text truncation and overflow handling. Drag the bottom-right corner to resize.',
       },
     },
   },
