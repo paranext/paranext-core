@@ -206,11 +206,12 @@ export class ScriptureFinderProjectDataProviderEngine
 
     return matches.map((match) => {
       return {
-        verseRef: usj.jsonPathToUsfmVerseLocation(
-          match.location.documentLocation.jsonPath,
+        ...match,
+        start: usj.usjDocumentLocationToUsfmVerseLocation(
+          match.start.documentLocation,
           scope.bookId,
-        ).verseRef,
-        text: match.text,
+        ),
+        end: usj.usjDocumentLocationToUsfmVerseLocation(match.end.documentLocation, scope.bookId),
       };
     });
   }

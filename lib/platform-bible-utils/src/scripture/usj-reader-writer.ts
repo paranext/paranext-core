@@ -19,6 +19,7 @@ import {
   UsfmVerseLocation,
   UsjAttributeKeyLocation,
   UsjAttributeMarkerLocation,
+  UsjVerseRefChapterLocation,
   UsjClosingAttributeMarkerLocation,
   UsjClosingMarkerLocation,
   UsjDocumentLocation,
@@ -500,16 +501,90 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return workingStack;
   }
 
-  /** "Normalize" the JSONPath passed in so we can use it for lookups in {@link FragmentsByJsonPath} */
-  private static normalizeJsonPath(jsonPath: string): string {
-    // Convert to path array and back to standardize property access syntax
-    const pathArray = JSONPath.toPathArray(jsonPath);
-    const standardizedJsonPath = pathArray.reduce((pathAcc, pathEntry) => {
+  /**
+   * Transform a JSONPath array (`JSONPath.toPathArray`) to a "normalized" JSONPath. We can use this
+   * JSONPath for lookups in {@link FragmentsByJsonPath}
+   */
+  private static jsonPathArrayToJsonPath(pathArray: string[]): string {
+    return pathArray.reduce((pathAcc, pathEntry) => {
       if (pathEntry === 'content') return `${pathAcc}.${pathEntry}`;
       if (!Number.isNaN(parseInt(pathEntry, 10))) return `${pathAcc}[${pathEntry}]`;
       return `${pathAcc}['${pathEntry}']`;
     });
-    return standardizedJsonPath;
+  }
+
+  /** "Normalize" the JSONPath passed in so we can use it for lookups in {@link FragmentsByJsonPath} */
+  private static normalizeJsonPath(jsonPath: string): string {
+    // Convert to path array and back to standardize property access syntax
+    const pathArray = JSONPath.toPathArray(jsonPath);
+    return UsjReaderWriter.jsonPathArrayToJsonPath(pathArray);
+  }
+
+  /**
+   * Move a JSONPath to be relative to a chapter marker JSONPath by removing the chapter path parts
+   * from the front of the JSONPath and adjusting the content index.
+   *
+   * @example Taking JSONPath `$.content[0].content[2].content[5].content[7]['caller']` and moving
+   * it relative to chapter JSONPath `$.content[0].content[2].content[3]` would return
+   * `$.content[2].content[7]['caller']`
+   *
+   * @param jsonPath JSONPath to move to be relative to the chapter
+   * @param chapterJsonPath JSONPath to use as the chapter from which to make the other JSONPath
+   *   relative
+   * @returns `jsonPath` made relative to the chapter JSONPath
+   */
+  private static moveJsonPathRelativeToChapter<TPath extends ContentJsonPath | PropertyJsonPath>(
+    jsonPath: TPath,
+    chapterJsonPath: ContentJsonPath,
+  ): TPath {
+    const jsonPathArray = JSONPath.toPathArray(jsonPath);
+    const chapterPathArray = JSONPath.toPathArray(chapterJsonPath);
+
+    // Make sure the chapter path ends with 'content' and an index
+    if (chapterPathArray.length < 2)
+      throw new Error(`chapterJsonPath is too short: ${chapterJsonPath}`);
+    const chapterFinalContent = chapterPathArray[chapterPathArray.length - 2];
+    const chapterFinalContentIndexString = chapterPathArray[chapterPathArray.length - 1];
+    const chapterFinalContentIndex = parseInt(chapterFinalContentIndexString, 10);
+    if (chapterFinalContent !== 'content' || Number.isNaN(chapterFinalContentIndex))
+      throw new Error(`chapterJsonPath does not end with content and index: ${chapterJsonPath}`);
+
+    // Make sure the chapter path is actually a prefix of the JSONPath (except the last content index)
+    for (let i = 0; i < chapterPathArray.length - 1; i++) {
+      if (jsonPathArray[i] !== chapterPathArray[i])
+        throw new Error(
+          `chapterJsonPath is not a prefix of jsonPath: ${jsonPath} vs ${chapterJsonPath}`,
+        );
+    }
+
+    // Remove the parts of the chapter path before the last content and index from the relative path
+    const relativePathArray = jsonPathArray.slice(chapterPathArray.length - 2);
+
+    // Make sure the relative path starts with 'content' and an index
+    if (relativePathArray.length < 2)
+      throw new Error(`relativePathArray is too short: ${relativePathArray}`);
+    const relativeFirstContent = relativePathArray[0];
+    const relativeFirstContentIndexString = relativePathArray[1];
+    const relativeFirstContentIndex = parseInt(relativeFirstContentIndexString, 10);
+    if (relativeFirstContent !== 'content' || Number.isNaN(relativeFirstContentIndex))
+      throw new Error(
+        `relativePathArray does not start with content and index: ${relativePathArray}`,
+      );
+
+    // Adjust the index of the first content in the relative path to be relative to the chapter
+    // content index
+    const adjustedRelativeIndex = relativeFirstContentIndex - chapterFinalContentIndex;
+    relativePathArray[1] = adjustedRelativeIndex.toString();
+
+    // Add the $ back to the start of the relative path
+    relativePathArray.unshift('$');
+
+    // Convert back to JSONPath string
+    const relativeJsonPath = UsjReaderWriter.jsonPathArrayToJsonPath(relativePathArray);
+
+    // The JSONPath string construction above conforms to the ContentJsonPath type
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return relativeJsonPath as TPath;
   }
 
   /**
@@ -826,24 +901,14 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const fragmentInfo = this.findFragmentInfoAtUsjDocumentLocation(usjLocation);
     if (fragmentInfo === undefined)
       throw new Error(
-        `Could not find fragment info at USJ document location ${JSON.stringify(usjLocation)}`,
+        `Could not find fragment info at USJ document location while transforming to USFM verse location: ${JSON.stringify(
+          usjLocation,
+        )}`,
       );
 
-    const verseRef = this.getVerseRefForIndexInUsfm(fragmentInfo.indexInUsfm);
+    const verseRef = this.getVerseRefForIndexInUsfm(fragmentInfo.indexInUsfm, bookIdIfNotFound);
 
     const verseIndexInUsfm = this.getIndexInUsfmForVerseRef(verseRef);
-
-    if (verseRef.book === NO_BOOK_ID) {
-      // Deal with no book ID
-      if (!bookIdIfNotFound)
-        throw new Error(
-          `Could not find book ID and no book ID provided when finding USFM verse location for USJ document location ${JSON.stringify(
-            usjLocation,
-          )}`,
-        );
-
-      verseRef.book = bookIdIfNotFound;
-    }
 
     return {
       verseRef,
@@ -912,8 +977,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   /**
    * Gets the verse ref that the provided index in USFM is in (including verse range if applicable).
    * Finds the closest verse ref before the index in USFM.
+   *
+   * @param indexInUsfm The index in USFM from the beginning of this document
+   * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+   *   is not found in the USJ document)
+   * @returns Closest verse reference before or at the index in USFM
+   * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+   *   provided
    */
-  private getVerseRefForIndexInUsfm(indexInUsfm: number): SerializedVerseRef {
+  private getVerseRefForIndexInUsfm(
+    indexInUsfm: number,
+    bookIdIfNotFound?: string,
+  ): SerializedVerseRef {
     // ENHANCE: This could be sped up and simplified significantly by storing a sorted number map of
     // verse refs by index in USFM like so:
     /**
@@ -991,6 +1066,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (!lastVerseRef)
       throw new Error(`Did not find any verse refs while looking for index in USFM ${indexInUsfm}`);
 
+    if (lastVerseRef.book === NO_BOOK_ID) {
+      // Deal with no book ID
+      if (!bookIdIfNotFound)
+        throw new Error(
+          `Could not find book ID and no book ID provided when finding USFM verse ref for index in USFM ${
+            indexInUsfm
+          }`,
+        );
+
+      lastVerseRef.book = bookIdIfNotFound;
+    }
+
     // If `didFindVerseRef` is `false`, the index in USFM to find is greater than all known indices
     // in USFM. That means it's in the very last verse ref. That's fine; no need to do anything
     // special.
@@ -1010,9 +1097,25 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return lastVerseRef;
   }
 
+  usfmLocationToIndexInUsfm(usfmLocation: UsfmLocation): number {
+    const { verseRef, offset: verseRefOffset } =
+      UsjReaderWriter.usfmLocationToUsfmVerseLocation(usfmLocation);
+
+    if (verseRefOffset < 0) throw new Error('offset must be >= 0');
+
+    // Find the index in the whole USFM of this verse
+    const verseIndexInUsfm = this.getIndexInUsfmForVerseRef(verseRef);
+
+    // Add the verse offset to the verse index to get the USFM location's index in the USFM
+    // representation of this USJ document
+    const usfmLocationIndexInUsfm = verseIndexInUsfm + verseRefOffset;
+
+    return usfmLocationIndexInUsfm;
+  }
+
   // #endregion Handling VerseRefs
 
-  // #region standardizing USFM locations
+  // #region transforming location types to different types
 
   private static usfmLocationToUsfmVerseLocation(
     usfmLocation: UsfmLocation,
@@ -1030,7 +1133,48 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  // #endregion standardizing USFM locations
+  usjDocumentLocationToUsjVerseRefChapterLocation<
+    TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
+  >(
+    usjLocation: TDocumentLocation,
+    bookIdIfNotFound?: string,
+  ): UsjVerseRefChapterLocation<TDocumentLocation> {
+    // Get the fragment info for this location so we can get the index in USFM
+    const fragmentInfo = this.findFragmentInfoAtUsjDocumentLocation(usjLocation);
+    if (!fragmentInfo)
+      throw new Error(
+        `Could not find fragment info at USJ document location when transforming to USJ chapter location: ${JSON.stringify(
+          usjLocation,
+        )}`,
+      );
+
+    // Get the verse ref for this USJ location
+    const verseRef = this.getVerseRefForIndexInUsfm(fragmentInfo.indexInUsfm, bookIdIfNotFound);
+
+    // Get the USJ location for the start of the chapter
+    const chapterUsjDocumentLocation = this.usfmLocationToUsjNodeAndDocumentLocation({
+      ...verseRef,
+      verseNum: 0,
+    });
+
+    return {
+      verseRef,
+      granularity: 'chapter',
+      documentLocation: {
+        ...usjLocation,
+        // Change the passed in JSONPath to be relative to the chapter
+        jsonPath: UsjReaderWriter.moveJsonPathRelativeToChapter(
+          usjLocation.jsonPath,
+          // We are trusting that `usfmLocationToUsjNodeAndDocumentLocation` gave us a proper
+          // UsjMarkerLocation, which always has a ContentJsonPath
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          chapterUsjDocumentLocation.documentLocation.jsonPath as ContentJsonPath,
+        ),
+      },
+    };
+  }
+
+  // #endregion transforming location types to different types
 
   // #region USFM location -> USJ location
 
@@ -1038,14 +1182,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const { verseRef, offset: verseRefOffset } =
       UsjReaderWriter.usfmLocationToUsfmVerseLocation(usfmLocation);
 
-    if (verseRefOffset < 0) throw new Error('offset must be >= 0');
-
-    // Find the index in the whole USFM of this verse
-    const verseIndexInUsfm = this.getIndexInUsfmForVerseRef(verseRef);
-
-    // Add the verse offset to the verse index to get the USFM location's index in the USFM
-    // representation of this USJ document
-    const usfmLocationIndexInUsfm = verseIndexInUsfm + verseRefOffset;
+    // Get the USFM location's index in the USFM representation of this USJ document
+    const usfmLocationIndexInUsfm = this.usfmLocationToIndexInUsfm(usfmLocation);
 
     // Find the fragment info at this USFM location
     const { value: fragmentInfo } = this.fragmentsByIndexInUsfm.findClosestLessThanOrEqual(
@@ -1306,17 +1444,37 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       if (match[0].length > 0) {
         if (match.index < 0 || match.index >= fullText.length)
           throw new Error(`Match index out of bounds: ${match.index}`);
-        const closestNode = fullTextIndexMap.findClosestLessThanOrEqual(match.index);
-        if (!closestNode)
-          throw new Error(`Internal error: no closest node found for index ${match.index}`);
-        const location: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
-          node: closestNode.value.node,
+
+        const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(match.index);
+        if (!startingNodeEntry)
+          throw new Error(`Internal error: no starting node found for index ${match.index}`);
+        const start: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+          node: startingNodeEntry.value.node,
           documentLocation: {
-            jsonPath: closestNode.value.documentLocation.jsonPath,
-            offset: match.index - closestNode.key,
+            jsonPath: startingNodeEntry.value.documentLocation.jsonPath,
+            offset: match.index - startingNodeEntry.key,
           },
         };
-        retVal.push({ text: match[0], location });
+
+        // Have to find the node containing the last character in the match so we don't go past the
+        // ending text node and to the next text node that may be multiple markers past the end text
+        // node. Then do NOT subtract one from the index in the offset since the ending location is
+        // exclusive, meaning the last character in the match is the character before the ending
+        // location.
+        const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(
+          match.index + match[0].length - 1,
+        );
+        if (!endingNodeEntry)
+          throw new Error(`Internal error: no ending node found for index ${match.index}`);
+        const end: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+          node: endingNodeEntry.value.node,
+          documentLocation: {
+            jsonPath: endingNodeEntry.value.documentLocation.jsonPath,
+            offset: match.index + match[0].length - endingNodeEntry.key,
+          },
+        };
+
+        retVal.push({ text: match[0], start, end });
       }
 
       // If the regex is not global, then running `exec` again will return the same match
