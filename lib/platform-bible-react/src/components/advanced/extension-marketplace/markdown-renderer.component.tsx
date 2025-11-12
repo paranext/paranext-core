@@ -14,6 +14,8 @@ interface MarkdownRendererProps {
    * adding a `target` to `a` tags
    */
   anchorTarget?: string;
+  /** Optional flag to truncate the content to 3 lines */
+  truncate?: boolean;
 }
 
 /**
@@ -23,7 +25,13 @@ interface MarkdownRendererProps {
  * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ id, markdown, className, anchorTarget }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+  id,
+  markdown,
+  className,
+  anchorTarget,
+  truncate,
+}: MarkdownRendererProps) {
   const options: MarkdownToJSX.Options = useMemo(
     () => ({
       overrides: {
@@ -37,7 +45,17 @@ export function MarkdownRenderer({ id, markdown, className, anchorTarget }: Mark
     [anchorTarget],
   );
   return (
-    <div id={id} className={cn('pr-twp tw-prose', className)}>
+    <div
+      id={id}
+      className={cn(
+        'pr-twp tw-prose',
+        {
+          'tw-line-clamp-3 tw-max-h-10 tw-overflow-hidden tw-text-ellipsis tw-break-words':
+            truncate,
+        },
+        className,
+      )}
+    >
       <Markdown options={options}>{markdown}</Markdown>
     </div>
   );

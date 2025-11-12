@@ -7,17 +7,15 @@ declare module 'legacy-comment-manager' {
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { ScriptureRange } from 'platform-scripture';
-  import { PlatformError, Prettify, UnsubscriberAsync } from 'platform-bible-utils';
-
-  // #region Enums
-
-  /** Possible status of a comment/note as defined in Paratext 9 */
-  export type CommentStatus = 'Unspecified' | 'Todo' | 'Done' | 'Resolved';
-
-  /** Possible types of comment/note as defined in Paratext 9 */
-  export type CommentType = 'Unspecified' | 'Normal' | 'Conflict';
-
-  // #endregion
+  import {
+    CommentStatus,
+    CommentType,
+    LegacyComment,
+    LegacyCommentThread,
+    PlatformError,
+    Prettify,
+    UnsubscriberAsync,
+  } from 'platform-bible-utils';
 
   // #region Scripture Range Types
 
@@ -148,70 +146,16 @@ declare module 'legacy-comment-manager' {
 
   // #region Legacy Types
 
-  export type LegacyComment = {
-    assignedUser?: string;
-    biblicalTermId?: string;
-    conflictType?: string;
-    contents: string;
-    contextAfter?: string;
-    contextBefore?: string;
-    date: string;
-    deleted: boolean;
-    extraHeadingInfo?: string;
-    hideInTextWindow: boolean;
-    id: string;
-    language: string;
-    replyToUser?: string;
-    selectedText?: string;
-    shared?: string;
-    startPosition: number;
-    status?: string;
-    tagAdded?: string;
-    tagRemoved?: string;
-    thread: string;
-    type?: string;
-    user: string;
-    verse?: string;
-    verseRef: string;
-  };
-
+  /**
+   * Represents a new comment to be created. It is a subtype of {@link LegacyComment} with some
+   * properties omitted (`id`, `user`, `date`). All properties except `contents` are optional.
+   *
+   * This is used when creating a new comment via the
+   * {@link ILegacyCommentProjectDataProvider.createComment} method.
+   */
   export type NewLegacyComment = Prettify<
     Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>> & { contents: string }
   >;
-
-  /**
-   * Represents a comment thread - a collection of related comments
-   *
-   * This is the C# CommentThread type from Paratext.Data.ProjectComments
-   */
-  export type LegacyCommentThread = {
-    /** Thread identifier (from first comment) */
-    id: string;
-    /** All comments in this thread */
-    comments: LegacyComment[];
-    /** Thread status (aggregated from most recent non-Unspecified comment) */
-    status: CommentStatus;
-    /** Thread type (from first comment) */
-    type: CommentType;
-    /** User to whom the thread is assigned */
-    assignedUser: string;
-    /** User to reply to */
-    replyToUser: string;
-    /** Last modified date (ISO 8601 string) */
-    modifiedDate: string;
-    /** Scripture reference for this thread */
-    verseRef: string;
-    /** Name of the context scripture text */
-    contextScrTextName?: string;
-    /** Whether this is a spelling note */
-    isSpellingNote: boolean;
-    /** Whether this is a back translation note */
-    isBTNote: boolean;
-    /** Whether this is a consultant note */
-    isConsultantNote: boolean;
-    /** Biblical term ID if this is a biblical term note */
-    biblicalTermId?: string;
-  };
 
   // #endregion
 
@@ -313,5 +257,11 @@ declare module 'papi-shared-types' {
 
   export interface ProjectDataProviderInterfaces {
     'legacyCommentManager.comments': ILegacyCommentProjectDataProvider;
+  }
+
+  export interface CommandHandlers {
+    'legacyCommentManager.openCommentList': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 }

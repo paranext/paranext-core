@@ -13,5 +13,7 @@
     "groups": {},
     "items": []
   },
-  "webViewMenus": {}
+  "webViewMenus": {
+    "legacyCommentManager.commentList": {}
+  }
 }

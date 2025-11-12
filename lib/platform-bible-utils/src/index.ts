@@ -103,7 +103,7 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
-export { default as formatTimeSpan } from './date-time-format-util';
+export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS } from './keyboard-util';
 
 // Types
@@ -197,3 +197,9 @@ export type {
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
+export type {
+  CommentStatus,
+  CommentType,
+  LegacyComment,
+  LegacyCommentThread,
+} from './comments.types';

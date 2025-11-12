@@ -6,8 +6,8 @@ import {
   UsjReaderWriter,
   VERSE_TYPE,
   VerseRefOffset,
+  LegacyComment,
 } from 'platform-bible-utils';
-import { LegacyComment } from 'legacy-comment-manager';
 import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
 import { valuesAreDeeplyEqual } from './platform-scripture-editor.utils';
