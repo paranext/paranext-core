@@ -134,6 +134,7 @@ export type {
   ComboBoxLabelOption,
   ComboBoxProps,
   ComboBoxOption,
+  ComboBoxGroup,
 } from './components/basics/combo-box.component';
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';

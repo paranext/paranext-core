@@ -1,25 +1,39 @@
 import { ReactNode, useState } from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   Command,
   CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
 } from '@/components/shadcn-ui/command';
 import { PopoverProps } from '@radix-ui/react-popover';
 
-export type ComboBoxLabelOption = { label: string };
+export type ComboBoxLabelOption = { label: string; secondaryLabel?: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
+
+/** Represents a group of options with an optional heading */
+export type ComboBoxGroup<T> = {
+  /** The heading text for this group of options */
+  groupHeading: string;
+  /** The options within this group */
+  options: readonly T[];
+};
 
 export type ComboBoxProps<T> = {
   /** Optional unique identifier */
   id?: string;
-  /** List of available options for the dropdown menu */
-  options?: readonly T[];
+  /**
+   * List of available options for the dropdown menu. Can be either:
+   *
+   * - A flat array of options (single group, no heading)
+   * - An array of group objects. Each group has a heading and an array of options
+   */
+  options?: readonly T[] | readonly ComboBoxGroup<T>[];
   /** @deprecated 3 December 2024. Renamed to `buttonClassName` */
   className?: string;
   /** Additional css classes to help with unique styling of the combo box button */
@@ -35,6 +49,11 @@ export type ComboBoxProps<T> = {
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: T) => string;
+  /**
+   * Used to determine the string value to display on the button for the selected value. If not
+   * provided, falls back to `getOptionLabel`.
+   */
+  getButtonLabel?: (option: T) => string;
   /** Icon to be displayed on the trigger */
   icon?: ReactNode;
   /** Text displayed on button if `value` is undefined */
@@ -49,6 +68,8 @@ export type ComboBoxProps<T> = {
   alignDropDown?: 'start' | 'center' | 'end';
   /** Optional boolean to set if trigger should be disabled */
   isDisabled?: boolean;
+  /** Optional aria-label for the trigger button for accessibility */
+  ariaLabel?: string;
 } & PopoverProps;
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
@@ -76,6 +97,7 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
+  getButtonLabel,
   icon = undefined,
   buttonPlaceholder = '',
   textPlaceholder = '',
@@ -83,9 +105,52 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   buttonVariant = 'outline',
   alignDropDown = 'start',
   isDisabled = false,
+  ariaLabel,
   ...props
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
+
+  const buttonLabel = getButtonLabel ?? getOptionLabel;
+
+  const isGroupedOptions = (
+    groupOptions: readonly T[] | readonly ComboBoxGroup<T>[],
+  ): groupOptions is readonly ComboBoxGroup<T>[] => {
+    return Boolean(
+      groupOptions.length > 0 &&
+        typeof groupOptions[0] === 'object' &&
+        'options' in groupOptions[0],
+    );
+  };
+
+  const renderCommandItem = (option: T, groupHeading?: string) => {
+    const optionLabel = getOptionLabel(option);
+    const secondaryLabel =
+      typeof option === 'object' && 'secondaryLabel' in option ? option.secondaryLabel : undefined;
+
+    const key = `${groupHeading ?? ''}${optionLabel}${secondaryLabel ?? ''}`;
+
+    return (
+      <CommandItem
+        key={key}
+        value={optionLabel}
+        onSelect={() => {
+          onChange(option);
+          setOpen(false);
+        }}
+        className="tw-flex tw-items-center"
+      >
+        <Check
+          className={cn('tw-me-2 tw-h-4 tw-w-4 tw-shrink-0', {
+            'tw-opacity-0': !value || getOptionLabel(value) !== optionLabel,
+          })}
+        />
+        <span className="tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
+          {optionLabel}
+          {secondaryLabel && <span className="tw-text-muted-foreground"> · {secondaryLabel}</span>}
+        </span>
+      </CommandItem>
+    );
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen} {...props}>
@@ -94,6 +159,7 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           variant={buttonVariant}
           role="combobox"
           aria-expanded={open}
+          aria-label={ariaLabel}
           id={id}
           className={cn(
             'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
@@ -101,14 +167,18 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           )}
           disabled={isDisabled}
         >
-          <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
-            {icon && <div className="tw-pe-2">{icon}</div>}
-            <span className={cn('tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap')}>
-              {value ? getOptionLabel(value) : buttonPlaceholder}
+          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-overflow-hidden">
+            {icon && <div className="tw-shrink-0 tw-pe-2">{icon}</div>}
+            <span
+              className={cn(
+                'tw-min-w-0 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-text-start',
+              )}
+            >
+              {value ? buttonLabel(value) : buttonPlaceholder}
             </span>
           </div>
 
-          <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+          <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -119,23 +189,13 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           <CommandInput placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
-            {options.map((option) => (
-              <CommandItem
-                key={getOptionLabel(option)}
-                value={getOptionLabel(option)}
-                onSelect={() => {
-                  onChange(option);
-                  setOpen(false);
-                }}
-              >
-                <Check
-                  className={cn('tw-me-2 tw-h-4 tw-w-4', {
-                    'tw-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
-                  })}
-                />
-                {getOptionLabel(option)}
-              </CommandItem>
-            ))}
+            {isGroupedOptions(options)
+              ? options.map((group) => (
+                  <CommandGroup key={group.groupHeading} heading={group.groupHeading}>
+                    {group.options.map((option) => renderCommandItem(option, group.groupHeading))}
+                  </CommandGroup>
+                ))
+              : options.map((option) => renderCommandItem(option))}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -1579,13 +1579,26 @@ export type ChecklistProps = {
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
+	secondaryLabel?: string;
 };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
+/** Represents a group of options with an optional heading */
+export type ComboBoxGroup<T> = {
+	/** The heading text for this group of options */
+	groupHeading: string;
+	/** The options within this group */
+	options: readonly T[];
+};
 export type ComboBoxProps<T> = {
 	/** Optional unique identifier */
 	id?: string;
-	/** List of available options for the dropdown menu */
-	options?: readonly T[];
+	/**
+	 * List of available options for the dropdown menu. Can be either:
+	 *
+	 * - A flat array of options (single group, no heading)
+	 * - An array of group objects. Each group has a heading and an array of options
+	 */
+	options?: readonly T[] | readonly ComboBoxGroup<T>[];
 	/** @deprecated 3 December 2024. Renamed to `buttonClassName` */
 	className?: string;
 	/** Additional css classes to help with unique styling of the combo box button */
@@ -1601,6 +1614,11 @@ export type ComboBoxProps<T> = {
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: T) => string;
+	/**
+	 * Used to determine the string value to display on the button for the selected value. If not
+	 * provided, falls back to `getOptionLabel`.
+	 */
+	getButtonLabel?: (option: T) => string;
 	/** Icon to be displayed on the trigger */
 	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
@@ -1615,6 +1633,8 @@ export type ComboBoxProps<T> = {
 	alignDropDown?: "start" | "center" | "end";
 	/** Optional boolean to set if trigger should be disabled */
 	isDisabled?: boolean;
+	/** Optional aria-label for the trigger button for accessibility */
+	ariaLabel?: string;
 } & PopoverProps;
 /**
  * Autocomplete input and command palette with a list of suggestions.
@@ -1622,7 +1642,7 @@ export type ComboBoxProps<T> = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
