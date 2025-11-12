@@ -20,7 +20,7 @@ type SearchResultsInBookProps = {
   bookId: string;
   /** The list of search results in this book */
   results: HidableFindResult[];
-  /** Map of book ids to their localized display names */
+  /** Map of book IDs to their localized display names */
   localizedBookData: Map<string, { localizedId: string }>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
@@ -44,7 +44,7 @@ export function SearchResultsInBook({
   onHideResult,
   localizedStrings,
 }: SearchResultsInBookProps) {
-  const bookVerseRef = useMemo(() => {
+  const verseRefForBook = useMemo(() => {
     return {
       book: bookId,
       chapterNum: 1,
@@ -55,7 +55,7 @@ export function SearchResultsInBook({
   const [usjBookPossiblyError] = useProjectData(
     'platformScripture.USJ_Book',
     projectId ?? undefined,
-  ).BookUSJ(bookVerseRef, undefined);
+  ).BookUSJ(verseRefForBook, undefined);
 
   const usjBook = useMemo(() => {
     if (isPlatformError(usjBookPossiblyError)) {
