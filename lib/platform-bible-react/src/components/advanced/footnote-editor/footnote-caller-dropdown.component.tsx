@@ -88,7 +88,7 @@ export function FootnoteCallerDropdown({
     if (!open) {
       // This makes it so that if the custom caller is invalid, then reverts back to the previous
       // selected caller
-      if (selectedCallerType !== 'custom' || customCaller) {
+      if (selectedCallerType !== 'custom' || newCustomCaller) {
         updateCallerType(selectedCallerType);
         updateCustomCaller(newCustomCaller);
       } else {
