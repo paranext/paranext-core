@@ -1,0 +1,106 @@
+{
+  "type": "USJ",
+  "version": "3.1",
+  "content": [
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "2"
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1"
+        },
+        "Now when Jesus was born in Bethlehem of Judea in the days of King Herod, behold, wise men",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "+",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "closed": "false",
+              "content": ["2:1 "]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "closed": "false",
+              "content": [
+                "The word for “wise men” (magoi) can also mean teachers, scientists, physicians, astrologers, seers, interpreters of dreams, or sorcerers."
+              ]
+            }
+          ]
+        },
+        " from the east came to Jerusalem, saying, ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2"
+        },
+        "“Where is he who is born King of the Jews? For we saw his star in the east, and have come to worship him.” ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "3"
+        },
+        "When King Herod heard it, he was troubled, and all Jerusalem with him. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4"
+        },
+        "Gathering together all the chief priests and scribes of the people, he asked them where the Christ would be born. ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "5"
+        },
+        "They said to him, “In Bethlehem of Judea, for this is written through the prophet,"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "19"
+        },
+        "But when Herod was dead, behold, an angel of the Lord appeared in a dream to Joseph in Egypt, saying, ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "20"
+        },
+        "“Arise and take the young child and his mother, and go into the land of Israel, for those who sought the young child’s life are dead.”"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "21-22"
+        },
+        "He arose and took the young child and his mother, and came into the land of Israel. ",
+        "But when he heard that Archelaus was reigning over Judea in the place of his father, Herod, he was afraid to go there. Being warned in a dream, he withdrew into the region of Galilee, ",
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "23"
+        },
+        "and came and lived in a city called Nazareth; that it might be fulfilled which was spoken through the prophets that he will be called a Nazarene."
+      ]
+    }
+  ]
+}

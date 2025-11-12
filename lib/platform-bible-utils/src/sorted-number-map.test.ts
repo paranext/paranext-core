@@ -166,6 +166,61 @@ describe('SortedNumberMap', () => {
     });
   });
 
+  describe('get', () => {
+    it('should return undefined for non-existent key', () => {
+      expect(map.get(5)).toBeUndefined();
+    });
+
+    it('should return the correct value for existing key', () => {
+      map.set(10, 'ten');
+      expect(map.get(10)).toBe('ten');
+    });
+
+    it('should handle updates to the same key', () => {
+      map.set(10, 'ten');
+      map.set(10, 'new ten');
+      expect(map.get(10)).toBe('new ten');
+    });
+
+    it('should return object references correctly', () => {
+      const objMap = new SortedNumberMap<{ value: string }>();
+      const obj = { value: 'test' };
+      objMap.set(10, obj);
+      const retrieved = objMap.get(10);
+      expect(retrieved).toBe(obj);
+      // Verify reference is maintained
+      obj.value = 'modified';
+      expect(retrieved?.value).toBe('modified');
+    });
+  });
+
+  describe('keys', () => {
+    it('should return an empty iterator for empty map', () => {
+      expect([...map.keys()]).toEqual([]);
+    });
+
+    it('should return all keys in the map', () => {
+      map.set(10, 'ten');
+      map.set(20, 'twenty');
+      map.set(30, 'thirty');
+
+      const keys = [...map.keys()];
+      expect(keys).toContain(10);
+      expect(keys).toContain(20);
+      expect(keys).toContain(30);
+      expect(keys.length).toBe(3);
+    });
+
+    it('should reflect updates to the map', () => {
+      map.set(10, 'ten');
+      map.set(20, 'twenty');
+      expect([...map.keys()].length).toBe(2);
+
+      map.set(30, 'thirty');
+      expect([...map.keys()].length).toBe(3);
+    });
+  });
+
   describe('performance and edge cases', () => {
     it('should handle large datasets efficiently', () => {
       const largeMap = new SortedNumberMap<number>();

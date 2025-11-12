@@ -9,7 +9,16 @@ declare module 'platform-scripture' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import {
+    Dispose,
+    LocalizeKey,
+    PlatformError,
+    UnsubscriberAsync,
+    UsfmVerseLocation,
+    UsjSearchResult,
+    UsjTextContentLocation,
+    UsjVerseRefChapterLocation,
+  } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
   import { InventoryItem } from 'platform-bible-react';
 
@@ -688,9 +697,20 @@ declare module 'platform-scripture' {
 
   /** Represents a single result from a find operation. */
   export type FindResult = {
-    /** The verse reference where the text was found */
-    verseRef: SerializedVerseRef;
-    /** The text that matched the find operation */
+    /**
+     * Beginning location in USFM of the search result. The text is inclusive of this location,
+     * meaning this is the location of the first character of the found text
+     */
+    start: UsfmVerseLocation;
+    /**
+     * Ending location in USFM of the search result. The text is exclusive of this location, meaning
+     * this is the location right after the last character of the found text
+     */
+    end: UsfmVerseLocation;
+    /**
+     * The matching Scripture text (not USFM string) that was found between the start and end
+     * locations
+     */
     text: string;
   };
 

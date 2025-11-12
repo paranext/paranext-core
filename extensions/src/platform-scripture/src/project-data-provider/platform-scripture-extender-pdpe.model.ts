@@ -12,6 +12,7 @@ import {
   USJVerseProjectInterfaceDataTypes,
 } from 'platform-scripture';
 import { Usj, usjToUsxString, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
+import { correctUsjVersion, correctUsxStringVersion } from './scripture.util';
 
 /** The `projectInterface`s the Scripture Extender PDPF serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -135,7 +136,7 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Book'].setBookUSX(
       verseRef,
-      usjToUsxString(bookUsj),
+      correctUsxStringVersion(usjToUsxString(bookUsj)),
     );
     if (didSucceed) return true;
     return false;
@@ -150,7 +151,7 @@ export class ScriptureExtenderProjectDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Chapter'].setChapterUSX(
       verseRef,
-      usjToUsxString(chapterUsj),
+      correctUsxStringVersion(usjToUsxString(chapterUsj)),
     );
     if (didSucceed) return true;
     return false;
@@ -164,17 +165,17 @@ export class ScriptureExtenderProjectDataProviderEngine
 
   async getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-    return usx ? usxStringToUsj(usx) : undefined;
+    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
   }
 
   async getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
-    return usx ? usxStringToUsj(usx) : undefined;
+    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
   }
 
   async getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Verse'].getVerseUSX(verseRef);
-    return usx ? usxStringToUsj(usx) : undefined;
+    return usx ? correctUsjVersion(usxStringToUsj(usx)) : undefined;
   }
 
   /**

@@ -1,14 +1,21 @@
-import { useLocalizedStrings, useProjectData } from '@papi/frontend/react';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
 import { DropdownMenuItem, ResultsCard } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  LocalizedStringValue,
+  LocalizeKey,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-type HidableFindResult = FindResult & { isHidden?: boolean };
+export type HidableFindResult = FindResult & { isHidden?: boolean };
 
-const SEARCH_RESULT_LOCALIZED_STRINGS: LocalizeKey[] = [
+/** How many words to show around the search result */
+const WORDS_AROUND_SEARCH_RESULT = 15;
+
+export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_copyReference%',
   '%webView_find_copyVerseText%',
   '%webView_find_copyReferenceAndVerseText%',
@@ -25,23 +32,17 @@ interface SearchResultProps {
   globalResultsIndex: number;
   /** Whether this search result is currently selected/focused */
   isSelected: boolean;
-  /** The ID of the project being searched */
-  projectId: string | undefined;
+  /** UsjReaderWriter for the book this search result occurred in */
+  usjReaderWriter: UsjReaderWriter | undefined;
   /** Map of book ids to their localized display names */
   localizedBookData: Map<string, { localizedId: string }>;
-  /** The index of this occurrence within the verse (for multiple matches in same verse) */
-  occurrenceInVerseIndex: number;
   /** Callback function called when the user clicks on this search result */
-  onResultClick: (
-    verseRef: SerializedVerseRef,
-    index: number,
-    /** Start index for the occurrence in the USFM verse text */
-    occurrenceTextPositionStart?: number,
-    /** End index for the occurrence in the USFM verse text */
-    occurrenceTextPositionEnd?: number,
-  ) => void;
+  onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
+  localizedStrings: {
+    [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
+  };
 }
 
 const countWords = (text: string): number => {
@@ -49,7 +50,9 @@ const countWords = (text: string): number => {
 };
 
 const truncateText = (text: string, maxWords: number, shouldCutFromStart: boolean): string => {
-  const words = text.trim().split(/\s+/);
+  // Don't trim when truncating because we want to keep the original spacing so the text doesn't
+  // lose spaces around the search result
+  const words = text.split(/\s+/);
   if (words.length <= maxWords) return text;
 
   if (shouldCutFromStart) {
@@ -70,53 +73,50 @@ export default function SearchResult({
   searchResult,
   globalResultsIndex,
   isSelected,
-  projectId,
+  usjReaderWriter,
   localizedBookData,
-  occurrenceInVerseIndex,
   onResultClick,
   onHideResult,
+  localizedStrings,
 }: SearchResultProps) {
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => SEARCH_RESULT_LOCALIZED_STRINGS, []),
-  );
+  // We should avoid calculating context unless this result is selected to improve performance
+  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
 
-  const [currentProjectVersePossiblyError] = useProjectData(
-    'platformScripture.USFM_Verse',
-    projectId ?? undefined,
-  ).VerseUSFM(searchResult.verseRef, localizedStrings['%webView_find_loadingVerseText%']);
-
-  const focusedVerseText = useMemo(() => {
-    if (isPlatformError(currentProjectVersePossiblyError)) {
-      return getErrorMessage(currentProjectVersePossiblyError);
+  // When this result becomes selected, we should calculate the context if we haven't already
+  useEffect(() => {
+    if (isSelected) {
+      setShouldGetVerseText(true);
     }
-    return currentProjectVersePossiblyError;
-  }, [currentProjectVersePossiblyError]);
+  }, [isSelected]);
 
-  /** Start and end index for the occurrence in the verse */
-  const occurrenceTextPosition = useMemo(() => {
-    if (!focusedVerseText || !searchResult.text) return undefined;
+  // Determine the text to show before the search result, the search result, and the text after
+  const textParts = useMemo(() => {
+    if (!usjReaderWriter || !shouldCalculateContext) return undefined;
+    try {
+      const startIndexInUsfm = usjReaderWriter.usfmLocationToIndexInUsfm(searchResult.start);
+      const endIndexInUsfm = usjReaderWriter.usfmLocationToIndexInUsfm(searchResult.end);
 
-    const lowerFocusedVerseText = focusedVerseText.toLowerCase();
-    const lowerResultText = searchResult.text.toLowerCase();
-    const occurrences: number[] = [];
-    let searchIndex = 0;
+      const usfm = usjReaderWriter.toUsfm();
 
-    while (searchIndex < lowerFocusedVerseText.length) {
-      const foundIndex = lowerFocusedVerseText.indexOf(lowerResultText, searchIndex);
-      if (foundIndex === -1) break;
-      occurrences.push(foundIndex);
-      searchIndex = foundIndex + 1;
+      let beforeText = usfm.substring(0, startIndexInUsfm);
+
+      const text = usfm.substring(startIndexInUsfm, endIndexInUsfm);
+
+      let afterText = usfm.substring(endIndexInUsfm);
+
+      if (countWords(beforeText) > WORDS_AROUND_SEARCH_RESULT) {
+        beforeText = truncateText(beforeText, WORDS_AROUND_SEARCH_RESULT, true);
+      }
+      if (countWords(afterText) > WORDS_AROUND_SEARCH_RESULT) {
+        afterText = truncateText(afterText, WORDS_AROUND_SEARCH_RESULT, false);
+      }
+
+      return { beforeText, text, afterText };
+    } catch (error) {
+      logger.warn(`Error determining text parts for search result: ${getErrorMessage(error)}`);
+      return undefined;
     }
-
-    const targetOccurrenceIndex =
-      occurrenceInVerseIndex < occurrences.length
-        ? occurrences[occurrenceInVerseIndex]
-        : occurrences[0];
-
-    if (targetOccurrenceIndex === undefined) return undefined;
-
-    return { start: targetOccurrenceIndex, end: targetOccurrenceIndex + searchResult.text.length };
-  }, [focusedVerseText, occurrenceInVerseIndex, searchResult.text]);
+  }, [usjReaderWriter, searchResult, shouldCalculateContext]);
 
   /**
    * Highlights the search term within the verse text by wrapping the specified occurrence in a
@@ -125,45 +125,38 @@ export default function SearchResult({
    * @returns The verse text with the search term highlighted, or plain text if not selected
    */
   const getFocusedVerseText = () => {
-    if (!focusedVerseText || !occurrenceTextPosition || !isSelected) return undefined;
+    if (!textParts) return localizedStrings['%webView_find_loadingVerseText%'];
 
-    let beforeText = focusedVerseText.substring(0, occurrenceTextPosition.start);
-    const matchText = focusedVerseText.substring(
-      occurrenceTextPosition.start,
-      occurrenceTextPosition.end,
-    );
-    let afterText = focusedVerseText.substring(occurrenceTextPosition.end);
-
-    if (countWords(beforeText) > 50) {
-      beforeText = truncateText(beforeText, 50, true);
-    }
-    if (countWords(afterText) > 50) {
-      afterText = truncateText(afterText, 50, false);
-    }
+    const { beforeText, text, afterText } = textParts;
 
     return (
       <>
         {beforeText}
-        <strong>{matchText}</strong>
+        <strong>{text}</strong>
         {afterText}
       </>
     );
   };
 
+  const getReference = () => {
+    return `${searchResult.start.verseRef.book} ${searchResult.start.verseRef.chapterNum}:${searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}`;
+  };
+
+  const getVerseText = () => {
+    if (!textParts) return localizedStrings['%webView_find_noVerseTextAvailable%'] ?? '';
+    return `${textParts.beforeText}${textParts.text}${textParts.afterText}`;
+  };
+
   const handleCopyReference = () => {
-    navigator.clipboard.writeText(
-      `${searchResult.verseRef.book} ${searchResult.verseRef.chapterNum}:${searchResult.verseRef.verseNum}`,
-    );
+    navigator.clipboard.writeText(getReference());
   };
 
   const handleCopyVerseText = () => {
-    if (focusedVerseText) navigator.clipboard.writeText(focusedVerseText);
+    if (textParts) navigator.clipboard.writeText(getVerseText());
   };
 
   const handleCopyReferenceAndVerseText = () => {
-    navigator.clipboard.writeText(
-      `${searchResult.verseRef.book} ${searchResult.verseRef.chapterNum}:${searchResult.verseRef.verseNum} - ${focusedVerseText ?? localizedStrings['%webView_find_noVerseTextAvailable%']}`,
-    );
+    navigator.clipboard.writeText(`${getReference()} - ${getVerseText()}`);
   };
 
   const handleDismiss = () => {
@@ -193,8 +186,11 @@ export default function SearchResult({
 
   const cardContent = (
     <div className="tw-text-xs tw-font-medium">
-      {localizedBookData.get(searchResult.verseRef.book)?.localizedId ?? searchResult.verseRef.book}{' '}
-      {searchResult.verseRef.chapterNum}:{searchResult.verseRef.verseNum} {searchResult.text ?? ''}
+      {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
+        searchResult.start.verseRef.book}{' '}
+      {searchResult.start.verseRef.chapterNum}:
+      {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
+      {searchResult.text ?? ''}
     </div>
   );
 
@@ -206,19 +202,15 @@ export default function SearchResult({
 
   return (
     <ResultsCard
-      cardKey={`${searchResult.verseRef.book + searchResult.verseRef.chapterNum}:${
-        searchResult.verseRef.verseNum
+      cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
+        searchResult.start.verseRef.verseNum
       }${searchResult.text}${globalResultsIndex}`}
       isHidden={searchResult.isHidden}
       isSelected={isSelected}
-      onSelect={() =>
-        onResultClick(
-          searchResult.verseRef,
-          globalResultsIndex,
-          occurrenceTextPosition?.start,
-          occurrenceTextPosition?.end,
-        )
-      }
+      onSelect={() => {
+        setShouldGetVerseText(true);
+        onResultClick(searchResult, globalResultsIndex);
+      }}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
     >
