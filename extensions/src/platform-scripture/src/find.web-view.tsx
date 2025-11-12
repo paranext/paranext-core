@@ -781,7 +781,9 @@ global.webViewComponent = function FindWebView({
               bookId={bookId}
               results={bookResults.map(({ result }) => result)}
               localizedBookData={localizedBookData}
-              focusedResultIndex={focusedResultIndex}
+              focusedResultIndex={bookResults.findIndex(
+                ({ originalIndex }) => originalIndex === focusedResultIndex,
+              )}
               onResultClick={(result, indexInBookResults) =>
                 handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
               }
