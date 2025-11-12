@@ -3,7 +3,7 @@ using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checks;
 
-public class CheckInputRangeTests
+public class InputRangeTests
 {
     [TestCase("pid1", "GEN 1:1", "GEN 10:1", "pid1", 1, 4, true)] // In range (single book)
     [TestCase("pid1", "GEN 1:1", "EXO 10:1", "pid1", 1, 4, true)] // In range (multiple books)
@@ -30,7 +30,7 @@ public class CheckInputRangeTests
     {
         VerseRef vrefStart = new(verseRefStart);
         VerseRef? vrefEnd = string.IsNullOrEmpty(verseRefEnd) ? null : new VerseRef(verseRefEnd);
-        CheckInputRange checkInputRange = new(verseRefProjectId, vrefStart, vrefEnd);
+        InputRange checkInputRange = new(verseRefProjectId, vrefStart, vrefEnd);
         Assert.That(
             checkInputRange.IsWithinRange(projectId, bookNum, chapterNum),
             Is.EqualTo(expectedResult)
@@ -54,7 +54,7 @@ public class CheckInputRangeTests
         string exceptionMessage = string.Empty;
         try
         {
-            var checkInputRange = new CheckInputRange(
+            var checkInputRange = new InputRange(
                 projectId!,
                 new VerseRef(bookNumStart, chapterNumStart, 1),
                 bookNumEnd.HasValue && chapterNumEnd.HasValue

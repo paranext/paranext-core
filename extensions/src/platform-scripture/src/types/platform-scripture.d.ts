@@ -771,21 +771,94 @@ declare module 'platform-scripture' {
   /** Function that creates and returns a new instance of a check */
   export type CheckCreatorFunction = () => Promise<Check>;
 
-  /** Represents a selection of scripture text */
+  /**
+   * Represents a selection of scripture text
+   *
+   * @example To represent a single verse, Matthew 1:1
+   *
+   * ```json
+   * {
+   *   "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 1 },
+   *   "end": { "bookId": "MAT", "chapterNum": 1, "verseNum": 1 }
+   * }
+   * ```
+   *
+   * @example To represent Matthew 1:1-5
+   *
+   * ```json
+   * {
+   *   "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 1 },
+   *   "end": { "bookId": "MAT", "chapterNum": 1, "verseNum": 5 }
+   * }
+   * ```
+   *
+   * @example To represent all of Matthew chapter 3
+   *
+   * ```json
+   * {
+   *   "start": { "bookId": "MAT", "chapterNum": 3, "verseNum": 0 },
+   *   "end": { "bookId": "MAT", "chapterNum": 3, "verseNum": 999 }
+   * }
+   * ```
+   *
+   * @example To represent all of Matthew
+   *
+   * ```json
+   * { "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 0 } }
+   * ```
+   */
   export type ScriptureRange = {
-    /** Location within a project that is the start of the range */
+    /**
+     * Location within a project that is the start of the range.
+     *
+     * You can use verse 0 to indicate that you want to include all front matter for the chapter. If
+     * you indicate chapter 1 verse 0, that includes all front matter for the book, not just the
+     * front matter for chapter 1.
+     */
     start: SerializedVerseRef;
     /**
      * Location within a project that is the end of the range. If not provided, then the end of the
      * book mentioned in `start` should be assumed.
+     *
+     * If the end of a chapter is desired and you don't know how many verses are in the chapter, you
+     * can use 999. This is the max allowed verse number that fits in BBBCCCVVV format.
      */
     end?: SerializedVerseRef;
   };
 
-  /** Represents a selection of scripture text to feed into a check */
+  /**
+   * Represents a selection of scripture text to feed into a check
+   *
+   * See {@link ScriptureRange} for details on how to represent ranges.
+   */
   export type CheckInputRange = ScriptureRange & {
     /** ID of the project to evaluate using checks */
     projectId: string;
+  };
+
+  /** Represents a specific location within USFM data */
+  export type UsfmLocation = {
+    /** Verse reference to a location within the document */
+    verseRef: SerializedVerseRef;
+    /** Offset to apply to start of the verse indicated by `verseRef` */
+    offset?: number;
+  };
+
+  /** Represents a specific location within USJ data */
+  export type UsjLocation = {
+    /** JSONPath expression pointing to a location within USJ data */
+    jsonPath: string;
+    /**
+     * Offset to apply to the content inside of the property indicated by `jsonPath` to determine
+     * the start of the range.
+     *
+     * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
+     * Matthew. If no offset is provided, then the entire object with type "para" is being pointed
+     * to.
+     *
+     * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
+     */
+    offset?: number;
   };
 
   /**
@@ -799,28 +872,7 @@ declare module 'platform-scripture' {
    * USFM or USX data (or some other data type), then it probably doesn't have access to the USJ and
    * can just return a `VerseRef`-style location.
    */
-  export type CheckLocation =
-    | {
-        /** JSONPath expression pointing to a location within USJ data */
-        jsonPath: string;
-        /**
-         * Offset to apply to the content inside of the property indicated by `jsonPath` to
-         * determine the start of the range.
-         *
-         * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
-         * Matthew. If no offset is provided, then the entire object with type "para" is being
-         * pointed to.
-         *
-         * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
-         */
-        offset?: number;
-      }
-    | {
-        /** Verse reference to a location with the document */
-        verseRef: SerializedVerseRef;
-        /** Offset to apply to start of the verse indicated by `verseRef` */
-        offset?: number;
-      };
+  export type CheckLocation = UsfmLocation | UsjLocation;
 
   /** One distinct result reported by a check */
   export type CheckRunResult = {
@@ -1025,7 +1077,16 @@ declare module 'platform-scripture' {
 
   /** Functions that provide configuration data for a specific check */
   export type CheckConfigurationProvider = {
-    /** Represents the ability to retrieve inventory data for one particular check on a project */
+    /**
+     * @deprecated 2025-11-10 Use IInventoryDataProvider instead of this method to retrieve
+     *   inventory data
+     *
+     *   Represents the ability to retrieve inventory data for one particular check on a project
+     * @param checkId ID of the check whose inventory data is being requested
+     * @param projectId ID of the project whose inventory data is being requested
+     * @param checkInputRange Range of project text to evaluate for inventory data
+     * @returns List of all inventory items for the check in the specified project and range
+     */
     retrieveInventoryData: (
       checkId: string,
       projectId: string,
@@ -1035,6 +1096,42 @@ declare module 'platform-scripture' {
     /** Returns if setup/configuration for the check has been completed */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
   };
+
+  /**
+   * All processes that can run checks are expected to implement this type in a data provider
+   * registered with object type 'checkRunner'
+   */
+  export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
+    CheckJobRunner &
+    CheckResultClassifier &
+    CheckConfigurationProvider;
+
+  /**
+   * When something happens that would invalidate previously calculated check results, an event with
+   * an object of this type is emitted. To listen for notifications of invalidated check results,
+   * subscribe to the `checkResultsInvalidated` network event using
+   * `papi.network.getNetworkEvent()`.
+   */
+  export type CheckResultsInvalidated = {
+    /** IDs of the checks whose results are now invalid */
+    checkIds: string[];
+    /** ID of the project whose results are now invalid */
+    projectId: string;
+    /** Scope of the invalidation */
+    scope: 'all' | 'book';
+    /** If scope is 'book', then this is the ID of the book whose results are now invalid */
+    bookId?: string;
+  };
+
+  /**
+   * Service that aggregates all available {@link ICheckRunner} data providers and provides a single
+   * point of interaction for managing checks across all processes. This service itself is also an
+   * {@link ICheckRunner} so that consumers only need to interact with one data provider to manage
+   * checks everywhere.
+   *
+   * Use the "platformScripture.checkAggregator" data provider name to access the service.
+   */
+  export type ICheckAggregatorService = ICheckRunner;
 
   // #endregion
 
@@ -1114,6 +1211,103 @@ declare module 'platform-scripture' {
     key?: string;
   };
 
+  /**
+   * Range of project text to evaluate for inventory data
+   *
+   * See {@link ScriptureRange} for details on how to represent ranges.
+   */
+  export type InventoryInputRange = CheckInputRange;
+
+  /** One distinct inventory item with its count in the project */
+  export type SummarizedInventoryItem = {
+    /** The text of the inventory item itself (e.g., single character in character inventory) */
+    key: string;
+    /** Count of how many times this item appears in the project */
+    count: number;
+  };
+
+  /** List of summarized inventory items for a specific text type */
+  export type SummarizedInventoryItemList = {
+    /** Type of text the inventory applies to */
+    textType: InventoryTextType;
+    /** List of summarized inventory items */
+    items: SummarizedInventoryItem[];
+  };
+
+  /** Summary of inventory items for a project */
+  export type SummarizedInventory = {
+    /** ID of the inventory summary */
+    summarizedInventoryId: string;
+    /** ID of the inventory */
+    inventoryId: string;
+    /** ID of the project */
+    projectId: string;
+    /** List of summarized inventory items by text type */
+    inventoryCountLists: SummarizedInventoryItemList[];
+  };
+
+  /** One instance of an inventory item with its location in the project */
+  export type ItemizedInventoryItem = {
+    /** Verse reference and offset where this item appears */
+    location: UsfmLocation;
+    /**
+     * The text of the inventory item itself (e.g., single character in character inventory).
+     *
+     * This is generally the same as the key used to identify the inventory item. However, it does
+     * not have to be the same. For example, if an inventory tracks the use of distinct words
+     * without tracking their exact form, the inventoryText might have different capitalization or
+     * diacritics than the key used to identify the inventory item.
+     */
+    inventoryText: string;
+    /** The source text surrounding the inventory item for context */
+    sourceText: string;
+  };
+
+  /**
+   * Scope for an itemized inventory job. A summarized inventory must be built before starting the
+   * job since itemized inventory jobs build on top of summarized inventory data.
+   */
+  export type ItemizedInventoryJobScope = {
+    /** ID of the inventory summary */
+    summarizedInventoryId: string;
+    /** Key of the inventory item to build the itemized inventory for */
+    key: string;
+  };
+
+  /** Status of an itemized inventory job */
+  export type ItemizedInventoryJobStatus = 'running' | 'stopped' | 'errored' | 'completed';
+
+  /**
+   * Represents the current status of an itemized inventory job, including the results found so far
+   * and any errors that occurred.
+   */
+  export type ItemizedInventoryJobStatusReport = {
+    /** Unique ID of the itemized inventory job */
+    jobId: string;
+    /** ID of the inventory */
+    inventoryId: string;
+    /** ID of the project */
+    projectId: string;
+    /** Key of the inventory item the job is for */
+    key: string;
+    /** Current status of the itemized inventory job */
+    status: ItemizedInventoryJobStatus;
+    /** Percentage of the job that is complete (0-100) */
+    percentComplete: number;
+    /** Total number of locations found so far */
+    totalResultsCount: number;
+    /** The next set of locations found so far, if any. */
+    nextResults?: ItemizedInventoryItem[];
+    /** If the job encountered an error, this will contain the error message */
+    error?: string;
+    /**
+     * Total time in milliseconds that the itemized inventory operation has taken to run. This is
+     * the total time from when the job started until now if the job is still running. If the job is
+     * no longer running, then this is the total time it took to run the job until it finished.
+     */
+    totalExecutionTimeMs: number;
+  };
+
   /** Data types provided by the inventory data provider */
   export type InventoryDataTypes = {
     /** Get list of available inventories (get only, no set) */
@@ -1163,47 +1357,96 @@ declare module 'platform-scripture' {
    * Data provider that provides information about inventories and allows managing inventory options
    * and item statuses
    */
-  export type IInventoryDataProvider = IDataProvider<InventoryDataTypes>;
-
-  // #endregion
-
-  // #region Check Runner Types
-
-  /**
-   * All processes that can run checks are expected to implement this type in a data provider
-   * registered with object type 'checkRunner'
-   */
-  export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
-    CheckJobRunner &
-    CheckResultClassifier &
-    CheckConfigurationProvider;
-
-  /**
-   * When something happens that would invalidate previously calculated check results, an event with
-   * an object of this type is emitted. To listen for notifications of invalidated check results,
-   * subscribe to the `checkResultsInvalidated` network event using
-   * `papi.network.getNetworkEvent()`.
-   */
-  export type CheckResultsInvalidated = {
-    /** IDs of the checks whose results are now invalid */
-    checkIds: string[];
-    /** ID of the project whose results are now invalid */
-    projectId: string;
-    /** Scope of the invalidation */
-    scope: 'all' | 'book';
-    /** If scope is 'book', then this is the ID of the book whose results are now invalid */
-    bookId?: string;
+  export type IInventoryDataProvider = IDataProvider<InventoryDataTypes> & {
+    /**
+     * Build a summarized inventory for a project
+     *
+     * Creates a summarized inventory for the specified inventory within the provided input ranges.
+     * The operation runs asynchronously and returns summarized inventory data, including a unique
+     * ID that can be used to retrieve itemized inventory data later.
+     *
+     * **Important:** All summarized inventories should have {@link discardSummarizedInventory}
+     * called when no longer needed to free resources. Not doing so will lead to memory leaks.
+     *
+     * @param inventoryId ID of the inventory to build the summary for
+     * @param inputRanges Ranges of project text to evaluate for inventory data
+     * @returns Promise that resolves to a {@link SummarizedInventory} object
+     */
+    buildSummarizedInventory: (
+      inventoryId: string,
+      inputRanges: InventoryInputRange[],
+    ) => Promise<SummarizedInventory>;
+    /**
+     * Discard a previously built summarized inventory to free resources
+     *
+     * Note that once discarded, the summarized inventory ID can no longer be used to start itemized
+     * inventory jobs.
+     *
+     * @param summarizedInventoryId ID of the summarized inventory to discard
+     */
+    discardSummarizedInventory: (summarizedInventoryId: string) => Promise<void>;
+    /**
+     * Begin a new itemized inventory job that will run asynchronously
+     *
+     * Creates and starts a new itemized inventory job that will evaluate the specified inventory
+     * item within the provided summarized inventory. The operation runs asynchronously and can be
+     * monitored using the returned job ID.
+     *
+     * **Important:** All jobs should have {@link abandonItemizedInventoryJob} called after you no
+     * longer need them to free resources and remove them from tracking. Not doing so will lead to
+     * memory leaks as jobs are not automatically cleaned up when they finish.
+     *
+     * @param jobScope - Configuration for the itemized inventory job, see
+     *   {@link ItemizedInventoryJobScope}
+     * @returns Promise that resolves to a unique job ID that can be used to interact with the
+     *   operation (retrieve results, check status, etc.)
+     */
+    beginItemizedInventoryJob: (jobScope: ItemizedInventoryJobScope) => Promise<string>;
+    /**
+     * Attempt to gracefully stop a running itemized inventory job
+     *
+     * Requests the specified itemized inventory job to stop processing and waits for it to finish
+     * gracefully within the specified timeout period. If the job doesn't stop within the timeout,
+     * it will continue running but this method will return false.
+     *
+     * **Important:** All jobs should have {@link abandonItemizedInventoryJob} called after you no
+     * longer need them to free resources and remove them from tracking. Not doing so will lead to
+     * memory leaks as jobs are not automatically cleaned up when they finish.
+     *
+     * @param jobId ID of the job to stop
+     * @param timeoutMs Maximum time in milliseconds to wait for the job to stop gracefully.
+     *   Defaults to 2000ms (2 seconds).
+     * @returns True if the job stopped gracefully within the timeout period, false if the job is
+     *   still running after the timeout.
+     */
+    stopItemizedInventoryJob: (jobId: string, timeoutMs?: number) => Promise<boolean>;
+    /**
+     * Clean up an itemized inventory job that may or may not be running to free resources
+     *
+     * This prevents any further calls to retrieve results or interact with the job in any way. It
+     * is useful for jobs that are no longer needed and should not be tracked. Abandoned jobs will
+     * be cleaned up automatically once it is possible.
+     *
+     * @param jobId ID of the job to abandon
+     */
+    abandonItemizedInventoryJob: (jobId: string) => Promise<void>;
+    /**
+     * Retrieve the current status and results (if desired) of an itemized inventory job.
+     *
+     * Once a set of results have been retrieved for a job, they cannot be retrieved again for this
+     * job. The results will need to be stored by the caller if they are to be retained. Subsequent
+     * calls to retrieve results will return the next set of results found so far.
+     *
+     * @param jobId ID of the job to check
+     * @param maxResultsToInclude Maximum number of results to include in the response. Use 0 to get
+     *   status without results, or a reasonable number to paginate through large result sets.
+     * @returns Status report for the job, including any new results found since the last call
+     */
+    retrieveItemizedInventoryJobUpdate: (
+      jobId: string,
+      maxResultsToInclude: number,
+    ) => Promise<ItemizedInventoryJobStatusReport>;
   };
-
-  /**
-   * Service that aggregates all available {@link ICheckRunner} data providers and provides a single
-   * point of interaction for managing checks across all processes. This service itself is also an
-   * {@link ICheckRunner} so that consumers only need to interact with one data provider to manage
-   * checks everywhere.
-   *
-   * Use the "platformScripture.checkAggregator" data provider name to access the service.
-   */
-  export type ICheckAggregatorService = ICheckRunner;
 
   // #endregion
 

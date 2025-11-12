@@ -6,7 +6,7 @@ namespace Paranext.DataProvider.Checks;
 /// Represents a single error/issue flagged by a check in a given project. This class must
 /// serialize/deserialize to the CheckRunResult type defined in TypeScript.
 /// </summary>
-public sealed record CheckRunResult(
+internal sealed record CheckRunResult(
     string CheckId,
     string CheckResultType,
     string ProjectId,
@@ -15,8 +15,8 @@ public sealed record CheckRunResult(
     string ItemText,
     bool IsDenied,
     VerseRef VerseRef,
-    CheckLocation Start,
-    CheckLocation End
+    UsfmLocation Start,
+    UsfmLocation End
 ) : IEquatable<CheckRunResult>
 {
     public bool Equals(CheckRunResult? other)
