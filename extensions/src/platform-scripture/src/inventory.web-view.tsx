@@ -71,22 +71,22 @@ global.webViewComponent = function InventoryWebView({
     const defaultScrRef: SerializedVerseRef = {
       book: verseRef.book,
       chapterNum: verseRef.chapterNum,
-      verseNum: 1,
+      verseNum: verseRef.verseNum,
     };
     const start = { ...defaultScrRef };
     let end: SerializedVerseRef | undefined = { ...defaultScrRef };
 
+    // Using 999 indicate "end of chapter" and "end of book" per the ScriptureRange docs
     if (scope === 'book') {
       start.chapterNum = 1;
       start.verseNum = 0;
-      end = undefined;
+      end.chapterNum = 999;
+      end.verseNum = 999;
     } else if (scope === 'chapter') {
       start.verseNum = 0;
-      // Using 999 indicate "end of chapter" per the ScriptureRange docs
       end.verseNum = 999;
     } else if (scope === 'verse') {
-      start.verseNum = verseRef.verseNum;
-      end.verseNum = verseRef.verseNum;
+      end = undefined;
     }
 
     return {

@@ -11,7 +11,8 @@ public class InputRangeTests
     [TestCase("pid1", "GEN 1:1", "GEN 10:1", "pid1", 2, 4, false)] // Book outside range (single book)
     [TestCase("pid1", "GEN 1:1", "GEN 10:1", "pid1", 1, 11, false)] // Chapter after range
     [TestCase("pid1", "GEN 2:1", "GEN 10:1", "pid1", 1, 1, false)] // Chapter before range
-    [TestCase("pid1", "GEN 1:1", null, "pid1", 1, 11, true)] // No end, normal in range
+    [TestCase("pid1", "GEN 1:1", null, "pid1", 1, 1, true)] // No end, same chapter in range
+    [TestCase("pid1", "GEN 1:1", null, "pid1", 1, 2, false)] // No end, different chapter
     [TestCase("pid1", "GEN 1:1", null, "pid1", 2, 11, false)] // No end, different book
     [TestCase("pid1", "GEN 1:1", "LEV 10:1", "pid1", 5, 1, false)] // Book after range (multiple books)
     [TestCase("pid1", "EXO 1:1", "LEV 10:1", "pid1", 1, 1, false)] // Book before range (multiple books)

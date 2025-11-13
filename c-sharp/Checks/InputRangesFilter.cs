@@ -8,30 +8,40 @@ internal sealed class InputRangesFilter<T> : LocationFilter<T>
     private readonly InputRange[] _inputRanges;
     private readonly List<(int min, int max)> _bcvRanges = [];
 
+    /// <summary>
+    /// Convert a VerseRef to a comparable integer, handling the special case of verse/chapter 999.
+    /// VerseRef.BBBCCCVVV normalizes 999 in a way that doesn't work for our purposes, so we need
+    /// to create our own representation.
+    /// </summary>
+    private static int ToComparableBCV(VerseRef vref)
+    {
+        int bookNum = vref.BookNum;
+        int chapterNum = vref.ChapterNum;
+        int verseNum = vref.VerseNum;
+
+        if (bookNum > 999 || chapterNum > 999 || verseNum > 999)
+            throw new ArgumentOutOfRangeException(
+                nameof(vref),
+                "Book, Chapter, and Verse numbers must be <= 999"
+            );
+
+        return (bookNum * 1000000) + (chapterNum * 1000) + verseNum;
+    }
+
     public InputRangesFilter(InputRange[] inputRanges, GetReferencesHandler refForItem)
         : base(refForItem)
     {
         _inputRanges = inputRanges;
         foreach (var inputRange in _inputRanges)
         {
-            int min = inputRange.Start.BBBCCCVVV;
-
-            // If End was not provided, assume the end of the book
-            int max = inputRange.End?.BBBCCCVVV ?? (min - (min % 1000000) + 999999);
-
-            // If we are intending to include an entire chapter, make sure the verse value is 999
-            // This will ensure the range merging logic works correctly
-            if (min % 1000 == InputRange.MAX_VERSE_NUM)
-                min++;
-            if (max % 1000 == InputRange.MAX_VERSE_NUM)
-                max++;
-
+            int min = ToComparableBCV(inputRange.Start);
+            int max = inputRange.End.HasValue ? ToComparableBCV(inputRange.End.Value) : min;
             _bcvRanges.Add((min, max));
         }
         _bcvRanges.Sort((a, b) => a.min.CompareTo(b.min));
         for (int i = _bcvRanges.Count - 1; i > 0; i--)
         {
-            // If a range starts with chapter 1 verse 0, adjust it chapter 0 for merging purposes
+            // If a range starts with chapter 1 verse 0, adjust it to chapter 0 for merging purposes
             int adjustedMin = _bcvRanges[i].min;
             if (adjustedMin % 1000000 == 1000)
                 adjustedMin -= 1000;
@@ -68,7 +78,7 @@ internal sealed class InputRangesFilter<T> : LocationFilter<T>
 
     public override bool AcceptReference(VerseRef reference)
     {
-        int bcv = reference.BBBCCCVVV;
+        int bcv = ToComparableBCV(reference);
         return _bcvRanges.Any((range) => bcv >= range.min && bcv <= range.max);
     }
 

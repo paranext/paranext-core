@@ -778,8 +778,7 @@ declare module 'platform-scripture' {
    *
    * ```json
    * {
-   *   "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 1 },
-   *   "end": { "bookId": "MAT", "chapterNum": 1, "verseNum": 1 }
+   *   "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 1 }
    * }
    * ```
    *
@@ -804,24 +803,31 @@ declare module 'platform-scripture' {
    * @example To represent all of Matthew
    *
    * ```json
-   * { "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 0 } }
+   * {
+   *   "start": { "bookId": "MAT", "chapterNum": 1, "verseNum": 0 },
+   *   "end": { "bookId": "MAT", "chapterNum": 999, "verseNum": 999 }
+   * }
    * ```
    */
   export type ScriptureRange = {
     /**
      * Location within a project that is the start of the range.
      *
-     * You can use verse 0 to indicate that you want to include all front matter for the chapter. If
-     * you indicate chapter 1 verse 0, that includes all front matter for the book, not just the
-     * front matter for chapter 1.
+     * You can use verse 0 to indicate that you want to include all parts of the chapter, including
+     * any content that might exist after the chapter marker and prior to the first verse. If you
+     * indicate chapter 1 verse 0, that includes all front matter for the book (i.e., all content
+     * that occurs prior to the first chapter marker).
      */
     start: SerializedVerseRef;
     /**
-     * Location within a project that is the end of the range. If not provided, then the end of the
-     * book mentioned in `start` should be assumed.
+     * Location within a project that is the end of the range. If not provided, then only the verse
+     * indicated by `start` is included.
      *
      * If the end of a chapter is desired and you don't know how many verses are in the chapter, you
-     * can use 999. This is the max allowed verse number that fits in BBBCCCVVV format.
+     * can use 999 as the verse number. This is the maximum value that fits in BBBCCCVVV format.
+     *
+     * If the end of a book is desired and you don't know how many chapters are in the book, you can
+     * use 999 as the chapter number. This is the maximum value that fits in BBBCCCVVV format.
      */
     end?: SerializedVerseRef;
   };

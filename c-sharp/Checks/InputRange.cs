@@ -6,9 +6,16 @@ namespace Paranext.DataProvider.Checks;
 /// Represents a range of text within a project that checks can target. This class must
 /// serialize/deserialize to the CheckInputRange type defined in TypeScript.
 /// <br />
-/// An <see cref="InputRange"/> could cover entire books or just a few verses within a book.
-/// If <see cref="End"/> is null, then the range concludes at the end of the book indicated in
-/// <see cref="Start"/>.
+/// An <see cref="InputRange"/> represents a selection of scripture text. If <see cref="End"/> is
+/// null, then only the verse indicated by <see cref="Start"/> is included.
+/// <br />
+/// Special values for verse and chapter numbers:
+/// - Verse 0: Includes all parts of the chapter, including content before the first verse.
+///   Chapter 1 verse 0 includes all front matter for the book.
+/// - Verse 999: Maximum value that fits in BBBCCCVVV format. Use when the end of a chapter is
+///   desired and the exact number of verses is unknown.
+/// - Chapter 999: Maximum value that fits in BBBCCCVVV format. Use when the end of a book is
+///   desired and the exact number of chapters is unknown.
 /// <br />
 /// Note that Paratext checks cannot be run on less than an entire book because of the definition of
 /// <see cref="ScriptureCheckBase.Run"/>. The <see cref="InputRange"/> class allows defining a
@@ -24,18 +31,22 @@ internal sealed class InputRange
     private VerseRef _start;
     private VerseRef? _end;
 
-    // VerseRef doesn't allow BCV conversions with verse numbers >= 999
-    public const int MAX_VERSE_NUM = 998;
+    // Maximum verse/chapter number that can be represented in BBBCCCVVV format
+    public const int MAX_BCV_PORTION_NUM = 999;
 
     public InputRange(string projectId, VerseRef start, VerseRef? end)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        // If verse numbers are larger than MAX_VERSE_NUM, VerseRef.BBBCCCVVV will not work properly
-        if (start.VerseNum > MAX_VERSE_NUM)
-            start.VerseNum = MAX_VERSE_NUM;
-        if (end.HasValue && end.Value.VerseNum > MAX_VERSE_NUM)
-            end = new VerseRef(end.Value) { VerseNum = MAX_VERSE_NUM };
+        // Clamp verse and chapter numbers to MAX values
+        if (start.VerseNum > MAX_BCV_PORTION_NUM)
+            start.VerseNum = MAX_BCV_PORTION_NUM;
+        if (start.ChapterNum > MAX_BCV_PORTION_NUM)
+            start.ChapterNum = MAX_BCV_PORTION_NUM;
+        if (end.HasValue && end.Value.VerseNum > MAX_BCV_PORTION_NUM)
+            end = new VerseRef(end.Value) { VerseNum = MAX_BCV_PORTION_NUM };
+        if (end.HasValue && end.Value.ChapterNum > MAX_BCV_PORTION_NUM)
+            end = new VerseRef(end.Value) { ChapterNum = MAX_BCV_PORTION_NUM };
 
         VerifyRange(start, end);
 
@@ -49,8 +60,14 @@ internal sealed class InputRange
         if (start.ChapterNum <= 0)
             throw new ArgumentOutOfRangeException(nameof(start), "start.ChapterNum must be > 0");
 
+        if (start.VerseNum < 0)
+            throw new ArgumentOutOfRangeException(nameof(start), "start.VerseNum must be >= 0");
+
         if (end.HasValue && end.Value.ChapterNum <= 0)
             throw new ArgumentOutOfRangeException(nameof(end), "end.ChapterNum must be > 0");
+
+        if (end.HasValue && end.Value.VerseNum < 0)
+            throw new ArgumentOutOfRangeException(nameof(end), "end.VerseNum must be >= 0");
 
         if (end.HasValue && (start > end.Value))
             throw new ArgumentException("end must come after start");
@@ -104,8 +121,9 @@ internal sealed class InputRange
             return false;
         if (bookNum == 0)
             return true;
+        // If no end is specified, this is a single verse range
         if (End == null)
-            return bookNum == Start.BookNum && (chapterNum == 0 || chapterNum >= Start.ChapterNum);
+            return bookNum == Start.BookNum && (chapterNum == 0 || chapterNum == Start.ChapterNum);
         if (bookNum < Start.BookNum || bookNum > End.Value.BookNum)
             return false;
         if (bookNum == Start.BookNum && chapterNum > 0 && chapterNum < Start.ChapterNum)

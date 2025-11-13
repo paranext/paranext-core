@@ -49,16 +49,19 @@ public class InputRangesFilterTests
     }
 
     [Test]
-    public void Constructor_RangeWithoutEnd_CreatesFilterForWholeBook()
+    public void Constructor_RangeWithoutEnd_CreatesFilterForSingleVerse()
     {
         var inputRanges = new[] { new InputRange("project1", new VerseRef("GEN 1:1"), null) };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
         Assert.Multiple(() =>
         {
-            // Should accept any verse in Genesis
+            // Should accept only the single verse
             Assert.That(filter.AcceptReference(new VerseRef("GEN 1:1")), Is.True);
-            Assert.That(filter.AcceptReference(new VerseRef("GEN 50:26")), Is.True);
+
+            // Should not accept other verses
+            Assert.That(filter.AcceptReference(new VerseRef("GEN 1:2")), Is.False);
+            Assert.That(filter.AcceptReference(new VerseRef("GEN 50:26")), Is.False);
 
             // Should not accept other books
             Assert.That(filter.AcceptReference(new VerseRef("EXO 1:1")), Is.False);
@@ -92,11 +95,11 @@ public class InputRangesFilterTests
     [Test]
     public void Constructor_WholeBookRanges_MergesContiguousBooks()
     {
-        // GEN 1:0 (whole book) and EXO 1:0 (whole book) are contiguous and should be merged
+        // GEN (whole book) and EXO (whole book) are contiguous and should be merged
         var inputRanges = new[]
         {
-            new InputRange("project1", new VerseRef("GEN 1:0"), null),
-            new InputRange("project1", new VerseRef("EXO 1:0"), null)
+            new InputRange("project1", new VerseRef("GEN 1:0"), new VerseRef("GEN 999:999")),
+            new InputRange("project1", new VerseRef("EXO 1:0"), new VerseRef("EXO 999:999"))
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
 
@@ -116,7 +119,7 @@ public class InputRangesFilterTests
     [Test]
     public void Constructor_PartialBookRanges_DoesNotMerge()
     {
-        // Two partial book ranges that should not merge
+        // Two single verse ranges that should not merge
         var inputRanges = new[]
         {
             new InputRange("project1", new VerseRef("GEN 3:1"), null),
@@ -127,13 +130,14 @@ public class InputRangesFilterTests
 
         Assert.Multiple(() =>
         {
-            // Should accept verses in the specified ranges
-            Assert.That(filter.AcceptReference(new VerseRef("GEN 25:1")), Is.True);
-            Assert.That(filter.AcceptReference(new VerseRef("EXO 20:1")), Is.True);
+            // Should accept only the specific verses
+            Assert.That(filter.AcceptReference(new VerseRef("GEN 3:1")), Is.True);
+            Assert.That(filter.AcceptReference(new VerseRef("EXO 1:1")), Is.True);
 
             // Should not accept verses outside the specified ranges
             Assert.That(filter.AcceptReference(new VerseRef("GEN 1:1")), Is.False);
-            Assert.That(filter.AcceptReference(new VerseRef("EXO 1:0")), Is.False);
+            Assert.That(filter.AcceptReference(new VerseRef("GEN 25:1")), Is.False);
+            Assert.That(filter.AcceptReference(new VerseRef("EXO 20:1")), Is.False);
 
             Assert.That(filter.RangeCount, Is.EqualTo(2));
         });
@@ -197,7 +201,7 @@ public class InputRangesFilterTests
         {
             new InputRange("project1", new VerseRef("GEN 1:1"), new VerseRef("GEN 5:10")),
             new InputRange("project1", new VerseRef("GEN 3:1"), new VerseRef("GEN 8:20")),
-            new InputRange("project1", new VerseRef("EXO 1:0"), null),
+            new InputRange("project1", new VerseRef("EXO 1:0"), new VerseRef("EXO 999:999")),
             new InputRange("project1", new VerseRef("LEV 1:1"), null)
         };
         var filter = new InputRangesFilter<TestItem>(inputRanges, GetReferences);
@@ -215,10 +219,11 @@ public class InputRangesFilterTests
             Assert.That(filter.AcceptReference(new VerseRef("EXO 1:1")), Is.True);
             Assert.That(filter.AcceptReference(new VerseRef("EXO 40:38")), Is.True);
 
-            // Verses in LEV
-            Assert.That(filter.AcceptReference(new VerseRef("LEV 1:0")), Is.False);
+            // Verses in LEV - only the single verse
             Assert.That(filter.AcceptReference(new VerseRef("LEV 1:1")), Is.True);
-            Assert.That(filter.AcceptReference(new VerseRef("LEV 27:34")), Is.True);
+            Assert.That(filter.AcceptReference(new VerseRef("LEV 1:0")), Is.False);
+            Assert.That(filter.AcceptReference(new VerseRef("LEV 1:2")), Is.False);
+            Assert.That(filter.AcceptReference(new VerseRef("LEV 27:34")), Is.False);
 
             // Verses outside all ranges
             Assert.That(filter.AcceptReference(new VerseRef("NUM 1:1")), Is.False);
