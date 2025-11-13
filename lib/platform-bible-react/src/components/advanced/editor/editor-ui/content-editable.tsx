@@ -33,7 +33,7 @@ export function ContentEditable({
         <div
           className={
             placeholderClassName ??
-            `tw-pointer-events-none tw-absolute tw-left-0 tw-top-0 tw-select-none tw-overflow-hidden tw-text-ellipsis tw-px-3 tw-py-3 tw-text-sm tw-text-muted-foreground`
+            `tw-pointer-events-none tw-absolute tw-top-0 tw-select-none tw-overflow-hidden tw-text-ellipsis tw-px-3 tw-py-3 tw-text-sm tw-text-muted-foreground`
           }
         >
           {placeholder}

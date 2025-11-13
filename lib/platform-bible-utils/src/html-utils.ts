@@ -1,6 +1,16 @@
 import DOMPurify from 'dompurify';
 
 /**
+ * Check if an HTML string contains custom Paratext-specific tags
+ *
+ * @param html - HTML string to check
+ * @returns True if the HTML contains <color> or <language> tags
+ */
+export function hasCustomParatextTags(html: string): boolean {
+  return /<color[^>]*>|<language[^>]*>/i.test(html);
+}
+
+/**
  * Parse Paratext specific HTML tags to standard HTML
  *
  * @param html - HTML string to parse
