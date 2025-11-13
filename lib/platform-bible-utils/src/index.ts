@@ -53,7 +53,7 @@ export {
   wait,
   waitForDuration,
 } from './util';
-export { parseParatextHtml } from './html-utils';
+export { hasCustomParatextTags, parseParatextHtml } from './html-utils';
 export {
   getDefaultCallerSequence,
   getNthCaller,
