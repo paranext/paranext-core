@@ -10,6 +10,9 @@ import {
   UsjNodeOptions,
   DeltaOp,
   ViewOptions,
+  DeltaSource,
+  isInsertEmbedOpOfType,
+  DeltaOpInsertNoteEmbed,
 } from '@eten-tech-foundation/platform-editor';
 import {
   MarkerContent,
@@ -43,6 +46,7 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
   Popover,
@@ -78,6 +82,7 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
+  ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
 ];
@@ -111,8 +116,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
-  const [editingNoteKey, setEditingNoteKey] = useState<string>();
-  const [editingNoteOps, setEditingNoteOps] = useState<DeltaOp[]>();
+  const editingNoteKey = useRef<string>();
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -487,12 +492,53 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [legacyCommentsFromPdp],
   );
 
+  const openFootnoteEditorOnNewNote = useCallback(
+    (ops?: DeltaOp[], insertedNodeKey?: string) => {
+      if (insertedNodeKey && ops) {
+        // If we are already editing a note, then returns
+        if (editingNoteKey.current) return;
+
+        // Makes sure the node is a note
+        const noteOp = ops[1];
+        if (!isInsertEmbedOpOfType('note', noteOp)) return;
+
+        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+        // Note element must be defined
+        if (!noteElement) return;
+
+        const targetRect = noteElement.getBoundingClientRect();
+        setNotePopoverAnchorX(targetRect.left);
+        setNotePopoverAnchorY(targetRect.top);
+        setNotePopoverAnchorHeight(targetRect.height);
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteOps.current = [noteOp];
+        setShowFootnoteEditor(true);
+      }
+    },
+    [editingNoteKey],
+  );
+
+  const handleEditorialUsjChange = useCallback(
+    (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
+      saveUsjToPdpIfUpdated(usj);
+      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+    },
+    [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+  );
+
   const onUsjAndCommentsChange = useCallback(
-    (newUsjFromEditor: Usj, newCommentsFromEditor: Comments | undefined) => {
+    (
+      newUsjFromEditor: Usj,
+      newCommentsFromEditor: Comments | undefined,
+      ops?: DeltaOp[],
+      _source?: DeltaSource,
+      insertedNodeKey?: string,
+    ) => {
       saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
       saveUsjToPdpIfUpdated(newUsjFromEditor);
+      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [saveUsjToPdpIfUpdated, saveCommentsToPdp],
+    [saveUsjToPdpIfUpdated, saveCommentsToPdp, openFootnoteEditorOnNewNote],
   );
 
   // This should only be used in the following `useEffect`
@@ -686,18 +732,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       noteCallerOnClick: isReadOnly
         ? undefined
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            if (!isCollapsed || editingNoteKey.current) return;
+
+            const noteOp = getNoteOps()?.at(0);
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
             const targetRect = event.currentTarget.getBoundingClientRect();
             setNotePopoverAnchorX(targetRect.left);
             setNotePopoverAnchorY(targetRect.top);
             setNotePopoverAnchorHeight(targetRect.height);
-
-            if (isCollapsed) {
-              if (editingNoteKey) return;
-
-              setEditingNoteKey(noteNodeKey);
-              setEditingNoteOps(getNoteOps());
-              setShowFootnoteEditor(true);
-            }
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = [noteOp];
+            setShowFootnoteEditor(true);
           },
     }),
     [isReadOnly, editingNoteKey],
@@ -708,6 +754,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
       nodes: nodeOptions,
+      markerMenuTrigger: '\\',
       textDirection: textDirectionEffective,
       view: defaultView,
     }),
@@ -715,14 +762,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const onFootnoteEditorClose = useCallback(() => {
-    setEditingNoteKey(undefined);
-    setEditingNoteOps(undefined);
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
     setShowFootnoteEditor(false);
   }, []);
 
   const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey, newNoteOps);
+    if (editingNoteKey.current) {
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
     }
     onFootnoteEditorClose();
   };
@@ -771,7 +818,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        <Editorial {...commonProps} onUsjChange={isReadOnly ? undefined : saveUsjToPdpIfUpdated} />
+        <Editorial
+          {...commonProps}
+          onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+        />
       </>
     );
   }
@@ -864,14 +914,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-96 tw-p-[10px]">
+        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
           <FootnoteEditor
-            noteOps={editingNoteOps}
-            noteKey={editingNoteKey}
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
             onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
-            viewOptions={options.view ?? defaultView}
+            editorOptions={options}
+            localizedStrings={localizedStrings}
           />
         </PopoverContent>
       </Popover>
