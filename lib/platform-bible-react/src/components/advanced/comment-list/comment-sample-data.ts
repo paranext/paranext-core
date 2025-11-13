@@ -483,7 +483,7 @@ export const sampleComments: LegacyCommentThread[] = [
     comments: [
       {
         id: '20',
-        user: 'Tim Steenwyk',
+        user: 'Current User',
         contents:
           'Two different people made conflicting changes in this verse.<p><language name="es-015-vaidika"><p>\\v 9 Moses said to the <s><color name="red">large group of </color></s>people, "While we were still at Mount Sinai, I told you, \'The responsibility for leading you is too much for me. I can\'t do it alone. </p></language></p>This <color name="green">is</color> <color name="blue">a</color> <strikethrough>new</strikethrough> paragraph</p>',
         date: twoDaysAgo.toISOString(),
@@ -513,9 +513,8 @@ export const sampleComments: LegacyCommentThread[] = [
     comments: [
       {
         id: '21',
-        user: 'Eve Fox',
-        contents:
-          '<p>This is my note with <language name="es-015-vaidika">Spanish text</language> embedded.</p>',
+        user: 'Current User',
+        contents: '<p>This is my note</p>',
         date: yesterday.toISOString(),
         deleted: false,
         hideInTextWindow: false,
@@ -527,7 +526,7 @@ export const sampleComments: LegacyCommentThread[] = [
         selectedText: '',
       },
     ],
-    status: 'Resolved',
+    status: 'Unspecified',
     type: 'Normal',
     assignedUser: '',
     replyToUser: '',

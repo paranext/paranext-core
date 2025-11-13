@@ -134,7 +134,7 @@ type LegacyComment = {
 	 * message when displaying the note.
 	 */
 	conflictType?: string;
-	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
+	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
 	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
@@ -357,12 +357,30 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
+/**
+ * Object containing all keys used for localization in the CommentList component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const COMMENT_LIST_STRING_KEYS: readonly [
+	"%comment_assigned_to%",
+	"%comment_dateAtTime%",
+	"%comment_date_today%",
+	"%comment_date_yesterday%",
+	"%comment_editComment%",
+	"%comment_replyOrAssign%",
+	"%comment_thread_multiple_replies%",
+	"%comment_thread_single_reply%",
+	"%no_comments%"
+];
 /** Props for the CommentList component */
 export interface CommentListProps {
 	/** Additional class name for the component */
 	className?: string;
 	/** Comment threads to render */
 	threads: LegacyCommentThread[];
+	/** Name of the current user, retrieved from the current user's Paratext Registry user information */
+	currentUser: string;
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
 	/**
@@ -372,13 +390,15 @@ export interface CommentListProps {
 	handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
 	/** Handler for resolving the comment thread */
 	handleResolveCommentThread: (threadId: string) => void;
+	/** Handler for updating a comment's content */
+	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, localizedStrings, handleAddComment, handleResolveCommentThread, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleResolveCommentThread, handleUpdateComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

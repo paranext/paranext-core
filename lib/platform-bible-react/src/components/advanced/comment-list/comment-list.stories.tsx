@@ -10,6 +10,7 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_dateAtTime%': '{date} at {time}',
   '%comment_date_today%': 'today',
   '%comment_date_yesterday%': 'yesterday',
+  '%comment_editComment%': 'Edit Comment',
   '%comment_replyOrAssign%': 'Reply or assign with @',
   '%comment_thread_multiple_replies%': '{count} replies',
   '%comment_thread_single_reply%': '1 reply',
@@ -63,12 +64,39 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     console.log(`Resolving thread ${threadId}`);
   };
 
+  const handleUpdateComment = async (commentId: string, contents: string): Promise<boolean> => {
+    console.log(`Updating comment id ${commentId} with contents: ${contents}`);
+
+    let commentFound = false;
+
+    // Find the comment and update its contents
+    setThreads((prevThreads) =>
+      prevThreads.map((thread) => ({
+        ...thread,
+        comments: thread.comments.map((comment) => {
+          if (comment.id === commentId) {
+            commentFound = true;
+            return {
+              ...comment,
+              contents,
+            };
+          }
+          return comment;
+        }),
+      })),
+    );
+
+    return commentFound;
+  };
+
   return (
     <CommentList
       threads={threads}
       localizedStrings={commentListLocalizedStrings}
+      currentUser="Current User"
       handleAddComment={handleAddComment}
       handleResolveCommentThread={handleResolveCommentThread}
+      handleUpdateComment={handleUpdateComment}
     />
   );
 }

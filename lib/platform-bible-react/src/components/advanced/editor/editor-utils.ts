@@ -4,6 +4,29 @@ import { $getRoot, $insertNodes, createEditor, SerializedEditorState } from 'lex
 import { nodes } from './nodes';
 
 /**
+ * Focus a content-editable element within a container and move the cursor to the end
+ *
+ * @param container - The container element to search within
+ * @returns True if a content-editable element was found and focused, false otherwise
+ */
+export function focusContentEditable(container: HTMLElement): boolean {
+  const contentEditableField = container.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!contentEditableField) return false;
+
+  contentEditableField.focus();
+
+  // Move cursor to the end
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(contentEditableField);
+  range.collapse(false); // false = collapse to end
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  return true;
+}
+
+/**
  * Check if the editor state has any meaningful content
  *
  * @param editorState - SerializedEditorState to check
