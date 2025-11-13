@@ -1,31 +1,41 @@
-import { CommentList, Label, Skeleton } from 'platform-bible-react';
-import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
-import { LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useMemo, useState } from 'react';
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
+import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
+import { COMMENT_LIST_STRING_KEYS, CommentList, Label, Skeleton } from 'platform-bible-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { sampleComments } from './comment-sample-data';
-
-const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%comment_assigned_to%',
-  '%comment_dateAtTime%',
-  '%comment_date_today%',
-  '%comment_date_yesterday%',
-  '%comment_replyOrAssign%',
-  '%comment_thread_multiple_replies%',
-  '%comment_thread_single_reply%',
-  '%no_comments%',
-];
 
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   projectId,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(COMMENT_LIST_STRING_KEYS);
   const [scrRef] = useWebViewScrollGroupScrRef();
   const [areThreadsLoading, setAreThreadsLoading] = useState<boolean>(false);
+  const [currentUserName, setCurrentUserName] = useState<string>('');
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  // Fetch current user's registration data on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRegistrationData = async () => {
+      try {
+        const registrationData = await papi.commands.sendCommand(
+          'paratextRegistration.getParatextRegistrationData',
+        );
+        if (isMounted) {
+          setCurrentUserName(registrationData.name);
+        }
+      } catch (error) {
+        logger.error('Failed to fetch registration data:', error);
+      }
+    };
+    fetchRegistrationData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const unresolvedThreadsForScrRef = useMemo(() => {
     setAreThreadsLoading(true);
@@ -55,6 +65,23 @@ global.webViewComponent = function CommentListWebView({
     logger.debug(`Resolving comment thread ${threadId}`);
   }, []);
 
+  const handleUpdateComment = useCallback(
+    async (commentId: string, contents: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return false;
+      }
+      try {
+        await commentsPdp.updateComment(commentId, contents);
+        return true;
+      } catch (error) {
+        logger.error(`Failed to update comment ${commentId}:`, error);
+        return false;
+      }
+    },
+    [commentsPdp],
+  );
+
   if (unresolvedThreadsForScrRef.length === 0) {
     return (
       <div className="tw-m-4 tw-flex tw-justify-center">
@@ -82,9 +109,11 @@ global.webViewComponent = function CommentListWebView({
     <div className="tw-bg-muted">
       <CommentList
         threads={unresolvedThreadsForScrRef}
+        currentUser={currentUserName}
         localizedStrings={localizedStrings}
         handleAddComment={handleAddComment}
         handleResolveCommentThread={handleResolveCommentThread}
+        handleUpdateComment={handleUpdateComment}
       />
     </div>
   );

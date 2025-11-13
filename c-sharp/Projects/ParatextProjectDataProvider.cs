@@ -400,9 +400,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(commentId))
             return false;
 
-        // Find the comment by ID
-        var commentToUpdate = FindCommentById(commentId);
-        if (commentToUpdate == null)
+        // Find the comment by ID and its parent thread
+        var (commentToUpdate, parentThread) = FindCommentByIdWithThread(commentId);
+        if (commentToUpdate == null || parentThread == null)
             return false;
 
         // Do not allow updating of comments not created by the current user
@@ -410,6 +410,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (commentToUpdate.User != scrText.User.Name)
             throw new InvalidOperationException(
                 "Cannot update a comment that is not created by the current user"
+            );
+
+        // Only allow updating the last comment in the thread
+        var lastComment = parentThread.LastComment;
+        if (lastComment == null || lastComment.Id != commentId)
+            throw new InvalidOperationException(
+                "Cannot update a comment that is not the last comment in the thread"
             );
 
         commentToUpdate.AddTextToContent("", false); // Clear existing content
@@ -422,10 +429,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    private Comment? FindCommentById(string commentId)
+    private (Comment?, CommentThread?) FindCommentByIdWithThread(string commentId)
     {
         if (!CommentsEnabled)
-            return null;
+            return (null, null);
 
         // Get all threads (activeOnly=false to include deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
@@ -435,10 +442,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             var comment = thread.Comments.FirstOrDefault(c => c.Id == commentId);
             if (comment != null)
-                return comment;
+                return (comment, thread);
         }
 
-        return null;
+        return (null, null);
     }
 
     private static IEnumerable<CommentThread> FilterByDate(
