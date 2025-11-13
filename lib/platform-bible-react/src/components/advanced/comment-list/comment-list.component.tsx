@@ -1,6 +1,7 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import React, { RefObject, useCallback, useState } from 'react';
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
+import { focusContentEditable } from '@/components/advanced/editor/editor-utils';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
@@ -14,9 +15,11 @@ const getUniqueThreadId = (id: string) => `thread-${id}`;
 export default function CommentList({
   className = '',
   threads,
+  currentUser,
   localizedStrings,
   handleAddComment,
   handleResolveCommentThread,
+  handleUpdateComment,
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
@@ -76,10 +79,12 @@ export default function CommentList({
             handleSelectThread={handleSelectThread}
             threadId={getUniqueThreadId(thread.id)}
             isSelected={selectedThreadId === getUniqueThreadId(thread.id)}
+            currentUser={currentUser}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
             handleAddComment={handleAddComment}
             handleResolveCommentThread={handleResolveCommentThread}
+            handleUpdateComment={handleUpdateComment}
           />
         </div>
       ))}

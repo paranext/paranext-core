@@ -1,4 +1,16 @@
+import { Editor } from '@/components/advanced/editor/editor';
+import {
+  editorStateToHtml,
+  handleEditorKeyNavigation,
+  hasEditorContent,
+} from '@/components/advanced/editor/editor-utils';
+import { Badge } from '@/components/shadcn-ui/badge';
+import { Button } from '@/components/shadcn-ui/button';
+import { Card, CardContent } from '@/components/shadcn-ui/card';
+import { Separator } from '@/components/shadcn-ui/separator';
 import { cn } from '@/utils/shadcn-ui.util';
+import { SerializedEditorState } from 'lexical';
+import { ArrowUp, AtSign, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp } from 'lucide-react';
@@ -15,7 +27,6 @@ import {
   SerializedTextNode,
 } from 'lexical';
 import { CommentThreadProps } from './comment-list.types';
-import { CommentItem } from './comment-item.component';
 
 const initialValue: SerializedEditorState<
   SerializedParagraphNode | SerializedElementNode<SerializedTextNode>
@@ -34,14 +45,12 @@ const initialValue: SerializedEditorState<
             version: 1,
           },
         ],
-        direction: 'ltr',
         format: '',
         indent: 0,
         type: 'paragraph',
         version: 1,
       },
     ],
-    direction: 'ltr',
     format: '',
     indent: 0,
     type: 'root',
@@ -60,16 +69,19 @@ export function CommentThread({
   isSelected = false,
   verseRef,
   assignedUser,
+  currentUser,
   handleSelectThread,
   threadId,
   threadStatus,
   handleResolveCommentThread,
   handleAddComment,
+  handleUpdateComment,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
   const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
+  const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
 
   const firstComment = useMemo(() => comments[0], [comments]);
 
@@ -210,28 +222,16 @@ export function CommentThread({
               </Button>
             )}
           </div>
-          <div className="tw-flex tw-w-full tw-flex-row tw-items-baseline tw-gap-3">
-            <div className="tw-flex-1">
-              <CommentItem
-                comment={firstComment}
-                localizedStrings={localizedStrings}
-                isThreadExpanded={isSelected}
-              />
-            </div>
-            {isSelected && threadStatus !== 'Resolved' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw-shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent triggering the expand/collapse
-                  handleResolveCommentThread(threadId);
-                }}
-              >
-                <Check />
-              </Button>
-            )}
-          </div>
+          <CommentItem
+            comment={firstComment}
+            localizedStrings={localizedStrings}
+            isThreadExpanded={isSelected}
+            threadStatus={threadStatus}
+            isEditable={comments.length === 1 && firstComment.user === currentUser}
+            handleResolveCommentThread={handleResolveCommentThread}
+            handleUpdateComment={handleUpdateComment}
+            onEditingChange={setIsAnyCommentEditing}
+          />
         </div>
         <>
           {hasReplies && !isSelected && (
@@ -279,65 +279,76 @@ export function CommentThread({
                   </div>
                 </div>
               )}
-              {visibleReplies.map((reply) => (
-                <div key={reply.id}>
-                  <CommentItem
-                    comment={reply}
-                    localizedStrings={localizedStrings}
-                    isReply
-                    isThreadExpanded={isSelected}
-                  />
-                </div>
-              ))}
+              {visibleReplies.map((reply) => {
+                const isLastReply = reply.id === replies[replies.length - 1].id;
+                const isEditableReply = isLastReply && reply.user === currentUser;
+                return (
+                  <div key={reply.id}>
+                    <CommentItem
+                      comment={reply}
+                      localizedStrings={localizedStrings}
+                      isReply
+                      isThreadExpanded={isSelected}
+                      isEditable={isEditableReply}
+                      handleUpdateComment={handleUpdateComment}
+                      onEditingChange={setIsAnyCommentEditing}
+                    />
+                  </div>
+                );
+              })}
 
-              <div
-                role="textbox"
-                tabIndex={-1}
-                className="tw-w-full tw-space-y-2"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDownCapture={(e) => {
-                  if (e.key === 'Enter' && e.shiftKey) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (hasEditorContent(editorState)) {
-                      handleSubmitComment();
+              {/* Only show main Editor if no comment is being edited, or if it has draft content */}
+              {(!isAnyCommentEditing || hasEditorContent(editorState)) && (
+                <div
+                  role="textbox"
+                  tabIndex={-1}
+                  className="tw-w-full tw-space-y-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDownCapture={(e) => {
+                    if (e.key === 'Enter' && e.shiftKey) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (hasEditorContent(editorState)) {
+                        handleSubmitComment();
+                      }
                     }
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                  }
-                }}
-              >
-                <Editor
-                  editorSerializedState={editorState}
-                  onSerializedChange={(value) => setEditorState(value)}
-                  placeholder={localizedStrings['%comment_replyOrAssign%']}
-                  autoFocus
-                  onClear={(clearFn) => {
-                    clearEditorRef.current = clearFn;
                   }}
-                />
-                <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                    disabled={!hasEditorContent(editorState)}
-                  >
-                    <AtSign />
-                  </Button>
-                  <Button
-                    size="icon"
-                    onClick={handleSubmitComment}
-                    className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                    disabled={!hasEditorContent(editorState)}
-                  >
-                    <ArrowUp />
-                  </Button>
+                  onKeyDown={(e) => {
+                    handleEditorKeyNavigation(e);
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  <Editor
+                    editorSerializedState={editorState}
+                    onSerializedChange={(value) => setEditorState(value)}
+                    placeholder={localizedStrings['%comment_replyOrAssign%']}
+                    autoFocus
+                    onClear={(clearFn) => {
+                      clearEditorRef.current = clearFn;
+                    }}
+                  />
+                  <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                      disabled={!hasEditorContent(editorState)}
+                    >
+                      <AtSign />
+                    </Button>
+                    <Button
+                      size="icon"
+                      onClick={handleSubmitComment}
+                      className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                      disabled={!hasEditorContent(editorState)}
+                    >
+                      <ArrowUp />
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </>

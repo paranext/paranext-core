@@ -2990,6 +2990,13 @@ export interface IUsjReaderWriter {
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
 /**
+ * Check if an HTML string contains custom Paratext-specific tags
+ *
+ * @param html - HTML string to check
+ * @returns True if the HTML contains <color> or <language> tags
+ */
+export declare function hasCustomParatextTags(html: string): boolean;
+/**
  * Parse Paratext specific HTML tags to standard HTML
  *
  * @param html - HTML string to parse
