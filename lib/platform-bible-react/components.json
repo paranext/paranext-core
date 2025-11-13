@@ -10,9 +10,13 @@
     "cssVariables": true,
     "prefix": "tw-"
   },
+  "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components/shadcn-ui",
     "utils": "@/utils/shadcn-ui.util",
     "ui": "@/components/shadcn-ui"
+  },
+  "registries": {
+    "@shadcn-editor": "https://shadcn-editor.vercel.app/r/{name}.json"
   }
 }

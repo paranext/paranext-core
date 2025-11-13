@@ -1,0 +1,75 @@
+/**
+ * This file was automatically generated on installation of the Shadcn/Lexical editor. The default
+ * location of this file has been changed to integrate better with our project structure.
+ *
+ * Original file location: src/components/editor/plugins/toolbar/font-format-toolbar-plugin.tsx
+ *
+ * Shadcn/Lexical Editor Documentation: https://shadcn-editor.vercel.app/docs/
+ *
+ * Documentation for this specific plugin:
+ * https://shadcn-editor.vercel.app/docs/plugins/toolbar/font-format-toolbar
+ */
+
+import { useCallback, useState } from 'react';
+import { $isTableSelection } from '@lexical/table';
+import { $isRangeSelection, BaseSelection, FORMAT_TEXT_COMMAND } from 'lexical';
+import { BoldIcon, ItalicIcon, StrikethroughIcon, UnderlineIcon } from 'lucide-react';
+
+import { useToolbarContext } from '@/components/advanced/editor/context/toolbar-context';
+import { useUpdateToolbarHandler } from '@/components/advanced/editor/editor-hooks/use-update-toolbar';
+import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
+
+const FORMATS = [
+  { format: 'bold', icon: BoldIcon, label: 'Bold' },
+  { format: 'italic', icon: ItalicIcon, label: 'Italic' },
+  { format: 'underline', icon: UnderlineIcon, label: 'Underline' },
+  { format: 'strikethrough', icon: StrikethroughIcon, label: 'Strikethrough' },
+] as const;
+
+export function FontFormatToolbarPlugin() {
+  const { activeEditor } = useToolbarContext();
+  const [activeFormats, setActiveFormats] = useState<string[]>([]);
+
+  const $updateToolbar = useCallback((selection: BaseSelection) => {
+    if ($isRangeSelection(selection) || $isTableSelection(selection)) {
+      const formats: string[] = [];
+      FORMATS.forEach(({ format }) => {
+        if (selection.hasFormat(format)) {
+          formats.push(format);
+        }
+      });
+      setActiveFormats((prev) => {
+        // Only update if formats have changed
+        if (prev.length !== formats.length || !formats.every((f) => prev.includes(f))) {
+          return formats;
+        }
+        return prev;
+      });
+    }
+  }, []);
+
+  useUpdateToolbarHandler($updateToolbar);
+
+  return (
+    <ToggleGroup
+      type="multiple"
+      value={activeFormats}
+      onValueChange={setActiveFormats}
+      variant="outline"
+      size="sm"
+    >
+      {FORMATS.map(({ format, icon: Icon, label }) => (
+        <ToggleGroupItem
+          key={format}
+          value={format}
+          aria-label={label}
+          onClick={() => {
+            activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+          }}
+        >
+          <Icon className="tw-h-4 tw-w-4" />
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
