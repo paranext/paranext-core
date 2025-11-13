@@ -9,7 +9,7 @@ using static CheckType;
 /// <summary>
 /// Creates inventory objects based on checkIds that have inventories
 /// </summary>
-public static class InventoryFactory
+internal static class InventoryFactory
 {
     private static readonly Dictionary<
         string,

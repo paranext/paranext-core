@@ -3,7 +3,7 @@ using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checks;
 
-public class CheckLocationTests
+public class UsfmLocationTests
 {
     [TestCase("GEN 1:1", 2, "GEN 1:1", 2, true)]
     [TestCase("GEN 1:1", 2, "NUM 1:1", 2, false)]
@@ -17,9 +17,9 @@ public class CheckLocationTests
     )
     {
         VerseRef vref1 = new(verseRef1);
-        CheckLocation item1 = new(vref1, offset1);
+        UsfmLocation item1 = new(vref1, offset1);
         VerseRef vref2 = new(verseRef2);
-        CheckLocation item2 = new(vref2, offset2);
+        UsfmLocation item2 = new(vref2, offset2);
         Assert.That(item1 == item2, Is.EqualTo(expectedResult));
         Assert.That(item1.Equals(item2), Is.EqualTo(expectedResult));
         Assert.That(item1.GetHashCode() == item2.GetHashCode(), Is.EqualTo(expectedResult));

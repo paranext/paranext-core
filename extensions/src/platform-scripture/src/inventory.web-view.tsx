@@ -1,10 +1,10 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { INVENTORY_STRING_KEYS, Scope, usePromise } from 'platform-bible-react';
-import { getChaptersForBook, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CheckInputRange } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
@@ -71,14 +71,22 @@ global.webViewComponent = function InventoryWebView({
     const defaultScrRef: SerializedVerseRef = {
       book: verseRef.book,
       chapterNum: verseRef.chapterNum,
-      verseNum: 1,
+      verseNum: verseRef.verseNum,
     };
     const start = { ...defaultScrRef };
-    const end = { ...defaultScrRef };
+    let end: SerializedVerseRef | undefined = { ...defaultScrRef };
 
+    // Using 999 indicate "end of chapter" and "end of book" per the ScriptureRange docs
     if (scope === 'book') {
       start.chapterNum = 1;
-      end.chapterNum = getChaptersForBook(Canon.bookIdToNumber(verseRef.book));
+      start.verseNum = 0;
+      end.chapterNum = 999;
+      end.verseNum = 999;
+    } else if (scope === 'chapter') {
+      start.verseNum = 0;
+      end.verseNum = 999;
+    } else if (scope === 'verse') {
+      end = undefined;
     }
 
     return {

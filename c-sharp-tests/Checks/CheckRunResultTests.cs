@@ -29,16 +29,16 @@ public class CheckRunResultTests
     )
     {
         VerseRef vrefStart1 = new("GEN 1:1");
-        CheckLocation start1 = new(vrefStart1, 1);
+        UsfmLocation start1 = new(vrefStart1, 1);
         VerseRef vrefEnd1 = new("GEN 1:2");
-        CheckLocation end1 = new(vrefEnd1, 5);
+        UsfmLocation end1 = new(vrefEnd1, 5);
         CheckRunResult checkRunResult1 =
             new("checkId", "resType", "projectId", "msg", "", "", false, vrefStart1, start1, end1);
 
         VerseRef vrefStart2 = new(verseRefStart2);
-        CheckLocation start2 = new(vrefStart2, offsetStart2);
+        UsfmLocation start2 = new(vrefStart2, offsetStart2);
         VerseRef vrefEnd2 = new(verseRefEnd2);
-        CheckLocation end2 = new(vrefEnd2, offsetEnd2);
+        UsfmLocation end2 = new(vrefEnd2, offsetEnd2);
         CheckRunResult checkRunResult2 =
             new(
                 checkId2,

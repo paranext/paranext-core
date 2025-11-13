@@ -1,11 +1,13 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Checks;
+using Paratext.Data.Checking;
 
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Holds a check and its results for a specific project.
 /// </summary>
-public sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
+internal sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
 {
     private readonly Dictionary<int, CheckResultsRecorder> _recordersByBookNum = new();
     private readonly object _lock = new();
@@ -56,5 +58,24 @@ public sealed class CheckForProject(ScriptureCheckBase check, string checkId, st
         {
             _recordersByBookNum[bookNum].ClearResults();
         }
+    }
+
+    public void Run(
+        ChecksDataSource dataSource,
+        int bookNum,
+        UsfmBookIndexer indexer,
+        ErrorMessageDenials denials
+    )
+    {
+        AccessResults(
+            bookNum,
+            (recorder) =>
+            {
+                recorder.ClearResultsFromBook(bookNum);
+                Check.Run(bookNum, dataSource, recorder);
+                recorder.PostProcessResults(denials, indexer);
+                recorder.ResultsReady = true;
+            }
+        );
     }
 }
