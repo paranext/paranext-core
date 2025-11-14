@@ -10,6 +10,7 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_dateAtTime%': '{date} at {time}',
   '%comment_date_today%': 'today',
   '%comment_date_yesterday%': 'yesterday',
+  '%comment_deleteComment%': 'Delete Comment',
   '%comment_editComment%': 'Edit Comment',
   '%comment_replyOrAssign%': 'Reply or assign with @',
   '%comment_thread_multiple_replies%': '{count} replies',
@@ -89,6 +90,34 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return commentFound;
   };
 
+  // This mock function simulates deleting a comment by setting its 'deleted' flag to true.
+  // In reality Paratext 9 actually removes the comment from the project instead of using this flag.
+  // The implementation can be found in `RemoveComment` on the `CommentManager` class in `ParatextData`
+  const handleDeleteComment = async (commentId: string): Promise<boolean> => {
+    console.log(`Deleting comment id ${commentId}`);
+
+    let commentFound = false;
+
+    // Find the comment and mark it as deleted
+    setThreads((prevThreads) =>
+      prevThreads.map((thread) => ({
+        ...thread,
+        comments: thread.comments.map((comment) => {
+          if (comment.id === commentId) {
+            commentFound = true;
+            return {
+              ...comment,
+              deleted: true,
+            };
+          }
+          return comment;
+        }),
+      })),
+    );
+
+    return commentFound;
+  };
+
   return (
     <CommentList
       threads={threads}
@@ -97,6 +126,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
       handleAddComment={handleAddComment}
       handleResolveCommentThread={handleResolveCommentThread}
       handleUpdateComment={handleUpdateComment}
+      handleDeleteComment={handleDeleteComment}
     />
   );
 }

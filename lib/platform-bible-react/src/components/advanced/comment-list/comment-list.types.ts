@@ -15,6 +15,7 @@ export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_dateAtTime%',
   '%comment_date_today%',
   '%comment_date_yesterday%',
+  '%comment_deleteComment%',
   '%comment_editComment%',
   '%comment_replyOrAssign%',
   '%comment_thread_multiple_replies%',
@@ -46,6 +47,8 @@ export interface CommentListProps {
   handleResolveCommentThread: (threadId: string) => void;
   /** Handler for updating a comment's content */
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
+  /** Handler for deleting a comment */
+  handleDeleteComment: (commentId: string) => Promise<boolean>;
 }
 
 /** Props for the CommentThread component */
@@ -77,6 +80,8 @@ export interface CommentThreadProps {
   handleResolveCommentThread: (threadId: string) => void;
   /** Handler for updating a comment's content */
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
+  /** Handler for deleting a comment */
+  handleDeleteComment: (commentId: string) => Promise<boolean>;
 }
 
 /** Props for the CommentItem component */
@@ -100,6 +105,8 @@ export interface CommentItemProps {
   handleResolveCommentThread?: (threadId: string) => void;
   /** Handler for updating a comment's content */
   handleUpdateComment?: (commentId: string, contents: string) => Promise<boolean>;
+  /** Handler for deleting a comment */
+  handleDeleteComment?: (commentId: string) => Promise<boolean>;
   /** Callback when editing state changes */
   onEditingChange?: (isEditing: boolean) => void;
 }
