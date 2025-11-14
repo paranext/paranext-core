@@ -82,6 +82,23 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const handleDeleteComment = useCallback(
+    async (commentId: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return false;
+      }
+      try {
+        await commentsPdp.deleteComment(commentId);
+        return true;
+      } catch (error) {
+        logger.error(`Failed to delete comment ${commentId}:`, error);
+        return false;
+      }
+    },
+    [commentsPdp],
+  );
+
   if (unresolvedThreadsForScrRef.length === 0) {
     return (
       <div className="tw-m-4 tw-flex tw-justify-center">
@@ -114,6 +131,7 @@ global.webViewComponent = function CommentListWebView({
         handleAddComment={handleAddComment}
         handleResolveCommentThread={handleResolveCommentThread}
         handleUpdateComment={handleUpdateComment}
+        handleDeleteComment={handleDeleteComment}
       />
     </div>
   );

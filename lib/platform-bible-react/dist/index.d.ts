@@ -148,7 +148,7 @@ type LegacyComment = {
 	contextBefore?: string;
 	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
 	date: string;
-	/** True if the comment has been deleted */
+	/** True if the comment has been deleted. Paratext 9 doesn't seem to use this flag when deleting a comment. Rather, it deletes the comment from the notes file instead. */
 	deleted: boolean;
 	/** Additional information for the note header, added for Biblical Term notes. */
 	extraHeadingInfo?: string;
@@ -382,13 +382,15 @@ export interface CommentListProps {
 	handleResolveCommentThread: (threadId: string) => void;
 	/** Handler for updating a comment's content */
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
+	/** Handler for deleting a comment */
+	handleDeleteComment: (commentId: string) => Promise<boolean>;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleResolveCommentThread, handleUpdateComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleResolveCommentThread, handleUpdateComment, handleDeleteComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
