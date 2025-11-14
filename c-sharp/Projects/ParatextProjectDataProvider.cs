@@ -295,12 +295,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (!CommentsEnabled)
             return false;
 
-        // Find the comment by ID across all comments
-        Comment? commentToDelete = _commentManager.AllComments.FirstOrDefault(c =>
-            c.Id == commentId
-        );
-
-        if (commentToDelete == null)
+        // Find the comment by ID and its parent thread
+        var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
+        if (commentToDelete == null || parentThread == null)
             return false;
 
         // Do not allow deletion of comments not created by the current user
@@ -308,6 +305,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (commentToDelete.User != scrText.User.Name)
             throw new InvalidOperationException(
                 "Cannot delete a comment that is not created by the current user"
+            );
+
+        // Only allow deleting the last comment in the thread
+        var lastComment = parentThread.LastComment;
+        if (lastComment == null || lastComment.Id != commentId)
+            throw new InvalidOperationException(
+                "Cannot delete a comment that is not the last comment in the thread"
             );
 
         // Remove the comment using CommentManager
