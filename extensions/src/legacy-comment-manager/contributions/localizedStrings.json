@@ -6,6 +6,7 @@
       "%comment_dateAtTime%": "{date} at {time}",
       "%comment_date_today%": "today",
       "%comment_date_yesterday%": "yesterday",
+      "%comment_deleteComment%": "Delete Comment",
       "%comment_editComment%": "Edit Comment",
       "%comment_replyOrAssign%": "Reply or assign with @",
       "%comment_thread_multiple_replies%": "{count} replies",
@@ -19,11 +20,12 @@
       "%comment_dateAtTime%": "{date} a las {time}",
       "%comment_date_today%": "hoy",
       "%comment_date_yesterday%": "ayer",
+      "%comment_deleteComment%": "Eliminar Comentario",
       "%comment_editComment%": "Editar Comentario",
       "%comment_replyOrAssign%": "Responder o asignar con @",
       "%comment_thread_multiple_replies%": "{count} respuestas",
       "%comment_thread_single_reply%": "1 respuesta",
-      "%no_comments%": "No hay comentarios todavía",
+      "%no_comments%": "No hay comentarios todavía",
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
     }

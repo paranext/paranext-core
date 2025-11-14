@@ -16,7 +16,7 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedEditorState } from 'lexical';
-import { ArrowUp, Check, MoreHorizontal, Pencil, X } from 'lucide-react';
+import { ArrowUp, Check, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import {
   formatRelativeDate,
   formatReplacementString,
@@ -40,6 +40,7 @@ export function CommentItem({
   threadStatus = 'Unspecified',
   handleResolveCommentThread = () => {},
   handleUpdateComment,
+  handleDeleteComment,
   onEditingChange,
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -129,20 +130,42 @@ export function CommentItem({
   const dropdownContent = useMemo(() => {
     if (!isThreadExpanded) return undefined;
     if (!isEditable) return undefined;
-    if (hasCustomParatextTags(comment.contents)) return undefined;
+
     return (
-      <DropdownMenuItem
-        onClick={() => {
-          setIsEditing(true);
-          setEditorState(htmlToEditorState(parseParatextHtml(comment.contents)));
-          onEditingChange?.(true);
-        }}
-      >
-        <Pencil className="tw-me-2 tw-h-4 tw-w-4" />
-        {localizedStrings['%comment_editComment%']}
-      </DropdownMenuItem>
+      <>
+        {!hasCustomParatextTags(comment.contents) && (
+          <DropdownMenuItem
+            onClick={() => {
+              setIsEditing(true);
+              setEditorState(htmlToEditorState(parseParatextHtml(comment.contents)));
+              onEditingChange?.(true);
+            }}
+          >
+            <Pencil className="tw-me-2 tw-h-4 tw-w-4" />
+            {localizedStrings['%comment_editComment%']}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          onClick={async () => {
+            if (handleDeleteComment) {
+              await handleDeleteComment(comment.id);
+            }
+          }}
+        >
+          <Trash2 className="tw-me-2 tw-h-4 tw-w-4" />
+          {localizedStrings['%comment_deleteComment%']}
+        </DropdownMenuItem>
+      </>
     );
-  }, [isEditable, isThreadExpanded, localizedStrings, comment.contents, onEditingChange]);
+  }, [
+    isEditable,
+    isThreadExpanded,
+    localizedStrings,
+    comment.contents,
+    comment.id,
+    handleDeleteComment,
+    onEditingChange,
+  ]);
 
   return (
     <div

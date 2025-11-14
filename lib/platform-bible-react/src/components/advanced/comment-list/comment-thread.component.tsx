@@ -65,6 +65,7 @@ export function CommentThread({
   handleResolveCommentThread,
   handleAddComment,
   handleUpdateComment,
+  handleDeleteComment,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
@@ -72,7 +73,9 @@ export function CommentThread({
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
 
-  const firstComment = useMemo(() => comments[0], [comments]);
+  const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
+
+  const firstComment = useMemo(() => activeComments[0], [activeComments]);
 
   // </p> expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -90,7 +93,7 @@ export function CommentThread({
     checkOverflow();
     window.addEventListener('resize', checkOverflow);
     return () => window.removeEventListener('resize', checkOverflow);
-  }, [firstComment.verse]);
+  }, [firstComment?.verse]);
 
   useEffect(() => {
     setShowAllReplies(false);
@@ -112,7 +115,7 @@ export function CommentThread({
     [assignedUser, localizedStrings],
   );
 
-  const replies = useMemo(() => comments.slice(1), [comments]);
+  const replies = useMemo(() => activeComments.slice(1), [activeComments]);
   const replyCount = useMemo(() => replies.length ?? 0, [replies.length]);
   const hasReplies = useMemo(() => replyCount > 0, [replyCount]);
 
@@ -155,7 +158,6 @@ export function CommentThread({
       setEditorState(initialValue);
     }
   }, [editorState, handleAddComment, threadId]);
-
   return (
     <Card
       role="option"
@@ -216,9 +218,10 @@ export function CommentThread({
             localizedStrings={localizedStrings}
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
-            isEditable={comments.length === 1 && firstComment.user === currentUser}
+            isEditable={activeComments.length === 1 && firstComment.user === currentUser}
             handleResolveCommentThread={handleResolveCommentThread}
             handleUpdateComment={handleUpdateComment}
+            handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
           />
         </div>
@@ -280,6 +283,7 @@ export function CommentThread({
                       isThreadExpanded={isSelected}
                       isEditable={isEditableReply}
                       handleUpdateComment={handleUpdateComment}
+                      handleDeleteComment={handleDeleteComment}
                       onEditingChange={setIsAnyCommentEditing}
                     />
                   </div>
