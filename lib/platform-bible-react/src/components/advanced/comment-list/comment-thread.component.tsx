@@ -218,7 +218,7 @@ export function CommentThread({
             localizedStrings={localizedStrings}
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
-            isEditable={activeComments.length === 1 && firstComment.user === currentUser}
+            isEditable={activeComments.length === 1 && firstComment?.user === currentUser}
             handleResolveCommentThread={handleResolveCommentThread}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
