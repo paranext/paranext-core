@@ -77,6 +77,12 @@
             "command": "platformScripture.openFind"
           },
           {
+            "label": "%webView_platformScriptureEditor_switchScriptureView%",
+            "group": "platformScriptureEditor.layout",
+            "order": 1,
+            "command": "platformScripture.changeView"
+          },
+          {
             "label": "%webView_platformScriptureEditor_showFootnotes%",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 1,

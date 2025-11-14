@@ -120,6 +120,82 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     defaultEditorDecorations,
   );
 
+  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+
+  const [projectNamePossiblyError] = useProjectSetting(
+    projectId,
+    'platform.name',
+    defaultProjectName,
+  );
+
+  const projectName = useMemo(() => {
+    if (isPlatformError(projectNamePossiblyError)) {
+      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
+      return defaultProjectName;
+    }
+    return projectNamePossiblyError;
+  }, [projectNamePossiblyError]);
+
+  const [textDirectionPossiblyError] = useProjectSetting(
+    projectId,
+    'platform.textDirection',
+    defaultTextDirection,
+  );
+
+  const textDirection = useMemo(() => {
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      return defaultTextDirection;
+    }
+
+    // Using || to make sure we get default if it is an empty string or if it is undefined
+    return textDirectionPossiblyError || defaultTextDirection;
+  }, [textDirectionPossiblyError]);
+
+  const textDirectionEffective = useMemo(() => {
+    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
+    if (projectName === 'OHEBGRK')
+      if (Canon.isBookOT(scrRef.book)) return 'rtl';
+      else return 'ltr';
+
+    return textDirection;
+  }, [projectName, scrRef, textDirection]);
+
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      noteCallerOnClick: isReadOnly
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+
+            if (isCollapsed) {
+              if (editingNoteKey) return;
+
+              setEditingNoteKey(noteNodeKey);
+              setEditingNoteOps(getNoteOps());
+              setShowFootnoteEditor(true);
+            }
+          },
+    }),
+    [isReadOnly, editingNoteKey],
+  );
+
+  const [viewOptions, setViewOptions] = useState<ViewOptions>(() => ({ ...defaultView }));
+
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnly,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      view: viewOptions,
+    }),
+    [isReadOnly, textDirectionEffective, nodeOptions, viewOptions],
+  );
+
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
     false,
@@ -134,7 +210,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -190,6 +265,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           setDecorations(updatedDecorations);
           break;
         }
+        case 'changeScriptureView': {
+          setViewOptions((prev) => {
+            const base = prev ?? defaultView;
+            switch (base.markerMode) {
+              case 'hidden':
+                return { ...base, markerMode: 'visible', noteMode: 'expanded' };
+              default:
+                return { ...base, markerMode: 'hidden', noteMode: 'collapsed' };
+            }
+          });
+          break;
+        }
         case 'toggleFootnotesPaneVisibility': {
           const { current } = footnotesPaneVisibleRef;
           setFootnotesPaneVisible(!current);
@@ -220,7 +307,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, setFootnotesPaneVisible]);
+  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, options, setFootnotesPaneVisible]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
@@ -641,78 +728,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement?.classList.remove('highlighted');
     };
   }, [scrRef]);
-
-  const [projectNamePossiblyError] = useProjectSetting(
-    projectId,
-    'platform.name',
-    defaultProjectName,
-  );
-
-  const projectName = useMemo(() => {
-    if (isPlatformError(projectNamePossiblyError)) {
-      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
-      return defaultProjectName;
-    }
-    return projectNamePossiblyError;
-  }, [projectNamePossiblyError]);
-
-  const [textDirectionPossiblyError] = useProjectSetting(
-    projectId,
-    'platform.textDirection',
-    defaultTextDirection,
-  );
-
-  const textDirection = useMemo(() => {
-    if (isPlatformError(textDirectionPossiblyError)) {
-      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
-      return defaultTextDirection;
-    }
-
-    // Using || to make sure we get default if it is an empty string or if it is undefined
-    return textDirectionPossiblyError || defaultTextDirection;
-  }, [textDirectionPossiblyError]);
-
-  const textDirectionEffective = useMemo(() => {
-    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
-    if (projectName === 'OHEBGRK')
-      if (Canon.isBookOT(scrRef.book)) return 'rtl';
-      else return 'ltr';
-
-    return textDirection;
-  }, [projectName, scrRef, textDirection]);
-
-  const nodeOptions = useMemo<UsjNodeOptions>(
-    () => ({
-      noteCallerOnClick: isReadOnly
-        ? undefined
-        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
-
-            if (isCollapsed) {
-              if (editingNoteKey) return;
-
-              setEditingNoteKey(noteNodeKey);
-              setEditingNoteOps(getNoteOps());
-              setShowFootnoteEditor(true);
-            }
-          },
-    }),
-    [isReadOnly, editingNoteKey],
-  );
-
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnly,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      view: defaultView,
-    }),
-    [isReadOnly, textDirectionEffective, nodeOptions],
-  );
 
   const onFootnoteEditorClose = useCallback(() => {
     setEditingNoteKey(undefined);
