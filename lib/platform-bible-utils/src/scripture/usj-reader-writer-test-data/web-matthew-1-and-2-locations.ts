@@ -3,7 +3,7 @@ import { LocationUsfmAndUsj } from './test-data.model';
 /** USFM and USJ location data for WEB Matthew 1-2. Used in tests in `usj-reader-writer.test.ts */
 export const matthew1And2Locations: LocationUsfmAndUsj[] = [
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 0,
     },
@@ -19,7 +19,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 1,
     },
@@ -36,7 +36,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 2,
     },
@@ -53,7 +53,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 3,
     },
@@ -70,7 +70,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 4,
     },
@@ -87,7 +87,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 8,
     },
@@ -100,7 +100,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 12,
     },
@@ -113,7 +113,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 48,
     },
@@ -126,7 +126,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 49,
     },
@@ -141,7 +141,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 50,
     },
@@ -157,7 +157,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 54,
     },
@@ -170,7 +170,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 71,
     },
@@ -185,7 +185,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 185,
     },
@@ -201,7 +201,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 0 },
       offset: 188,
     },
@@ -218,7 +218,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 },
       offset: 50,
     },
@@ -235,7 +235,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 },
       offset: 0,
     },
@@ -251,7 +251,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 6 },
       offset: 8,
     },
@@ -264,7 +264,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 1, verseNum: 6 },
       offset: 105,
     },
@@ -277,7 +277,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 2, verseNum: 6 },
       offset: 150,
     },
@@ -293,7 +293,7 @@ export const matthew1And2Locations: LocationUsfmAndUsj[] = [
   // content at that offset in USFM no matter how far away it is from the verseRef requested.
   // This is not particularly designed to be this way; can change if desired
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: 'MAT', chapterNum: 3, verseNum: 0 },
       offset: 9997139,
     },

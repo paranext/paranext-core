@@ -15,7 +15,6 @@ import {
   IUsjReaderWriter,
   NO_BOOK_ID,
   PropertyJsonPath,
-  UsfmLocation,
   UsfmVerseLocation,
   UsjAttributeKeyLocation,
   UsjAttributeMarkerLocation,
@@ -30,6 +29,10 @@ import {
   UsjSearchResult,
   UsjTextContentLocation,
   VERSE_TYPE,
+  UsfmVerseRefVerseLocation,
+  UsjChapterLocation,
+  UsjVerseRefBookLocation,
+  UsjBookLocation,
 } from './usj-reader-writer.model';
 import { SortedNumberMap } from '../sorted-number-map';
 import { extractFootnotesFromUsjContent } from './footnote-util';
@@ -268,13 +271,13 @@ type WorkingStack = StackItem[];
  *   - `extractTextBetweenPoints`
  *   - `findNextLocationOfMatchingText`
  *   - `search`
- *   - `usfmLocationToNextTextLocation`
+ *   - `usfmVerseLocationToNextTextLocation`
  * - Edit the USJ document: `removeContentNodes`
  * - Transform USJ to USFM: `toUsfm`
  * - Transform USJ document locations to USFM locations and vice versa
  *
- *   - `usfmLocationToUsjDocumentLocation`
- *   - `usjDocumentLocationToUsfmVerseLocation`
+ *   - `usfmVerseLocationToUsjDocumentLocation`
+ *   - `usjDocumentLocationToUsfmVerseRefVerseLocation`
  * - Use the version of USFM you need by passing in a custom markers map to the constructor if the
  *   version in your USJ document is not supported by default:
  *   {@link UsjReaderWriterOptions.markersMap}
@@ -285,8 +288,8 @@ type WorkingStack = StackItem[];
  *   somewhere in the USj document, either {@link Usj} or {@link MarkerContent}. However, in specific
  *   situations, it may refer only to {@link MarkerObject} or {@link MarkerContent}. The TypeScript
  *   types indicate when this is the case.
- * - See {@link UsfmLocation} and {@link UsjDocumentLocation} for information about transforming USFM
- *   locations and USJ locations including what kinds of USFM locations are and are not
+ * - See {@link UsfmVerseLocation} and {@link UsjDocumentLocation} for information about transforming
+ *   USFM locations and USJ locations including what kinds of USFM locations are and are not
  *   representable in USJ locations, which USJ locations actually correspond to something in USJ,
  *   etc.
  * - It is best to reuse the same `UsjReaderWriter` for the same USJ document as long as possible
@@ -833,11 +836,28 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region USJ node -> SerializedVerseRef + offset in USFM
 
-  nodeToUsfmVerseLocation(
+  nodeToUsfmVerseRefVerseLocation(
     node: MarkerContent | Usj,
     nodeParent?: MarkerObject | MarkerContent[] | Usj,
     bookIdIfNotFound?: string,
-  ): UsfmVerseLocation {
+  ): UsfmVerseRefVerseLocation {
+    const { documentLocation: usjLocation } = this.nodeToUsjNodeAndDocumentLocation(
+      node,
+      nodeParent,
+    );
+
+    // Find the UsjFragmentInfo at this location
+    return this.usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation, bookIdIfNotFound);
+  }
+
+  // #endregion USJ node -> SerializedVerseRef + offset in USFM
+
+  // #region USJ node -> USJ location
+
+  nodeToUsjNodeAndDocumentLocation(
+    node: MarkerContent | Usj,
+    nodeParent?: MarkerObject | MarkerContent[] | Usj,
+  ): UsjNodeAndDocumentLocation {
     // Get working stack to the node
     let workingStack: WorkingStack;
 
@@ -868,35 +888,74 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Get the UsjDocumentLocation for this node so we can find the fragment at that location
     const usjLocation = UsjReaderWriter.convertNodeToUsjDocumentLocation(node, workingStack);
 
-    // Find the UsjFragmentInfo at this location
-    return this.usjDocumentLocationToUsfmVerseLocation(usjLocation, bookIdIfNotFound);
+    return {
+      node,
+      documentLocation: usjLocation,
+    };
   }
 
-  // #endregion USJ node -> SerializedVerseRef + offset in USFM
+  // #endregion USJ node -> USJ location
 
-  // #region JSONPath or USJ location -> SerializedVerseRef + offset in USFM
+  // #region JSONPath > USJ location
 
-  jsonPathToUsfmVerseLocation(jsonPathQuery: string, bookIdIfNotFound?: string): UsfmVerseLocation {
+  /**
+   * Finds the node associated with the JSONPath provided, and also gets the parent of the node if
+   * the node is a string. This is helpful so you can find a real object that is actually somewhere
+   * in the USJ document from the JSONPath
+   *
+   * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
+   *   the expression matches more than one node, then only the first node found is considered.
+   * @returns First node found at the JSONPath and the parent of that node _if_ the node is a
+   *   string. Note that the object returned is the actual object in the USJ document.
+   */
+  private jsonPathToNodeAndParentIfString(jsonPathQuery: string): {
+    node: MarkerContent | Usj;
+    parent: MarkerObject | Usj | MarkerContent[] | undefined;
+  } {
     // Find the node this JSONPath is pointing to
-    const target: MarkerContent | undefined = this.findSingleValue(jsonPathQuery);
+    const target: MarkerContent | Usj | undefined = this.findSingleValue(jsonPathQuery);
     if (!target) throw new Error(`No result found for JSONPath query: ${jsonPathQuery}`);
 
     // Find the parent of this node if it is a string so we can know where it is
-    const parent: MarkerObject | MarkerContent[] | undefined = isString(target)
+    const parent: MarkerObject | Usj | MarkerContent[] | undefined = isString(target)
       ? this.findParent(jsonPathQuery)
       : undefined;
     if (!parent && isString(target))
       throw new Error(`Could not determine parent for ${jsonPathQuery}`);
 
-    const usfmVerseLocation = this.nodeToUsfmVerseLocation(target, parent, bookIdIfNotFound);
+    return {
+      node: target,
+      parent,
+    };
+  }
+
+  jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation {
+    const { node, parent } = this.jsonPathToNodeAndParentIfString(jsonPathQuery);
+
+    const usjNodeAndDocumentLocation = this.nodeToUsjNodeAndDocumentLocation(node, parent);
+
+    return usjNodeAndDocumentLocation;
+  }
+
+  // #endregion JSONPath > USJ location
+
+  // #region JSONPath or USJ location -> SerializedVerseRef + offset in USFM
+
+  jsonPathToUsfmVerseRefVerseLocation(
+    jsonPathQuery: string,
+    bookIdIfNotFound?: string,
+  ): UsfmVerseRefVerseLocation {
+    const { node, parent } = this.jsonPathToNodeAndParentIfString(jsonPathQuery);
+
+    const usfmVerseLocation = this.nodeToUsfmVerseRefVerseLocation(node, parent, bookIdIfNotFound);
 
     return usfmVerseLocation;
   }
 
-  usjDocumentLocationToUsfmVerseLocation(
+  usjDocumentLocationToUsfmVerseRefVerseLocation(
     usjLocation: UsjDocumentLocation,
     bookIdIfNotFound?: string,
-  ): UsfmVerseLocation {
+  ): UsfmVerseRefVerseLocation {
     // Find the fragment with the matching UsjDocumentLocation except offset
     const fragmentInfo = this.findFragmentInfoAtUsjDocumentLocation(usjLocation);
     if (fragmentInfo === undefined)
@@ -1097,9 +1156,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return lastVerseRef;
   }
 
-  usfmLocationToIndexInUsfm(usfmLocation: UsfmLocation): number {
+  usfmVerseLocationToIndexInUsfm(usfmVerseLocation: UsfmVerseLocation): number {
     const { verseRef, offset: verseRefOffset } =
-      UsjReaderWriter.usfmLocationToUsfmVerseLocation(usfmLocation);
+      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(usfmVerseLocation);
 
     if (verseRefOffset < 0) throw new Error('offset must be >= 0');
 
@@ -1108,28 +1167,165 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     // Add the verse offset to the verse index to get the USFM location's index in the USFM
     // representation of this USJ document
-    const usfmLocationIndexInUsfm = verseIndexInUsfm + verseRefOffset;
+    const usfmVerseLocationIndexInUsfm = verseIndexInUsfm + verseRefOffset;
 
-    return usfmLocationIndexInUsfm;
+    return usfmVerseLocationIndexInUsfm;
   }
 
   // #endregion Handling VerseRefs
 
   // #region transforming location types to different types
 
-  private static usfmLocationToUsfmVerseLocation(
-    usfmLocation: UsfmLocation,
-  ): UsfmVerseLocation & { offset: number } {
-    if ('verseRef' in usfmLocation) {
+  /**
+   * Transforms a USFM verse-based location into a single standardized format of USFM verse-based
+   * location for ease of accessing the location's properties
+   *
+   * @param usfmVerseLocation USFM verse-based location in one of multiple forms
+   * @returns USFM verse-based location in one particular form. Also ensures `offset` is defined
+   *   (defaults to 0 as described in {@link UsfmVerseLocation})
+   */
+  static usfmVerseLocationToUsfmVerseRefVerseLocation(
+    usfmVerseLocation: UsfmVerseLocation,
+  ): UsfmVerseRefVerseLocation & { offset: number } {
+    if ('verseRef' in usfmVerseLocation) {
+      // UsfmVerseRefVerseLocation
       return {
-        verseRef: usfmLocation.verseRef,
-        offset: usfmLocation.offset ?? 0,
+        verseRef: usfmVerseLocation.verseRef,
+        offset: usfmVerseLocation.offset ?? 0,
       };
     }
 
+    if ('scrRef' in usfmVerseLocation) {
+      // Old deprecated form UsfmScrRefVerseLocation
+      return {
+        verseRef: usfmVerseLocation.scrRef,
+        offset: usfmVerseLocation.offset ?? 0,
+      };
+    }
+
+    // SerializedVerseRef
     return {
-      verseRef: usfmLocation,
+      verseRef: usfmVerseLocation,
       offset: 0,
+    };
+  }
+
+  /**
+   * Transforms a USJ chapter-based location into a single standardized format of USJ chapter-based
+   * location for ease of accessing the location's properties
+   *
+   * @param usjChapterLocation USJ chapter-based location in one of multiple forms
+   * @returns USJ chapter-based location in one particular form.
+   * @throws If erroneously received a {@link UsjBookLocation}, not a {@link UsjChapterLocation}.
+   *   Cannot statically transform between those because there is no way to know how to change the
+   *   JSONPath
+   */
+  static usjChapterLocationToUsjVerseRefChapterLocation(
+    usjChapterLocation: UsjChapterLocation,
+  ): UsjVerseRefChapterLocation {
+    // Old deprecated UsjFlatTextChapterLocation
+    if ('jsonPath' in usjChapterLocation) {
+      if (usjChapterLocation.offset !== undefined)
+        // with UsjTextContentLocation
+        return {
+          verseRef: {
+            book: usjChapterLocation.book,
+            chapterNum: usjChapterLocation.chapterNum,
+            verseNum: 0,
+          },
+          granularity: 'chapter',
+          documentLocation: {
+            jsonPath: usjChapterLocation.jsonPath,
+            offset: usjChapterLocation.offset,
+          },
+        };
+      // with UsjMarkerLocation
+      return {
+        verseRef: {
+          book: usjChapterLocation.book,
+          chapterNum: usjChapterLocation.chapterNum,
+          verseNum: 0,
+        },
+        granularity: 'chapter',
+        documentLocation: {
+          jsonPath: usjChapterLocation.jsonPath,
+        },
+      };
+    }
+
+    // UsjVerseRefChapterLocation<TDocumentLocation>
+    if ('verseRef' in usjChapterLocation) {
+      if (
+        // Make sure we are receiving a chapter location, not a book location
+        usjChapterLocation.granularity !== undefined &&
+        usjChapterLocation.granularity !== 'chapter'
+      )
+        throw new Error(
+          'Received UsjVerseRefBookLocation! Cannot statically transform JSONPath from book-relative to chapter-relative',
+        );
+
+      return usjChapterLocation;
+    }
+
+    // UsjFlatChapterLocation<TDocumentLocation>
+    // Make sure we are receiving a chapter location, not a book location
+    if (usjChapterLocation.chapterNum === undefined)
+      throw new Error(
+        'Received UsjFlatBookLocation! Cannot statically transform JSONPath from book-relative to chapter-relative',
+      );
+
+    return {
+      verseRef: {
+        book: usjChapterLocation.book,
+        chapterNum: usjChapterLocation.chapterNum,
+        verseNum: 0,
+      },
+      granularity: 'chapter',
+      documentLocation: usjChapterLocation.documentLocation,
+    };
+  }
+
+  /**
+   * Transforms a USJ book-based location into a single standardized format of USJ book-based
+   * location for ease of accessing the location's properties
+   *
+   * @param usjBookLocation USJ book-based location in one of multiple forms
+   * @returns USJ book-based location in one particular form.
+   * @throws If erroneously received a {@link UsjChapterLocation}, not a {@link UsjBookLocation}.
+   *   Cannot statically transform between those because there is no way to know how to change the
+   *   JSONPath
+   */
+  static usjBookLocationToUsjVerseRefBookLocation(
+    usjBookLocation: UsjBookLocation,
+  ): UsjVerseRefBookLocation {
+    // UsjVerseRefBookLocation<TDocumentLocation>
+    if ('verseRef' in usjBookLocation) {
+      if (
+        // Make sure we are receiving a book location, not a chapter location
+        usjBookLocation.granularity !== 'book'
+      )
+        throw new Error(
+          'Received UsjVerseRefChapterLocation! Cannot statically transform JSONPath from chapter-relative to book-relative',
+        );
+
+      return usjBookLocation;
+    }
+
+    // UsjFlatBookLocation<TDocumentLocation>
+    // Make sure we are receiving a book location, not a chapter location
+    if ('chapterNum' in usjBookLocation)
+      throw new Error(
+        'Received UsjFlatChapterLocation! Cannot statically transform JSONPath from chapter-relative to book-relative',
+      );
+
+    return {
+      verseRef: {
+        book: usjBookLocation.book,
+        chapterNum: 1,
+        verseNum: 0,
+      },
+      granularity: 'book',
+      documentLocation: usjBookLocation.documentLocation,
     };
   }
 
@@ -1152,7 +1348,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const verseRef = this.getVerseRefForIndexInUsfm(fragmentInfo.indexInUsfm, bookIdIfNotFound);
 
     // Get the USJ location for the start of the chapter
-    const chapterUsjDocumentLocation = this.usfmLocationToUsjNodeAndDocumentLocation({
+    const chapterUsjDocumentLocation = this.usfmVerseLocationToUsjNodeAndDocumentLocation({
       ...verseRef,
       verseNum: 0,
     });
@@ -1165,7 +1361,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // Change the passed in JSONPath to be relative to the chapter
         jsonPath: UsjReaderWriter.moveJsonPathRelativeToChapter(
           usjLocation.jsonPath,
-          // We are trusting that `usfmLocationToUsjNodeAndDocumentLocation` gave us a proper
+          // We are trusting that `usfmVerseLocationToUsjNodeAndDocumentLocation` gave us a proper
           // UsjMarkerLocation, which always has a ContentJsonPath
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           chapterUsjDocumentLocation.documentLocation.jsonPath as ContentJsonPath,
@@ -1178,16 +1374,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region USFM location -> USJ location
 
-  usfmLocationToUsjNodeAndDocumentLocation(usfmLocation: UsfmLocation): UsjNodeAndDocumentLocation {
+  usfmVerseLocationToUsjNodeAndDocumentLocation(
+    usfmVerseLocation: UsfmVerseLocation,
+  ): UsjNodeAndDocumentLocation {
     const { verseRef, offset: verseRefOffset } =
-      UsjReaderWriter.usfmLocationToUsfmVerseLocation(usfmLocation);
+      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(usfmVerseLocation);
 
     // Get the USFM location's index in the USFM representation of this USJ document
-    const usfmLocationIndexInUsfm = this.usfmLocationToIndexInUsfm(usfmLocation);
+    const usfmVerseLocationIndexInUsfm = this.usfmVerseLocationToIndexInUsfm(usfmVerseLocation);
 
     // Find the fragment info at this USFM location
     const { value: fragmentInfo } = this.fragmentsByIndexInUsfm.findClosestLessThanOrEqual(
-      usfmLocationIndexInUsfm,
+      usfmVerseLocationIndexInUsfm,
     ) ?? {
       value: undefined,
     };
@@ -1197,7 +1395,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       );
 
     // Get the offset within the fragment where the USFM location is pointing
-    const usjOffset = usfmLocationIndexInUsfm - fragmentInfo.indexInUsfm;
+    const usjOffset = usfmVerseLocationIndexInUsfm - fragmentInfo.indexInUsfm;
 
     // Add the offset to the fragment's UsjDocumentLocation and return it
     return {
@@ -1209,10 +1407,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  usfmLocationToUsjDocumentLocation(
-    usfmLocation: UsfmLocation | SerializedVerseRef,
+  usfmVerseLocationToUsjDocumentLocation(
+    usfmVerseLocation: UsfmVerseLocation | SerializedVerseRef,
   ): UsjDocumentLocation {
-    return this.usfmLocationToUsjNodeAndDocumentLocation(usfmLocation).documentLocation;
+    return this.usfmVerseLocationToUsjNodeAndDocumentLocation(usfmVerseLocation).documentLocation;
   }
 
   // #endregion USFM location -> USJ location
@@ -1258,11 +1456,11 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region Search for text from a certain point
 
-  usfmLocationToNextTextLocation(
-    usfmLocation: UsfmLocation,
+  usfmVerseLocationToNextTextLocation(
+    usfmVerseLocation: UsfmVerseLocation,
   ): UsjNodeAndDocumentLocation<UsjTextContentLocation> {
     // Get the location of the verse marker
-    const verseLocation = this.usfmLocationToUsjNodeAndDocumentLocation(usfmLocation);
+    const verseLocation = this.usfmVerseLocationToUsjNodeAndDocumentLocation(usfmVerseLocation);
 
     // Find the first string after the verse marker
     const firstStringLocationAfterVerseMarker = this.findNextLocationOfMatchingText(
@@ -1272,7 +1470,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     if (!firstStringLocationAfterVerseMarker)
       throw new Error(
-        `Could not find next text location after verse ${JSON.stringify(usfmLocation)} at location ${
+        `Could not find next text location after verse ${JSON.stringify(usfmVerseLocation)} at location ${
           verseLocation.documentLocation.jsonPath
         }`,
       );

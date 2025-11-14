@@ -94,7 +94,7 @@ function getCommentDetails(
       `Start and end parents are not both present. start:${startParent} end:${endParent}`,
     );
 
-  const start = usjRW.nodeToUsfmVerseLocation(startNode, startParent, bookId);
+  const start = usjRW.nodeToUsfmVerseRefVerseLocation(startNode, startParent, bookId);
   if (!start)
     throw new Error(`Could not find SerializedVerseRef for start of comment ${commentId}`);
 
@@ -262,7 +262,7 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
     const lc = thread.legacyComment;
     const serializedVerseRef: SerializedVerseRef = new VerseRef(lc.verseRef).toJSON();
     // BUG: PT9 comments give offset in USFM space, not verse text space
-    let start = usjRW.usfmLocationToUsjNodeAndDocumentLocation({
+    let start = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
       verseRef: serializedVerseRef,
       offset: lc.startPosition,
     });

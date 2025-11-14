@@ -568,6 +568,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
         // Set the focus and the range to the result in the editor
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
         editorWebViewController.selectRange({
+          // Transform deprecated check result locations to the new format. The old check result
+          // types don't have book/chapter info in the location, so we need to add them.
           start:
             'jsonPath' in selectedResult.start
               ? {
@@ -575,7 +577,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
                   chapterNum: selectedResult.verseRef.chapterNum,
                   ...selectedResult.start,
                 }
-              : { scrRef: selectedResult.start.verseRef, ...selectedResult.start },
+              : selectedResult.start,
           end:
             'jsonPath' in selectedResult.end
               ? {
@@ -583,7 +585,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
                   chapterNum: selectedResult.verseRef.chapterNum,
                   ...selectedResult.end,
                 }
-              : { scrRef: selectedResult.end.verseRef, ...selectedResult.end },
+              : selectedResult.end,
         });
       } else {
         // Could not get controller to set specific range, so at least set the verse ref

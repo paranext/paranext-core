@@ -207,11 +207,14 @@ export class ScriptureFinderProjectDataProviderEngine
     return matches.map((match) => {
       return {
         ...match,
-        start: usj.usjDocumentLocationToUsfmVerseLocation(
+        start: usj.usjDocumentLocationToUsfmVerseRefVerseLocation(
           match.start.documentLocation,
           scope.bookId,
         ),
-        end: usj.usjDocumentLocationToUsfmVerseLocation(match.end.documentLocation, scope.bookId),
+        end: usj.usjDocumentLocationToUsfmVerseRefVerseLocation(
+          match.end.documentLocation,
+          scope.bookId,
+        ),
       };
     });
   }
