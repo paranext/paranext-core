@@ -1,7 +1,31 @@
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $getRoot, $insertNodes, createEditor, SerializedEditorState } from 'lexical';
+import React from 'react';
 import { nodes } from './nodes';
+
+/**
+ * Focus a content-editable element within a container and move the cursor to the end
+ *
+ * @param container - The container element to search within
+ * @returns True if a content-editable element was found and focused, false otherwise
+ */
+export function focusContentEditable(container: HTMLElement): boolean {
+  const contentEditableField = container.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!contentEditableField) return false;
+
+  contentEditableField.focus();
+
+  // Move cursor to the end
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(contentEditableField);
+  range.collapse(false); // false = collapse to end
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  return true;
+}
 
 /**
  * Check if the editor state has any meaningful content
@@ -128,4 +152,23 @@ export function editorStateToHtml(editorState: SerializedEditorState): string {
     .replace(/<s>(.*?)<\/s>/g, '<strikethrough>$1</strikethrough>');
 
   return html;
+}
+
+/**
+ * Handle keyboard events for editor navigation to prevent parent listbox from intercepting
+ * navigation keys. This should be used on a container wrapping the Editor component.
+ *
+ * @param event - The keyboard event
+ * @returns True if the event was handled (and should be stopped from propagating), false otherwise
+ */
+export function handleEditorKeyNavigation(event: React.KeyboardEvent<HTMLElement>): boolean {
+  // Keys that should be kept within the editor for navigation
+  const navigationKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+
+  if (navigationKeys.includes(event.key)) {
+    event.stopPropagation();
+    return true;
+  }
+
+  return false;
 }

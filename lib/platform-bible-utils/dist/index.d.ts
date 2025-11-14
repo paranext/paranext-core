@@ -1664,6 +1664,13 @@ export interface IUsjReaderWriter {
 	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
 }
 /**
+ * Check if an HTML string contains custom Paratext-specific tags
+ *
+ * @param html - HTML string to check
+ * @returns True if the HTML contains <color> or <language> tags
+ */
+export declare function hasCustomParatextTags(html: string): boolean;
+/**
  * Parse Paratext specific HTML tags to standard HTML
  *
  * @param html - HTML string to parse
@@ -3667,7 +3674,7 @@ export type LegacyComment = {
 	 * message when displaying the note.
 	 */
 	conflictType?: string;
-	/** InnerXML of the contents of the comment, needs to be rendered with MarkdownRenderer. */
+	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
 	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
