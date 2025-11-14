@@ -90,7 +90,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return commentFound;
   };
 
-  // This mock function simulation deleting a comment by settings its 'deleted' flag to true.
+  // This mock function simulates deleting a comment by setting its 'deleted' flag to true.
   // In reality Paratext 9 actually removes the comment from the project instead of using this flag.
   // The implementation can be found in `RemoveComment` on the `CommentManager` class in `ParatextData`
   const handleDeleteComment = async (commentId: string): Promise<boolean> => {
