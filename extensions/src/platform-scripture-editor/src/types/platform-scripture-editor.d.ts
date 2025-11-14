@@ -157,8 +157,6 @@ declare module 'platform-scripture-editor' {
   export type OpenEditorOptions = {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
-    /** Ways Scripture project text can be viewed in the editor */
-    scriptureViewType: 'formatted' | 'markers';
     /**
      * When the footnote pane is shown, where it should be positioned
      *
