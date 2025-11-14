@@ -93,8 +93,8 @@ export default function SearchResult({
   const textParts = useMemo(() => {
     if (!usjReaderWriter || !shouldCalculateContext) return undefined;
     try {
-      const startIndexInUsfm = usjReaderWriter.usfmLocationToIndexInUsfm(searchResult.start);
-      const endIndexInUsfm = usjReaderWriter.usfmLocationToIndexInUsfm(searchResult.end);
+      const startIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.start);
+      const endIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.end);
 
       const usfm = usjReaderWriter.toUsfm();
 

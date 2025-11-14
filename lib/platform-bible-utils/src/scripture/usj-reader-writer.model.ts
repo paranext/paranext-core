@@ -21,55 +21,42 @@ export const NO_BOOK_ID = '***';
 /**
  * Represents a book, chapter, verse, and offset
  *
- * @deprecated 23 October 2025. Use {@link UsfmVerseLocation} or {@link UsfmLocation} instead.
+ * @deprecated 23 October 2025. Use {@link UsfmVerseLocation} or {@link UsfmVerseRefVerseLocation}
+ *   instead.
  */
 export type VerseRefOffset = {
   verseRef: SerializedVerseRef;
   offset: number;
 };
 
-// #region Serializable USFM and USJ locations
-
 /**
- * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
- * document.
+ * WARNING: INTERNAL ONLY FOR NOW
  *
- * This could actually have more content clauses at the end, but TS types are limited
- */
-export type ContentJsonPath =
-  | ''
-  | `$`
-  | `$.content[${number}]`
-  | `$.content[${number}].content[${number}]`
-  | `$.content[${number}].content[${number}].content[${number}]`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
-
-/**
- * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
- * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
- * if there are symbols other than underscore in the property name
+ * {@link UsfmLocation} will VERY likely be expanded in the future to allow for specifying offsets
+ * based on other locations than a specific verse like from the start of a chapter or book. Then,
+ * this type can be exported from `platform-bible-utils`.
  *
- * This could actually have more content clauses at the end, but TS types are limited
+ * A set of information that points to a specific location in USFM or USJ. These locations are
+ * absolute verse reference locations, meaning they point to a specific location in a Scripture text
+ * rather than being relative to a specific document.
  */
-export type PropertyJsonPath =
-  | ''
-  | `$.${string}`
-  | `$['${string}']`
-  | `$.content[${number}].${string}`
-  | `$.content[${number}]['${string}']`
-  | `$.content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}]['${string}']`
-  | `$.content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}]['${string}']`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`
-  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+export type ScriptureLocation = UsfmLocation | UsjLocation;
+
+// #region Serializable USFM locations
 
 /**
+ * WARNING: INTERNAL ONLY FOR NOW
+ *
+ * This type will VERY likely be expanded in the future to allow for specifying offsets based on
+ * other locations than a specific verse like from the start of a chapter or book. Then, this type
+ * can be exported from `platform-bible-utils`. If you do not want to offer such features in some
+ * API, use {@link UsfmVerseLocation}, whose offset is based on a specific verse.
+ *
  * A verse ref and an offset in USFM space that point to a specific location in USFM. If only a
  * verse ref is provided, the offset is assumed to be 0.
  *
- * The USJ representation of the positions represented by this type are {@link UsjVerseRefLocation}.
- * Both are absolute verse reference locations.
+ * The USJ representation of the positions represented by this type are {@link UsjLocation}. Both are
+ * absolute verse reference locations.
  *
  * {@link UsjDocumentLocation} also represents positions of this type, but those locations are
  * relative to a specific USJ document rather than being absolute verse reference locations like
@@ -77,18 +64,38 @@ export type PropertyJsonPath =
  *
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
- *
- * Note: This type may be expanded in the future to allow for specifying offsets based on other
- * locations than a specific verse like from the start of a chapter or book. If you do not want to
- * offer such features, use {@link UsfmVerseLocation}, whose offset is based on a specific verse.
  */
-export type UsfmLocation = UsfmVerseLocation | SerializedVerseRef;
+export type UsfmLocation = UsfmVerseLocation;
+
+/**
+ * A verse ref and an offset within that verse in USFM space that point to a specific location in
+ * USFM. If only a verse ref is provided, the offset is assumed to be 0.
+ *
+ * The USJ representation of the positions represented by this type are {@link UsjLocation}. Both are
+ * absolute verse reference locations.
+ *
+ * {@link UsjDocumentLocation} also represents positions of this type, but those locations are
+ * relative to a specific USJ document rather than being absolute verse reference locations like
+ * this type. The closest equivalent concept in USFM to {@link UsjDocumentLocation} is a string
+ * character index in a USFM document; such an index is relative to a specific USFM document rather
+ * than indicating an absolute position in a Scripture text.
+ *
+ * To see many examples of the same point represented by both USFM and USJ locations, go to
+ * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
+ *
+ * Note: some forms of this type are deprecated and will be removed eventually; see
+ * {@link UsfmScrRefVerseLocation} for details.
+ */
+export type UsfmVerseLocation =
+  | UsfmVerseRefVerseLocation
+  | SerializedVerseRef
+  | UsfmScrRefVerseLocation;
 
 /**
  * A verse ref and an offset within that verse in USFM space that point to a specific location in
  * USFM
  */
-export type UsfmVerseLocation = {
+export type UsfmVerseRefVerseLocation = {
   /** Verse reference indicating which verse the location is in */
   verseRef: SerializedVerseRef;
   /**
@@ -103,38 +110,123 @@ export type UsfmVerseLocation = {
 };
 
 /**
+ * A verse ref and an offset within that verse in USFM space that point to a specific location in
+ * USFM. This uses `scrRef` instead of `verseRef` for backwards compatibility.
+ *
+ * @deprecated 13 November 2025. Use {@link UsfmVerseLocation} instead.
+ */
+export type UsfmScrRefVerseLocation = {
+  /** Verse reference indicating which verse the location is in */
+  scrRef: SerializedVerseRef;
+  /**
+   * Offset to apply to start of the verse indicated by `verseRef`.
+   *
+   * If the verse is 0, offset 0 is the start of the chapter. If the verse is greater than 0, offset
+   * 0 is the backslash on the verse marker.
+   *
+   * If not provided, defaults to 0.
+   */
+  offset?: number;
+};
+
+// #endregion Serializable USFM locations
+
+// #region Serializable absolute USJ locations
+
+/**
  * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
  * USJ space should be interpreted as starting from either the start of the book or the chapter
- * depending on the type of location used. When no document location is provided, the location is
- * intended to be the beginning of the verse specified.
+ * depending on the type of location used.
  *
- * The USFM representation of the positions represented by this type are {@link UsfmLocation}.
+ * The USFM representation of the positions represented by this type are {@link UsfmVerseLocation}.
  *
  * The locations in USJ space are specified as {@link UsjDocumentLocation}s, which, on their own, are
  * relative to a specific USJ document. However, the other information in this type specifies which
  * USJ document the document location is relative to, meaning this location is an absolute verse
  * reference location.
  *
- * This type intends to represent USFM positions ({@link UsfmLocation}) in USJ space. However, there
- * are some USFM positions that are not currently representable with these types; see
+ * The JSONPaths in these USJ-based locations are specified relative to the following USJ documents:
+ *
+ * - {@link UsjBookLocation} - a USJ document that contains the entire specified book. The first
+ *   content entry of the top-level `USJ` marker is the `id` marker of the book.
+ * - {@link UsjChapterLocation} - a USJ document that contains only the specified chapter in the
+ *   specified book. If the chapter number is 1, the first content entry of the top-level `USJ`
+ *   marker is the `id` marker of the book because the intro content before chapter 1 is part of
+ *   chapter 1. If the chapter number is greater than 1, the first content entry of the top-level
+ *   `USJ` marker is the `c` marker of the chapter.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types; see
  * {@link UsjDocumentLocation} for more information.
  *
  * You can specify a particular kind of `UsjDocumentLocation` in the generic type
  * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
  */
 export type UsjLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> =
-  | UsjVerseRefLocation<TDocumentLocation>
-  | SerializedVerseRef;
+  | UsjChapterLocation<TDocumentLocation>
+  | UsjBookLocation<TDocumentLocation>;
 
 /**
  * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
- * USJ space should be interpreted as starting from either the start of the book or the chapter
- * specified in the verse ref depending on the `granularity` property. The rest of the verse ref is
- * meaningless and can be disregarded.
+ * USJ space should be interpreted as starting from the start of the book specified.
+ *
+ * The USFM representation of the positions represented by this type are {@link UsfmVerseLocation}.
+ *
+ * The locations in USJ space are specified as {@link UsjDocumentLocation}s, which, on their own, are
+ * relative to a specific USJ document. However, the other information in this type specifies which
+ * USJ document the document location is relative to, meaning this location is an absolute verse
+ * reference location.
+ *
+ * The JSONPaths in these USJ-based locations are specified relative to the USJ document that
+ * contains the entire specified book. The first content entry of the top-level `USJ` marker is the
+ * `id` marker of the book.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types; see
+ * {@link UsjDocumentLocation} for more information.
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
  */
-export type UsjVerseRefLocation<
+export type UsjBookLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> =
+  | UsjVerseRefBookLocation<TDocumentLocation>
+  | UsjFlatBookLocation<TDocumentLocation>;
+
+/**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space should be interpreted as starting from the start of the chapter specified.
+ *
+ * The USFM representation of the positions represented by this type are {@link UsfmVerseLocation}.
+ *
+ * The locations in USJ space are specified as {@link UsjDocumentLocation}s, which, on their own, are
+ * relative to a specific USJ document. However, the other information in this type specifies which
+ * USJ document the document location is relative to, meaning this location is an absolute verse
+ * reference location.
+ *
+ * The JSONPaths in these USJ-based locations are specified relative to the USJ document that
+ * contains only the specified chapter in the specified book. If the chapter number is 1, the first
+ * content entry of the top-level `USJ` marker is the `id` marker of the book because the intro
+ * content before chapter 1 is part of chapter 1. If the chapter number is greater than 1, the first
+ * content entry of the top-level `USJ` marker is the `c` marker of the chapter.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types; see
+ * {@link UsjDocumentLocation} for more information.
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
+ *
+ * Note: some forms of this type are deprecated and will be removed eventually; see
+ * {@link UsjFlatTextChapterLocation} for details. Also note that {@link UsjFlatTextChapterLocation}
+ * can only be a marker- or text-based location and will _not_ follow the generic type specified as
+ * `TDocumentLocation`.
+ */
+export type UsjChapterLocation<
   TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
-> = UsjVerseRefBookLocation<TDocumentLocation> | UsjVerseRefChapterLocation<TDocumentLocation>;
+> =
+  | UsjVerseRefChapterLocation<TDocumentLocation>
+  | UsjFlatChapterLocation<TDocumentLocation>
+  | UsjFlatTextChapterLocation;
 
 /**
  * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
@@ -153,8 +245,9 @@ export type UsjVerseRefBookLocation<
    *   entry of the top-level `USJ` marker is the `id` marker of the book
    * - `chapter` = document location is specified relative to the start of the chapter in the
    *   specified book. If the chapter number is 1, the first content entry of the top-level `USJ`
-   *   marker is the `id` marker of the book. If the chapter number is greater than 1, the first
-   *   content entry of the top-level `USJ` marker is the `c` marker of the chapter
+   *   marker is the `id` marker of the book because the intro content before chapter 1 is part of
+   *   chapter 1. If the chapter number is greater than 1, the first content entry of the top-level
+   *   `USJ` marker is the `c` marker of the chapter
    *
    *   - Note: this is likely to be the case with peripheral books as well, but these books have
    *       `periph` markers between `id` and chapters, so this may need to be revised when
@@ -201,16 +294,98 @@ export type UsjVerseRefChapterLocation<
 };
 
 /**
+ * A book ID and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space starts from the start of the book specified.
+ */
+export type UsjFlatBookLocation<
+  TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
+> = {
+  /** Book ID indicating which book the document location is in */
+  book: string;
+  /** USJ document location specifying where in the chapter the location is pointing to */
+  documentLocation: TDocumentLocation;
+};
+
+/**
+ * A book ID, chapter number, and location in USJ space that point to a specific location in USJ.
+ * The location in USJ space starts from the start of the chapter specified.
+ */
+export type UsjFlatChapterLocation<
+  TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
+> = UsjFlatBookLocation<TDocumentLocation> & {
+  /** Chapter number indicating which chapter the document location is in */
+  chapterNum: number;
+};
+
+/**
+ * A book ID, chapter number, and text location or beginning of marker location in USJ space that
+ * point to a specific location in USJ. The location in USJ space starts from the start of the
+ * chapter specified. This can only represent the beginning of a marker or a location in the USJ
+ * document's text content.
+ *
+ * @deprecated 13 November 2025. This type of location is not generic enough to support all
+ *   positions we need to be able to represent in USJ space. Use other forms of
+ *   {@link UsjChapterLocation} instead.
+ */
+export type UsjFlatTextChapterLocation = {
+  /** Book ID indicating which book the document location is in */
+  book: string;
+  /** Chapter number indicating which chapter the document location is in */
+  chapterNum: number;
+} & ((UsjMarkerLocation & { offset?: undefined }) | UsjTextContentLocation);
+
+// #endregion Serializable absolute USJ locations
+
+// #region Serializable USJ locations relative to a specific USJ document (chapter or book)
+
+/**
+ * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
+ * document.
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
+export type ContentJsonPath =
+  | ''
+  | `$`
+  | `$.content[${number}]`
+  | `$.content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}]`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
+
+/**
+ * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
+ * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
+ * if there are symbols other than underscore in the property name
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
+export type PropertyJsonPath =
+  | ''
+  | `$.${string}`
+  | `$['${string}']`
+  | `$.content[${number}].${string}`
+  | `$.content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}]['${string}']`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}`
+  | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+
+/**
  * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
- * additional information that point to a specific location in USJ.
+ * additional information that point to a specific location in that USJ document.
  *
  * This type does not include a verse reference because the JSONPath is relative to a specific USJ
  * document; that USJ document may have a book, a chapter, or something else in it. Use
- * {@link UsjVerseRefLocation} to specify which USJ document this location is relative to, making the
- * location an absolute verse reference location.
+ * {@link UsjLocation} to specify which USJ document this location is relative to, making the
+ * location an absolute verse reference location. The closest equivalent concept in USFM to this
+ * relative document location is a string character index in a USFM document; such an index is
+ * relative to a specific USFM document rather than indicating an absolute position in a Scripture
+ * text.
  *
- * This type intends to represent USFM positions ({@link UsfmLocation}) in USJ space. However, there
- * are some USFM positions that are not currently representable with these types:
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types:
  *
  * - The second slash in `optbreak`'s USFM representation `//` (literally not representable)
  * - Nested marker prefix on opening markers like `+` for character markers (literally not
@@ -377,7 +552,7 @@ export type UsjClosingAttributeMarkerLocation = {
   keyClosingMarkerOffset: number;
 };
 
-// #endregion Serializable USFM and USJ locations
+// #endregion Serializable USJ locations relative to a specific USJ document (chapter or book)
 
 /**
  * Node in a USJ object (including the top-level Usj object) and its location in the document. You
@@ -495,7 +670,23 @@ export interface IUsjReaderWriter {
    * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
    *   provided
    */
-  jsonPathToUsfmVerseLocation(jsonPathQuery: string, bookIdIfNotFound?: string): UsfmVerseLocation;
+  jsonPathToUsfmVerseRefVerseLocation(
+    jsonPathQuery: string,
+    bookIdIfNotFound?: string,
+  ): UsfmVerseRefVerseLocation;
+  /**
+   * Convert a JSONPath query into a USJ node, JSONPath, and offset
+   *
+   * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
+   *   the expression matches more than one node, then only the first node found is considered.
+   * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+   *   is not found in the USJ document)
+   * @returns SerializedVerseRef and offset that represents the location within this USJ data
+   *   indicated by `jsonPathQuery`
+   * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+   *   provided
+   */
+  jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
   /** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
   nodeToJsonPath(node: MarkerObject): ContentJsonPath;
   /**
@@ -515,11 +706,28 @@ export interface IUsjReaderWriter {
    * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
    *   provided
    */
-  nodeToUsfmVerseLocation(
+  nodeToUsfmVerseRefVerseLocation(
     node: MarkerContent | Usj,
     nodeParent?: MarkerObject | MarkerContent[] | Usj,
     bookIdIfNotFound?: string,
-  ): UsfmVerseLocation;
+  ): UsfmVerseRefVerseLocation;
+  /**
+   * Determine the location in the USJ document that corresponds to the location of a node somewhere
+   * within this USJ data
+   *
+   * @param node JSON object or string in the USJ data to get the USJ location for
+   * @param nodeParent JSON object that owns the `content` array that includes `node`. Required if
+   *   `node` is a string; optional and unused if `node` is a {@link MarkerObject} or {@link Usj}
+   * @returns Node, JSONPath, and offset info representing the location of `node`, if one could be
+   *   found
+   * @throws If `node` is a string and no `nodeParent` is provided
+   * @throws If not able to establish relationship between string `node` and `nodeParent`
+   * @throws If not able to find the node in the USJ document
+   */
+  nodeToUsjNodeAndDocumentLocation(
+    node: MarkerContent | Usj,
+    nodeParent?: MarkerObject | MarkerContent[] | Usj,
+  ): UsjNodeAndDocumentLocation;
   /**
    * Remove all nodes from this USJ data that match a given search function.
    *
@@ -538,12 +746,12 @@ export interface IUsjReaderWriter {
   toUsfm(): string;
   /**
    * Get the index in the USFM representation of this data relative to the start of the document
-   * that corresponds to the absolute location in USFM space passed in
+   * that corresponds to the absolute verse location in USFM space passed in
    *
-   * @param usfmLocation The location in USFM space to get the index for
+   * @param usfmVerseLocation The location in USFM space relative to a verse to get the index for
    * @returns Index in the USFM representation of this data relative to the start of the document
    */
-  usfmLocationToIndexInUsfm(usfmLocation: UsfmLocation): number;
+  usfmVerseLocationToIndexInUsfm(usfmVerseLocation: UsfmVerseLocation): number;
   /**
    * Get the node + offset and JSONPath query within this USJ data of the first encountered string
    * after the provided USFM location for a specific verse in a USJ document.
@@ -552,46 +760,45 @@ export interface IUsjReaderWriter {
    * much content the USJ data contains. It simply looks through the rest of the USJ data for the
    * first text node and returns that.
    *
-   * @param usfmLocation Indicates the location in USFM space (book, chapter, verse, character
+   * @param usfmVerseLocation Indicates the location in USFM space (book, chapter, verse, character
    *   offset) to find the next text for
    * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
    *   indicates the location of the USJ text node within this USJ data.
-   * @throws Error if there is no text after `usfmLocation`
-   * @throws Error if `usfmLocation` does not point to a valid location in this USJ data
+   * @throws Error if there is no text after `usfmVerseLocation`
+   * @throws Error if `usfmVerseLocation` does not point to a valid location in this USJ data
    */
-  usfmLocationToNextTextLocation(
-    usfmLocation: UsfmLocation,
+  usfmVerseLocationToNextTextLocation(
+    usfmVerseLocation: UsfmVerseLocation,
   ): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
   /**
-   * Convert a location in USFM space into a location in USJ space within this USJ data.
+   * Convert a verse-based location in USFM space into a location in USJ space within this USJ data.
    *
    * If the USJ document has no book markers in it to determine which book the USJ is in, the
    * `verseRef.book` will be ignored, and only the chapter and verse numbers will be used to
    * determine the location.
    *
-   * @param usfmLocation Location in USFM space - a book, chapter, verse, and character offset
+   * @param usfmVerseLocation Location in USFM space - a book, chapter, verse, and character offset
    *   within the verse's USFM
    * @returns Object containing the USJ location within the USJ document indicated by
-   *   `usfmLocation`.
+   *   `usfmVerseLocation`.
    */
-  usfmLocationToUsjDocumentLocation(
-    usfmLocation: UsfmLocation | SerializedVerseRef,
-  ): UsjDocumentLocation;
+  usfmVerseLocationToUsjDocumentLocation(usfmVerseLocation: UsfmVerseLocation): UsjDocumentLocation;
   /**
-   * Convert a location in USFM space into a node and location in USJ space within this USJ data.
+   * Convert a verse-based location in USFM space into a node and location in USJ space within this
+   * USJ data.
    *
    * If the USJ document has no book markers in it to determine which book the USJ is in, the
    * `verseRef.book` will be ignored, and only the chapter and verse numbers will be used to
    * determine the location.
    *
-   * @param usfmLocation Location in USFM space - a book, chapter, verse, and character offset
+   * @param usfmVerseLocation Location in USFM space - a book, chapter, verse, and character offset
    *   within the verse's USFM
    * @returns Object containing the USJ node and location within the USJ document indicated by
-   *   `usfmLocation`. Note that if the USJ node returned is an object, it is the same object that
-   *   is within this USJ data. So if you change it, you are changing this USJ data.
+   *   `usfmVerseLocation`. Note that if the USJ node returned is an object, it is the same object
+   *   that is within this USJ data. So if you change it, you are changing this USJ data.
    */
-  usfmLocationToUsjNodeAndDocumentLocation(
-    usfmLocation: UsfmLocation | SerializedVerseRef,
+  usfmVerseLocationToUsjNodeAndDocumentLocation(
+    usfmVerseLocation: UsfmVerseLocation,
   ): UsjNodeAndDocumentLocation;
   /**
    * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
@@ -610,10 +817,10 @@ export interface IUsjReaderWriter {
    * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
    *   provided
    */
-  usjDocumentLocationToUsfmVerseLocation(
+  usjDocumentLocationToUsfmVerseRefVerseLocation(
     usjLocation: UsjDocumentLocation,
     bookIdIfNotFound?: string,
-  ): UsfmVerseLocation;
+  ): UsfmVerseRefVerseLocation;
   /**
    * Transforms a relative USJ document location into an absolute chapter-based USJ location that
    * includes which chapter the USJ location is relative to.

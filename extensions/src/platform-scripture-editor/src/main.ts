@@ -14,6 +14,7 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjNodeAndDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -326,130 +327,169 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          let targetScrRef = { book: '', chapterNum: 0, verseNum: 0 };
-
-          // Figure out the book and chapter
-          if ('jsonPath' in range.start && 'jsonPath' in range.end) {
-            // Use the chapter and verse number from the range
-            if (
-              range.start.book !== range.end.book ||
-              range.start.chapterNum !== range.end.chapterNum
-            ) {
-              throw new Error(
-                'Could not get targetScrRef from jsonPaths! Selection range cannot (yet) span chapters or books',
-              );
-            }
-
-            targetScrRef.book = range.start.book;
-            targetScrRef.chapterNum = range.start.chapterNum;
-          } else {
-            // At least one range location is USFM specification. Will convert to USJ for jsonPath
-            if (
-              'scrRef' in range.start &&
-              'scrRef' in range.end &&
-              (range.start.scrRef.book !== range.end.scrRef.book ||
-                range.start.scrRef.chapterNum !== range.end.scrRef.chapterNum)
-            ) {
-              throw new Error(
-                'Could not get targetScrRef from scrRefs! Selection range cannot (yet) span chapters or books',
-              );
-            }
-
-            // Establish the book and chapter we're working with by what the range says
-            if ('scrRef' in range.start) {
-              targetScrRef = range.start.scrRef;
-            } else if ('scrRef' in range.end) {
-              targetScrRef = range.end.scrRef;
-            } else
-              throw new Error('Could not determine target scrRef to convert scrRef to jsonPath');
-          }
-
-          // Get the USJ chapter we're on so we can determine some things
-          const pdp = await papi.projectDataProviders.get(
-            'platformScripture.USJ_Chapter',
-            currentWebViewDefinition.projectId,
-          );
-          const usjChapter = await pdp.getChapterUSJ(targetScrRef);
-
-          if (!usjChapter)
-            throw new Error(
-              `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(targetScrRef)} is undefined!`,
-            );
-
-          const usjRW = new UsjReaderWriter(usjChapter, {
-            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          });
-
-          // Convert the range now - easy conversion if already jsonPath, but need to run conversion
-          // if in USFM verse ref
+          // Figure out the information needed to make the USJ range to give to the editor:
+          // book, chapter, start jsonPath and offset, and end jsonPath and offset
+          let startVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
           let startJsonPath = '';
           let endJsonPath = '';
-          // Assume offset is 0 if not provided
-          let startOffset = 0;
-          let endOffset = 0;
+          // Start and end offsets based on the USJ JSONPath location
+          let startJsonPathOffset: number | undefined;
+          let endJsonPathOffset: number | undefined;
 
-          if ('scrRef' in range.start) {
-            const startContentLocation = usjRW.usfmLocationToUsjNodeAndDocumentLocation({
-              verseRef: range.start.scrRef,
-              offset: range.start.offset,
+          //  May need to use verse refs and offsets from the USFM verse location to get USJ offsets
+          let endVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
+          let startVerseOffset: number | undefined;
+          let endVerseOffset: number | undefined;
+
+          // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
+          // passed to us
+          // Process the starting location
+          if ('jsonPath' in range.start || 'documentLocation' in range.start) {
+            const startChapterLocation =
+              UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(range.start);
+            startVerseRef.book = startChapterLocation.verseRef.book;
+            startVerseRef.chapterNum = startChapterLocation.verseRef.chapterNum;
+            startJsonPath = startChapterLocation.documentLocation.jsonPath;
+            if (
+              UsjReaderWriter.isUsjDocumentLocationForTextContent(
+                startChapterLocation.documentLocation,
+              )
+            )
+              startJsonPathOffset = startChapterLocation.documentLocation.offset;
+          } else {
+            const startVerseLocation = UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(
+              range.start,
+            );
+            startVerseRef = startVerseLocation.verseRef;
+            startVerseOffset = startVerseLocation.offset;
+          }
+          // Process the ending location
+          if ('jsonPath' in range.end || 'documentLocation' in range.end) {
+            const endChapterLocation =
+              UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(range.end);
+            endVerseRef.book = endChapterLocation.verseRef.book;
+            endVerseRef.chapterNum = endChapterLocation.verseRef.chapterNum;
+            endJsonPath = endChapterLocation.documentLocation.jsonPath;
+            if (
+              UsjReaderWriter.isUsjDocumentLocationForTextContent(
+                endChapterLocation.documentLocation,
+              )
+            )
+              endJsonPathOffset = endChapterLocation.documentLocation.offset;
+          } else {
+            const endVerseLocation = UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(
+              range.end,
+            );
+            endVerseRef = endVerseLocation.verseRef;
+            endVerseOffset = endVerseLocation.offset;
+          }
+          if (
+            startVerseRef.book !== endVerseRef.book ||
+            startVerseRef.chapterNum !== endVerseRef.chapterNum
+          )
+            throw new Error(
+              'Could not get targetScrRef from range! Selection range cannot (yet) span chapters or books',
+            );
+
+          // If we don't have at least one of the USJ range properties, need to process the chapter
+          // to find them based on what we have
+          if (
+            !startJsonPath ||
+            !endJsonPath ||
+            startJsonPathOffset === undefined ||
+            endJsonPathOffset === undefined
+          ) {
+            // Get the USJ chapter we're on so we can determine the missing USJ range properties
+            const pdp = await papi.projectDataProviders.get(
+              'platformScripture.USJ_Chapter',
+              currentWebViewDefinition.projectId,
+            );
+            const usjChapter = await pdp.getChapterUSJ(startVerseRef);
+
+            if (!usjChapter)
+              throw new Error(
+                `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(startVerseRef)} is undefined!`,
+              );
+
+            const usjRW = new UsjReaderWriter(usjChapter, {
+              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
             });
-            startJsonPath = startContentLocation.documentLocation.jsonPath;
-            // If we found a text content location, use it
-            if ('offset' in startContentLocation.documentLocation) {
-              startOffset = startContentLocation.documentLocation.offset;
-            } else {
-              // Didn't find a text content location. Find the next text content location because
-              // the editor doesn't support other location types
+
+            // Convert the UsfmVerseLocations to get jsonPath and offset from them
+            let startContentLocation: UsjNodeAndDocumentLocation | undefined;
+            if (!startJsonPath) {
+              startContentLocation = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
+                verseRef: startVerseRef,
+                offset: startVerseOffset,
+              });
+
+              startJsonPath = startContentLocation.documentLocation.jsonPath;
+              if (
+                UsjReaderWriter.isUsjDocumentLocationForTextContent(
+                  startContentLocation.documentLocation,
+                )
+              ) {
+                startJsonPathOffset = startContentLocation.documentLocation.offset;
+              }
+            }
+            let endContentLocation: UsjNodeAndDocumentLocation | undefined;
+            if (!endJsonPath) {
+              endContentLocation = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
+                verseRef: endVerseRef,
+                offset: endVerseOffset,
+              });
+
+              endJsonPath = endContentLocation.documentLocation.jsonPath;
+              if (
+                UsjReaderWriter.isUsjDocumentLocationForTextContent(
+                  endContentLocation.documentLocation,
+                )
+              ) {
+                endJsonPathOffset = endContentLocation.documentLocation.offset;
+              }
+            }
+
+            // If we haven't found JSONPath offsets, find the nearest text location. We only need to do
+            // this because the editor does not support the full `UsjDocumentLocation`; once it is
+            // updated to support them, we can stop tracking jsonPathOffsets
+            if (!startJsonPathOffset) {
               const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(
-                startContentLocation,
+                startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath),
                 '',
               );
               if (nextTextContentLocation) {
                 startJsonPath = nextTextContentLocation.documentLocation.jsonPath;
-                startOffset = nextTextContentLocation.documentLocation.offset;
-              }
+                startJsonPathOffset = nextTextContentLocation.documentLocation.offset;
+              } else
+                // Just put the offset at the start of the marker pointed to by the jsonPath and
+                // hope that's good enough for now. This probably won't happen much, and this case
+                // will not exist once the editor is updated
+                startJsonPathOffset = 0;
             }
-          } else {
-            startJsonPath = range.start.jsonPath;
-            if (range.start.offset !== undefined) startOffset = range.start.offset;
-          }
-
-          if ('scrRef' in range.end) {
-            const endContentLocation = usjRW.usfmLocationToUsjNodeAndDocumentLocation({
-              verseRef: range.end.scrRef,
-              offset: range.end.offset,
-            });
-            endJsonPath = endContentLocation.documentLocation.jsonPath;
-            // If we found a text content location, use it
-            if ('offset' in endContentLocation.documentLocation) {
-              endOffset = endContentLocation.documentLocation.offset;
-            } else {
-              // Didn't find a text content location. Find the next text content location because
-              // the editor doesn't support other location types
+            if (!endJsonPathOffset) {
               const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(
-                endContentLocation,
+                endContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(endJsonPath),
                 '',
               );
               if (nextTextContentLocation) {
                 endJsonPath = nextTextContentLocation.documentLocation.jsonPath;
-                endOffset = nextTextContentLocation.documentLocation.offset;
-              }
+                endJsonPathOffset = nextTextContentLocation.documentLocation.offset;
+              } else
+                // Just put the offset at the start of the marker pointed to by the jsonPath and
+                // hope that's good enough for now. This probably won't happen much, and this case
+                // will not exist once the editor is updated
+                endJsonPathOffset = 0;
             }
-          } else {
-            endJsonPath = range.end.jsonPath;
-            if (range.end.offset !== undefined) endOffset = range.end.offset;
-            else if (startJsonPath === endJsonPath && range.start.offset !== undefined)
-              endOffset = range.start.offset;
           }
 
           const convertedRange = {
-            start: { jsonPath: startJsonPath, offset: startOffset },
-            end: { jsonPath: endJsonPath, offset: endOffset },
+            start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
+            end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
           };
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
-            scrRef: targetScrRef,
+            scrRef: startVerseRef,
             range: convertedRange,
           };
           await papi.webViewProviders.postMessageToWebView(

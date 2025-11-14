@@ -5,7 +5,7 @@ import { LocationUsfmAndUsj } from './test-data.model';
 export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   // First example of the beginning of a marker (the backslash `\`)
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 0,
     },
@@ -22,7 +22,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // First example of the beginning of the opening marker name (`id`)
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 1,
     },
@@ -39,7 +39,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 2,
     },
@@ -56,7 +56,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 3,
     },
@@ -74,7 +74,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // First example of a leading attribute e.g. `\id 2SA Stuff` - `2SA` is `code`. `Stuff` is just text content
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 4,
     },
@@ -91,7 +91,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 5,
     },
@@ -108,7 +108,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 6,
     },
@@ -125,7 +125,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 7,
     },
@@ -142,7 +142,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 8,
     },
@@ -155,7 +155,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 9,
     },
@@ -168,7 +168,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 10,
     },
@@ -181,7 +181,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 11,
     },
@@ -194,7 +194,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 12,
     },
@@ -207,7 +207,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 13,
     },
@@ -220,7 +220,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 14,
     },
@@ -233,7 +233,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 15,
     },
@@ -246,7 +246,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 16,
     },
@@ -259,7 +259,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 17,
     },
@@ -272,7 +272,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 18,
     },
@@ -285,7 +285,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 19,
     },
@@ -298,7 +298,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 20,
     },
@@ -311,7 +311,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 21,
     },
@@ -324,7 +324,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 22,
     },
@@ -337,7 +337,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 23,
     },
@@ -350,7 +350,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 24,
     },
@@ -365,7 +365,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 25,
     },
@@ -381,7 +381,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 26,
     },
@@ -397,7 +397,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 27,
     },
@@ -413,7 +413,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 28,
     },
@@ -429,7 +429,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 29,
     },
@@ -445,7 +445,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 30,
     },
@@ -458,7 +458,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 31,
     },
@@ -471,7 +471,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 32,
     },
@@ -484,7 +484,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 33,
     },
@@ -497,7 +497,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 34,
     },
@@ -511,7 +511,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to chapter 1 marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 62,
     },
@@ -530,7 +530,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 63,
     },
@@ -550,7 +550,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 64,
     },
@@ -570,7 +570,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 65,
     },
@@ -590,7 +590,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 66,
     },
@@ -610,7 +610,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 67,
     },
@@ -631,7 +631,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // begin altnumber - first example of an attribute marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 68,
     },
@@ -651,7 +651,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 69,
     },
@@ -672,7 +672,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 70,
     },
@@ -693,7 +693,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 71,
     },
@@ -714,7 +714,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 72,
     },
@@ -734,7 +734,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 73,
     },
@@ -754,7 +754,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 74,
     },
@@ -774,7 +774,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 75,
     },
@@ -794,7 +794,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 76,
     },
@@ -815,7 +815,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 77,
     },
@@ -836,7 +836,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 78,
     },
@@ -857,7 +857,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 79,
     },
@@ -878,7 +878,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 80,
     },
@@ -900,7 +900,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Finished altnumber. Now to next attribute marker pubnumber
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 81,
     },
@@ -920,7 +920,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 82,
     },
@@ -941,7 +941,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 83,
     },
@@ -962,7 +962,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 84,
     },
@@ -983,7 +983,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 85,
     },
@@ -1003,7 +1003,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 86,
     },
@@ -1023,7 +1023,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 87,
     },
@@ -1043,7 +1043,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 88,
     },
@@ -1063,7 +1063,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 89,
     },
@@ -1084,7 +1084,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Finished pubnumber. Continue with normal markers again
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 90,
     },
@@ -1100,7 +1100,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to end of para before verse 1
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 196,
     },
@@ -1117,7 +1117,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // First example of a verse marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 0,
     },
@@ -1134,7 +1134,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 1,
     },
@@ -1152,7 +1152,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 2,
     },
@@ -1170,7 +1170,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 3,
     },
@@ -1188,7 +1188,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 4,
     },
@@ -1207,7 +1207,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // First example of an unclosed character marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 5,
     },
@@ -1225,7 +1225,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 6,
     },
@@ -1244,7 +1244,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 7,
     },
@@ -1263,7 +1263,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 8,
     },
@@ -1282,7 +1282,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 1 },
       offset: 9,
     },
@@ -1296,7 +1296,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to footnote
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 2 },
       offset: 160,
     },
@@ -1313,7 +1313,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 2 },
       offset: 161,
     },
@@ -1331,7 +1331,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 2 },
       offset: 162,
     },
@@ -1349,7 +1349,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 2 },
       offset: 163,
     },
@@ -1367,7 +1367,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 2 },
       offset: 164,
     },
@@ -1385,7 +1385,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 2 },
       offset: 165,
     },
@@ -1404,7 +1404,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of closed character marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 33,
     },
@@ -1419,7 +1419,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 34,
     },
@@ -1435,7 +1435,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 35,
     },
@@ -1451,7 +1451,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 36,
     },
@@ -1467,7 +1467,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 37,
     },
@@ -1480,7 +1480,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 38,
     },
@@ -1493,7 +1493,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 39,
     },
@@ -1509,7 +1509,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 40,
     },
@@ -1525,7 +1525,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 41,
     },
@@ -1541,7 +1541,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 42,
     },
@@ -1557,7 +1557,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 43,
     },
@@ -1571,7 +1571,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of marker with default attribute
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 156,
     },
@@ -1589,7 +1589,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 157,
     },
@@ -1608,7 +1608,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 158,
     },
@@ -1627,7 +1627,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 159,
     },
@@ -1640,7 +1640,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 160,
     },
@@ -1653,7 +1653,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 161,
     },
@@ -1666,7 +1666,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 162,
     },
@@ -1679,7 +1679,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 163,
     },
@@ -1692,7 +1692,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 164,
     },
@@ -1705,7 +1705,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 165,
     },
@@ -1718,7 +1718,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 166,
     },
@@ -1737,7 +1737,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 167,
     },
@@ -1756,7 +1756,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 168,
     },
@@ -1776,7 +1776,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of non-default closing marker attribute
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 532,
     },
@@ -1798,7 +1798,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 533,
     },
@@ -1820,7 +1820,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 534,
     },
@@ -1842,7 +1842,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 535,
     },
@@ -1864,7 +1864,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 536,
     },
@@ -1886,7 +1886,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 537,
     },
@@ -1908,7 +1908,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 538,
     },
@@ -1930,7 +1930,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 539,
     },
@@ -1952,7 +1952,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 540,
     },
@@ -1973,7 +1973,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 541,
     },
@@ -1995,7 +1995,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of nested marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 2513,
     },
@@ -2013,7 +2013,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   // USJ because there actually is no specification for how to represent this location in USJ.
   // Not including here because it is not the same when translating locations in both directions
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 3 },
       offset: 2515,
     },
@@ -2030,7 +2030,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of custom attribute on closing marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 8 },
       offset: 56,
     },
@@ -2052,7 +2052,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of optbreak
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 16 },
       offset: 121,
     },
@@ -2070,7 +2070,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   // Not including here because it is not the same when translating locations in both directions
   // Skip to first example of closed sidebar
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 370,
     },
@@ -2086,7 +2086,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 371,
     },
@@ -2103,7 +2103,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 372,
     },
@@ -2120,7 +2120,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 373,
     },
@@ -2137,7 +2137,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 374,
     },
@@ -2154,7 +2154,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 375,
     },
@@ -2172,7 +2172,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to last character of `\cat*` closing attribute marker
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 398,
     },
@@ -2190,7 +2190,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 399,
     },
@@ -2206,7 +2206,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to second to last character before first example of closing marker for sidebar
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 636,
     },
@@ -2219,7 +2219,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 637,
     },
@@ -2233,7 +2233,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // First example of closing marker for sidebar
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 638,
     },
@@ -2250,7 +2250,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 639,
     },
@@ -2267,7 +2267,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 640,
     },
@@ -2284,7 +2284,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 641,
     },
@@ -2301,7 +2301,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 642,
     },
@@ -2318,7 +2318,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     },
   },
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 643,
     },
@@ -2336,7 +2336,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   },
   // Skip to first example of a non-closed sidebar
   {
-    usfmLocation: {
+    usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 26 },
       offset: 826,
     },

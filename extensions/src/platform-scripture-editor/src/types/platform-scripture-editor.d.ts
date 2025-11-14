@@ -5,7 +5,13 @@ declare module 'platform-scripture-editor' {
   import type { CheckLocation } from 'platform-scripture';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { NetworkableObject } from '@papi/core';
-  import type { LocalizeKey } from 'platform-bible-utils';
+  import type {
+    LocalizeKey,
+    UsfmScrRefVerseLocation,
+    UsfmVerseLocation,
+    UsjChapterLocation,
+    UsjFlatTextChapterLocation,
+  } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
 
@@ -21,10 +27,7 @@ declare module 'platform-scripture-editor' {
     /** Goes to this Scripture Reference before setting the selection */
     scrRef: SerializedVerseRef;
     /** Endpoints of the selection. Should start at the same place as the scrRef */
-    // Temporarily disabled setting specific range for USFM ranges until we fix the offset
-    // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
-    // so this is temporarily able to be undefined
-    range?: SelectionRange;
+    range: SelectionRange;
   };
 
   /** Tell the editor to merge these decorations into its existing decorations */
@@ -64,40 +67,34 @@ declare module 'platform-scripture-editor' {
    * {@link CheckLocation}.
    *
    * Also added `bookNum` and `chapterNum` to the `jsonPath` result
+   *
+   * @deprecated 13 November 2025. This type of location is not generic enough to support all
+   *   positions we need to be able to represent in USJ space. Use {@link UsjChapterLocation} and
+   *   {@link UsfmVerseLocation} instead.
    */
-  export type ScriptureLocation =
-    | {
-        /** To which book this jsonPath is relative */
-        book: string;
-        /** To which chapter this jsonPath is relative */
-        chapterNum: number;
-        /** JSONPath expression pointing to a location within USJ data */
-        jsonPath: string;
-        /**
-         * Offset to apply to the content inside of the property indicated by `jsonPath` to
-         * determine the start of the range.
-         *
-         * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
-         * Matthew. If no offset is provided, then the entire object with type "para" is being
-         * pointed to.
-         *
-         * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
-         */
-        offset?: number;
-      }
-    | {
-        /** Verse reference to a location with the document */
-        scrRef: SerializedVerseRef;
-        /** Offset to apply to start of the verse indicated by `scrRef` */
-        offset?: number;
-      };
+  export type ScriptureLocation = UsjFlatTextChapterLocation | UsfmScrRefVerseLocation;
 
-  /** A pair of Scripture positions that are either in USFM or USJ format */
+  /**
+   * A pair of Scripture positions that are either in USFM or USJ format
+   *
+   * Note: some forms of properties in this type are deprecated; see {@link ScriptureLocation} for
+   * details.
+   */
   export type ScriptureRange = {
-    /** Starting point where the check result applies in the document */
-    start: ScriptureLocation;
-    /** Ending point where the check result applies in the document */
-    end: ScriptureLocation;
+    /**
+     * Starting point where the check result applies in the document
+     *
+     * Note: some forms of this type are deprecated and will be removed eventually; see
+     * {@link ScriptureLocation} for details.
+     */
+    start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    /**
+     * Ending point where the check result applies in the document
+     *
+     * Note: some forms of this type are deprecated and will be removed eventually; see
+     * {@link ScriptureLocation} for details.
+     */
+    end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
   };
 
   export type EditorContainer = {
