@@ -77,16 +77,22 @@
             "command": "platformScripture.openFind"
           },
           {
+            "label": "%webView_platformScriptureEditor_switchScriptureView%",
+            "group": "platformScriptureEditor.layout",
+            "order": 1,
+            "command": "platformScriptureEditor.changeView"
+          },
+          {
             "label": "%webView_platformScriptureEditor_showFootnotes%",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 1,
-            "command": "platformScripture.toggleFootnotes"
+            "command": "platformScriptureEditor.toggleFootnotes"
           },
           {
             "label": "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%",
             "group": "platformScriptureEditor.footnotesPane",
             "order": 2,
-            "command": "platformScripture.changeFootnotesPaneLocation"
+            "command": "platformScriptureEditor.changeFootnotesPaneLocation"
           },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
