@@ -733,7 +733,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const changeScriptureViewPromise = papi.commands.registerCommand(
-    'platformScripture.changeView',
+    'platformScriptureEditor.changeView',
     changeScriptureView,
     {
       method: {
@@ -755,7 +755,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const toggleFootnotesPanePromise = papi.commands.registerCommand(
-    'platformScripture.toggleFootnotes',
+    'platformScriptureEditor.toggleFootnotes',
     toggleFootnotesPane,
     {
       method: {
@@ -777,7 +777,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
-    'platformScripture.changeFootnotesPaneLocation',
+    'platformScriptureEditor.changeFootnotesPaneLocation',
     changeFootnotesPaneLocation,
     {
       method: {

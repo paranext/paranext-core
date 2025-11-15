@@ -158,6 +158,12 @@ declare module 'platform-scripture-editor' {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
     /**
+     * Ways Scripture project text can be viewed in the editor
+     *
+     * Defaults to 'formatted'.
+     */
+    scriptureViewType?: 'formatted' | 'markers';
+    /**
      * When the footnote pane is shown, where it should be positioned
      *
      * Defaults to 'bottom'.
@@ -269,14 +275,14 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
-    'platformScripture.changeView': (webViewId: string | undefined) => Promise<void>;
+    'platformScriptureEditor.changeView': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Toggles the visibility of the footnotes pane for the given the WebView ID
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
-    'platformScripture.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+    'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
@@ -284,7 +290,7 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
-    'platformScripture.changeFootnotesPaneLocation': (
+    'platformScriptureEditor.changeFootnotesPaneLocation': (
       webViewId: string | undefined,
     ) => Promise<void>;
 

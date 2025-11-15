@@ -93,6 +93,14 @@ const defaultProjectName = '';
 const defaultTextDirection = 'ltr';
 
 const defaultView: ViewOptions = getDefaultViewOptions();
+// Return the appropriate ViewOptions for the given webview `viewType`.
+// Centralizes the logic so initialization and effects can call the same helper
+// instead of duplicating the shallow-copy code.
+const getViewOptionsForType = (viewType: 'formatted' | 'markers'): ViewOptions => {
+  const base = { ...defaultView };
+  if (viewType === 'markers') return { ...base, markerMode: 'visible' };
+  return base;
+};
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -119,6 +127,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'decorations',
     defaultEditorDecorations,
   );
+
+  const [viewType, setViewType] = useWebViewState<'formatted' | 'markers'>('viewType', 'formatted');
 
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
 
@@ -183,7 +193,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, editingNoteKey],
   );
 
-  const [viewOptions, setViewOptions] = useState<ViewOptions>(() => ({ ...defaultView }));
+  const [viewOptions, setViewOptions] = useState<ViewOptions>(() => {
+    return getViewOptionsForType(viewType);
+  });
+
+  // Keep viewOptions in sync with the `viewType` webview state. When `viewType` changes
+  // we reset the viewOptions to the appropriate default with the requested marker/note modes.
+  useEffect(() => {
+    setViewOptions(() => getViewOptionsForType(viewType));
+  }, [viewType]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -266,15 +284,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'changeScriptureView': {
-          setViewOptions((prev) => {
-            const base = prev ?? defaultView;
-            switch (base.markerMode) {
-              case 'hidden':
-                return { ...base, markerMode: 'visible', noteMode: 'expanded' };
-              default:
-                return { ...base, markerMode: 'hidden', noteMode: 'collapsed' };
-            }
-          });
+          setViewType(viewOptions.markerMode === 'hidden' ? 'markers' : 'formatted');
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
@@ -307,7 +317,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, options, setFootnotesPaneVisible]);
+  }, [
+    scrRef,
+    setScrRefWithScroll,
+    decorations,
+    setDecorations,
+    setFootnotesPaneVisible,
+    setViewType,
+    viewOptions,
+  ]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
