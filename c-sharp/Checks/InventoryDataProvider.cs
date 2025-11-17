@@ -423,9 +423,7 @@ internal sealed class InventoryDataProvider(
     // Default timeout should match CHECK_STOP_DEFAULT_TIMEOUT_MS in check.model.ts
     private bool StopItemizedInventoryJob(string jobId, int? timeoutMs = 2000)
     {
-        var job =
-            (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
-            ?? throw new Exception($"No active inventory job with ID {jobId} (stop)");
+        var job = GetItemizedInventoryJobById(jobId);
         job.StopRequested = true;
         // Poll until the job stops or the timeout expires
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -440,9 +438,7 @@ internal sealed class InventoryDataProvider(
 
     public void AbandonItemizedInventoryJob(string jobId)
     {
-        var job =
-            (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
-            ?? throw new Exception($"No active inventory job with ID {jobId} (abandon)");
+        var job = GetItemizedInventoryJobById(jobId);
         job.StopRequested = true;
         if (!_activeItemizedInventoryJobsByJobId.TryRemove(jobId, out _))
             Console.WriteLine($"Failed to remove inventory job {jobId} from active jobs");
@@ -453,15 +449,19 @@ internal sealed class InventoryDataProvider(
         int maxResultsToInclude
     )
     {
-        var job =
-            (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
-            ?? throw new Exception($"No active inventory job with ID {jobId} (status)");
+        var job = GetItemizedInventoryJobById(jobId);
         return job.GenerateStatusReport(maxResultsToInclude);
     }
 
     #endregion
 
     #region Private Helper methods
+
+    private ItemizedInventoryJobStatus GetItemizedInventoryJobById(string jobId)
+    {
+        return (_activeItemizedInventoryJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
+            ?? throw new Exception($"No active inventory job with ID {jobId} (status)");
+    }
 
     private void RunItemizedInventoryJob(ItemizedInventoryJobStatus job)
     {
@@ -513,14 +513,6 @@ internal sealed class InventoryDataProvider(
         {
             list.Add(new InventoryItemStatus(item, isValid));
         }
-    }
-
-    private static HashSet<string> IEnumerableToHashSet(
-        IEnumerable<InventoryItemStatus> enumerable,
-        Func<InventoryItemStatus, bool> filter
-    )
-    {
-        return enumerable.Where(filter).Select(item => item.Key).ToHashSet();
     }
 
     // Adapted from Paratext.Checks.ScriptureInventoryBase.HashSetToString

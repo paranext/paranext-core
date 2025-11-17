@@ -18,7 +18,7 @@ using static InventoryTextType;
 internal sealed class InventoryWorker
 {
     private readonly object _lock = new();
-    private bool _inventoryBuilt = false;
+    private bool _isInventoryBuilt = false;
     private readonly Dictionary<InventoryTextType, TextInventory> _summarizedInventoriesByType = [];
     private readonly ScriptureInventoryBase _inventory;
     private readonly ScrText _scrText;
@@ -109,7 +109,7 @@ internal sealed class InventoryWorker
     {
         lock (_lock)
         {
-            if (!_inventoryBuilt)
+            if (!_isInventoryBuilt)
                 BuildInventory();
 
             var retVal = new List<SummarizedInventoryItemList>();
@@ -163,7 +163,7 @@ internal sealed class InventoryWorker
             if (job.StopRequested)
                 return;
 
-            if (!_inventoryBuilt)
+            if (!_isInventoryBuilt)
                 BuildInventory();
 
             var finder = new TextInventoryItemInstanceFinder(
@@ -232,7 +232,7 @@ internal sealed class InventoryWorker
     // Adapted from InventoryForm.BuildInventory() in Paratext 9
     private void BuildInventory()
     {
-        if (_inventoryBuilt)
+        if (_isInventoryBuilt)
             return;
 
         lock (_lock)
@@ -323,7 +323,7 @@ internal sealed class InventoryWorker
                 _summarizedInventoriesByType[AllText].RecalculateStatus(_inventory);
             }
 
-            _inventoryBuilt = true;
+            _isInventoryBuilt = true;
         }
     }
 

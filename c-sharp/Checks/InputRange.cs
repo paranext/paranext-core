@@ -32,21 +32,21 @@ internal sealed class InputRange
     private VerseRef? _end;
 
     // Maximum verse/chapter number that can be represented in BBBCCCVVV format
-    public const int MAX_BCV_PORTION_NUM = 999;
+    public const int MAX_CHAPTER_OR_VERSE_NUM = 999;
 
     public InputRange(string projectId, VerseRef start, VerseRef? end)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
         // Clamp verse and chapter numbers to MAX values
-        if (start.VerseNum > MAX_BCV_PORTION_NUM)
-            start.VerseNum = MAX_BCV_PORTION_NUM;
-        if (start.ChapterNum > MAX_BCV_PORTION_NUM)
-            start.ChapterNum = MAX_BCV_PORTION_NUM;
-        if (end.HasValue && end.Value.VerseNum > MAX_BCV_PORTION_NUM)
-            end = new VerseRef(end.Value) { VerseNum = MAX_BCV_PORTION_NUM };
-        if (end.HasValue && end.Value.ChapterNum > MAX_BCV_PORTION_NUM)
-            end = new VerseRef(end.Value) { ChapterNum = MAX_BCV_PORTION_NUM };
+        if (start.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
+            start.VerseNum = MAX_CHAPTER_OR_VERSE_NUM;
+        if (start.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
+            start.ChapterNum = MAX_CHAPTER_OR_VERSE_NUM;
+        if (end.HasValue && end.Value.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
+            end = new VerseRef(end.Value) { VerseNum = MAX_CHAPTER_OR_VERSE_NUM };
+        if (end.HasValue && end.Value.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
+            end = new VerseRef(end.Value) { ChapterNum = MAX_CHAPTER_OR_VERSE_NUM };
 
         VerifyRange(start, end);
 

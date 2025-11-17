@@ -19,10 +19,17 @@ internal sealed class InputRangesFilter<T> : LocationFilter<T>
         int chapterNum = vref.ChapterNum;
         int verseNum = vref.VerseNum;
 
-        if (bookNum > 999 || chapterNum > 999 || verseNum > 999)
+        if (
+            bookNum < 0
+            || bookNum > 999
+            || chapterNum < 0
+            || chapterNum > 999
+            || verseNum < 0
+            || verseNum > 999
+        )
             throw new ArgumentOutOfRangeException(
                 nameof(vref),
-                "Book, Chapter, and Verse numbers must be <= 999"
+                "Book, Chapter, and Verse numbers must be between 0 and 999 inclusive"
             );
 
         return (bookNum * 1000000) + (chapterNum * 1000) + verseNum;

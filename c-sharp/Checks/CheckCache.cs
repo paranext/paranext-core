@@ -49,16 +49,14 @@ internal sealed class CheckCache
 
                     // Update all checks for this project to indicate that settings have changed
                     // This will cause them to reload settings and clear results before the next run
-                    _checksByIds
-                        .Where((kvp) => kvp.Key.projectId == projectId)
-                        .Select((kvp) => kvp.Value)
-                        .ToList()
-                        .ForEach(
-                            (check) =>
-                            {
-                                check.SettingsChanged = true;
-                            }
-                        );
+                    foreach (
+                        var check in _checksByIds
+                            .Where((kvp) => kvp.Key.projectId == projectId)
+                            .Select((kvp) => kvp.Value)
+                    )
+                    {
+                        check.SettingsChanged = true;
+                    }
 
                     // Notify the front end that all check results for this project are invalid
                     try
@@ -150,17 +148,14 @@ internal sealed class CheckCache
                     ThreadingUtils.RunTask(
                         Task.Run(async () =>
                         {
-                            _checksByIds
-                                .Where((kvp) => kvp.Key.projectId == projectId)
-                                .Select((kvp) => kvp.Value)
-                                .ToList()
-                                .ForEach(
-                                    (check) =>
-                                    {
-                                        check.ClearResultsForBook(args.BookNum);
-                                    }
-                                );
-
+                            foreach (
+                                var check in _checksByIds
+                                    .Where((kvp) => kvp.Key.projectId == projectId)
+                                    .Select((kvp) => kvp.Value)
+                            )
+                            {
+                                check.ClearResultsForBook(args.BookNum);
+                            }
                             // Notify the front end that all check results for this project are invalid
                             try
                             {
