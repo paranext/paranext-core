@@ -3,6 +3,8 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
 export interface FootnoteItemProps {
+  /** Optional additional class name for styling */
+  className?: string;
   /**
    * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
    * array of {@link MarkerObject}, in practice, for footnotes that array contains only one
@@ -22,8 +24,17 @@ export interface FootnoteItemProps {
    * @default 'horizontal'
    */
   layout?: FootnoteLayout;
+  /** Callback to handle clicking the footnote */
+  onClick?: () => void;
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
+  /** Optional tab index for keyboard navigation */
+  tabIndex?: number;
+  /** Optional ARIA role for accessibility */
+  role?: string;
+  'aria-selected'?: boolean;
+  'data-marker'?: string;
+  'data-state'?: string;
   /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this

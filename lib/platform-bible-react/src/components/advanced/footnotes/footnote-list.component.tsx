@@ -1,6 +1,4 @@
-import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Card } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { getFormatCallerFunction, LocalizedStringValue, LocalizeKey } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
@@ -51,9 +49,6 @@ export function FootnoteList({
     ? localizeString(localizedStrings, '%webView_footnoteList_header%')
     : 'Footnotes';
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
-  const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
-    onFootnoteSelected?.(footnote, index, listId);
-  };
   const initialFocusedIndex = selectedFootnote
     ? footnotes.findIndex((f) => f === selectedFootnote)
     : 0;
@@ -100,63 +95,78 @@ export function FootnoteList({
         role="listbox"
         aria-label="Footnotes"
         tabIndex={0}
-        className={cn('tw-h-full tw-overflow-y-auto', className)}
         onKeyDown={handleListKeyDown}
+        className={cn(
+          'tw-h-full tw-overflow-y-auto tw-p-0.5 tw-pt-1',
+          !suppressFormatting && 'formatted-font',
+          className,
+        )}
       >
-        <div
-          className={cn(
-            'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
-            layout === 'horizontal' ? 'tw-table tw-min-w-full' : 'tw-flex tw-flex-col tw-gap-0.5',
-            !suppressFormatting && 'formatted-font',
-          )}
-        >
-          {footnotes.map((footnote, idx) => {
-            const isSelected = footnote === selectedFootnote;
-            const key = `${listId}-${idx}`;
-            return (
-              <>
-                <Card
+        {layout === 'horizontal' ? (
+          <div className="tw-grid tw-grid-cols-[auto_auto_1fr] tw-gap-x-2 tw-gap-y-1">
+            {footnotes.map((footnote, idx) => {
+              const isSelected = footnote === selectedFootnote;
+              const key = `${listId}-${idx}`;
+              return (
+                <FootnoteItem
+                  key={key}
                   ref={(el) => {
                     rowRefs.current[idx] = el;
                   }}
                   role="option"
                   aria-selected={isSelected}
-                  key={key}
+                  tabIndex={-1}
                   data-marker={footnote.marker}
                   data-state={isSelected ? 'selected' : undefined}
-                  tabIndex={-1}
                   className={cn(
                     'data-[state=selected]:tw-bg-muted',
                     onFootnoteSelected && 'hover:tw-bg-muted/50',
-                    'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
-                    'focus:tw-outline-none focus-visible:tw-outline-none',
-                    /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
-                     that looks great in Storybook. However, the left edge of the ring is clipped in
-                     P.B app. These are similar, but not identical to, the customizations made in
-                     our shadcn table component.
-                  */
-                    'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
-                    layout === 'horizontal'
-                      ? 'horizontal tw-table-row'
-                      : 'vertical tw-block tw-text-sm',
                     classNameForItems,
+                    'tw-contents', // internal divs are grid cells
                   )}
-                  onClick={() => handleFootnoteClick(footnote, idx)}
-                >
+                  footnote={footnote}
+                  layout={layout}
+                  formatCaller={(caller) => handleFormatCaller(caller, idx)}
+                  showMarkers={showMarkers}
+                  onClick={() => onFootnoteSelected?.(footnote, idx, listId)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div className="tw-flex tw-flex-col tw-gap-0.5">
+            {footnotes.map((footnote, idx) => {
+              const isSelected = footnote === selectedFootnote;
+              const key = `${listId}-${idx}`;
+              return (
+                <React.Fragment key={key}>
                   <FootnoteItem
+                    ref={(el) => {
+                      rowRefs.current[idx] = el;
+                    }}
+                    role="option"
+                    aria-selected={isSelected}
+                    tabIndex={-1}
+                    data-marker={footnote.marker}
+                    data-state={isSelected ? 'selected' : undefined}
+                    className={cn(
+                      'data-[state=selected]:tw-bg-muted',
+                      onFootnoteSelected && 'hover:tw-bg-muted/50',
+                      classNameForItems,
+                    )}
                     footnote={footnote}
                     layout={layout}
-                    formatCaller={() => handleFormatCaller(footnote.caller, idx)}
+                    formatCaller={(caller) => handleFormatCaller(caller, idx)}
                     showMarkers={showMarkers}
+                    onClick={() => onFootnoteSelected?.(footnote, idx, listId)}
                   />
-                </Card>
-
-                {/* Only render separator if not the last item */}
-                {idx < footnotes.length - 1 && layout === 'vertical' && <Separator />}
-              </>
-            );
-          })}
-        </div>
+                  {/* Only render separator if not the last item */}
+                  {idx < footnotes.length - 1 && <Separator />}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );

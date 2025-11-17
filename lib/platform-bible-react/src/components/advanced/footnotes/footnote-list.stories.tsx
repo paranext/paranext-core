@@ -95,6 +95,7 @@ function ScripturePanelTemplate({
               footnotes={footnotes}
               listId={listId}
               selectedFootnote={selectedFootnote}
+              showMarkers={showMarkers}
               onFootnoteSelected={(footnote) => setSelectedFootnote(footnote)}
             />
           </div>
