@@ -153,6 +153,8 @@ declare module 'platform-scripture-editor' {
     containers?: { [containerId: string]: EditorContainer };
   };
 
+  export type ScriptureEditorViewType = 'formatted' | 'markers';
+
   /** Options for configuring the editor you are opening */
   export type OpenEditorOptions = {
     /** Decorations to add to the editor */
@@ -162,7 +164,7 @@ declare module 'platform-scripture-editor' {
      *
      * Defaults to 'formatted'.
      */
-    scriptureViewType?: 'formatted' | 'markers';
+    scriptureViewType?: ScriptureEditorViewType;
     /**
      * When the footnote pane is shown, where it should be positioned
      *

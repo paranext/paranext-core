@@ -50,7 +50,11 @@ import {
   PopoverContent,
   Spinner,
 } from 'platform-bible-react';
-import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
+import {
+  EditorDecorations,
+  EditorWebViewMessage,
+  ScriptureEditorViewType,
+} from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
@@ -96,7 +100,7 @@ const defaultView: ViewOptions = getDefaultViewOptions();
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
-const getViewOptionsForType = (viewType: 'formatted' | 'markers'): ViewOptions => {
+const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
   const base = { ...defaultView };
   if (viewType === 'markers') return { ...base, markerMode: 'visible' };
   return base;
@@ -128,7 +132,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     defaultEditorDecorations,
   );
 
-  const [viewType, setViewType] = useWebViewState<'formatted' | 'markers'>('viewType', 'formatted');
+  const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>('viewType', 'formatted');
 
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
 
@@ -324,7 +328,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setDecorations,
     setFootnotesPaneVisible,
     setViewType,
-    viewOptions,
+    viewOptions.markerMode,
   ]);
 
   // Listen for Ctrl+F to open find dialog
