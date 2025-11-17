@@ -23,7 +23,8 @@ import {
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
   toKebabCase,
-} from './segment-string-util';
+  UnicodeString,
+} from './unicode-string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
@@ -115,101 +116,105 @@ describe('string-util-goals', () => {
 });
 
 describe('at', () => {
+  const longString: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
   it('at with in bounds index', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, 4);
+    const result = longString.at(4);
     expect(result).toEqual('𐐷');
   });
 
   it('at with negative index returns last character', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, -1);
+    const result = longString.at(-1);
     expect(result).toEqual('🌟');
   });
 
   it('at with police officer doesn\'t break the grapheme', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, 54);
+    const result = longString.at(54);
     expect(result).toEqual('👮🏽‍♀️');
   });
 
   it('at with the length of the string returns undefined', () => {
-    const length = stringLength(LONG_SURROGATE_PAIRS_STRING);
-    const result = at(LONG_SURROGATE_PAIRS_STRING, length);
+    const result = longString.at(longString.length);
     expect(result).toEqual(undefined);
   });
 
-  it('at with the negative length of the string returns undefined', () => {
-    const length = stringLength(LONG_SURROGATE_PAIRS_STRING);
-    const result = at(LONG_SURROGATE_PAIRS_STRING, -(length+1));
+  it('at with the negative length of the string returns first character', () => {
+    const result = longString.at(-longString.length);
+    expect(result).toEqual('L');
+  });
+
+  it('at with the negative length+1 of the string returns first character', () => {
+    const result = longString.at(-(longString.length+1));
     expect(result).toEqual(undefined);
   });
 
   it('at with index greater than length returns undefined', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, stringLength(LONG_SURROGATE_PAIRS_STRING) + 10);
+    const result = longString.at(longString.length+10);
     expect(result).toEqual(undefined);
   });
 
   it('at with index smaller than -length returns undefined', () => {
-    const result = at(LONG_SURROGATE_PAIRS_STRING, -stringLength(LONG_SURROGATE_PAIRS_STRING) - 10);
+    const result = longString.at(-(longString.length+10));
     expect(result).toEqual(undefined);
   });
 });
 
 describe('charAt', () => {
+  const medString: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
   it('0 < index < string length', () => {
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 7);
+    const result = medString.charAt(7);
     expect(result).toEqual('🦄');
   });
 
   it('index < 0', () => {
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, -2);
+    const result = medString.charAt(-2);
     expect(result).toEqual('');
   });
 
   it('index > string length', () => {
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 50);
+    const result = medString.charAt(50);
     expect(result).toEqual('');
   });
   
   it('charAt grapheme', () => {
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 18);
+    const result = medString.charAt(18);
     expect(result).toEqual('👮🏽‍♀️');
   });
 
   it('index == string length', () => {
-    const length = stringLength(MEDIUM_SURROGATE_PAIRS_STRING);
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, length);
+    const result = medString.charAt(medString.length);
     expect(result).toEqual('');
   });
 
   it('index == string length-1', () => {
-    const length = stringLength(MEDIUM_SURROGATE_PAIRS_STRING);
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, length-1);
+    const result = medString.charAt(medString.length-1);
     expect(result).toEqual('e');
   });
 });
 
 describe('codePointAt', () => {
+  const medString: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
   it('codePointAt for regular character', () => {
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 11);
+    const result = medString.codePointAt(11);
     expect(result).toEqual(115);
   });
 
   it('codePointAt for surrogate pair', () => {
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 7);
+    const result = medString.codePointAt(7);
     expect(result).toEqual(129412);
   });
 
   it('codePointAt index < 0', () => {
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, -1);
+    const result = medString.codePointAt(-1);
     expect(result).toEqual(undefined);
   });
 
   it('codePointAt index > string length', () => {
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 50);
+    const result = medString.codePointAt(50);
     expect(result).toEqual(undefined);
   });
 
   it('codePointAt grapheme', () => {
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 18);
+    const result = medString.codePointAt(18);
     // NOTE(mattg): This is the code point for a general police officer, so it breaks up the
     // grapheme, but it kind of has to.
     // This is the hex value of a generic police officer emoji.
@@ -217,14 +222,12 @@ describe('codePointAt', () => {
   });
 
   it('codePointAt index == string length', () => {
-    const length = stringLength(MEDIUM_SURROGATE_PAIRS_STRING);
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, length);
+    const result = medString.codePointAt(medString.length);
     expect(result).toEqual(undefined);
   });
 
   it('codePointAt index == string length-1', () => {
-    const length = stringLength(MEDIUM_SURROGATE_PAIRS_STRING);
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, length-1);
+    const result = medString.codePointAt(medString.length-1);
     expect(result).toEqual(101);
   });
 });

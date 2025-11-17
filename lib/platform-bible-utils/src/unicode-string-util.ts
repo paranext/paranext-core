@@ -9,9 +9,9 @@ import { isString } from './util';
 /*
  * TODO(mattg): This is a comment on the state of this branch, and where it needs
  * to go in the future.
- * 
+ *
  * CURRENT STATE OF THIS BRANCH:
- * As of 2025/10/30, I, Matthew Getgen, have finished re-writing 
+ * As of 2025/10/30, I, Matthew Getgen, have finished re-writing
  * stringLength, at, charAt, codePointAt, endsWith,
  * includes, indexOf, lastIndexOf, substr, and substring to use the
  * `SegmentedString` type I created. The tests for these have also been updated,
@@ -24,9 +24,11 @@ import { isString } from './util';
  * `string` or `SegmentedString`, we should instead provide an API that requires you to
  * use a `UnicodeString` class which requires it, so the performant option is always
  * chosen. This is just the very start of that work.
- * 
+ *
  * TODOS:
  * - Re-write all functions.
+ * - Consider making functions that transform strings into other `UnicodeString`s, instead of just
+ *   strings
  * - Ensure tests work to ensure edge cases are met and regressions aren't made.
  * - Add tests when needed.
  * - Compare performance in the perf test folder.
@@ -67,57 +69,165 @@ export class UnicodeString {
     return this._graphemes;
   }
 
-  private _substr() {}
+  public at(index: number): string | undefined {
+    return this._graphemes.at(index);
+  }
 
-  public substring() {}
+  public charAt(index: number): string {
+    if (index < 0 || index >= this.length) return '';
+    return this._graphemes.at(index)!;
+  }
 
+  public codePointAt(index: number): number | undefined {
+    if (index < 0 || index >= this.length) return undefined;
+    return this._graphemes.at(index)?.codePointAt(0);
+  }
+
+  private _substr(
+    begin: number = 0,
+    len: number = this.length - begin,
+  ): string {
+    if (begin >= this.length) return '';
+    if (begin < 0) begin += this.length;
+    if (begin < 0) begin = 0;
+
+    if (len > this.length) len = this.length;
+    if (len < 0) return '';
+
+    const start: number = this._indecies.at(begin)!;
+    const end: number = begin === this.length-1 ? this.length : this._indecies.at(begin+len)!;
+    return this.string.substring(start, end);
+  }
+
+  public substring(
+    begin: number,
+    end: number = this.length,
+  ): string {
+    if (begin < 0 || begin >= this.length) return '';
+    // NOTE(mattg): `>` instead of `>=` is intentional
+    if (end < 0 || end > this.length || end < begin) return '';
+
+    const start: number = this._indecies.at(begin)!;
+    const stop: number = this._indecies.at(end)!;
+    return this._string.substring(start, stop);
+  }
+
+  // TODO(mattg): finish this function
   public slice() {}
 
+  // TODO(mattg): finish this function
   public split() {}
 
-  public at() {}
+  public indexOf(
+    searchString: UnicodeString,
+    position: number = 0,
+  ): number {
+    if (searchString.length === 0) return -1;
 
-  public charAt() {}
+    const maxSearchIndex: number = this.length - searchString.length;
+    if (maxSearchIndex < 0) return -1;
+    if (position < 0) position = 0;
+    if (position > maxSearchIndex) return -1;
 
-  public codePointAt() {}
+    for (let index = position; index <= maxSearchIndex; index++) {
+      if (this.charAt(index) === searchString.charAt(0)) {
+        if (searchString.length === 1) {
+          // charAt did the comparison, we can stop now.
+          return index;
+        } else if (this._substr(index, searchString.length) === searchString.string) {
+          return index;
+        }
+      }
+    }
+    return -1;
+  }
 
-  public indexOf() {}
+  public lastIndexOf(
+    searchString: UnicodeString,
+    position: number ,
+  ): number {
+    if (searchString.length === 0) return -1;
 
-  public lastIndexOf() {}
+    const maxSearchableIndex: number = this.length - searchString.length;
+    if (maxSearchableIndex < 0) return -1;
 
-  public includes() {}
+    position = position === undefined ? maxSearchableIndex : position;
+    if (position < 0) position = 0;
+    else if (position >= this.length) position = this.length - 1;
 
+    for (let index = position; index >= 0; index--) {
+      if (this.charAt(index) === searchString.charAt(0)) {
+        if (searchString.length === 1) {
+          // charAt did the comparison, we can stop now.
+          return index;
+        } else if (this._substr(index, searchString.length) === searchString.string) {
+          return index;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  public includes(
+    searchString: UnicodeString,
+    position: number = 0,
+  ): boolean {
+    return !(this.indexOf(searchString, position) === -1);
+  }
+
+  // TODO(mattg): finish this function
   public normalize() {}
 
+  // TODO(mattg): finish this function
   public ordinalCompare() {}
 
+  // TODO(mattg): finish this function
   public startsWith() {}
 
-  public endsWith() {}
+  public endsWith(
+    searchString: UnicodeString,
+    endPosition: number = this.length,
+  ): boolean {
+    const index = endPosition = searchString.length;
+    if (index < 0) return false;
+    return (this._substr(index, searchString.length) === searchString.string);
+  }
 
+  // TODO(mattg): finish this function
   public padStart() {}
 
+  // TODO(mattg): finish this function
   public padEnd() {}
 
+  // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
   public isLocalizeKey() {}
 
+  // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
   public isWhiteSpace() {}
 
+  // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
   public toKebabCase() {}
 
+  // TODO(mattg): finish this function
   private _indexOfClosestClosingCurlyBrace() {}
 
+  // TODO(mattg): finish this function
   public formatReplacementStringToArray() {}
 
+  // TODO(mattg): finish this function
   public formatReplacementString() {}
 
+  // TODO(mattg): finish this function
   public escapeStringRegexp() {}
 
+  // TODO(mattg): finish this function
   public transformAndEnsureRegExpRegExpArray() {}
 
+  // TODO(mattg): finish this function
   public transformAndEnsureRegExpArray() {}
 };
 
@@ -512,7 +622,7 @@ export function indexOf(
   const stringLen: number = stringLength(segString);
   const searchStringLen: number = stringLength(segSearchString);
 
-  if (searchStringLen === 0) return -1; 
+  if (searchStringLen === 0) return -1;
 
   const searchableIndex: number = stringLen - searchStringLen;
   if (searchableIndex < 0) return -1;
@@ -554,7 +664,7 @@ export function lastIndexOf(
   const stringLen: number = stringLength(segString);
   const searchStringLen: number = stringLength(segSearchString);
 
-  if (searchStringLen === 0) return -1; 
+  if (searchStringLen === 0) return -1;
 
   const searchableIndex: number = stringLen - searchStringLen;
   if (searchableIndex < 0) return -1;
