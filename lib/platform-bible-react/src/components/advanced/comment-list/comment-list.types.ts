@@ -3,6 +3,7 @@ import {
   LanguageStrings,
   LegacyComment,
   LegacyCommentThread,
+  LocalizeKey,
 } from 'platform-bible-utils';
 
 /**
@@ -10,7 +11,7 @@ import {
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
-export const COMMENT_LIST_STRING_KEYS = Object.freeze([
+export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
   '%comment_assigned_to%',
   '%comment_dateAtTime%',
   '%comment_date_today%',
@@ -20,7 +21,7 @@ export const COMMENT_LIST_STRING_KEYS = Object.freeze([
   '%comment_thread_multiple_replies%',
   '%comment_thread_single_reply%',
   '%no_comments%',
-] as const);
+];
 
 /** Type definition for the localized strings used in the CommentList component */
 export type CommentListLocalizedStrings = {

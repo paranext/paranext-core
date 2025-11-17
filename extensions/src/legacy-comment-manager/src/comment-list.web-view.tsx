@@ -1,7 +1,7 @@
 import { CommentList, COMMENT_LIST_STRING_KEYS, Label, Skeleton } from 'platform-bible-react';
 import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import papi from '@papi/frontend';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { sampleComments } from './comment-sample-data';
@@ -10,11 +10,7 @@ global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   projectId,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => {
-      return Array.from(COMMENT_LIST_STRING_KEYS);
-    }, []),
-  );
+  const [localizedStrings] = useLocalizedStrings(COMMENT_LIST_STRING_KEYS);
   const [scrRef] = useWebViewScrollGroupScrRef();
   const [areThreadsLoading, setAreThreadsLoading] = useState<boolean>(false);
   const [currentUserName, setCurrentUserName] = useState<string>('');

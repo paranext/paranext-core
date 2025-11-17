@@ -47,6 +47,15 @@ export function CommentItem({
 
   // eslint-disable-next-line no-null/no-null
   const editContainerRef = useRef<HTMLDivElement | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Track mount state for cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Focus the editor when entering edit mode, after dropdown menu has fully closed
   useEffect(() => {
@@ -59,6 +68,7 @@ export function CommentItem({
 
     // Use timeout to wait until the dropdown menu has properly closed before giving focus to the editor
     const timeoutId = setTimeout(() => {
+      if (!isMountedRef.current) return;
       const container = editContainerRef.current;
       if (container) {
         focusContentEditable(container);

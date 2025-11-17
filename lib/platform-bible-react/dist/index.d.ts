@@ -362,17 +362,7 @@ export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearc
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
-export declare const COMMENT_LIST_STRING_KEYS: readonly [
-	"%comment_assigned_to%",
-	"%comment_dateAtTime%",
-	"%comment_date_today%",
-	"%comment_date_yesterday%",
-	"%comment_editComment%",
-	"%comment_replyOrAssign%",
-	"%comment_thread_multiple_replies%",
-	"%comment_thread_single_reply%",
-	"%no_comments%"
-];
+export declare const COMMENT_LIST_STRING_KEYS: LocalizeKey[];
 /** Props for the CommentList component */
 export interface CommentListProps {
 	/** Additional class name for the component */

@@ -495,6 +495,32 @@ namespace TestParanextDataProvider.Projects
             Assert.That(result, Is.False, "Update with null comment ID should fail");
         }
 
+        [Test]
+        public void UpdateComment_NotLastCommentInThread_ThrowsException()
+        {
+            // Arrange - Create a thread with multiple comments
+            var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
+            string firstCommentId = _provider.CreateComment(firstComment);
+
+            // Get the thread ID from the first comment
+            var threads = _provider.GetCommentThreads(new CommentThreadSelector());
+            var thread = threads.FirstOrDefault(t => t.Comments.Any(c => c.Id == firstCommentId));
+            var threadId = thread?.Comments.First(c => c.Id == firstCommentId).Thread;
+
+            // Add a second comment (reply) to the thread
+            var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
+            secondComment.Thread = threadId;
+            string secondCommentId = _provider.CreateComment(secondComment);
+
+            // Act & Assert - Try to update the first comment (not the last one)
+            Assert.That(
+                () => _provider.UpdateComment(firstCommentId, "Updated content"),
+                Throws.InvalidOperationException.With.Message.Contains(
+                    "Cannot update a comment that is not the last comment in the thread"
+                )
+            );
+        }
+
         #endregion
     }
 }
