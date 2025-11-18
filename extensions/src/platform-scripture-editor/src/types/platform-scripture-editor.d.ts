@@ -36,6 +36,14 @@ declare module 'platform-scripture-editor' {
     decorationsToRemove?: string[];
   };
 
+  /**
+   * Tell the editor to cycle between the Scripture view types (currently just a toggle between
+   * formatted and Marker view)
+   */
+  export type EditorMessageChangeScriptureView = {
+    method: 'changeScriptureView';
+  };
+
   /** Tell the editor to toggle footnotes pane visibility */
   export type EditorMessageToggleFootnotesPaneVisibility = {
     method: 'toggleFootnotesPaneVisibility';
@@ -55,6 +63,7 @@ declare module 'platform-scripture-editor' {
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
+    | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection;
@@ -144,10 +153,18 @@ declare module 'platform-scripture-editor' {
     containers?: { [containerId: string]: EditorContainer };
   };
 
+  export type ScriptureEditorViewType = 'formatted' | 'markers';
+
   /** Options for configuring the editor you are opening */
   export type OpenEditorOptions = {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
+    /**
+     * Ways Scripture project text can be viewed in the editor
+     *
+     * Defaults to 'formatted'.
+     */
+    scriptureViewType?: ScriptureEditorViewType;
     /**
      * When the footnote pane is shown, where it should be positioned
      *
@@ -186,6 +203,11 @@ declare module 'platform-scripture-editor' {
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{
     /** Set the current selection on the editor */
     selectRange(range: ScriptureRange): Promise<void>;
+    /**
+     * Cycle through the Scripture view types in the editor (currently just a toggle between
+     * formatted and Marker view)
+     */
+    changeScriptureView(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
@@ -250,11 +272,19 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
+     * Cycles through the Scripture view types in the editor (currently just a toggle between
+     * formatted and Marker view) for the given the WebView ID
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScriptureEditor.changeView': (webViewId: string | undefined) => Promise<void>;
+
+    /**
      * Toggles the visibility of the footnotes pane for the given the WebView ID
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
-    'platformScripture.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+    'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
 
     /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
@@ -262,7 +292,7 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
-    'platformScripture.changeFootnotesPaneLocation': (
+    'platformScriptureEditor.changeFootnotesPaneLocation': (
       webViewId: string | undefined,
     ) => Promise<void>;
 

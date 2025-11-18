@@ -185,6 +185,36 @@ async function open(
   return undefined;
 }
 
+async function changeScriptureView(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.changeScriptureView();
+}
+
 async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
   if (!webViewId) {
     logger.debug('No editor WebView ID!');
@@ -485,6 +515,28 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           throw new Error(message);
         }
       },
+      async changeScriptureView() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to changeScriptureView`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'changeScriptureView',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
       async toggleFootnotesPaneVisibility() {
         try {
           logger.debug(
@@ -680,8 +732,30 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     scriptureEditorWebViewProvider,
   );
 
+  const changeScriptureViewPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.changeView',
+    changeScriptureView,
+    {
+      method: {
+        summary: 'Change the Scripture view type in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   const toggleFootnotesPanePromise = papi.commands.registerCommand(
-    'platformScripture.toggleFootnotes',
+    'platformScriptureEditor.toggleFootnotes',
     toggleFootnotesPane,
     {
       method: {
@@ -703,7 +777,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
-    'platformScripture.changeFootnotesPaneLocation',
+    'platformScriptureEditor.changeFootnotesPaneLocation',
     changeFootnotesPaneLocation,
     {
       method: {
@@ -730,6 +804,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
+    await changeScriptureViewPromise,
     await toggleFootnotesPanePromise,
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
