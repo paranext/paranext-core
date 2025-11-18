@@ -32,9 +32,17 @@ export interface FootnoteItemProps {
   tabIndex?: number;
   /** Optional ARIA role for accessibility */
   role?: string;
-  'aria-selected'?: boolean;
-  'data-marker'?: string;
-  'data-state'?: string;
+  /** ARIA selected state for accessibility */
+  isSelected?: boolean;
+  /**
+   * The footnote marker (f, fe, or x) this row represents.
+   * Used for styling hooks (data-marker="f" / "fe" / etc.). */
+  marker?: string;
+  /**
+   * Internal UI state (data-state). This is used for Tailwind attribute styling.
+   * Usually "selected" or undefined.
+   */
+  state?: string;
   /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this

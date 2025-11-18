@@ -133,9 +133,9 @@ export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
       showMarkers = true,
       formatCaller,
       className,
-      'aria-selected': ariaSelected,
-      'data-marker': dataMarker,
-      'data-state': dataState,
+      isSelected,
+      marker,
+      state,
       onClick,
     }: FootnoteItemProps,
     ref,
@@ -150,23 +150,26 @@ export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
         ? footnote.content
         : [undefined, ...(footnote.content ?? [])];
 
-    const layoutClass =
-      layout === 'horizontal'
-        ? 'tw-grid tw-grid-cols-[auto_auto_1fr] tw-gap-x-2'
-        : 'tw-flex tw-flex-col';
-
     return (
       <div
         ref={ref}
-        className={cn(layoutClass, className)}
+        className={cn(
+          layout === 'horizontal'
+            ? 'tw-relative tw-grid tw-grid-cols-[auto_auto_1fr] tw-gap-x-2 tw-px-1 tw-py-0.5'
+            : 'tw-flex tw-flex-col',
+          className,
+          'data-[state=selected]:tw-bg-muted',
+          onClick && 'hover:tw-bg-muted/50',
+        )}
         role="option"
         tabIndex={0}
-        aria-selected={ariaSelected}
-        data-marker={dataMarker}
-        data-state={dataState}
+        aria-selected={isSelected ?? undefined}
+        data-marker={marker}
+        data-state={state}
+        data-interactive={onClick ? '' : undefined}
         onClick={onClick}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (onClick && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             onClick?.();
           }
@@ -174,9 +177,11 @@ export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
       >
         {layout === 'horizontal' ? (
           <>
-            {showMarkers && <span className="marker">{`\\${footnote.marker} `}</span>}
-            {/* Caller column */}
-            <div className="textual-note-header note-caller tw-whitespace-nowrap">{caller}</div>
+            {/* First column: marker (if showing) + caller */}
+            <div className="textual-note-header note-caller tw-whitespace-nowrap">
+              {showMarkers && <span className="marker">{`\\${footnote.marker} `}</span>}
+              {caller}
+            </div>
 
             {/* Reference column */}
             <div className="textual-note-header tw-whitespace-nowrap">

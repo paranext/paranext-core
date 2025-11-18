@@ -114,12 +114,11 @@ export function FootnoteList({
                     rowRefs.current[idx] = el;
                   }}
                   role="option"
-                  aria-selected={isSelected}
+                  isSelected={isSelected}
                   tabIndex={-1}
-                  data-marker={footnote.marker}
-                  data-state={isSelected ? 'selected' : undefined}
+                  marker={footnote.marker}
+                  state={isSelected ? 'selected' : undefined}
                   className={cn(
-                    'data-[state=selected]:tw-bg-muted',
                     onFootnoteSelected && 'hover:tw-bg-muted/50',
                     classNameForItems,
                     'tw-contents', // internal divs are grid cells
@@ -145,10 +144,10 @@ export function FootnoteList({
                       rowRefs.current[idx] = el;
                     }}
                     role="option"
-                    aria-selected={isSelected}
+                    isSelected={isSelected}
                     tabIndex={-1}
-                    data-marker={footnote.marker}
-                    data-state={isSelected ? 'selected' : undefined}
+                    marker={footnote.marker}
+                    state={isSelected ? 'selected' : undefined}
                     className={cn(
                       'data-[state=selected]:tw-bg-muted',
                       onFootnoteSelected && 'hover:tw-bg-muted/50',
