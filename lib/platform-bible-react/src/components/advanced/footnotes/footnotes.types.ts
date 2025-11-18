@@ -35,12 +35,13 @@ export interface FootnoteItemProps {
   /** ARIA selected state for accessibility */
   isSelected?: boolean;
   /**
-   * The footnote marker (f, fe, or x) this row represents.
-   * Used for styling hooks (data-marker="f" / "fe" / etc.). */
+   * The footnote marker (f, fe, or x) this row represents. Used for styling hooks (data-marker="f"
+   * / "fe" / etc.).
+   */
   marker?: string;
   /**
-   * Internal UI state (data-state). This is used for Tailwind attribute styling.
-   * Usually "selected" or undefined.
+   * Internal UI state (data-state). This is used for Tailwind attribute styling. Usually "selected"
+   * or undefined.
    */
   state?: string;
   /**

@@ -31,14 +31,12 @@ type Story = StoryObj<typeof FootnoteItem>;
 export const Basic: Story = {
   args: {
     footnote: usjFootnotes[0],
-    onClick: undefined, // prevents hover styles in Storybook
   } satisfies FootnoteItemProps,
 };
 
 export const CrossReferenceWithoutCaller: Story = {
   args: {
     footnote: usjFootnotes[2],
-    onClick: undefined, // prevents hover styles in Storybook
   } satisfies FootnoteItemProps,
 };
 
@@ -64,7 +62,6 @@ export const WithCallerFormatting: StoryObj<FootnoteItemWithFormatCallerStoryPro
   args: {
     callerSymbol: '†',
     footnote: usjFootnotes[1],
-    onClick: undefined, // prevents hover styles in Storybook
   },
   argTypes: {
     callerSymbol: { control: 'text' },
@@ -75,7 +72,6 @@ export const WithCallerFormatting: StoryObj<FootnoteItemWithFormatCallerStoryPro
 export const UnmarkedFootnoteText: Story = {
   args: {
     footnote: usjFootnotes[5],
-    onClick: undefined, // prevents hover styles in Storybook
   } satisfies FootnoteItemProps,
 };
 
@@ -87,6 +83,5 @@ export const Complex: Story = {
       return c;
     },
     footnote: usjFootnotes[4],
-    onClick: undefined, // prevents hover styles in Storybook
   } satisfies FootnoteItemProps,
 };

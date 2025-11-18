@@ -158,8 +158,6 @@ export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
             ? 'tw-relative tw-grid tw-grid-cols-[auto_auto_1fr] tw-gap-x-2 tw-px-1 tw-py-0.5'
             : 'tw-flex tw-flex-col',
           className,
-          'data-[state=selected]:tw-bg-muted',
-          onClick && 'hover:tw-bg-muted/50',
         )}
         role="option"
         tabIndex={0}
