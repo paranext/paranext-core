@@ -2800,10 +2800,12 @@ export interface IUsjReaderWriter {
 	 * Convert a JSONPath query into a SerializedVerseRef and offset
 	 *
 	 * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
-	 *   the expression matches more than one node, then only the first node found is considered.
+	 *   the expression matches more than one node, then only the first node found is considered. Note
+	 *   that this query must yield a {@link MarkerContent} or {@link Usj}; JSONPaths yielding
+	 *   properties on nodes are not currently supported.
 	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
 	 *   is not found in the USJ document)
-	 * @returns SerializedVerseRef and offset that represents the location within this USJ data
+	 * @returns SerializedVerseRef and offset that represent the location within this USJ data
 	 *   indicated by `jsonPathQuery`
 	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
 	 *   provided
@@ -2813,13 +2815,11 @@ export interface IUsjReaderWriter {
 	 * Convert a JSONPath query into a USJ node, JSONPath, and offset
 	 *
 	 * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
-	 *   the expression matches more than one node, then only the first node found is considered.
-	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
-	 *   is not found in the USJ document)
-	 * @returns SerializedVerseRef and offset that represents the location within this USJ data
+	 *   the expression matches more than one node, then only the first node found is considered. Note
+	 *   that this query must yield a {@link MarkerContent} or {@link Usj}; JSONPaths yielding
+	 *   properties on nodes are not currently supported.
+	 * @returns USJ node, JSONPath, and offset that represent the location within this USJ data
 	 *   indicated by `jsonPathQuery`
-	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
-	 *   provided
 	 */
 	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
 	/** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
@@ -2942,26 +2942,6 @@ export interface IUsjReaderWriter {
 	 *   provided
 	 */
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
-	/**
-	 * Transforms a relative USJ document location into an absolute chapter-based USJ location that
-	 * includes which chapter the USJ location is relative to.
-	 *
-	 * Note: this method property transforms book-based USJ document locations to chapter-based USJ
-	 * locations as well.
-	 *
-	 * Note: This may work with peripheral books as well, but these books have `periph` markers
-	 * between `id` and chapters, so this may need to be revised when peripheral books are more fully
-	 * supported
-	 *
-	 * @param usjLocation Location in USJ space relative to the USJ document
-	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
-	 *   is not found in the USJ document)
-	 * @returns Location in USJ space relative to the chapter that the USJ document location is in
-	 * @throws If not able to find the location in the USJ document
-	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
-	 *   provided
-	 */
-	usjDocumentLocationToUsjVerseRefChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation>(usjLocation: TDocumentLocation, bookIdIfNotFound?: string): UsjVerseRefChapterLocation<TDocumentLocation>;
 }
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export declare function getDefaultCallerSequence(): string[];
@@ -4971,20 +4951,6 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	/** "Normalize" the JSONPath passed in so we can use it for lookups in {@link FragmentsByJsonPath} */
 	private static normalizeJsonPath;
 	/**
-	 * Move a JSONPath to be relative to a chapter marker JSONPath by removing the chapter path parts
-	 * from the front of the JSONPath and adjusting the content index.
-	 *
-	 * @example Taking JSONPath `$.content[0].content[2].content[5].content[7]['caller']` and moving
-	 * it relative to chapter JSONPath `$.content[0].content[2].content[3]` would return
-	 * `$.content[2].content[7]['caller']`
-	 *
-	 * @param jsonPath JSONPath to move to be relative to the chapter
-	 * @param chapterJsonPath JSONPath to use as the chapter from which to make the other JSONPath
-	 *   relative
-	 * @returns `jsonPath` made relative to the chapter JSONPath
-	 */
-	private static moveJsonPathRelativeToChapter;
-	/**
 	 * Returns a "normalized" JSONPath transformed from the working stack. We can use this JSONPath
 	 * for lookups in {@link FragmentsByJsonPath}
 	 */
@@ -5104,7 +5070,6 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   JSONPath
 	 */
 	static usjBookLocationToUsjVerseRefBookLocation(usjBookLocation: UsjBookLocation): UsjVerseRefBookLocation;
-	usjDocumentLocationToUsjVerseRefChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation>(usjLocation: TDocumentLocation, bookIdIfNotFound?: string): UsjVerseRefChapterLocation<TDocumentLocation>;
 	usfmVerseLocationToUsjNodeAndDocumentLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation;
 	usfmVerseLocationToUsjDocumentLocation(usfmVerseLocation: UsfmVerseLocation | SerializedVerseRef): UsjDocumentLocation;
 	/**

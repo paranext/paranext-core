@@ -8,6 +8,17 @@ import {
 } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { JSONPath } from 'jsonpath-plus';
+import { deepEqual } from '../equality-checking';
+import { SortedNumberMap } from '../sorted-number-map';
+import { isString } from '../util';
+import { extractFootnotesFromUsjContent } from './footnote-util';
+import {
+  AttributeMarkerInfo,
+  MarkerInfo,
+  MarkersMap,
+  MarkerTypeInfo,
+  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+} from './markers-maps/markers-map-3.0.model';
 import {
   BOOK_TYPE,
   CHAPTER_TYPE,
@@ -16,9 +27,11 @@ import {
   NO_BOOK_ID,
   PropertyJsonPath,
   UsfmVerseLocation,
+  UsfmVerseRefVerseLocation,
   UsjAttributeKeyLocation,
   UsjAttributeMarkerLocation,
-  UsjVerseRefChapterLocation,
+  UsjBookLocation,
+  UsjChapterLocation,
   UsjClosingAttributeMarkerLocation,
   UsjClosingMarkerLocation,
   UsjDocumentLocation,
@@ -28,23 +41,10 @@ import {
   UsjReaderWriterOptions,
   UsjSearchResult,
   UsjTextContentLocation,
-  VERSE_TYPE,
-  UsfmVerseRefVerseLocation,
-  UsjChapterLocation,
   UsjVerseRefBookLocation,
-  UsjBookLocation,
+  UsjVerseRefChapterLocation,
+  VERSE_TYPE,
 } from './usj-reader-writer.model';
-import { SortedNumberMap } from '../sorted-number-map';
-import { extractFootnotesFromUsjContent } from './footnote-util';
-import {
-  AttributeMarkerInfo,
-  MarkerInfo,
-  MarkersMap,
-  MarkerTypeInfo,
-  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
-} from './markers-maps/markers-map-3.0.model';
-import { isString } from '../util';
-import { deepEqual } from '../equality-checking';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
@@ -521,73 +521,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Convert to path array and back to standardize property access syntax
     const pathArray = JSONPath.toPathArray(jsonPath);
     return UsjReaderWriter.jsonPathArrayToJsonPath(pathArray);
-  }
-
-  /**
-   * Move a JSONPath to be relative to a chapter marker JSONPath by removing the chapter path parts
-   * from the front of the JSONPath and adjusting the content index.
-   *
-   * @example Taking JSONPath `$.content[0].content[2].content[5].content[7]['caller']` and moving
-   * it relative to chapter JSONPath `$.content[0].content[2].content[3]` would return
-   * `$.content[2].content[7]['caller']`
-   *
-   * @param jsonPath JSONPath to move to be relative to the chapter
-   * @param chapterJsonPath JSONPath to use as the chapter from which to make the other JSONPath
-   *   relative
-   * @returns `jsonPath` made relative to the chapter JSONPath
-   */
-  private static moveJsonPathRelativeToChapter<TPath extends ContentJsonPath | PropertyJsonPath>(
-    jsonPath: TPath,
-    chapterJsonPath: ContentJsonPath,
-  ): TPath {
-    const jsonPathArray = JSONPath.toPathArray(jsonPath);
-    const chapterPathArray = JSONPath.toPathArray(chapterJsonPath);
-
-    // Make sure the chapter path ends with 'content' and an index
-    if (chapterPathArray.length < 2)
-      throw new Error(`chapterJsonPath is too short: ${chapterJsonPath}`);
-    const chapterFinalContent = chapterPathArray[chapterPathArray.length - 2];
-    const chapterFinalContentIndexString = chapterPathArray[chapterPathArray.length - 1];
-    const chapterFinalContentIndex = parseInt(chapterFinalContentIndexString, 10);
-    if (chapterFinalContent !== 'content' || Number.isNaN(chapterFinalContentIndex))
-      throw new Error(`chapterJsonPath does not end with content and index: ${chapterJsonPath}`);
-
-    // Make sure the chapter path is actually a prefix of the JSONPath (except the last content index)
-    for (let i = 0; i < chapterPathArray.length - 1; i++) {
-      if (jsonPathArray[i] !== chapterPathArray[i])
-        throw new Error(
-          `chapterJsonPath is not a prefix of jsonPath: ${jsonPath} vs ${chapterJsonPath}`,
-        );
-    }
-
-    // Remove the parts of the chapter path before the last content and index from the relative path
-    const relativePathArray = jsonPathArray.slice(chapterPathArray.length - 2);
-
-    // Make sure the relative path starts with 'content' and an index
-    if (relativePathArray.length < 2)
-      throw new Error(`relativePathArray is too short: ${relativePathArray}`);
-    const relativeFirstContent = relativePathArray[0];
-    const relativeFirstContentIndexString = relativePathArray[1];
-    const relativeFirstContentIndex = parseInt(relativeFirstContentIndexString, 10);
-    if (relativeFirstContent !== 'content' || Number.isNaN(relativeFirstContentIndex))
-      throw new Error(
-        `relativePathArray does not start with content and index: ${relativePathArray}`,
-      );
-
-    // Adjust the index of the first content in the relative path to be relative to the chapter
-    // content index
-    const adjustedRelativeIndex = relativeFirstContentIndex - chapterFinalContentIndex;
-    relativePathArray[1] = adjustedRelativeIndex.toString();
-
-    // Add the $ back to the start of the relative path
-    relativePathArray.unshift('$');
-
-    // Convert back to JSONPath string
-    const relativeJsonPath = UsjReaderWriter.jsonPathArrayToJsonPath(relativePathArray);
-
-    // The JSONPath string construction above conforms to the ContentJsonPath type
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return relativeJsonPath as TPath;
   }
 
   /**
@@ -1226,7 +1159,10 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // Old deprecated UsjFlatTextChapterLocation
     if ('jsonPath' in usjChapterLocation) {
       if (usjChapterLocation.offset !== undefined)
-        // with UsjTextContentLocation
+        // with UsjTextContentLocation (has offset). Unfortunately, TypeScript really doesn't like
+        // having this and the following type returned via the same object even though they're very
+        // similar because of the required presence/absence of `offset` in each of the returned
+        // types. Just breaking them out into separate returns.
         return {
           verseRef: {
             book: usjChapterLocation.book,
@@ -1239,7 +1175,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             offset: usjChapterLocation.offset,
           },
         };
-      // with UsjMarkerLocation
+      // with UsjMarkerLocation (does not have offset)
       return {
         verseRef: {
           book: usjChapterLocation.book,
@@ -1326,47 +1262,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       },
       granularity: 'book',
       documentLocation: usjBookLocation.documentLocation,
-    };
-  }
-
-  usjDocumentLocationToUsjVerseRefChapterLocation<
-    TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
-  >(
-    usjLocation: TDocumentLocation,
-    bookIdIfNotFound?: string,
-  ): UsjVerseRefChapterLocation<TDocumentLocation> {
-    // Get the fragment info for this location so we can get the index in USFM
-    const fragmentInfo = this.findFragmentInfoAtUsjDocumentLocation(usjLocation);
-    if (!fragmentInfo)
-      throw new Error(
-        `Could not find fragment info at USJ document location when transforming to USJ chapter location: ${JSON.stringify(
-          usjLocation,
-        )}`,
-      );
-
-    // Get the verse ref for this USJ location
-    const verseRef = this.getVerseRefForIndexInUsfm(fragmentInfo.indexInUsfm, bookIdIfNotFound);
-
-    // Get the USJ location for the start of the chapter
-    const chapterUsjDocumentLocation = this.usfmVerseLocationToUsjNodeAndDocumentLocation({
-      ...verseRef,
-      verseNum: 0,
-    });
-
-    return {
-      verseRef,
-      granularity: 'chapter',
-      documentLocation: {
-        ...usjLocation,
-        // Change the passed in JSONPath to be relative to the chapter
-        jsonPath: UsjReaderWriter.moveJsonPathRelativeToChapter(
-          usjLocation.jsonPath,
-          // We are trusting that `usfmVerseLocationToUsjNodeAndDocumentLocation` gave us a proper
-          // UsjMarkerLocation, which always has a ContentJsonPath
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          chapterUsjDocumentLocation.documentLocation.jsonPath as ContentJsonPath,
-        ),
-      },
     };
   }
 

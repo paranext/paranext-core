@@ -29,43 +29,7 @@ export type VerseRefOffset = {
   offset: number;
 };
 
-/**
- * WARNING: INTERNAL ONLY FOR NOW
- *
- * {@link UsfmLocation} will VERY likely be expanded in the future to allow for specifying offsets
- * based on other locations than a specific verse like from the start of a chapter or book. Then,
- * this type can be exported from `platform-bible-utils`.
- *
- * A set of information that points to a specific location in USFM or USJ. These locations are
- * absolute verse reference locations, meaning they point to a specific location in a Scripture text
- * rather than being relative to a specific document.
- */
-export type ScriptureLocation = UsfmLocation | UsjLocation;
-
 // #region Serializable USFM locations
-
-/**
- * WARNING: INTERNAL ONLY FOR NOW
- *
- * This type will VERY likely be expanded in the future to allow for specifying offsets based on
- * other locations than a specific verse like from the start of a chapter or book. Then, this type
- * can be exported from `platform-bible-utils`. If you do not want to offer such features in some
- * API, use {@link UsfmVerseLocation}, whose offset is based on a specific verse.
- *
- * A verse ref and an offset in USFM space that point to a specific location in USFM. If only a
- * verse ref is provided, the offset is assumed to be 0.
- *
- * The USJ representation of the positions represented by this type are {@link UsjLocation}. Both are
- * absolute verse reference locations.
- *
- * {@link UsjDocumentLocation} also represents positions of this type, but those locations are
- * relative to a specific USJ document rather than being absolute verse reference locations like
- * this type.
- *
- * To see many examples of the same point represented by both USFM and USJ locations, go to
- * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
- */
-export type UsfmLocation = UsfmVerseLocation;
 
 /**
  * A verse ref and an offset within that verse in USFM space that point to a specific location in
@@ -662,10 +626,12 @@ export interface IUsjReaderWriter {
    * Convert a JSONPath query into a SerializedVerseRef and offset
    *
    * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
-   *   the expression matches more than one node, then only the first node found is considered.
+   *   the expression matches more than one node, then only the first node found is considered. Note
+   *   that this query must yield a {@link MarkerContent} or {@link Usj}; JSONPaths yielding
+   *   properties on nodes are not currently supported.
    * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
    *   is not found in the USJ document)
-   * @returns SerializedVerseRef and offset that represents the location within this USJ data
+   * @returns SerializedVerseRef and offset that represent the location within this USJ data
    *   indicated by `jsonPathQuery`
    * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
    *   provided
@@ -678,13 +644,11 @@ export interface IUsjReaderWriter {
    * Convert a JSONPath query into a USJ node, JSONPath, and offset
    *
    * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
-   *   the expression matches more than one node, then only the first node found is considered.
-   * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
-   *   is not found in the USJ document)
-   * @returns SerializedVerseRef and offset that represents the location within this USJ data
+   *   the expression matches more than one node, then only the first node found is considered. Note
+   *   that this query must yield a {@link MarkerContent} or {@link Usj}; JSONPaths yielding
+   *   properties on nodes are not currently supported.
+   * @returns USJ node, JSONPath, and offset that represent the location within this USJ data
    *   indicated by `jsonPathQuery`
-   * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
-   *   provided
    */
   jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
   /** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
@@ -821,29 +785,4 @@ export interface IUsjReaderWriter {
     usjLocation: UsjDocumentLocation,
     bookIdIfNotFound?: string,
   ): UsfmVerseRefVerseLocation;
-  /**
-   * Transforms a relative USJ document location into an absolute chapter-based USJ location that
-   * includes which chapter the USJ location is relative to.
-   *
-   * Note: this method property transforms book-based USJ document locations to chapter-based USJ
-   * locations as well.
-   *
-   * Note: This may work with peripheral books as well, but these books have `periph` markers
-   * between `id` and chapters, so this may need to be revised when peripheral books are more fully
-   * supported
-   *
-   * @param usjLocation Location in USJ space relative to the USJ document
-   * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
-   *   is not found in the USJ document)
-   * @returns Location in USJ space relative to the chapter that the USJ document location is in
-   * @throws If not able to find the location in the USJ document
-   * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
-   *   provided
-   */
-  usjDocumentLocationToUsjVerseRefChapterLocation<
-    TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
-  >(
-    usjLocation: TDocumentLocation,
-    bookIdIfNotFound?: string,
-  ): UsjVerseRefChapterLocation<TDocumentLocation>;
 }

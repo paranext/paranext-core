@@ -4,20 +4,28 @@
 // Need to disable no-irregular-whitespace because the test data includes irregular whitespace that
 // we are testing on purpose.
 // Disabling camelcase and @typescript-eslint/naming-convention so we can use 3_1 indicating USFM 3.1
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';
 import path from 'path';
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
-import { UsjReaderWriter } from './usj-reader-writer';
 import { usjMat1 } from './footnote-util-test.usj.data';
 import { USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0 } from './markers-maps/markers-map-3.0.model';
 import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-maps/markers-map-3.1.model';
-import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
+import { UsjReaderWriter } from './usj-reader-writer';
 import { LocationUsfmAndUsj } from './usj-reader-writer-test-data/test-data.model';
 import { testUSFM2SaCh1Locations } from './usj-reader-writer-test-data/testUSFM-2SA-1-locations';
+import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew-1-and-2-locations';
 import {
+  UsfmScrRefVerseLocation,
+  UsfmVerseRefVerseLocation,
+  UsjDocumentLocation,
+  UsjFlatBookLocation,
+  UsjFlatChapterLocation,
+  UsjFlatTextChapterLocation,
   UsjNodeAndDocumentLocation,
-  UsjPropertyValueLocation,
   UsjReaderWriterOptions,
+  UsjVerseRefBookLocation,
+  UsjVerseRefChapterLocation,
 } from './usj-reader-writer.model';
 
 // #region set up file path variables
@@ -501,6 +509,54 @@ function test_UsjDocumentLocationToUsfmVerseRefVerseLocation(
   });
 }
 
+function test_JsonPathToUsjNodeAndDocumentLocation(
+  usjDoc: UsjReaderWriter,
+  locations: LocationUsfmAndUsj[],
+) {
+  locations.forEach((testCase) => {
+    // Skip locations that are not marker locations or text locations because they are not yet
+    // supported by this method
+    if (
+      // text locations have offset
+      !('offset' in testCase.usjContent.documentLocation) &&
+      // marker locations just have jsonPath
+      Object.keys(testCase.usjContent.documentLocation).length !== 1
+    )
+      return;
+
+    const location = usjDoc.jsonPathToUsjNodeAndDocumentLocation(
+      testCase.usjContent.documentLocation.jsonPath,
+    );
+    // Set the offset we're checking for to 0 if it has an offset because
+    // jsonPathToUsjNodeAndDocumentLocation should always return offset 0 if it has one
+    const expectedDocumentLocation =
+      'offset' in testCase.usjContent.documentLocation
+        ? { ...testCase.usjContent.documentLocation, offset: 0 }
+        : testCase.usjContent.documentLocation;
+    // expect().toEqual() gives more detailed errors than UsjReaderWriter.areUsjDocumentLocationsEqual.
+    // If this ever becomes a problem with JSONPath property format, can use that instead
+    expect(location.documentLocation).toEqual(expectedDocumentLocation);
+    expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(location)).toBe(
+      UsjReaderWriter.isUsjDocumentLocationForTextContent(testCase.usjContent),
+    );
+    // Disabling conditional expectations because we need to do different tests based on which
+    // kinds of data we're testing
+    /* eslint-disable jest/no-conditional-expect */
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(testCase.usjContent)) {
+      expect(location.node).toBe(testCase.usjContent.node);
+    } else {
+      expect(typeof location.node).toBe('object');
+      if (typeof location.node !== 'object') return;
+      // Pull `content` out from the result because `content` is not in the test data. But we
+      // don't need `content`, so just call it _
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { content: _, ...node } = location.node;
+      expect(node).toEqual(testCase.usjContent.node);
+    }
+    /** Eslint-enable */
+  });
+}
+
 describe('jsonPathToUsfmVerseRefVerseLocation translates USJ jsonPath to UsfmVerseLocation', () => {
   test('Matthew 1-2 WEB 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
@@ -550,6 +606,28 @@ describe('jsonPathToUsfmVerseRefVerseLocation translates USJ jsonPath to UsfmVer
         version: '3.0' as typeof USJ_VERSION,
         content: [],
       }).jsonPathToUsfmVerseRefVerseLocation('');
+    }).toThrow('No result found for JSONPath query: ');
+  });
+});
+
+describe('jsonPathToUsjNodeAndDocumentLocation translates USJ jsonPath to UsjNodeAndDocumentLocation', () => {
+  test('Matthew 1-2 WEB 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    test_JsonPathToUsjNodeAndDocumentLocation(usjDoc, matthew1And2Locations);
+
+    expect(() => {
+      usjDoc.jsonPathToUsjNodeAndDocumentLocation('$.content[9999]');
+    }).toThrow('No result found for JSONPath query: $.content[9999]');
+
+    expect(() => {
+      new UsjReaderWriter({
+        type: USJ_TYPE,
+        // testing 3.0. Usj can be any version, but the `Usj` type says only 3.1
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        version: '3.0' as typeof USJ_VERSION,
+        content: [],
+      }).jsonPathToUsjNodeAndDocumentLocation('');
     }).toThrow('No result found for JSONPath query: ');
   });
 });
@@ -629,6 +707,100 @@ describe('usjDocumentLocationToUsfmVerseRefVerseLocation translates USJ document
       });
     }).toThrow(
       'Could not find book ID and no book ID provided when finding USFM verse ref for index in USFM 0',
+    );
+  });
+});
+
+describe('Transform various location types into the standardized formats', () => {
+  test('usfmVerseLocationToUsfmVerseRefVerseLocation', () => {
+    const serializedVerseRef: SerializedVerseRef = {
+      book: 'MAT',
+      chapterNum: 1,
+      verseNum: 2,
+    };
+    const verseRefVerseLocation: UsfmVerseRefVerseLocation = {
+      verseRef: serializedVerseRef,
+      offset: 0,
+    };
+    // Deprecated
+    const scrRefVerseLocation: UsfmScrRefVerseLocation = {
+      scrRef: serializedVerseRef,
+      offset: 0,
+    };
+
+    expect(
+      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(serializedVerseRef),
+    ).toEqual(verseRefVerseLocation);
+    expect(
+      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(verseRefVerseLocation),
+    ).toEqual(verseRefVerseLocation);
+    expect(
+      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(scrRefVerseLocation),
+    ).toEqual(verseRefVerseLocation);
+  });
+
+  test('usjChapterLocationToUsjVerseRefChapterLocation', () => {
+    const serializedVerseRef: SerializedVerseRef = {
+      book: 'MAT',
+      chapterNum: 1,
+      verseNum: 0,
+    };
+    const documentLocation: UsjDocumentLocation = {
+      jsonPath: '$.content[0]',
+      offset: 3,
+    };
+    const usjVerseRefChapterLocation: UsjVerseRefChapterLocation = {
+      verseRef: serializedVerseRef,
+      granularity: 'chapter',
+      documentLocation,
+    };
+    const usjFlatChapterLocation: UsjFlatChapterLocation = {
+      book: serializedVerseRef.book,
+      chapterNum: serializedVerseRef.chapterNum,
+      documentLocation,
+    };
+    const usjFlatTextChapterLocation: UsjFlatTextChapterLocation = {
+      book: serializedVerseRef.book,
+      chapterNum: serializedVerseRef.chapterNum,
+      ...documentLocation,
+    };
+
+    expect(
+      UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(usjVerseRefChapterLocation),
+    ).toEqual(usjVerseRefChapterLocation);
+    expect(
+      UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(usjFlatChapterLocation),
+    ).toEqual(usjVerseRefChapterLocation);
+    expect(
+      UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(usjFlatTextChapterLocation),
+    ).toEqual(usjVerseRefChapterLocation);
+  });
+
+  test('usjBookLocationToUsjVerseRefBookLocation', () => {
+    const serializedVerseRef: SerializedVerseRef = {
+      book: 'MAT',
+      chapterNum: 1,
+      verseNum: 0,
+    };
+    const documentLocation: UsjDocumentLocation = {
+      jsonPath: '$.content[0]',
+      offset: 3,
+    };
+    const usjVerseRefBookLocation: UsjVerseRefBookLocation = {
+      verseRef: serializedVerseRef,
+      granularity: 'book',
+      documentLocation,
+    };
+    const usjFlatBookLocation: UsjFlatBookLocation = {
+      book: serializedVerseRef.book,
+      documentLocation,
+    };
+
+    expect(
+      UsjReaderWriter.usjBookLocationToUsjVerseRefBookLocation(usjVerseRefBookLocation),
+    ).toEqual(usjVerseRefBookLocation);
+    expect(UsjReaderWriter.usjBookLocationToUsjVerseRefBookLocation(usjFlatBookLocation)).toEqual(
+      usjVerseRefBookLocation,
     );
   });
 });
@@ -846,95 +1018,6 @@ describe('usfmVerseLocationToUsjNodeAndDocumentLocation translates USFM location
         offset: -1,
       });
     }).toThrow('offset must be >= 0');
-  });
-});
-
-describe('usjDocumentLocationToUsjVerseRefChapterLocation translates USJ document locations to USJ chapter locations', () => {
-  test('Matthew 1-2 WEB 3.0', () => {
-    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
-
-    // The very beginning
-    const result0 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
-      jsonPath: '$.content[0]',
-    });
-    expect(result0.verseRef.book).toBe('MAT');
-    expect(result0.verseRef.chapterNum).toBe(1);
-    expect(result0.granularity === undefined || result0.granularity === 'chapter').toBe(true);
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result0.documentLocation))
-      throw new Error('Expected result0 not to be a string');
-    expect(result0.documentLocation.jsonPath).toBe('$.content[0]');
-    expect(result0.documentLocation).not.toHaveProperty('offset');
-
-    // String inside the very beginning
-    const result1 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
-      jsonPath: '$.content[0].content[0]',
-      offset: 6,
-    });
-    expect(result1.verseRef.book).toBe('MAT');
-    expect(result1.verseRef.chapterNum).toBe(1);
-    expect(result1.granularity === undefined || result1.granularity === 'chapter').toBe(true);
-    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(result1.documentLocation))
-      throw new Error('Expected result1 to be a string');
-    expect(result1.documentLocation.jsonPath).toBe('$.content[0].content[0]');
-    expect(result1.documentLocation.offset).toBe(6);
-
-    // First chapter marker
-    const result2 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
-      jsonPath: '$.content[8]',
-    });
-    expect(result2.verseRef.book).toBe('MAT');
-    expect(result2.verseRef.chapterNum).toBe(1);
-    expect(result2.granularity === undefined || result2.granularity === 'chapter').toBe(true);
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result2.documentLocation))
-      throw new Error('Expected result2 not to be a string');
-    expect(result2.documentLocation.jsonPath).toBe('$.content[8]');
-    expect(result2.documentLocation).not.toHaveProperty('offset');
-
-    // Some random spot in chapter 1
-    const result3 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
-      jsonPath: "$.content[9].content[2]['caller']",
-      propertyOffset: 3,
-    });
-    expect(result3.verseRef.book).toBe('MAT');
-    expect(result3.verseRef.chapterNum).toBe(1);
-    expect(result3.granularity === undefined || result3.granularity === 'chapter').toBe(true);
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result3.documentLocation))
-      throw new Error('Expected result3 not to be a string');
-    expect(result3.documentLocation.jsonPath).toBe("$.content[9].content[2]['caller']");
-    expect(result3.documentLocation).not.toHaveProperty('offset');
-    expect(result3.documentLocation).toHaveProperty('propertyOffset');
-    // We just checked that it has `propertyOffset`, so just casting it
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    expect((result3.documentLocation as UsjPropertyValueLocation).propertyOffset).toBe(3);
-
-    // Second chapter marker
-    const result4 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
-      jsonPath: '$.content[20]',
-    });
-    expect(result4.verseRef.book).toBe('MAT');
-    expect(result4.verseRef.chapterNum).toBe(2);
-    expect(result4.granularity === undefined || result4.granularity === 'chapter').toBe(true);
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result4.documentLocation))
-      throw new Error('Expected result4 not to be a string');
-    expect(result4.documentLocation.jsonPath).toBe('$.content[0]');
-    expect(result4.documentLocation).not.toHaveProperty('offset');
-
-    // Some random spot in chapter 2
-    const result5 = usjDoc.usjDocumentLocationToUsjVerseRefChapterLocation({
-      jsonPath: "$.content[25].content[1].content[1]['marker']",
-      propertyOffset: 1,
-    });
-    expect(result5.verseRef.book).toBe('MAT');
-    expect(result5.verseRef.chapterNum).toBe(2);
-    expect(result5.granularity === undefined || result5.granularity === 'chapter').toBe(true);
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(result5.documentLocation))
-      throw new Error('Expected result5 not to be a string');
-    expect(result5.documentLocation.jsonPath).toBe("$.content[5].content[1].content[1]['marker']");
-    expect(result5.documentLocation).not.toHaveProperty('offset');
-    expect(result5.documentLocation).toHaveProperty('propertyOffset');
-    // We just checked that it has `propertyOffset`, so just casting it
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    expect((result5.documentLocation as UsjPropertyValueLocation).propertyOffset).toBe(1);
   });
 });
 

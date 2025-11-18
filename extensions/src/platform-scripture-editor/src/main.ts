@@ -328,8 +328,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             throw new Error(`webViewDefinition.projectId is empty!`);
 
           // Figure out the information needed to make the USJ range to give to the editor:
-          // book, chapter, start jsonPath and offset, and end jsonPath and offset
-          let startVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
+          // book, chapter, start jsonPath and offset, and end jsonPath and offset.
+          // Also need to get the verse to set the scroll group verse to because the editor doesn't
+          // do it automatically right now
+          let startVerseRef = { book: '', chapterNum: 0, verseNum: -1 };
           let startJsonPath = '';
           let endJsonPath = '';
           // Start and end offsets based on the USJ JSONPath location
@@ -391,13 +393,14 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
               'Could not get targetScrRef from range! Selection range cannot (yet) span chapters or books',
             );
 
-          // If we don't have at least one of the USJ range properties, need to process the chapter
-          // to find them based on what we have
+          // If we don't have at least one of the USJ range properties or the verse number, need to
+          // process the chapter to find them based on what we have
           if (
             !startJsonPath ||
             !endJsonPath ||
             startJsonPathOffset === undefined ||
-            endJsonPathOffset === undefined
+            endJsonPathOffset === undefined ||
+            startVerseRef.verseNum === -1
           ) {
             // Get the USJ chapter we're on so we can determine the missing USJ range properties
             const pdp = await papi.projectDataProviders.get(
@@ -479,6 +482,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
                 // hope that's good enough for now. This probably won't happen much, and this case
                 // will not exist once the editor is updated
                 endJsonPathOffset = 0;
+            }
+
+            // If we don't have which verse we're setting the scroll group to, get it
+            if (startVerseRef.verseNum === -1) {
+              const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+                (startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath))
+                  .documentLocation,
+              );
+              startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
             }
           }
 
