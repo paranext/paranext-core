@@ -3,11 +3,11 @@ import { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scriptur
 import {
   CHAPTER_TYPE,
   USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsfmVerseLocation,
   UsjNodeAndDocumentLocation,
   UsjReaderWriter,
   VERSE_TYPE,
   LegacyComment,
+  UsfmVerseRefVerseLocation,
 } from 'platform-bible-utils';
 import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
@@ -76,7 +76,7 @@ function getCommentDetails(
   usjRW: UsjReaderWriter,
   commentId: string,
   bookId: string,
-): { start: UsfmVerseLocation; selectedText: string; contextAfter: string } | undefined {
+): { start: UsfmVerseRefVerseLocation; selectedText: string; contextAfter: string } | undefined {
   const startQuery = `$..content[?(@.type=="ms" && @.marker=="${MILESTONE_START}" && @.sid=="${commentId}")]`;
   const endQuery = `$..content[?(@.type=="ms" && @.marker=="${MILESTONE_END}" && @.eid=="${commentId}")]`;
 
