@@ -18,7 +18,9 @@
     "*.css": "tailwindcss",
     ".eslintignore": "ignore",
     ".prettierignore": "ignore",
-    ".stylelintignore": "ignore"
+    ".stylelintignore": "ignore",
+    "*.SFM": "usfm",
+    "*.sfm": "usfm"
   },
   "files.eol": "\n",
 
