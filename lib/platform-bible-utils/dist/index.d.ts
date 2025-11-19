@@ -578,6 +578,34 @@ export declare class SortedNumberMap<T> {
 	private map;
 	private sortedKeys;
 	/**
+	 * Returns an iterable of keys in the map sorted in ascending order.
+	 *
+	 * Time complexity: internal detail to JavaScript engine. Reasonable expectation:
+	 *
+	 * - Executing this method to return an iterator: O(1)
+	 * - Iterating over the returned iterator: O(n)
+	 *
+	 * Note that iterating over the keys this way negates the benefits of using this class over a
+	 * using a {@link Map}. To access individual keys more quickly, use
+	 * {@link SortedNumberMap.findClosestLessThanOrEqual} or {@link SortedNumberMap.get}.
+	 *
+	 * TSDoc adapted from {@link Map.keys}
+	 */
+	keys(): ArrayIterator<number>;
+	/**
+	 * Returns a specified element from the Map object. If the value that is associated to the
+	 * provided key is an object, then you will get a reference to that object and any change made to
+	 * that object will effectively modify it inside the Map.
+	 *
+	 * Time complexity: O(1)
+	 *
+	 * @returns Returns the element associated with the specified key. If no element is associated
+	 *   with the specified key, returns `undefined`.
+	 *
+	 *   TSDoc adapted from {@link Map.get}
+	 */
+	get(key: number): T | undefined;
+	/**
 	 * Sets a key-value pair in the map. If the key already exists, its value is updated. If the key
 	 * is new, it's inserted in the correct sorted position.
 	 *
@@ -843,11 +871,15 @@ export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFun
  *
  * @param items - Array of items to group by.
  * @param keySelector - Function to run on each item to get the key for the group to which it
- *   belongs
+ *   belongs. The first argument is the item, and the second argument is the index of the item in
+ *   the original array.
+ * @param valueSelector - Optional function to run on each item to get the value to store in the
+ *   group. The first argument is the item, the second argument is the key for the group to which
+ *   this item belongs, and the third argument is the index of the item in the original array.
  * @returns Map of keys to groups of values corresponding to each item.
  */
-export declare function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T) => K, valueSelector: (item: T, key: K) => V): Map<K, Array<V>>;
+export declare function groupBy<T, K>(items: T[], keySelector: (item: T, index: number) => K): Map<K, Array<T>>;
+export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T, index: number) => K, valueSelector: (item: T, key: K, index: number) => V): Map<K, Array<V>>;
 /**
  * Function to get an error message from the object (useful for getting error message in a catch
  * block)
@@ -1528,28 +1560,1205 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * are shallow equaled.
  */
 export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+/**
+ * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
+ * other kinds of markers.
+ *
+ * An attribute marker is a marker that adds information to a previous marker in USFM and is an
+ * attribute on that previous marker instead in USX/USJ.
+ *
+ * @example `ca` and `cp` are attribute markers for `c`. `va` and `vp` are attribute markers for
+ * `v`. `cat` is an attribute marker for `f`, `esb`, and more.
+ *
+ * Following is an example of using the `ca` and `cp` attribute markers in USFM:
+ *
+ * ```usfm
+ * \c 1 \ca 2\ca*
+ * \cp A
+ * \s1 This is a section header
+ * ```
+ *
+ * The equivalent in USX would be:
+ *
+ * ```xml
+ * <!-- prettier-ignore -->
+ * <chapter number="1" style="c" altnumber="2" pubnumber="A" sid="GEN 1" />
+ * <para style="s1">This is a section header</para>
+ * ```
+ */
+export type AttributeMarkerInfo = NormalMarkerInfo & {
+	/**
+	 * List of normal marker names for which this marker is an attribute marker.
+	 *
+	 * @example `ca` and `cp` are attribute markers for `c`. `isAttributeMarkerFor` would be `['c']`
+	 * for both `ca` and `cp`.
+	 */
+	isAttributeMarkerFor?: string[];
+	/**
+	 * List of RegExp patterns matching marker names for which this marker is an attribute marker.
+	 *
+	 * @example Pretend `ex1` and `ex2` are attribute markers for markers matching RegExp `/test/`.
+	 * `isAttributeMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
+	 */
+	isAttributeMarkerForRegExp?: string[];
+	/**
+	 * The name of the USX/USJ attribute this attribute marker represents.
+	 *
+	 * @example `ca` is an attribute marker for `c` and represents the `altnumber` attribute on the
+	 * `c` marker in USX/USJ. `attributeMarkerAttributeName` would be `altnumber` for the `ca`
+	 * marker.
+	 */
+	attributeMarkerAttributeName: string;
+	/**
+	 * Whether there should be a structural space after the normal closing marker in output USFM if
+	 * this marker is an attribute marker. If this marker is not an attribute marker, it should not
+	 * have a structural space after the normal closing marker.
+	 *
+	 * This field should be ignored if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `true`
+	 * because this space is only supposed to be added in contexts in which the space here is
+	 * structural. Otherwise we would be mistakenly adding content to the USFM.
+	 *
+	 * Note that, if {@link MarkersMap.isSpaceAfterAttributeMarkersContent} is `false` (which is the
+	 * case according to spec), horizontal spaces after attribute markers are always considered
+	 * structural; this property only indicates whether there should be a space after the attribute
+	 * marker when outputting USFM as opposed to parsing it.
+	 *
+	 * If not present or `undefined`, defaults to `false`.
+	 *
+	 * @example According to specification, the `va` and `vp` attribute markers have a space after
+	 * their normal closing markers:
+	 *
+	 * ```usfm
+	 * \p \v 10 \va 10 va\va* \vp 10 vp\vp* Some verse text
+	 * ```
+	 *
+	 * The verse text in this example is just "Some verse text" without a space at the start.
+	 *
+	 * However, when the `vp` marker is not an attribute marker, such as when it has markers in its
+	 * contents, there should not be a structural space after the normal closing marker, and any space
+	 * should be considered content:
+	 *
+	 * ```usfm
+	 * \p \v 10 \va 10 va\va* \vp \+wj 10 vp\+wj*\vp* Some verse text.
+	 * ```
+	 *
+	 * The verse text in this example is " Some verse text" including a space at the start.
+	 *
+	 * @example The `cat` attribute marker does not have a structural space after its normal closing
+	 * marker:
+	 *
+	 * ```usfm
+	 * \f + \cat category here\cat*\fr 1:2 \ft Some footnote text\f*
+	 * ```
+	 *
+	 * The verse text in this example is just "Some verse text" without a space at the start.
+	 */
+	hasStructuralSpaceAfterCloseAttributeMarker?: boolean;
+};
+/**
+ * Information about a regular USFM/USX/USJ marker. See {@link MarkerInfo} for other kinds of
+ * markers.
+ */
+export type NormalMarkerInfo = {
+	/**
+	 * Which marker type the marker is. Determines how the marker is structured in the data such as
+	 * what kind of mandatory whitespace is around the marker in USFM. See {@link MarkerTypeInfoBase}
+	 * for information.
+	 */
+	type: string;
+	/** Explanation of the meaning of this marker */
+	description?: string;
+	/**
+	 * Which attribute can be provided without specifying the attribute name in USFM.
+	 *
+	 * A marker can have a default attribute only if it has zero or one non-optional attributes.
+	 *
+	 * An attribute can be provided with default syntax in the USFM only if it is the only attribute
+	 * provided for the marker.
+	 *
+	 * @example A marker with a default attribute:
+	 *
+	 * ```usfm
+	 * \w stuff|thisIsTheLemmaDefaultAttribute\w*
+	 * ```
+	 *
+	 * @example A marker with multiple attributes (cannot use default attribute syntax):
+	 *
+	 * ```usfm
+	 * \w stuff|lemma="thisIsTheLemma" strong="H1234,G1234"\w*
+	 * ```
+	 */
+	defaultAttribute?: string;
+	/**
+	 * The name of the text content attribute that is present on this marker if this marker has text
+	 * content in USFM.
+	 *
+	 * Text content attributes are attributes in USX/USJ that are represented in USFM as the actual
+	 * text content of the marker.
+	 *
+	 * @example `alt` is a text content attribute on the `periph` marker. This value would be `alt`
+	 * for the `periph` marker.
+	 *
+	 * Following is an example of a `periph` marker in USFM:
+	 *
+	 * ```usfm
+	 * \periph Example Peripheral|id="x-example"
+	 * \p Some contents of the example peripheral
+	 * ```
+	 *
+	 * The equivalent in USX would be:
+	 *
+	 * ```xml
+	 * <!-- prettier-ignore -->
+	 * <periph alt="Example Peripheral" id="x-example">
+	 *   <para style="p">Some contents of the example peripheral</para>
+	 * </periph>
+	 * ```
+	 */
+	textContentAttribute?: string;
+	/**
+	 * List of leading attributes that must be present on this marker. This list is ordered by the
+	 * order in which the attributes should appear.
+	 *
+	 * Leading attributes are attributes in USJ/USX that are listed in USFM directly after the marker
+	 * and separated only by a space.
+	 *
+	 * @example `code` is a leading attribute on the `id` marker. This value would be `['code']` for
+	 * the `id` marker.
+	 *
+	 * Following is an example of an `id` marker in USFM:
+	 *
+	 * ```usfm
+	 * \id MAT 41MATEX.SFM, Example Translation, September 2025
+	 * ```
+	 *
+	 * The equivalent in USX would be:
+	 *
+	 * ```xml
+	 * <!-- prettier-ignore -->
+	 * <book code="MAT" style="id">41MATEX.SFM, Example Translation, September 2025</book>
+	 * ```
+	 */
+	leadingAttributes?: string[];
+	/**
+	 * List of attribute markers that may be present on this marker. This list is ordered by the order
+	 * in which the markers should appear.
+	 *
+	 * An attribute marker is a marker that adds information to a previous marker in USFM and is an
+	 * attribute on that previous marker in USX/USJ.
+	 *
+	 * Note: the attribute names for attribute markers may be different than the marker names. See
+	 * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
+	 *
+	 * @example `ca` and `cp` are attribute markers for `c`. This value would be `['ca', 'cp']` for
+	 * `c`.
+	 */
+	attributeMarkers?: string[];
+	/**
+	 * Whether the normal closing marker for this marker is considered optional in USFM, meaning in
+	 * some cases that the normal closing marker would be expected not to be present.
+	 *
+	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `true`, this marker
+	 * may or may not be expected to have a normal closing marker actually present in USFM depending
+	 * on the value of this property.
+	 *
+	 * - If this is `true`, the normal closing marker for this marker in USFM may be expected to be
+	 *   present or absent depending on the value of
+	 *   {@link MarkersMap.shouldOptionalClosingMarkersBePresent}. If
+	 *   {@link MarkersMap.shouldOptionalClosingMarkersBePresent} is `true`, this marker is expected to
+	 *   have the normal closing marker actually present in USFM just like markers for which this
+	 *   property is `false`. If {@link MarkersMap.shouldOptionalClosingMarkersBePresent} is `false`,
+	 *   this marker is expected not to have the normal closing marker actually present in USFM. The
+	 *   `closed` attribute should be present if the presence of a normal closing marker for this
+	 *   marker in USFM does not match the presence implied by
+	 *   {@link MarkersMap.shouldOptionalClosingMarkersBePresent}.
+	 * - If this is `false`, the normal closing marker for this marker in USFM is expected to always be
+	 *   present. If the normal closing marker is absent in USFM, the USX/USJ for this marker should
+	 *   have the attribute `closed` set to `false`.
+	 *
+	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `false`, this
+	 * property is unused; markers of that type do not have a normal closing marker.
+	 *
+	 * If not present or `undefined`, defaults to `false`
+	 */
+	isClosingMarkerOptional?: boolean;
+	/**
+	 * List of independent closing marker names for this marker in USFM if it has any. If this is
+	 * defined, this marker does not have a normal closing marker but rather is closed by a completely
+	 * separate marker in USFM. All contents between this marker and the independent closing marker
+	 * are contents of this marker. In USX and USJ, this marker is closed normally like any other
+	 * object because USX and USJ have clear hierarchical structure.
+	 *
+	 * Note that independent closing markers do not have a `*` at the end because they are not normal
+	 * closing marker for but rather are completely separate markers that close the corresponding
+	 * opening marker.
+	 *
+	 * @example `esb` (a sidebar) is closed by the independent closing marker `esbe`.
+	 * `independentClosingMarkers` would be `['esbe']` for `esb`. Following is an example of a
+	 * sidebar:
+	 *
+	 * ```usfm
+	 * \esb
+	 * \p This paragraph is in a \bd sidebar\bd*.
+	 * \p The sidebar can contain multiple paragraphs.
+	 * \esbe
+	 * ```
+	 */
+	independentClosingMarkers?: string[];
+	/**
+	 * List of marker names for which this marker is an independent closing marker. See
+	 * {@link NormalMarkerInfo.independentClosingMarker} for more information on independent closing
+	 * markers and their syntax.
+	 *
+	 * @example `esbe` is an independent closing marker for `esb`. `isIndependentClosingMarkerFor`
+	 * would be `['esb']` for `esbe`.
+	 */
+	isIndependentClosingMarkerFor?: string[];
+	/**
+	 * List of RegExp patterns matching marker names for which this marker is an independent closing
+	 * marker. See {@link NormalMarkerInfo.independentClosingMarker} for more information on
+	 * independent closing markers and their syntax.
+	 *
+	 * @example Pretend `ex1` and `ex2` are independent closing markers for markers matching RegExp
+	 * `/test/`. `isIndependentClosingMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
+	 */
+	isIndependentClosingMarkerForRegExp?: string[];
+	/**
+	 * Marker to use when operating on the USFM representation of this marker. For example, when
+	 * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
+	 * instead of the marker info for the marker as listed in USX or USJ.
+	 *
+	 * @example When the `usx` marker is output to USFM, it should be transformed to the `usfm`
+	 * marker.
+	 */
+	markerUsfm?: string;
+	/**
+	 * Instructions written in plain text regarding special handling required for this marker when
+	 * transforming from USFM to USX or USJ. These instructions are an explanation of what needs to be
+	 * done to this marker to properly transform it to USX or USJ.
+	 *
+	 * This property is generally only included when it is exceptionally difficult to parse a marker
+	 * properly from USFM; the markers map attempts to use this property as little as possible,
+	 * favoring encoding information in other properties for more automatic transformation instead.
+	 */
+	parseUsfmInstructions?: string;
+};
+/**
+ * Information about a USFM/USX/USJ marker that is essential for proper translation between formats.
+ *
+ * @example `w` is a `char`-type marker, so it shares the characteristics of the `char`
+ * {@link MarkerTypeInfo} with other `char`-type markers and has its own set of characteristics.
+ * `w`'s `MarkerInfo` is as follows:
+ *
+ * ```json
+ * {
+ *   "type": "char",
+ *   "defaultAttribute": "lemma"
+ * }
+ * ```
+ */
+export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
+/**
+ * Information about a USFM/USX/USJ marker type that has a closing marker. See {@link MarkerTypeInfo}
+ * for other kinds of marker types.
+ *
+ * If the marker type has a closing marker but the closing marker is not present in the USFM for a
+ * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
+ * `false` unless {@link NormalMarkerInfo.isClosingMarkerOptional} is `true`.
+ *
+ * @example `char` marker types such as `nd` markers have closing markers, but `para` markers such
+ * as `p` do not:
+ *
+ * ```usfm
+ * \p This is a plain paragraph.
+ * \p This is a paragraph \nd with some special text\nd* in it.
+ * ```
+ */
+export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
+	/**
+	 * Whether markers of this type can have a normal closing marker in USFM. This property concerns
+	 * normal closing markers like `\wj*`, not independent closing markers like
+	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
+	 *
+	 * If this is `true`, markers of this type _may_ have a normal closing marker present in USFM.
+	 * Usually, markers whose type has `isCloseable` set to `true` are expected to have a normal
+	 * closing marker actually present in USFM unless otherwise specified using the `closed`
+	 * attribute. However, some markers are expected _not_ to have a normal closing marker actually
+	 * present in USFM unless otherwise specified using the `closed` attribute. To determine whether a
+	 * specific marker of this type is expected not to have a closing marker present in USFM, see
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional}.
+	 *
+	 * If this is `false`, markers of this type do not have a normal closing marker; there is never
+	 * expected to be a normal closing marker in USFM for markers of this type. In this case,
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional} is unused.
+	 *
+	 * If not present or `undefined`, defaults to `false` (meaning this `MarkerTypeInfo` is a
+	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
+	 */
+	isCloseable: true;
+	/**
+	 * Whether the closing marker for markers of this type is "empty" in USFM, meaning the marker name
+	 * is absent from the closing marker. This also means that there should not be a structural space
+	 * between the opening and the closing markers in USFM if there are no attributes listed on the
+	 * marker.
+	 *
+	 * If not present or `undefined`, defaults to `false`
+	 *
+	 * @example Markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
+	 *
+	 * ```usfm
+	 * \qt1-s\*
+	 * ...
+	 * \qt1-e\*
+	 * ```
+	 *
+	 * The closing marker for `qt1-s` is `\*` as opposed to the closing marker for `nd` which is
+	 * `\nd*`.
+	 *
+	 * Note that there is still a structural space after the opening marker if there are attributes
+	 * present:
+	 *
+	 * ```usfm
+	 * \qt1-s |Someone\*
+	 * ...
+	 * \qt1-e\*
+	 * ```
+	 */
+	isClosingMarkerEmpty?: boolean;
+};
+/**
+ * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
+ * {@link MarkerTypeInfo} for other kinds of marker types.
+ *
+ * @example `char` marker types such as `nd` markers have closing markers, but `para` marker types
+ * such as `p` do not:
+ *
+ * ```usfm
+ * \p This is a plain paragraph.
+ * \p This is a paragraph \nd with some special text\nd* in it.
+ * ```
+ */
+export type NonCloseableMarkerTypeInfo = MarkerTypeInfoBase & {
+	/**
+	 * Whether markers of this type can have a normal closing marker in USFM. This property concerns
+	 * normal closing markers like `\wj*`, not independent closing markers like
+	 * {@link NormalMarkerInfo.independentClosingMarkers}, which are completely separate markers.
+	 *
+	 * If this is `true`, markers of this type _may_ have a normal closing marker present in USFM.
+	 * Usually, markers whose type has `isCloseable` set to `true` are expected to have a normal
+	 * closing marker actually present in USFM unless otherwise specified using the `closed`
+	 * attribute. However, some markers are expected _not_ to have a normal closing marker actually
+	 * present in USFM unless otherwise specified using the `closed` attribute. To determine whether a
+	 * specific marker of this type is expected not to have a closing marker present in USFM, see
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional}.
+	 *
+	 * If this is `false`, markers of this type do not have a normal closing marker; there is never
+	 * expected to be a normal closing marker in USFM for markers of this type. In this case,
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional} is unused.
+	 *
+	 * If not present or `undefined`, defaults to `false` (meaning this `MarkerTypeInfo` is a
+	 * {@link NonCloseableMarkerTypeInfo}, not a {@link CloseableMarkerTypeInfo})
+	 */
+	isCloseable?: false;
+};
+/**
+ * Information about a USFM/USX/USJ marker type that is common to all marker types. See
+ * {@link MarkerTypeInfo} for various kinds of marker types.
+ */
+export type MarkerTypeInfoBase = {
+	/** Explanation of the meaning of this marker type */
+	description?: string;
+	/**
+	 * Whether markers of this type should have a `style` attribute in USX/USJ.
+	 *
+	 * If this is `false`, it also means the marker type is the same as the marker name.
+	 *
+	 * If not present or `undefined`, defaults to `true`.
+	 */
+	hasStyleAttribute?: boolean;
+	/**
+	 * List of attributes that should not be output to USFM on markers of this type.
+	 *
+	 * This is used for attributes that are not present in USFM.
+	 *
+	 * This property is not used when converting to USX or USJ.
+	 *
+	 * @example The `sid` attribute on the `verse` type marker is not present in USFM because it is
+	 * derived metadata in USX/USJ and is not present in USFM.
+	 */
+	skipOutputAttributeToUsfm?: string[];
+	/**
+	 * List of attributes indicating whether to skip outputting this marker to USFM. If any of the
+	 * listed attributes is present on the marker, skip outputting this marker when converting to
+	 * USFM. Only skip outputting the opening and closing marker representations, though; the content
+	 * inside the marker (if present) should not be skipped.
+	 *
+	 * This is used for certain markers that sometimes are normal markers but sometimes are derived
+	 * metadata and are not present in USFM. These derived metadata markers are identified by whether
+	 * they have specific attributes on them.
+	 *
+	 * This property is not used when converting to USX or USJ.
+	 *
+	 * @example If the `verse` marker has an `eid` attribute, it indicates it is a marker denoting the
+	 * end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that the
+	 * `verse` marker does not have the `style="v"` attribute in this situation, so this list of
+	 * attributes is on the marker type.
+	 *
+	 * Following is an example of a derived metadata `verse` marker in USX:
+	 *
+	 * ```xml
+	 * <!-- prettier-ignore -->
+	 * <para style="p">
+	 *   <verse number="21" style="v" sid="2SA 1:21" />This is verse 21.<verse eid="2SA 1:21" />
+	 * </para>
+	 * ```
+	 *
+	 * The equivalent in USFM would be:
+	 *
+	 * ```usfm
+	 * \p
+	 * \v 21 This is verse 21.
+	 * ```
+	 *
+	 * @example Generated `ref`s should be skipped but have content inside the marker that should not
+	 * be skipped. These `ref`s wrap project-localized Scripture references in `xt` markers and have
+	 * computer-readable Scripture References as their `loc` attribute. These `ref`s that are derived
+	 * metadata have the `gen` attribute set to `"true"` and can be removed if `gen="true"` is
+	 * present.
+	 *
+	 * Following is an example of a generated `ref` in USX:
+	 *
+	 * ```xml
+	 * <!-- prettier-ignore -->
+	 * <char style="xt"><ref loc="2SA 1:1" gen="true">2Sam 1:1</ref>; <ref loc="2SA 1:2-3">2Sam 1:2-3</ref>.</char>
+	 * ```
+	 *
+	 * The equivalent in USFM would be:
+	 *
+	 * ```usfm
+	 * \xt 2Sam 1:1; 2Sam 1:2-3.\xt*
+	 * ```
+	 */
+	skipOutputMarkerToUsfmIfAttributeIsPresent?: string[];
+	/**
+	 * Whether to always skip outputting this marker when converting to USFM. Only skip outputting the
+	 * opening and closing marker representations, though; the content inside the marker (if present)
+	 * should not be skipped.
+	 *
+	 * This is used for marker types that have no representation in USFM in a given version, likely
+	 * meaning they are derived metadata and are not present in USFM.
+	 *
+	 * This property is not used when converting to USX or USJ.
+	 *
+	 * If not present or `undefined`, defaults to `false`
+	 *
+	 * @example In USFM 3.1, the `table` marker type is generated while transforming USFM into USX/USJ
+	 * and is not preserved when transforming from USX/USJ to USFM.
+	 *
+	 * Following is an example of a derived metadata `table` marker in USX:
+	 *
+	 * ```xml
+	 * <!-- prettier-ignore -->
+	 * <table>
+	 *   <row style="tr">
+	 *     <cell style="th1" align="start">Header 1</cell>
+	 *     <cell style="th2" align="start">Header 2 space after </cell>
+	 *     <cell style="thc3" align="center" colspan="2">Header 3-4 centered</cell>
+	 *     <cell style="thr5" align="end">Header 5 right</cell>
+	 *   </row>
+	 *   <row style="tr">
+	 *     <cell style="tc1" align="start">Row 1 cell 1</cell>
+	 *     <cell style="tc2" align="start">Row 1 cell 2 space after </cell>
+	 *     <cell style="thc3" align="center">Row 1 cell 3 centered</cell>
+	 *     <cell style="thr4" align="end" colspan="2">Row 1 cell 4-5 right</cell>
+	 *   </row>
+	 *   <row style="tr">
+	 *     <cell style="tcr1" align="end" colspan="4">Row 2 cell 1-4 right</cell>
+	 *     <cell style="tc5" align="start">Row 2 cell 5</cell>
+	 *   </row>
+	 * </table>
+	 * ```
+	 *
+	 * The equivalent in USFM would be:
+	 *
+	 * ```usfm
+	 * \tr \th1 Header 1\th2 Header 2 space after \thc3-4 Header 3-4 centered\thr5 Header 5 right
+	 * \tr \tc1 Row 1 cell 1\tc2 Row 1 cell 2 space after \thc3 Row 1 cell 3 centered\thr4-5 Row 1 cell 4-5 right
+	 * \tr \tcr1-4 Row 2 cell 1-4 right\tc5 Row 2 cell 5
+	 * ```
+	 */
+	skipOutputMarkerToUsfm?: boolean;
+	/**
+	 * Whether markers of this type should have a newline before them in USFM.
+	 *
+	 * Note that the newline is never strictly necessary, and it is not usually present if the very
+	 * first marker in the file (or in examples such as the following example) should have a newline.
+	 *
+	 * If not present or `undefined`, defaults to `false`
+	 *
+	 * @example `para` marker types such as `p` should have a newline, but `char` marker types such as
+	 * `nd` markers should not:
+	 *
+	 * ```usfm
+	 * \p This is a plain paragraph.
+	 * \p This is a paragraph \nd with some special text\nd* in it.
+	 * ```
+	 */
+	hasNewlineBefore?: boolean;
+	/**
+	 * Marker type to use when operating on the USFM representation of markers of this type. For
+	 * example, when outputting to USFM, the marker type listed here in `markerTypeUsfm` should be
+	 * used instead of the marker's type as listed in USX or USJ.
+	 */
+	markerTypeUsfm?: string;
+	/**
+	 * Marker type to use when operating on the USX representation of markers of this type. For
+	 * example, when outputting to USX, the marker type listed here in `markerTypeUsx` should be used
+	 * instead of the marker's type as listed in USFM or USJ.
+	 */
+	markerTypeUsx?: string;
+	/**
+	 * Marker type to use when operating on the USJ representation of markers of this type. For
+	 * example, when outputting to USJ, the marker type listed here in `markerTypeUsj` should be used
+	 * instead of the marker's type as listed in USFM or USX.
+	 */
+	markerTypeUsj?: string;
+	/**
+	 * Prefix to add to the opening and closing marker before the marker name if a marker of this type
+	 * occurs within another marker of this type when outputting to USFM.
+	 *
+	 * @example In USFM 3.0, `char`-type markers that are nested must have a `+` prefix. Following is
+	 * an example of `nd` inside `wj` (both are `char`-type markers) in USFM:
+	 *
+	 * ```usfm
+	 * \p \wj This is \+nd nested\+nd*!\wj*
+	 * ```
+	 */
+	nestedPrefix?: string;
+	/**
+	 * Instructions written in plain text regarding special handling required for this marker type
+	 * when transforming to USFM. These instructions are an explanation of what needs to be done to
+	 * markers of this type to properly transform the marker to USFM.
+	 *
+	 * This property is generally only included when it is exceptionally difficult to output a marker
+	 * properly to USFM; the markers map attempts to use this property as little as possible, favoring
+	 * encoding information in other properties for more automatic transformation instead.
+	 */
+	outputToUsfmInstructions?: string;
+	/**
+	 * Instructions written in plain text regarding special handling required for this marker type
+	 * when transforming from USFM to USX or USJ. These instructions are an explanation of what needs
+	 * to be done to markers of this type to properly transform the marker to USX or USJ.
+	 *
+	 * This property is generally only included when it is exceptionally difficult to parse a marker
+	 * properly from USFM; the markers map attempts to use this property as little as possible,
+	 * favoring encoding information in other properties for more automatic transformation instead.
+	 */
+	parseUsfmInstructions?: string;
+};
+/**
+ * Information about a USFM/USX/USJ marker type that is essential for proper translation between
+ * formats.
+ *
+ * @example `char` is a marker type, which means markers like `w` whose marker type is `char` share
+ * some characteristics, and each marker also has its own set of characteristics which are presented
+ * with type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
+ *
+ * ```json
+ * {
+ *   "isCloseable": true,
+ *   "nestedPrefix": "+"
+ * }
+ * ```
+ */
+export type MarkerTypeInfo = CloseableMarkerTypeInfo | NonCloseableMarkerTypeInfo;
+/** A map of all USFM/USX/USJ markers and some information about them */
+export type MarkersMap = {
+	/** Which version of USFM/USX/USJ this map represents */
+	version: string;
+	/** Which repository this map came from. */
+	schemaRepo: string;
+	/**
+	 * Which commit this map came from. This is necessary because the schema file seems to be
+	 * distributed multiple times in one release version. As such, this specifies the exact version of
+	 * the schema file.
+	 */
+	schemaCommit: string;
+	/**
+	 * Which version of the markers map types this markers map conforms to. Follows [Semantic
+	 * versioning](https://semver.org/); the same major version contains no breaking changes.
+	 */
+	markersMapVersion: `1.${number}.${number}${string}`;
+	/**
+	 * Which tag or commit in the `https://github.com/paranext/usfm-tools` repo this map is generated
+	 * from.
+	 *
+	 * Contains the output from `git tag --points-at HEAD` or `git rev-parse HEAD`
+	 *
+	 * Will also have a `+` at the end if there were working changes outside the `src/test-data`
+	 * folder when this was generated.
+	 */
+	usfmToolsCommit: string;
+	/**
+	 * Whether any whitespace after attribute markers and before the next content is not just
+	 * structural but should actually be considered part of the content of the marker.
+	 *
+	 * Structural whitespace is whitespace in the USFM that is required as part of the USFM syntax and
+	 * usually acts as a delimiter between markers and other things. Content whitespace is whitespace
+	 * in USFM that is part of the actual Scripture text or the "content" of the marker.
+	 *
+	 * According to specification, whitespace after attribute markers is not content but is just
+	 * structural.
+	 *
+	 * According to Paratext 9.4, whitespace after attribute markers is content and is not just
+	 * structural.
+	 *
+	 * This setting determines which interpretation to use when converting from USFM to USX/USJ.
+	 *
+	 * If not present or `undefined`, defaults to `false`.
+	 */
+	isSpaceAfterAttributeMarkersContent?: boolean;
+	/**
+	 * Whether markers with optional closing markers (see
+	 * {@link NormalMarkerInfo.isClosingMarkerOptional}) should still be explicitly closed in USFM.
+	 * That is, whether markers with optional closing markers still need the `closed` attribute set to
+	 * `"false"` in USX/USJ if the closing marker is not present in USFM.
+	 *
+	 * In other words, this setting determines whether markers with optional closing markers should
+	 * still be expected to be explicitly closed (meaning the closing marker is present in USFM) when
+	 * transforming USX/USJ to USFM unless otherwise indicated by the `closed` attribute.
+	 *
+	 * If this is `true` (matches Paratext 9.4), markers with optional closing markers are treated
+	 * like markers whose normal closing marker is not optional in that they are expected to be
+	 * explicitly closed in USFM unless otherwise indicated:
+	 *
+	 * - If they are not explicitly closed in USFM, they should have `closed="false"`
+	 * - If they are explicitly closed in USFM, they do not need `closed="true"`
+	 *
+	 * If this is `false` (matches specification), markers with optional closing markers are expected
+	 * _not_ to be explicitly closed in USFM unless otherwise indicated:
+	 *
+	 * - If they are not explicitly closed in USFM, they do not need `closed="false"`
+	 * - If they are explicitly closed in USFM, they should have `closed="true"`
+	 *
+	 *   - Disclaimer: It is not clear that `closed="true"` should be present in this case according to
+	 *       `usx.rng`; it seems `usx.rng` indicates that optional closing markers should never be
+	 *       output to USFM. It is possible that `usx.rng` considers this to be a case where
+	 *       preserving the exact USFM is not important.
+	 *
+	 * If not present or `undefined`, defaults to `false`.
+	 */
+	shouldOptionalClosingMarkersBePresent?: boolean;
+	/**
+	 * Map whose keys are the marker names and whose values are information about that marker
+	 *
+	 * If you find the marker name in this map, you do not need to search the `markersRegExp` map.
+	 */
+	markers: Record<string, MarkerInfo | undefined>;
+	/**
+	 * Map whose keys are string representations of `RegExp` patterns to match against marker names
+	 * (using the
+	 * [test](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+	 * function) and whose values are information about that marker
+	 *
+	 * You do not need to search this map if you found the marker name in the `markers` map.
+	 */
+	markersRegExp: Record<string, MarkerInfo | undefined>;
+	/** Map whose keys are the marker types and whose values are information about that marker type */
+	markerTypes: Record<string, MarkerTypeInfo | undefined>;
+};
+/**
+ * A map of all USFM/USX/USJ markers and some information about them. Generated from a `usx.rng`
+ * file
+ */
+declare const USFM_MARKERS_MAP: MarkersMap;
+/**
+ * A map of all USFM/USX/USJ markers and some information about them. Generated from a `usx.rng`
+ * file and adjusted to reflect the way Paratext 9.4 handles USFM.
+ */
+declare const USFM_MARKERS_MAP_PARATEXT: MarkersMap;
 /** USJ content node type for a chapter */
 export declare const CHAPTER_TYPE = "chapter";
 /** USJ content node type for a verse */
 export declare const VERSE_TYPE = "verse";
-/** Represents a book, chapter, verse, and offset */
+/**
+ * Represents a book, chapter, verse, and offset
+ *
+ * @deprecated 23 October 2025. Use {@link UsfmVerseLocation} or {@link UsfmVerseRefVerseLocation}
+ *   instead.
+ */
 export type VerseRefOffset = {
 	verseRef: SerializedVerseRef;
 	offset: number;
 };
-/** This could actually have more content clauses at the end, but TS types are limited */
+/**
+ * A verse ref and an offset within that verse in USFM space that point to a specific location in
+ * USFM. If only a verse ref is provided, the offset is assumed to be 0.
+ *
+ * The USJ representation of the positions represented by this type are {@link UsjLocation}. Both are
+ * absolute verse reference locations.
+ *
+ * {@link UsjDocumentLocation} also represents positions of this type, but those locations are
+ * relative to a specific USJ document rather than being absolute verse reference locations like
+ * this type. The closest equivalent concept in USFM to {@link UsjDocumentLocation} is a string
+ * character index in a USFM document; such an index is relative to a specific USFM document rather
+ * than indicating an absolute position in a Scripture text.
+ *
+ * To see many examples of the same point represented by both USFM and USJ locations, go to
+ * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
+ *
+ * Note: some forms of this type are deprecated and will be removed eventually; see
+ * {@link UsfmScrRefVerseLocation} for details.
+ */
+export type UsfmVerseLocation = UsfmVerseRefVerseLocation | SerializedVerseRef | UsfmScrRefVerseLocation;
+/**
+ * A verse ref and an offset within that verse in USFM space that point to a specific location in
+ * USFM
+ */
+export type UsfmVerseRefVerseLocation = {
+	/** Verse reference indicating which verse the location is in */
+	verseRef: SerializedVerseRef;
+	/**
+	 * Offset to apply to start of the verse indicated by `verseRef`.
+	 *
+	 * If the verse is 0, offset 0 is the start of the chapter. If the verse is greater than 0, offset
+	 * 0 is the backslash on the verse marker.
+	 *
+	 * If not provided, defaults to 0.
+	 */
+	offset?: number;
+};
+/**
+ * A verse ref and an offset within that verse in USFM space that point to a specific location in
+ * USFM. This uses `scrRef` instead of `verseRef` for backwards compatibility.
+ *
+ * @deprecated 13 November 2025. Use {@link UsfmVerseLocation} instead.
+ */
+export type UsfmScrRefVerseLocation = {
+	/** Verse reference indicating which verse the location is in */
+	scrRef: SerializedVerseRef;
+	/**
+	 * Offset to apply to start of the verse indicated by `verseRef`.
+	 *
+	 * If the verse is 0, offset 0 is the start of the chapter. If the verse is greater than 0, offset
+	 * 0 is the backslash on the verse marker.
+	 *
+	 * If not provided, defaults to 0.
+	 */
+	offset?: number;
+};
+/**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space should be interpreted as starting from either the start of the book or the chapter
+ * depending on the type of location used.
+ *
+ * The USFM representation of the positions represented by this type are {@link UsfmVerseLocation}.
+ *
+ * The locations in USJ space are specified as {@link UsjDocumentLocation}s, which, on their own, are
+ * relative to a specific USJ document. However, the other information in this type specifies which
+ * USJ document the document location is relative to, meaning this location is an absolute verse
+ * reference location.
+ *
+ * The JSONPaths in these USJ-based locations are specified relative to the following USJ documents:
+ *
+ * - {@link UsjBookLocation} - a USJ document that contains the entire specified book. The first
+ *   content entry of the top-level `USJ` marker is the `id` marker of the book.
+ * - {@link UsjChapterLocation} - a USJ document that contains only the specified chapter in the
+ *   specified book. If the chapter number is 1, the first content entry of the top-level `USJ`
+ *   marker is the `id` marker of the book because the intro content before chapter 1 is part of
+ *   chapter 1. If the chapter number is greater than 1, the first content entry of the top-level
+ *   `USJ` marker is the `c` marker of the chapter.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types; see
+ * {@link UsjDocumentLocation} for more information.
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
+ */
+export type UsjLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = UsjChapterLocation<TDocumentLocation> | UsjBookLocation<TDocumentLocation>;
+/**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space should be interpreted as starting from the start of the book specified.
+ *
+ * The USFM representation of the positions represented by this type are {@link UsfmVerseLocation}.
+ *
+ * The locations in USJ space are specified as {@link UsjDocumentLocation}s, which, on their own, are
+ * relative to a specific USJ document. However, the other information in this type specifies which
+ * USJ document the document location is relative to, meaning this location is an absolute verse
+ * reference location.
+ *
+ * The JSONPaths in these USJ-based locations are specified relative to the USJ document that
+ * contains the entire specified book. The first content entry of the top-level `USJ` marker is the
+ * `id` marker of the book.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types; see
+ * {@link UsjDocumentLocation} for more information.
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
+ */
+export type UsjBookLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = UsjVerseRefBookLocation<TDocumentLocation> | UsjFlatBookLocation<TDocumentLocation>;
+/**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space should be interpreted as starting from the start of the chapter specified.
+ *
+ * The USFM representation of the positions represented by this type are {@link UsfmVerseLocation}.
+ *
+ * The locations in USJ space are specified as {@link UsjDocumentLocation}s, which, on their own, are
+ * relative to a specific USJ document. However, the other information in this type specifies which
+ * USJ document the document location is relative to, meaning this location is an absolute verse
+ * reference location.
+ *
+ * The JSONPaths in these USJ-based locations are specified relative to the USJ document that
+ * contains only the specified chapter in the specified book. If the chapter number is 1, the first
+ * content entry of the top-level `USJ` marker is the `id` marker of the book because the intro
+ * content before chapter 1 is part of chapter 1. If the chapter number is greater than 1, the first
+ * content entry of the top-level `USJ` marker is the `c` marker of the chapter.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types; see
+ * {@link UsjDocumentLocation} for more information.
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
+ *
+ * Note: some forms of this type are deprecated and will be removed eventually; see
+ * {@link UsjFlatTextChapterLocation} for details. Also note that {@link UsjFlatTextChapterLocation}
+ * can only be a marker- or text-based location and will _not_ follow the generic type specified as
+ * `TDocumentLocation`.
+ */
+export type UsjChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = UsjVerseRefChapterLocation<TDocumentLocation> | UsjFlatChapterLocation<TDocumentLocation> | UsjFlatTextChapterLocation;
+/**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space starts from the start of the book specified in the verse ref. The rest of the verse ref
+ * is meaningless and can be disregarded.
+ */
+export type UsjVerseRefBookLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = {
+	/** Verse reference indicating which book the document location is in */
+	verseRef: SerializedVerseRef;
+	/**
+	 * Specifies which part of the verse reference the document location is relative to:
+	 *
+	 * - `book` = document location is specified relative to the start of the book. The first content
+	 *   entry of the top-level `USJ` marker is the `id` marker of the book
+	 * - `chapter` = document location is specified relative to the start of the chapter in the
+	 *   specified book. If the chapter number is 1, the first content entry of the top-level `USJ`
+	 *   marker is the `id` marker of the book because the intro content before chapter 1 is part of
+	 *   chapter 1. If the chapter number is greater than 1, the first content entry of the top-level
+	 *   `USJ` marker is the `c` marker of the chapter
+	 *
+	 *   - Note: this is likely to be the case with peripheral books as well, but these books have
+	 *       `periph` markers between `id` and chapters, so this may need to be revised when
+	 *       peripheral books are more fully supported
+	 *
+	 * When using {@link UsjVerseRefLocation}, defaults to 'chapter' (see
+	 * {@link UsjVerseRefChapterLocation})
+	 */
+	granularity: "book";
+	/** USJ document location specifying where in the book the location is pointing to */
+	documentLocation: TDocumentLocation;
+};
+/**
+ * A verse ref and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space starts from the start of the chapter specified in the verse ref. The rest of the verse
+ * ref is meaningless and can be disregarded.
+ */
+export type UsjVerseRefChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = {
+	/** Verse reference indicating which chapter in which book the document location is in */
+	verseRef: SerializedVerseRef;
+	/**
+	 * Specifies which part of the verse reference the document location is relative to:
+	 *
+	 * - `book` = document location is specified relative to the start of the book. The first content
+	 *   entry of the top-level `USJ` marker is the `id` marker of the book
+	 * - `chapter` = document location is specified relative to the start of the chapter in the
+	 *   specified book. If the chapter number is 1, the first content entry of the top-level `USJ`
+	 *   marker is the `id` marker of the book. If the chapter number is greater than 1, the first
+	 *   content entry of the top-level `USJ` marker is the `c` marker of the chapter
+	 *
+	 *   - Note: this is likely to be the case with peripheral books as well, but these books have
+	 *       `periph` markers between `id` and chapters, so this may need to be revised when
+	 *       peripheral books are more fully supported
+	 *
+	 * When using {@link UsjVerseRefLocation}, defaults to 'chapter' (can alternatively be 'book';
+	 * {@link UsjVerseRefBookLocation})
+	 */
+	granularity?: "chapter";
+	/** USJ document location specifying where in the chapter the location is pointing to */
+	documentLocation: TDocumentLocation;
+};
+/**
+ * A book ID and a location in USJ space that point to a specific location in USJ. The location in
+ * USJ space starts from the start of the book specified.
+ */
+export type UsjFlatBookLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = {
+	/** Book ID indicating which book the document location is in */
+	book: string;
+	/** USJ document location specifying where in the chapter the location is pointing to */
+	documentLocation: TDocumentLocation;
+};
+/**
+ * A book ID, chapter number, and location in USJ space that point to a specific location in USJ.
+ * The location in USJ space starts from the start of the chapter specified.
+ */
+export type UsjFlatChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = UsjFlatBookLocation<TDocumentLocation> & {
+	/** Chapter number indicating which chapter the document location is in */
+	chapterNum: number;
+};
+/**
+ * A book ID, chapter number, and text location or beginning of marker location in USJ space that
+ * point to a specific location in USJ. The location in USJ space starts from the start of the
+ * chapter specified. This can only represent the beginning of a marker or a location in the USJ
+ * document's text content.
+ *
+ * @deprecated 13 November 2025. This type of location is not generic enough to support all
+ *   positions we need to be able to represent in USJ space. Use other forms of
+ *   {@link UsjChapterLocation} instead.
+ */
+export type UsjFlatTextChapterLocation = {
+	/** Book ID indicating which book the document location is in */
+	book: string;
+	/** Chapter number indicating which chapter the document location is in */
+	chapterNum: number;
+} & ((UsjMarkerLocation & {
+	offset?: undefined;
+}) | UsjTextContentLocation);
+/**
+ * JSON path to a {@link MarkerObject}, {@link Usj}, or text content string in the current USJ
+ * document.
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
 export type ContentJsonPath = "" | `$` | `$.content[${number}]` | `$.content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}]` | `$.content[${number}].content[${number}].content[${number}].content[${number}]`;
-/** Node within a USJ object, an offset within that node, and a JSONPath query to the node */
-export type UsjContentLocation = {
-	node: MarkerContent;
-	offset: number;
+/**
+ * JSON path to the `marker` or an attribute on a {@link MarkerObject} or {@link Usj} in the current
+ * USJ document. Note that it seems you must use `['bracket notation']` rather than `.dot` notation
+ * if there are symbols other than underscore in the property name
+ *
+ * This could actually have more content clauses at the end, but TS types are limited
+ */
+export type PropertyJsonPath = "" | `$.${string}` | `$['${string}']` | `$.content[${number}].${string}` | `$.content[${number}]['${string}']` | `$.content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}]['${string}']` | `$.content[${number}].content[${number}].content[${number}].content[${number}].${string}` | `$.content[${number}].content[${number}].content[${number}].content[${number}]['${string}']`;
+/**
+ * A JSONPath query to a {@link MarkerContent}, {@link Usj}, or property within a USJ document and
+ * additional information that point to a specific location in that USJ document.
+ *
+ * This type does not include a verse reference because the JSONPath is relative to a specific USJ
+ * document; that USJ document may have a book, a chapter, or something else in it. Use
+ * {@link UsjLocation} to specify which USJ document this location is relative to, making the
+ * location an absolute verse reference location. The closest equivalent concept in USFM to this
+ * relative document location is a string character index in a USFM document; such an index is
+ * relative to a specific USFM document rather than indicating an absolute position in a Scripture
+ * text.
+ *
+ * This type intends to represent USFM positions ({@link UsfmVerseLocation}) in USJ space. However,
+ * there are some USFM positions that are not currently representable with these types:
+ *
+ * - The second slash in `optbreak`'s USFM representation `//` (literally not representable)
+ * - Nested marker prefix on opening markers like `+` for character markers (literally not
+ *   representable)
+ * - The bar `|` that indicates the start of closing marker attributes (no official representation)
+ * - The equals sign for closing marker attributes (no official representation)
+ * - The quotes around closing marker attribute values (no official representation)
+ * - The space between closing marker attributes (no official representation)
+ *
+ * Also note that the following types do not specify a concrete location that is actually in the USJ
+ * document but represent a USFM location relative to the most similar thing in USJ that there is:
+ *
+ * - {@link UsjClosingMarkerLocation} - there are no distinct closing objects in JSON; there is a
+ *   common syntax for closing every object, but it is only one character and is on every single
+ *   object as opposed to USFM closing markers which are multiple characters long and are only
+ *   sometimes present.
+ * - {@link UsjAttributeKeyLocation} - when the attribute whose key is being pointed to is an attribute
+ *   marker in USFM, the `keyOffset` does not apply to the USJ attribute name (e.g. `altnumber`) but
+ *   to the USFM attribute marker name (e.g. `ca`).
+ * - {@link UsjAttributeMarkerLocation} - attribute markers are just properties in JSON; they do not
+ *   have their own object such that they would have an opening that can be pointed to in the JSON
+ *   like they have their own opening in USFM.
+ * - {@link UsjClosingAttributeMarkerLocation} - attribute markers are just properties in JSON, plus
+ *   they are in the same situation as {@link UsjClosingMarkerLocation} as detailed above.
+ *
+ * To see many examples of the same point represented by both USFM and USJ locations, go to
+ * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
+ */
+export type UsjDocumentLocation = UsjMarkerLocation | UsjClosingMarkerLocation | UsjTextContentLocation | UsjPropertyValueLocation | UsjAttributeKeyLocation | UsjAttributeMarkerLocation | UsjClosingAttributeMarkerLocation;
+/**
+ * A JSONPath query to a {@link MarkerObject} or {@link Usj} node. Indicates the very beginning of
+ * that marker (at the backslash in USFM).
+ */
+export type UsjMarkerLocation = {
+	/** JSON path to the marker object the location is pointing to. */
 	jsonPath: ContentJsonPath;
+};
+/**
+ * A JSONPath query to a specific point in the closing marker representation of a
+ * {@link MarkerObject} or {@link Usj} node.
+ */
+export type UsjClosingMarkerLocation = {
+	/**
+	 * JSON path to the marker object whose closing marker the location is pointing to. The offset
+	 * applies to the closing marker representation of that marker (for example, `\nd*` in USFM).
+	 */
+	jsonPath: ContentJsonPath;
+	/**
+	 * The character index in the closing marker representation where this location is pointing. The
+	 * location is at this offset within the closing marker representation.
+	 */
+	closingMarkerOffset: number;
+};
+/**
+ * A JSONPath query to a specific point in a text content string in a {@link MarkerObject.content}
+ * array.
+ */
+export type UsjTextContentLocation = {
+	/**
+	 * JSON path to the text content string the location is pointing to. The offset applies to this
+	 * text string.
+	 */
+	jsonPath: ContentJsonPath;
+	/**
+	 * The character index in the text content string where this location is pointing. The location is
+	 * at this offset within the text content string.
+	 */
+	offset: number;
+};
+/**
+ * A JSONPath query to a specific point in a property (`marker` or an attribute) value string in a
+ * {@link MarkerObject} or {@link Usj}. The property cannot be `type` because `type`'s value has no
+ * representation in USFM.
+ *
+ * To represent a location in an attribute's key, use {@link UsjAttributeKeyLocation}.
+ */
+export type UsjPropertyValueLocation = {
+	/**
+	 * JSON path to the property the location is pointing to. The offset applies to this property's
+	 * value string.
+	 */
+	jsonPath: PropertyJsonPath;
+	/**
+	 * The character index in the property's value string where this location is pointing. The
+	 * location is at this offset within the property's value string.
+	 */
+	propertyOffset: number;
+};
+/**
+ * A JSONPath query to a specific point in an attribute key string in a {@link MarkerObject} or
+ * {@link Usj}. The property cannot be `type` or `marker` because these properties' keys have no
+ * representation in USFM. The property also cannot be any special attribute whose key doesn't have
+ * a text representation in USFM like default attribute, leading attribute, text content attribute
+ *
+ * To represent a location in an attribute's value, use {@link UsjPropertyValueLocation}.
+ */
+export type UsjAttributeKeyLocation = {
+	/**
+	 * JSON path to the marker whose attribute key the location is pointing to. The offset applies to
+	 * this attribute's key string unless the attribute is an attribute marker in USFM.
+	 */
+	jsonPath: ContentJsonPath;
+	/** Attribute name on the marker object whose key this location is pointing to. */
+	keyName: string;
+	/**
+	 * The character index in the attribute's key string where this location is pointing.
+	 *
+	 * If the attribute is an attribute marker in USFM, the location is at this offset within the
+	 * marker name for this attribute marker (for example, `c`'s `altnumber` attribute has attribute
+	 * marker `ca`, so its `keyOffset` applies to `ca`).
+	 *
+	 * If the attribute is not an attribute marker in USFM, the location is at this offset within the
+	 * attribute's key string.
+	 */
+	keyOffset: number;
+};
+/**
+ * A JSONPath query to an attribute marker derived from an attribute on a {@link MarkerObject} or
+ * {@link Usj}. Indicates the very beginning of that marker (at the backslash in USFM).
+ */
+export type UsjAttributeMarkerLocation = {
+	/** JSON path to the marker whose attribute marker the location is pointing to. */
+	jsonPath: ContentJsonPath;
+	/**
+	 * Attribute name on the marker object whose key this location is pointing to. This attribute is
+	 * an attribute marker in USFM.
+	 */
+	keyName: string;
+};
+/**
+ * A JSONPath query to a specific point in the closing marker representation of an attribute marker
+ * derived from an attribute on a {@link MarkerObject} or {@link Usj}.
+ */
+export type UsjClosingAttributeMarkerLocation = {
+	/**
+	 * JSON path to the marker whose attribute marker's closing marker the location is pointing to.
+	 * The offset applies to the closing marker representation of that attribute marker (for example,
+	 * `\ca*` in USFM).
+	 */
+	jsonPath: ContentJsonPath;
+	/**
+	 * Attribute name on the marker object whose key this location is pointing to. This attribute is
+	 * an attribute marker in USFM.
+	 */
+	keyName: string;
+	/**
+	 * The character index in the closing marker representation where this location is pointing. The
+	 * location is at this offset within the closing marker representation of the attribute marker.
+	 */
+	keyClosingMarkerOffset: number;
+};
+/**
+ * Node in a USJ object (including the top-level Usj object) and its location in the document. You
+ * must make sure you only add `node`s that correspond to the appropriate type of
+ * `UsjDocumentLocation` (e.g. if `documentLocation` is a {@link UsjTextContentLocation}, `node` must
+ * be a text content string)
+ *
+ * You can specify a particular kind of `UsjDocumentLocation` in the generic type
+ * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
+ */
+export type UsjNodeAndDocumentLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = {
+	node: TDocumentLocation extends UsjTextContentLocation ? string : MarkerObject | Usj;
+	documentLocation: TDocumentLocation;
 };
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
-	location: UsjContentLocation;
-	/** The matching text that was found at the location */
+	/**
+	 * Beginning location in the USJ document of the search result. The text is inclusive of this
+	 * location, meaning this is the location of the first character of the found text
+	 */
+	start: UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * Ending location in the USJ document of the search result. The text is exclusive of this
+	 * location, meaning this is the location right after the last character of the found text
+	 */
+	end: UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * The matching Scripture text (not USFM string) that was found between the start and end
+	 * locations
+	 */
 	text: string;
+};
+/**
+ * Set of options to provide to `UsjReaderWriter`'s constructor to customize how the reading and
+ * writing works
+ */
+export type UsjReaderWriterOptions = {
+	/**
+	 * A map of all USFM/USX/USJ markers and some information about them. Used for translating between
+	 * the formats
+	 *
+	 * Defaults to trying to use a built-in markers map that matches the version of the USJ passed in.
+	 *
+	 * Currently supported built-in USFM versions:
+	 *
+	 * - 3.0/3.0.x
+	 */
+	markersMap?: MarkersMap;
+	/**
+	 * Whether the transformations should preserve invisible characters as in Paratext 9
+	 * (`ScrText.Settings.AllowInvisibleChars`).
+	 *
+	 * Defaults to `false`
+	 */
+	shouldAllowInvisibleCharacters?: boolean;
 };
 /** Utilities for reading from and writing to `Usj` objects */
 export interface IUsjReaderWriter {
@@ -1559,7 +2768,7 @@ export interface IUsjReaderWriter {
 	 * @param start Point where text extraction will start
 	 * @param desiredLength Length of text to extract from this USJ data
 	 */
-	extractText(start: UsjContentLocation, desiredLength: number): string;
+	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
 	/**
 	 * Return a copy of text between two points
 	 *
@@ -1568,7 +2777,7 @@ export interface IUsjReaderWriter {
 	 * @param maxLength Maximum length of string to return (defaults to 100)
 	 * @returns Text between the two points, capped at length `maxLength`
 	 */
-	extractTextBetweenPoints(start: UsjContentLocation, end: UsjContentLocation, maxLength: number): string;
+	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength: number): string;
 	/**
 	 * Given a starting point, find the next location in this USJ data that matches the given text
 	 *
@@ -1582,7 +2791,7 @@ export interface IUsjReaderWriter {
 	 *   an object, it is the same object that is within this USJ data. So if you change it, you are
 	 *   changing this USJ data.
 	 */
-	findNextLocationOfMatchingText(start: UsjContentLocation, text: string, maxTextLengthToSearch: number): UsjContentLocation | undefined;
+	findNextLocationOfMatchingText(start: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
 	/** Find the first value matching the given JSONPath query within this USJ data */
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	/** Find the parent of the first value matching the given JSONPath query within this USJ data */
@@ -1591,31 +2800,62 @@ export interface IUsjReaderWriter {
 	 * Convert a JSONPath query into a SerializedVerseRef and offset
 	 *
 	 * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
-	 *   the expression matches more than one node, then only the first node found is considered.
-	 * @param bookId 3 letter ID of the book being searched (must be defined in this USJ data if not
-	 *   provided here)
-	 * @returns SerializedVerseRef and offset that represents the location within this USJ data
+	 *   the expression matches more than one node, then only the first node found is considered. Note
+	 *   that this query must yield a {@link MarkerContent} or {@link Usj}; JSONPaths yielding
+	 *   properties on nodes are not currently supported.
+	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+	 *   is not found in the USJ document)
+	 * @returns SerializedVerseRef and offset that represent the location within this USJ data
+	 *   indicated by `jsonPathQuery`
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
+	 */
+	jsonPathToUsfmVerseRefVerseLocation(jsonPathQuery: string, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
+	/**
+	 * Convert a JSONPath query into a USJ node, JSONPath, and offset
+	 *
+	 * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
+	 *   the expression matches more than one node, then only the first node found is considered. Note
+	 *   that this query must yield a {@link MarkerContent} or {@link Usj}; JSONPaths yielding
+	 *   properties on nodes are not currently supported.
+	 * @returns USJ node, JSONPath, and offset that represent the location within this USJ data
 	 *   indicated by `jsonPathQuery`
 	 */
-	jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset;
+	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
 	/** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
 	nodeToJsonPath(node: MarkerObject): ContentJsonPath;
 	/**
-	 * Determine the SerializedVerseRef and offset that correspond to the location of a node somewhere
-	 * within this USJ data
+	 * Determine the location in the USFM representation of this data that corresponds to the location
+	 * of a node somewhere within this USJ data
 	 *
-	 * @param bookId ID of the book represented by this USJ data
-	 * @param node JSON object representing the location of the SerializedVerseRef and offset
-	 * @param nodeParent JSON object that owns the `content` array that includes `node`. If
-	 *   'undefined' is provided then the `UsjReaderWriter` will attempt to lookup the parent of
-	 *   `node`. The lookup will always fail and throw an error if `node` is a string.
+	 * @param node JSON object or string in the USJ data to get the USFM location for
+	 * @param nodeParent JSON object that owns the `content` array that includes `node`. Required if
+	 *   `node` is a string; optional and unused if `node` is a {@link MarkerObject} or {@link Usj}
+	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+	 *   is not found in the USJ document)
 	 * @returns SerializedVerseRef and offset representing the location of `node`, if one could be
 	 *   found
+	 * @throws If `node` is a string and no `nodeParent` is provided
+	 * @throws If not able to establish relationship between string `node` and `nodeParent`
+	 * @throws If not able to find the node in the USJ document
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
 	 */
-	nodeToVerseRefAndOffset(bookId: string, node: MarkerContent, nodeParent: MarkerObject | MarkerContent[] | undefined): {
-		verseRef: SerializedVerseRef;
-		offset: number;
-	} | undefined;
+	nodeToUsfmVerseRefVerseLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
+	/**
+	 * Determine the location in the USJ document that corresponds to the location of a node somewhere
+	 * within this USJ data
+	 *
+	 * @param node JSON object or string in the USJ data to get the USJ location for
+	 * @param nodeParent JSON object that owns the `content` array that includes `node`. Required if
+	 *   `node` is a string; optional and unused if `node` is a {@link MarkerObject} or {@link Usj}
+	 * @returns Node, JSONPath, and offset info representing the location of `node`, if one could be
+	 *   found
+	 * @throws If `node` is a string and no `nodeParent` is provided
+	 * @throws If not able to establish relationship between string `node` and `nodeParent`
+	 * @throws If not able to find the node in the USJ document
+	 */
+	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation;
 	/**
 	 * Remove all nodes from this USJ data that match a given search function.
 	 *
@@ -1630,38 +2870,78 @@ export interface IUsjReaderWriter {
 	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
 	 */
 	search(regex: RegExp): UsjSearchResult[];
+	/** Transforms the USJ document into USFM */
+	toUsfm(): string;
+	/**
+	 * Get the index in the USFM representation of this data relative to the start of the document
+	 * that corresponds to the absolute verse location in USFM space passed in
+	 *
+	 * @param usfmVerseLocation The location in USFM space relative to a verse to get the index for
+	 * @returns Index in the USFM representation of this data relative to the start of the document
+	 */
+	usfmVerseLocationToIndexInUsfm(usfmVerseLocation: UsfmVerseLocation): number;
+	/**
+	 * Get the node + offset and JSONPath query within this USJ data of the first encountered string
+	 * after the provided USFM location for a specific verse in a USJ document.
+	 *
+	 * Note: this may return a node that is in a subsequent verse or even chapter depending on how
+	 * much content the USJ data contains. It simply looks through the rest of the USJ data for the
+	 * first text node and returns that.
+	 *
+	 * @param usfmVerseLocation Indicates the location in USFM space (book, chapter, verse, character
+	 *   offset) to find the next text for
+	 * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
+	 *   indicates the location of the USJ text node within this USJ data.
+	 * @throws Error if there is no text after `usfmVerseLocation`
+	 * @throws Error if `usfmVerseLocation` does not point to a valid location in this USJ data
+	 */
+	usfmVerseLocationToNextTextLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * Convert a verse-based location in USFM space into a location in USJ space within this USJ data.
+	 *
+	 * If the USJ document has no book markers in it to determine which book the USJ is in, the
+	 * `verseRef.book` will be ignored, and only the chapter and verse numbers will be used to
+	 * determine the location.
+	 *
+	 * @param usfmVerseLocation Location in USFM space - a book, chapter, verse, and character offset
+	 *   within the verse's USFM
+	 * @returns Object containing the USJ location within the USJ document indicated by
+	 *   `usfmVerseLocation`.
+	 */
+	usfmVerseLocationToUsjDocumentLocation(usfmVerseLocation: UsfmVerseLocation): UsjDocumentLocation;
+	/**
+	 * Convert a verse-based location in USFM space into a node and location in USJ space within this
+	 * USJ data.
+	 *
+	 * If the USJ document has no book markers in it to determine which book the USJ is in, the
+	 * `verseRef.book` will be ignored, and only the chapter and verse numbers will be used to
+	 * determine the location.
+	 *
+	 * @param usfmVerseLocation Location in USFM space - a book, chapter, verse, and character offset
+	 *   within the verse's USFM
+	 * @returns Object containing the USJ node and location within the USJ document indicated by
+	 *   `usfmVerseLocation`. Note that if the USJ node returned is an object, it is the same object
+	 *   that is within this USJ data. So if you change it, you are changing this USJ data.
+	 */
+	usfmVerseLocationToUsjNodeAndDocumentLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation;
 	/**
 	 * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
 	 * caches used when querying.
 	 */
 	usjChanged(): void;
 	/**
-	 * Convert a verse ref + offset into a node + offset within this USJ data and a JSONPath query
+	 * Convert a location in USJ space within this USJ data into a location in USFM space.
 	 *
-	 * @param verseRef Indicates the book, chapter, and verse of interest to find
-	 * @param verseRefOffset Specific location within verse text (defaults to 0)
-	 * @returns Object containing the USJ node indicated by `verseRef` and `verseRefOffset`, offset
-	 *   within that node that matches the `verseRefOffset`, and a JSONPath string that indicates the
-	 *   location of the of USJ node within this USJ data. Note that if the USJ node returned is an
-	 *   object, it is the same object that is within this USJ data. So if you change it, you are
-	 *   changing this USJ data.
+	 * @param usjLocation Location in USJ space - a jsonPath and other information about where the
+	 *   location is
+	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+	 *   is not found in the USJ document)
+	 * @returns Location in USFM space that is equivalent to the USJ location specified
+	 * @throws If not able to find the location in the USJ document
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
 	 */
-	verseRefToUsjContentLocation(verseRef: SerializedVerseRef, verseRefOffset: number): UsjContentLocation;
-	/**
-	 * Get the node + offset and JSONPath query within this USJ data of the first encountered string
-	 * after the verse marker for a specific verse in a USJ chapter.
-	 *
-	 * Note: this may return a node that is in a subsequent verse or even chapter depending on how
-	 * much content the USJ data contains. It simply looks through the rest of the USJ data for the
-	 * first text node and returns that.
-	 *
-	 * @param verseRef Indicates the book, chapter, and verse of interest to find the next text for
-	 * @returns Object containing the first USJ text node after `verseRef`, and a JSONPath string that
-	 *   indicates the location of the of USJ text node within this USJ data.
-	 * @throws Error if there is no text after the verse marker for `verseRef`
-	 * @throws Error if `verseRef` does not point to a valid verse in this USJ data
-	 */
-	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
+	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
 /** Gets the default caller sequence to use to generate callers for textual notes. */
 export declare function getDefaultCallerSequence(): string[];
@@ -3567,16 +4847,87 @@ export declare function getStylesheetForTheme(theme: ThemeDefinitionExpanded): s
  * @returns
  */
 export declare function applyThemeStylesheet(this: Window, theme: ThemeDefinitionExpanded, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
-/** Represents USJ formatted scripture with helpful utilities for working with it */
+/**
+ * Represents information about where a USJ node resides in the `content` array of its parent.
+ * `parent` is a reference to the node's parent, and `index` represents the numeric index inside of
+ * `parent`'s content array.
+ */
+export type StackItem = {
+	parent: MarkerObject | Usj;
+	index: number;
+};
+/**
+ * Stack of levels inside a USJ tree relative to a specific node. The top of the stack should always
+ * be the root Usj object.
+ */
+export type WorkingStack = StackItem[];
+/**
+ * Represents USJ formatted scripture with helpful utilities for working with it. Some notable
+ * features:
+ *
+ * - Find Scripture text in the USJ document
+ *
+ *   - `extractText`
+ *   - `extractTextBetweenPoints`
+ *   - `findNextLocationOfMatchingText`
+ *   - `search`
+ *   - `usfmVerseLocationToNextTextLocation`
+ * - Edit the USJ document: `removeContentNodes`
+ * - Transform USJ to USFM: `toUsfm`
+ * - Transform USJ document locations to USFM locations and vice versa
+ *
+ *   - `usfmVerseLocationToUsjDocumentLocation`
+ *   - `usjDocumentLocationToUsfmVerseRefVerseLocation`
+ * - Use the version of USFM you need by passing in a custom markers map to the constructor if the
+ *   version in your USJ document is not supported by default:
+ *   {@link UsjReaderWriterOptions.markersMap}
+ *
+ * Notes:
+ *
+ * - "node" is a term used in the methods in this class that usually means an object or content string
+ *   somewhere in the USj document, either {@link Usj} or {@link MarkerContent}. However, in specific
+ *   situations, it may refer only to {@link MarkerObject} or {@link MarkerContent}. The TypeScript
+ *   types indicate when this is the case.
+ * - See {@link UsfmVerseLocation} and {@link UsjDocumentLocation} for information about transforming
+ *   USFM locations and USJ locations including what kinds of USFM locations are and are not
+ *   representable in USJ locations, which USJ locations actually correspond to something in USJ,
+ *   etc.
+ * - It is best to reuse the same `UsjReaderWriter` for the same USJ document as long as possible
+ *   because there is a significant amount of processing and caching done internally to facilitate
+ *   various operations. Note that, if the USJ document added to `UsjReaderWriter` changes, you must
+ *   run `usjChanged` to clear the internal caches and receive accurate results from future method
+ *   calls
+ */
 export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly usj;
+	private readonly markersMap;
+	private readonly shouldAllowInvisibleCharacters;
 	private parentMapInternal;
-	constructor(usj: Usj);
+	private fragmentsByIndexInUsfmInternal;
+	private fragmentsByJsonPathInternal;
+	private indicesInUsfmByVerseRefInternal;
+	private usfmInternal;
+	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
+	private static areUsjVersionsCompatible;
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	findParent<T>(jsonPathQuery: string): T | undefined;
-	private findBookId;
-	private findChapterNode;
+	/**
+	 * Determine if the passed in marker is the top-level USJ marker.
+	 *
+	 * Note that USJ markers that are not the top-level USJ markers technically should not occur, but
+	 * they can occur. We should treat them like any other marker. They conform to
+	 * {@link MarkerObject}, so it's not hard to do.
+	 *
+	 * @param marker Marker to test if it is USJ marker
+	 * @returns `true` if it is a USJ marker; false otherwise
+	 */
+	static isTopLevelUsjMarker(marker: Usj | MarkerContent, workingStack: WorkingStack): marker is Usj;
+	/**
+	 * Determine if a fragment is a marker, not a text content string or some kind of position
+	 * fragment that isn't actually a marker e.g. closing marker fragment
+	 */
+	private static isFragmentAMarker;
 	private static createParentMapInternal;
 	/** Viewing a Usj object as a tree, build a map to walk up the tree */
 	private createUsjParentMap;
@@ -3592,7 +4943,23 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private static areStackItemsShallowEqual;
 	/** Return the working stack applicable to the given node */
 	private createWorkingStack;
+	/**
+	 * Transform a JSONPath array (`JSONPath.toPathArray`) to a "normalized" JSONPath. We can use this
+	 * JSONPath for lookups in {@link FragmentsByJsonPath}
+	 */
+	private static jsonPathArrayToJsonPath;
+	/** "Normalize" the JSONPath passed in so we can use it for lookups in {@link FragmentsByJsonPath} */
+	private static normalizeJsonPath;
+	/**
+	 * Returns a "normalized" JSONPath transformed from the working stack. We can use this JSONPath
+	 * for lookups in {@link FragmentsByJsonPath}
+	 */
 	private static convertWorkingStackToJsonPath;
+	/**
+	 * Returns a "normalized" JSONPath transformed from the working stack and property. We can use
+	 * this JSONPath for lookups in {@link FragmentsByJsonPath}
+	 */
+	private static convertWorkingStackAndPropertyToJsonPath;
 	private convertJsonPathToWorkingStack;
 	/**
 	 * Extract textual notes (aka, "footnotes") from a full USJ object.
@@ -3601,45 +4968,318 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 */
 	findAllNotes(): MarkerObject[];
 	/**
-	 * Given the starting point of a tree to consider (`node`), find the rightmost MarkerObject from
-	 * the array of `content`. In the following example, this would be "J".
+	 * Look through the USJ document for a node or the closing of a node matching some condition. This
+	 * will run `searchFunction` for `node`, all nodes encountered in `node.contents` (recursively),
+	 * when `node` closes, and all nodes after `node`
 	 *
-	 *         A        <- Consider "A" to be `node`
-	 *     / / | \ \
-	 *     B C D E F    <- Consider these to be MarkerObjects inside the `content` array owned by "A"
-	 *     |  / \  |
-	 *     G H   I J    <- Consider these to be MarkerObjects inside their parents `content` arrays
-	 *
-	 * If "F" did not exist in this example, then "E" would be returned. If "E" and "F" didn't exist,
-	 * then "I" would be returned.
-	 *
-	 * The general idea here is that we are looking for the MarkerObject in Usj that is immediately
-	 * adjacent to whatever `node`'s next sibling is in `parent`'s `content` array.
+	 * @param node Node from which to start looking
+	 * @param workingStack Working stack pointing to this node (should not include this node)
+	 * @param skipTypes List of marker types to skip (skips all contents of skipped markers)
+	 * @param searchFunction Function that nodes and representations of the closing of nodes will be
+	 *   passed into to determine if they are the correct node or representation of the closing of a
+	 *   node. Stops searching and returns the node/close if this function returns `true`
+	 * @returns Node or representation of the closing of a node matching condition tested by the
+	 *   search function
 	 */
-	private static findRightMostDescendantMarkerObject;
-	private static findNextMatchingNodeUsingWorkingStack;
+	private static findNextMatchingNodeOrClosingFragmentUsingWorkingStack;
 	/**
-	 * Walk through a USJ node tree depth-first, left-to-right to find the first node that matches
-	 * criteria specified by `searchFunction` (i.e., the first node where `searchFunction` returns
-	 * `true`)
+	 * Look through the USJ document for a node matching some condition
+	 *
+	 * @param node Node from which to start looking
+	 * @param workingStack Working stack pointing to this node (should not include this node)
+	 * @param skipTypes List of marker types to skip (skips all contents of skipped markers)
+	 * @param searchFunction Function that nodes will be passed into to determine if they are the
+	 *   correct node. Stops searching and returns the node if this function returns `true`
+	 * @returns Node matching condition tested by the search function
 	 */
-	private findNextMatchingNode;
+	private static findNextMatchingNodeUsingWorkingStack;
 	nodeToJsonPath(node: MarkerObject): ContentJsonPath;
-	/** Find the chapter and verse that apply to a given USJ node */
-	private findVerseRefForNode;
-	nodeToVerseRefAndOffset(bookId: string, node: MarkerContent, nodeParent: MarkerObject | MarkerContent[] | undefined): {
-		verseRef: SerializedVerseRef;
+	nodeToUsfmVerseRefVerseLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
+	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation;
+	/**
+	 * Finds the node associated with the JSONPath provided, and also gets the parent of the node if
+	 * the node is a string. This is helpful so you can find a real object that is actually somewhere
+	 * in the USJ document from the JSONPath
+	 *
+	 * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
+	 *   the expression matches more than one node, then only the first node found is considered.
+	 * @returns First node found at the JSONPath and the parent of that node _if_ the node is a
+	 *   string. Note that the object returned is the actual object in the USJ document.
+	 */
+	private jsonPathToNodeAndParentIfString;
+	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
+	jsonPathToUsfmVerseRefVerseLocation(jsonPathQuery: string, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
+	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
+	/**
+	 * Gets the book ID in the internal USJ document data corresponding to the book ID passed in.
+	 *
+	 * @param bookId The book ID to look up data in the USJ document for
+	 * @returns If there isn't a book ID in the USJ document, {@link NO_BOOK_ID} will be returned
+	 * @throws If the requested book is not found in the USJ data and there are other books
+	 * @throws If there is no USJ content in the document whatsoever
+	 */
+	private getEffectiveBookId;
+	/**
+	 * Gets the index in USFM of the start of the verse (the backslash on the verse marker or the
+	 * beginning of the chapter if verse 0 is provided)
+	 */
+	private getIndexInUsfmForVerseRef;
+	/**
+	 * Gets the verse ref that the provided index in USFM is in (including verse range if applicable).
+	 * Finds the closest verse ref before the index in USFM.
+	 *
+	 * @param indexInUsfm The index in USFM from the beginning of this document
+	 * @param bookIdIfNotFound 3-letter ID of the book this USJ document is in (only used if a book ID
+	 *   is not found in the USJ document)
+	 * @returns Closest verse reference before or at the index in USFM
+	 * @throws If not able to find a book ID in the USJ document and `bookIdIfNotFound` is not
+	 *   provided
+	 */
+	private getVerseRefForIndexInUsfm;
+	usfmVerseLocationToIndexInUsfm(usfmVerseLocation: UsfmVerseLocation): number;
+	/**
+	 * Transforms a USFM verse-based location into a single standardized format of USFM verse-based
+	 * location for ease of accessing the location's properties
+	 *
+	 * @param usfmVerseLocation USFM verse-based location in one of multiple forms
+	 * @returns USFM verse-based location in one particular form. Also ensures `offset` is defined
+	 *   (defaults to 0 as described in {@link UsfmVerseLocation})
+	 */
+	static usfmVerseLocationToUsfmVerseRefVerseLocation(usfmVerseLocation: UsfmVerseLocation): UsfmVerseRefVerseLocation & {
 		offset: number;
-	} | undefined;
-	jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset;
-	verseRefToUsjContentLocation(verseRef: SerializedVerseRef, verseRefOffset?: number): UsjContentLocation;
-	verseRefToNextTextLocation(verseRef: SerializedVerseRef): UsjContentLocation;
-	findNextLocationOfMatchingText(startingPoint: UsjContentLocation, text: string, maxTextLengthToSearch?: number): UsjContentLocation | undefined;
+	};
+	/**
+	 * Transforms a USJ chapter-based location into a single standardized format of USJ chapter-based
+	 * location for ease of accessing the location's properties
+	 *
+	 * @param usjChapterLocation USJ chapter-based location in one of multiple forms
+	 * @returns USJ chapter-based location in one particular form.
+	 * @throws If erroneously received a {@link UsjBookLocation}, not a {@link UsjChapterLocation}.
+	 *   Cannot statically transform between those because there is no way to know how to change the
+	 *   JSONPath
+	 */
+	static usjChapterLocationToUsjVerseRefChapterLocation(usjChapterLocation: UsjChapterLocation): UsjVerseRefChapterLocation;
+	/**
+	 * Transforms a USJ book-based location into a single standardized format of USJ book-based
+	 * location for ease of accessing the location's properties
+	 *
+	 * @param usjBookLocation USJ book-based location in one of multiple forms
+	 * @returns USJ book-based location in one particular form.
+	 * @throws If erroneously received a {@link UsjChapterLocation}, not a {@link UsjBookLocation}.
+	 *   Cannot statically transform between those because there is no way to know how to change the
+	 *   JSONPath
+	 */
+	static usjBookLocationToUsjVerseRefBookLocation(usjBookLocation: UsjBookLocation): UsjVerseRefBookLocation;
+	usfmVerseLocationToUsjNodeAndDocumentLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation;
+	usfmVerseLocationToUsjDocumentLocation(usfmVerseLocation: UsfmVerseLocation | SerializedVerseRef): UsjDocumentLocation;
+	/**
+	 * Determine if the USJ document location is pointing to a text content location instead of some
+	 * location related to a marker object
+	 *
+	 * @param usjDocumentLocation USJ document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForTextContent(usjDocumentLocation: UsjDocumentLocation): usjDocumentLocation is UsjTextContentLocation;
+	/**
+	 * Determine if the USJ document location in this node and document location is pointing to a text
+	 * content location instead of some location related to a marker object
+	 *
+	 * @param usjNodeAndDocumentLocation USJ node and document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForTextContent(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	usfmVerseLocationToNextTextLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	findNextLocationOfMatchingText(startingPoint: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch?: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
 	search(regex: RegExp): UsjSearchResult[];
-	extractText(start: UsjContentLocation, desiredLength: number): string;
-	extractTextBetweenPoints(start: UsjContentLocation, end: UsjContentLocation, maxLength?: number): string;
+	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
+	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;
 	removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number;
+	/**
+	 * Get `MarkerInfo` by marker name
+	 *
+	 * @param markerName Name of the marker for which to get `MarkerInfo`
+	 * @returns `MarkerInfo` for the marker by name if the marker is in the markers map. `undefined`
+	 *   if the marker is not in the markers map. If you have the marker type, you can build a fake
+	 *   `MarkerInfo` for an unknown marker by making an object with just the type. If not, might be
+	 *   best to throw an error since there probably isn't enough information available to do anything
+	 *   with that marker.
+	 */
+	private getMarkerInfo;
+	/**
+	 * Gathers various pieces of information about a marker that are helpful for transforming the
+	 * marker to USFM
+	 *
+	 * WARNING: this only has the ability to return the info for the marker to be used in USFM. If you
+	 * need to use info for the marker in USX or USJ, this method needs to be modified.
+	 *
+	 * @param marker A USJ marker (can be USJ type) or a string which is the marker name
+	 * @param scriptureFormat The Scripture format to get the marker information for. For example, if
+	 *   you are using this marker info to transform the marker into USFM, this should be `usfm`.
+	 *   Defaults to `usfm`
+	 * @returns Various pieces of info about the marker
+	 */
+	private getInfoForMarker;
+	/** Converts the text content of a marker to its equivalent in USFM */
+	private textContentToUsfm;
+	/**
+	 * Merge an independent array of fragment info into an existing array of fragment info, offsetting
+	 * the indices of the new fragments so their locations start from the end of the string
+	 */
+	private static mergeFragmentsInfoIntoExistingArray;
+	/**
+	 * Transforms the provided USJ marker into its opening marker representation in USFM
+	 *
+	 * Includes a newline before the marker if applicable. Generally also includes a space at the end.
+	 *
+	 * Opening markers generally look like the following:
+	 *
+	 * ```text
+	 * \markerName leadingAttributes textContentAttribute attributeMarkers
+	 * ```
+	 *
+	 * @param marker The marker to transform
+	 * @param isInsideMarkerWithSameType `true` if this marker is inside another marker of the same
+	 *   type. This is used to determine if a prefix should be added before the marker name.
+	 * @returns String containing the marker information that should come before the contents of the
+	 *   marker in USFM
+	 */
+	private openingMarkerToUsfm;
+	/**
+	 * Transforms the provided USJ marker into its closing marker representation in USFM
+	 *
+	 * Closing markers do not include the attributes listed as part of the opening markers (leading
+	 * attributes, text content attributes, and attribute markers). They only include other kinds of
+	 * attributes including the default attribute if present.
+	 *
+	 * Closing markers with only the default attribute present generally look like the following:
+	 *
+	 * ```text
+	 * |defaultAttribute\markerName*
+	 * ```
+	 *
+	 * Closing markers with at least one non-default attribute present generally look like the
+	 * following:
+	 *
+	 * ```text
+	 * |attributeName="AttributeValue" attributeName="AttributeValue"\markerName*
+	 * ```
+	 *
+	 * @param marker The marker to transform
+	 * @param isInsideMarkerWithSameType `true` if this marker is inside another marker of the same
+	 *   type. This is used to determine if a prefix should be added before the marker name.
+	 * @returns String containing the marker information that should come after the contents of the
+	 *   marker in USFM
+	 */
+	private closingMarkerToUsfm;
+	/**
+	 * Determines whether this marker and all its content should be skipped entirely when outputting
+	 * to USFM
+	 *
+	 * @param marker Marker to check
+	 * @returns `true` if this marker should be skipped; `false` otherwise
+	 */
+	private shouldSkipOutputMarkerToUsfm;
+	/** Removes one space at the end of the string if present */
+	private static removeEndSpace;
+	/**
+	 * Add an opening or closing marker USFM representation to the end of a string of USFM
+	 *
+	 * @param usfm The USFM string to add the marker to
+	 * @param marker The opening or closing marker to add to the USFM
+	 * @param markerParent Parent of the marker being added. Used to determine if this marker is
+	 *   nested within another marker of the same type
+	 * @param fragmentsInfo The array of fragment information built so far for the USFM string passed
+	 *   in. THIS METHOD WILL MODIFY THE ARRAY PASSED IN; it will add new fragments that correspond to
+	 *   the marker added.
+	 * @returns Final USFM string with the marker added
+	 */
+	private addMarkerUsfmToString;
+	toUsfm(): string;
+	/**
+	 * Returns a new {@link UsjDocumentLocation} based on the one passed in but with the offset
+	 * provided. If the location passed in does not have an offset property, a shallow clone of the
+	 * location will be returned with no changes.
+	 */
+	private static moveUsjDocumentLocationToNewOffset;
+	/**
+	 * Returns the offset of whatever kind that is found in the UsjDocumentLocation. Returns 0 if the
+	 * location passed in does not have an offset property.
+	 */
+	private static getOffsetInUsjDocumentLocation;
+	/**
+	 * Compares two UsjDocumentLocations to determine if they are pointing to the same location
+	 *
+	 * @param a The first location to compare
+	 * @param b The second location to compare
+	 * @param ignoreJsonPath If `true`, the JSONPath properties of the locations will be ignored in
+	 *   the comparison. This is useful if you have already determined that the JSONPaths are the
+	 *   same
+	 */
+	private static areUsjDocumentLocationsEqual;
+	/** Find the fragment info corresponding to the specified USJ Document location. */
+	private findFragmentInfoAtUsjDocumentLocation;
+	/**
+	 * Transform a node and its working stack into the {@link UsjDocumentLocation} corresponding to it.
+	 *
+	 * @param node Marker or string to convert
+	 * @param workingStack Working stack pointing to the node
+	 * @param locationOffset If applicable, this is the offset that will be put on the
+	 *   {@link UsjDocumentLocation}. If not present, offset on the {@link UsjDocumentLocation} will be
+	 *   `0`. Not all subtypes of {@link UsjDocumentLocation}s have offsets, so this is not used in all
+	 *   situations
+	 * @returns The node and the document location corresponding to this fragment
+	 */
+	private static convertNodeToUsjDocumentLocation;
+	/**
+	 * Transform a fragment and its working stack into the {@link UsjNodeAndDocumentLocation}
+	 * corresponding to it.
+	 *
+	 * @param fragment Fragment to convert
+	 * @param workingStack Working stack pointing to the marker or string the fragment is in
+	 * @param offsetWithinFragment If applicable, this is the offset within the fragment that the
+	 *   location is pointing to, which is offset that will be put on the {@link UsjDocumentLocation}.
+	 *   If not present, offset on the {@link UsjDocumentLocation} will be `0` because fragments don't
+	 *   have their own offsets into the contents. Not all {@link UsjDocumentLocation}s have offsets,
+	 *   so this is not used in all situations
+	 * @returns The node and the document location corresponding to this fragment
+	 */
+	private static convertFragmentToUsjNodeAndDocumentLocation;
+	/**
+	 * Fill out fragments info from a minimal fragments info array and move them into the final
+	 * fragments map
+	 *
+	 * @param fragmentsInfo Minimal fragments info array to fill out and put into maps. ALL CONTENTS
+	 *   OF THIS ARRAY ARE REMOVED IN THIS METHOD
+	 * @param workingStack Current working stack
+	 * @param position Object containing properties describing where in the USFM document these
+	 *   fragments are. If this method encounters a verse range, only the starting verse number is
+	 *   used (hence this is not a {@link SerializedVerseRef}). PROPERTIES ON THIS OBJECT ARE MODIFIED
+	 *   IN THIS METHOD
+	 * @param fragmentsByIndexInUsfm Map to add fragment information to by index in USFM
+	 * @param fragmentsByJsonPath Map to add fragment information to by JSONPath
+	 * @param indicesInUsfmByVerseRef Map to add verse start locations to. If this method encounters a
+	 *   verse range, only the starting verse number is used. See {@link IndicesInUsfmByVerseRef} for
+	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
+	 *   do.
+	 */
+	private static transferFragmentsInfoArrayToMaps;
+	/**
+	 * Generates USFM representation of the USJ document passed in and returns it along with
+	 * information about how various locations in USFM and USJ map to each other
+	 */
+	private calculateUsfmProperties;
+	/** The USFM representation of the USJ document passed in */
+	private get usfm();
+	/** Fragments at each index in the USFM string */
+	private get fragmentsByIndexInUsfm();
+	/** Fragments at each index in the USFM string */
+	private get fragmentsByJsonPath();
+	/**
+	 * String index of the start of each verse (the backslash on the verse marker) in the USFM
+	 * representation of the USJ document. See {@link IndicesInUsfmByVerseRef} for more information.
+	 */
+	private get indicesInUsfmByVerseRef();
 }
 /** Possible status of a comment/note as defined in Paratext 9 */
 export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
@@ -3744,6 +5384,11 @@ export type LegacyCommentThread = {
 	isConsultantNote: boolean;
 	/** Biblical term ID if this is a biblical term note */
 	biblicalTermId?: string;
+};
+
+export {
+	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
 };
 
 export {};

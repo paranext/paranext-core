@@ -9,7 +9,17 @@ declare module 'platform-scripture' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import {
+    Dispose,
+    LocalizeKey,
+    PlatformError,
+    UnsubscriberAsync,
+    UsfmVerseLocation,
+    UsfmVerseRefVerseLocation,
+    UsjChapterLocation,
+    UsjMarkerLocation,
+    UsjTextContentLocation,
+  } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
   import { InventoryItem } from 'platform-bible-react';
 
@@ -688,9 +698,20 @@ declare module 'platform-scripture' {
 
   /** Represents a single result from a find operation. */
   export type FindResult = {
-    /** The verse reference where the text was found */
-    verseRef: SerializedVerseRef;
-    /** The text that matched the find operation */
+    /**
+     * Beginning location in USFM of the search result. The text is inclusive of this location,
+     * meaning this is the location of the first character of the found text
+     */
+    start: UsfmVerseRefVerseLocation;
+    /**
+     * Ending location in USFM of the search result. The text is exclusive of this location, meaning
+     * this is the location right after the last character of the found text
+     */
+    end: UsfmVerseRefVerseLocation;
+    /**
+     * The matching Scripture text (not USFM string) that was found between the start and end
+     * locations
+     */
     text: string;
   };
 
@@ -798,29 +819,19 @@ declare module 'platform-scripture' {
    * `JSONPath`-style locations since it already has the data in USJ form. If a check is processing
    * USFM or USX data (or some other data type), then it probably doesn't have access to the USJ and
    * can just return a `VerseRef`-style location.
+   *
+   * Note: the `JSONPath` location type is expected to be a JSONPath relative to the chapter
+   * specified by {@link CheckRunResult.verseRef}. For example, if the verseRef is "MAT 5:3", then
+   * the JSONPath should be relative to the USJ document that starts at Matthew chapter 5.
+   *
+   * @deprecated 13 November 2025. Cannot tell where in Scripture a location is by just JSONPath and
+   *   offset; must also have book and possibly chapter. Changing this to require specifying book
+   *   and chapter.
    */
   export type CheckLocation =
-    | {
-        /** JSONPath expression pointing to a location within USJ data */
-        jsonPath: string;
-        /**
-         * Offset to apply to the content inside of the property indicated by `jsonPath` to
-         * determine the start of the range.
-         *
-         * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
-         * Matthew. If no offset is provided, then the entire object with type "para" is being
-         * pointed to.
-         *
-         * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
-         */
-        offset?: number;
-      }
-    | {
-        /** Verse reference to a location with the document */
-        verseRef: SerializedVerseRef;
-        /** Offset to apply to start of the verse indicated by `verseRef` */
-        offset?: number;
-      };
+    | (UsjMarkerLocation & { offset?: undefined })
+    | UsjTextContentLocation
+    | UsfmVerseRefVerseLocation;
 
   /** One distinct result reported by a check */
   export type CheckRunResult = {
@@ -861,10 +872,20 @@ declare module 'platform-scripture' {
     isDenied: boolean;
     /** VerseRef that most closely identifies a single place where the check applies */
     verseRef: SerializedVerseRef;
-    /** Starting point where the check result applies in the document */
-    start: CheckLocation;
-    /** Ending point where the check result applies in the document */
-    end: CheckLocation;
+    /**
+     * Starting point where the check result applies in the document
+     *
+     * Note: some forms of this type are deprecated and will be removed eventually; see
+     * {@link CheckLocation} for details.
+     */
+    start: UsjChapterLocation | UsfmVerseLocation | CheckLocation;
+    /**
+     * Ending point where the check result applies in the document
+     *
+     * Note: some forms of this type are deprecated and will be removed eventually; see
+     * {@link CheckLocation} for details.
+     */
+    end: UsjChapterLocation | UsfmVerseLocation | CheckLocation;
   };
 
   // #endregion

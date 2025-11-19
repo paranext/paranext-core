@@ -2,11 +2,12 @@ import { Comments } from '@eten-tech-foundation/platform-editor';
 import { MarkerContent, MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   CHAPTER_TYPE,
-  UsjContentLocation,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjNodeAndDocumentLocation,
   UsjReaderWriter,
   VERSE_TYPE,
-  VerseRefOffset,
   LegacyComment,
+  UsfmVerseRefVerseLocation,
 } from 'platform-bible-utils';
 import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
@@ -75,7 +76,7 @@ function getCommentDetails(
   usjRW: UsjReaderWriter,
   commentId: string,
   bookId: string,
-): { start: VerseRefOffset; selectedText: string; contextAfter: string } | undefined {
+): { start: UsfmVerseRefVerseLocation; selectedText: string; contextAfter: string } | undefined {
   const startQuery = `$..content[?(@.type=="ms" && @.marker=="${MILESTONE_START}" && @.sid=="${commentId}")]`;
   const endQuery = `$..content[?(@.type=="ms" && @.marker=="${MILESTONE_END}" && @.eid=="${commentId}")]`;
 
@@ -93,12 +94,18 @@ function getCommentDetails(
       `Start and end parents are not both present. start:${startParent} end:${endParent}`,
     );
 
-  const start = usjRW.nodeToVerseRefAndOffset(bookId, startNode, startParent);
+  const start = usjRW.nodeToUsfmVerseRefVerseLocation(startNode, startParent, bookId);
   if (!start)
     throw new Error(`Could not find SerializedVerseRef for start of comment ${commentId}`);
 
-  const startPoint = { node: startNode, offset: 0, jsonPath: usjRW.nodeToJsonPath(startNode) };
-  const endPoint = { node: endNode, offset: 0, jsonPath: usjRW.nodeToJsonPath(endNode) };
+  const startPoint = {
+    node: startNode,
+    documentLocation: { offset: 0, jsonPath: usjRW.nodeToJsonPath(startNode) },
+  };
+  const endPoint = {
+    node: endNode,
+    documentLocation: { offset: 0, jsonPath: usjRW.nodeToJsonPath(endNode) },
+  };
 
   const selectedText = usjRW.extractTextBetweenPoints(startPoint, endPoint, 20);
   const contextAfter = usjRW.extractText(endPoint, 10);
@@ -128,7 +135,7 @@ export function convertEditorCommentsToLegacyComments(
         id: editorComment.id,
         language: 'en',
         selectedText: commentDetails.selectedText,
-        startPosition: commentDetails.start.offset,
+        startPosition: commentDetails.start.offset ?? 0,
         thread: editorComment.id,
         user: editorComment.author,
         verseRef,
@@ -144,7 +151,7 @@ export function convertEditorCommentsToLegacyComments(
           id: editorThreadComment.id,
           language: 'en',
           selectedText: commentDetails.selectedText,
-          startPosition: commentDetails.start.offset,
+          startPosition: commentDetails.start.offset ?? 0,
           thread: editorComment.id,
           user: editorThreadComment.author,
           verseRef,
@@ -160,18 +167,18 @@ function getAnchorLocation(
   anchorMarker: typeof MILESTONE_START | typeof MILESTONE_END,
   anchorIdType: typeof ID_TYPE_START | typeof ID_TYPE_END,
   anchorId: string,
-): UsjContentLocation | undefined {
+): UsjNodeAndDocumentLocation | undefined {
   const jsonPathExpressionForAnchor = `$..content[?(@.type=="ms" && @.marker=="${anchorMarker}" && @.${anchorIdType}=="${anchorId}")]`;
   const node: MarkerObject | undefined = usjRW.findSingleValue(jsonPathExpressionForAnchor);
   if (!node) return undefined;
-  return { node, offset: 0, jsonPath: usjRW.nodeToJsonPath(node) };
+  return { node, documentLocation: { jsonPath: usjRW.nodeToJsonPath(node) } };
 }
 
 function insertAnchorIfNeeded(
   usjRW: UsjReaderWriter,
   startOrEnd: 'start' | 'end',
   anchorId: string,
-  anchorLocation: UsjContentLocation,
+  anchorLocation: UsjNodeAndDocumentLocation,
 ): boolean {
   // Make sure it doesn't already exist
   const anchorMarker = startOrEnd === 'start' ? MILESTONE_START : MILESTONE_END;
@@ -179,18 +186,22 @@ function insertAnchorIfNeeded(
   if (getAnchorLocation(usjRW, anchorMarker, anchorIdType, anchorId)) return false;
 
   // Find the container for the anchor
-  const contentArray: MarkerContent[] | undefined = usjRW.findParent(anchorLocation.jsonPath);
+  const contentArray: MarkerContent[] | undefined = usjRW.findParent(
+    anchorLocation.documentLocation.jsonPath,
+  );
   if (!Array.isArray(contentArray))
     throw new Error(`Unexpected anchor location parent: ${JSON.stringify(contentArray)}`);
 
   // Figure out where this is in the content array
-  const matches = anchorLocation.jsonPath.match(/content\[(\d+)\]/g);
+  const matches = anchorLocation.documentLocation.jsonPath.match(/content\[(\d+)\]/g);
   if (!matches || matches.length === 0)
-    throw new Error(`Unexpected jsonPath query: ${anchorLocation.jsonPath}`);
+    throw new Error(`Unexpected jsonPath query: ${anchorLocation.documentLocation.jsonPath}`);
   const lastNumber = matches[matches.length - 1].match(/(\d+)/);
   const contentIndex = parseInt(lastNumber ? lastNumber[0] : '0', 10);
   if (contentIndex > contentArray.length - 1)
-    throw new Error(`Index ${contentIndex} longer than content array: ${anchorLocation.jsonPath}`);
+    throw new Error(
+      `Index ${contentIndex} longer than content array: ${anchorLocation.documentLocation.jsonPath}`,
+    );
   if (anchorLocation.node && !valuesAreDeeplyEqual(contentArray[contentIndex], anchorLocation.node))
     throw new Error(
       `Found unexpected node at anchor location, expected:${JSON.stringify(anchorLocation.node)}, actual:${JSON.stringify(contentArray[contentIndex])}`,
@@ -214,16 +225,23 @@ function insertAnchorIfNeeded(
     contentArray.splice(potentialIndex, 0, anchorNode);
   }
   // Insert the anchor before anything else in that spot
-  else if (anchorLocation.offset === 0) {
+  else if (
+    !('offset' in anchorLocation.documentLocation) ||
+    anchorLocation.documentLocation.offset === 0
+  ) {
     contentArray.splice(contentIndex, 0, anchorNode);
   } else {
     if (typeof currentContent !== 'string')
-      throw new Error(`Inserting anchor at offset ${anchorLocation.offset} where no string exists`);
-    if (anchorLocation.offset > currentContent.length - 1)
-      throw new Error(`Node was too short for offset ${anchorLocation.offset}: ${currentContent}`);
+      throw new Error(
+        `Inserting anchor at offset ${anchorLocation.documentLocation.offset} where no string exists`,
+      );
+    if (anchorLocation.documentLocation.offset > currentContent.length - 1)
+      throw new Error(
+        `Node was too short for offset ${anchorLocation.documentLocation.offset}: ${currentContent}`,
+      );
     // Break up the existing string and put the anchor between the two parts
-    const firstPart = currentContent.substring(0, anchorLocation.offset);
-    const secondPart = currentContent.substring(anchorLocation.offset);
+    const firstPart = currentContent.substring(0, anchorLocation.documentLocation.offset);
+    const secondPart = currentContent.substring(anchorLocation.documentLocation.offset);
     contentArray.splice(contentIndex, 1, firstPart, anchorNode, secondPart);
   }
   usjRW.usjChanged();
@@ -236,7 +254,7 @@ function insertAnchorIfNeeded(
  * @returns True if some comment anchors were inserted, false if no comment anchors were inserted
  */
 export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComment[]): boolean {
-  const usjRW = new UsjReaderWriter(usj);
+  const usjRW = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
   let usjChanged = false;
 
   const threads = convertLegacyCommentsToEditorThreads(legacyComments);
@@ -244,7 +262,10 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
     const lc = thread.legacyComment;
     const serializedVerseRef: SerializedVerseRef = new VerseRef(lc.verseRef).toJSON();
     // BUG: PT9 comments give offset in USFM space, not verse text space
-    let start = usjRW.verseRefToUsjContentLocation(serializedVerseRef, lc.startPosition);
+    let start = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
+      verseRef: serializedVerseRef,
+      offset: lc.startPosition,
+    });
     const startAnchorInserted = insertAnchorIfNeeded(usjRW, 'start', thread.id, start);
     if (!startAnchorInserted) {
       // If the start anchor is there already, see if the end anchor is there, too
@@ -258,15 +279,14 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
     start = newStart;
 
     // BUG: PT9 comments may include markup, so we might not find the end
-    const indicatedEnd: UsjContentLocation | undefined = lc.contextAfter
+    const indicatedEnd: UsjNodeAndDocumentLocation | undefined = lc.contextAfter
       ? usjRW.findNextLocationOfMatchingText(start, lc.contextAfter)
       : undefined;
 
     // If no end was provided/found, lean on the insertion function to place the end anchor
     const end = indicatedEnd ?? {
+      ...start,
       node: '',
-      offset: start.offset,
-      jsonPath: start.jsonPath,
     };
     insertAnchorIfNeeded(usjRW, 'end', thread.id, end);
   });

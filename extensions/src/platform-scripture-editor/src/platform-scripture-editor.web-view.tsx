@@ -35,6 +35,7 @@ import {
   isPlatformError,
   LocalizeKey,
   serialize,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
   LegacyComment,
 } from 'platform-bible-utils';
@@ -108,6 +109,21 @@ const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions =
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
+
+/**
+ * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
+ *
+ * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
+ * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
+ * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
+ * need to change how we're handling this.
+ */
+function correctEditorUsjVersion(editorUsj: Usj): Usj {
+  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
+  // well right now
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
@@ -270,10 +286,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
             setScrRefWithScroll(targetScrRef);
-            if (range) nextSelectionRange.current = range;
+            nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
-          else if (range) editorRef.current?.setSelection(range);
+          else editorRef.current?.setSelection(range);
 
           break;
         }
@@ -466,7 +482,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
       if (
         editorUsj &&
-        !areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, editorUsj)
+        !areUsjContentsEqualExceptWhitespace(
+          usjFromPdpWithAnchors.current,
+          correctEditorUsjVersion(editorUsj),
+        )
       )
         saveUsjToPdpInternal(editorUsj);
     }
@@ -481,8 +500,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (currentlyWritingUsjToPdp.current) return;
 
       // Remove the milestones that we inserted before writing back to the PDP
-      const clonedUsj = deepClone(newUsj);
-      const usjRW = new UsjReaderWriter(clonedUsj);
+      const clonedUsj = deepClone(correctEditorUsjVersion(newUsj));
+      const usjRW = new UsjReaderWriter(clonedUsj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
       usjRW.removeContentNodes((node: MarkerContent) => {
         if (typeof node === 'string') return false;
         if (node.type !== 'ms') return false;
@@ -499,8 +518,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
           // chance the editor has more updates since the last attempted save. Let's check and save
           // again if there have been updates
-          const editorUsj = editorRef.current?.getUsj();
-          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+          let editorUsj = editorRef.current?.getUsj();
+          if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
+          if (!deepEqualAcrossIframes(editorUsj, correctEditorUsjVersion(newUsj)))
+            saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
         logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
@@ -562,7 +583,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       legacyCommentsFromPdp.forEach((existingComment) => legacyCommentIds.add(existingComment.id));
 
       // Determine which "new" comments are actually new
-      const usjRW = new UsjReaderWriter(usjWithAnchors);
+      const usjRW = new UsjReaderWriter(correctEditorUsjVersion(usjWithAnchors), {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+      });
       const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
       const legacyCommentsToAdd: LegacyComment[] = [];
       newLegacyComments.forEach((newComment) => {
@@ -678,9 +701,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         let nextTextLocationJsonPath = '';
         try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(
-            scrRef,
-          ).jsonPath;
+          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
+            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }

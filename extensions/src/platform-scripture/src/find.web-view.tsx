@@ -32,21 +32,18 @@ import {
 import {
   formatReplacementString,
   getErrorMessage,
+  groupBy,
   isPlatformError,
   LocalizeKey,
   Mutex,
 } from 'platform-bible-utils';
-import {
-  FindJobStatus,
-  FindJobStatusReport,
-  FindOptions,
-  FindResult,
-  FindScope,
-} from 'platform-scripture';
+import { FindJobStatus, FindJobStatusReport, FindOptions, FindScope } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import SearchResult from './find/search-result.component';
-
-type HidableFindResult = FindResult & { isHidden?: boolean };
+import {
+  HidableFindResult,
+  SEARCH_RESULT_LOCALIZED_STRING_KEYS,
+} from './find/search-result.component';
+import { SearchResultsInBook } from './find/search-results-in-book.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_allowRegex%',
@@ -112,6 +109,18 @@ global.webViewComponent = function FindWebView({
   const [numberOfHiddenResults, setNumberOfHiddenResults] = useState<number>(0);
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
+  /**
+   * Search results grouped by book. Keys are book IDs and values are search results in that book
+   * and their index in the original search results array
+   */
+  const resultsByBook = useMemo(() => {
+    return groupBy(
+      results,
+      (result) => result.start.verseRef.book,
+      (result, _key, index) => ({ result, originalIndex: index }),
+    );
+  }, [results]);
+
   const [verseRefSetting, setVerseRefSetting, scrollGroupId, setScrollGroupId] =
     useWebViewScrollGroupScrRef();
 
@@ -129,6 +138,12 @@ global.webViewComponent = function FindWebView({
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
       return Array.from(SCOPE_SELECTOR_STRING_KEYS);
+    }, []),
+  );
+
+  const [searchResultLocalizedStrings] = useLocalizedStrings(
+    useMemo(() => {
+      return Array.from(SEARCH_RESULT_LOCALIZED_STRING_KEYS);
     }, []),
   );
 
@@ -568,20 +583,12 @@ global.webViewComponent = function FindWebView({
   ]);
 
   const handleFocusedResultChange = useCallback(
-    (
-      verseRef: SerializedVerseRef,
-      index: number,
-      occurrenceTextPositionStart?: number,
-      occurrenceTextPositionEnd?: number,
-    ) => {
+    (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
-      setVerseRefSetting(verseRef);
+      setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        editorWebViewController.selectRange({
-          start: { scrRef: verseRef, offset: occurrenceTextPositionStart },
-          end: { scrRef: verseRef, offset: occurrenceTextPositionEnd },
-        });
+        editorWebViewController.selectRange(searchResult);
       }
     },
     [editorWebViewController, editorWebViewId, setVerseRefSetting],
@@ -598,30 +605,6 @@ global.webViewComponent = function FindWebView({
       setFocusedResultIndex(undefined);
     },
     [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
-  );
-
-  const getOccurrenceInVerseIndex = useCallback(
-    (currentIndex: number): number => {
-      const currentResult = results[currentIndex];
-      let occurrenceIndex = 0;
-
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        const prevResult = results[i];
-
-        if (
-          prevResult.verseRef.book !== currentResult.verseRef.book ||
-          prevResult.verseRef.chapterNum !== currentResult.verseRef.chapterNum ||
-          prevResult.verseRef.verseNum !== currentResult.verseRef.verseNum
-        ) {
-          break;
-        }
-
-        occurrenceIndex += 1;
-      }
-
-      return occurrenceIndex;
-    },
-    [results],
   );
 
   const canClearResults = useMemo(
@@ -787,23 +770,27 @@ global.webViewComponent = function FindWebView({
         className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
         onScroll={handleResultsScroll}
       >
-        {results &&
-          results.map((result, index) => {
-            const occurrenceInVerseIndex = getOccurrenceInVerseIndex(index);
-            return (
-              <SearchResult
-                key={`${result.verseRef.book + result.verseRef.chapterNum}:${result.verseRef.verseNum}${result.text}${occurrenceInVerseIndex}`}
-                searchResult={result}
-                globalResultsIndex={index}
-                isSelected={index === focusedResultIndex}
-                projectId={projectId}
-                localizedBookData={localizedBookData}
-                occurrenceInVerseIndex={occurrenceInVerseIndex}
-                onResultClick={handleFocusedResultChange}
-                onHideResult={handleHideResult}
-              />
-            );
-          })}
+        {[...resultsByBook.entries()].map(([bookId, bookResults]) => {
+          return (
+            <SearchResultsInBook
+              key={bookId}
+              projectId={projectId}
+              bookId={bookId}
+              results={bookResults.map(({ result }) => result)}
+              localizedBookData={localizedBookData}
+              focusedResultIndex={bookResults.findIndex(
+                ({ originalIndex }) => originalIndex === focusedResultIndex,
+              )}
+              onResultClick={(result, indexInBookResults) =>
+                handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+              }
+              onHideResult={(indexInBookResults) =>
+                handleHideResult(bookResults[indexInBookResults].originalIndex)
+              }
+              localizedStrings={searchResultLocalizedStrings}
+            />
+          );
+        })}
       </div>
 
       {/* Status bar */}
