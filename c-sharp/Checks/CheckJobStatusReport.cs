@@ -4,7 +4,7 @@ namespace Paranext.DataProvider.Checks;
 /// A report on the status of a check job, including a batch of results if available. This class
 /// must serialize to the CheckJobStatusReport type defined in TypeScript.
 /// </summary>
-public class CheckJobStatusReport
+internal class CheckJobStatusReport
 {
     public string JobId { get; init; } = Guid.NewGuid().ToString();
     public string Status { get; set; } = CheckJobStatus.Queued;
