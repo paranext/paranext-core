@@ -20,13 +20,19 @@ Examples:
 
 - `UsfmVerseLocation` - Locations relative to the start of a specified verse and at an offset in the USFM representation of the Scripture data
 
-  - `<scripture_format>` - `USFM` - the information specifying the position relative to the anchor is an offset based on the USFM representation of the Scripture data
+  - `<scripture_format>` - `Usfm` - the information specifying the position relative to the anchor is an offset based on the USFM representation of the Scripture data
   - `<location_format>` - None; this is a union type of multiple subtypes that all specify the same data.
+  - `<location_anchor>` - `Verse` - this location specifies a specific verse that its position is relative to
+
+- `UsfmVerseRefVerseLocation` - Location relative to the start of a specified verse and at an offset in the USFM representation of the Scripture data. This is a particular format of `UsfmVerseLocation`
+
+  - `<scripture_format>` - `Usfm` - the information specifying the position relative to the anchor is an offset based on the USFM representation of the Scripture data
+  - `<location_format>` - `VerseRef` - the anchor is specified in a `verseRef` field that contains all the information needed to clarify where in a project the offset is relative to (book, chapter, verse, and optionally versification)
   - `<location_anchor>` - `Verse` - this location specifies a specific verse that its position is relative to
 
 - `UsjLocation` - Location whose JSONPath is specified on a USJ document which contains either the entire book or the entire chapter specified and whose offset information is in the USJ representation of the Scripture data
 
-  - `<scripture_format>` - `USFM` - the information specifying the position relative to the anchor is an offset based on the USFM representation of the Scripture data
+  - `<scripture_format>` - `Usj` - the information specifying the position relative to the anchor is an offset based on the USJ representation of the Scripture data
   - `<location_format>` - None; this is a union type of multiple subtypes whose subtypes all specify the same data as one another.
   - `<location_anchor>` - None; this is a union type of multiple subtypes that all specify either a USJ book or chapter location
 
