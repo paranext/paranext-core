@@ -234,6 +234,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
       view: viewOptions,
     }),
     [isReadOnly, textDirectionEffective, nodeOptions, viewOptions],
