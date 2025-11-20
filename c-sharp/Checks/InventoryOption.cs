@@ -8,7 +8,7 @@ namespace Paranext.DataProvider.Checks;
 /// This class corresponds to the InventoryOption type defined in platform-scripture.d.ts.
 /// Keep their structures in sync for serialization compatibility.
 /// </summary>
-internal class InventoryOption
+internal sealed class InventoryOption
 {
     public const string TYPE_BOOLEAN = "boolean";
     public const string TYPE_STRING = "string";
