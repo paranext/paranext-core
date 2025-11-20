@@ -217,8 +217,7 @@ export type UsjVerseRefBookLocation<
    *       `periph` markers between `id` and chapters, so this may need to be revised when
    *       peripheral books are more fully supported
    *
-   * When using {@link UsjVerseRefLocation}, defaults to 'chapter' (see
-   * {@link UsjVerseRefChapterLocation})
+   * Defaults to 'chapter' (see {@link UsjVerseRefChapterLocation})
    */
   granularity: 'book';
   /** USJ document location specifying where in the book the location is pointing to */
@@ -249,8 +248,7 @@ export type UsjVerseRefChapterLocation<
    *       `periph` markers between `id` and chapters, so this may need to be revised when
    *       peripheral books are more fully supported
    *
-   * When using {@link UsjVerseRefLocation}, defaults to 'chapter' (can alternatively be 'book';
-   * {@link UsjVerseRefBookLocation})
+   * Defaults to 'chapter' (can alternatively be 'book'; {@link UsjVerseRefBookLocation})
    */
   granularity?: 'chapter';
   /** USJ document location specifying where in the chapter the location is pointing to */
