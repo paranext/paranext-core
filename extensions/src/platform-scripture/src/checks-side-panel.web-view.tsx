@@ -520,7 +520,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
 
   useEffect(() => {
-    if (!checkAggregator || !projectId || isPlatformError(availableChecks)) {
+    if (
+      !checkAggregator ||
+      !projectId ||
+      isPlatformError(availableChecks) ||
+      availableChecks.length === 0 ||
+      availableChecks[0] === defaultCheckRunnerCheckDetails
+    ) {
       setChecksInfo([]);
       return;
     }

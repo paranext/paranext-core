@@ -15,7 +15,7 @@ namespace Paranext.DataProvider.Checks;
 /// objects for reporting problems to the user. This class is essentially an adapter for storing a
 /// list of problems from checks.
 /// </summary>
-public sealed partial class CheckResultsRecorder(string checkId, string projectId)
+internal sealed partial class CheckResultsRecorder(string checkId, string projectId)
     : IRecordCheckError
 {
     /// <summary>
@@ -119,8 +119,9 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
                 itemText,
                 false,
                 vref,
-                new CheckLocation(vref, selectionStart),
-                new CheckLocation(vref, selectionStart + text.Length)
+                // Actual offsets will be calculated below after results have been filtered
+                new UsfmLocation(vref, selectionStart),
+                new UsfmLocation(vref, selectionStart + text.Length)
             )
         );
     }
@@ -149,7 +150,7 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
         }
     }
 
-    public IEnumerable<CheckRunResult> GetResultsInRange(CheckInputRange range)
+    public IEnumerable<CheckRunResult> GetResultsInRange(InputRange range)
     {
         foreach (var result in CheckRunResults)
         {

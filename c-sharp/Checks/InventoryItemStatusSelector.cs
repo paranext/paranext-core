@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.Checks;
 /// This class corresponds to the InventoryItemStatusSelector type defined in platform-scripture.d.ts.
 /// Keep their structures in sync for serialization compatibility.
 /// </summary>
-public class InventoryItemStatusSelector
+internal sealed class InventoryItemStatusSelector
 {
     public string ProjectId { get; set; } = string.Empty;
     public string InventoryId { get; set; } = string.Empty;
