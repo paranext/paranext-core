@@ -6,27 +6,48 @@ namespace Paranext.DataProvider.Checks;
 /// Represents a range of text within a project that checks can target. This class must
 /// serialize/deserialize to the CheckInputRange type defined in TypeScript.
 /// <br />
-/// A <see cref="CheckInputRange"/> could cover entire books or just a few verses within a book.
-/// If <see cref="End"/> is null, then the range concludes at the end of the book indicated in
-/// <see cref="Start"/>.
+/// An <see cref="InputRange"/> represents a selection of scripture text. If <see cref="End"/> is
+/// null, then only the verse indicated by <see cref="Start"/> is included.
+/// <br />
+/// Special values for verse and chapter numbers:
+/// - Verse 0: Includes all parts of the chapter, including content before the first verse.
+///   Chapter 1 verse 0 includes all front matter for the book.
+/// - Verse 999: Maximum value that fits in BBBCCCVVV format. Use when the end of a chapter is
+///   desired and the exact number of verses is unknown.
+/// - Chapter 999: Maximum value that fits in BBBCCCVVV format. Use when the end of a book is
+///   desired and the exact number of chapters is unknown.
 /// <br />
 /// Note that Paratext checks cannot be run on less than an entire book because of the definition of
-/// <see cref="ScriptureCheckBase.Run"/>. The <see cref="CheckInputRange"/> class allows defining a
+/// <see cref="ScriptureCheckBase.Run"/>. The <see cref="InputRange"/> class allows defining a
 /// range that is more granular than an entire book because that is how Platform.Bible's interfaces
 /// work, and we need to serialize and deserialize these structures when communicating with the
 /// platform. Whenever a Paratext check is given a range, though, it can only target entire books.
 /// <br />
 /// See the TypeScript check data types for more details.
 /// </summary>
-public sealed class CheckInputRange
+internal sealed class InputRange
 {
     private string _projectId;
     private VerseRef _start;
     private VerseRef? _end;
 
-    public CheckInputRange(string projectId, VerseRef start, VerseRef? end)
+    // Maximum verse/chapter number that can be represented in BBBCCCVVV format
+    public const int MAX_CHAPTER_OR_VERSE_NUM = 999;
+
+    public InputRange(string projectId, VerseRef start, VerseRef? end)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectId);
+
+        // Clamp verse and chapter numbers to MAX values
+        if (start.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
+            start.VerseNum = MAX_CHAPTER_OR_VERSE_NUM;
+        if (start.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
+            start.ChapterNum = MAX_CHAPTER_OR_VERSE_NUM;
+        if (end.HasValue && end.Value.VerseNum > MAX_CHAPTER_OR_VERSE_NUM)
+            end = new VerseRef(end.Value) { VerseNum = MAX_CHAPTER_OR_VERSE_NUM };
+        if (end.HasValue && end.Value.ChapterNum > MAX_CHAPTER_OR_VERSE_NUM)
+            end = new VerseRef(end.Value) { ChapterNum = MAX_CHAPTER_OR_VERSE_NUM };
+
         VerifyRange(start, end);
 
         _projectId = projectId;
@@ -39,8 +60,14 @@ public sealed class CheckInputRange
         if (start.ChapterNum <= 0)
             throw new ArgumentOutOfRangeException(nameof(start), "start.ChapterNum must be > 0");
 
+        if (start.VerseNum < 0)
+            throw new ArgumentOutOfRangeException(nameof(start), "start.VerseNum must be >= 0");
+
         if (end.HasValue && end.Value.ChapterNum <= 0)
             throw new ArgumentOutOfRangeException(nameof(end), "end.ChapterNum must be > 0");
+
+        if (end.HasValue && end.Value.VerseNum < 0)
+            throw new ArgumentOutOfRangeException(nameof(end), "end.VerseNum must be >= 0");
 
         if (end.HasValue && (start > end.Value))
             throw new ArgumentException("end must come after start");
@@ -94,8 +121,9 @@ public sealed class CheckInputRange
             return false;
         if (bookNum == 0)
             return true;
+        // If no end is specified, this is a single verse range
         if (End == null)
-            return bookNum == Start.BookNum && (chapterNum == 0 || chapterNum >= Start.ChapterNum);
+            return bookNum == Start.BookNum && (chapterNum == 0 || chapterNum == Start.ChapterNum);
         if (bookNum < Start.BookNum || bookNum > End.Value.BookNum)
             return false;
         if (bookNum == Start.BookNum && chapterNum > 0 && chapterNum < Start.ChapterNum)
@@ -103,5 +131,19 @@ public sealed class CheckInputRange
         if (bookNum == End.Value.BookNum && chapterNum > End.Value.ChapterNum)
             return false;
         return true;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        if (obj is not InputRange other)
+            return false;
+        return _projectId == other._projectId
+            && _start.Equals(other._start)
+            && Nullable.Equals(_end, other._end);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(_projectId, _start, _end);
     }
 }
