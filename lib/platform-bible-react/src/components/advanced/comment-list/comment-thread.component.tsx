@@ -174,7 +174,7 @@ export function CommentThread({
       className={cn(
         'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         {
-          'tw-cursor-pointer tw-bg-slate-50 hover:tw-shadow-md': !isSelected,
+          'tw-cursor-pointer tw-bg-primary-foreground hover:tw-shadow-md': !isSelected,
         },
         { 'tw-bg-background': isSelected },
       )}
