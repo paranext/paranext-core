@@ -1,5 +1,5 @@
 import { cn } from '@/utils/shadcn-ui.util';
-import { RefObject, useCallback, useEffect, useState } from 'react';
+import React, { RefObject, useCallback, useState } from 'react';
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
@@ -37,28 +37,19 @@ export default function CommentList({
     onOptionSelect: handleKeyboardSelectThread,
   });
 
-  // When a thread is expanded, focus the input field
-  useEffect(() => {
-    if (!selectedThreadId) return;
-
-    const container = document.getElementById(selectedThreadId);
-    if (!container) return;
-
-    const requestAnimationFrameScheduled = requestAnimationFrame(() => {
-      const requestAnimationFrameChangesRendered = requestAnimationFrame(() => {
-        const inputField = container.querySelector<HTMLElement>(
-          'input:not([disabled]):not([type="hidden"])',
-        );
-        const fallback = container.querySelector<HTMLElement>(
-          'textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
-        );
-        const toFocus = inputField ?? fallback;
-        toFocus?.focus();
-      });
-      return () => cancelAnimationFrame(requestAnimationFrameChangesRendered);
-    });
-    return () => cancelAnimationFrame(requestAnimationFrameScheduled);
-  }, [selectedThreadId]);
+  // Set selected thread id to undefined when Escape is pressed
+  const handleKeyDownWithEscape = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        setSelectedThreadId(undefined);
+        event.preventDefault();
+        event.stopPropagation();
+      } else {
+        handleKeyDown(event);
+      }
+    },
+    [handleKeyDown],
+  );
 
   return (
     <div
@@ -74,7 +65,7 @@ export default function CommentList({
         'tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         className,
       )}
-      onKeyDown={handleKeyDown}
+      onKeyDown={handleKeyDownWithEscape}
     >
       {threads.map((thread) => (
         <div key={getUniqueThreadId(thread.id)}>
