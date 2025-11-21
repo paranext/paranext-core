@@ -1,35 +1,20 @@
 import {
-  Comments,
   EditorOptions,
   Editorial,
   EditorRef,
-  Marginal,
   MarginalRef,
   SelectionRange,
   getDefaultViewOptions,
   UsjNodeOptions,
   DeltaOp,
   ViewOptions,
-  DeltaSource,
-  isInsertEmbedOpOfType,
-  DeltaOpInsertNoteEmbed,
 } from '@eten-tech-foundation/platform-editor';
-import {
-  MarkerContent,
-  USJ_TYPE,
-  USJ_VERSION,
-  Usj,
-} from '@eten-tech-foundation/scripture-utilities';
+import { USJ_TYPE, USJ_VERSION, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import {
-  useLocalizedStrings,
-  useProjectData,
-  useProjectSetting,
-  useSetting,
-} from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
@@ -38,16 +23,13 @@ import {
   isPlatformError,
   LocalizeKey,
   serialize,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
-  LegacyComment,
 } from 'platform-bible-utils';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
   Button,
-  FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
   Popover,
@@ -55,21 +37,10 @@ import {
   PopoverContent,
   Spinner,
 } from 'platform-bible-react';
-import {
-  EditorDecorations,
-  EditorWebViewMessage,
-  ScriptureEditorViewType,
-} from 'platform-scripture-editor';
+import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
-import {
-  convertEditorCommentsToLegacyComments,
-  convertLegacyCommentsToEditorThreads,
-  insertCommentAnchorsIntoUsj,
-  MILESTONE_END,
-  MILESTONE_START,
-} from './comments';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
@@ -87,14 +58,11 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
-  ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
 ];
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
-
-const defaultLegacyComments: LegacyComment[] = [];
 
 const defaultEditorDecorations: EditorDecorations = {};
 
@@ -103,14 +71,6 @@ const defaultProjectName = '';
 const defaultTextDirection = 'ltr';
 
 const defaultView: ViewOptions = getDefaultViewOptions();
-// Return the appropriate ViewOptions for the given webview `viewType`.
-// Centralizes the logic so initialization and effects can call the same helper
-// instead of duplicating the shallow-copy code.
-const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
-  const base = { ...defaultView };
-  if (viewType === 'markers') return { ...base, markerMode: 'visible' };
-  return base;
-};
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -144,100 +104,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
-  const editingNoteKey = useRef<string>();
-  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+  const [editingNoteKey, setEditingNoteKey] = useState<string>();
+  const [editingNoteOps, setEditingNoteOps] = useState<DeltaOp[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
     defaultEditorDecorations,
-  );
-
-  const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>('viewType', 'formatted');
-
-  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
-
-  const [projectNamePossiblyError] = useProjectSetting(
-    projectId,
-    'platform.name',
-    defaultProjectName,
-  );
-
-  const projectName = useMemo(() => {
-    if (isPlatformError(projectNamePossiblyError)) {
-      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
-      return defaultProjectName;
-    }
-    return projectNamePossiblyError;
-  }, [projectNamePossiblyError]);
-
-  const [textDirectionPossiblyError] = useProjectSetting(
-    projectId,
-    'platform.textDirection',
-    defaultTextDirection,
-  );
-
-  const textDirection = useMemo(() => {
-    if (isPlatformError(textDirectionPossiblyError)) {
-      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
-      return defaultTextDirection;
-    }
-
-    // Using || to make sure we get default if it is an empty string or if it is undefined
-    return textDirectionPossiblyError || defaultTextDirection;
-  }, [textDirectionPossiblyError]);
-
-  const textDirectionEffective = useMemo(() => {
-    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
-    if (projectName === 'OHEBGRK')
-      if (Canon.isBookOT(scrRef.book)) return 'rtl';
-      else return 'ltr';
-
-    return textDirection;
-  }, [projectName, scrRef, textDirection]);
-
-  const nodeOptions = useMemo<UsjNodeOptions>(
-    () => ({
-      noteCallerOnClick: isReadOnly
-        ? undefined
-        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            if (!isCollapsed || editingNoteKey.current) return;
-
-            const noteOp = getNoteOps()?.at(0);
-            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
-
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
-            editingNoteKey.current = noteNodeKey;
-            editingNoteOps.current = [noteOp];
-            setShowFootnoteEditor(true);
-          },
-    }),
-    [isReadOnly, editingNoteKey],
-  );
-
-  const [viewOptions, setViewOptions] = useState<ViewOptions>(() => {
-    return getViewOptionsForType(viewType);
-  });
-
-  // Keep viewOptions in sync with the `viewType` webview state. When `viewType` changes
-  // we reset the viewOptions to the appropriate default with the requested marker/note modes.
-  useEffect(() => {
-    setViewOptions(() => getViewOptionsForType(viewType));
-  }, [viewType]);
-
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnly,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      markerMenuTrigger: '\\',
-      view: viewOptions,
-    }),
-    [isReadOnly, textDirectionEffective, nodeOptions, viewOptions],
   );
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
@@ -254,6 +127,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
+  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -292,10 +166,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
             setScrRefWithScroll(targetScrRef);
-            nextSelectionRange.current = range;
+            if (range) nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
-          else editorRef.current?.setSelection(range);
+          else if (range) editorRef.current?.setSelection(range);
 
           break;
         }
@@ -307,10 +181,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           removeDecorations(updatedDecorations, decorationsToRemove);
 
           setDecorations(updatedDecorations);
-          break;
-        }
-        case 'changeScriptureView': {
-          setViewType(viewOptions.markerMode === 'hidden' ? 'markers' : 'formatted');
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
@@ -343,15 +213,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [
-    scrRef,
-    setScrRefWithScroll,
-    decorations,
-    setDecorations,
-    setFootnotesPaneVisible,
-    setViewType,
-    viewOptions.markerMode,
-  ]);
+  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, setFootnotesPaneVisible]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
@@ -393,17 +255,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       }),
     [decorationsLocalizedStringsBase],
   );
-
-  const [commentsEnabledPossiblyError] = useSetting('platform.commentsEnabled', false);
-
-  const commentsEnabled = useMemo(() => {
-    if (isPlatformError(commentsEnabledPossiblyError)) {
-      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabledPossiblyError);
-      return false;
-    }
-
-    return commentsEnabledPossiblyError;
-  }, [commentsEnabledPossiblyError]);
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
@@ -488,10 +339,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
       if (
         editorUsj &&
-        !areUsjContentsEqualExceptWhitespace(
-          usjFromPdpWithAnchors.current,
-          correctEditorUsjVersion(editorUsj),
-        )
+        !areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, editorUsj)
       )
         saveUsjToPdpInternal(editorUsj);
     }
@@ -499,26 +347,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
-    async function saveUsjToPdpInternal(newUsj: Usj) {
+    async function saveUsjToPdpInternal(normalizedUsj: Usj) {
       if (!saveUsjToPdpRaw) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
 
-      // Remove the milestones that we inserted before writing back to the PDP
-      const clonedUsj = deepClone(correctEditorUsjVersion(newUsj));
-      const usjRW = new UsjReaderWriter(clonedUsj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
-      usjRW.removeContentNodes((node: MarkerContent) => {
-        if (typeof node === 'string') return false;
-        if (node.type !== 'ms') return false;
-        return node.marker === MILESTONE_START || node.marker === MILESTONE_END;
-      });
+      const usjToPersist = deepClone(normalizedUsj);
 
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
-      usjSentToPdp.current = clonedUsj;
+      usjSentToPdp.current = usjToPersist;
       try {
-        if (!(await saveUsjToPdpRaw(clonedUsj)) && currentlyWritingUsjToPdp.current) {
+        if (!(await saveUsjToPdpRaw(usjToPersist)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -526,7 +367,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // again if there have been updates
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
-          if (!deepEqualAcrossIframes(editorUsj, correctEditorUsjVersion(newUsj)))
+          if (!deepEqualAcrossIframes(editorUsj, normalizedUsj))
             saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
@@ -538,151 +379,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [saveUsjToPdpRaw]);
 
-  const [legacyCommentsFromPdpPossiblyError, saveLegacyCommentsToPdp] = useProjectData(
-    'legacyCommentManager.comments',
-    // Only load comments if we have them turned on
-    commentsEnabled ? projectId : undefined,
-  ).Comments(
-    useMemo(() => {
-      return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
-    }, [scrRef.book, scrRef.chapterNum]),
-    defaultLegacyComments,
-  );
-
-  const legacyCommentsFromPdp = useMemo(() => {
-    if (isPlatformError(legacyCommentsFromPdpPossiblyError)) {
-      logger.warn(
-        `Error getting legacy comments from PDP: ${getErrorMessage(legacyCommentsFromPdpPossiblyError)}`,
-      );
-      return defaultLegacyComments;
-    }
-    return legacyCommentsFromPdpPossiblyError;
-  }, [legacyCommentsFromPdpPossiblyError]);
-
-  /**
-   * Write the latest comments back to the PDP. We need `usjWithAnchors` to know where (e.g., verse
-   * refs) the latest comments are in scripture text.
-   */
-  const saveCommentsToPdp = useCallback(
-    (
-      newComments: Comments | undefined,
-      usjWithAnchors: Usj | undefined = editorRef.current?.getUsj(),
-    ) => {
-      // Cannot convert between legacy and current comments without access to corresponding USJ
-      if (!usjWithAnchors) {
-        logger.warn('Updating comments without providing USJ');
-        return;
-      }
-      // We aren't currently overwriting comments, so if it's empty we have nothing to do
-      if (!newComments) {
-        logger.debug('Updating comments, but the comments are empty');
-        return;
-      }
-      // If we can't save a newly merged set of comments, we have nothing to do
-      if (!saveLegacyCommentsToPdp) {
-        logger.warn('Updating comments without a way to save the comments to a PDP');
-        return;
-      }
-
-      // Record all the IDs of previously known comments
-      const legacyCommentIds = new Set<string>();
-      legacyCommentsFromPdp.forEach((existingComment) => legacyCommentIds.add(existingComment.id));
-
-      // Determine which "new" comments are actually new
-      const usjRW = new UsjReaderWriter(correctEditorUsjVersion(usjWithAnchors), {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
-      const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
-      const legacyCommentsToAdd: LegacyComment[] = [];
-      newLegacyComments.forEach((newComment) => {
-        if (!legacyCommentIds.has(newComment.id)) legacyCommentsToAdd.push(newComment);
-      });
-
-      // Nothing to do
-      if (legacyCommentsToAdd.length === 0) return;
-
-      // Save the new comments to the data provider
-      const newCommentArray = [...legacyCommentsFromPdp, ...legacyCommentsToAdd];
-      saveLegacyCommentsToPdp(newCommentArray);
-    },
-    [legacyCommentsFromPdp, scrRef, saveLegacyCommentsToPdp],
-  );
-
-  /**
-   * Modify `newUsj` to include anchors that the editor uses to highlight text where a comment
-   * should be. The source of the comments is the legacy comment PDP.
-   */
-  const insertCommentAnchors = useCallback(
-    (newUsj: Usj) => {
-      try {
-        insertCommentAnchorsIntoUsj(newUsj, legacyCommentsFromPdp);
-        // Getting more information about the error
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        logger.debug(`Error inserting anchors into USJ: ${error}, stack = ${error.stack}"`);
-      }
-    },
-    [legacyCommentsFromPdp],
-  );
-
-  const openFootnoteEditorOnNewNote = useCallback(
-    (ops?: DeltaOp[], insertedNodeKey?: string) => {
-      if (insertedNodeKey && ops) {
-        // If we are already editing a note, then returns
-        if (editingNoteKey.current) return;
-
-        // Makes sure the node is a note
-        const noteOp = ops[1];
-        if (!isInsertEmbedOpOfType('note', noteOp)) return;
-
-        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
-        // Note element must be defined
-        if (!noteElement) return;
-
-        const targetRect = noteElement.getBoundingClientRect();
-        setNotePopoverAnchorX(targetRect.left);
-        setNotePopoverAnchorY(targetRect.top);
-        setNotePopoverAnchorHeight(targetRect.height);
-        editingNoteKey.current = insertedNodeKey;
-        editingNoteOps.current = [noteOp];
-        setShowFootnoteEditor(true);
-      }
-    },
-    [editingNoteKey],
-  );
-
-  const handleEditorialUsjChange = useCallback(
-    (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
-      saveUsjToPdpIfUpdated(usj);
-      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
-    },
-    [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
-  );
-
-  const onUsjAndCommentsChange = useCallback(
-    (
-      newUsjFromEditor: Usj,
-      newCommentsFromEditor: Comments | undefined,
-      ops?: DeltaOp[],
-      _source?: DeltaSource,
-      insertedNodeKey?: string,
-    ) => {
-      saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
-      saveUsjToPdpIfUpdated(newUsjFromEditor);
-      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
-    },
-    [saveUsjToPdpIfUpdated, saveCommentsToPdp, openFootnoteEditorOnNewNote],
-  );
-
-  // This should only be used in the following `useEffect`
-  const mostRecentlySetLegacyComments = useRef(legacyCommentsFromPdp);
-
   // Update the editor if a change comes in from the PDP
   // Note: this will run every time we get data from the PDP whether or not it is different than it
   // was previously. We need to know when data comes in so we can set
   // `currentlyWritingUsjToPdp.current` to `false` appropriately
   useEffect(() => {
-    if (!usjFromPdp || !legacyCommentsFromPdp || !editorRef.current) return;
+    if (!usjFromPdp || !editorRef.current) return;
 
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
@@ -692,7 +394,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (!deepEqualAcrossIframes(usjFromPdp, usjFromPdpPrev.current)) {
       // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
       usjFromPdpWithAnchors.current = deepClone(usjFromPdp);
-      insertCommentAnchors(usjFromPdpWithAnchors.current);
     }
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
@@ -714,24 +415,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const authoritativeUsj =
       editorRef.current?.getUsj() ?? usjFromPdpWithAnchors.current ?? usjFromPdp;
     if (authoritativeUsj) setUsjForFootnoteDisplay(authoritativeUsj);
-
-    // Make sure the editor has the latest comment data from the PDP
-    if (
-      'setComments' in editorRef.current &&
-      !deepEqualAcrossIframes(legacyCommentsFromPdp, mostRecentlySetLegacyComments.current)
-    ) {
-      const threads = convertLegacyCommentsToEditorThreads(legacyCommentsFromPdp);
-      mostRecentlySetLegacyComments.current = legacyCommentsFromPdp;
-      // The editor's USJ needs to have anchors for these comments or the editor will error
-      editorRef.current.setComments?.(threads);
-    }
-  }, [
-    insertCommentAnchors,
-    legacyCommentsFromPdp,
-    saveUsjToPdpIfUpdated,
-    usjFromPdp,
-    setUsjForFootnoteDisplay,
-  ]);
+  }, [saveUsjToPdpIfUpdated, usjFromPdp, setUsjForFootnoteDisplay]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -748,9 +432,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         let nextTextLocationJsonPath = '';
         try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
-            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
+          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(
+            scrRef,
+          ).jsonPath;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
@@ -821,15 +505,87 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
+  const [projectNamePossiblyError] = useProjectSetting(
+    projectId,
+    'platform.name',
+    defaultProjectName,
+  );
+
+  const projectName = useMemo(() => {
+    if (isPlatformError(projectNamePossiblyError)) {
+      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
+      return defaultProjectName;
+    }
+    return projectNamePossiblyError;
+  }, [projectNamePossiblyError]);
+
+  const [textDirectionPossiblyError] = useProjectSetting(
+    projectId,
+    'platform.textDirection',
+    defaultTextDirection,
+  );
+
+  const textDirection = useMemo(() => {
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      return defaultTextDirection;
+    }
+
+    // Using || to make sure we get default if it is an empty string or if it is undefined
+    return textDirectionPossiblyError || defaultTextDirection;
+  }, [textDirectionPossiblyError]);
+
+  const textDirectionEffective = useMemo(() => {
+    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
+    if (projectName === 'OHEBGRK')
+      if (Canon.isBookOT(scrRef.book)) return 'rtl';
+      else return 'ltr';
+
+    return textDirection;
+  }, [projectName, scrRef, textDirection]);
+
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      noteCallerOnClick: isReadOnly
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+
+            if (isCollapsed) {
+              if (editingNoteKey) return;
+
+              setEditingNoteKey(noteNodeKey);
+              setEditingNoteOps(getNoteOps());
+              setShowFootnoteEditor(true);
+            }
+          },
+    }),
+    [isReadOnly, editingNoteKey],
+  );
+
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnly,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      view: defaultView,
+    }),
+    [isReadOnly, textDirectionEffective, nodeOptions],
+  );
+
   const onFootnoteEditorClose = useCallback(() => {
-    editingNoteKey.current = undefined;
-    editingNoteOps.current = undefined;
+    setEditingNoteKey(undefined);
+    setEditingNoteOps(undefined);
     setShowFootnoteEditor(false);
   }, []);
 
   const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey.current) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
+    if (editingNoteKey) {
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey, newNoteOps);
     }
     onFootnoteEditorClose();
   };
@@ -863,25 +619,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         </div>
       );
     }
-    if (commentsEnabled && !isReadOnly) {
-      return (
-        <>
-          {workaround}
-          <Marginal
-            {...commonProps}
-            onUsjChange={onUsjAndCommentsChange}
-            onCommentChange={saveCommentsToPdp}
-          />
-        </>
-      );
-    }
     return (
       <>
         {workaround}
-        <Editorial
-          {...commonProps}
-          onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-        />
+        <Editorial {...commonProps} onUsjChange={isReadOnly ? undefined : saveUsjToPdpIfUpdated} />
       </>
     );
   }
@@ -974,15 +715,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
+        <PopoverContent className="tw-w-96 tw-p-[10px]">
           <FootnoteEditor
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
+            noteOps={editingNoteOps}
+            noteKey={editingNoteKey}
             onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
-            editorOptions={options}
-            localizedStrings={localizedStrings}
+            viewOptions={options.view ?? defaultView}
           />
         </PopoverContent>
       </Popover>

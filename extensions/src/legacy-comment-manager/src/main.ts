@@ -107,9 +107,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   context.registrations.add(await commentListWebViewProviderPromise, await openCommentListPromise);
 
-  // Force enable comments when this extension is activated
-  papi.settings.set('platform.commentsEnabled', true);
-
   /* Potentially helpful code if you need to see comments without the UI
   setTimeout(async () => {
     logger.debug('GETTING COMMENTS');
