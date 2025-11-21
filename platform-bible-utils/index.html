@@ -1,26 +1,119 @@
 <!DOCTYPE html><html class="default" lang="en" data-base="./"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>platform-bible-utils</title><meta name="description" content="Documentation for platform-bible-utils"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script><script async src="assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><a href="index.html" class="title">platform-bible-utils</a><div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/><ul role="listbox" id="tsd-search-results"></ul><div id="tsd-search-status" aria-live="polite" aria-atomic="true"><div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>platform-bible-utils</h1></div><div class="tsd-panel tsd-typography"><h1 id="platformbible-utils" class="tsd-anchor-link">Platform.Bible Utils<a href="#platformbible-utils" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1><p>A set of utility functions, types, and classes for use inside Platform.Bible and extensions.</p>
-<h2 id="development" class="tsd-anchor-link">Development<a href="#development" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>Inspired by <a href="https://github.com/jasonsturges/vite-typescript-npm-package">https://github.com/jasonsturges/vite-typescript-npm-package</a></p>
-<p>When we publish this npm package, then in the root <code>package.json</code>, a version can be given to <code>platform-bible-utils</code> instead of the existing file link. At that time we will likely need to use <code>npm link</code> and <code>npm unlink</code> to develop the components (<a href="https://github.com/jasonsturges/vite-typescript-npm-package#development">see here</a>).</p>
+<h2 id="scripture-location-types-overview" class="tsd-anchor-link">Scripture Location Types Overview<a href="#scripture-location-types-overview" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>There are many types exported from this package that describe specific positions in a Scripture project.</p>
+<p>The types generally follow this name format:</p>
+<pre><code><span class="hl-0">&lt;</span><span class="hl-1">scripture_format</span><span class="hl-0">&gt;&lt;</span><span class="hl-1">location_format</span><span class="hl-0">?&gt;&lt;</span><span class="hl-1">location_anchor</span><span class="hl-0">?&gt;</span><span class="hl-2">Location</span>
+</code><button>Copy</button></pre>
+
+<ul>
+<li><code>&lt;scripture_format&gt;</code> - Which Scripture format the location information is specified against. For example, if the Scripture format is <code>Usfm</code>, offsets from the anchor to the specified position are string character index offsets within the USFM representation of the Scripture data.</li>
+<li><code>&lt;location_format?&gt;</code> - Particulars about the way the anchor is specified. If this is not included, this type is likely a catch-all containing a union of multiple subtypes that all include the same information in different location formats.</li>
+<li><code>&lt;location_anchor?&gt;</code> - <code>Book</code>, <code>Chapter</code>, <code>Verse</code>, or <code>Document</code> - Which kind of more general, well-known position this location is relative to. The more general location &quot;anchor&quot; may be an absolute position: the start of a specified chapter, book, verse; the data in this location type is expected to specify which chapter, book, or verse the location data is relative to. The anchor may also be a specific USJ document, in which case the location type is not expected to specify which document it is relative to. Document-relative positions are only interpretable if you have the document the position is based on; other location types layer over the document-relative types to indicate which document (and therefore which absolute position) the document-relative position is based on. If this is not specified, this type is a union of multiple subtypes that all specify positions in the same Scripture format.</li>
+</ul>
+<p>Examples:</p>
+<ul>
+<li>
+<p><code>UsfmVerseLocation</code> - Locations relative to the start of a specified verse and at an offset in the USFM representation of the Scripture data</p>
+<ul>
+<li><code>&lt;scripture_format&gt;</code> - <code>Usfm</code> - the information specifying the position relative to the anchor is an offset based on the USFM representation of the Scripture data</li>
+<li><code>&lt;location_format&gt;</code> - None; this is a union type of multiple subtypes that all specify the same data.</li>
+<li><code>&lt;location_anchor&gt;</code> - <code>Verse</code> - this location specifies a specific verse that its position is relative to</li>
+</ul>
+</li>
+<li>
+<p><code>UsfmVerseRefVerseLocation</code> - Location relative to the start of a specified verse and at an offset in the USFM representation of the Scripture data. This is a particular format of <code>UsfmVerseLocation</code></p>
+<ul>
+<li><code>&lt;scripture_format&gt;</code> - <code>Usfm</code> - the information specifying the position relative to the anchor is an offset based on the USFM representation of the Scripture data</li>
+<li><code>&lt;location_format&gt;</code> - <code>VerseRef</code> - the anchor is specified in a <code>verseRef</code> field that contains all the information needed to clarify where in a project the offset is relative to (book, chapter, verse, and optionally versification)</li>
+<li><code>&lt;location_anchor&gt;</code> - <code>Verse</code> - this location specifies a specific verse that its position is relative to</li>
+</ul>
+</li>
+<li>
+<p><code>UsjLocation</code> - Location whose JSONPath is specified on a USJ document which contains either the entire book or the entire chapter specified and whose offset information is in the USJ representation of the Scripture data</p>
+<ul>
+<li><code>&lt;scripture_format&gt;</code> - <code>Usj</code> - the information specifying the position relative to the anchor is an offset based on the USJ representation of the Scripture data</li>
+<li><code>&lt;location_format&gt;</code> - None; this is a union type of multiple subtypes whose subtypes all specify the same data as one another.</li>
+<li><code>&lt;location_anchor&gt;</code> - None; this is a union type of multiple subtypes that all specify either a USJ book or chapter location</li>
+</ul>
+</li>
+<li>
+<p>Document-relative locations - various location types that specify a location within some USJ document which is not determinable based on the information in these types</p>
+<ul>
+<li><code>UsjDocumentLocation</code> - A JSONPath query to an object, string, or property within a USJ document and additional information that point to a specific location in that USJ document.
+<ul>
+<li>Note: The subtypes of this type do not conform to the naming format specified above. They are all different forms of USJ document-relative locations.</li>
+<li>JSONPath types - subsets of <a href="https://www.rfc-editor.org/rfc/rfc9535.html">JSONPath</a> that point to some object, string, or property in a USJ document
+<ul>
+<li><code>ContentJsonPath</code> - JSON path to an object or text content string in a USJ document.</li>
+<li><code>PropertyJsonPath</code> - JSON path to a property on an object in a USJ document.</li>
+</ul>
+</li>
+<li>Types of USJ document locations - each type is a different format specifying various kinds of locations in a USJ document.
+<ul>
+<li><code>UsjAttributeKeyLocation</code></li>
+<li><code>UsjAttributeMarkerLocation</code></li>
+<li><code>UsjClosingAttributeMarkerLocation</code></li>
+<li><code>UsjClosingMarkerLocation</code></li>
+<li><code>UsjMarkerLocation</code></li>
+<li><code>UsjTextContentLocation</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>UsjNodeAndDocumentLocation</code> - An object or string in a USJ document and its location in that document.</li>
+</ul>
+</li>
+<li>
+<p>Absolute locations - various location types that specify a location within a determinable document or relative to a specific point in the Scripture data.</p>
+<ul>
+<li>
+<p><code>UsfmVerseLocation</code> - A verse ref and an offset within that verse in USFM space that point to a specific location in USFM.</p>
+<ul>
+<li><code>UsfmVerseRefVerseLocation</code> - A particular format for specifying a verse ref and an offset within that verse in USFM space that point to a specific location in USFM.</li>
+<li><code>SerializedVerseRef</code> - Just a verse reference. The offset is implied to be 0, meaning this always points to the very beginning of a verse.</li>
+</ul>
+</li>
+<li>
+<p><code>UsjLocation</code> - A verse ref and a location in USJ space that point to a specific location in USJ. The location in USJ space should be interpreted as starting from either the start of the book or the chapter depending on the type of location used.</p>
+<ul>
+<li><code>UsjBookLocation</code> - A verse ref and a location in USJ space that point to a specific location in USJ. The location in USJ space should be interpreted as starting from the start of the book specified.
+<ul>
+<li><code>UsjFlatBookLocation</code></li>
+<li><code>UsjVerseRefBookLocation</code></li>
+</ul>
+</li>
+<li><code>UsjChapterLocation</code> - A verse ref and a location in USJ space that point to a specific location in USJ. The location in USJ space should be interpreted as starting from the start of the chapter specified.
+<ul>
+<li><code>UsjFlatChapterLocation</code></li>
+<li><code>UsjVerseRefChapterLocation</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="development" class="tsd-anchor-link">Development<a href="#development" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>When we publish this npm package, then in the root <code>package.json</code>, a version can be given to <code>platform-bible-utils</code> instead of the existing file link. At that time we will likely need to use <code>npm link</code> and <code>npm unlink</code> to develop the components (<a href="https://github.com/jasonsturges/vite-typescript-npm-package#development">see here</a>).</p>
 <p>TODO:</p>
 <ul>
 <li>[ ] Decide if this package will be public, if not it will probably need an NPM organization setup to publish it to privately.</li>
 <li>[ ] What NPM user login will we use to publish it (each developer or an app-wide user)?</li>
 </ul>
 <h3 id="building" class="tsd-anchor-link">Building<a href="#building" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><h4 id="setting-up" class="tsd-anchor-link">Setting up<a href="#setting-up" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h4><p>To set up the dev environment to build, you must run the following from <code>paranext-core</code>:</p>
-<pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">i</span>
+<pre><code class="bash"><span class="hl-3">npm</span><span class="hl-0"> </span><span class="hl-4">i</span>
 </code><button type="button">Copy</button></pre>
 
 <h4 id="building-platform-bible-utils" class="tsd-anchor-link">Building <code>platform-bible-utils</code><a href="#building-platform-bible-utils" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h4><p>Once you have set up your environment, you can run the build command in this folder to build <code>platform-bible-utils</code>:</p>
-<pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build</span>
+<pre><code class="bash"><span class="hl-3">npm</span><span class="hl-0"> </span><span class="hl-4">run</span><span class="hl-0"> </span><span class="hl-4">build</span>
 </code><button type="button">Copy</button></pre>
 
 <p>Or you can build from <code>paranext-core</code>:</p>
-<pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build:platform-bible-utils</span>
+<pre><code class="bash"><span class="hl-3">npm</span><span class="hl-0"> </span><span class="hl-4">run</span><span class="hl-0"> </span><span class="hl-4">build:platform-bible-utils</span>
 </code><button type="button">Copy</button></pre>
 
 <p>If you want a quick build that doesn't lint, run the following:</p>
-<pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build:basic</span>
+<pre><code class="bash"><span class="hl-3">npm</span><span class="hl-0"> </span><span class="hl-4">run</span><span class="hl-0"> </span><span class="hl-4">build:basic</span>
 </code><button type="button">Copy</button></pre>
 
 <p>Do not commit changes after running this basic build. Before committing, always run a full build.</p>
-</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#platformbible-utils"><span>Platform.<wbr/>Bible <wbr/>Utils</span></a><ul><li><a href="#development"><span>Development</span></a></li><li><ul><li><a href="#building"><span>Building</span></a></li><li><ul><li><a href="#setting-up"><span>Setting up</span></a></li><li><a href="#building-platform-bible-utils"><span>Building platform-<wbr/>bible-<wbr/>utils</span></a></li></ul></li></ul></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">platform-bible-utils</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>
+<h2 id="acknowledgements" class="tsd-anchor-link">Acknowledgements<a href="#acknowledgements" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>Inspired by <a href="https://github.com/jasonsturges/vite-typescript-npm-package">https://github.com/jasonsturges/vite-typescript-npm-package</a></p>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#platformbible-utils"><span>Platform.<wbr/>Bible <wbr/>Utils</span></a><ul><li><a href="#scripture-location-types-overview"><span>Scripture <wbr/>Location <wbr/>Types <wbr/>Overview</span></a></li><li><a href="#development"><span>Development</span></a></li><li><ul><li><a href="#building"><span>Building</span></a></li><li><ul><li><a href="#setting-up"><span>Setting up</span></a></li><li><a href="#building-platform-bible-utils"><span>Building platform-<wbr/>bible-<wbr/>utils</span></a></li></ul></li></ul></li><li><a href="#acknowledgements"><span>Acknowledgements</span></a></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">platform-bible-utils</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>
