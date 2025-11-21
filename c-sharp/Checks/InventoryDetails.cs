@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.Checks;
 /// This class corresponds to the AvailableInventory type defined in platform-scripture.d.ts.
 /// Keep their structures in sync for serialization compatibility.
 /// </summary>
-internal class InventoryDetails
+internal sealed class InventoryDetails
 {
     public InventoryDetails(ScriptureInventoryBase inventory)
     {
