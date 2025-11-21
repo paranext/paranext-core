@@ -169,20 +169,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Comments
 
-    public bool CommentsEnabled
-    {
-        get
-        {
-            return SettingsService.GetSetting<bool?>(PapiClient, Settings.COMMENTS_ENABLED)
-                ?? false;
-        }
-    }
-
     public List<Comment> GetComments(CommentSelector selector)
     {
-        if (!CommentsEnabled)
-            return [];
-
         List<Comment> comments = _commentManager.AllComments.ToList();
         if (comments.Count == 0)
             return comments;
@@ -205,9 +193,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     // Too much risk of data loss while there are other bugs related to comments floating around
     public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
     {
-        if (!CommentsEnabled)
-            return false;
-
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         bool madeChange = false;
         foreach (var ic in incomingComments)
@@ -238,9 +223,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public List<CommentThread> GetCommentThreads(CommentThreadSelector selector)
     {
-        if (!CommentsEnabled)
-            return [];
-
         // Get all threads (activeOnly=false to include threads with deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
@@ -292,9 +274,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
-        if (!CommentsEnabled)
-            return false;
-
         // Find the comment by ID and its parent thread
         var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
         if (commentToDelete == null || parentThread == null)
@@ -325,9 +304,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string CreateComment(Comment comment)
     {
-        if (!CommentsEnabled)
-            throw new InvalidOperationException("Comments are not enabled for this project");
-
         // Check if the XML has actual text content
         if (string.IsNullOrWhiteSpace(comment.Contents.InnerText))
             throw new InvalidDataException("Comment Contents must contain text");
@@ -398,9 +374,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool UpdateComment(string commentId, string updatedContent)
     {
-        if (!CommentsEnabled)
-            return false;
-
         if (string.IsNullOrEmpty(commentId))
             return false;
 
@@ -435,9 +408,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private (Comment?, CommentThread?) FindCommentByIdWithThread(string commentId)
     {
-        if (!CommentsEnabled)
-            return (null, null);
-
         // Get all threads (activeOnly=false to include deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
