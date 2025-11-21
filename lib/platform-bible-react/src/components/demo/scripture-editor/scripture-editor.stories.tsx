@@ -136,6 +136,21 @@ export const RTL: Story = {
   },
 };
 
+function handleAnnotationOnClick(
+  event: globalThis.MouseEvent,
+  type: string,
+  id: string,
+  textContent: string,
+) {
+  // eslint-disable-next-line no-console
+  console.log('handleAnnotationOnClick', { event, type, id, textContent });
+}
+
+function handleAnnotationOnRemove(type: string, id: string, cause: string, textContent: string) {
+  // eslint-disable-next-line no-console
+  console.log('handleAnnotationOnRemove', { type, id, cause, textContent });
+}
+
 export const Annotated: Story = {
   render: (args) => {
     // eslint-disable-next-line no-null/no-null
@@ -144,8 +159,20 @@ export const Annotated: Story = {
     useEffect(() => {
       const timeoutId = setTimeout(() => {
         if (editorRef.current) {
-          editorRef.current.addAnnotation(annotationRangeWeb1, 'spelling', 'annotationId');
-          editorRef.current.addAnnotation(annotationRangeWeb2, 'grammar', 'abc123');
+          editorRef.current.setAnnotation(
+            annotationRangeWeb1,
+            'spelling',
+            'annotationId',
+            handleAnnotationOnClick,
+            handleAnnotationOnRemove,
+          );
+          editorRef.current.setAnnotation(
+            annotationRangeWeb2,
+            'grammar',
+            'abc123',
+            handleAnnotationOnClick,
+            handleAnnotationOnRemove,
+          );
         }
       }, 0);
       return () => clearTimeout(timeoutId);

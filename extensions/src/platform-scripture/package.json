@@ -40,7 +40,7 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@eten-tech-foundation/scripture-utilities": "~0.1.4",
+    "@eten-tech-foundation/scripture-utilities": "~0.1.5",
     "@swc/core": "1.13.3",
     "@tailwindcss/typography": "^0.5.16",
     "@types/jest": "^29.5.14",
