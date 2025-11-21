@@ -5,8 +5,10 @@
  * An attribute marker is a marker that adds information to a previous marker in USFM and is an
  * attribute on that previous marker instead in USX/USJ.
  *
- * @example `ca` and `cp` are attribute markers for `c`. `va` and `vp` are attribute markers for
- * `v`. `cat` is an attribute marker for `f`, `esb`, and more.
+ * @example
+ *
+ * `ca` and `cp` are attribute markers for `c`. `va` and `vp` are attribute markers for `v`. `cat`
+ * is an attribute marker for `f`, `esb`, and more.
  *
  * Following is an example of using the `ca` and `cp` attribute markers in USFM:
  *
@@ -28,23 +30,28 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
   /**
    * List of normal marker names for which this marker is an attribute marker.
    *
-   * @example `ca` and `cp` are attribute markers for `c`. `isAttributeMarkerFor` would be `['c']`
-   * for both `ca` and `cp`.
+   * @example
+   *
+   * `ca` and `cp` are attribute markers for `c`. `isAttributeMarkerFor` would be `['c']` for both
+   * `ca` and `cp`.
    */
   isAttributeMarkerFor?: string[];
   /**
    * List of RegExp patterns matching marker names for which this marker is an attribute marker.
    *
-   * @example Pretend `ex1` and `ex2` are attribute markers for markers matching RegExp `/test/`.
+   * @example
+   *
+   * Pretend `ex1` and `ex2` are attribute markers for markers matching RegExp `/test/`.
    * `isAttributeMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
    */
   isAttributeMarkerForRegExp?: string[];
   /**
    * The name of the USX/USJ attribute this attribute marker represents.
    *
-   * @example `ca` is an attribute marker for `c` and represents the `altnumber` attribute on the
-   * `c` marker in USX/USJ. `attributeMarkerAttributeName` would be `altnumber` for the `ca`
-   * marker.
+   * @example
+   *
+   * `ca` is an attribute marker for `c` and represents the `altnumber` attribute on the `c` marker
+   * in USX/USJ. `attributeMarkerAttributeName` would be `altnumber` for the `ca` marker.
    */
   attributeMarkerAttributeName: string;
   /**
@@ -63,8 +70,10 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
    *
    * If not present or `undefined`, defaults to `false`.
    *
-   * @example According to specification, the `va` and `vp` attribute markers have a space after
-   * their normal closing markers:
+   * @example
+   *
+   * According to specification, the `va` and `vp` attribute markers have a space after their normal
+   * closing markers:
    *
    * ```usfm
    * \p \v 10 \va 10 va\va* \vp 10 vp\vp* Some verse text
@@ -82,8 +91,9 @@ export type AttributeMarkerInfo = NormalMarkerInfo & {
    *
    * The verse text in this example is " Some verse text" including a space at the start.
    *
-   * @example The `cat` attribute marker does not have a structural space after its normal closing
-   * marker:
+   * @example
+   *
+   * The `cat` attribute marker does not have a structural space after its normal closing marker:
    *
    * ```usfm
    * \f + \cat category here\cat*\fr 1:2 \ft Some footnote text\f*
@@ -115,13 +125,17 @@ export type NormalMarkerInfo = {
    * An attribute can be provided with default syntax in the USFM only if it is the only attribute
    * provided for the marker.
    *
-   * @example A marker with a default attribute:
+   * @example
+   *
+   * A marker with a default attribute:
    *
    * ```usfm
    * \w stuff|thisIsTheLemmaDefaultAttribute\w*
    * ```
    *
-   * @example A marker with multiple attributes (cannot use default attribute syntax):
+   * @example
+   *
+   * A marker with multiple attributes (cannot use default attribute syntax):
    *
    * ```usfm
    * \w stuff|lemma="thisIsTheLemma" strong="H1234,G1234"\w*
@@ -135,8 +149,10 @@ export type NormalMarkerInfo = {
    * Text content attributes are attributes in USX/USJ that are represented in USFM as the actual
    * text content of the marker.
    *
-   * @example `alt` is a text content attribute on the `periph` marker. This value would be `alt`
-   * for the `periph` marker.
+   * @example
+   *
+   * `alt` is a text content attribute on the `periph` marker. This value would be `alt` for the
+   * `periph` marker.
    *
    * Following is an example of a `periph` marker in USFM:
    *
@@ -162,8 +178,10 @@ export type NormalMarkerInfo = {
    * Leading attributes are attributes in USJ/USX that are listed in USFM directly after the marker
    * and separated only by a space.
    *
-   * @example `code` is a leading attribute on the `id` marker. This value would be `['code']` for
-   * the `id` marker.
+   * @example
+   *
+   * `code` is a leading attribute on the `id` marker. This value would be `['code']` for the `id`
+   * marker.
    *
    * Following is an example of an `id` marker in USFM:
    *
@@ -189,8 +207,9 @@ export type NormalMarkerInfo = {
    * Note: the attribute names for attribute markers may be different than the marker names. See
    * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
    *
-   * @example `ca` and `cp` are attribute markers for `c`. This value would be `['ca', 'cp']` for
-   * `c`.
+   * @example
+   *
+   * `ca` and `cp` are attribute markers for `c`. This value would be `['ca', 'cp']` for `c`.
    */
   attributeMarkers?: string[];
   /**
@@ -232,7 +251,9 @@ export type NormalMarkerInfo = {
    * closing marker for but rather are completely separate markers that close the corresponding
    * opening marker.
    *
-   * @example `esb` (a sidebar) is closed by the independent closing marker `esbe`.
+   * @example
+   *
+   * `esb` (a sidebar) is closed by the independent closing marker `esbe`.
    * `independentClosingMarkers` would be `['esbe']` for `esb`. Following is an example of a
    * sidebar:
    *
@@ -246,20 +267,24 @@ export type NormalMarkerInfo = {
   independentClosingMarkers?: string[];
   /**
    * List of marker names for which this marker is an independent closing marker. See
-   * {@link NormalMarkerInfo.independentClosingMarker} for more information on independent closing
+   * {@link NormalMarkerInfo.independentClosingMarkers} for more information on independent closing
    * markers and their syntax.
    *
-   * @example `esbe` is an independent closing marker for `esb`. `isIndependentClosingMarkerFor`
-   * would be `['esb']` for `esbe`.
+   * @example
+   *
+   * `esbe` is an independent closing marker for `esb`. `isIndependentClosingMarkerFor` would be
+   * `['esb']` for `esbe`.
    */
   isIndependentClosingMarkerFor?: string[];
   /**
    * List of RegExp patterns matching marker names for which this marker is an independent closing
-   * marker. See {@link NormalMarkerInfo.independentClosingMarker} for more information on
+   * marker. See {@link NormalMarkerInfo.independentClosingMarkers} for more information on
    * independent closing markers and their syntax.
    *
-   * @example Pretend `ex1` and `ex2` are independent closing markers for markers matching RegExp
-   * `/test/`. `isIndependentClosingMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
+   * @example
+   *
+   * Pretend `ex1` and `ex2` are independent closing markers for markers matching RegExp `/test/`.
+   * `isIndependentClosingMarkerForRegExp` would be `['test']` for both `ex1` and `ex2`.
    */
   isIndependentClosingMarkerForRegExp?: string[];
   /**
@@ -267,8 +292,9 @@ export type NormalMarkerInfo = {
    * outputting to USFM, the marker info for the marker listed here in `markerUsfm` should be used
    * instead of the marker info for the marker as listed in USX or USJ.
    *
-   * @example When the `usx` marker is output to USFM, it should be transformed to the `usfm`
-   * marker.
+   * @example
+   *
+   * When the `usx` marker is output to USFM, it should be transformed to the `usfm` marker.
    */
   markerUsfm?: string;
   /**
@@ -286,9 +312,11 @@ export type NormalMarkerInfo = {
 /**
  * Information about a USFM/USX/USJ marker that is essential for proper translation between formats.
  *
- * @example `w` is a `char`-type marker, so it shares the characteristics of the `char`
- * {@link MarkerTypeInfo} with other `char`-type markers and has its own set of characteristics.
- * `w`'s `MarkerInfo` is as follows:
+ * @example
+ *
+ * `w` is a `char`-type marker, so it shares the characteristics of the `char` {@link MarkerTypeInfo}
+ * with other `char`-type markers and has its own set of characteristics. `w`'s `MarkerInfo` is as
+ * follows:
  *
  * ```json
  * {
@@ -307,8 +335,10 @@ export type MarkerInfo = NormalMarkerInfo | AttributeMarkerInfo;
  * marker with this marker type, the USX/USJ for the marker will have the attribute `closed` set to
  * `false` unless {@link NormalMarkerInfo.isClosingMarkerOptional} is `true`.
  *
- * @example `char` marker types such as `nd` markers have closing markers, but `para` markers such
- * as `p` do not:
+ * @example
+ *
+ * `char` marker types such as `nd` markers have closing markers, but `para` markers such as `p` do
+ * not:
  *
  * ```usfm
  * \p This is a plain paragraph.
@@ -345,7 +375,9 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
    *
    * If not present or `undefined`, defaults to `false`
    *
-   * @example Markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
+   * @example
+   *
+   * Markers of type `ms` (such as `qt1-s` and `qt1-e`) have an empty closing marker:
    *
    * ```usfm
    * \qt1-s\*
@@ -372,8 +404,10 @@ export type CloseableMarkerTypeInfo = MarkerTypeInfoBase & {
  * Information about a USFM/USX/USJ marker type that does not have a closing marker. See
  * {@link MarkerTypeInfo} for other kinds of marker types.
  *
- * @example `char` marker types such as `nd` markers have closing markers, but `para` marker types
- * such as `p` do not:
+ * @example
+ *
+ * `char` marker types such as `nd` markers have closing markers, but `para` marker types such as
+ * `p` do not:
  *
  * ```usfm
  * \p This is a plain paragraph.
@@ -426,8 +460,10 @@ export type MarkerTypeInfoBase = {
    *
    * This property is not used when converting to USX or USJ.
    *
-   * @example The `sid` attribute on the `verse` type marker is not present in USFM because it is
-   * derived metadata in USX/USJ and is not present in USFM.
+   * @example
+   *
+   * The `sid` attribute on the `verse` type marker is not present in USFM because it is derived
+   * metadata in USX/USJ and is not present in USFM.
    */
   skipOutputAttributeToUsfm?: string[];
   /**
@@ -442,10 +478,12 @@ export type MarkerTypeInfoBase = {
    *
    * This property is not used when converting to USX or USJ.
    *
-   * @example If the `verse` marker has an `eid` attribute, it indicates it is a marker denoting the
-   * end of the verse that is derived metadata in USX/USJ and is not present in USFM. Note that the
-   * `verse` marker does not have the `style="v"` attribute in this situation, so this list of
-   * attributes is on the marker type.
+   * @example
+   *
+   * If the `verse` marker has an `eid` attribute, it indicates it is a marker denoting the end of
+   * the verse that is derived metadata in USX/USJ and is not present in USFM. Note that the `verse`
+   * marker does not have the `style="v"` attribute in this situation, so this list of attributes is
+   * on the marker type.
    *
    * Following is an example of a derived metadata `verse` marker in USX:
    *
@@ -463,8 +501,10 @@ export type MarkerTypeInfoBase = {
    * \v 21 This is verse 21.
    * ```
    *
-   * @example Generated `ref`s should be skipped but have content inside the marker that should not
-   * be skipped. These `ref`s wrap project-localized Scripture references in `xt` markers and have
+   * @example
+   *
+   * Generated `ref`s should be skipped but have content inside the marker that should not be
+   * skipped. These `ref`s wrap project-localized Scripture references in `xt` markers and have
    * computer-readable Scripture References as their `loc` attribute. These `ref`s that are derived
    * metadata have the `gen` attribute set to `"true"` and can be removed if `gen="true"` is
    * present.
@@ -495,8 +535,10 @@ export type MarkerTypeInfoBase = {
    *
    * If not present or `undefined`, defaults to `false`
    *
-   * @example In USFM 3.1, the `table` marker type is generated while transforming USFM into USX/USJ
-   * and is not preserved when transforming from USX/USJ to USFM.
+   * @example
+   *
+   * In USFM 3.1, the `table` marker type is generated while transforming USFM into USX/USJ and is
+   * not preserved when transforming from USX/USJ to USFM.
    *
    * Following is an example of a derived metadata `table` marker in USX:
    *
@@ -539,8 +581,10 @@ export type MarkerTypeInfoBase = {
    *
    * If not present or `undefined`, defaults to `false`
    *
-   * @example `para` marker types such as `p` should have a newline, but `char` marker types such as
-   * `nd` markers should not:
+   * @example
+   *
+   * `para` marker types such as `p` should have a newline, but `char` marker types such as `nd`
+   * markers should not:
    *
    * ```usfm
    * \p This is a plain paragraph.
@@ -570,8 +614,10 @@ export type MarkerTypeInfoBase = {
    * Prefix to add to the opening and closing marker before the marker name if a marker of this type
    * occurs within another marker of this type when outputting to USFM.
    *
-   * @example In USFM 3.0, `char`-type markers that are nested must have a `+` prefix. Following is
-   * an example of `nd` inside `wj` (both are `char`-type markers) in USFM:
+   * @example
+   *
+   * In USFM 3.0, `char`-type markers that are nested must have a `+` prefix. Following is an
+   * example of `nd` inside `wj` (both are `char`-type markers) in USFM:
    *
    * ```usfm
    * \p \wj This is \+nd nested\+nd*!\wj*
@@ -604,9 +650,11 @@ export type MarkerTypeInfoBase = {
  * Information about a USFM/USX/USJ marker type that is essential for proper translation between
  * formats.
  *
- * @example `char` is a marker type, which means markers like `w` whose marker type is `char` share
- * some characteristics, and each marker also has its own set of characteristics which are presented
- * with type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
+ * @example
+ *
+ * `char` is a marker type, which means markers like `w` whose marker type is `char` share some
+ * characteristics, and each marker also has its own set of characteristics which are presented with
+ * type {@link MarkerInfo}. `char`'s `MarkerTypeInfo` is as follows:
  *
  * ```json
  * {
@@ -747,7 +795,7 @@ export const USFM_MARKERS_MAP: MarkersMap = deepFreeze({
   schemaRepo: 'https://github.com/usfm-bible/tcdocs.git',
   schemaCommit: '50f2a6ac3fc1d867d906df28bc00fcff729a7b76',
   markersMapVersion: '1.0.0',
-  usfmToolsCommit: 'b3475856e2b7c0f19739d247ae3f3c13cba66215',
+  usfmToolsCommit: '6c7bb8d75eda47893296a635c1e6e0b67165ac7f',
   markers: {
     add: {
       type: 'char',

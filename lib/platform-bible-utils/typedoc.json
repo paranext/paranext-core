@@ -11,5 +11,20 @@
     "rewrittenLink": true,
     "unusedMergeModuleWith": true
   },
+  "highlightLanguages": [
+    "bash",
+    "console",
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "jsonc",
+    "json5",
+    "yaml",
+    "tsx",
+    "typescript",
+    "xml"
+  ],
+  "ignoredHighlightLanguages": ["usfm"],
   "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"]
 }
