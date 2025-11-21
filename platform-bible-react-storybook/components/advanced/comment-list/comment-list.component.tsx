@@ -19,10 +19,15 @@ export default function CommentList({
   handleAddComment,
   handleResolveCommentThread,
   handleUpdateComment,
+  handleDeleteComment,
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
-  const options: ListboxOption[] = threads.map((thread) => ({
+  const activeThreads = threads.filter((thread) =>
+    thread.comments.some((comment) => !comment.deleted),
+  );
+
+  const options: ListboxOption[] = activeThreads.map((thread) => ({
     id: getUniqueThreadId(thread.id),
   }));
 
@@ -69,7 +74,7 @@ export default function CommentList({
       )}
       onKeyDown={handleKeyDownWithEscape}
     >
-      {threads.map((thread) => (
+      {activeThreads.map((thread) => (
         <div key={getUniqueThreadId(thread.id)}>
           <CommentThread
             comments={thread.comments}
@@ -84,6 +89,7 @@ export default function CommentList({
             handleAddComment={handleAddComment}
             handleResolveCommentThread={handleResolveCommentThread}
             handleUpdateComment={handleUpdateComment}
+            handleDeleteComment={handleDeleteComment}
           />
         </div>
       ))}
