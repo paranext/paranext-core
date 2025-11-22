@@ -53,6 +53,8 @@ export function sanitizeHtml(html: string): string {
     ALLOWED_TAGS: [
       'p',
       'br',
+      'b',
+      'i',
       'strong',
       'em',
       'u',

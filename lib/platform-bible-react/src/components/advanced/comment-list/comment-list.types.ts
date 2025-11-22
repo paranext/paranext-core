@@ -44,8 +44,8 @@ export interface CommentListProps {
    * (format: "threadId/userName/date"). Otherwise, returns undefined.
    */
   handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-  /** Handler for resolving the comment thread */
-  handleResolveCommentThread: (threadId: string) => void;
+  /** Handler for setting the comment thread status (resolve/unresolve) */
+  handleSetCommentThreadStatus: (threadId: string, resolve: boolean) => Promise<boolean>;
   /** Handler for updating a comment's content */
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
@@ -77,8 +77,8 @@ export interface CommentThreadProps {
    * (format: "threadId/userName/date"). Otherwise, returns undefined.
    */
   handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-  /** Handler for resolving the comment thread */
-  handleResolveCommentThread: (threadId: string) => void;
+  /** Handler for setting the comment thread status (resolve/unresolve) */
+  handleSetCommentThreadStatus: (threadId: string, resolve: boolean) => Promise<boolean>;
   /** Handler for updating a comment's content */
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
@@ -102,8 +102,8 @@ export interface CommentItemProps {
   isThreadExpanded?: boolean;
   /** Current status of the thread */
   threadStatus?: CommentStatus;
-  /** Handler for resolving the comment thread */
-  handleResolveCommentThread?: (threadId: string) => void;
+  /** Handler for setting the comment thread status (resolve/unresolve) */
+  handleSetCommentThreadStatus?: (threadId: string, resolve: boolean) => Promise<boolean>;
   /** Handler for updating a comment's content */
   handleUpdateComment?: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */

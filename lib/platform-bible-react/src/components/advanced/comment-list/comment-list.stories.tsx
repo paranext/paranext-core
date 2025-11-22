@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
+import {
+  CommentStatus,
+  LanguageStrings,
+  LegacyComment,
+  LegacyCommentThread,
+} from 'platform-bible-utils';
 import { useState } from 'react';
 import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample.data';
@@ -24,6 +29,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
   const handleAddComment = async (
     threadId: string,
     contents: string,
+    status?: CommentStatus,
   ): Promise<string | undefined> => {
     console.log(`Adding comment to thread ${threadId}: ${contents}`);
 
@@ -48,10 +54,12 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
             contextAfter: '',
             thread: thread.id,
             verseRef: thread.verseRef,
+            ...(status && { status }),
           };
           return {
             ...thread,
             comments: [...thread.comments, newComment],
+            ...(status && { status }),
           };
         }
         return thread;
@@ -61,8 +69,13 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return newCommentId;
   };
 
-  const handleResolveCommentThread = (threadId: string) => {
-    console.log(`Resolving thread ${threadId}`);
+  const handleSetCommentThreadStatus = async (
+    threadId: string,
+    resolve: boolean,
+  ): Promise<boolean> => {
+    console.log(`Setting thread ${threadId} status to ${resolve ? 'resolved' : 'unresolved'}`);
+    const result = await handleAddComment(threadId, '1', resolve ? 'Resolved' : 'Todo');
+    return result !== undefined;
   };
 
   const handleUpdateComment = async (commentId: string, contents: string): Promise<boolean> => {
@@ -124,7 +137,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
       localizedStrings={commentListLocalizedStrings}
       currentUser="Current User"
       handleAddComment={handleAddComment}
-      handleResolveCommentThread={handleResolveCommentThread}
+      handleSetCommentThreadStatus={handleSetCommentThreadStatus}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
     />

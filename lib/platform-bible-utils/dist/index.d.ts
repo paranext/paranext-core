@@ -5381,7 +5381,7 @@ export type LegacyComment = {
 	contextBefore?: string;
 	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
 	date: string;
-	/** True if the comment has been deleted. Paratext 9 doesn't seem to use this flag when deleting a comment. Rather, it deletes the comment from the notes file instead. */
+	/** True if the comment has been deleted */
 	deleted: boolean;
 	/** Additional information for the note header, added for Biblical Term notes. */
 	extraHeadingInfo?: string;
@@ -5400,7 +5400,7 @@ export type LegacyComment = {
 	/** Approximate position where the comment begins. Zero for attached to a verse. */
 	startPosition: number;
 	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
-	status?: string;
+	status?: CommentStatus;
 	/** Tags added in this note, joined with (',') */
 	tagAdded?: string;
 	/** Tags removed in this note, joined with (',') */

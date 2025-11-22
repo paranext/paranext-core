@@ -39,7 +39,7 @@ export function CommentItem({
   localizedStrings,
   isThreadExpanded = false,
   threadStatus = 'Unspecified',
-  handleResolveCommentThread = () => {},
+  handleSetCommentThreadStatus,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
@@ -248,19 +248,22 @@ export function CommentItem({
           />
         )}
       </div>
-      {isThreadExpanded && !isReply && threadStatus !== 'Resolved' && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="tw-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering the expand/collapse
-            handleResolveCommentThread(comment.thread);
-          }}
-        >
-          <Check />
-        </Button>
-      )}
+      {isThreadExpanded &&
+        !isReply &&
+        threadStatus !== 'Resolved' &&
+        handleSetCommentThreadStatus && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering the expand/collapse
+              handleSetCommentThreadStatus(comment.thread, true);
+            }}
+          >
+            <Check />
+          </Button>
+        )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
