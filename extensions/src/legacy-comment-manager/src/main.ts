@@ -29,9 +29,17 @@ const commentListWebViewProvider: IWebViewProvider = {
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    const title = await papi.localization.getLocalizedString({
+    const baseTitle = await papi.localization.getLocalizedString({
       localizeKey: '%webView_legacyCommentManager_commentList_title%',
     });
+
+    const title = projectId
+      ? `${baseTitle}: ${
+          (await (
+            await papi.projectDataProviders.get('platform.base', projectId)
+          ).getSetting('platform.name')) ?? projectId
+        }`
+      : baseTitle;
 
     return {
       ...savedWebView,
