@@ -108,7 +108,7 @@ const defaultView: ViewOptions = getDefaultViewOptions();
 // instead of duplicating the shallow-copy code.
 const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
   const base = { ...defaultView };
-  if (viewType === 'markers') return { ...base, markerMode: 'visible' };
+  if (viewType === 'markers') return { ...base, markerMode: 'visible', noteMode: 'expanded' };
   return base;
 };
 
@@ -230,14 +230,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const options = useMemo<EditorOptions>(
     () => ({
-      isReadonly: isReadOnly,
+      isReadonly: isReadOnly || viewType === 'markers',
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
       markerMenuTrigger: '\\',
       view: viewOptions,
     }),
-    [isReadOnly, textDirectionEffective, nodeOptions, viewOptions],
+    [isReadOnly, textDirectionEffective, nodeOptions, viewOptions, viewType],
   );
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
