@@ -149,7 +149,9 @@ export function editorStateToHtml(editorState: SerializedEditorState): string {
     // Simplify nested strikethrough tags (e.g., <s><span>text</span></s> -> <s>text</s>)
     .replace(/<s><span[^>]*>(.*?)<\/span><\/s>/g, '<s>$1</s>')
     // Convert <s> tags back to <strikethrough> for Paratext compatibility
-    .replace(/<s>(.*?)<\/s>/g, '<strikethrough>$1</strikethrough>');
+    .replace(/<s>(.*?)<\/s>/g, '<strikethrough>$1</strikethrough>')
+    // Convert all <br> variants to XML-compatible <br/> for Paratext
+    .replace(/<br\s*\/?>/gi, '<br/>');
 
   return html;
 }
