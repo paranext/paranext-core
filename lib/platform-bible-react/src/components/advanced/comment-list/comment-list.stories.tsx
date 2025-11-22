@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
+import {
+  CommentStatus,
+  LanguageStrings,
+  LegacyComment,
+  LegacyCommentThread,
+} from 'platform-bible-utils';
 import { useState } from 'react';
 import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample.data';
@@ -12,7 +17,10 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_date_yesterday%': 'yesterday',
   '%comment_deleteComment%': 'Delete Comment',
   '%comment_editComment%': 'Edit Comment',
+  '%comment_reopenResolved%': 'Adding a comment will re-open this discussion...',
   '%comment_replyOrAssign%': 'Reply or assign with @',
+  '%comment_status_resolved%': 'Marked as resolved',
+  '%comment_status_todo%': 'Re-opened',
   '%comment_thread_multiple_replies%': '{count} replies',
   '%comment_thread_single_reply%': '1 reply',
   '%no_comments%': 'No comments yet',
@@ -24,6 +32,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
   const handleAddComment = async (
     threadId: string,
     contents: string,
+    status?: CommentStatus,
   ): Promise<string | undefined> => {
     console.log(`Adding comment to thread ${threadId}: ${contents}`);
 
@@ -32,8 +41,16 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     // Find the thread and add the comment
     setThreads((prevThreads) =>
       prevThreads.map((thread) => {
-        if (`thread-${thread.id}` === threadId) {
+        if (thread.id === threadId) {
           newCommentId = `${thread.id}-${Date.now()}`;
+
+          // Determine the status for the new comment
+          // If explicitly provided, use it; otherwise check if thread is resolved
+          let commentStatus = status;
+          if (!commentStatus && thread.status === 'Resolved') {
+            commentStatus = 'Todo';
+          }
+
           const newComment: LegacyComment = {
             id: newCommentId,
             user: 'Current User',
@@ -48,10 +65,12 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
             contextAfter: '',
             thread: thread.id,
             verseRef: thread.verseRef,
+            ...(commentStatus && { status: commentStatus }),
           };
           return {
             ...thread,
             comments: [...thread.comments, newComment],
+            ...(commentStatus && { status: commentStatus }),
           };
         }
         return thread;
@@ -61,8 +80,48 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return newCommentId;
   };
 
-  const handleResolveCommentThread = (threadId: string) => {
-    console.log(`Resolving thread ${threadId}`);
+  const handleSetCommentThreadStatus = async (
+    threadId: string,
+    resolve: boolean,
+    contents?: string,
+  ): Promise<boolean> => {
+    console.log(`Setting thread ${threadId} status to ${resolve ? 'resolved' : 'unresolved'}`);
+
+    let success = false;
+
+    // Add a status comment to the thread (mimics PT9 behavior of adding a comment with status)
+    setThreads((prevThreads) =>
+      prevThreads.map((thread) => {
+        if (thread.id === threadId) {
+          const statusCommentId = `${thread.id}-status-${Date.now()}`;
+          const statusComment: LegacyComment = {
+            id: statusCommentId,
+            user: 'Current User',
+            date: new Date().toISOString(),
+            contents: contents || '',
+            deleted: false,
+            hideInTextWindow: false,
+            language: 'en',
+            startPosition: 0,
+            selectedText: '',
+            contextBefore: '',
+            contextAfter: '',
+            thread: thread.id,
+            verseRef: thread.verseRef,
+            status: resolve ? 'Resolved' : 'Todo',
+          };
+          success = true;
+          return {
+            ...thread,
+            comments: [...thread.comments, statusComment],
+            status: resolve ? 'Resolved' : 'Todo',
+          };
+        }
+        return thread;
+      }),
+    );
+
+    return success;
   };
 
   const handleUpdateComment = async (commentId: string, contents: string): Promise<boolean> => {
@@ -124,7 +183,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
       localizedStrings={commentListLocalizedStrings}
       currentUser="Current User"
       handleAddComment={handleAddComment}
-      handleResolveCommentThread={handleResolveCommentThread}
+      handleSetCommentThreadStatus={handleSetCommentThreadStatus}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
     />
@@ -138,9 +197,7 @@ const meta: Meta<typeof CommentList> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-2xl tw-bg-muted">
-          <Story />
-        </div>
+        <Story />
       </ThemeProvider>
     ),
   ],
