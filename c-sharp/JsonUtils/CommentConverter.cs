@@ -11,6 +11,43 @@ namespace Paranext.DataProvider.JsonUtils;
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
 public class CommentConverter : JsonConverter<Comment>
 {
+    /// <summary>
+    /// Maps TypeScript CommentStatus values to C# NoteStatus internal string representations.
+    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
+    /// C# NoteStatus: "" | "todo" | "done" | "deleted"
+    /// </summary>
+    private static string ConvertCommentStatusToNoteStatus(string commentStatus)
+    {
+        return commentStatus switch
+        {
+            "Resolved" => "deleted",
+            "Todo" => "todo",
+            "Done" => "done",
+            "Unspecified" => "",
+            "" => "",
+            _ => commentStatus.ToLowerInvariant(),
+        };
+    }
+
+    /// <summary>
+    /// Maps C# NoteStatus internal string representations to TypeScript CommentStatus values.
+    /// C# NoteStatus: "" | "todo" | "done" | "deleted"
+    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
+    /// </summary>
+    private static string ConvertNoteStatusToCommentStatus(string noteStatus)
+    {
+        return noteStatus switch
+        {
+            "deleted" => "Resolved",
+            "todo" => "Todo",
+            "done" => "Done",
+            "" => "Unspecified",
+            _ => noteStatus.Length > 0
+                ? char.ToUpperInvariant(noteStatus[0]) + noteStatus.Substring(1)
+                : "Unspecified",
+        };
+    }
+
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
     private const string CONFLICT_TYPE = "conflictType";
@@ -192,6 +229,9 @@ public class CommentConverter : JsonConverter<Comment>
             throw new InvalidDataException($"Contents are not valid XML: {contents}");
         }
 
+        if (!string.IsNullOrEmpty(status))
+            status = ConvertCommentStatusToNoteStatus(status);
+
         var conflictTypeEnum = ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType);
         var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status);
         var typeEnum = ConvertToEnum<NoteType>(TYPE, type);
@@ -213,7 +253,7 @@ public class CommentConverter : JsonConverter<Comment>
                 ReplyToUser = replyToUser,
                 SelectedText = selectedText,
                 Shared = shared,
-                StartPosition = startPosition ?? 0,
+                StartPosition = startPosition ?? -1,
                 Status = statusEnum ?? NoteStatus.Unspecified,
                 TagsAdded = tagAdded?.Split(","),
                 TagsRemoved = tagRemoved?.Split(","),
@@ -247,7 +287,11 @@ public class CommentConverter : JsonConverter<Comment>
         JsonConverterUtils.TryWriteString(writer, CONTEXT_BEFORE, value.ContextBefore);
         JsonConverterUtils.TryWriteString(writer, CONTEXT_AFTER, value.ContextAfter);
         if (value.Status != NoteStatus.Unspecified)
-            writer.WriteString(STATUS, value.Status.ToString());
+        {
+            string noteStatusValue = value.Status.ToString();
+            string commentStatusValue = ConvertNoteStatusToCommentStatus(noteStatusValue);
+            writer.WriteString(STATUS, commentStatusValue);
+        }
         if (value.Type != NoteType.Unspecified && value.Type != NoteType.Normal)
             writer.WriteString(TYPE, value.Type.ToString());
         if (value.ConflictType != NoteConflictType.None)

@@ -39,7 +39,7 @@ export function CommentItem({
   localizedStrings,
   isThreadExpanded = false,
   threadStatus = 'Unspecified',
-  handleResolveCommentThread = () => {},
+  handleSetCommentThreadStatus,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
@@ -236,31 +236,50 @@ export function CommentItem({
           </div>
         )}
         {!isEditing && (
-          <div
-            className={cn(
-              'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
-              {
-                'tw-line-clamp-3': !isThreadExpanded,
-              },
+          <>
+            {comment.status === 'Resolved' && (
+              <div className="tw-text-sm tw-italic">
+                {localizedStrings['%comment_status_resolved%']}
+              </div>
             )}
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-          />
+            {comment.status === 'Todo' && (
+              <div className="tw-text-sm tw-italic">
+                {localizedStrings['%comment_status_todo%']}
+              </div>
+            )}
+            <div
+              className={cn(
+                'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
+                // tw-prose has a max width defined on it, that we choose to override
+                'tw-max-w-none',
+                {
+                  'tw-line-clamp-3': !isThreadExpanded,
+                },
+              )}
+              // The comment content is stored in HTML so it needs to be set directly. To make sure
+              // it is safe we have sanitized it first.
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+            />
+          </>
         )}
       </div>
-      {isThreadExpanded && !isReply && threadStatus !== 'Resolved' && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="tw-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering the expand/collapse
-            handleResolveCommentThread(comment.thread);
-          }}
-        >
-          <Check />
-        </Button>
-      )}
+      {isThreadExpanded &&
+        !isReply &&
+        threadStatus !== 'Resolved' &&
+        handleSetCommentThreadStatus && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering the expand/collapse
+              handleSetCommentThreadStatus(comment.thread, true);
+            }}
+          >
+            <Check />
+          </Button>
+        )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

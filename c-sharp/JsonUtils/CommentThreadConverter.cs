@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Paratext.Data.ProjectComments;
+using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -8,6 +9,26 @@ namespace Paranext.DataProvider.JsonUtils;
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
 public class CommentThreadConverter : JsonConverter<CommentThread>
 {
+    /// <summary>
+    /// Maps C# NoteStatus to TypeScript CommentStatus values.
+    /// C# NoteStatus: Enum with internal strings "" | "todo" | "done" | "deleted"
+    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
+    /// </summary>
+    private static string ConvertNoteStatusToCommentStatus(Enum<NoteStatus> noteStatus)
+    {
+        string noteStatusValue = noteStatus.ToString();
+        return noteStatusValue switch
+        {
+            "deleted" => "Resolved",
+            "todo" => "Todo",
+            "done" => "Done",
+            "" => "Unspecified",
+            _ => noteStatusValue.Length > 0
+                ? char.ToUpperInvariant(noteStatusValue[0]) + noteStatusValue.Substring(1)
+                : "Unspecified",
+        };
+    }
+
     private const string ID = "id";
     private const string COMMENTS = "comments";
     private const string STATUS = "status";
@@ -46,8 +67,9 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
         writer.WritePropertyName(COMMENTS);
         JsonSerializer.Serialize(writer, value.Comments, options);
 
-        // Status and Type
-        writer.WriteString(STATUS, value.Status.ToString());
+        // Status and Type - convert NoteStatus to CommentStatus for frontend
+        string threadStatus = ConvertNoteStatusToCommentStatus(value.Status);
+        writer.WriteString(STATUS, threadStatus);
         writer.WriteString(TYPE, value.Type.ToString());
         writer.WriteBoolean(IS_SPELLING_NOTE, value.IsSpellingNote);
         writer.WriteBoolean(IS_BT_NOTE, value.IsBTNote);
