@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Paratext.Data.ProjectComments;
+using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -7,6 +9,43 @@ namespace Paranext.DataProvider.JsonUtils;
 /// </summary>
 public static class JsonConverterUtils
 {
+    /// <summary>
+    /// Maps TypeScript CommentStatus values to C# NoteStatus internal string representations.
+    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
+    /// C# NoteStatus: "" | "todo" | "done" | "deleted"
+    /// </summary>
+    public static string ConvertCommentStatusToNoteStatus(string commentStatus)
+    {
+        return commentStatus switch
+        {
+            "Resolved" => "deleted",
+            "Todo" => "todo",
+            "Done" => "done",
+            "Unspecified" => "",
+            "" => "",
+            _ => commentStatus.ToLowerInvariant(),
+        };
+    }
+
+    /// <summary>
+    /// Maps C# NoteStatus internal string representations to TypeScript CommentStatus values.
+    /// C# NoteStatus: "" | "todo" | "done" | "deleted"
+    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
+    /// </summary>
+    public static string ConvertNoteStatusToCommentStatus(string noteStatus)
+    {
+        return noteStatus switch
+        {
+            "deleted" => "Resolved",
+            "todo" => "Todo",
+            "done" => "Done",
+            "" => "Unspecified",
+            _ => noteStatus.Length > 0
+                ? char.ToUpperInvariant(noteStatus[0]) + noteStatus.Substring(1)
+                : "Unspecified",
+        };
+    }
+
     /// <summary>
     /// Write a string property to JSON only if the value is not null or empty.
     /// </summary>
