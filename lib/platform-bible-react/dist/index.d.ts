@@ -167,7 +167,7 @@ type LegacyComment = {
 	/** Approximate position where the comment begins. Zero for attached to a verse. */
 	startPosition: number;
 	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
-	status?: string;
+	status?: CommentStatus;
 	/** Tags added in this note, joined with (',') */
 	tagAdded?: string;
 	/** Tags removed in this note, joined with (',') */
@@ -378,8 +378,8 @@ export interface CommentListProps {
 	 * (format: "threadId/userName/date"). Otherwise, returns undefined.
 	 */
 	handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-	/** Handler for resolving the comment thread */
-	handleResolveCommentThread: (threadId: string) => void;
+	/** Handler for setting the comment thread status (resolve/unresolve) */
+	handleSetCommentThreadStatus: (threadId: string, resolve: boolean) => Promise<boolean>;
 	/** Handler for updating a comment's content */
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
@@ -390,7 +390,7 @@ export interface CommentListProps {
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleResolveCommentThread, handleUpdateComment, handleDeleteComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleSetCommentThreadStatus, handleUpdateComment, handleDeleteComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

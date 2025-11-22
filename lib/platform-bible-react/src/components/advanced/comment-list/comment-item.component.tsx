@@ -39,7 +39,7 @@ export function CommentItem({
   localizedStrings,
   isThreadExpanded = false,
   threadStatus = 'Unspecified',
-  handleResolveCommentThread = () => {},
+  handleSetCommentThreadStatus,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
@@ -239,6 +239,8 @@ export function CommentItem({
           <div
             className={cn(
               'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
+              // tw-prose has a max width defined on it, that we might want to override
+              'tw-max-w-none',
               {
                 'tw-line-clamp-3': !isThreadExpanded,
               },
@@ -248,19 +250,22 @@ export function CommentItem({
           />
         )}
       </div>
-      {isThreadExpanded && !isReply && threadStatus !== 'Resolved' && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="tw-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering the expand/collapse
-            handleResolveCommentThread(comment.thread);
-          }}
-        >
-          <Check />
-        </Button>
-      )}
+      {isThreadExpanded &&
+        !isReply &&
+        threadStatus !== 'Resolved' &&
+        handleSetCommentThreadStatus && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering the expand/collapse
+              handleSetCommentThreadStatus(comment.thread, true);
+            }}
+          >
+            <Check />
+          </Button>
+        )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

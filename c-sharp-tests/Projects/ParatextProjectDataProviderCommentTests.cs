@@ -556,5 +556,229 @@ namespace TestParanextDataProvider.Projects
         }
 
         #endregion
+
+        #region SetCommentThreadStatus Tests
+
+        [Test]
+        public void SetCommentThreadStatus_ResolveUnresolvedThread_CreatesNewComment()
+        {
+            // Arrange - Create a comment to establish a thread
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolving");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Get initial comment count
+            var threadsBefore = _provider.GetCommentThreads(
+                new CommentThreadSelector { ThreadId = threadId }
+            );
+            int initialCommentCount = threadsBefore[0].Comments.Count;
+
+            // Act - Resolve the thread
+            bool result = _provider.SetCommentThreadStatus(threadId, true);
+
+            // Assert
+            Assert.That(result, Is.True, "Resolving thread should succeed");
+
+            // Verify thread status is Resolved (displayed as 'deleted' internally by ParatextData)
+            var threadsAfter = _provider.GetCommentThreads(
+                new CommentThreadSelector { ThreadId = threadId }
+            );
+            Assert.That(threadsAfter, Has.Count.EqualTo(1));
+            Assert.That(
+                threadsAfter[0].Status.ToString().ToLowerInvariant(),
+                Is.EqualTo("deleted"),
+                "Thread status should be Resolved (labeled 'deleted' by ParatextData)"
+            );
+
+            // Verify a new comment was created to record the status change
+            Assert.That(
+                threadsAfter[0].Comments.Count,
+                Is.EqualTo(initialCommentCount + 1),
+                "A new comment should be created to record the status change"
+            );
+
+            // Verify the new comment has the correct status
+            var lastComment = threadsAfter[0].Comments.Last();
+            Assert.That(
+                lastComment.Status.ToString().ToLowerInvariant(),
+                Is.EqualTo("deleted"),
+                "Last comment should have Resolved status (labeled 'deleted' by ParatextData)"
+            );
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_UnresolveResolvedThread_CreatesNewComment()
+        {
+            // Arrange - Create and resolve a thread
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for unresolving");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Resolve it first
+            _provider.SetCommentThreadStatus(threadId, true);
+
+            // Get comment count after resolving
+            var threadsAfterResolve = _provider.GetCommentThreads(
+                new CommentThreadSelector { ThreadId = threadId }
+            );
+            int commentCountAfterResolve = threadsAfterResolve[0].Comments.Count;
+
+            // Act - Unresolve the thread
+            bool result = _provider.SetCommentThreadStatus(threadId, false);
+
+            // Assert
+            Assert.That(result, Is.True, "Unresolving thread should succeed");
+
+            // Verify thread status is Todo
+            var threadsAfterUnresolve = _provider.GetCommentThreads(
+                new CommentThreadSelector { ThreadId = threadId }
+            );
+            Assert.That(threadsAfterUnresolve, Has.Count.EqualTo(1));
+            Assert.That(
+                threadsAfterUnresolve[0].Status.ToString().ToLowerInvariant(),
+                Is.EqualTo("todo"),
+                "Thread status should be Todo after unresolving"
+            );
+
+            // Verify a new comment was created
+            Assert.That(
+                threadsAfterUnresolve[0].Comments.Count,
+                Is.EqualTo(commentCountAfterResolve + 1),
+                "A new comment should be created when unresolving"
+            );
+
+            // Verify the new comment has Todo status
+            var lastComment = threadsAfterUnresolve[0].Comments.Last();
+            Assert.That(
+                lastComment.Status.ToString().ToLowerInvariant(),
+                Is.EqualTo("todo"),
+                "Last comment should have Todo status"
+            );
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_ResolvedThreadAppearsInResolvedFilter()
+        {
+            // Arrange - Create a comment
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for filter");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Act - Resolve the thread
+            _provider.SetCommentThreadStatus(threadId, true);
+
+            // Assert - Verify it appears in resolved filter (using ParatextData's 'deleted' label)
+            var resolvedThreads = _provider.GetCommentThreads(
+                new CommentThreadSelector { Status = "deleted" }
+            );
+
+            Assert.That(
+                resolvedThreads.Any(t => t.Id == threadId),
+                Is.True,
+                "Resolved thread should appear in Resolved filter"
+            );
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_UnresolvedThreadAppearsInTodoFilter()
+        {
+            // Arrange - Create and resolve a thread
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            _provider.SetCommentThreadStatus(threadId, true); // Resolve first
+
+            // Act - Unresolve it
+            _provider.SetCommentThreadStatus(threadId, false);
+
+            // Assert - Verify it appears in Todo filter
+            var todoThreads = _provider.GetCommentThreads(
+                new CommentThreadSelector { Status = "todo" }
+            );
+
+            Assert.That(
+                todoThreads.Any(t => t.Id == threadId),
+                Is.True,
+                "Unresolved thread should appear in Todo filter"
+            );
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_NonExistentThread_ReturnsFalse()
+        {
+            // Act
+            bool result = _provider.SetCommentThreadStatus("nonexistent-thread-id", true);
+
+            // Assert
+            Assert.That(result, Is.False, "Setting status on non-existent thread should fail");
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_EmptyThreadId_ReturnsFalse()
+        {
+            // Act
+            bool result = _provider.SetCommentThreadStatus("", true);
+
+            // Assert
+            Assert.That(result, Is.False, "Setting status with empty thread ID should fail");
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_NullThreadId_ReturnsFalse()
+        {
+            // Act
+            bool result = _provider.SetCommentThreadStatus(null!, true);
+
+            // Assert
+            Assert.That(result, Is.False, "Setting status with null thread ID should fail");
+        }
+
+        [Test]
+        public void SetCommentThreadStatus_MultipleStatusChanges_CreatesMultipleComments()
+        {
+            // Arrange - Create a comment
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple changes");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            int initialCount = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .First()
+                .Comments.Count;
+
+            // Act - Make multiple status changes
+            _provider.SetCommentThreadStatus(threadId, true); // Resolve
+            _provider.SetCommentThreadStatus(threadId, false); // Unresolve
+            _provider.SetCommentThreadStatus(threadId, true); // Resolve again
+
+            // Assert - Verify each status change created a new comment
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .First();
+
+            Assert.That(
+                thread.Comments.Count,
+                Is.EqualTo(initialCount + 3),
+                "Three status changes should create three new comments"
+            );
+        }
+
+        #endregion
     }
 }

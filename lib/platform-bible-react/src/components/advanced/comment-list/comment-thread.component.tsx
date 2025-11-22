@@ -70,7 +70,7 @@ export function CommentThread({
   handleSelectThread,
   threadId,
   threadStatus,
-  handleResolveCommentThread,
+  handleSetCommentThreadStatus,
   handleAddComment,
   handleUpdateComment,
   handleDeleteComment,
@@ -227,7 +227,7 @@ export function CommentThread({
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
             isEditable={activeComments.length === 1 && firstComment?.user === currentUser}
-            handleResolveCommentThread={handleResolveCommentThread}
+            handleSetCommentThreadStatus={handleSetCommentThreadStatus}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
