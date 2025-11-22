@@ -29,6 +29,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.VERSE_PLAIN_TEXT,
     ];
 
+    public static readonly List<string> AllCommentDataTypes =
+    [
+        ProjectDataType.COMMENTS,
+        ProjectDataType.COMMENT_THREADS,
+    ];
+
     private readonly LocalParatextProjects _paratextProjects;
 
     private readonly CommentManager _commentManager;
@@ -80,6 +86,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("createComment", CreateComment));
         retVal.Add(("deleteComment", DeleteComment));
         retVal.Add(("updateComment", UpdateComment));
+        retVal.Add(("setCommentThreadStatus", SetCommentThreadStatus));
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
@@ -216,7 +223,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         if (madeChange)
-            SendDataUpdateEvent(ProjectDataType.COMMENTS, "comments data update event");
+            SendDataUpdateEvent(AllCommentDataTypes, "comments data update event");
 
         return madeChange;
     }
@@ -283,14 +290,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (commentToDelete.User != scrText.User.Name)
             throw new InvalidOperationException(
-                "Cannot delete a comment that is not created by the current user"
+                $"Cannot delete comment {commentId} in thread {commentToDelete.Thread} - not created by current user {scrText.User.Name} (created by {commentToDelete.User})"
             );
 
         // Only allow deleting the last comment in the thread
         var lastComment = parentThread.LastComment;
         if (lastComment == null || lastComment.Id != commentId)
             throw new InvalidOperationException(
-                "Cannot delete a comment that is not the last comment in the thread"
+                $"Cannot delete comment {commentId} in thread {parentThread.Id} - only the last comment can be deleted (last comment ID: {lastComment?.Id})"
             );
 
         // Remove the comment using CommentManager
@@ -298,26 +305,45 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         _commentManager.SaveUser(commentToDelete.User, false);
 
-        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment deleted event");
+        SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
         return true;
     }
 
     public string CreateComment(Comment comment)
     {
-        // Check if the XML has actual text content
-        if (string.IsNullOrWhiteSpace(comment.Contents.InnerText))
-            throw new InvalidDataException("Comment Contents must contain text");
+        // Get the thread if it exists (will be null for new threads)
+        CommentThread? existingThread = !string.IsNullOrEmpty(comment.Thread)
+            ? _commentManager.FindThread(comment.Thread)
+            : null;
 
-        // Throw if thread does not exist
-        if (
-            !string.IsNullOrEmpty(comment.Thread)
-            && _commentManager.FindThread(comment.Thread) == null
-        )
-            throw new InvalidDataException("Thread with given ThreadId does not exist");
+        // Throw if a thread ID was provided but the thread doesn't exist
+        if (!string.IsNullOrEmpty(comment.Thread) && existingThread == null)
+            throw new InvalidDataException($"Thread with id {comment.Thread} does not exist");
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         Comment newComment = new(scrText.User);
+
+        // If adding to an existing thread, inherit verse reference and context info from the last comment
+        if (existingThread != null && existingThread.Comments.Count > 0)
+        {
+            var lastComment = existingThread.LastComment;
+            if (lastComment != null)
+            {
+                if (string.IsNullOrEmpty(comment.VerseRefStr))
+                    newComment.VerseRefStr = lastComment.VerseRefStr;
+                if (string.IsNullOrEmpty(comment.SelectedText))
+                    newComment.SelectedText = lastComment.SelectedText;
+                if (comment.StartPosition == 0)
+                    newComment.StartPosition = lastComment.StartPosition;
+                if (string.IsNullOrEmpty(comment.ContextBefore))
+                    newComment.ContextBefore = lastComment.ContextBefore;
+                if (string.IsNullOrEmpty(comment.ContextAfter))
+                    newComment.ContextAfter = lastComment.ContextAfter;
+                if (string.IsNullOrEmpty(comment.Language))
+                    newComment.Language = lastComment.Language;
+            }
+        }
 
         if (!string.IsNullOrEmpty(comment.ContextAfter))
             newComment.ContextAfter = comment.ContextAfter;
@@ -335,8 +361,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             newComment.ConflictType = comment.ConflictType;
         if (comment.Deleted)
             newComment.Deleted = comment.Deleted;
-        if (comment.ExtraHeadingInfo != null)
-            newComment.ExtraHeadingInfo = comment.ExtraHeadingInfo;
         if (comment.HideInTextWindow)
             newComment.HideInTextWindow = comment.HideInTextWindow;
         if (!string.IsNullOrEmpty(comment.Language))
@@ -347,6 +371,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             newComment.Shared = comment.Shared;
         if (comment.Status != NoteStatus.Unspecified)
             newComment.Status = comment.Status;
+        // If adding a comment to a resolved thread, set status to Todo to reopen it
+        else if (existingThread != null && existingThread.Status == NoteStatus.Resolved)
+            newComment.Status = NoteStatus.Todo;
         if (!string.IsNullOrEmpty(comment.Thread))
             newComment.Thread = comment.Thread;
         if (comment.Type != NoteType.Normal)
@@ -361,12 +388,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             newComment.TagsAdded = comment.TagsAdded;
         if (comment.TagsRemoved != null && comment.TagsRemoved.Length > 0)
             newComment.TagsRemoved = comment.TagsRemoved;
+        if (!string.IsNullOrEmpty(comment.ExtraHeadingInfoInternal))
+            newComment.ExtraHeadingInfoInternal = comment.ExtraHeadingInfoInternal;
 
         _commentManager.AddComment(newComment);
 
         _commentManager.SaveUser(newComment.User, false);
 
-        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment created event");
+        SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
 
         // Return the generated comment ID
         return newComment.Id;
@@ -386,22 +415,88 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (commentToUpdate.User != scrText.User.Name)
             throw new InvalidOperationException(
-                "Cannot update a comment that is not created by the current user"
+                $"Cannot update comment {commentId} in thread {commentToUpdate.Thread} - not created by current user {scrText.User.Name} (created by {commentToUpdate.User})"
             );
 
         // Only allow updating the last comment in the thread
         var lastComment = parentThread.LastComment;
         if (lastComment == null || lastComment.Id != commentId)
             throw new InvalidOperationException(
-                "Cannot update a comment that is not the last comment in the thread"
+                $"Cannot update comment {commentId} in thread {parentThread.Id} - only the last comment can be updated (last comment ID: {lastComment?.Id})"
             );
 
-        commentToUpdate.AddTextToContent("", false); // Clear existing content
-        commentToUpdate.AddTextToContent(updatedContent, true); // Add new content
+        // Set the new content as XML/HTML
+        // updatedContent is already HTML from the frontend editor
+        XmlDocument xmlDoc = new XmlDocument { PreserveWhitespace = true };
+        xmlDoc.LoadXml($"<Contents>{updatedContent}</Contents>");
+        commentToUpdate.Contents = xmlDoc.DocumentElement;
+
+        // Reset the status field to Unspecified when a comment is edited
+        commentToUpdate.Status = NoteStatus.Unspecified;
 
         _commentManager.SaveUser(commentToUpdate.User, false);
 
-        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment updated");
+        SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the status of a comment thread (resolve/unresolve toggle).
+    /// </summary>
+    /// <param name="threadId">The ID of the thread to update</param>
+    /// <param name="resolve">True to resolve the thread, false to unresolve it</param>
+    /// <param name="contents">Optional comment contents to include with the status change</param>
+    /// <returns>True if successful, false if user canceled or thread not found</returns>
+    public bool SetCommentThreadStatus(string threadId, bool resolve, string? contents = null)
+    {
+        if (string.IsNullOrEmpty(threadId))
+            return false;
+
+        var thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            return false;
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        if (resolve && thread.ThreadNeedsCreatorResolve)
+        {
+            // Check if current user is the creator or an administrator
+            bool isCreator =
+                thread.Comments.Count > 0 && thread.Comments[0].User == scrText.User.Name;
+            bool isAdmin = scrText.Permissions.AmAdministrator;
+
+            if (!isCreator && !isAdmin)
+            {
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot resolve thread '{threadId}' - only the creator or an administrator can resolve this type of note."
+                );
+            }
+
+            if (!isCreator && isAdmin)
+            {
+                throw new InvalidOperationException(
+                    $"Administrator '{scrText.User.Name}' is resolving thread '{threadId}' created by '{thread.Comments[0].User}'."
+                );
+            }
+        }
+
+        // Create the comment contents XML
+        XmlDocument xmlDoc = new() { PreserveWhitespace = true };
+        string commentContents = string.IsNullOrEmpty(contents) ? "" : contents;
+        xmlDoc.LoadXml($"<Contents>{commentContents}</Contents>");
+
+        // Create a new comment with the status using the proper Comment structure
+        Comment statusComment =
+            new(scrText.User)
+            {
+                Thread = threadId,
+                Status = resolve ? NoteStatus.Resolved : NoteStatus.Todo,
+                Contents = xmlDoc.DocumentElement,
+            };
+
+        // Use CreateComment to add the status comment
+        CreateComment(statusComment);
 
         return true;
     }

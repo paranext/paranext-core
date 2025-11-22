@@ -70,7 +70,7 @@ export function CommentThread({
   handleSelectThread,
   threadId,
   threadStatus,
-  handleResolveCommentThread,
+  handleSetCommentThreadStatus,
   handleAddComment,
   handleUpdateComment,
   handleDeleteComment,
@@ -166,6 +166,21 @@ export function CommentThread({
       setEditorState(initialValue);
     }
   }, [editorState, handleAddComment, threadId]);
+
+  const handleResolveWithContents = useCallback(
+    async (passedThreadId: string, resolve: boolean) => {
+      if (!handleSetCommentThreadStatus) return false;
+      const contents = hasEditorContent(editorState) ? editorStateToHtml(editorState) : undefined;
+      const success = await handleSetCommentThreadStatus(passedThreadId, resolve, contents);
+      if (success && contents) {
+        clearEditorRef.current?.();
+        setEditorState(initialValue);
+      }
+      return success;
+    },
+    [editorState, handleSetCommentThreadStatus],
+  );
+
   return (
     <Card
       role="option"
@@ -173,10 +188,12 @@ export function CommentThread({
       id={threadId}
       className={cn(
         'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        { 'tw-cursor-pointer hover:tw-shadow-md': !isSelected },
         {
-          'tw-cursor-pointer tw-bg-primary-foreground hover:tw-shadow-md': !isSelected,
+          'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved',
+          'tw-bg-background': isSelected && threadStatus !== 'Resolved',
+          'tw-bg-muted': threadStatus === 'Resolved',
         },
-        { 'tw-bg-background': isSelected },
       )}
       onClick={() => {
         handleSelectThread(threadId);
@@ -227,7 +244,7 @@ export function CommentThread({
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
             isEditable={activeComments.length === 1 && firstComment?.user === currentUser}
-            handleResolveCommentThread={handleResolveCommentThread}
+            handleSetCommentThreadStatus={handleResolveWithContents}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
@@ -324,7 +341,11 @@ export function CommentThread({
                   <Editor
                     editorSerializedState={editorState}
                     onSerializedChange={(value) => setEditorState(value)}
-                    placeholder={localizedStrings['%comment_replyOrAssign%']}
+                    placeholder={
+                      threadStatus === 'Resolved'
+                        ? localizedStrings['%comment_reopenResolved%']
+                        : localizedStrings['%comment_replyOrAssign%']
+                    }
                     autoFocus
                     onClear={(clearFn) => {
                       clearEditorRef.current = clearFn;
