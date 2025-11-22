@@ -246,6 +246,21 @@ declare module 'legacy-comment-manager' {
         updatedContent: string,
       ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
 
+      /**
+       * Sets the status of a comment thread (resolve/unresolve toggle)
+       *
+       * @param threadId The unique ID of the thread to update
+       * @param resolve True to resolve the thread, false to unresolve it (set to "Todo")
+       * @returns Promise that resolves to update instructions indicating which data types were
+       *   affected, or `false` if the thread was not found or user doesn't have permission
+       * @throws If an error occurs during the status change
+       */
+      resolveCommentThread(
+        threadId: string,
+        resolve: boolean,
+        contents?: string,
+      ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
+
       // #endregion
     };
 

@@ -71,10 +71,22 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
-  const handleResolveCommentThread = useCallback((threadId: string) => {
-    // Logic to resolve a comment thread would go here
-    logger.debug(`Resolving comment thread ${threadId}`);
-  }, []);
+  const handleResolveCommentThread = useCallback(
+    async (threadId: string, resolve: boolean, contents?: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return false;
+      }
+      try {
+        const result = await commentsPdp.resolveCommentThread(threadId, resolve, contents);
+        return result !== false;
+      } catch (error) {
+        logger.error(`Failed to set comment thread status for ${threadId}:`, error);
+        return false;
+      }
+    },
+    [commentsPdp],
+  );
 
   const handleUpdateComment = useCallback(
     async (commentId: string, contents: string): Promise<boolean> => {

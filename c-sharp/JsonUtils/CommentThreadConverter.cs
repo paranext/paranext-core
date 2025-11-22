@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Paratext.Data.ProjectComments;
+using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -46,8 +47,10 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
         writer.WritePropertyName(COMMENTS);
         JsonSerializer.Serialize(writer, value.Comments, options);
 
-        // Status and Type
-        writer.WriteString(STATUS, value.Status.ToString());
+        // Status and Type - convert NoteStatus to CommentStatus for frontend
+        string noteStatusValue = value.Status.ToString();
+        string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(noteStatusValue);
+        writer.WriteString(STATUS, threadStatus);
         writer.WriteString(TYPE, value.Type.ToString());
         writer.WriteBoolean(IS_SPELLING_NOTE, value.IsSpellingNote);
         writer.WriteBoolean(IS_BT_NOTE, value.IsBTNote);
