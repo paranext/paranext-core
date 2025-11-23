@@ -8,7 +8,7 @@ namespace Paranext.DataProvider.Checks;
 /// Creates check objects based on checkIds (which are the low-level enum values of
 /// <see cref="CheckType"/>s)
 /// </summary>
-public static class CheckFactory
+internal static class CheckFactory
 {
     // Note that CheckType.Schema is not available outside Paratext itself due to dependencies
     // It cannot be easily copied, either, without some refactoring
