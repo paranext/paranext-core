@@ -59,7 +59,7 @@ public static class Program
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
-            var checkRunner = new CheckRunner(papi);
+            var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             await Task.WhenAll(
