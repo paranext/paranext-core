@@ -1,10 +1,7 @@
 import {
-  Comments,
   EditorOptions,
   Editorial,
   EditorRef,
-  Marginal,
-  MarginalRef,
   SelectionRange,
   getDefaultViewOptions,
   UsjNodeOptions,
@@ -14,22 +11,12 @@ import {
   isInsertEmbedOpOfType,
   DeltaOpInsertNoteEmbed,
 } from '@eten-tech-foundation/platform-editor';
-import {
-  MarkerContent,
-  USJ_TYPE,
-  USJ_VERSION,
-  Usj,
-} from '@eten-tech-foundation/scripture-utilities';
+import { USJ_TYPE, USJ_VERSION, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import {
-  useLocalizedStrings,
-  useProjectData,
-  useProjectSetting,
-  useSetting,
-} from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
@@ -40,7 +27,6 @@ import {
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
-  LegacyComment,
 } from 'platform-bible-utils';
 import {
   Alert,
@@ -64,13 +50,6 @@ import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal'
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import {
-  convertEditorCommentsToLegacyComments,
-  convertLegacyCommentsToEditorThreads,
-  insertCommentAnchorsIntoUsj,
-  MILESTONE_END,
-  MILESTONE_START,
-} from './comments';
-import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
@@ -93,8 +72,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
-
-const defaultLegacyComments: LegacyComment[] = [];
 
 const defaultEditorDecorations: EditorDecorations = {};
 
@@ -253,7 +230,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
-  const editorRef = useRef<EditorRef | MarginalRef | null>(null);
+  const editorRef = useRef<EditorRef | null>(null);
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -394,17 +371,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [decorationsLocalizedStringsBase],
   );
 
-  const [commentsEnabledPossiblyError] = useSetting('platform.commentsEnabled', false);
-
-  const commentsEnabled = useMemo(() => {
-    if (isPlatformError(commentsEnabledPossiblyError)) {
-      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabledPossiblyError);
-      return false;
-    }
-
-    return commentsEnabledPossiblyError;
-  }, [commentsEnabledPossiblyError]);
-
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
    * come from us
@@ -457,17 +423,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     logger.error(`Error getting USJ from PDP: ${errorMessage}`);
     return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
   }, [usjFromPdpPossiblyError]);
-  const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
-  useEffect(() => {
-    return () => {
-      usjFromPdpPrev.current = usjFromPdp;
-    };
-  }, [usjFromPdp]);
-
-  /* Latest USJ from the PDP with comment anchors inserted */
-  const usjFromPdpWithAnchors = useRef(defaultUsj);
-
-  const usjSentToPdp = useRef(usjFromPdp);
+  const usjFromPdpCorrectedVersion = useRef<Usj>(defaultUsj);
+  const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
   const [usjForFootnoteDisplay, setUsjForFootnoteDisplay] = useState<Usj | undefined>();
@@ -485,15 +442,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
-    function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
+    function saveUsjToPdpIfUpdatedInternal(usJFromEditor = editorRef.current?.getUsj()) {
+      if (!usJFromEditor) return;
+
+      const usjFromEditorWithCorrectedVersion = correctEditorUsjVersion(usJFromEditor);
       if (
-        editorUsj &&
         !areUsjContentsEqualExceptWhitespace(
-          usjFromPdpWithAnchors.current,
-          correctEditorUsjVersion(editorUsj),
+          usjFromPdpCorrectedVersion.current,
+          usjFromEditorWithCorrectedVersion,
         )
       )
-        saveUsjToPdpInternal(editorUsj);
+        saveUsjToPdpInternal(usjFromEditorWithCorrectedVersion);
     }
 
     // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
@@ -505,20 +464,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
 
-      // Remove the milestones that we inserted before writing back to the PDP
-      const clonedUsj = deepClone(correctEditorUsjVersion(newUsj));
-      const usjRW = new UsjReaderWriter(clonedUsj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
-      usjRW.removeContentNodes((node: MarkerContent) => {
-        if (typeof node === 'string') return false;
-        if (node.type !== 'ms') return false;
-        return node.marker === MILESTONE_START || node.marker === MILESTONE_END;
-      });
+      const usjToPersist = deepClone(newUsj);
 
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
-      usjSentToPdp.current = clonedUsj;
+      usjSentToPdp.current = usjToPersist;
       try {
-        if (!(await saveUsjToPdpRaw(clonedUsj)) && currentlyWritingUsjToPdp.current) {
+        if (!(await saveUsjToPdpRaw(usjToPersist)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -526,8 +478,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // again if there have been updates
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
-          if (!deepEqualAcrossIframes(editorUsj, correctEditorUsjVersion(newUsj)))
-            saveUsjToPdpIfUpdatedInternal(editorUsj);
+          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
         logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
@@ -537,93 +488,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     return saveUsjToPdpIfUpdatedInternal;
   }, [saveUsjToPdpRaw]);
-
-  const [legacyCommentsFromPdpPossiblyError, saveLegacyCommentsToPdp] = useProjectData(
-    'legacyCommentManager.comments',
-    // Only load comments if we have them turned on
-    commentsEnabled ? projectId : undefined,
-  ).Comments(
-    useMemo(() => {
-      return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
-    }, [scrRef.book, scrRef.chapterNum]),
-    defaultLegacyComments,
-  );
-
-  const legacyCommentsFromPdp = useMemo(() => {
-    if (isPlatformError(legacyCommentsFromPdpPossiblyError)) {
-      logger.warn(
-        `Error getting legacy comments from PDP: ${getErrorMessage(legacyCommentsFromPdpPossiblyError)}`,
-      );
-      return defaultLegacyComments;
-    }
-    return legacyCommentsFromPdpPossiblyError;
-  }, [legacyCommentsFromPdpPossiblyError]);
-
-  /**
-   * Write the latest comments back to the PDP. We need `usjWithAnchors` to know where (e.g., verse
-   * refs) the latest comments are in scripture text.
-   */
-  const saveCommentsToPdp = useCallback(
-    (
-      newComments: Comments | undefined,
-      usjWithAnchors: Usj | undefined = editorRef.current?.getUsj(),
-    ) => {
-      // Cannot convert between legacy and current comments without access to corresponding USJ
-      if (!usjWithAnchors) {
-        logger.warn('Updating comments without providing USJ');
-        return;
-      }
-      // We aren't currently overwriting comments, so if it's empty we have nothing to do
-      if (!newComments) {
-        logger.debug('Updating comments, but the comments are empty');
-        return;
-      }
-      // If we can't save a newly merged set of comments, we have nothing to do
-      if (!saveLegacyCommentsToPdp) {
-        logger.warn('Updating comments without a way to save the comments to a PDP');
-        return;
-      }
-
-      // Record all the IDs of previously known comments
-      const legacyCommentIds = new Set<string>();
-      legacyCommentsFromPdp.forEach((existingComment) => legacyCommentIds.add(existingComment.id));
-
-      // Determine which "new" comments are actually new
-      const usjRW = new UsjReaderWriter(correctEditorUsjVersion(usjWithAnchors), {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
-      const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
-      const legacyCommentsToAdd: LegacyComment[] = [];
-      newLegacyComments.forEach((newComment) => {
-        if (!legacyCommentIds.has(newComment.id)) legacyCommentsToAdd.push(newComment);
-      });
-
-      // Nothing to do
-      if (legacyCommentsToAdd.length === 0) return;
-
-      // Save the new comments to the data provider
-      const newCommentArray = [...legacyCommentsFromPdp, ...legacyCommentsToAdd];
-      saveLegacyCommentsToPdp(newCommentArray);
-    },
-    [legacyCommentsFromPdp, scrRef, saveLegacyCommentsToPdp],
-  );
-
-  /**
-   * Modify `newUsj` to include anchors that the editor uses to highlight text where a comment
-   * should be. The source of the comments is the legacy comment PDP.
-   */
-  const insertCommentAnchors = useCallback(
-    (newUsj: Usj) => {
-      try {
-        insertCommentAnchorsIntoUsj(newUsj, legacyCommentsFromPdp);
-        // Getting more information about the error
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        logger.debug(`Error inserting anchors into USJ: ${error}, stack = ${error.stack}"`);
-      }
-    },
-    [legacyCommentsFromPdp],
-  );
 
   const openFootnoteEditorOnNewNote = useCallback(
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
@@ -659,79 +523,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
-  const onUsjAndCommentsChange = useCallback(
-    (
-      newUsjFromEditor: Usj,
-      newCommentsFromEditor: Comments | undefined,
-      ops?: DeltaOp[],
-      _source?: DeltaSource,
-      insertedNodeKey?: string,
-    ) => {
-      saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
-      saveUsjToPdpIfUpdated(newUsjFromEditor);
-      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
-    },
-    [saveUsjToPdpIfUpdated, saveCommentsToPdp, openFootnoteEditorOnNewNote],
-  );
-
-  // This should only be used in the following `useEffect`
-  const mostRecentlySetLegacyComments = useRef(legacyCommentsFromPdp);
-
   // Update the editor if a change comes in from the PDP
   // Note: this will run every time we get data from the PDP whether or not it is different than it
   // was previously. We need to know when data comes in so we can set
   // `currentlyWritingUsjToPdp.current` to `false` appropriately
   useEffect(() => {
-    if (!usjFromPdp || !legacyCommentsFromPdp || !editorRef.current) return;
+    if (!usjFromPdp || !editorRef.current) return;
 
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
-    // Recalculate usj from PDP with anchors if the new USJ we received from the PDP is different
-    // than the previous we received
-    if (!deepEqualAcrossIframes(usjFromPdp, usjFromPdpPrev.current)) {
-      // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
-      usjFromPdpWithAnchors.current = deepClone(usjFromPdp);
-      insertCommentAnchors(usjFromPdpWithAnchors.current);
-    }
+    usjFromPdpCorrectedVersion.current = correctEditorUsjVersion(usjFromPdp);
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (!areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, usjSentToPdp.current)) {
-      usjSentToPdp.current = usjFromPdpWithAnchors.current;
-      editorRef.current.setUsj(usjFromPdpWithAnchors.current);
+    if (
+      !areUsjContentsEqualExceptWhitespace(usjFromPdpCorrectedVersion.current, usjSentToPdp.current)
+    ) {
+      usjSentToPdp.current = usjFromPdpCorrectedVersion.current;
+      editorRef.current.setUsj(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
 
     // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
     // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
-    // we may have set the editor from the PDP if the PDP had a "trumping" change. Ira expressed
-    // doubts as to whether the above changes will have been fully applied to the editor by now, but
-    // they seem to be. At least I have not yet found another way to do this that keeps the
-    // footnotes in sync.
+    // we may have set the editor from the PDP if the PDP had a "trumping" change.
     const authoritativeUsj =
-      editorRef.current?.getUsj() ?? usjFromPdpWithAnchors.current ?? usjFromPdp;
+      editorRef.current?.getUsj() ?? usjFromPdpCorrectedVersion.current ?? usjFromPdp;
     if (authoritativeUsj) setUsjForFootnoteDisplay(authoritativeUsj);
-
-    // Make sure the editor has the latest comment data from the PDP
-    if (
-      'setComments' in editorRef.current &&
-      !deepEqualAcrossIframes(legacyCommentsFromPdp, mostRecentlySetLegacyComments.current)
-    ) {
-      const threads = convertLegacyCommentsToEditorThreads(legacyCommentsFromPdp);
-      mostRecentlySetLegacyComments.current = legacyCommentsFromPdp;
-      // The editor's USJ needs to have anchors for these comments or the editor will error
-      editorRef.current.setComments?.(threads);
-    }
-  }, [
-    insertCommentAnchors,
-    legacyCommentsFromPdp,
-    saveUsjToPdpIfUpdated,
-    usjFromPdp,
-    setUsjForFootnoteDisplay,
-  ]);
+  }, [saveUsjToPdpIfUpdated, usjFromPdp, setUsjForFootnoteDisplay]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -861,18 +683,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <div className="tw-flex tw-items-center tw-justify-center tw-h-full">
           <Spinner />
         </div>
-      );
-    }
-    if (commentsEnabled && !isReadOnly) {
-      return (
-        <>
-          {workaround}
-          <Marginal
-            {...commonProps}
-            onUsjChange={onUsjAndCommentsChange}
-            onCommentChange={saveCommentsToPdp}
-          />
-        </>
       );
     }
     return (
