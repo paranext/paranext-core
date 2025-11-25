@@ -48,10 +48,14 @@ export function renderEditorialWithToolbar(
         ref={editorRef}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
-        onStateChange={(newCanUndo, newCanRedo, newBlockMarker) => {
-          setCanUndo(newCanUndo);
-          setCanRedo(newCanRedo);
-          setBlockMarker(newBlockMarker);
+        onStateChange={({
+          canUndo: nextCanUndo,
+          canRedo: nextCanRedo,
+          blockMarker: nextBlockMarker,
+        }) => {
+          setCanUndo(nextCanUndo);
+          setCanRedo(nextCanRedo);
+          setBlockMarker(nextBlockMarker);
         }}
       />
     </CanvasWithDescription>
