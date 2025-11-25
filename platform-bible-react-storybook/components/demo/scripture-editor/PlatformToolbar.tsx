@@ -3,13 +3,13 @@ import { SelectMenuItemHandler } from '@/components/advanced/menus/platform-menu
 import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { BlockFormatDropDown } from '@/components/demo/scripture-editor/BlockFormatDropDown';
 import { Button } from '@/components/shadcn-ui/button';
-import { EditorRef, MarginalRef } from '@eten-tech-foundation/platform-editor';
+import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ListEnd, Redo, Shuffle, Superscript, Undo } from 'lucide-react';
 import { RefObject } from 'react';
 
 interface PlatformToolbarProps {
-  editorRef: RefObject<MarginalRef | EditorRef | null>;
+  editorRef: RefObject<EditorRef | null>;
   scrRef: SerializedVerseRef;
   onScrRefChange: (scrRef: SerializedVerseRef) => void;
   isReadonly?: boolean;
