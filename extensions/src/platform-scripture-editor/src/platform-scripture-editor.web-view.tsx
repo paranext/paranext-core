@@ -2,12 +2,14 @@ import {
   EditorOptions,
   Editorial,
   EditorRef,
-  MarginalRef,
   SelectionRange,
   getDefaultViewOptions,
   UsjNodeOptions,
   DeltaOp,
   ViewOptions,
+  DeltaSource,
+  isInsertEmbedOpOfType,
+  DeltaOpInsertNoteEmbed,
 } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
@@ -23,6 +25,7 @@ import {
   isPlatformError,
   LocalizeKey,
   serialize,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -30,6 +33,7 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
   Popover,
@@ -37,7 +41,11 @@ import {
   PopoverContent,
   Spinner,
 } from 'platform-bible-react';
-import { EditorDecorations, EditorWebViewMessage } from 'platform-scripture-editor';
+import {
+  EditorDecorations,
+  EditorWebViewMessage,
+  ScriptureEditorViewType,
+} from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
@@ -58,6 +66,7 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
+  ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
 ];
@@ -71,6 +80,14 @@ const defaultProjectName = '';
 const defaultTextDirection = 'ltr';
 
 const defaultView: ViewOptions = getDefaultViewOptions();
+// Return the appropriate ViewOptions for the given webview `viewType`.
+// Centralizes the logic so initialization and effects can call the same helper
+// instead of duplicating the shallow-copy code.
+const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions => {
+  const base = { ...defaultView };
+  if (viewType === 'markers') return { ...base, markerMode: 'visible' };
+  return base;
+};
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
@@ -104,13 +121,100 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
-  const [editingNoteKey, setEditingNoteKey] = useState<string>();
-  const [editingNoteOps, setEditingNoteOps] = useState<DeltaOp[]>();
+  const editingNoteKey = useRef<string>();
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
     defaultEditorDecorations,
+  );
+
+  const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>('viewType', 'formatted');
+
+  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+
+  const [projectNamePossiblyError] = useProjectSetting(
+    projectId,
+    'platform.name',
+    defaultProjectName,
+  );
+
+  const projectName = useMemo(() => {
+    if (isPlatformError(projectNamePossiblyError)) {
+      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
+      return defaultProjectName;
+    }
+    return projectNamePossiblyError;
+  }, [projectNamePossiblyError]);
+
+  const [textDirectionPossiblyError] = useProjectSetting(
+    projectId,
+    'platform.textDirection',
+    defaultTextDirection,
+  );
+
+  const textDirection = useMemo(() => {
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      return defaultTextDirection;
+    }
+
+    // Using || to make sure we get default if it is an empty string or if it is undefined
+    return textDirectionPossiblyError || defaultTextDirection;
+  }, [textDirectionPossiblyError]);
+
+  const textDirectionEffective = useMemo(() => {
+    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
+    if (projectName === 'OHEBGRK')
+      if (Canon.isBookOT(scrRef.book)) return 'rtl';
+      else return 'ltr';
+
+    return textDirection;
+  }, [projectName, scrRef, textDirection]);
+
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      noteCallerOnClick: isReadOnly
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            if (!isCollapsed || editingNoteKey.current) return;
+
+            const noteOp = getNoteOps()?.at(0);
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = [noteOp];
+            setShowFootnoteEditor(true);
+          },
+    }),
+    [isReadOnly, editingNoteKey],
+  );
+
+  const [viewOptions, setViewOptions] = useState<ViewOptions>(() => {
+    return getViewOptionsForType(viewType);
+  });
+
+  // Keep viewOptions in sync with the `viewType` webview state. When `viewType` changes
+  // we reset the viewOptions to the appropriate default with the requested marker/note modes.
+  useEffect(() => {
+    setViewOptions(() => getViewOptionsForType(viewType));
+  }, [viewType]);
+
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnly,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
+      view: viewOptions,
+    }),
+    [isReadOnly, textDirectionEffective, nodeOptions, viewOptions],
   );
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
@@ -126,8 +230,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
-  const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+  const editorRef = useRef<EditorRef | null>(null);
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -166,10 +269,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
             setScrRefWithScroll(targetScrRef);
-            if (range) nextSelectionRange.current = range;
+            nextSelectionRange.current = range;
           }
           // We're on the right scr ref. Go ahead and set the selection
-          else if (range) editorRef.current?.setSelection(range);
+          else editorRef.current?.setSelection(range);
 
           break;
         }
@@ -181,6 +284,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           removeDecorations(updatedDecorations, decorationsToRemove);
 
           setDecorations(updatedDecorations);
+          break;
+        }
+        case 'changeScriptureView': {
+          setViewType(viewOptions.markerMode === 'hidden' ? 'markers' : 'formatted');
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
@@ -213,7 +320,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll, decorations, setDecorations, setFootnotesPaneVisible]);
+  }, [
+    scrRef,
+    setScrRefWithScroll,
+    decorations,
+    setDecorations,
+    setFootnotesPaneVisible,
+    setViewType,
+    viewOptions.markerMode,
+  ]);
 
   // Listen for Ctrl+F to open find dialog
   useEffect(() => {
@@ -308,17 +423,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     logger.error(`Error getting USJ from PDP: ${errorMessage}`);
     return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
   }, [usjFromPdpPossiblyError]);
-  const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
-  useEffect(() => {
-    return () => {
-      usjFromPdpPrev.current = usjFromPdp;
-    };
-  }, [usjFromPdp]);
-
-  /* Latest USJ from the PDP with comment anchors inserted */
-  const usjFromPdpWithAnchors = useRef(defaultUsj);
-
-  const usjSentToPdp = useRef(usjFromPdp);
+  const usjFromPdpCorrectedVersion = useRef<Usj>(defaultUsj);
+  const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
   const [usjForFootnoteDisplay, setUsjForFootnoteDisplay] = useState<Usj | undefined>();
@@ -336,24 +442,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
-    function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
+    function saveUsjToPdpIfUpdatedInternal(usJFromEditor = editorRef.current?.getUsj()) {
+      if (!usJFromEditor) return;
+
+      const usjFromEditorWithCorrectedVersion = correctEditorUsjVersion(usJFromEditor);
       if (
-        editorUsj &&
-        !areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, editorUsj)
+        !areUsjContentsEqualExceptWhitespace(
+          usjFromPdpCorrectedVersion.current,
+          usjFromEditorWithCorrectedVersion,
+        )
       )
-        saveUsjToPdpInternal(editorUsj);
+        saveUsjToPdpInternal(usjFromEditorWithCorrectedVersion);
     }
 
     // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
-    async function saveUsjToPdpInternal(normalizedUsj: Usj) {
+    async function saveUsjToPdpInternal(newUsj: Usj) {
       if (!saveUsjToPdpRaw) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
 
-      const usjToPersist = deepClone(normalizedUsj);
+      const usjToPersist = deepClone(newUsj);
 
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
@@ -367,8 +478,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // again if there have been updates
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
-          if (!deepEqualAcrossIframes(editorUsj, normalizedUsj))
-            saveUsjToPdpIfUpdatedInternal(editorUsj);
+          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
         logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
@@ -378,6 +488,40 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     return saveUsjToPdpIfUpdatedInternal;
   }, [saveUsjToPdpRaw]);
+
+  const openFootnoteEditorOnNewNote = useCallback(
+    (ops?: DeltaOp[], insertedNodeKey?: string) => {
+      if (insertedNodeKey && ops) {
+        // If we are already editing a note, then returns
+        if (editingNoteKey.current) return;
+
+        // Makes sure the node is a note
+        const noteOp = ops[1];
+        if (!isInsertEmbedOpOfType('note', noteOp)) return;
+
+        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+        // Note element must be defined
+        if (!noteElement) return;
+
+        const targetRect = noteElement.getBoundingClientRect();
+        setNotePopoverAnchorX(targetRect.left);
+        setNotePopoverAnchorY(targetRect.top);
+        setNotePopoverAnchorHeight(targetRect.height);
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteOps.current = [noteOp];
+        setShowFootnoteEditor(true);
+      }
+    },
+    [editingNoteKey],
+  );
+
+  const handleEditorialUsjChange = useCallback(
+    (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
+      saveUsjToPdpIfUpdated(usj);
+      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+    },
+    [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+  );
 
   // Update the editor if a change comes in from the PDP
   // Note: this will run every time we get data from the PDP whether or not it is different than it
@@ -389,31 +533,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
-    // Recalculate usj from PDP with anchors if the new USJ we received from the PDP is different
-    // than the previous we received
-    if (!deepEqualAcrossIframes(usjFromPdp, usjFromPdpPrev.current)) {
-      // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
-      usjFromPdpWithAnchors.current = deepClone(usjFromPdp);
-    }
+    usjFromPdpCorrectedVersion.current = correctEditorUsjVersion(usjFromPdp);
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (!areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, usjSentToPdp.current)) {
-      usjSentToPdp.current = usjFromPdpWithAnchors.current;
-      editorRef.current.setUsj(usjFromPdpWithAnchors.current);
+    if (
+      !areUsjContentsEqualExceptWhitespace(usjFromPdpCorrectedVersion.current, usjSentToPdp.current)
+    ) {
+      usjSentToPdp.current = usjFromPdpCorrectedVersion.current;
+      editorRef.current.setUsj(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
 
     // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
     // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
-    // we may have set the editor from the PDP if the PDP had a "trumping" change. Ira expressed
-    // doubts as to whether the above changes will have been fully applied to the editor by now, but
-    // they seem to be. At least I have not yet found another way to do this that keeps the
-    // footnotes in sync.
+    // we may have set the editor from the PDP if the PDP had a "trumping" change.
     const authoritativeUsj =
-      editorRef.current?.getUsj() ?? usjFromPdpWithAnchors.current ?? usjFromPdp;
+      editorRef.current?.getUsj() ?? usjFromPdpCorrectedVersion.current ?? usjFromPdp;
     if (authoritativeUsj) setUsjForFootnoteDisplay(authoritativeUsj);
   }, [saveUsjToPdpIfUpdated, usjFromPdp, setUsjForFootnoteDisplay]);
 
@@ -432,9 +570,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         let nextTextLocationJsonPath = '';
         try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp).verseRefToNextTextLocation(
-            scrRef,
-          ).jsonPath;
+          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
+            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
@@ -505,87 +643,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
-  const [projectNamePossiblyError] = useProjectSetting(
-    projectId,
-    'platform.name',
-    defaultProjectName,
-  );
-
-  const projectName = useMemo(() => {
-    if (isPlatformError(projectNamePossiblyError)) {
-      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
-      return defaultProjectName;
-    }
-    return projectNamePossiblyError;
-  }, [projectNamePossiblyError]);
-
-  const [textDirectionPossiblyError] = useProjectSetting(
-    projectId,
-    'platform.textDirection',
-    defaultTextDirection,
-  );
-
-  const textDirection = useMemo(() => {
-    if (isPlatformError(textDirectionPossiblyError)) {
-      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
-      return defaultTextDirection;
-    }
-
-    // Using || to make sure we get default if it is an empty string or if it is undefined
-    return textDirectionPossiblyError || defaultTextDirection;
-  }, [textDirectionPossiblyError]);
-
-  const textDirectionEffective = useMemo(() => {
-    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
-    if (projectName === 'OHEBGRK')
-      if (Canon.isBookOT(scrRef.book)) return 'rtl';
-      else return 'ltr';
-
-    return textDirection;
-  }, [projectName, scrRef, textDirection]);
-
-  const nodeOptions = useMemo<UsjNodeOptions>(
-    () => ({
-      noteCallerOnClick: isReadOnly
-        ? undefined
-        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
-
-            if (isCollapsed) {
-              if (editingNoteKey) return;
-
-              setEditingNoteKey(noteNodeKey);
-              setEditingNoteOps(getNoteOps());
-              setShowFootnoteEditor(true);
-            }
-          },
-    }),
-    [isReadOnly, editingNoteKey],
-  );
-
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnly,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      view: defaultView,
-    }),
-    [isReadOnly, textDirectionEffective, nodeOptions],
-  );
-
   const onFootnoteEditorClose = useCallback(() => {
-    setEditingNoteKey(undefined);
-    setEditingNoteOps(undefined);
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
     setShowFootnoteEditor(false);
   }, []);
 
   const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey, newNoteOps);
+    if (editingNoteKey.current) {
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
     }
     onFootnoteEditorClose();
   };
@@ -622,7 +688,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        <Editorial {...commonProps} onUsjChange={isReadOnly ? undefined : saveUsjToPdpIfUpdated} />
+        <Editorial
+          {...commonProps}
+          onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+        />
       </>
     );
   }
@@ -715,14 +784,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-96 tw-p-[10px]">
+        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
           <FootnoteEditor
-            noteOps={editingNoteOps}
-            noteKey={editingNoteKey}
+            noteOps={editingNoteOps.current}
+            noteKey={editingNoteKey.current}
             onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
-            viewOptions={options.view ?? defaultView}
+            editorOptions={options}
+            localizedStrings={localizedStrings}
           />
         </PopoverContent>
       </Popover>
