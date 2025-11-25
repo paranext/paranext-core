@@ -1,9 +1,11 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import { COMMENT_LIST_STRING_KEYS, CommentList, Label, Skeleton } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { sampleComments } from './comment-sample-data';
+import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
+import { isPlatformError, LegacyCommentThread } from 'platform-bible-utils';
+
+const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
@@ -11,7 +13,6 @@ global.webViewComponent = function CommentListWebView({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(COMMENT_LIST_STRING_KEYS);
   const [scrRef] = useWebViewScrollGroupScrRef();
-  const [areThreadsLoading, setAreThreadsLoading] = useState<boolean>(false);
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
@@ -37,13 +38,23 @@ global.webViewComponent = function CommentListWebView({
     };
   }, []);
 
-  const unresolvedThreadsForScrRef = useMemo(() => {
-    setAreThreadsLoading(true);
-    const scrRefString = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}`;
-    const filteredThreads = sampleComments.filter((thread) => scrRefString === thread.verseRef);
-    setAreThreadsLoading(false);
-    return filteredThreads;
-  }, [scrRef]);
+  const [commentThreads, , isLoadingCommentThreads] = useProjectData(
+    'legacyCommentManager.comments',
+    projectId,
+  ).CommentThreads(
+    useMemo(() => {
+      return {
+        scriptureRanges: [
+          {
+            granularity: 'chapter',
+            start: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
+            end: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
+          },
+        ],
+      };
+    }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]),
+    DEFAULT_LEGACY_COMMENT_THREADS,
+  );
 
   const handleAddComment = useCallback(
     async (threadId: string, contents: string): Promise<string | undefined> => {
@@ -99,17 +110,9 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
-  if (unresolvedThreadsForScrRef.length === 0) {
+  if (isLoadingCommentThreads || !commentsPdp) {
     return (
-      <div className="tw-m-4 tw-flex tw-justify-center">
-        <Label>{localizedStrings['%no_comments%']}</Label>
-      </div>
-    );
-  }
-
-  if (areThreadsLoading) {
-    return (
-      <div className="tw-bg-muted tw-flex-1 tw-p-2 tw-space-y-4">
+      <div className="tw-bg-background tw-flex-1 tw-p-2 tw-space-y-4">
         {[...Array(10)].map((_, index) => (
           <Skeleton
             // There are no other unique identifiers for these items
@@ -124,15 +127,21 @@ global.webViewComponent = function CommentListWebView({
 
   return (
     <div className="tw-bg-muted">
-      <CommentList
-        threads={unresolvedThreadsForScrRef}
-        currentUser={currentUserName}
-        localizedStrings={localizedStrings}
-        handleAddComment={handleAddComment}
-        handleResolveCommentThread={handleResolveCommentThread}
-        handleUpdateComment={handleUpdateComment}
-        handleDeleteComment={handleDeleteComment}
-      />
+      {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
+        <div className="tw-m-4 tw-flex tw-justify-center">
+          <Label>{localizedStrings['%no_comments%']}</Label>
+        </div>
+      ) : (
+        <CommentList
+          threads={commentThreads}
+          currentUser={currentUserName}
+          localizedStrings={localizedStrings}
+          handleAddComment={handleAddComment}
+          handleResolveCommentThread={handleResolveCommentThread}
+          handleUpdateComment={handleUpdateComment}
+          handleDeleteComment={handleDeleteComment}
+        />
+      )}
     </div>
   );
 };
