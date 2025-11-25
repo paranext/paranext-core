@@ -423,6 +423,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     logger.error(`Error getting USJ from PDP: ${errorMessage}`);
     return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
   }, [usjFromPdpPossiblyError]);
+  const usjFromPdpCorrectedVersion = useRef<Usj>(defaultUsj);
   const usjSentToPdp = useRef<Usj | undefined>(undefined);
   const currentlyWritingUsjToPdp = useRef(false);
 
@@ -441,27 +442,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
-    function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
-      if (!editorUsj) return;
+    function saveUsjToPdpIfUpdatedInternal(usJFromEditor = editorRef.current?.getUsj()) {
+      if (!usJFromEditor) return;
 
-      const normalizedEditorUsj = correctEditorUsjVersion(editorUsj);
-      const baselineUsj =
-        usjSentToPdp.current ?? (usjFromPdp ? correctEditorUsjVersion(usjFromPdp) : defaultUsj);
-
-      if (!areUsjContentsEqualExceptWhitespace(baselineUsj, normalizedEditorUsj))
-        saveUsjToPdpInternal(normalizedEditorUsj);
+      const usjFromEditorWithCorrectedVersion = correctEditorUsjVersion(usJFromEditor);
+      if (
+        !areUsjContentsEqualExceptWhitespace(
+          usjFromPdpCorrectedVersion.current,
+          usjFromEditorWithCorrectedVersion,
+        )
+      )
+        saveUsjToPdpInternal(usjFromEditorWithCorrectedVersion);
     }
 
     // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
-    async function saveUsjToPdpInternal(normalizedUsj: Usj) {
+    async function saveUsjToPdpInternal(newUsj: Usj) {
       if (!saveUsjToPdpRaw) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
 
-      const usjToPersist = deepClone(normalizedUsj);
+      const usjToPersist = deepClone(newUsj);
 
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
@@ -475,8 +478,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // again if there have been updates
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
-          if (!deepEqualAcrossIframes(editorUsj, normalizedUsj))
-            saveUsjToPdpIfUpdatedInternal(editorUsj);
+          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
         logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
@@ -531,14 +533,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
-    const normalizedPdpUsj = correctEditorUsjVersion(usjFromPdp);
-    const lastSentUsj = usjSentToPdp.current;
+    usjFromPdpCorrectedVersion.current = correctEditorUsjVersion(usjFromPdp);
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (!lastSentUsj || !areUsjContentsEqualExceptWhitespace(normalizedPdpUsj, lastSentUsj)) {
-      usjSentToPdp.current = normalizedPdpUsj;
+    if (
+      !areUsjContentsEqualExceptWhitespace(usjFromPdpCorrectedVersion.current, usjSentToPdp.current)
+    ) {
+      usjSentToPdp.current = usjFromPdpCorrectedVersion.current;
       editorRef.current.setUsj(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
@@ -547,7 +550,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
     // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
     // we may have set the editor from the PDP if the PDP had a "trumping" change.
-    const authoritativeUsj = editorRef.current?.getUsj() ?? usjFromPdp;
+    const authoritativeUsj =
+      editorRef.current?.getUsj() ?? usjFromPdpCorrectedVersion.current ?? usjFromPdp;
     if (authoritativeUsj) setUsjForFootnoteDisplay(authoritativeUsj);
   }, [saveUsjToPdpIfUpdated, usjFromPdp, setUsjForFootnoteDisplay]);
 
