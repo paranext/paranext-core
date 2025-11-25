@@ -149,17 +149,7 @@ rm -rf "$TEMP_DIR"
 echo "Removing quarantine attribute..."
 xattr -dr com.apple.quarantine "/Applications/$APP_NAME" 2>/dev/null || true
 
-# Always re-sign the app to ensure all components have a matching signature
-echo "Code signing the application (force, deep)..."
-codesign --deep --force --sign - "/Applications/$APP_NAME"
-if [ $? -eq 0 ]; then
-    echo "✅ Code signing successful!"
-else
-    echo "❌ Code signing failed!"
-    exit 1
-fi
-
-# Explicitly sign all .dylib and .so files in dotnet (sometimes --deep misses these)
+# Explicitly sign all .dylib and .so files in dotnet before signing the main app (sometimes --deep misses these)
 DOTNET_DIR="/Applications/$APP_NAME/Contents/Resources/dotnet"
 if [ -d "$DOTNET_DIR" ]; then
     echo "Explicitly signing all binaries in $DOTNET_DIR..."
@@ -170,6 +160,33 @@ if [ -d "$DOTNET_DIR" ]; then
         fi
     done
 fi
+
+# TODO: Remove this section when https://paratextstudio.atlassian.net/browse/PT-3623 is resolved
+# Sign Python framework components if they exist
+PYTHON_DIRS=("/Applications/$APP_NAME/Contents/Resources/hg-universal" "/Applications/$APP_NAME/Contents/Frameworks")
+for PYTHON_DIR in "${PYTHON_DIRS[@]}"; do
+    if [ -d "$PYTHON_DIR" ]; then
+        echo "Signing Python components in $PYTHON_DIR..."
+        # Sign Python framework binaries
+        find "$PYTHON_DIR" -name "Python" -type f | while read PYTHON_BIN; do
+            echo "Signing Python binary: $PYTHON_BIN"
+            codesign --force --sign - "$PYTHON_BIN" 2>/dev/null || echo "Warning: Failed to sign $PYTHON_BIN"
+        done
+        # Sign Python .dylib and .so files
+        find "$PYTHON_DIR" -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.framework" \) | while read PYTHON_LIB; do
+            echo "Signing Python library: $PYTHON_LIB"
+            codesign --force --sign - "$PYTHON_LIB" 2>/dev/null || echo "Warning: Failed to sign $PYTHON_LIB"
+        done
+        # Sign any executables in the Python directory
+        find "$PYTHON_DIR" -type f -perm +111 | while read PYTHON_EXEC; do
+            # Skip if it's already been signed above
+            if [[ "$PYTHON_EXEC" != *.dylib ]] && [[ "$PYTHON_EXEC" != *.so ]] && [[ "$PYTHON_EXEC" != *Python ]]; then
+                echo "Signing Python executable: $PYTHON_EXEC"
+                codesign --force --sign - "$PYTHON_EXEC" 2>/dev/null || echo "Warning: Failed to sign $PYTHON_EXEC"
+            fi
+        done
+    fi
+done
 
 # Verify critical dotnet binaries are properly signed
 echo "Verifying critical dotnet binaries..."
@@ -185,10 +202,31 @@ for lib in "${CRITICAL_LIBS[@]}"; do
     fi
 done
 
+# Sign the main app bundle AFTER signing all internal components
+echo "Code signing the main application bundle (force, deep)..."
+codesign --deep --force --sign - "/Applications/$APP_NAME"
+if [ $? -eq 0 ]; then
+    echo "✅ Main app code signing successful!"
+else
+    echo "❌ Main app code signing failed!"
+    exit 1
+fi
+
 
 # Add to Gatekeeper approval (this will prompt for admin password if needed)
 echo "Adding app to Gatekeeper approval..."
-spctl --add "/Applications/$APP_NAME" 2>/dev/null || echo "Note: Could not add to spctl (may require admin privileges)"
+if spctl --add "/Applications/$APP_NAME" 2>/dev/null; then
+    echo "✅ Successfully added app to Gatekeeper approval"
+else
+    echo "⚠️  Could not add to spctl - trying alternative approach..."
+    # Try to enable the app in Gatekeeper by assessing it first
+    if spctl --assess --type execute "/Applications/$APP_NAME" 2>/dev/null; then
+        echo "✅ App is already approved by Gatekeeper"
+    else
+        echo "ℹ️  App not in Gatekeeper database, but this is normal for unsigned apps"
+        echo "ℹ️  The app should still launch successfully due to code signing"
+    fi
+fi
 
 # Verify the app is properly installed and signed
 if [ -d "/Applications/$APP_NAME" ]; then
