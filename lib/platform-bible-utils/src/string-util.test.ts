@@ -52,17 +52,17 @@ describe('string-util-goals', () => {
    * For UTF-16 and UTF-8, however, there's a variable-length encoding.
    * UTF-16 can represent a code point as 1 _or_ 2 16-bit values in memory.
    * UTF-8 can represent a code point as anywhere from 1 to 4 8-bit values in memory.
-   * 
+   *
    * In UTF-16, if it takes two 16-bit values to store a code point, that's called
    * a surrogate pair. We want to properly handle strings
    * without breaking the surrogate pair up.
-   * 
+   *
    * In Unicode, there's another thing entirely that's called Graphemes.
    * A grapheme is a single displayable character, but may be made up of multiple
    * unicode codepoints, with a zero-width-joiner in-between.
    * For emojis, this allows flexibility, since a female police officer can be depicted as:
    * Police Officer emoji (👮) + Zero Width Joiner ('‍') + Female Sign (♀️) = 👮‍♀️
-   * 
+   *
    * Emojis are cool and all, but all of this is important for human languages as well.
    */
   it('unicorn', () => {
@@ -74,7 +74,7 @@ describe('string-util-goals', () => {
     expect(stringLength(str)).toEqual(1);
 
     // This is a JS-native solution.
-    const segmenter = new Intl.Segmenter('en', {granularity: 'grapheme'});
+    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
     const segments = Array.from(segmenter.segment(str));
     expect(segments.length).toEqual(1);
   });
@@ -92,7 +92,7 @@ describe('string-util-goals', () => {
     // But even with a length of 5, we should still get 1 for both methods
     expect(stringLength(str)).toEqual(1);
 
-    const segmenter = new Intl.Segmenter('en', {granularity: 'grapheme'});
+    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
     const segments = Array.from(segmenter.segment(str));
     expect(segments.length).toEqual(1);
   });
@@ -107,11 +107,10 @@ describe('string-util-goals', () => {
     // But even with a length of 7, we should still get 1 for both methods
     expect(stringLength(str)).toEqual(1);
 
-    const segmenter = new Intl.Segmenter('en', {granularity: 'grapheme'});
+    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
     const segments = Array.from(segmenter.segment(str));
     expect(segments.length).toEqual(1);
   });
-
 });
 
 describe('at', () => {
@@ -125,7 +124,7 @@ describe('at', () => {
     expect(result).toEqual('🌟');
   });
 
-  it('at with police officer doesn\'t break the grapheme', () => {
+  it("at with police officer doesn't break the grapheme", () => {
     const result = at(LONG_SURROGATE_PAIRS_STRING, 54);
     expect(result).toEqual('👮🏽‍♀️');
   });
@@ -138,7 +137,7 @@ describe('at', () => {
 
   it('at with the negative length of the string returns undefined', () => {
     const length = stringLength(LONG_SURROGATE_PAIRS_STRING);
-    const result = at(LONG_SURROGATE_PAIRS_STRING, -(length+1));
+    const result = at(LONG_SURROGATE_PAIRS_STRING, -(length + 1));
     expect(result).toEqual(undefined);
   });
 
@@ -168,7 +167,7 @@ describe('charAt', () => {
     const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 50);
     expect(result).toEqual('');
   });
-  
+
   it('charAt grapheme', () => {
     const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 18);
     expect(result).toEqual('👮🏽‍♀️');
@@ -182,7 +181,7 @@ describe('charAt', () => {
 
   it('index == string length-1', () => {
     const length = stringLength(MEDIUM_SURROGATE_PAIRS_STRING);
-    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, length-1);
+    const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, length - 1);
     expect(result).toEqual('e');
   });
 });
@@ -213,7 +212,7 @@ describe('codePointAt', () => {
     // NOTE(mattg): This is the code point for a general police officer, so it breaks up the
     // grapheme, but it kind of has to.
     // This is the hex value of a generic police officer emoji.
-    expect(result).toEqual(0x1F46E);
+    expect(result).toEqual(0x1f46e);
   });
 
   it('codePointAt index == string length', () => {
@@ -224,7 +223,7 @@ describe('codePointAt', () => {
 
   it('codePointAt index == string length-1', () => {
     const length = stringLength(MEDIUM_SURROGATE_PAIRS_STRING);
-    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, length-1);
+    const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, length - 1);
     expect(result).toEqual(101);
   });
 });
@@ -645,21 +644,21 @@ describe('indexOf', () => {
   });
 
   it('indexOf with a search length longer than 1', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋')
+    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋');
     expect(result).toEqual(67);
   });
 
   it('indexOf at the end of the string', () => {
     const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
     expect(result).toEqual(73);
-  })
+  });
 
-  it ('indexOf with a seach for something that\'s not in the string', () => {
+  it("indexOf with a seach for something that's not in the string", () => {
     const result = indexOf(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
     expect(result).toEqual(-1);
   });
 
-  it('indexOf with a searchString that\'s longer than the string', () => {
+  it("indexOf with a searchString that's longer than the string", () => {
     const result = indexOf(MEDIUM_SURROGATE_PAIRS_STRING, LONG_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(-1);
   });
@@ -695,21 +694,21 @@ describe('lastIndexOf', () => {
   });
 
   it('lastIndexOf with a search length longer than 1', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋')
+    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋');
     expect(result).toEqual(67);
   });
 
   it('lastIndexOf at the end of the string', () => {
     const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
     expect(result).toEqual(73);
-  })
+  });
 
-  it ('lastIndexOf with a seach for something that\'s not in the string', () => {
+  it("lastIndexOf with a seach for something that's not in the string", () => {
     const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
     expect(result).toEqual(-1);
   });
 
-  it('lastIndexOf with a searchString that\'s longer than the string', () => {
+  it("lastIndexOf with a searchString that's longer than the string", () => {
     const result = lastIndexOf(MEDIUM_SURROGATE_PAIRS_STRING, LONG_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(-1);
   });

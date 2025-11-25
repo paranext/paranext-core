@@ -1,8 +1,5 @@
 import { LocalizeKey } from 'extension-contributions/menus.model';
-import {
-  limit as stringzLimit,
-  toArray as stringzToArray,
-} from 'stringz';
+import { limit as stringzLimit, toArray as stringzToArray } from 'stringz';
 import { ensureArray } from './array-util';
 import { isString } from './util';
 
@@ -45,9 +42,9 @@ export class UnicodeString {
   private readonly _graphemes: string[];
   private readonly _indecies: number[];
 
-  public constructor(string: string) {
+  constructor(string: string, graphemes?: string[] | undefined) {
     this._string = string;
-    this._graphemes = stringzToArray(this._string);
+    this._graphemes = graphemes === undefined ? stringzToArray(this._string) : graphemes;
     this._indecies = [];
 
     let index: number = 0;
@@ -57,36 +54,33 @@ export class UnicodeString {
     }
   }
 
-  public get string(): string {
+  get string(): string {
     return this._string;
   }
 
-  public get length(): number {
+  get length(): number {
     return this._graphemes.length;
   }
 
-  public toArray(): string[] {
+  toArray(): string[] {
     return this._graphemes;
   }
 
-  public at(index: number): string | undefined {
+  at(index: number): string | undefined {
     return this._graphemes.at(index);
   }
 
-  public charAt(index: number): string {
+  charAt(index: number): string {
     if (index < 0 || index >= this.length) return '';
     return this._graphemes.at(index)!;
   }
 
-  public codePointAt(index: number): number | undefined {
+  codePointAt(index: number): number | undefined {
     if (index < 0 || index >= this.length) return undefined;
     return this._graphemes.at(index)?.codePointAt(0);
   }
 
-  private _substr(
-    begin: number = 0,
-    len: number = this.length - begin,
-  ): string {
+  private _substr(begin: number = 0, len: number = this.length - begin): string {
     if (begin >= this.length) return '';
     if (begin < 0) begin += this.length;
     if (begin < 0) begin = 0;
@@ -95,14 +89,11 @@ export class UnicodeString {
     if (len < 0) return '';
 
     const start: number = this._indecies.at(begin)!;
-    const end: number = begin === this.length-1 ? this.length : this._indecies.at(begin+len)!;
+    const end: number = begin === this.length - 1 ? this.length : this._indecies.at(begin + len)!;
     return this.string.substring(start, end);
   }
 
-  public substring(
-    begin: number,
-    end: number = this.length,
-  ): string {
+  substring(begin: number, end: number = this.length): string {
     if (begin < 0 || begin >= this.length) return '';
     // NOTE(mattg): `>` instead of `>=` is intentional
     if (end < 0 || end > this.length || end < begin) return '';
@@ -113,15 +104,12 @@ export class UnicodeString {
   }
 
   // TODO(mattg): finish this function
-  public slice() {}
+  slice() {}
 
   // TODO(mattg): finish this function
-  public split() {}
+  split() {}
 
-  public indexOf(
-    searchString: UnicodeString,
-    position: number = 0,
-  ): number {
+  indexOf(searchString: UnicodeString, position: number = 0): number {
     if (searchString.length === 0) return -1;
 
     const maxSearchIndex: number = this.length - searchString.length;
@@ -134,7 +122,8 @@ export class UnicodeString {
         if (searchString.length === 1) {
           // charAt did the comparison, we can stop now.
           return index;
-        } else if (this._substr(index, searchString.length) === searchString.string) {
+        }
+        if (this._substr(index, searchString.length) === searchString.string) {
           return index;
         }
       }
@@ -142,10 +131,7 @@ export class UnicodeString {
     return -1;
   }
 
-  public lastIndexOf(
-    searchString: UnicodeString,
-    position: number ,
-  ): number {
+  lastIndexOf(searchString: UnicodeString, position: number): number {
     if (searchString.length === 0) return -1;
 
     const maxSearchableIndex: number = this.length - searchString.length;
@@ -160,7 +146,8 @@ export class UnicodeString {
         if (searchString.length === 1) {
           // charAt did the comparison, we can stop now.
           return index;
-        } else if (this._substr(index, searchString.length) === searchString.string) {
+        }
+        if (this._substr(index, searchString.length) === searchString.string) {
           return index;
         }
       }
@@ -169,78 +156,75 @@ export class UnicodeString {
     return -1;
   }
 
-  public includes(
-    searchString: UnicodeString,
-    position: number = 0,
-  ): boolean {
+  includes(searchString: UnicodeString, position: number = 0): boolean {
     return !(this.indexOf(searchString, position) === -1);
   }
 
   // TODO(mattg): finish this function
-  public normalize() {}
+  normalize() {}
 
   // TODO(mattg): finish this function
-  public ordinalCompare() {}
+  ordinalCompare() {}
 
   // TODO(mattg): finish this function
-  public startsWith() {}
+  startsWith(searchString: UnicodeString, position: number = 0): boolean {
+    // TODO(mattg): check bounds, or let _substr do it
+    return this._substr(position, searchString.length) === searchString.string;
+  }
 
-  public endsWith(
-    searchString: UnicodeString,
-    endPosition: number = this.length,
-  ): boolean {
-    const index = endPosition = searchString.length;
+  endsWith(searchString: UnicodeString, endPosition: number = this.length): boolean {
+    const index = endPosition - searchString.length;
     if (index < 0) return false;
-    return (this._substr(index, searchString.length) === searchString.string);
+    return this._substr(index, searchString.length) === searchString.string;
   }
 
   // TODO(mattg): finish this function
-  public padStart() {}
+  padStart() {}
 
   // TODO(mattg): finish this function
-  public padEnd() {}
-
-  // TODO(mattg): finish this function
-  // NOTE(mattg): this may not need to be apart of the class
-  public isLocalizeKey() {}
+  padEnd() {}
 
   // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
-  public isWhiteSpace() {}
+  isLocalizeKey() {}
 
   // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
-  public toKebabCase() {}
+  isWhiteSpace() {}
 
   // TODO(mattg): finish this function
-  private _indexOfClosestClosingCurlyBrace() {}
+  // NOTE(mattg): this may not need to be apart of the class
+  toKebabCase() {}
 
   // TODO(mattg): finish this function
-  public formatReplacementStringToArray() {}
+  // private _indexOfClosestClosingCurlyBrace() {}
 
   // TODO(mattg): finish this function
-  public formatReplacementString() {}
+  formatReplacementStringToArray() {}
 
   // TODO(mattg): finish this function
-  public escapeStringRegexp() {}
+  formatReplacementString() {}
 
   // TODO(mattg): finish this function
-  public transformAndEnsureRegExpRegExpArray() {}
+  escapeStringRegexp() {}
 
   // TODO(mattg): finish this function
-  public transformAndEnsureRegExpArray() {}
-};
+  transformAndEnsureRegExpRegExpArray() {}
+
+  // TODO(mattg): finish this function
+  transformAndEnsureRegExpArray() {}
+}
 
 // DecomposedString or GraphemeString
 type SegmentedString = {
-  string: string,
-  segments: string[],
-  indecies: number[],
+  string: string;
+  segments: string[];
+  indecies: number[];
 };
 
 export function segmentString(string: string): SegmentedString {
   const ss: SegmentedString = {
-    string: string,
+    string,
     segments: [],
     indecies: [],
   };
@@ -256,9 +240,7 @@ export function segmentString(string: string): SegmentedString {
 
 function ensureSegmentedString(string: string | SegmentedString): SegmentedString {
   return typeof string === 'string' ? segmentString(string) : string;
-
 }
-
 
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
@@ -301,8 +283,8 @@ export function charAt(string: string | SegmentedString, index: number): string 
  * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
- * the given index.
- * Usage Warning: This function only takes the first code point in a multi-code point grapheme.
+ * the given index. Usage Warning: This function only takes the first code point in a multi-code
+ * point grapheme.
  *
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
@@ -336,10 +318,11 @@ export function endsWith(
   const segString = ensureSegmentedString(string);
   const segSearchString = ensureSegmentedString(searchString);
   const searchStringLen = stringLength(segSearchString);
-  const cleanEndPosition: number = endPosition === undefined ? stringLength(segString) : endPosition;
+  const cleanEndPosition: number =
+    endPosition === undefined ? stringLength(segString) : endPosition;
   const index = cleanEndPosition - searchStringLen;
   if (index < 0) return false;
-  return (substr(segString, index, searchStringLen) === searchString);
+  return substr(segString, index, searchStringLen) === searchString;
 }
 
 /**
@@ -634,7 +617,8 @@ export function indexOf(
       if (searchStringLen === 1) {
         // charAt did the work, we can exit now.
         return index;
-      } else if (substr(segString, index, searchStringLen) === segSearchString.string) {
+      }
+      if (substr(segString, index, searchStringLen) === segSearchString.string) {
         return index;
       }
     }
@@ -682,7 +666,8 @@ export function lastIndexOf(
       if (searchStringLen === 1) {
         // charAt did the work, we can exit now.
         return index;
-      } else if (substr(segString, index, searchStringLen) === segSearchString.string) {
+      }
+      if (substr(segString, index, searchStringLen) === segSearchString.string) {
         return index;
       }
     }
@@ -926,7 +911,8 @@ function substr(
   if (len < 0) return '';
 
   const start: number = ss.indecies.at(begin)!;
-  const end: number = begin === stringLength(ss)-1 ? ss.string.length : ss.indecies.at(begin+len)!;
+  const end: number =
+    begin === stringLength(ss) - 1 ? ss.string.length : ss.indecies.at(begin + len)!;
   return ss.string.substring(start, end);
 }
 

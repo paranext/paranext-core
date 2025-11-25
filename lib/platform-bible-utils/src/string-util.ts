@@ -29,7 +29,7 @@ export function at(string: string, index: number): string | undefined {
    * String:   |--------------|
    * Positive: 0............N-1
    * Negative: -N............-1
-   * 
+   *
    * Total Bounds Range (inclusive): -N..N-1
    */
   if (index >= stringLen || index < -stringLen) return undefined;
@@ -58,8 +58,8 @@ export function charAt(string: string, index: number): string {
  * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
- * the given index.
- * Usage Warning: This function only takes the first code point in a multi-code point grapheme.
+ * the given index. Usage Warning: This function only takes the first code point in a multi-code
+ * point grapheme.
  *
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
@@ -97,7 +97,7 @@ export function endsWith(
   const searchStringLen = stringLength(searchString);
   const index = endPosition - searchStringLen;
   if (index < 0) return false;
-  return (substr(string, index, searchStringLen) === searchString);
+  return substr(string, index, searchStringLen) === searchString;
 }
 
 /**
@@ -401,9 +401,9 @@ export function lastIndexOf(string: string, searchString: string, position?: num
     // this check is far cheaper than a `substr` call,
     // so this is is a huge performance improvement!
     // if (string[index] === searchString[0]) {
-      if (substr(string, index, searchStringLen) === searchString) {
-        return index;
-      }
+    if (substr(string, index, searchStringLen) === searchString) {
+      return index;
+    }
     // }
   }
 

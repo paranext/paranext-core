@@ -1701,6 +1701,7 @@ export declare function charAt(string: string, index: number): string;
  *
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
  * the given index.
+ * Usage Warning: This function only takes the first code point in a multi-code point grapheme.
  *
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
