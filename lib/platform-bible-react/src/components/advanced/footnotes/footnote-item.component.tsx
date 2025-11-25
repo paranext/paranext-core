@@ -155,15 +155,13 @@ export function FootnoteItem({
     <span className="marker">{` \\${footnote.marker}*`}</span>
   ) : undefined;
 
-  const header = (
-    <>
-      {caller && (
-        // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
-        // specific class name in case styling is needed.
-        <span className={cn('note-caller', { formatted: isCallerFormatted })}>{caller} </span>
-      )}
-      {targetRef && <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>}
-    </>
+  const footnoteCaller = caller && (
+    // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
+    // specific class name in case styling is needed.
+    <span className={cn('note-caller', { formatted: isCallerFormatted })}>{caller} </span>
+  );
+  const header = targetRef && (
+    <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
   );
 
   const layoutClass = layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical';
@@ -172,11 +170,17 @@ export function FootnoteItem({
 
   return (
     <>
-      <div className={cn('textual-note-header tw-text-nowrap tw-pr-2', baseClasses)}>
+      <div className={cn('textual-note-header tw-text-nowrap tw-pr-1', baseClasses)}>
         {footnoteOpening}
-        {header}
+        {footnoteCaller}
+        {layout === 'vertical' && header}
       </div>
-      <div className={cn('textual-note-body tw-pr-0.5', baseClasses)}>
+      {layout === 'horizontal' && (
+        <div className={cn('textual-note-header tw-text-nowrap tw-pr-1', baseClasses)}>
+          {header}
+        </div>
+      )}
+      <div className={cn('textual-note-body', baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (
           <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}
