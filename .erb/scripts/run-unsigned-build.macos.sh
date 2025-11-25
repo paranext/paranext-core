@@ -56,19 +56,67 @@ if [ -f "$SEARCH_PATH" ]; then
 elif [ -d "$SEARCH_PATH" ]; then
     # Path is a directory - search for dmg or app-macos*.zip files
     echo "Looking for DMG or app-macos*.zip files in $SEARCH_PATH..."
-    DMG_FILE=$(ls -t "$SEARCH_PATH"/*.dmg 2>/dev/null | head -1)
-    if [ -z "$DMG_FILE" ]; then
-        APP_ARCHIVE=$(ls -t "$SEARCH_PATH/app-macos"*.zip 2>/dev/null | head -1)
+
+    # First, look for Platform.Bible or Paratext-specific files (prioritize these)
+    PLATFORM_DMG=$(ls -t "$SEARCH_PATH"/*Platform*.dmg "$SEARCH_PATH"/*Paratext*.dmg 2>/dev/null | head -1)
+    PLATFORM_ZIP=$(ls -t "$SEARCH_PATH"/app-macos*.zip 2>/dev/null | head -1)
+
+    # If we found Platform-specific files, choose the most recent one
+    if [ -n "$PLATFORM_DMG" ] || [ -n "$PLATFORM_ZIP" ]; then
+        # Compare timestamps of Platform-specific files
+        if [ -n "$PLATFORM_DMG" ] && [ -n "$PLATFORM_ZIP" ]; then
+            # Both exist, choose the newer one
+            if [ "$PLATFORM_DMG" -nt "$PLATFORM_ZIP" ]; then
+                DMG_FILE="$PLATFORM_DMG"
+                echo "Found most recent Platform-specific DMG file: $(basename "$DMG_FILE")"
+            else
+                APP_ARCHIVE="$PLATFORM_ZIP"
+                echo "Found most recent Platform-specific zip file: $(basename "$APP_ARCHIVE")"
+            fi
+        elif [ -n "$PLATFORM_DMG" ]; then
+            DMG_FILE="$PLATFORM_DMG"
+            echo "Found Platform-specific DMG file: $(basename "$DMG_FILE")"
+        else
+            APP_ARCHIVE="$PLATFORM_ZIP"
+            echo "Found Platform-specific zip file: $(basename "$APP_ARCHIVE")"
+        fi
+    else
+        # No Platform-specific files found, fall back to generic search
+        echo "No Platform-specific files found, searching for any DMG or app-macos*.zip files..."
+
+        # Get all matching files and find the most recent
+        ALL_FILES=()
+        while IFS= read -r -d '' file; do
+            ALL_FILES+=("$file")
+        done < <(find "$SEARCH_PATH" -maxdepth 1 \( -name "*.dmg" -o -name "app-macos*.zip" \) -print0 2>/dev/null | sort -z)
+
+        if [ ${#ALL_FILES[@]} -eq 0 ]; then
+            echo "Error: No app-macos*.zip or *.dmg file found in $SEARCH_PATH!"
+            echo "Available files in $SEARCH_PATH:"
+            ls -la "$SEARCH_PATH/"*.{zip,dmg} 2>/dev/null || echo "No zip or dmg files found"
+            exit 1
+        fi
+
+        # Find the most recent file among all matches
+        NEWEST_FILE=""
+        for file in "${ALL_FILES[@]}"; do
+            if [ -z "$NEWEST_FILE" ] || [ "$file" -nt "$NEWEST_FILE" ]; then
+                NEWEST_FILE="$file"
+            fi
+        done
+
+        if [[ "$NEWEST_FILE" == *.dmg ]]; then
+            DMG_FILE="$NEWEST_FILE"
+            echo "Found most recent DMG file: $(basename "$DMG_FILE")"
+        else
+            APP_ARCHIVE="$NEWEST_FILE"
+            echo "Found most recent zip file: $(basename "$APP_ARCHIVE")"
+        fi
     fi
 
-    if [ -n "$DMG_FILE" ]; then
-        echo "Found most recent DMG file: $(basename "$DMG_FILE")"
-    elif [ -n "$APP_ARCHIVE" ]; then
-        echo "Found most recent zip file: $(basename "$APP_ARCHIVE")"
-    else
-        echo "Error: No app-macos*.zip or *.dmg file found in $SEARCH_PATH!"
-        echo "Available files in $SEARCH_PATH:"
-        ls -la "$SEARCH_PATH/"*.{zip,dmg} 2>/dev/null || echo "No zip or dmg files found"
+    # Validate that we found a file
+    if [ -z "$DMG_FILE" ] && [ -z "$APP_ARCHIVE" ]; then
+        echo "Error: No suitable file found in $SEARCH_PATH!"
         exit 1
     fi
 else
