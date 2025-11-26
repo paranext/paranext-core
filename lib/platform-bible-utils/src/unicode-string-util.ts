@@ -1,14 +1,264 @@
 import { LocalizeKey } from 'extension-contributions/menus.model';
 import {
-  indexOf as stringzIndexOf,
-  length as stringzLength,
   limit as stringzLimit,
-  substr as stringzSubstr,
-  substring as stringzSubstring,
   toArray as stringzToArray,
 } from 'stringz';
 import { ensureArray } from './array-util';
 import { isString } from './util';
+
+/*
+ * TODO(mattg): This is a comment on the state of this branch, and where it needs
+ * to go in the future.
+ *
+ * CURRENT STATE OF THIS BRANCH:
+ * As of 2025/10/30, I, Matthew Getgen, have finished re-writing
+ * stringLength, at, charAt, codePointAt, endsWith,
+ * includes, indexOf, lastIndexOf, substr, and substring to use the
+ * `SegmentedString` type I created. The tests for these have also been updated,
+ * with edge cases added. I myself also have a perf testing folder on my computer
+ * under `~/repos/test/platform-bible-utils-perf` used to test the perf difference
+ * of the JavaScript std functions, the old, and the newer versions. In there I have
+ * proven that the new versions of at and charAt are more performant, but in the
+ * future it would be good to ensure that more are actually better.
+ * Below is a class that I defined. Instead of giving users the option of either a
+ * `string` or `SegmentedString`, we should instead provide an API that requires you to
+ * use a `UnicodeString` class which requires it, so the performant option is always
+ * chosen. This is just the very start of that work.
+ *
+ * TODOS:
+ * - Re-write all functions.
+ * - Consider making functions that transform strings into other `UnicodeString`s, instead of just
+ *   strings
+ * - Ensure tests work to ensure edge cases are met and regressions aren't made.
+ * - Add tests when needed.
+ * - Compare performance in the perf test folder.
+ * - Standardize the way we index into strings (positive,negative,overflow,underflow).
+ *   - The current methods don't have a standard, each one follows different rules.
+ * - Move all functions to a class-based solution using the UnicodeString class.
+ * - Add comments above the classes and functions to describe their usage.
+ * - Rename the `segment-string-util.ts` and `segment-string-util.test.ts` files to match
+ *   the name chosen for the class. `unicode-string-util.ts` for example.
+ * - Mark previous functions as deprecated.
+ */
+export class UnicodeString {
+  private readonly _string: string;
+  private readonly _graphemes: string[];
+  private readonly _indecies: number[];
+
+  public constructor(string: string) {
+    this._string = string;
+    this._graphemes = stringzToArray(this._string);
+    this._indecies = [];
+
+    let index: number = 0;
+    for (const grapheme of this._graphemes) {
+      this._indecies.push(index);
+      index += grapheme.length;
+    }
+  }
+
+  public get string(): string {
+    return this._string;
+  }
+
+  public get length(): number {
+    return this._graphemes.length;
+  }
+
+  public toArray(): string[] {
+    return this._graphemes;
+  }
+
+  public at(index: number): string | undefined {
+    return this._graphemes.at(index);
+  }
+
+  public charAt(index: number): string {
+    if (index < 0 || index >= this.length) return '';
+    return this._graphemes.at(index)!;
+  }
+
+  public codePointAt(index: number): number | undefined {
+    if (index < 0 || index >= this.length) return undefined;
+    return this._graphemes.at(index)?.codePointAt(0);
+  }
+
+  private _substr(
+    begin: number = 0,
+    len: number = this.length - begin,
+  ): string {
+    if (begin >= this.length) return '';
+    if (begin < 0) begin += this.length;
+    if (begin < 0) begin = 0;
+
+    if (len > this.length) len = this.length;
+    if (len < 0) return '';
+
+    const start: number = this._indecies.at(begin)!;
+    const end: number = begin === this.length-1 ? this.length : this._indecies.at(begin+len)!;
+    return this.string.substring(start, end);
+  }
+
+  public substring(
+    begin: number,
+    end: number = this.length,
+  ): string {
+    if (begin < 0 || begin >= this.length) return '';
+    // NOTE(mattg): `>` instead of `>=` is intentional
+    if (end < 0 || end > this.length || end < begin) return '';
+
+    const start: number = this._indecies.at(begin)!;
+    const stop: number = this._indecies.at(end)!;
+    return this._string.substring(start, stop);
+  }
+
+  // TODO(mattg): finish this function
+  public slice() {}
+
+  // TODO(mattg): finish this function
+  public split() {}
+
+  public indexOf(
+    searchString: UnicodeString,
+    position: number = 0,
+  ): number {
+    if (searchString.length === 0) return -1;
+
+    const maxSearchIndex: number = this.length - searchString.length;
+    if (maxSearchIndex < 0) return -1;
+    if (position < 0) position = 0;
+    if (position > maxSearchIndex) return -1;
+
+    for (let index = position; index <= maxSearchIndex; index++) {
+      if (this.charAt(index) === searchString.charAt(0)) {
+        if (searchString.length === 1) {
+          // charAt did the comparison, we can stop now.
+          return index;
+        } else if (this._substr(index, searchString.length) === searchString.string) {
+          return index;
+        }
+      }
+    }
+    return -1;
+  }
+
+  public lastIndexOf(
+    searchString: UnicodeString,
+    position: number ,
+  ): number {
+    if (searchString.length === 0) return -1;
+
+    const maxSearchableIndex: number = this.length - searchString.length;
+    if (maxSearchableIndex < 0) return -1;
+
+    position = position === undefined ? maxSearchableIndex : position;
+    if (position < 0) position = 0;
+    else if (position >= this.length) position = this.length - 1;
+
+    for (let index = position; index >= 0; index--) {
+      if (this.charAt(index) === searchString.charAt(0)) {
+        if (searchString.length === 1) {
+          // charAt did the comparison, we can stop now.
+          return index;
+        } else if (this._substr(index, searchString.length) === searchString.string) {
+          return index;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  public includes(
+    searchString: UnicodeString,
+    position: number = 0,
+  ): boolean {
+    return !(this.indexOf(searchString, position) === -1);
+  }
+
+  // TODO(mattg): finish this function
+  public normalize() {}
+
+  // TODO(mattg): finish this function
+  public ordinalCompare() {}
+
+  // TODO(mattg): finish this function
+  public startsWith() {}
+
+  public endsWith(
+    searchString: UnicodeString,
+    endPosition: number = this.length,
+  ): boolean {
+    const index = endPosition = searchString.length;
+    if (index < 0) return false;
+    return (this._substr(index, searchString.length) === searchString.string);
+  }
+
+  // TODO(mattg): finish this function
+  public padStart() {}
+
+  // TODO(mattg): finish this function
+  public padEnd() {}
+
+  // TODO(mattg): finish this function
+  // NOTE(mattg): this may not need to be apart of the class
+  public isLocalizeKey() {}
+
+  // TODO(mattg): finish this function
+  // NOTE(mattg): this may not need to be apart of the class
+  public isWhiteSpace() {}
+
+  // TODO(mattg): finish this function
+  // NOTE(mattg): this may not need to be apart of the class
+  public toKebabCase() {}
+
+  // TODO(mattg): finish this function
+  private _indexOfClosestClosingCurlyBrace() {}
+
+  // TODO(mattg): finish this function
+  public formatReplacementStringToArray() {}
+
+  // TODO(mattg): finish this function
+  public formatReplacementString() {}
+
+  // TODO(mattg): finish this function
+  public escapeStringRegexp() {}
+
+  // TODO(mattg): finish this function
+  public transformAndEnsureRegExpRegExpArray() {}
+
+  // TODO(mattg): finish this function
+  public transformAndEnsureRegExpArray() {}
+};
+
+// DecomposedString or GraphemeString
+type SegmentedString = {
+  string: string,
+  segments: string[],
+  indecies: number[],
+};
+
+export function segmentString(string: string): SegmentedString {
+  const ss: SegmentedString = {
+    string: string,
+    segments: [],
+    indecies: [],
+  };
+
+  ss.segments = stringzToArray(ss.string);
+  let index = 0;
+  for (const segment of ss.segments) {
+    ss.indecies.push(index);
+    index += segment.length;
+  }
+  return ss;
+}
+
+function ensureSegmentedString(string: string | SegmentedString): SegmentedString {
+  return typeof string === 'string' ? segmentString(string) : string;
+
+}
+
 
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
@@ -22,18 +272,9 @@ import { isString } from './util';
  * @returns New string consisting of the Unicode code point located at the specified offset,
  *   undefined if index is out of bounds
  */
-export function at(string: string, index: number): string | undefined {
-  const stringLen: number = stringLength(string);
-  /*
-   * NOTE(mattg): The index bounds on a JS string/array look like this:
-   * String:   |--------------|
-   * Positive: 0............N-1
-   * Negative: -N............-1
-   * 
-   * Total Bounds Range (inclusive): -N..N-1
-   */
-  if (index >= stringLen || index < -stringLen) return undefined;
-  return substr(string, index, 1);
+export function at(string: string | SegmentedString, index: number): string | undefined {
+  const ss: SegmentedString = ensureSegmentedString(string);
+  return ss.segments.at(index);
 }
 
 /**
@@ -48,9 +289,11 @@ export function at(string: string, index: number): string | undefined {
  * @returns New string consisting of the Unicode code point located at the specified offset, empty
  *   string if index is out of bounds
  */
-export function charAt(string: string, index: number): string {
-  if (index < 0 || index > stringLength(string) - 1) return '';
-  return substr(string, index, 1);
+export function charAt(string: string | SegmentedString, index: number): string {
+  const ss: SegmentedString = ensureSegmentedString(string);
+  if (index < 0 || index >= stringLength(ss)) return '';
+
+  return ss.segments.at(index)!;
 }
 
 /**
@@ -67,9 +310,10 @@ export function charAt(string: string, index: number): string {
  * @returns Non-negative integer representing the code point value of the character at the given
  *   index, or undefined if there is no element at that position
  */
-export function codePointAt(string: string, index: number): number | undefined {
+export function codePointAt(string: string | SegmentedString, index: number): number | undefined {
+  const ss: SegmentedString = ensureSegmentedString(string);
   if (index < 0 || index > stringLength(string) - 1) return undefined;
-  return substr(string, index, 1).codePointAt(0);
+  return ss.segments.at(index)?.codePointAt(0);
 }
 
 /**
@@ -85,19 +329,17 @@ export function codePointAt(string: string, index: number): number | undefined {
  * @returns True if it ends with searchString, false if it does not
  */
 export function endsWith(
-  string: string,
-  searchString: string,
-  endPosition: number = stringLength(string),
+  string: string | SegmentedString,
+  searchString: string | SegmentedString,
+  endPosition: number | undefined = undefined,
 ): boolean {
-  /*
-   * NOTE(mattg): This re-write of endsWith reduces it
-   * from 210,808x slower than JS endsWith
-   * to 81,946x slower
-   */
-  const searchStringLen = stringLength(searchString);
-  const index = endPosition - searchStringLen;
+  const segString = ensureSegmentedString(string);
+  const segSearchString = ensureSegmentedString(searchString);
+  const searchStringLen = stringLength(segSearchString);
+  const cleanEndPosition: number = endPosition === undefined ? stringLength(segString) : endPosition;
+  const index = cleanEndPosition - searchStringLen;
   if (index < 0) return false;
-  return (substr(string, index, searchStringLen) === searchString);
+  return (substr(segString, index, searchStringLen) === searchString);
 }
 
 /**
@@ -348,9 +590,13 @@ export function formatReplacementString(
  * @param position Position within the string to start searching for searchString. Default is `0`
  * @returns True if search string is found, false if it is not
  */
-export function includes(string: string, searchString: string, position: number = 0): boolean {
-  const partialString = substring(string, position);
-  const indexOfSearchString = indexOf(partialString, searchString);
+export function includes(
+  string: string | SegmentedString,
+  searchString: string | SegmentedString,
+  position: number = 0,
+): boolean {
+  // const partialString = substring(string, position);
+  const indexOfSearchString = indexOf(string, searchString, position);
   if (indexOfSearchString === -1) return false;
   return true;
 }
@@ -367,11 +613,33 @@ export function includes(string: string, searchString: string, position: number 
  * @returns Index of the first occurrence of a given string
  */
 export function indexOf(
-  string: string,
-  searchString: string,
-  position: number | undefined = 0,
+  string: string | SegmentedString,
+  searchString: string | SegmentedString,
+  position: number = 0,
 ): number {
-  return stringzIndexOf(string, searchString, position);
+  const segString: SegmentedString = ensureSegmentedString(string);
+  const segSearchString: SegmentedString = ensureSegmentedString(searchString);
+  const stringLen: number = stringLength(segString);
+  const searchStringLen: number = stringLength(segSearchString);
+
+  if (searchStringLen === 0) return -1;
+
+  const searchableIndex: number = stringLen - searchStringLen;
+  if (searchableIndex < 0) return -1;
+  if (position < 0) position = 0;
+  if (position > searchableIndex) return -1;
+
+  for (let index = position; index <= searchableIndex; index++) {
+    if (charAt(segString, index) === charAt(segSearchString, 0)) {
+      if (searchStringLen === 1) {
+        // charAt did the work, we can exit now.
+        return index;
+      } else if (substr(segString, index, searchStringLen) === segSearchString.string) {
+        return index;
+      }
+    }
+  }
+  return -1;
 }
 
 /**
@@ -386,10 +654,22 @@ export function indexOf(
  *   of the string. Default is `undefined`
  * @returns Index of the last occurrence of searchString found, or -1 if not found.
  */
-export function lastIndexOf(string: string, searchString: string, position?: number): number {
-  const stringLen: number = stringLength(string);
-  const searchStringLen: number = stringLength(searchString);
-  let validatedPosition = position === undefined ? stringLen : position;
+export function lastIndexOf(
+  string: string | SegmentedString,
+  searchString: string | SegmentedString,
+  position?: number,
+): number {
+  const segString: SegmentedString = ensureSegmentedString(string);
+  const segSearchString: SegmentedString = ensureSegmentedString(searchString);
+  const stringLen: number = stringLength(segString);
+  const searchStringLen: number = stringLength(segSearchString);
+
+  if (searchStringLen === 0) return -1;
+
+  const searchableIndex: number = stringLen - searchStringLen;
+  if (searchableIndex < 0) return -1;
+
+  let validatedPosition = position === undefined ? searchableIndex : position;
 
   if (validatedPosition < 0) {
     validatedPosition = 0;
@@ -398,13 +678,14 @@ export function lastIndexOf(string: string, searchString: string, position?: num
   }
 
   for (let index = validatedPosition; index >= 0; index--) {
-    // this check is far cheaper than a `substr` call,
-    // so this is is a huge performance improvement!
-    // if (string[index] === searchString[0]) {
-      if (substr(string, index, searchStringLen) === searchString) {
+    if (charAt(segString, index) === charAt(segSearchString, 0)) {
+      if (searchStringLen === 1) {
+        // charAt did the work, we can exit now.
+        return index;
+      } else if (substr(segString, index, searchStringLen) === segSearchString.string) {
         return index;
       }
-    // }
+    }
   }
 
   return -1;
@@ -420,8 +701,9 @@ export function lastIndexOf(string: string, searchString: string, position?: num
  * @param string String to return the length for
  * @returns Number that is length of the starting string
  */
-export function stringLength(string: string): number {
-  return stringzLength(string);
+export function stringLength(string: string | SegmentedString): number {
+  const ss: SegmentedString = ensureSegmentedString(string);
+  return ss.segments.length;
 }
 
 /**
@@ -629,11 +911,23 @@ export function startsWith(string: string, searchString: string, position: numbe
  * @returns Substring from starting string
  */
 function substr(
-  string: string,
+  string: string | SegmentedString,
   begin: number = 0,
-  len: number = stringLength(string) - begin,
+  len: number | undefined = undefined,
 ): string {
-  return stringzSubstr(string, begin, len);
+  const ss: SegmentedString = ensureSegmentedString(string);
+  const stringLen: number = stringLength(ss);
+  if (begin >= stringLen) return '';
+  if (begin < 0) begin += stringLen;
+  if (begin < 0) begin = 0;
+
+  if (len === undefined) len = stringLen - begin;
+  if (len > stringLen) len = stringLen;
+  if (len < 0) return '';
+
+  const start: number = ss.indecies.at(begin)!;
+  const end: number = begin === stringLength(ss)-1 ? ss.string.length : ss.indecies.at(begin+len)!;
+  return ss.string.substring(start, end);
 }
 
 /**
@@ -648,11 +942,20 @@ function substr(
  * @returns Substring from starting string
  */
 export function substring(
-  string: string,
+  string: string | SegmentedString,
   begin: number,
-  end: number = stringLength(string),
+  end: number | undefined = undefined,
 ): string {
-  return stringzSubstring(string, begin, end);
+  const ss: SegmentedString = ensureSegmentedString(string);
+  const stringLen: number = stringLength(ss);
+  const cleanEnd: number = end === undefined ? stringLen : end;
+  if (begin < 0 || begin >= stringLen) return '';
+  // NOTE(mattg): end is inclusive I guess?
+  if (cleanEnd < 0 || cleanEnd > stringLen) return '';
+  if (cleanEnd < begin) return '';
+  const start: number = ss.indecies.at(begin)!;
+  const newEnd: number = ss.indecies.at(cleanEnd)!;
+  return ss.string.substring(start, newEnd);
 }
 
 /**
