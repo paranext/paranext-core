@@ -155,10 +155,11 @@ export function FootnoteItem({
     <span className="marker">{` \\${footnote.marker}*`}</span>
   ) : undefined;
 
-  const footnoteCaller = caller && (
+  const footnoteCaller = /* caller && */ (
     // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
     // specific class name in case styling is needed.
-    <span className={cn('note-caller', { formatted: isCallerFormatted })}>{caller} </span>
+    // TODO(mattg): Look at the width in relation to grid sizing
+    <span className={cn('note-caller tw-inline-block tw-w-4', { formatted: isCallerFormatted })}>{caller} </span>
   );
   const header = targetRef && (
     <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
@@ -180,7 +181,7 @@ export function FootnoteItem({
           {header}
         </div>
       )}
-      <div className={cn('textual-note-body', baseClasses)}>
+      <div className={cn('textual-note-body tw-pr-0.5', baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (
           <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}
