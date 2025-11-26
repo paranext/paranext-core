@@ -4,6 +4,13 @@
   "out": "docs",
   "sort": ["kind", "alphabetical"],
   "tsconfig": "tsconfig.json",
+  "externalSymbolLinkMappings": {
+    "@eten-tech-foundation/scripture-utilities": {
+      "MarkerObject": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L54",
+      "MarkerObject.content": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L65",
+      "MarkerContent": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L48"
+    }
+  },
   "validation": {
     "notExported": false,
     "invalidLink": true,
