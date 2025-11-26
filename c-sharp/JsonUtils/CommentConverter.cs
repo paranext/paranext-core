@@ -42,7 +42,9 @@ public class CommentConverter : JsonConverter<Comment>
             "todo" => "Todo",
             "done" => "Done",
             "" => "Unspecified",
-            _ => char.ToUpperInvariant(noteStatus[0]) + noteStatus.Substring(1),
+            _ => noteStatus.Length > 0
+                ? char.ToUpperInvariant(noteStatus[0]) + noteStatus.Substring(1)
+                : "Unspecified",
         };
     }
 

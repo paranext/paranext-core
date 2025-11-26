@@ -428,8 +428,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Set the new content as XML/HTML
         // updatedContent is already HTML from the frontend editor
         XmlDocument xmlDoc = new XmlDocument { PreserveWhitespace = true };
-        xmlDoc.LoadXml($"<Contents>{updatedContent}</Contents>");
-        commentToUpdate.Contents = xmlDoc.DocumentElement;
+        XmlElement contentsElement = xmlDoc.CreateElement("Contents");
+        XmlCDataSection cdata = xmlDoc.CreateCDataSection(updatedContent ?? string.Empty);
+        contentsElement.AppendChild(cdata);
+        commentToUpdate.Contents = contentsElement;
 
         // Reset the status field to Unspecified when a comment is edited
         commentToUpdate.Status = NoteStatus.Unspecified;
@@ -484,7 +486,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Create the comment contents XML
         XmlDocument xmlDoc = new() { PreserveWhitespace = true };
         string commentContents = string.IsNullOrEmpty(contents) ? "" : contents;
-        xmlDoc.LoadXml($"<Contents>{commentContents}</Contents>");
+        XmlElement contentsElement = xmlDoc.CreateElement("Contents");
+        contentsElement.InnerText = commentContents;
+        xmlDoc.AppendChild(contentsElement);
 
         // Create a new comment with the status using the proper Comment structure
         Comment statusComment =

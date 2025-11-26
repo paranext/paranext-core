@@ -23,7 +23,9 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
             "todo" => "Todo",
             "done" => "Done",
             "" => "Unspecified",
-            _ => char.ToUpperInvariant(noteStatusValue[0]) + noteStatusValue.Substring(1),
+            _ => noteStatusValue.Length > 0
+                ? char.ToUpperInvariant(noteStatusValue[0]) + noteStatusValue.Substring(1)
+                : "Unspecified",
         };
     }
 
