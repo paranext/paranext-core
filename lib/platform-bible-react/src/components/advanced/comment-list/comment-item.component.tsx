@@ -112,15 +112,7 @@ export function CommentItem({
     });
   }, [comment.date, localizedStrings]);
 
-  const userLabel = useMemo(
-    () =>
-      !isReply && comment.assignedUser
-        ? formatReplacementString(localizedStrings['%comment_assigned_to%'], {
-            assignedUser: comment.assignedUser,
-          })
-        : comment.user,
-    [isReply, comment.assignedUser, comment.user, localizedStrings],
-  );
+  const userLabel = useMemo(() => comment.user, [comment.user]);
 
   // Generate initials for avatar
   const initials = useMemo(
