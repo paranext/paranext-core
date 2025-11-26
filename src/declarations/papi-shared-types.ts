@@ -170,7 +170,7 @@ declare module 'papi-shared-types' {
      * interacting with ParatextData.
      */
     'platform.paratextDataLastRegistryDataCachedTimes': { [key: string]: string };
-    /** Enable reading and writing comments in projects. This is an experimental feature. */
+    /** @deprecated 20 November 2025. */
     'platform.commentsEnabled': boolean;
     /**
      * Timeout in seconds for requests to be resolved before they are considered to have failed.

@@ -32,12 +32,6 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
-      'platform.commentsEnabled': {
-        label: '%settings_platform_comments_enabled_label%',
-        description: '%settings_platform_comments_enabled_description%',
-        default: false,
-        isHidden: true,
-      },
       'platform.requestTimeout': {
         label: '%settings_platform_requestTimeout_label%',
         description: '%settings_platform_requestTimeout_description%',
