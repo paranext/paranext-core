@@ -26,5 +26,18 @@
     "xml"
   ],
   "ignoredHighlightLanguages": ["usfm"],
-  "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"]
+  "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"],
+  "externalSymbolLinkMappings": {
+    "@eten-tech-foundation/scripture-utilities": {
+      "MarkerObject": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L54",
+      "MarkerObject.content": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L65",
+      "MarkerContent": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L48",
+      "Usj": "https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/utilities/src/converters/usj/usj.model.ts#L91"
+    },
+    "typescript": {
+      "Map": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map",
+      "Map.get": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/get",
+      "Map.keys": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/keys"
+    }
+  },
 }

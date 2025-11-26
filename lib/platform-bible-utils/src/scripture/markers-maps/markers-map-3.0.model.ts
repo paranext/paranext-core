@@ -205,7 +205,7 @@ export type NormalMarkerInfo = {
    * attribute on that previous marker in USX/USJ.
    *
    * Note: the attribute names for attribute markers may be different than the marker names. See
-   * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
+   * {@link AttributeMarkerInfo["attributeMarkerAttributeName"]} for more information.
    *
    * @example
    *
@@ -216,9 +216,9 @@ export type NormalMarkerInfo = {
    * Whether the normal closing marker for this marker is considered optional in USFM, meaning in
    * some cases that the normal closing marker would be expected not to be present.
    *
-   * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `true`, this marker
-   * may or may not be expected to have a normal closing marker actually present in USFM depending
-   * on the value of this property.
+   * If this marker's type has {@link CloseableMarkerTypeInfo["isCloseable"]} set to `true`, this
+   * marker may or may not be expected to have a normal closing marker actually present in USFM
+   * depending on the value of this property.
    *
    * - If this is `true`, the normal closing marker for this marker in USFM may be expected to be
    *   present or absent depending on the value of
@@ -234,7 +234,7 @@ export type NormalMarkerInfo = {
    *   present. If the normal closing marker is absent in USFM, the USX/USJ for this marker should
    *   have the attribute `closed` set to `false`.
    *
-   * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `false`, this
+   * If this marker's type has {@link CloseableMarkerTypeInfo["isCloseable"]} set to `false`, this
    * property is unused; markers of that type do not have a normal closing marker.
    *
    * If not present or `undefined`, defaults to `false`

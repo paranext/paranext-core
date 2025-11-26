@@ -36,8 +36,8 @@ export function deepClone<T>(obj: T): T {
 /**
  * Get a function that reduces calls to the function passed in
  *
- * @template T - A function type that takes any arguments and returns void. This is the type of the
- *   function being debounced.
+ * @template TFunc - A function type that takes any arguments and returns void. This is the type of
+ *   the function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
@@ -86,15 +86,16 @@ export function debounce<TFunc extends (...args: any[]) => any>(
  * - `groupBy(items, keySelector, valueSelector)` – groups transformed values using the key returned
  *   by `keySelector` and the value returned by `valueSelector`.
  *
- * If `valueSelector` is not provided, the original item is used in the resulting groups.
+ * `valueSelector` is an optional third parameter. It is a function that runs on each item to get
+ * the value to store in the group. The first argument is the item, the second argument is the key
+ * for the group to which this item belongs, and the third argument is the index of the item in the
+ * original array. If `valueSelector` is not provided, the original item is used in the resulting
+ * groups.
  *
  * @param items - Array of items to group by.
  * @param keySelector - Function to run on each item to get the key for the group to which it
  *   belongs. The first argument is the item, and the second argument is the index of the item in
  *   the original array.
- * @param valueSelector - Optional function to run on each item to get the value to store in the
- *   group. The first argument is the item, the second argument is the key for the group to which
- *   this item belongs, and the third argument is the index of the item in the original array.
  * @returns Map of keys to groups of values corresponding to each item.
  */
 export function groupBy<T, K>(
