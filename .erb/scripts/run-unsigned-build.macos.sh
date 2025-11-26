@@ -37,6 +37,9 @@ echo "Starting app installation process..."
 # Define variables
 TEMP_DIR="/tmp/app_install_$$"
 
+# Ensure temp directory is cleaned up on exit (both success and error)
+trap 'if [ -d "$TEMP_DIR" ]; then rm -rf "$TEMP_DIR"; fi' EXIT
+
 # Find the zip file based on provided path or default
 SEARCH_PATH="${1:-$HOME/Downloads}"  # Use first argument or default to ~/Downloads
 
@@ -133,7 +136,6 @@ if [ -n "$APP_ARCHIVE" ]; then
     DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" -type f | head -1)
     if [ -z "$DMG_FILE" ]; then
         echo "Error: No DMG found inside zip archive"
-        rm -rf "$TEMP_DIR"
         exit 1
     fi
 fi
@@ -190,9 +192,6 @@ cp -R "$APP_PATH" "/Applications/"
 echo "Unmounting DMG..."
 hdiutil detach "$MOUNT_POINT" -quiet
 
-# Clean up temporary directory
-rm -rf "$TEMP_DIR"
-
 # Remove quarantine attribute to avoid Gatekeeper issues
 echo "Removing quarantine attribute..."
 xattr -dr com.apple.quarantine "/Applications/$APP_NAME" 2>/dev/null || true
@@ -209,7 +208,6 @@ if [ -d "$DOTNET_DIR" ]; then
     done
 fi
 
-# TODO: Remove this section when https://paratextstudio.atlassian.net/browse/PT-3623 is resolved
 # Sign Python framework components if they exist
 PYTHON_DIRS=("/Applications/$APP_NAME/Contents/Resources/hg-universal" "/Applications/$APP_NAME/Contents/Frameworks")
 for PYTHON_DIR in "${PYTHON_DIRS[@]}"; do
