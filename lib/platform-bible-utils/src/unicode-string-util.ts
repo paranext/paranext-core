@@ -44,7 +44,8 @@ export class UnicodeString {
 
   constructor(string: string, graphemes?: string[] | undefined) {
     this._string = string;
-    this._graphemes = graphemes === undefined ? stringzToArray(this._string) : graphemes;
+    this._graphemes = graphemes !== undefined
+      ? graphemes : stringzToArray(this._string);
     this._indecies = [];
 
     let index: number = 0;
@@ -103,8 +104,24 @@ export class UnicodeString {
     return this._string.substring(start, stop);
   }
 
-  // TODO(mattg): finish this function
-  slice() {}
+  slice(indexStart: number, indexEnd?: number): string {
+    // TODO(mattg): refactor these checks
+    if (indexStart > this.length) return '';
+    if (indexEnd) {
+      if (indexStart > indexEnd && !(indexStart >= 0 && indexStart < this.length && indexEnd < 0 && indexEnd > -this.length) || indexEnd < -this.length) return '';
+    }
+
+    let newStart = this._correctSliceIndex(indexStart);
+    let newEnd = indexEnd ? this._correctSliceIndex(indexEnd) : undefined;
+    return this.substring(newStart, newEnd);
+  }
+
+  private _correctSliceIndex(index: number): number {
+    if (index > this.length) return this.length;
+    if (index < -this.length) return 0;
+    if (index < 0) return index + this.length;
+    return index;
+  }
 
   // TODO(mattg): finish this function
   split() {}
@@ -160,29 +177,42 @@ export class UnicodeString {
     return !(this.indexOf(searchString, position) === -1);
   }
 
-  // TODO(mattg): finish this function
-  normalize() {}
+  normalize(form: 'NFC' | 'NFD' | 'NFKC' | 'NFKD' | 'none'): string {
+    const upperCaseForm = form.toUpperCase();
+    if (upperCaseForm === 'NONE') {
+      return this.string;
+    }
+    return this.string.normalize(upperCaseForm);
+  }
 
-  // TODO(mattg): finish this function
-  ordinalCompare() {}
+  ordinalCompare(otherString: string | UnicodeString, options?: Intl.CollatorOptions): number {
+    const str = typeof otherString === 'string' ? otherString : otherString.string;
+    return this.string.localeCompare(str, 'en', options);
+  }
 
-  // TODO(mattg): finish this function
   startsWith(searchString: UnicodeString, position: number = 0): boolean {
-    // TODO(mattg): check bounds, or let _substr do it
+    // NOTE(mattg): _substr checks the bounds
     return this._substr(position, searchString.length) === searchString.string;
   }
 
-  endsWith(searchString: UnicodeString, endPosition: number = this.length): boolean {
-    const index = endPosition - searchString.length;
+  endsWith(searchString: UnicodeString, position: number = this.length): boolean {
+    const index = position - searchString.length;
     if (index < 0) return false;
+    // NOTE(mattg): _substr checks the bounds
     return this._substr(index, searchString.length) === searchString.string;
   }
 
-  // TODO(mattg): finish this function
-  padStart() {}
+  padStart(targetLength: number, padString: string = ' '): string {
+    if (targetLength <= this.length) return this.string;
+    // TODO(mattg): rewrite this to not use stringz
+    return stringzLimit(this.string, targetLength, padString, 'left');
+  }
 
-  // TODO(mattg): finish this function
-  padEnd() {}
+  padEnd(targetLength: number, padString: string = ' '): string {
+    if (targetLength <= this.length) return this.string;
+    // TODO(mattg): rewrite this to not use stringz
+    return stringzLimit(this.string, targetLength, padString, 'right');
+  }
 
   // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
