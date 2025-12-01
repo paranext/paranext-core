@@ -102,14 +102,42 @@ export function FootnoteList({
           className,
         )}
       >
-        {layout === 'horizontal' ? (
-          <div className="tw-grid tw-grid-cols-[auto_auto_1fr] tw-gap-x-2 tw-gap-y-1">
-            {footnotes.map((footnote, idx) => {
-              const isSelected = footnote === selectedFootnote;
-              const key = `${listId}-${idx}`;
-              return (
+        <style>{`
+          /* Parent grid controls the column tracks; children will either use subgrid or fall back to display:contents */
+          .footnote-list-grid { container-type: inline-size; display: grid; grid-template-columns: [col-caller-start col-ref-start col-body-start] 1fr [col-caller-end col-ref-end col-body-end]; grid-auto-rows: auto; gap: 0.25rem 0.5rem; }
+
+          /* Fallback for environments without Container Queries: also provide a viewport-based media query */
+          @media (min-width: 640px) {
+            .footnote-list-grid { grid-template-columns: [col-caller-start] auto [col-caller-end col-ref-start] auto [col-ref-end col-body-start] 1fr [col-body-end]; }
+          }
+
+          /* Preferred: when container queries are supported, switch at container size */
+          @container (min-width: 640px) {
+            .footnote-list-grid { grid-template-columns: [col-caller-start] auto [col-caller-end col-ref-start] auto [col-ref-end col-body-start] 1fr [col-body-end]; }
+          }
+
+          /* If subgrid is supported, let each item inherit the parent's column tracks */
+          @supports (grid-template-columns: subgrid) {
+            .footnote-list-grid .footnote-item-root { display: grid; grid-template-columns: subgrid; align-items: start; gap: 0; }
+          }
+          /* Otherwise fall back to display:contents so the internal cells participate in the parent grid */
+          @supports not (grid-template-columns: subgrid) {
+            .footnote-list-grid .footnote-item-root { display: contents; }
+            /* ensure the inner cells still get the proper flow */
+            .footnote-item-root .textual-note-header, .footnote-item-root .textual-note-body { display: block; }
+          }
+
+          /* Body spans all columns when layout is explicitly vertical */
+          .footnote-item-root[data-layout="vertical"] .textual-note-body { grid-column: 1 / -1; }
+        `}</style>
+
+        <div className="footnote-list-grid">
+          {footnotes.map((footnote, idx) => {
+            const isSelected = footnote === selectedFootnote;
+            const key = `${listId}-${idx}`;
+            return (
+              <React.Fragment key={key}>
                 <FootnoteItem
-                  key={key}
                   ref={(el) => {
                     rowRefs.current[idx] = el;
                   }}
@@ -118,54 +146,18 @@ export function FootnoteList({
                   tabIndex={-1}
                   marker={footnote.marker}
                   state={isSelected ? 'selected' : undefined}
-                  className={cn(
-                    onFootnoteSelected && 'hover:tw-bg-muted/50',
-                    classNameForItems,
-                    'tw-contents', // internal divs are grid cells
-                  )}
+                  className={cn(onFootnoteSelected && 'hover:tw-bg-muted/50', classNameForItems)}
                   footnote={footnote}
                   layout={layout}
                   formatCaller={(caller) => handleFormatCaller(caller, idx)}
                   showMarkers={showMarkers}
                   onClick={() => onFootnoteSelected?.(footnote, idx, listId)}
                 />
-              );
-            })}
-          </div>
-        ) : (
-          <div className="tw-flex tw-flex-col tw-gap-0.5">
-            {footnotes.map((footnote, idx) => {
-              const isSelected = footnote === selectedFootnote;
-              const key = `${listId}-${idx}`;
-              return (
-                <React.Fragment key={key}>
-                  <FootnoteItem
-                    ref={(el) => {
-                      rowRefs.current[idx] = el;
-                    }}
-                    role="option"
-                    isSelected={isSelected}
-                    tabIndex={-1}
-                    marker={footnote.marker}
-                    state={isSelected ? 'selected' : undefined}
-                    className={cn(
-                      'data-[state=selected]:tw-bg-muted',
-                      onFootnoteSelected && 'hover:tw-bg-muted/50',
-                      classNameForItems,
-                    )}
-                    footnote={footnote}
-                    layout={layout}
-                    formatCaller={(caller) => handleFormatCaller(caller, idx)}
-                    showMarkers={showMarkers}
-                    onClick={() => onFootnoteSelected?.(footnote, idx, listId)}
-                  />
-                  {/* Only render separator if not the last item */}
-                  {idx < footnotes.length - 1 && <Separator />}
-                </React.Fragment>
-              );
-            })}
-          </div>
-        )}
+                {layout === 'vertical' && idx < footnotes.length - 1 && <Separator />}
+              </React.Fragment>
+            );
+          })}
+        </div>
       </div>
     </>
   );

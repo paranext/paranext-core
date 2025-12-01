@@ -153,12 +153,9 @@ export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
     return (
       <div
         ref={ref}
-        className={cn(
-          layout === 'horizontal'
-            ? 'tw-relative tw-grid tw-grid-cols-[auto_auto_1fr] tw-gap-x-2 tw-px-1 tw-py-0.5'
-            : 'tw-flex tw-flex-col',
-          className,
-        )}
+        className={cn('footnote-item-root tw-relative tw-grid tw-gap-x-2 tw-gap-y-1', className)}
+        style={{ gridTemplateColumns: 'subgrid' }}
+        data-layout={layout}
         role="option"
         tabIndex={0}
         aria-selected={isSelected ?? undefined}
@@ -173,37 +170,43 @@ export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
           }
         }}
       >
-        {layout === 'horizontal' ? (
-          <>
-            {/* First column: marker (if showing) + caller */}
-            <div className="textual-note-header note-caller tw-whitespace-nowrap">
-              {showMarkers && <span className="marker">{`\\${footnote.marker} `}</span>}
-              {caller}
-            </div>
+        {/* Caller cell */}
+        <div
+          className="textual-note-header note-caller tw-whitespace-nowrap"
+          style={{ gridColumn: 'col-caller-start / col-caller-end' }}
+        >
+          {showMarkers && <span className="marker">{`\\${footnote.marker} `}</span>}
+          {caller}
+        </div>
 
-            {/* Reference column */}
-            <div className="textual-note-header tw-whitespace-nowrap">
-              {targetRef && renderContent(footnote.marker, [targetRef], showMarkers)}
-            </div>
-          </>
-        ) : (
-          <div className="textual-note-header">
-            {showMarkers && <span className="marker">{`\\${footnote.marker} `}</span>}
-            {caller && <span className="note-caller">{caller} </span>}
-            {targetRef && <>{renderContent(footnote.marker, [targetRef], showMarkers)}</>}
-          </div>
-        )}
+        {/* Reference cell */}
+        <div
+          className="textual-note-header tw-whitespace-nowrap"
+          style={{ gridColumn: 'col-ref-start / col-ref-end' }}
+        >
+          {targetRef && renderContent(footnote.marker, [targetRef], showMarkers)}
+        </div>
 
-        {remainingContent.length > 0 && (
-          <div className="textual-note-body">
-            {renderParagraphs(
-              footnote.marker,
-              remainingContent.filter((c): c is MarkerContent => c !== undefined),
-              showMarkers,
-              showMarkers && <span className="marker">{` \\${footnote.marker}*`}</span>,
-            )}
-          </div>
-        )}
+        {/* Body cell: spans all columns when layout is vertical */}
+        <div
+          className="textual-note-body"
+          style={
+            layout === 'vertical'
+              ? { gridColumn: '1 / -1' }
+              : { gridColumn: 'col-body-start / col-body-end' }
+          }
+        >
+          {remainingContent.length > 0 && (
+            <>
+              {renderParagraphs(
+                footnote.marker,
+                remainingContent.filter((c): c is MarkerContent => c !== undefined),
+                showMarkers,
+                showMarkers && <span className="marker">{` \\${footnote.marker}*`}</span>,
+              )}
+            </>
+          )}
+        </div>
       </div>
     );
   },
