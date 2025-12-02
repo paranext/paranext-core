@@ -849,8 +849,8 @@ export declare function deepClone<T>(obj: T): T;
 /**
  * Get a function that reduces calls to the function passed in
  *
- * @template T - A function type that takes any arguments and returns void. This is the type of the
- *   function being debounced.
+ * @template TFunc - A function type that takes any arguments and returns void. This is the type of
+ *   the function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
@@ -867,15 +867,16 @@ export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFun
  * - `groupBy(items, keySelector, valueSelector)` – groups transformed values using the key returned
  *   by `keySelector` and the value returned by `valueSelector`.
  *
- * If `valueSelector` is not provided, the original item is used in the resulting groups.
+ * `valueSelector` is an optional third parameter. It is a function that runs on each item to get
+ * the value to store in the group. The first argument is the item, the second argument is the key
+ * for the group to which this item belongs, and the third argument is the index of the item in the
+ * original array. If `valueSelector` is not provided, the original item is used in the resulting
+ * groups.
  *
  * @param items - Array of items to group by.
  * @param keySelector - Function to run on each item to get the key for the group to which it
  *   belongs. The first argument is the item, and the second argument is the index of the item in
  *   the original array.
- * @param valueSelector - Optional function to run on each item to get the value to store in the
- *   group. The first argument is the item, the second argument is the key for the group to which
- *   this item belongs, and the third argument is the index of the item in the original array.
  * @returns Map of keys to groups of values corresponding to each item.
  */
 export declare function groupBy<T, K>(items: T[], keySelector: (item: T, index: number) => K): Map<K, Array<T>>;
@@ -1766,7 +1767,7 @@ export type NormalMarkerInfo = {
 	 * attribute on that previous marker in USX/USJ.
 	 *
 	 * Note: the attribute names for attribute markers may be different than the marker names. See
-	 * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
+	 * {@link AttributeMarkerInfo["attributeMarkerAttributeName"]} for more information.
 	 *
 	 * @example
 	 *
@@ -1777,9 +1778,9 @@ export type NormalMarkerInfo = {
 	 * Whether the normal closing marker for this marker is considered optional in USFM, meaning in
 	 * some cases that the normal closing marker would be expected not to be present.
 	 *
-	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `true`, this marker
-	 * may or may not be expected to have a normal closing marker actually present in USFM depending
-	 * on the value of this property.
+	 * If this marker's type has {@link CloseableMarkerTypeInfo["isCloseable"]} set to `true`, this
+	 * marker may or may not be expected to have a normal closing marker actually present in USFM
+	 * depending on the value of this property.
 	 *
 	 * - If this is `true`, the normal closing marker for this marker in USFM may be expected to be
 	 *   present or absent depending on the value of
@@ -1795,7 +1796,7 @@ export type NormalMarkerInfo = {
 	 *   present. If the normal closing marker is absent in USFM, the USX/USJ for this marker should
 	 *   have the attribute `closed` set to `false`.
 	 *
-	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `false`, this
+	 * If this marker's type has {@link CloseableMarkerTypeInfo["isCloseable"]} set to `false`, this
 	 * property is unused; markers of that type do not have a normal closing marker.
 	 *
 	 * If not present or `undefined`, defaults to `false`
@@ -2355,8 +2356,9 @@ export type VerseRefOffset = {
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
  *
- * Note: some forms of this type are deprecated and will be removed eventually; see
- * {@link UsfmScrRefVerseLocation} for details.
+ * Note: some forms of this type are deprecated and will be removed eventually.
+ *
+ * @see UsfmScrRefVerseLocation
  */
 export type UsfmVerseLocation = UsfmVerseRefVerseLocation | SerializedVerseRef | UsfmScrRefVerseLocation;
 /**
@@ -2472,10 +2474,11 @@ export type UsjBookLocation<TDocumentLocation extends UsjDocumentLocation = UsjD
  * You can specify a particular kind of `UsjDocumentLocation` in the generic type
  * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
  *
- * Note: some forms of this type are deprecated and will be removed eventually; see
- * {@link UsjFlatTextChapterLocation} for details. Also note that {@link UsjFlatTextChapterLocation}
- * can only be a marker- or text-based location and will _not_ follow the generic type specified as
- * `TDocumentLocation`.
+ * Note: some forms of this type are deprecated and will be removed eventually. Also note that the
+ * deprecated `UsjFlatTextChapterLocation` can only be a marker- or text-based location and will
+ * _not_ follow the generic type specified as `TDocumentLocation`.
+ *
+ * @see UsjFlatTextChapterLocation
  */
 export type UsjChapterLocation<TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation> = UsjVerseRefChapterLocation<TDocumentLocation> | UsjFlatChapterLocation<TDocumentLocation> | UsjFlatTextChapterLocation;
 /**
@@ -4685,6 +4688,7 @@ export interface ThemeCssVariables {
 	"sidebar-ring"?: string;
 	radius?: string;
 }
+/** JSON schema object for ThemeContribution */
 export declare const themeDocumentSchema: {
 	$schema: string;
 	title: string;
