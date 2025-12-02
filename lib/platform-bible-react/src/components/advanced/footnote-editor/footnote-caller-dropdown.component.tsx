@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
-import { useEffect, useState } from 'react';
+import { createRef, useEffect, useState } from 'react';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
@@ -66,6 +66,7 @@ export function FootnoteCallerDropdown({
   updateCustomCaller,
   localizedStrings,
 }: FootnoteCallerDropdownProps) {
+  const customCallerInputRef = createRef<HTMLInputElement>();
   const [selectedCallerType, setSelectedCallerType] = useState<FootnoteCallerType>(callerType);
   const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
 
@@ -138,6 +139,9 @@ export function FootnoteCallerDropdown({
           </div>
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
+          onMouseMove={() => {
+            if (selectedCallerType === 'custom') customCallerInputRef.current?.focus();
+          }}
           checked={selectedCallerType === 'custom'}
           onCheckedChange={() => setSelectedCallerType('custom')}
           onSelect={(event) => event.preventDefault()}
@@ -145,6 +149,7 @@ export function FootnoteCallerDropdown({
           <div className="tw-flex tw-w-full tw-justify-between">
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}</span>
             <Input
+              ref={customCallerInputRef}
               className="tw-h-auto tw-w-10 tw-p-0 tw-text-center"
               value={newCustomCaller}
               maxLength={1}
