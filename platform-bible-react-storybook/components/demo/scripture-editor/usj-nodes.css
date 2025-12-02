@@ -42,8 +42,8 @@
   font-weight: bold;
   font-style: italic;
 }
-.usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+.formatted-font .usfm {
+  font-family: 'Charis SIL', serif;
   font-size: 12pt;
 }
 
