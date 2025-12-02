@@ -1,6 +1,5 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Card } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { getFormatCallerFunction, LocalizedStringValue, LocalizeKey } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
@@ -85,7 +84,7 @@ export function FootnoteList({
     }
   };
 
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
     if (focusedIndex >= 0 && focusedIndex < rowRefs.current.length) {
@@ -100,22 +99,26 @@ export function FootnoteList({
         role="listbox"
         aria-label="Footnotes"
         tabIndex={0}
-        className={cn('tw-h-full tw-overflow-y-auto', className)}
+        className={cn('@container tw-h-full tw-overflow-y-auto', className)}
         onKeyDown={handleListKeyDown}
       >
-        <div
+        <ul
           className={cn(
             'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
-            layout === 'horizontal' ? 'tw-table tw-min-w-full' : 'tw-flex tw-flex-col tw-gap-0.5',
+            'tw-grid',
+            layout === 'horizontal'
+              ? 'tw-grid-cols-3 tw-grid-cols-[min-content_min-content_1fr]'
+              : 'tw-grid-cols-2 tw-grid-cols-[min-content_1fr]',
             !suppressFormatting && 'formatted-font',
           )}
         >
           {footnotes.map((footnote, idx) => {
             const isSelected = footnote === selectedFootnote;
             const key = `${listId}-${idx}`;
+            console.log(classNameForItems);
             return (
               <>
-                <Card
+                <li
                   ref={(el) => {
                     rowRefs.current[idx] = el;
                   }}
@@ -131,14 +134,13 @@ export function FootnoteList({
                     'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
                     'focus:tw-outline-none focus-visible:tw-outline-none',
                     /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
-                     that looks great in Storybook. However, the left edge of the ring is clipped in
-                     P.B app. These are similar, but not identical to, the customizations made in
-                     our shadcn table component.
-                  */
+                       that looks great in Storybook. However, the left edge of the ring is clipped in
+                       P.B app. These are similar, but not identical to, the customizations made in
+                       our shadcn table component.
+                      */
                     'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
-                    layout === 'horizontal'
-                      ? 'horizontal tw-table-row'
-                      : 'vertical tw-block tw-text-sm',
+                    'tw-grid tw-grid-flow-col tw-grid-cols-subgrid',
+                    layout === 'horizontal' ? 'tw-col-span-3' : 'tw-col-span-2 tw-row-span-2',
                     classNameForItems,
                   )}
                   onClick={() => handleFootnoteClick(footnote, idx)}
@@ -149,14 +151,16 @@ export function FootnoteList({
                     formatCaller={() => handleFormatCaller(footnote.caller, idx)}
                     showMarkers={showMarkers}
                   />
-                </Card>
+                </li>
 
                 {/* Only render separator if not the last item */}
-                {idx < footnotes.length - 1 && layout === 'vertical' && <Separator />}
+                {idx < footnotes.length - 1 && layout === 'vertical' && (
+                  <Separator className="tw-col-span-2" />
+                )}
               </>
             );
           })}
-        </div>
+        </ul>
       </div>
     </>
   );
