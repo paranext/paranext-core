@@ -8,9 +8,15 @@ import {
   ResizablePanelGroup,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { getPaneSizeLimits, UsjReaderWriter } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  getPaneSizeLimits,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
 import { EditorWebViewMessage } from 'platform-scripture-editor';
 import { UseWebViewStateHook } from '@papi/core';
+import { logger } from '@papi/frontend';
 import { valuesAreDeeplyEqual as deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 // TODO (PT-3657): calculate these dynamically:
@@ -44,22 +50,30 @@ export function FootnotesLayout({
   >();
 
   useEffect(() => {
-    const usjReaderWriter = new UsjReaderWriter(usj);
-    const newFootnotes = usjReaderWriter.findAllNotes();
+    try {
+      const usjReaderWriter = new UsjReaderWriter(usj, {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+      });
+      const newFootnotes = usjReaderWriter.findAllNotes();
 
-    setFootnotes(newFootnotes);
-    setFootnoteListKey((prev) => prev + 1);
+      setFootnotes(newFootnotes);
+      setFootnoteListKey((prev) => prev + 1);
 
-    setSelectedFootnote((currentSelected) => {
-      if (!currentSelected) return undefined;
-      const { index, footnote } = currentSelected;
-      if (index < 0 || index >= newFootnotes.length) return undefined;
-      const f = newFootnotes[index];
-      if (f.marker === footnote.marker && deepEqualAcrossIframes(f.content, footnote.content)) {
-        return currentSelected;
-      }
-      return undefined;
-    });
+      setSelectedFootnote((currentSelected) => {
+        if (!currentSelected) return undefined;
+        const { index, footnote } = currentSelected;
+        if (index < 0 || index >= newFootnotes.length) return undefined;
+        const f = newFootnotes[index];
+        if (f.marker === footnote.marker && deepEqualAcrossIframes(f.content, footnote.content)) {
+          return currentSelected;
+        }
+        return undefined;
+      });
+    } catch (e) {
+      logger.warn(
+        `FootnotesLayout failed to process USJ: ${getErrorMessage(e)}. USJ: ${JSON.stringify(usj)}`,
+      );
+    }
   }, [usj]);
 
   const [containerHeight, setContainerHeight] = useState(0);
