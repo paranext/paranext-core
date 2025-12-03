@@ -92,6 +92,11 @@ export function FootnoteList({
     }
   }, [focusedIndex]);
 
+  /*
+   * TODO: After upgrading to Tailwind v4, move to using @container and @sm/@lg css
+   * styling to repalce the use of the `layout` variable to distinguish between
+   * wide/skinny layouts.
+   */
   return (
     <>
       {layout === 'vertical' && <h2 className="tw-mb-1 tw-font-semibold">{headerText}</h2>}
@@ -99,7 +104,7 @@ export function FootnoteList({
         role="listbox"
         aria-label="Footnotes"
         tabIndex={0}
-        className={cn('@container tw-h-full tw-overflow-y-auto', className)}
+        className={cn('tw-h-full tw-overflow-y-auto', className)}
         onKeyDown={handleListKeyDown}
       >
         <ul
@@ -137,7 +142,7 @@ export function FootnoteList({
                        that looks great in Storybook. However, the left edge of the ring is clipped in
                        P.B app. These are similar, but not identical to, the customizations made in
                        our shadcn table component.
-                      */
+                    */
                     'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
                     'tw-grid tw-grid-flow-col tw-grid-cols-subgrid',
                     layout === 'horizontal' ? 'tw-col-span-3' : 'tw-col-span-2 tw-row-span-2',

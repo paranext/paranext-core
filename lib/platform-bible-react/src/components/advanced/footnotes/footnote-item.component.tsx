@@ -158,7 +158,6 @@ export function FootnoteItem({
   const footnoteCaller = caller && (
     // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
     // specific class name in case styling is needed.
-    // TODO(mattg): Look at the width in relation to grid sizing
     <span className={cn('note-caller tw-inline-block', { formatted: isCallerFormatted })}>
       {caller}{' '}
     </span>
