@@ -178,8 +178,6 @@ public class CommentConverter : JsonConverter<Comment>
             }
         }
 
-        VerifyDataProvided(CONTENTS, contents);
-
         XmlElement? contentsXml;
         try
         {
@@ -263,7 +261,10 @@ public class CommentConverter : JsonConverter<Comment>
             writer.WriteString(CONFLICT_TYPE, value.ConflictType.ToString());
         JsonConverterUtils.TryWriteString(writer, VERSE, value.Verse);
         JsonConverterUtils.TryWriteString(writer, SHARED, value.Shared);
-        JsonConverterUtils.TryWriteString(writer, ASSIGNED_USER, value.AssignedUser);
+        // AssignedUser: null means no assignment info, empty string means explicitly unassigned
+        // We need to write empty string to distinguish from undefined
+        if (value.AssignedUser != null)
+            writer.WriteString(ASSIGNED_USER, value.AssignedUser);
         JsonConverterUtils.TryWriteString(writer, REPLY_TO_USER, value.ReplyToUser);
         JsonConverterUtils.TryWriteString(
             writer,

@@ -7,6 +7,7 @@ import {
   htmlToEditorState,
 } from '@/components/advanced/editor/editor-utils';
 import { Avatar, AvatarFallback } from '@/components/shadcn-ui/avatar';
+import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ import {
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
+import { getAssignedUserDisplayName } from './comment-list.utils';
 
 /**
  * A single comment item in the comment list.
@@ -39,7 +41,7 @@ export function CommentItem({
   localizedStrings,
   isThreadExpanded = false,
   threadStatus = 'Unspecified',
-  handleResolveCommentThread,
+  handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
@@ -181,9 +183,15 @@ export function CommentItem({
         <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
       </Avatar>
       <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
-        <div className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
+        <div className="tw-flex tw-w-full tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
           <p className="tw-text-sm tw-font-medium">{userLabel}</p>
           <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
+          <div className="tw-flex-1" />
+          {isReply && comment.assignedUser !== undefined && (
+            <Badge variant="secondary" className="tw-text-xs tw-font-normal">
+              → {getAssignedUserDisplayName(comment.assignedUser, localizedStrings)}
+            </Badge>
+          )}
         </div>
         {isEditing && (
           <div
@@ -264,22 +272,19 @@ export function CommentItem({
           </>
         )}
       </div>
-      {isThreadExpanded &&
-        !isReply &&
-        threadStatus !== 'Resolved' &&
-        handleResolveCommentThread && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="tw-shrink-0"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent triggering the expand/collapse
-              handleResolveCommentThread(comment.thread, true);
-            }}
-          >
-            <Check />
-          </Button>
-        )}
+      {isThreadExpanded && !isReply && threadStatus !== 'Resolved' && handleAddCommentToThread && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="tw-shrink-0"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering the expand/collapse
+            handleAddCommentToThread({ threadId: comment.thread, status: 'Resolved' });
+          }}
+        >
+          <Check />
+        </Button>
+      )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
