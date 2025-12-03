@@ -53,13 +53,14 @@ export function FootnoteList({
   const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
     onFootnoteSelected?.(footnote, index, listId);
   };
+
   const initialFocusedIndex = selectedFootnote
     ? footnotes.findIndex((f) => f === selectedFootnote)
     : 0;
 
   const [focusedIndex, setFocusedIndex] = useState<number>(initialFocusedIndex);
 
-  const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleFootnoteKeyDown = (e: React.KeyboardEvent<HTMLLIElement>) => {
     if (!footnotes.length) return;
 
     switch (e.key) {
@@ -105,7 +106,6 @@ export function FootnoteList({
         aria-label="Footnotes"
         tabIndex={0}
         className={cn('tw-h-full tw-overflow-y-auto', className)}
-        onKeyDown={handleListKeyDown}
       >
         <ul
           className={cn(
@@ -149,6 +149,7 @@ export function FootnoteList({
                     classNameForItems,
                   )}
                   onClick={() => handleFootnoteClick(footnote, idx)}
+                  onKeyDown={handleFootnoteKeyDown}
                 >
                   <FootnoteItem
                     footnote={footnote}
@@ -160,7 +161,9 @@ export function FootnoteList({
 
                 {/* Only render separator if not the last item */}
                 {idx < footnotes.length - 1 && layout === 'vertical' && (
-                  <Separator className="tw-col-span-2" />
+                  <li tabIndex={-1} className="tw-col-span-2">
+                    <Separator />
+                  </li>
                 )}
               </>
             );
