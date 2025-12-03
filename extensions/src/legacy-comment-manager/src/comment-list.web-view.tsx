@@ -1,6 +1,13 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { COMMENT_LIST_STRING_KEYS, CommentList, Label, Skeleton } from 'platform-bible-react';
+import {
+  AddCommentToThreadOptions,
+  COMMENT_LIST_STRING_KEYS,
+  CommentList,
+  Label,
+  Skeleton,
+  usePromise,
+} from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread } from 'platform-bible-utils';
@@ -16,6 +23,13 @@ global.webViewComponent = function CommentListWebView({
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  // Fetch assignable users when projectId changes
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!commentsPdp) return [];
+    return commentsPdp.findAssignableUsers();
+  }, [commentsPdp]);
+  const [assignableUsers] = usePromise(fetchAssignableUsers, []);
 
   // Fetch current user's registration data on mount
   useEffect(() => {
@@ -56,33 +70,23 @@ global.webViewComponent = function CommentListWebView({
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
-  const handleAddComment = useCallback(
-    async (threadId: string, contents: string): Promise<string | undefined> => {
+  const handleAddCommentToThread = useCallback(
+    async (options: AddCommentToThreadOptions): Promise<string | undefined> => {
       if (!commentsPdp) {
         logger.error('Comments PDP is not available');
         return undefined;
       }
-      const newCommentId = await commentsPdp.createComment({
-        thread: threadId,
-        contents,
-      });
-      return newCommentId;
-    },
-    [commentsPdp],
-  );
-
-  const handleResolveCommentThread = useCallback(
-    async (threadId: string, resolve: boolean, contents?: string): Promise<boolean> => {
-      if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
-        return false;
-      }
       try {
-        const result = await commentsPdp.resolveCommentThread(threadId, resolve, contents);
-        return result !== false;
+        const newCommentId = await commentsPdp.addCommentToThread({
+          thread: options.threadId,
+          contents: options.contents,
+          status: options.status,
+          assignedUser: options.assignedUser,
+        });
+        return newCommentId;
       } catch (error) {
-        logger.error(`Failed to set comment thread status for ${threadId}:`, error);
-        return false;
+        logger.error(`Failed to add comment to thread ${options.threadId}:`, error);
+        return undefined;
       }
     },
     [commentsPdp],
@@ -148,10 +152,10 @@ global.webViewComponent = function CommentListWebView({
           threads={commentThreads}
           currentUser={currentUserName}
           localizedStrings={localizedStrings}
-          handleAddComment={handleAddComment}
-          handleResolveCommentThread={handleResolveCommentThread}
+          handleAddCommentToThread={handleAddCommentToThread}
           handleUpdateComment={handleUpdateComment}
           handleDeleteComment={handleDeleteComment}
+          assignableUsers={assignableUsers}
         />
       )}
     </div>
