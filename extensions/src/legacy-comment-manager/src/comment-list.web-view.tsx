@@ -71,14 +71,14 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
-  const handleSetCommentThreadStatus = useCallback(
+  const handleResolveCommentThread = useCallback(
     async (threadId: string, resolve: boolean, contents?: string): Promise<boolean> => {
       if (!commentsPdp) {
         logger.error('Comments PDP is not available');
         return false;
       }
       try {
-        const result = await commentsPdp.setCommentThreadStatus(threadId, resolve, contents);
+        const result = await commentsPdp.resolveCommentThread(threadId, resolve, contents);
         return result !== false;
       } catch (error) {
         logger.error(`Failed to set comment thread status for ${threadId}:`, error);
@@ -149,7 +149,7 @@ global.webViewComponent = function CommentListWebView({
           currentUser={currentUserName}
           localizedStrings={localizedStrings}
           handleAddComment={handleAddComment}
-          handleSetCommentThreadStatus={handleSetCommentThreadStatus}
+          handleResolveCommentThread={handleResolveCommentThread}
           handleUpdateComment={handleUpdateComment}
           handleDeleteComment={handleDeleteComment}
         />

@@ -39,7 +39,7 @@ export function CommentItem({
   localizedStrings,
   isThreadExpanded = false,
   threadStatus = 'Unspecified',
-  handleSetCommentThreadStatus,
+  handleResolveCommentThread,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
@@ -267,14 +267,14 @@ export function CommentItem({
       {isThreadExpanded &&
         !isReply &&
         threadStatus !== 'Resolved' &&
-        handleSetCommentThreadStatus && (
+        handleResolveCommentThread && (
           <Button
             variant="ghost"
             size="icon"
             className="tw-shrink-0"
             onClick={(e) => {
               e.stopPropagation(); // Prevent triggering the expand/collapse
-              handleSetCommentThreadStatus(comment.thread, true);
+              handleResolveCommentThread(comment.thread, true);
             }}
           >
             <Check />

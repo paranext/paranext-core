@@ -557,10 +557,10 @@ namespace TestParanextDataProvider.Projects
 
         #endregion
 
-        #region SetCommentThreadStatus Tests
+        #region ResolveCommentThread Tests
 
         [Test]
-        public void SetCommentThreadStatus_ResolveUnresolvedThread_CreatesNewComment()
+        public void ResolveCommentThread_ResolveUnresolvedThread_CreatesNewComment()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolving");
@@ -577,7 +577,7 @@ namespace TestParanextDataProvider.Projects
             int initialCommentCount = threadsBefore[0].Comments.Count;
 
             // Act - Resolve the thread
-            bool result = _provider.SetCommentThreadStatus(threadId, true);
+            bool result = _provider.ResolveCommentThread(threadId, true);
 
             // Assert
             Assert.That(result, Is.True, "Resolving thread should succeed");
@@ -610,7 +610,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void SetCommentThreadStatus_UnresolveResolvedThread_CreatesNewComment()
+        public void ResolveCommentThread_UnresolveResolvedThread_CreatesNewComment()
         {
             // Arrange - Create and resolve a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unresolving");
@@ -621,7 +621,7 @@ namespace TestParanextDataProvider.Projects
                 .Thread;
 
             // Resolve it first
-            _provider.SetCommentThreadStatus(threadId, true);
+            _provider.ResolveCommentThread(threadId, true);
 
             // Get comment count after resolving
             var threadsAfterResolve = _provider.GetCommentThreads(
@@ -630,7 +630,7 @@ namespace TestParanextDataProvider.Projects
             int commentCountAfterResolve = threadsAfterResolve[0].Comments.Count;
 
             // Act - Unresolve the thread
-            bool result = _provider.SetCommentThreadStatus(threadId, false);
+            bool result = _provider.ResolveCommentThread(threadId, false);
 
             // Assert
             Assert.That(result, Is.True, "Unresolving thread should succeed");
@@ -663,7 +663,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void SetCommentThreadStatus_ResolvedThreadAppearsInResolvedFilter()
+        public void ResolveCommentThread_ResolvedThreadAppearsInResolvedFilter()
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for filter");
@@ -674,7 +674,7 @@ namespace TestParanextDataProvider.Projects
                 .Thread;
 
             // Act - Resolve the thread
-            _provider.SetCommentThreadStatus(threadId, true);
+            _provider.ResolveCommentThread(threadId, true);
 
             // Assert - Verify it appears in resolved filter (using ParatextData's 'deleted' label)
             var resolvedThreads = _provider.GetCommentThreads(
@@ -689,7 +689,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void SetCommentThreadStatus_UnresolvedThreadAppearsInTodoFilter()
+        public void ResolveCommentThread_UnresolvedThreadAppearsInTodoFilter()
         {
             // Arrange - Create and resolve a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
@@ -699,10 +699,10 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            _provider.SetCommentThreadStatus(threadId, true); // Resolve first
+            _provider.ResolveCommentThread(threadId, true); // Resolve first
 
             // Act - Unresolve it
-            _provider.SetCommentThreadStatus(threadId, false);
+            _provider.ResolveCommentThread(threadId, false);
 
             // Assert - Verify it appears in Todo filter
             var todoThreads = _provider.GetCommentThreads(
@@ -717,37 +717,37 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void SetCommentThreadStatus_NonExistentThread_ReturnsFalse()
+        public void ResolveCommentThread_NonExistentThread_ReturnsFalse()
         {
             // Act
-            bool result = _provider.SetCommentThreadStatus("nonexistent-thread-id", true);
+            bool result = _provider.ResolveCommentThread("nonexistent-thread-id", true);
 
             // Assert
             Assert.That(result, Is.False, "Setting status on non-existent thread should fail");
         }
 
         [Test]
-        public void SetCommentThreadStatus_EmptyThreadId_ReturnsFalse()
+        public void ResolveCommentThread_EmptyThreadId_ReturnsFalse()
         {
             // Act
-            bool result = _provider.SetCommentThreadStatus("", true);
+            bool result = _provider.ResolveCommentThread("", true);
 
             // Assert
             Assert.That(result, Is.False, "Setting status with empty thread ID should fail");
         }
 
         [Test]
-        public void SetCommentThreadStatus_NullThreadId_ReturnsFalse()
+        public void ResolveCommentThread_NullThreadId_ReturnsFalse()
         {
             // Act
-            bool result = _provider.SetCommentThreadStatus(null!, true);
+            bool result = _provider.ResolveCommentThread(null!, true);
 
             // Assert
             Assert.That(result, Is.False, "Setting status with null thread ID should fail");
         }
 
         [Test]
-        public void SetCommentThreadStatus_MultipleStatusChanges_CreatesMultipleComments()
+        public void ResolveCommentThread_MultipleStatusChanges_CreatesMultipleComments()
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple changes");
@@ -763,9 +763,9 @@ namespace TestParanextDataProvider.Projects
                 .Comments.Count;
 
             // Act - Make multiple status changes
-            _provider.SetCommentThreadStatus(threadId, true); // Resolve
-            _provider.SetCommentThreadStatus(threadId, false); // Unresolve
-            _provider.SetCommentThreadStatus(threadId, true); // Resolve again
+            _provider.ResolveCommentThread(threadId, true); // Resolve
+            _provider.ResolveCommentThread(threadId, false); // Unresolve
+            _provider.ResolveCommentThread(threadId, true); // Resolve again
 
             // Assert - Verify each status change created a new comment
             var thread = _provider

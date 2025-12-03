@@ -380,7 +380,7 @@ export interface CommentListProps {
 	 */
 	handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
 	/** Handler for setting the comment thread status (resolve/unresolve) */
-	handleSetCommentThreadStatus: (threadId: string, resolve: boolean, contents?: string) => Promise<boolean>;
+	handleResolveCommentThread: (threadId: string, resolve: boolean, contents?: string) => Promise<boolean>;
 	/** Handler for updating a comment's content */
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
@@ -391,7 +391,7 @@ export interface CommentListProps {
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleSetCommentThreadStatus, handleUpdateComment, handleDeleteComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleResolveCommentThread, handleUpdateComment, handleDeleteComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

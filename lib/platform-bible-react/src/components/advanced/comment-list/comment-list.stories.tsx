@@ -80,7 +80,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return newCommentId;
   };
 
-  const handleSetCommentThreadStatus = async (
+  const handleResolveCommentThread = async (
     threadId: string,
     resolve: boolean,
     contents?: string,
@@ -183,7 +183,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
       localizedStrings={commentListLocalizedStrings}
       currentUser="Current User"
       handleAddComment={handleAddComment}
-      handleSetCommentThreadStatus={handleSetCommentThreadStatus}
+      handleResolveCommentThread={handleResolveCommentThread}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
     />

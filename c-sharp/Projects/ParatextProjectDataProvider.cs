@@ -86,7 +86,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("createComment", CreateComment));
         retVal.Add(("deleteComment", DeleteComment));
         retVal.Add(("updateComment", UpdateComment));
-        retVal.Add(("setCommentThreadStatus", SetCommentThreadStatus));
+        retVal.Add(("resolveCommentThread", ResolveCommentThread));
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
@@ -373,7 +373,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             newComment.Status = comment.Status;
         // If adding a comment to a resolved thread, set status to Todo to reopen it
         else if (existingThread != null && existingThread.Status == NoteStatus.Resolved)
+        {
+            Console.WriteLine(
+                $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
+            );
             newComment.Status = NoteStatus.Todo;
+        }
         if (!string.IsNullOrEmpty(comment.Thread))
             newComment.Thread = comment.Thread;
         if (comment.Type != NoteType.Normal)
@@ -451,9 +456,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     /// <param name="threadId">The ID of the thread to update</param>
     /// <param name="resolve">True to resolve the thread, false to unresolve it</param>
-    /// <param name="contents">Optional comment contents to include with the status change</param>
+    /// <param name="contents">Optional Paratext 9 XML comment contents to include with the status change (e.g., "&lt;p&gt;text&lt;/p&gt;")</param>
     /// <returns>True if successful, false if user canceled or thread not found</returns>
-    public bool SetCommentThreadStatus(string threadId, bool resolve, string? contents = null)
+    public bool ResolveCommentThread(string threadId, bool resolve, string? contents = null)
     {
         if (string.IsNullOrEmpty(threadId))
             return false;
@@ -486,7 +491,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
         catch (XmlException ex)
         {
-            throw new InvalidDataException($"Content is not valid XML/HTML: {ex.Message}");
+            throw new InvalidDataException($"Content is not valid Paratext 9 XML: {ex.Message}");
         }
 
         Comment statusComment =

@@ -48,7 +48,7 @@ export interface CommentListProps {
    */
   handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
   /** Handler for setting the comment thread status (resolve/unresolve) */
-  handleSetCommentThreadStatus: (
+  handleResolveCommentThread: (
     threadId: string,
     resolve: boolean,
     contents?: string,
@@ -85,7 +85,7 @@ export interface CommentThreadProps {
    */
   handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
   /** Handler for setting the comment thread status (resolve/unresolve) */
-  handleSetCommentThreadStatus: (
+  handleResolveCommentThread: (
     threadId: string,
     resolve: boolean,
     contents?: string,
@@ -114,7 +114,7 @@ export interface CommentItemProps {
   /** Current status of the thread */
   threadStatus?: CommentStatus;
   /** Handler for setting the comment thread status (resolve/unresolve) */
-  handleSetCommentThreadStatus?: (threadId: string, resolve: boolean) => Promise<boolean>;
+  handleResolveCommentThread?: (threadId: string, resolve: boolean) => Promise<boolean>;
   /** Handler for updating a comment's content */
   handleUpdateComment?: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */

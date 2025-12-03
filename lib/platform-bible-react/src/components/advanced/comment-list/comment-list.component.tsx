@@ -15,7 +15,7 @@ export default function CommentList({
   currentUser,
   localizedStrings,
   handleAddComment,
-  handleSetCommentThreadStatus,
+  handleResolveCommentThread,
   handleUpdateComment,
   handleDeleteComment,
 }: CommentListProps) {
@@ -91,7 +91,7 @@ export default function CommentList({
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
             handleAddComment={handleAddComment}
-            handleSetCommentThreadStatus={handleSetCommentThreadStatus}
+            handleResolveCommentThread={handleResolveCommentThread}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
           />

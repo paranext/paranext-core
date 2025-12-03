@@ -70,7 +70,7 @@ export function CommentThread({
   handleSelectThread,
   threadId,
   threadStatus,
-  handleSetCommentThreadStatus,
+  handleResolveCommentThread,
   handleAddComment,
   handleUpdateComment,
   handleDeleteComment,
@@ -169,16 +169,16 @@ export function CommentThread({
 
   const handleResolveWithContents = useCallback(
     async (passedThreadId: string, resolve: boolean) => {
-      if (!handleSetCommentThreadStatus) return false;
+      if (!handleResolveCommentThread) return false;
       const contents = hasEditorContent(editorState) ? editorStateToHtml(editorState) : undefined;
-      const success = await handleSetCommentThreadStatus(passedThreadId, resolve, contents);
+      const success = await handleResolveCommentThread(passedThreadId, resolve, contents);
       if (success && contents) {
         clearEditorRef.current?.();
         setEditorState(initialValue);
       }
       return success;
     },
-    [editorState, handleSetCommentThreadStatus],
+    [editorState, handleResolveCommentThread],
   );
 
   return (
@@ -244,7 +244,7 @@ export function CommentThread({
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
             isEditable={activeComments.length === 1 && firstComment?.user === currentUser}
-            handleSetCommentThreadStatus={handleResolveWithContents}
+            handleResolveCommentThread={handleResolveWithContents}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}

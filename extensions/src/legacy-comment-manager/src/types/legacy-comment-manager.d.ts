@@ -255,7 +255,7 @@ declare module 'legacy-comment-manager' {
        *   affected, or `false` if the thread was not found or user doesn't have permission
        * @throws If an error occurs during the status change
        */
-      setCommentThreadStatus(
+      resolveCommentThread(
         threadId: string,
         resolve: boolean,
         contents?: string,
