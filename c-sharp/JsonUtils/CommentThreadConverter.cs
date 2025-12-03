@@ -62,8 +62,11 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
         // Scripture reference
         writer.WriteString(VERSE_REF, value.VerseRef.ToString());
 
-        // User assignments (optional)
-        JsonConverterUtils.TryWriteString(writer, ASSIGNED_USER, value.AssignedUser);
+        // User assignments
+        // AssignedUser: null means no assignment info, empty string means explicitly unassigned
+        // We need to write empty string to distinguish from undefined
+        if (value.AssignedUser != null)
+            writer.WriteString(ASSIGNED_USER, value.AssignedUser);
         JsonConverterUtils.TryWriteString(writer, REPLY_TO_USER, value.ReplyToUser);
 
         // Context and metadata (optional)

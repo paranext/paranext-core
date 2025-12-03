@@ -2,7 +2,10 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%comment_assign_team%": "Team",
+      "%comment_assign_unassigned%": "Unassigned",
       "%comment_assigned_to%": "Assigned to {assignedUser}",
+      "%comment_assigning_to%": "Assigning to: {assignedUser}",
       "%comment_dateAtTime%": "{date} at {time}",
       "%comment_date_today%": "today",
       "%comment_date_yesterday%": "yesterday",
@@ -19,7 +22,10 @@
       "%webView_legacyCommentManager_openComments%": "Open Comments"
     },
     "es": {
+      "%comment_assign_team%": "Equipo",
+      "%comment_assign_unassigned%": "Sin asignar",
       "%comment_assigned_to%": "Asignado a {assignedUser}",
+      "%comment_assigning_to%": "Asignando a: {assignedUser}",
       "%comment_dateAtTime%": "{date} a las {time}",
       "%comment_date_today%": "hoy",
       "%comment_date_yesterday%": "ayer",
