@@ -334,6 +334,7 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  *   strings for the component.
  */
 export declare function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
+/** Interface defining the properties for the RecentSearches component */
 export interface RecentSearchesProps<T> {
 	/** Array of recent search items */
 	recentSearches: T[];
@@ -685,6 +686,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  */
 export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
+/** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
 	/**
 	 * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
@@ -714,6 +716,7 @@ export interface FootnoteItemProps {
 	 */
 	formatCaller?: (caller: string | undefined) => string | undefined;
 }
+/** Interface defining the properties for the FootnoteList component */
 export interface FootnoteListProps {
 	/** Optional additional class name for styling */
 	className?: string;
@@ -803,9 +806,7 @@ export interface FootnoteEditorProps {
 /**
  * Component to edit footnotes from within the editor component
  *
- * @param usj The raw usj of the footnote to edit
- * @param parentRef The ref of the parent editor component
- * @returns
+ * @param FootnoteEditorProps - The properties for the footnote editor component
  */
 export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
@@ -2230,7 +2231,14 @@ export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectP
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Select */
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Accessible resizable panel groups and layouts with keyboard support. This component is built on
+ * react-resizable-panels and styled with Shadcn UI. See Shadcn UI documentation:
+ * https://ui.shadcn.com/docs/components/resizable See react-resizable-panels documentation:
+ * https://github.com/bvaughn/react-resizable-panels/tree/main/packages/react-resizable-panels
+ */
 export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ResizablePanelGroup */
 export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
 	className?: string;
 	collapsedSize?: number | undefined;
@@ -2248,6 +2256,7 @@ export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<Reac
 } & {
 	children?: import("react").ReactNode | undefined;
 } & React$1.RefAttributes<ResizablePrimitive.ImperativePanelHandle>>;
+/** @inheritdoc ResizablePanelGroup */
 export declare function ResizableHandle({ withHandle, className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle> & {
 	withHandle?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
@@ -2288,9 +2297,13 @@ export declare function useSidebar(): SidebarContextProps;
  * Documentation: https://ui.shadcn.com/docs/components/sidebar
  */
 export declare const SidebarProvider: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLDivElement> & React$1.HTMLAttributes<HTMLDivElement> & {
+	/** Whether the sidebar is initially open. */
 	defaultOpen?: boolean;
+	/** Whether the sidebar is open. */
 	open?: boolean;
+	/** Callback fired when the open state changes. */
 	onOpenChange?: (open: boolean) => void;
+	/** The side of the sidebar. */
 	side?: Side;
 }, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc SidebarProvider */

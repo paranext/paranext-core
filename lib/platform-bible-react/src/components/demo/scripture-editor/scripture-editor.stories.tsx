@@ -13,9 +13,7 @@ import {
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
 import {
   annotationRangeWeb1,
@@ -90,6 +88,16 @@ This demo version is included in Storybook to showcase the component's functiona
 export default meta;
 
 type Story = StoryObj<typeof Editorial>;
+
+/** Story type with custom flattened ViewOptions args for the Controls panel */
+type ViewOptionsStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
+  args: ViewOptions;
+  argTypes: Partial<Record<keyof ViewOptions, object>>;
+  render: (
+    args: ViewOptions,
+    context: { viewMode: string; parameters?: { docs?: { description?: { story?: string } } } },
+  ) => ReactNode;
+};
 
 export const Default: Story = {
   args: {
@@ -439,111 +447,66 @@ export const FootnoteEditorView: Story = {
   },
 };
 
-export const MarkersView: Story = {
+export const EditorViewOptions: ViewOptionsStory = {
+  name: 'View Options',
   render: (args, context) => {
-    // eslint-disable-next-line no-null/no-null
-    const editorRef = useRef<EditorRef | null>(null);
-    // eslint-disable-next-line no-null/no-null
-    const [toolbarEndEl, setToolbarEndEl] = useState<HTMLElement | null>(null);
-    const [showMarkers, setShowMarkers] = useState(false);
+    // Destructure flattened view options from args
+    const { markerMode, noteMode, hasSpacing, isFormattedFont } = args;
 
-    const mergedOptions = useMemo(() => {
-      const base = args.options ?? {};
-      const view: ViewOptions = {
-        markerMode: showMarkers ? 'visible' : 'hidden',
-        hasSpacing: true,
-        isFormattedFont: true,
-      };
-      return {
-        ...base,
-        view,
-      };
-    }, [args.options, showMarkers]);
-
-    useEffect(() => {
-      const el = editorRef.current?.toolbarEndRef?.current;
-      if (el) setToolbarEndEl(el);
-      else {
-        // Retry once on next tick in case the toolbar mounts after the ref effect
-        const id = window.setTimeout(() => {
-          const el2 = editorRef.current?.toolbarEndRef?.current;
-          if (el2) setToolbarEndEl(el2);
-        }, 0);
-        return () => window.clearTimeout(id);
-      }
-      return undefined;
-    }, [mergedOptions]);
-
-    const handleShowMarkerToggle = useCallback(() => setShowMarkers((v) => !v), []);
-
-    return (
-      <CanvasWithDescription
-        viewMode={context.viewMode}
-        description={
-          context.parameters?.docs?.description?.story ?? context.parameters?.description
-        }
-      >
-        <Editorial {...args} options={mergedOptions} ref={editorRef} />
-        {toolbarEndEl &&
-          createPortal(
-            <button
-              type="button"
-              title="Show/hide markers"
-              aria-label="Show/hide markers"
-              aria-pressed={showMarkers}
-              className={`toolbar-item ${showMarkers ? 'active' : ''}`}
-              onClick={handleShowMarkerToggle}
-            >
-              <span className="icon pilcrow-icon" aria-hidden="true">
-                ¶
-              </span>
-            </button>,
-            toolbarEndEl,
-          )}
-      </CanvasWithDescription>
-    );
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'This story demonstrates the Markers view, which shows USFM markers inline with the ' +
-          'text. Click the **Show/hide markers** (¶) button in the editor toolbar to toggle the ' +
-          'Markers view on and off. ',
+    // Reconstruct the args with the options.view settings
+    const mergedArgs = {
+      defaultUsj: usjWeb,
+      options: {
+        hasExternalUI: true,
+        view: {
+          markerMode,
+          noteMode,
+          hasSpacing,
+          isFormattedFont,
+        },
       },
+    };
+
+    return renderEditorialWithToolbar(mergedArgs, context, defaultScrRef);
+  },
+  argTypes: {
+    markerMode: {
+      control: { type: 'select' },
+      options: ['hidden', 'visible', 'editable'],
+      description: 'Controls how USFM markers are displayed in the editor',
+      table: { category: 'View Options' },
+    },
+    noteMode: {
+      control: { type: 'select' },
+      options: ['collapsed', 'expandInline', 'expanded'],
+      description: 'Controls how notes are displayed in the editor',
+      table: { category: 'View Options' },
+    },
+    hasSpacing: {
+      control: { type: 'boolean' },
+      description: 'Whether to add spacing between paragraphs',
+      table: { category: 'View Options' },
+    },
+    isFormattedFont: {
+      control: { type: 'boolean' },
+      description: 'Whether to use formatted font styling',
+      table: { category: 'View Options' },
     },
   },
-  args: {
-    defaultUsj: usjWeb,
-    scrRef: defaultScrRef,
-  },
-};
-
-export const ViewOptionsStory: Story = {
-  name: 'View Options',
-  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
   parameters: {
     docs: {
       description: {
         story:
           'Demonstrates the editor view options (marker visibility, spacing, and formatted font) ' +
-          'using USX input. Below in the **Controls** tab, try changing the **options.view** ' +
-          'values to see how they affect the editor display. Valid values for **markerMode** are ' +
-          '_"hidden"_, _"visible"_, and _"editable"_. Valid values for **noteMode** are ' +
-          '_"collapsed"_, _"expandInline"_, and _"expanded"_.',
+          'using USX input. Below in the **Controls** tab, try changing the **View Options** ' +
+          'to see how they affect the editor display.',
       },
     },
   },
   args: {
-    defaultUsj: usjWeb,
-    options: {
-      hasExternalUI: true,
-      view: {
-        markerMode: 'hidden',
-        noteMode: 'collapsed',
-        hasSpacing: true,
-        isFormattedFont: true,
-      },
-    },
+    markerMode: 'hidden',
+    noteMode: 'collapsed',
+    hasSpacing: true,
+    isFormattedFont: true,
   },
 };

@@ -42,8 +42,8 @@
   font-weight: bold;
   font-style: italic;
 }
-.usfm.formatted-font {
-  font-family: 'Charis SIL', 'Times New Roman', 'Liberation Serif', 'DejaVu Serif', Georgia, serif;
+.formatted-font .usfm {
+  font-family: 'Charis SIL', serif;
   font-size: 12pt;
 }
 
@@ -2048,11 +2048,6 @@
 
 .formatted-font .usfm_zpa-d {
   font-size: 100%;
-}
-
-body {
-  background-color: rgba(252, 252, 252, 1);
-  color: rgba(25, 25, 25, 1);
 }
 
 .marker {
