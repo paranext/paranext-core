@@ -47,9 +47,8 @@ export type VerseRefOffset = {
  * To see many examples of the same point represented by both USFM and USJ locations, go to
  * https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils/src/scripture/usj-reader-writer-test-data/testUSFM-2SA-1-locations.ts
  *
- * Note: some forms of this type are deprecated and will be removed eventually.
- *
- * @see UsfmScrRefVerseLocation
+ * Note: some forms of this type are deprecated and will be removed eventually; see
+ * {@link UsfmScrRefVerseLocation} for details.
  */
 export type UsfmVerseLocation =
   | UsfmVerseRefVerseLocation
@@ -181,11 +180,10 @@ export type UsjBookLocation<TDocumentLocation extends UsjDocumentLocation = UsjD
  * You can specify a particular kind of `UsjDocumentLocation` in the generic type
  * `TDocumentLocation`, and that will narrow `documentLocation` to that specific kind of location.
  *
- * Note: some forms of this type are deprecated and will be removed eventually. Also note that the
- * deprecated `UsjFlatTextChapterLocation` can only be a marker- or text-based location and will
- * _not_ follow the generic type specified as `TDocumentLocation`.
- *
- * @see UsjFlatTextChapterLocation
+ * Note: some forms of this type are deprecated and will be removed eventually; see
+ * {@link UsjFlatTextChapterLocation} for details. Also note that {@link UsjFlatTextChapterLocation}
+ * can only be a marker- or text-based location and will _not_ follow the generic type specified as
+ * `TDocumentLocation`.
  */
 export type UsjChapterLocation<
   TDocumentLocation extends UsjDocumentLocation = UsjDocumentLocation,
