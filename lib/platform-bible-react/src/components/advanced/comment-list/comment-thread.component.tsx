@@ -18,8 +18,11 @@ import {
 import { ArrowUp, AtSign, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
-import { CommentThreadProps } from './comment-list.types';
+import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
+import { getAssignedUserDisplayName } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
   SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
@@ -70,16 +73,18 @@ export function CommentThread({
   handleSelectThread,
   threadId,
   threadStatus,
-  handleResolveCommentThread,
-  handleAddComment,
+  handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
+  assignableUsers,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
   const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
+  const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
+  const [pendingAssignedUser, setPendingAssignedUser] = useState<string | undefined>(undefined);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
 
@@ -115,13 +120,18 @@ export function CommentThread({
     [localizedStrings],
   );
 
-  const localizedAssignedToText = useMemo(
-    () =>
-      assignedUser
-        ? formatReplacementString(localizedStrings['%comment_assigned_to%'], { assignedUser })
-        : undefined,
-    [assignedUser, localizedStrings],
-  );
+  const localizedAssignedToText = useMemo(() => {
+    if (assignedUser === undefined) {
+      return undefined;
+    }
+    if (assignedUser === '') {
+      return localizedStrings['%comment_assign_unassigned%'] ?? 'Unassigned';
+    }
+    const displayName = getAssignedUserDisplayName(assignedUser, localizedStrings);
+    return formatReplacementString(localizedStrings['%comment_assigned_to%'], {
+      assignedUser: displayName,
+    });
+  }, [assignedUser, localizedStrings]);
 
   const replies = useMemo(() => activeComments.slice(1), [activeComments]);
   const replyCount = useMemo(() => replies.length ?? 0, [replies.length]);
@@ -160,25 +170,52 @@ export function CommentThread({
   );
 
   const handleSubmitComment = useCallback(async () => {
-    const newCommentId = await handleAddComment(threadId, editorStateToHtml(editorState));
-    if (newCommentId) {
-      clearEditorRef.current?.();
-      setEditorState(initialValue);
-    }
-  }, [editorState, handleAddComment, threadId]);
+    const contents = hasEditorContent(editorState) ? editorStateToHtml(editorState) : undefined;
 
-  const handleResolveWithContents = useCallback(
-    async (passedThreadId: string, resolve: boolean) => {
-      if (!handleResolveCommentThread) return false;
+    // If there's a pending assignment, include it
+    if (pendingAssignedUser !== undefined) {
+      const success = await handleAddCommentToThread({
+        threadId,
+        contents,
+        assignedUser: pendingAssignedUser,
+      });
+      if (success) {
+        setPendingAssignedUser(undefined);
+        if (contents) {
+          clearEditorRef.current?.();
+          setEditorState(initialValue);
+        }
+      }
+      return;
+    }
+    // Otherwise, just add a comment if there's content
+    if (contents) {
+      const newCommentId = await handleAddCommentToThread({ threadId, contents });
+      if (newCommentId) {
+        clearEditorRef.current?.();
+        setEditorState(initialValue);
+      }
+    }
+  }, [editorState, handleAddCommentToThread, pendingAssignedUser, threadId]);
+
+  const handleAddCommentToThreadWithContents = useCallback(
+    async (options: AddCommentToThreadOptions) => {
       const contents = hasEditorContent(editorState) ? editorStateToHtml(editorState) : undefined;
-      const success = await handleResolveCommentThread(passedThreadId, resolve, contents);
+      const success = await handleAddCommentToThread({
+        ...options,
+        contents,
+        assignedUser: pendingAssignedUser,
+      });
       if (success && contents) {
         clearEditorRef.current?.();
         setEditorState(initialValue);
       }
+      if (success && pendingAssignedUser !== undefined) {
+        setPendingAssignedUser(undefined);
+      }
       return success;
     },
-    [editorState, handleResolveCommentThread],
+    [editorState, handleAddCommentToThread, pendingAssignedUser],
   );
 
   return (
@@ -244,7 +281,7 @@ export function CommentThread({
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
             isEditable={activeComments.length === 1 && firstComment?.user === currentUser}
-            handleResolveCommentThread={handleResolveWithContents}
+            handleAddCommentToThread={handleAddCommentToThreadWithContents}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
@@ -326,7 +363,7 @@ export function CommentThread({
                     if (e.key === 'Enter' && e.shiftKey) {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (hasEditorContent(editorState)) {
+                      if (hasEditorContent(editorState) || pendingAssignedUser !== undefined) {
                         handleSubmitComment();
                       }
                     }
@@ -351,20 +388,73 @@ export function CommentThread({
                       clearEditorRef.current = clearFn;
                     }}
                   />
-                  <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                      disabled={!hasEditorContent(editorState)}
-                    >
-                      <AtSign />
-                    </Button>
+                  <div className="tw-flex tw-flex-row tw-items-center tw-justify-end tw-gap-2">
+                    {pendingAssignedUser !== undefined && (
+                      <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
+                        {formatReplacementString(
+                          localizedStrings['%comment_assigning_to%'] ??
+                            'Assigning to: {assignedUser}',
+                          {
+                            assignedUser: getAssignedUserDisplayName(
+                              pendingAssignedUser,
+                              localizedStrings,
+                            ),
+                          },
+                        )}
+                      </span>
+                    )}
+                    <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                          disabled={
+                            !assignableUsers ||
+                            assignableUsers.length === 0 ||
+                            !assignableUsers.includes(currentUser)
+                          }
+                        >
+                          <AtSign />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="tw-w-auto tw-p-0"
+                        align="end"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            setIsAssignPopoverOpen(false);
+                          }
+                        }}
+                      >
+                        <Command>
+                          <CommandList>
+                            {assignableUsers?.map((user) => (
+                              <CommandItem
+                                key={user || 'unassigned'}
+                                onSelect={() => {
+                                  if (user !== assignedUser) {
+                                    setPendingAssignedUser(user);
+                                  } else {
+                                    setPendingAssignedUser(undefined);
+                                  }
+                                  setIsAssignPopoverOpen(false);
+                                }}
+                                className="tw-flex tw-items-center"
+                              >
+                                <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <Button
                       size="icon"
                       onClick={handleSubmitComment}
                       className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                      disabled={!hasEditorContent(editorState)}
+                      disabled={!hasEditorContent(editorState) && pendingAssignedUser === undefined}
                     >
                       <ArrowUp />
                     </Button>
