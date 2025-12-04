@@ -132,7 +132,12 @@ namespace TestParanextDataProvider.Projects
             // Arrange - Create a comment to establish a thread
             var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
             string firstCommentId = _provider.CreateComment(firstComment);
-            string firstCommentThreadId = firstComment.Thread;
+
+            // Retrieve the thread ID from the created comment
+            string firstCommentThreadId = _provider
+                .GetComments(new CommentSelector { CommentId = firstCommentId })
+                .First()
+                .Thread;
 
             // Create another comment for the same thread
             var secondComment = CreateTestComment(
@@ -144,11 +149,14 @@ namespace TestParanextDataProvider.Projects
             );
 
             // Act
-            string secondCommentId = _provider.CreateComment(secondComment);
+            string secondCommentId = _provider.AddCommentToThread(secondComment);
 
             // Assert
             Assert.That(secondCommentId, Is.Not.Null);
-            string secondCommentThreadId = secondComment.Thread;
+            string secondCommentThreadId = _provider
+                .GetComments(new CommentSelector { CommentId = secondCommentId })
+                .First()
+                .Thread;
             Assert.That(
                 firstCommentThreadId,
                 Is.EqualTo(secondCommentThreadId),
@@ -510,7 +518,7 @@ namespace TestParanextDataProvider.Projects
             // Add a second comment (reply) to the thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
             secondComment.Thread = threadId;
-            string secondCommentId = _provider.CreateComment(secondComment);
+            string secondCommentId = _provider.AddCommentToThread(secondComment);
 
             // Act & Assert - Try to update the first comment (not the last one)
             Assert.That(
@@ -536,7 +544,7 @@ namespace TestParanextDataProvider.Projects
             // Add a second comment (reply) to the thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
             secondComment.Thread = threadId;
-            string secondCommentId = _provider.CreateComment(secondComment);
+            string secondCommentId = _provider.AddCommentToThread(secondComment);
 
             // Act - Update the second comment (the last one in the thread)
             bool result = _provider.UpdateComment(secondCommentId, "Updated second comment");
@@ -560,7 +568,7 @@ namespace TestParanextDataProvider.Projects
         #region ResolveCommentThread Tests
 
         [Test]
-        public void CreateComment_ResolveThread_CreatesNewComment()
+        public void AddCommentToThread_ResolveThread_CreatesNewComment()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolving");
@@ -576,13 +584,13 @@ namespace TestParanextDataProvider.Projects
             );
             int initialCommentCount = threadsBefore[0].Comments.Count;
 
-            // Act - Resolve the thread via CreateComment with Status
+            // Act - Resolve the thread via AddCommentToThread with Status
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.CreateComment(resolveComment);
+            _provider.AddCommentToThread(resolveComment);
 
             // Verify thread status is Resolved (displayed as 'deleted' internally by ParatextData)
             var threadsAfter = _provider.GetCommentThreads(
@@ -612,7 +620,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_UnresolveThread_CreatesNewComment()
+        public void AddCommentToThread_UnresolveThread_CreatesNewComment()
         {
             // Arrange - Create and resolve a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unresolving");
@@ -622,13 +630,13 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Resolve it first via CreateComment
+            // Resolve it first via AddCommentToThread
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.CreateComment(resolveComment);
+            _provider.AddCommentToThread(resolveComment);
 
             // Get comment count after resolving
             var threadsAfterResolve = _provider.GetCommentThreads(
@@ -636,13 +644,13 @@ namespace TestParanextDataProvider.Projects
             );
             int commentCountAfterResolve = threadsAfterResolve[0].Comments.Count;
 
-            // Act - Unresolve the thread via CreateComment with Todo status
+            // Act - Unresolve the thread via AddCommentToThread with Todo status
             var unresolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 Status = NoteStatus.Todo
             };
-            _provider.CreateComment(unresolveComment);
+            _provider.AddCommentToThread(unresolveComment);
 
             // Verify thread status is Todo
             var threadsAfterUnresolve = _provider.GetCommentThreads(
@@ -672,7 +680,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_ResolvedThreadAppearsInResolvedFilter()
+        public void AddCommentToThread_ResolvedThreadAppearsInResolvedFilter()
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for filter");
@@ -682,13 +690,13 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Act - Resolve the thread via CreateComment
+            // Act - Resolve the thread via AddCommentToThread
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.CreateComment(resolveComment);
+            _provider.AddCommentToThread(resolveComment);
 
             // Assert - Verify it appears in resolved filter (using ParatextData's 'deleted' label)
             var resolvedThreads = _provider.GetCommentThreads(
@@ -703,7 +711,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_UnresolvedThreadAppearsInTodoFilter()
+        public void AddCommentToThread_UnresolvedThreadAppearsInTodoFilter()
         {
             // Arrange - Create and resolve a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
@@ -713,21 +721,21 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Resolve first via CreateComment
+            // Resolve first via AddCommentToThread
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.CreateComment(resolveComment);
+            _provider.AddCommentToThread(resolveComment);
 
-            // Act - Unresolve it via CreateComment
+            // Act - Unresolve it via AddCommentToThread
             var unresolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 Status = NoteStatus.Todo
             };
-            _provider.CreateComment(unresolveComment);
+            _provider.AddCommentToThread(unresolveComment);
 
             // Assert - Verify it appears in Todo filter
             var todoThreads = _provider.GetCommentThreads(
@@ -742,7 +750,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_ResolveNonExistentThread_ThrowsException()
+        public void AddCommentToThread_ResolveNonExistentThread_ThrowsException()
         {
             // Arrange - Create a comment with non-existent thread ID
             var resolveComment = new Comment(_scrText.User)
@@ -753,13 +761,13 @@ namespace TestParanextDataProvider.Projects
 
             // Act & Assert - Should throw InvalidDataException
             Assert.That(
-                () => _provider.CreateComment(resolveComment),
+                () => _provider.AddCommentToThread(resolveComment),
                 Throws.InstanceOf<InvalidDataException>().With.Message.Contains("does not exist")
             );
         }
 
         [Test]
-        public void CreateComment_MultipleStatusChanges_CreatesMultipleComments()
+        public void AddCommentToThread_MultipleStatusChanges_CreatesMultipleComments()
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple changes");
@@ -774,14 +782,14 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Comments.Count;
 
-            // Act - Make multiple status changes via CreateComment
-            _provider.CreateComment(
+            // Act - Make multiple status changes via AddCommentToThread
+            _provider.AddCommentToThread(
                 new Comment(_scrText.User) { Thread = threadId, Status = NoteStatus.Resolved }
             ); // Resolve
-            _provider.CreateComment(
+            _provider.AddCommentToThread(
                 new Comment(_scrText.User) { Thread = threadId, Status = NoteStatus.Todo }
             ); // Unresolve
-            _provider.CreateComment(
+            _provider.AddCommentToThread(
                 new Comment(_scrText.User) { Thread = threadId, Status = NoteStatus.Resolved }
             ); // Resolve again
 
@@ -845,7 +853,7 @@ namespace TestParanextDataProvider.Projects
         #region AssignUserToThread Tests
 
         [Test]
-        public void CreateComment_AssignTeam_UpdatesThreadAssignment()
+        public void AddCommentToThread_AssignTeam_UpdatesThreadAssignment()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for team assignment");
@@ -855,13 +863,13 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Act - Assign to Team via CreateComment
+            // Act - Assign to Team via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            _provider.CreateComment(assignComment);
+            _provider.AddCommentToThread(assignComment);
 
             // Assert - Verify the thread is assigned to Team
             var threads = _provider.GetCommentThreads(
@@ -876,7 +884,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_Unassign_ClearsAssignment()
+        public void AddCommentToThread_Unassign_ClearsAssignment()
         {
             // Arrange - Create a comment and assign it first
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unassignment");
@@ -886,21 +894,21 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Assign first via CreateComment
+            // Assign first via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            _provider.CreateComment(assignComment);
+            _provider.AddCommentToThread(assignComment);
 
-            // Act - Unassign (empty string) via CreateComment
+            // Act - Unassign (empty string) via AddCommentToThread
             var unassignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 AssignedUser = ""
             };
-            _provider.CreateComment(unassignComment);
+            _provider.AddCommentToThread(unassignComment);
 
             // Assert
             var threads = _provider.GetCommentThreads(
@@ -915,7 +923,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_AssignNonExistentThread_ThrowsException()
+        public void AddCommentToThread_AssignNonExistentThread_ThrowsException()
         {
             // Arrange - Create a comment with non-existent thread ID
             var assignComment = new Comment(_scrText.User)
@@ -926,13 +934,13 @@ namespace TestParanextDataProvider.Projects
 
             // Act & Assert - Should throw InvalidDataException
             Assert.That(
-                () => _provider.CreateComment(assignComment),
+                () => _provider.AddCommentToThread(assignComment),
                 Throws.InstanceOf<InvalidDataException>().With.Message.Contains("does not exist")
             );
         }
 
         [Test]
-        public void CreateComment_AssignInvalidUser_ThrowsException()
+        public void AddCommentToThread_AssignInvalidUser_ThrowsException()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for invalid user");
@@ -942,20 +950,20 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Act & Assert - Try to assign an invalid user via CreateComment
+            // Act & Assert - Try to assign an invalid user via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 AssignedUser = "InvalidUserNotInList"
             };
             Assert.That(
-                () => _provider.CreateComment(assignComment),
+                () => _provider.AddCommentToThread(assignComment),
                 Throws.InvalidOperationException.With.Message.Contains("cannot be assigned")
             );
         }
 
         [Test]
-        public void CreateComment_MultipleAssignments_LastAssignmentWins()
+        public void AddCommentToThread_MultipleAssignments_LastAssignmentWins()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple assignments");
@@ -965,14 +973,14 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Act - Make multiple assignments via CreateComment
-            _provider.CreateComment(
+            // Act - Make multiple assignments via AddCommentToThread
+            _provider.AddCommentToThread(
                 new Comment(_scrText.User) { Thread = threadId, AssignedUser = "Team" }
             );
-            _provider.CreateComment(
+            _provider.AddCommentToThread(
                 new Comment(_scrText.User) { Thread = threadId, AssignedUser = "" }
             ); // Unassign
-            _provider.CreateComment(
+            _provider.AddCommentToThread(
                 new Comment(_scrText.User) { Thread = threadId, AssignedUser = "Team" }
             ); // Assign again
 
@@ -989,7 +997,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_AssignUser_CreatesNewCommentRecord()
+        public void AddCommentToThread_AssignUser_CreatesNewCommentRecord()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Original comment");
@@ -1004,13 +1012,13 @@ namespace TestParanextDataProvider.Projects
             );
             int commentCountBefore = threadsBefore[0].Comments.Count;
 
-            // Act - Assign to Team via CreateComment
+            // Act - Assign to Team via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            _provider.CreateComment(assignComment);
+            _provider.AddCommentToThread(assignComment);
 
             // Assert - A new comment should have been created
             var threadsAfter = _provider.GetCommentThreads(
@@ -1024,7 +1032,7 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void CreateComment_AssignWithContents_IncludesContentsInComment()
+        public void AddCommentToThread_AssignWithContents_IncludesContentsInComment()
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Original comment");
@@ -1034,14 +1042,14 @@ namespace TestParanextDataProvider.Projects
                 .First()
                 .Thread;
 
-            // Act - Assign with contents via CreateComment
+            // Act - Assign with contents via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
                 AssignedUser = "Team"
             };
             assignComment.AddTextToContent("Assigning to team for review", false);
-            _provider.CreateComment(assignComment);
+            _provider.AddCommentToThread(assignComment);
 
             // Assert - Verify the thread is assigned and has the new comment
             var threads = _provider.GetCommentThreads(
