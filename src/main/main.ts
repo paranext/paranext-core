@@ -657,11 +657,11 @@ async function main() {
       e.preventDefault();
       isAppQuitting = true;
 
-      networkService.shutdown();
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
         extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT),
       ]);
+      await networkService.shutdown();
 
       // In development, the dotnet watcher was killed so we have to wait here.
       if (process.env.NODE_ENV !== 'production') await wait(500);

@@ -31,12 +31,23 @@ logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 process.on('message', (message) => {
   if (isString(message) && message === gracefulShutdownMessage) {
     logger.info('Shutting down process due to graceful shutdown message');
-    process.exit();
+    (async () => {
+      try {
+        logger.info('Deactivating extensions');
+        await extensionService.deactivateActiveExtensions();
+      } catch (error) {
+        logger.error('Failed to deactivate extensions');
+        logger.error(error);
+      } finally {
+        process.exit();
+      }
+    })();
   }
 });
 
 // Try to kill child processes that extensions created
 process.on('exit', () => {
+  logger.info('Killing child processes created by extensions');
   killChildProcessesFromExtensions();
 });
 
