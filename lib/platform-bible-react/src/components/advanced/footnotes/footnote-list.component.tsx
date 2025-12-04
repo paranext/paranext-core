@@ -60,7 +60,26 @@ export function FootnoteList({
 
   const [focusedIndex, setFocusedIndex] = useState<number>(initialFocusedIndex);
 
-  const handleFootnoteKeyDown = (e: React.KeyboardEvent<HTMLLIElement>) => {
+  const handleFootnoteKeyDown = (
+    e: React.KeyboardEvent<HTMLLIElement>,
+    footnote: MarkerObject,
+    index: number,
+  ) => {
+    if (!footnotes.length) return;
+
+    switch (e.key) {
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        onFootnoteSelected?.(footnote, index, listId);
+        break;
+
+      default:
+        break;
+    }
+  };
+
+  const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!footnotes.length) return;
 
     switch (e.key) {
@@ -72,12 +91,6 @@ export function FootnoteList({
       case 'ArrowUp':
         e.preventDefault();
         setFocusedIndex((prev) => Math.max(prev - 1, 0));
-        break;
-
-      case 'Enter':
-      case ' ':
-        e.preventDefault();
-        onFootnoteSelected?.(footnotes[focusedIndex], focusedIndex, listId);
         break;
 
       default:
@@ -106,6 +119,7 @@ export function FootnoteList({
         aria-label="Footnotes"
         tabIndex={0}
         className={cn('tw-h-full tw-overflow-y-auto', className)}
+        onKeyDown={handleListKeyDown}
       >
         <ul
           className={cn(
@@ -120,7 +134,6 @@ export function FootnoteList({
           {footnotes.map((footnote, idx) => {
             const isSelected = footnote === selectedFootnote;
             const key = `${listId}-${idx}`;
-            console.log(classNameForItems);
             return (
               <>
                 <li
@@ -132,7 +145,7 @@ export function FootnoteList({
                   key={key}
                   data-marker={footnote.marker}
                   data-state={isSelected ? 'selected' : undefined}
-                  tabIndex={-1}
+                  tabIndex={0}
                   className={cn(
                     'data-[state=selected]:tw-bg-muted',
                     onFootnoteSelected && 'hover:tw-bg-muted/50',
@@ -149,7 +162,7 @@ export function FootnoteList({
                     classNameForItems,
                   )}
                   onClick={() => handleFootnoteClick(footnote, idx)}
-                  onKeyDown={handleFootnoteKeyDown}
+                  onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
                 >
                   <FootnoteItem
                     footnote={footnote}
@@ -158,7 +171,6 @@ export function FootnoteList({
                     showMarkers={showMarkers}
                   />
                 </li>
-
                 {/* Only render separator if not the last item */}
                 {idx < footnotes.length - 1 && layout === 'vertical' && (
                   <li tabIndex={-1} className="tw-col-span-2">
