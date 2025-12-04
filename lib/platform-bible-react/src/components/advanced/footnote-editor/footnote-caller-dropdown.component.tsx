@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
-import { createRef, useEffect, useState } from 'react';
+import { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
@@ -66,9 +66,26 @@ export function FootnoteCallerDropdown({
   updateCustomCaller,
   localizedStrings,
 }: FootnoteCallerDropdownProps) {
-  const customCallerInputRef = createRef<HTMLInputElement>();
+  // eslint-disable-next-line no-null/no-null
+  const customCallerInputRef = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const customCallerSelectRef = useRef<HTMLDivElement>(null);
+  const isCustomCallerInputFocused = useRef(false);
   const [selectedCallerType, setSelectedCallerType] = useState<FootnoteCallerType>(callerType);
   const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const clickHandler = () => {
+      if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
+    };
+
+    globalThis.addEventListener('click', clickHandler);
+
+    return () => {
+      globalThis.removeEventListener('click', clickHandler);
+    };
+  }, []);
 
   // If the caller type changes, the selected caller type needs to change also
   useEffect(() => {
@@ -86,6 +103,7 @@ export function FootnoteCallerDropdown({
   }, [customCaller]);
 
   const handleDropdownOpenChange = (open: boolean) => {
+    setIsDropdownOpen(open);
     if (!open) {
       // This makes it so that if the custom caller is invalid, then reverts back to the previous
       // selected caller
@@ -99,8 +117,36 @@ export function FootnoteCallerDropdown({
     }
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Allow to navigate to the input field
+    if (
+      (event.key === 'ArrowDown' || event.key === 'ArrowRight') &&
+      document.activeElement === customCallerSelectRef.current
+    ) {
+      customCallerInputRef.current?.focus();
+    } else if (event.key === 'ArrowUp' && document.activeElement === customCallerInputRef.current) {
+      customCallerSelectRef.current?.focus();
+    } else if (
+      event.key === 'ArrowLeft' &&
+      document.activeElement === customCallerInputRef.current &&
+      customCallerInputRef.current?.selectionStart === 0
+    ) {
+      customCallerSelectRef.current?.focus();
+    }
+
+    // Allow the dropdown menu to be submitted if the custom caller is selected when you press enter
+    if (
+      selectedCallerType === 'custom' &&
+      event.key === 'Enter' &&
+      (document.activeElement === customCallerInputRef.current ||
+        document.activeElement === customCallerSelectRef.current)
+    ) {
+      handleDropdownOpenChange(false);
+    }
+  };
+
   return (
-    <DropdownMenu onOpenChange={handleDropdownOpenChange}>
+    <DropdownMenu open={isDropdownOpen} onOpenChange={handleDropdownOpenChange}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -115,7 +161,13 @@ export function FootnoteCallerDropdown({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent className="tw-z-[300]">
+      <DropdownMenuContent
+        className="tw-z-[300]"
+        onKeyDown={handleKeyDown}
+        onMouseMove={() => {
+          if (isCustomCallerInputFocused.current) customCallerInputRef.current?.focus();
+        }}
+      >
         <DropdownMenuLabel>
           {localizedStrings['%footnoteEditor_callerDropdown_label%']}
         </DropdownMenuLabel>
@@ -139,9 +191,7 @@ export function FootnoteCallerDropdown({
           </div>
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
-          onMouseMove={() => {
-            if (selectedCallerType === 'custom') customCallerInputRef.current?.focus();
-          }}
+          ref={customCallerSelectRef}
           checked={selectedCallerType === 'custom'}
           onCheckedChange={() => setSelectedCallerType('custom')}
           onSelect={(event) => event.preventDefault()}
@@ -149,6 +199,11 @@ export function FootnoteCallerDropdown({
           <div className="tw-flex tw-w-full tw-justify-between">
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}</span>
             <Input
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+                isCustomCallerInputFocused.current = true;
+              }}
               ref={customCallerInputRef}
               className="tw-h-auto tw-w-10 tw-p-0 tw-text-center"
               value={newCustomCaller}
