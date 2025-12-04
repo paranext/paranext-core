@@ -14,10 +14,10 @@ export default function CommentList({
   threads,
   currentUser,
   localizedStrings,
-  handleAddComment,
-  handleResolveCommentThread,
+  handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
+  assignableUsers,
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
@@ -90,10 +90,10 @@ export default function CommentList({
             currentUser={currentUser}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
-            handleAddComment={handleAddComment}
-            handleResolveCommentThread={handleResolveCommentThread}
+            handleAddCommentToThread={handleAddCommentToThread}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
+            assignableUsers={assignableUsers}
           />
         </div>
       ))}

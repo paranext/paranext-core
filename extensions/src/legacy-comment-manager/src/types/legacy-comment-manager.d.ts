@@ -148,13 +148,25 @@ declare module 'legacy-comment-manager' {
 
   /**
    * Represents a new comment to be created. It is a subtype of {@link LegacyComment} with some
-   * properties omitted (`id`, `user`, `date`). All properties except `contents` are optional.
+   * properties omitted (`id`, `user`, `date`, `thread`).Besides `contents`, all properties are
+   * optional.
    *
    * This is used when creating a new comment via the
    * {@link ILegacyCommentProjectDataProvider.createComment} method.
    */
   export type NewLegacyComment = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>> & { contents: string }
+    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread'>> & { contents: string }
+  >;
+
+  /**
+   * Represents a comment to add to an existing thread. It is a subtype of {@link LegacyComment} with
+   * some properties omitted (`id`, `user`, `date`). The `thread` property is required.
+   *
+   * This is used when adding a comment to an existing thread via the
+   * {@link ILegacyCommentProjectDataProvider.addCommentToThread} method.
+   */
+  export type AddCommentToThread = Prettify<
+    Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>> & { thread: string }
   >;
 
   // #endregion
@@ -205,18 +217,31 @@ declare module 'legacy-comment-manager' {
       getCommentThreads(selector?: LegacyCommentThreadSelector): Promise<LegacyCommentThread[]>;
 
       /**
-       * Creates a new comment
+       * Creates a new comment (which will automatically also create a new thread). Use
+       * `addCommentToThread` to add a comment to an existing thread.
        *
        * @param comment Comment data to create a new comment through ParatextData. Besides
-       *   `contents`, all properties are optional, and the 'id', 'user', and 'date' properties are
-       *   omitted as they will be auto-generated and should not be provided. If no 'thread' ID is
-       *   provided, a new threadId will also be auto-generated.
+       *   `contents`, all properties are optional, and the 'thread', 'id', 'user', and 'date'
+       *   properties are omitted as they will be auto-generated and should not be provided.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
-       * @throws If no valid comment content is provided, or when trying to add a comment to a
-       *   non-existing thread
        */
       createComment(comment: NewLegacyComment): Promise<string>;
+
+      /**
+       * Adds a comment to an existing thread. The thread must already exist.
+       *
+       * Can also be used to modify thread-level properties (status, assignedUser) without adding
+       * comment content by omitting the `contents` property.
+       *
+       * @param comment Comment data. Must have a valid `thread` ID that exists.
+       * @returns Promise that resolves to the auto-generated comment ID (format:
+       *   "threadId/userName/date")
+       * @throws If the thread ID is missing or doesn't exist
+       * @throws If trying to resolve/unresolve without permission
+       * @throws If the assignedUser is not a valid assignable user for this project
+       */
+      addCommentToThread(comment: AddCommentToThread): Promise<string>;
 
       /**
        * Deletes a comment by its ID
@@ -247,19 +272,13 @@ declare module 'legacy-comment-manager' {
       ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
 
       /**
-       * Sets the status of a comment thread (resolve/unresolve toggle)
+       * Finds the list of users that can be assigned to comment threads in this project
        *
-       * @param threadId The unique ID of the thread to update
-       * @param resolve True to resolve the thread, false to unresolve it (set to "Todo")
-       * @returns Promise that resolves to update instructions indicating which data types were
-       *   affected, or `false` if the thread was not found or user doesn't have permission
-       * @throws If an error occurs during the status change
+       * @returns Promise that resolves to an array of usernames that can be assigned to threads.
+       *   Includes special values: "Team" for team assignment, and "" (empty string) for
+       *   unassigned.
        */
-      resolveCommentThread(
-        threadId: string,
-        resolve: boolean,
-        contents?: string,
-      ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
+      findAssignableUsers(): Promise<string[]>;
 
       // #endregion
     };
