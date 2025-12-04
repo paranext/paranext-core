@@ -4,8 +4,6 @@ import React, { RefObject, useCallback, useState } from 'react';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
-const getUniqueThreadId = (id: string) => `thread-${id}`;
-
 /**
  * Component for rendering a list of comment threads
  *
@@ -28,7 +26,7 @@ export default function CommentList({
   );
 
   const options: ListboxOption[] = activeThreads.map((thread) => ({
-    id: getUniqueThreadId(thread.id),
+    id: thread.id,
   }));
 
   const handleKeyboardSelectThread = useCallback((option: ListboxOption) => {
@@ -69,20 +67,26 @@ export default function CommentList({
       aria-activedescendant={activeId ?? undefined}
       aria-label="Comments"
       className={cn(
-        'tw-flex tw-w-full tw-max-w-screen-md tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        'tw-flex tw-w-full tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+
         className,
       )}
       onKeyDown={handleKeyDownWithEscape}
     >
       {activeThreads.map((thread) => (
-        <div key={getUniqueThreadId(thread.id)}>
+        <div
+          key={thread.id}
+          className={cn({
+            'tw-opacity-60': thread.status === 'Resolved',
+          })}
+        >
           <CommentThread
             comments={thread.comments}
             localizedStrings={localizedStrings}
             verseRef={thread.verseRef}
             handleSelectThread={handleSelectThread}
-            threadId={getUniqueThreadId(thread.id)}
-            isSelected={selectedThreadId === getUniqueThreadId(thread.id)}
+            threadId={thread.id}
+            isSelected={selectedThreadId === thread.id}
             currentUser={currentUser}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}

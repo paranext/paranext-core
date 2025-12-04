@@ -167,7 +167,7 @@ type LegacyComment = {
 	/** Approximate position where the comment begins. Zero for attached to a verse. */
 	startPosition: number;
 	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
-	status?: string;
+	status?: CommentStatus;
 	/** Tags added in this note, joined with (',') */
 	tagAdded?: string;
 	/** Tags removed in this note, joined with (',') */
@@ -379,8 +379,8 @@ export interface CommentListProps {
 	 * (format: "threadId/userName/date"). Otherwise, returns undefined.
 	 */
 	handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-	/** Handler for resolving the comment thread */
-	handleResolveCommentThread: (threadId: string) => void;
+	/** Handler for setting the comment thread status (resolve/unresolve) */
+	handleResolveCommentThread: (threadId: string, resolve: boolean, contents?: string) => Promise<boolean>;
 	/** Handler for updating a comment's content */
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
