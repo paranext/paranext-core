@@ -125,64 +125,91 @@ function renderMarkerObject(
 }
 
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
-export function FootnoteItem({
-  footnote,
-  layout = 'horizontal',
-  formatCaller,
-  showMarkers = true,
-}: FootnoteItemProps) {
-  const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
-  const isCallerFormatted = caller !== footnote.caller;
+export const FootnoteItem = React.forwardRef<HTMLDivElement, FootnoteItemProps>(
+  (
+    {
+      footnote,
+      layout = 'horizontal',
+      showMarkers = true,
+      formatCaller,
+      className,
+      isSelected,
+      marker,
+      state,
+      onClick,
+    }: FootnoteItemProps,
+    ref,
+  ) => {
+    const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
 
-  // Split out target reference (first top-level fr/xo, if any)
-  let targetRef: MarkerContent | undefined;
-  let remainingContent = footnote.content;
+    const [targetRef, ...remainingContent] =
+      Array.isArray(footnote.content) &&
+      footnote.content.length > 0 &&
+      typeof footnote.content[0] !== 'string' &&
+      ['fr', 'xo'].includes(footnote.content[0].marker ?? '')
+        ? footnote.content
+        : [undefined, ...(footnote.content ?? [])];
 
-  if (
-    Array.isArray(footnote.content) &&
-    footnote.content.length > 0 &&
-    typeof footnote.content[0] !== 'string' &&
-    (footnote.content[0].marker === 'fr' || footnote.content[0].marker === 'xo')
-  ) {
-    [targetRef, ...remainingContent] = footnote.content;
-  }
+    return (
+      <div
+        ref={ref}
+        className={cn('footnote-item-root tw-relative tw-grid tw-gap-x-2 tw-gap-y-1', className)}
+        style={{ gridTemplateColumns: 'subgrid' }}
+        data-layout={layout}
+        role="option"
+        tabIndex={0}
+        aria-selected={isSelected ?? undefined}
+        data-marker={marker}
+        data-state={state}
+        data-interactive={onClick ? '' : undefined}
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            onClick?.();
+          }
+        }}
+      >
+        {/* Caller cell */}
+        <div
+          className="textual-note-header note-caller tw-whitespace-nowrap"
+          style={{ gridColumn: 'col-caller-start / col-caller-end' }}
+        >
+          {showMarkers && <span className="marker">{`\\${footnote.marker} `}</span>}
+          {caller}
+        </div>
 
-  const footnoteOpening = showMarkers ? (
-    <span className="marker">{`\\${footnote.marker} `}</span>
-  ) : undefined;
+        {/* Reference cell */}
+        <div
+          className="textual-note-header tw-whitespace-nowrap"
+          style={{ gridColumn: 'col-ref-start / col-ref-end' }}
+        >
+          {targetRef && renderContent(footnote.marker, [targetRef], showMarkers)}
+        </div>
 
-  const footnoteClosing = showMarkers ? (
-    <span className="marker">{` \\${footnote.marker}*`}</span>
-  ) : undefined;
-
-  const header = (
-    <>
-      {caller && (
-        // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
-        // specific class name in case styling is needed.
-        <span className={cn('note-caller', { formatted: isCallerFormatted })}>{caller} </span>
-      )}
-      {targetRef && <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>}
-    </>
-  );
-
-  const layoutClass = layout === 'horizontal' ? 'horizontal tw-table-cell' : 'vertical';
-  const markerClass = showMarkers ? 'marker-visible' : '';
-  const baseClasses = cn(layoutClass, markerClass);
-
-  return (
-    <>
-      <div className={cn('textual-note-header tw-text-nowrap tw-pr-2', baseClasses)}>
-        {footnoteOpening}
-        {header}
+        {/* Body cell: spans all columns when layout is vertical */}
+        <div
+          className="textual-note-body"
+          style={
+            layout === 'vertical'
+              ? { gridColumn: '1 / -1' }
+              : { gridColumn: 'col-body-start / col-body-end' }
+          }
+        >
+          {remainingContent.length > 0 && (
+            <>
+              {renderParagraphs(
+                footnote.marker,
+                remainingContent.filter((c): c is MarkerContent => c !== undefined),
+                showMarkers,
+                showMarkers && <span className="marker">{` \\${footnote.marker}*`}</span>,
+              )}
+            </>
+          )}
+        </div>
       </div>
-      <div className={cn('textual-note-body tw-pr-0.5', baseClasses)}>
-        {remainingContent && remainingContent.length > 0 && (
-          <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
-        )}
-      </div>
-    </>
-  );
-}
+    );
+  },
+);
 
 export default FootnoteItem;
