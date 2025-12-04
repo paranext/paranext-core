@@ -53,6 +53,8 @@ export function sanitizeHtml(html: string): string {
     ALLOWED_TAGS: [
       'p',
       'br',
+      'b',
+      'i',
       'strong',
       'em',
       'u',
@@ -73,7 +75,7 @@ export function sanitizeHtml(html: string): string {
       'code',
       'pre',
     ],
-    ALLOWED_ATTR: ['style', 'href', 'target', 'rel', 'class'],
+    ALLOWED_ATTR: ['style', 'href', 'target', 'rel', 'class', 'dir'],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
   });
