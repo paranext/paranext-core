@@ -204,7 +204,7 @@ export function CommentThread({
       const success = await handleAddCommentToThread({
         ...options,
         contents,
-        assignedUser: pendingAssignedUser,
+        assignedUser: options.assignedUser ?? pendingAssignedUser,
       });
       if (success && contents) {
         clearEditorRef.current?.();
