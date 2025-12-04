@@ -94,8 +94,8 @@ export function FootnoteList({
   }, [focusedIndex]);
 
   /*
-   * TODO: After upgrading to Tailwind v4, move to using @container and @sm/@lg css
-   * styling to repalce the use of the `layout` variable to distinguish between
+   * TODO(PT-3743): After upgrading to Tailwind v4, move to using @container and @sm/@lg css
+   * styling to replace the use of the `layout` variable to distinguish between
    * wide/skinny layouts.
    */
   return (
