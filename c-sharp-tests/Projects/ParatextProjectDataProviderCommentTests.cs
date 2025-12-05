@@ -1070,5 +1070,192 @@ namespace TestParanextDataProvider.Projects
         }
 
         #endregion
+
+        #region Permission Check Tests
+
+        [Test]
+        public void CanUserCreateComments_NormalProject_ReturnsTrue()
+        {
+            // Act
+            bool canCreate = _provider.CanUserCreateComments();
+
+            // Assert
+            Assert.That(
+                canCreate,
+                Is.True,
+                "User should be able to create comments in a normal project"
+            );
+        }
+
+        [Test]
+        public void CanUserCreateComments_AllowInSbaParameter_AcceptsParameter()
+        {
+            // Act - Just verify the parameter is accepted and method runs
+            bool canCreateWithSbaFalse = _provider.CanUserCreateComments(false);
+            bool canCreateWithSbaTrue = _provider.CanUserCreateComments(true);
+
+            // Assert - Both calls should complete without error
+            Assert.That(canCreateWithSbaFalse, Is.True);
+            Assert.That(canCreateWithSbaTrue, Is.True);
+        }
+
+        [Test]
+        public void CanUserAddCommentToThread_NormalProject_ReturnsTrue()
+        {
+            // Act
+            bool canAdd = _provider.CanUserAddCommentToThread();
+
+            // Assert
+            Assert.That(
+                canAdd,
+                Is.True,
+                "User should be able to add comments to threads in a normal project"
+            );
+        }
+
+        [Test]
+        public void CanUserAssignThread_ValidThread_ReturnsTrue()
+        {
+            // Arrange - Create a comment to establish a thread
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for assignment");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Act
+            bool canAssign = _provider.CanUserAssignThread(threadId);
+
+            // Assert
+            Assert.That(canAssign, Is.True, "User should be able to assign a normal thread");
+        }
+
+        [Test]
+        public void CanUserAssignThread_NonexistentThread_ReturnsFalse()
+        {
+            // Act
+            bool canAssign = _provider.CanUserAssignThread("nonexistent-thread-id");
+
+            // Assert
+            Assert.That(canAssign, Is.False, "Should return false for a nonexistent thread");
+        }
+
+        [Test]
+        public void CanUserResolveThread_ValidThread_ReturnsTrue()
+        {
+            // Arrange - Create a comment to establish a thread
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolve");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Act
+            bool canResolve = _provider.CanUserResolveThread(threadId);
+
+            // Assert
+            Assert.That(
+                canResolve,
+                Is.True,
+                "User should be able to resolve a normal thread they created"
+            );
+        }
+
+        [Test]
+        public void CanUserResolveThread_NonexistentThread_ReturnsFalse()
+        {
+            // Act
+            bool canResolve = _provider.CanUserResolveThread("nonexistent-thread-id");
+
+            // Assert
+            Assert.That(canResolve, Is.False, "Should return false for a nonexistent thread");
+        }
+
+        [Test]
+        public void CanUserEditOrDeleteComment_OwnLastComment_ReturnsTrue()
+        {
+            // Arrange - Create a comment
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment to edit");
+            string commentId = _provider.CreateComment(comment);
+
+            // Act
+            bool canEdit = _provider.CanUserEditOrDeleteComment(commentId);
+
+            // Assert
+            Assert.That(canEdit, Is.True, "User should be able to edit their own last comment");
+        }
+
+        [Test]
+        public void CanUserEditOrDeleteComment_NonexistentComment_ReturnsFalse()
+        {
+            // Act
+            bool canEdit = _provider.CanUserEditOrDeleteComment("nonexistent-comment-id");
+
+            // Assert
+            Assert.That(canEdit, Is.False, "Should return false for a nonexistent comment");
+        }
+
+        [Test]
+        public void CanUserEditOrDeleteComment_NotLastComment_ReturnsFalse()
+        {
+            // Arrange - Create a thread with multiple comments
+            var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
+            string firstCommentId = _provider.CreateComment(firstComment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = firstCommentId })
+                .First()
+                .Thread;
+
+            // Add a second comment to the same thread
+            var secondComment = CreateTestComment("GEN", 1, 1, "Second comment", threadId);
+            _provider.AddCommentToThread(secondComment);
+
+            // Act - Try to check if we can edit the first comment (not the last one)
+            bool canEditFirst = _provider.CanUserEditOrDeleteComment(firstCommentId);
+
+            // Assert
+            Assert.That(
+                canEditFirst,
+                Is.False,
+                "Should not be able to edit a comment that is not the last in the thread"
+            );
+        }
+
+        [Test]
+        public void CanUserEditOrDeleteComment_AfterDelete_CanEditPreviousComment()
+        {
+            // Arrange - Create a thread with two comments
+            var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
+            string firstCommentId = _provider.CreateComment(firstComment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = firstCommentId })
+                .First()
+                .Thread;
+
+            var secondComment = CreateTestComment("GEN", 1, 1, "Second comment", threadId);
+            string secondCommentId = _provider.AddCommentToThread(secondComment);
+
+            // Verify first comment cannot be edited before delete
+            Assert.That(
+                _provider.CanUserEditOrDeleteComment(firstCommentId),
+                Is.False,
+                "First comment should not be editable when second exists"
+            );
+
+            // Act - Delete the second comment
+            _provider.DeleteComment(secondCommentId);
+
+            // Assert - Now the first comment should be editable (it's the last one)
+            bool canEditFirst = _provider.CanUserEditOrDeleteComment(firstCommentId);
+            Assert.That(
+                canEditFirst,
+                Is.True,
+                "First comment should be editable after second comment is deleted"
+            );
+        }
+
+        #endregion
     }
 }
