@@ -280,6 +280,53 @@ declare module 'legacy-comment-manager' {
        */
       findAssignableUsers(): Promise<string[]>;
 
+      // #region Permission Check Functions
+
+      /**
+       * Determines if the current user can create new comment threads in this project
+       *
+       * @param allowInSba Allow creating comments in Study Bible Additions projects (default:
+       *   false)
+       * @returns Promise that resolves to true if the user can create comments, false otherwise
+       */
+      canUserCreateComments(allowInSba?: boolean): Promise<boolean>;
+
+      /**
+       * Determines if the current user can add comments to existing threads in this project. This
+       * is slightly different from canUserCreateComments - it allows adding to threads in resource
+       * projects that aren't global note types.
+       *
+       * @returns Promise that resolves to true if the user can add comments to threads, false
+       *   otherwise
+       */
+      canUserAddCommentToThread(): Promise<boolean>;
+
+      /**
+       * Determines if the current user can change the assigned user on a specific thread
+       *
+       * @param threadId The ID of the thread to check
+       * @returns Promise that resolves to true if the user can assign the thread, false otherwise
+       */
+      canUserAssignThread(threadId: string): Promise<boolean>;
+
+      /**
+       * Determines if the current user can resolve or re-open a specific thread
+       *
+       * @param threadId The ID of the thread to check
+       * @returns Promise that resolves to true if the user can resolve the thread, false otherwise
+       */
+      canUserResolveThread(threadId: string): Promise<boolean>;
+
+      /**
+       * Determines if the current user can edit or delete a specific comment. In Paratext 9, edit
+       * and delete have identical permission requirements.
+       *
+       * @param commentId The ID of the comment to check
+       * @returns Promise that resolves to true if the user can edit or delete the comment, false
+       *   otherwise
+       */
+      canUserEditOrDeleteComment(commentId: string): Promise<boolean>;
+
       // #endregion
     };
 

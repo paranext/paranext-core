@@ -24,13 +24,6 @@ global.webViewComponent = function CommentListWebView({
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
-  // Fetch assignable users when projectId changes
-  const fetchAssignableUsers = useCallback(async () => {
-    if (!commentsPdp) return [];
-    return commentsPdp.findAssignableUsers();
-  }, [commentsPdp]);
-  const [assignableUsers] = usePromise(fetchAssignableUsers, []);
-
   // Fetch current user's registration data on mount
   useEffect(() => {
     let isMounted = true;
@@ -68,6 +61,57 @@ global.webViewComponent = function CommentListWebView({
       };
     }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]),
     DEFAULT_LEGACY_COMMENT_THREADS,
+  );
+
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!commentsPdp) {
+      logger.error('Comments PDP is not available');
+      return [];
+    }
+    return commentsPdp.findAssignableUsers();
+  }, [commentsPdp]);
+  const [assignableUsers] = usePromise(fetchAssignableUsers, []);
+
+  const fetchCanUserAddCommentToThread = useCallback(async () => {
+    if (!commentsPdp) {
+      logger.error('Comments PDP is not available');
+      return false;
+    }
+    return commentsPdp.canUserAddCommentToThread();
+  }, [commentsPdp]);
+  const [canUserAddCommentToThread] = usePromise(fetchCanUserAddCommentToThread, false);
+
+  const canUserAssignThreadCallback = useCallback(
+    async (threadId: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return false;
+      }
+      return commentsPdp.canUserAssignThread(threadId);
+    },
+    [commentsPdp],
+  );
+
+  const canUserResolveThreadCallback = useCallback(
+    async (threadId: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return false;
+      }
+      return commentsPdp.canUserResolveThread(threadId);
+    },
+    [commentsPdp],
+  );
+
+  const canUserEditOrDeleteCommentCallback = useCallback(
+    async (commentId: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return false;
+      }
+      return commentsPdp.canUserEditOrDeleteComment(commentId);
+    },
+    [commentsPdp],
   );
 
   const handleAddCommentToThread = useCallback(
@@ -156,6 +200,10 @@ global.webViewComponent = function CommentListWebView({
           handleUpdateComment={handleUpdateComment}
           handleDeleteComment={handleDeleteComment}
           assignableUsers={assignableUsers}
+          canUserAddCommentToThread={canUserAddCommentToThread}
+          canUserAssignThreadCallback={canUserAssignThreadCallback}
+          canUserResolveThreadCallback={canUserResolveThreadCallback}
+          canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
         />
       )}
     </div>

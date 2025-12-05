@@ -78,6 +78,26 @@ export interface CommentListProps {
    * (empty string) for unassigned.
    */
   assignableUsers?: string[];
+  /**
+   * Whether the current user can add comments to existing threads in this project. When false, UI
+   * elements for adding comments to threads should be hidden or disabled.
+   */
+  canUserAddCommentToThread?: boolean;
+  /**
+   * Callback to check if the current user can assign a specific thread. Returns a promise that
+   * resolves to true if the user can assign the thread, false otherwise.
+   */
+  canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can resolve or re-open a specific thread. Returns a
+   * promise that resolves to true if the user can resolve the thread, false otherwise.
+   */
+  canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+   * that resolves to true if the user can edit or delete the comment, false otherwise.
+   */
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 }
 
 /** Props for the CommentThread component */
@@ -121,6 +141,26 @@ export interface CommentThreadProps {
    * (empty string) for unassigned.
    */
   assignableUsers?: string[];
+  /**
+   * Whether the current user can add comments to existing threads in this project. When false, UI
+   * elements for adding comments to threads should be hidden or disabled.
+   */
+  canUserAddCommentToThread?: boolean;
+  /**
+   * Callback to check if the current user can assign a specific thread. Returns a promise that
+   * resolves to true if the user can assign the thread, false otherwise.
+   */
+  canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can resolve or re-open a specific thread. Returns a
+   * promise that resolves to true if the user can resolve the thread, false otherwise.
+   */
+  canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+   * that resolves to true if the user can edit or delete the comment, false otherwise.
+   */
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 }
 
 /** Props for the CommentItem component */
@@ -129,11 +169,6 @@ export interface CommentItemProps {
   comment: LegacyComment;
   /** Whether the comment is a reply or a top-level comment */
   isReply?: boolean;
-  /**
-   * Whether the comment is editable or not. Only the most recent comment on a thread can be edited
-   * and it can only be edited by its author.
-   */
-  isEditable?: boolean;
   /** Localized strings for the component */
   localizedStrings: LanguageStrings;
   /** Whether the thread is expanded */
@@ -151,4 +186,11 @@ export interface CommentItemProps {
   handleDeleteComment?: (commentId: string) => Promise<boolean>;
   /** Callback when editing state changes */
   onEditingChange?: (isEditing: boolean) => void;
+  /**
+   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+   * that resolves to true if the user can edit or delete the comment, false otherwise.
+   */
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+  /** Whether the current user can resolve or re-open this thread. */
+  canUserResolveThread?: boolean;
 }

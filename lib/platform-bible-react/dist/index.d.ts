@@ -406,13 +406,33 @@ export interface CommentListProps {
 	 * (empty string) for unassigned.
 	 */
 	assignableUsers?: string[];
+	/**
+	 * Whether the current user can add comments to existing threads in this project. When false, UI
+	 * elements for adding comments to threads should be hidden or disabled.
+	 */
+	canUserAddCommentToThread?: boolean;
+	/**
+	 * Callback to check if the current user can assign a specific thread. Returns a promise that
+	 * resolves to true if the user can assign the thread, false otherwise.
+	 */
+	canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+	/**
+	 * Callback to check if the current user can resolve or re-open a specific thread. Returns a
+	 * promise that resolves to true if the user can resolve the thread, false otherwise.
+	 */
+	canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+	/**
+	 * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+	 * that resolves to true if the user can edit or delete the comment, false otherwise.
+	 */
+	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
