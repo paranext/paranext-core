@@ -77,6 +77,10 @@ export function CommentThread({
   handleUpdateComment,
   handleDeleteComment,
   assignableUsers,
+  canUserAddCommentToThread,
+  canUserAssignThreadCallback,
+  canUserResolveThreadCallback,
+  canUserEditOrDeleteCommentCallback,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
@@ -85,6 +89,41 @@ export function CommentThread({
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
   const [pendingAssignedUser, setPendingAssignedUser] = useState<string | undefined>(undefined);
+  const [canAssign, setCanAssign] = useState<boolean>(false);
+  const [canResolve, setCanResolve] = useState<boolean>(false);
+
+  // Check async permissions when thread is selected
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isSelected) {
+      setCanAssign(false);
+      setCanResolve(false);
+      return undefined;
+    }
+
+    const checkPermissions = async () => {
+      const assignResult = canUserAssignThreadCallback
+        ? await canUserAssignThreadCallback(threadId)
+        : false;
+
+      if (!isMounted) return;
+
+      const resolveResult = canUserResolveThreadCallback
+        ? await canUserResolveThreadCallback(threadId)
+        : false;
+
+      if (!isMounted) return;
+
+      setCanAssign(assignResult);
+      setCanResolve(resolveResult);
+    };
+
+    checkPermissions();
+    return () => {
+      isMounted = false;
+    };
+  }, [isSelected, threadId, canUserAssignThreadCallback, canUserResolveThreadCallback]);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
 
@@ -282,11 +321,12 @@ export function CommentThread({
             localizedStrings={localizedStrings}
             isThreadExpanded={isSelected}
             threadStatus={threadStatus}
-            isEditable={activeComments.length === 1 && firstComment?.user === currentUser}
             handleAddCommentToThread={handleAddCommentToThreadWithContents}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
+            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+            canUserResolveThread={canResolve}
           />
         </div>
         <>
@@ -335,136 +375,136 @@ export function CommentThread({
                   </div>
                 </div>
               )}
-              {visibleReplies.map((reply) => {
-                const isLastReply = reply.id === replies[replies.length - 1].id;
-                const isEditableReply = isLastReply && reply.user === currentUser;
-                return (
-                  <div key={reply.id}>
-                    <CommentItem
-                      comment={reply}
-                      localizedStrings={localizedStrings}
-                      isReply
-                      isThreadExpanded={isSelected}
-                      isEditable={isEditableReply}
-                      handleUpdateComment={handleUpdateComment}
-                      handleDeleteComment={handleDeleteComment}
-                      onEditingChange={setIsAnyCommentEditing}
-                    />
-                  </div>
-                );
-              })}
-
-              {/* Only show main Editor if no comment is being edited, or if it has draft content */}
-              {(!isAnyCommentEditing || hasEditorContent(editorState)) && (
-                <div
-                  role="textbox"
-                  tabIndex={-1}
-                  className="tw-w-full tw-space-y-2"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDownCapture={(e) => {
-                    if (e.key === 'Enter' && e.shiftKey) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (hasEditorContent(editorState) || pendingAssignedUser !== undefined) {
-                        handleSubmitComment();
-                      }
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    handleEditorKeyNavigation(e);
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation();
-                    }
-                  }}
-                >
-                  <Editor
-                    editorSerializedState={editorState}
-                    onSerializedChange={(value) => setEditorState(value)}
-                    placeholder={
-                      threadStatus === 'Resolved'
-                        ? localizedStrings['%comment_reopenResolved%']
-                        : localizedStrings['%comment_replyOrAssign%']
-                    }
-                    autoFocus
-                    onClear={(clearFn) => {
-                      clearEditorRef.current = clearFn;
-                    }}
+              {visibleReplies.map((reply) => (
+                <div key={reply.id}>
+                  <CommentItem
+                    comment={reply}
+                    localizedStrings={localizedStrings}
+                    isReply
+                    isThreadExpanded={isSelected}
+                    handleUpdateComment={handleUpdateComment}
+                    handleDeleteComment={handleDeleteComment}
+                    onEditingChange={setIsAnyCommentEditing}
+                    canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
                   />
-                  <div className="tw-flex tw-flex-row tw-items-center tw-justify-end tw-gap-2">
-                    {pendingAssignedUser !== undefined && (
-                      <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
-                        {formatReplacementString(
-                          localizedStrings['%comment_assigning_to%'] ??
-                            'Assigning to: {assignedUser}',
-                          {
-                            assignedUser: getAssignedUserDisplayName(
-                              pendingAssignedUser,
-                              localizedStrings,
-                            ),
-                          },
-                        )}
-                      </span>
-                    )}
-                    <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                          disabled={
-                            !assignableUsers ||
-                            assignableUsers.length === 0 ||
-                            !assignableUsers.includes(currentUser)
-                          }
-                          aria-label="Assign user"
-                        >
-                          <AtSign />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="tw-w-auto tw-p-0"
-                        align="end"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            e.stopPropagation();
-                            setIsAssignPopoverOpen(false);
-                          }
-                        }}
-                      >
-                        <Command>
-                          <CommandList>
-                            {assignableUsers?.map((user) => (
-                              <CommandItem
-                                key={user || 'unassigned'}
-                                onSelect={() => {
-                                  if (user !== assignedUser) {
-                                    setPendingAssignedUser(user);
-                                  } else {
-                                    setPendingAssignedUser(undefined);
-                                  }
-                                  setIsAssignPopoverOpen(false);
-                                }}
-                                className="tw-flex tw-items-center"
-                              >
-                                <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <Button
-                      size="icon"
-                      onClick={handleSubmitComment}
-                      className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
-                      disabled={!hasEditorContent(editorState) && pendingAssignedUser === undefined}
-                      aria-label="Submit comment"
-                    >
-                      <ArrowUp />
-                    </Button>
-                  </div>
                 </div>
-              )}
+              ))}
+
+              {/* Only show main Editor if user can add comments, no comment is being edited, or if it has draft content */}
+              {canUserAddCommentToThread !== false &&
+                (!isAnyCommentEditing || hasEditorContent(editorState)) && (
+                  <div
+                    role="textbox"
+                    tabIndex={-1}
+                    className="tw-w-full tw-space-y-2"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDownCapture={(e) => {
+                      if (e.key === 'Enter' && e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (hasEditorContent(editorState) || pendingAssignedUser !== undefined) {
+                          handleSubmitComment();
+                        }
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      handleEditorKeyNavigation(e);
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
+                    <Editor
+                      editorSerializedState={editorState}
+                      onSerializedChange={(value) => setEditorState(value)}
+                      placeholder={
+                        threadStatus === 'Resolved'
+                          ? localizedStrings['%comment_reopenResolved%']
+                          : localizedStrings['%comment_replyOrAssign%']
+                      }
+                      autoFocus
+                      onClear={(clearFn) => {
+                        clearEditorRef.current = clearFn;
+                      }}
+                    />
+                    <div className="tw-flex tw-flex-row tw-items-center tw-justify-end tw-gap-2">
+                      {pendingAssignedUser !== undefined && (
+                        <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
+                          {formatReplacementString(
+                            localizedStrings['%comment_assigning_to%'] ??
+                              'Assigning to: {assignedUser}',
+                            {
+                              assignedUser: getAssignedUserDisplayName(
+                                pendingAssignedUser,
+                                localizedStrings,
+                              ),
+                            },
+                          )}
+                        </span>
+                      )}
+                      <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                            disabled={
+                              !canAssign ||
+                              !assignableUsers ||
+                              assignableUsers.length === 0 ||
+                              !assignableUsers.includes(currentUser)
+                            }
+                            aria-label="Assign user"
+                          >
+                            <AtSign />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="tw-w-auto tw-p-0"
+                          align="end"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.stopPropagation();
+                              setIsAssignPopoverOpen(false);
+                            }
+                          }}
+                        >
+                          <Command>
+                            <CommandList>
+                              {assignableUsers?.map((user) => (
+                                <CommandItem
+                                  key={user || 'unassigned'}
+                                  onSelect={() => {
+                                    if (user !== assignedUser) {
+                                      setPendingAssignedUser(user);
+                                    } else {
+                                      setPendingAssignedUser(undefined);
+                                    }
+                                    setIsAssignPopoverOpen(false);
+                                  }}
+                                  className="tw-flex tw-items-center"
+                                >
+                                  <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <Button
+                        size="icon"
+                        onClick={handleSubmitComment}
+                        className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                        disabled={
+                          !hasEditorContent(editorState) && pendingAssignedUser === undefined
+                        }
+                        aria-label="Submit comment"
+                      >
+                        <ArrowUp />
+                      </Button>
+                    </div>
+                  </div>
+                )}
             </>
           )}
         </>
