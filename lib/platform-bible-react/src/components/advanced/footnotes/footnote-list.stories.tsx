@@ -111,9 +111,6 @@ export const Basic: Story = {
     listId: 'storybook-Basic',
     showMarkers: false,
     layout: 'horizontal',
-    localizedStrings: {
-      '%webView_footnoteList_header%': 'Footnotes',
-    },
   },
 };
 
@@ -125,9 +122,6 @@ export const WithCustomCallerFormatting: Story = {
     showMarkers: true,
     layout: 'horizontal',
     formatCaller: getFormatCallerFunction(usjFootnotes, ['†', '‡', '⁂', '★', '☆']),
-    localizedStrings: {
-      '%webView_footnoteList_header%': 'Footnotes',
-    },
   },
 };
 
@@ -139,9 +133,6 @@ export const Raw: Story = {
     showMarkers: true,
     layout: 'horizontal',
     formatCaller: (caller) => caller,
-    localizedStrings: {
-      '%webView_footnoteList_header%': 'Footnotes',
-    },
   },
 };
 
@@ -152,9 +143,6 @@ export const Formatted: Story = {
     listId: 'storybook-Formatted',
     showMarkers: false,
     layout: 'vertical',
-    localizedStrings: {
-      '%webView_footnoteList_header%': 'Footnotes',
-    },
   },
 };
 
@@ -166,8 +154,5 @@ export const ShowMarkers: Story = {
     showMarkers: true,
     layout: 'vertical',
     formatCaller: (caller) => caller,
-    localizedStrings: {
-      '%webView_footnoteList_header%': 'Footnotes',
-    },
   },
 };

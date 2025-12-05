@@ -1,36 +1,10 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Separator } from '@/components/shadcn-ui/separator';
-import { getFormatCallerFunction, LocalizedStringValue, LocalizeKey } from 'platform-bible-utils';
+import { getFormatCallerFunction } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
-
-/**
- * Object containing all keys used for localization in this component. If you're using this
- * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStrings prop of this component
- */
-export const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[] = ['%webView_footnoteList_header%'];
-
-export type FootnoteListLocalizedStrings = {
-  [localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
-
-/**
- * Gets the localized value for the provided key
- *
- * @param strings Object containing localized string
- * @param key Key for a localized string
- * @returns The localized value for the provided key, if available. Returns the key if no localized
- *   value is available
- */
-const localizeString = (
-  strings: FootnoteListLocalizedStrings,
-  key: keyof FootnoteListLocalizedStrings,
-) => {
-  return strings[key] ?? key;
-};
 
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
@@ -44,11 +18,7 @@ export function FootnoteList({
   suppressFormatting = false,
   formatCaller,
   onFootnoteSelected,
-  localizedStrings,
-}: FootnoteListProps & { localizedStrings?: FootnoteListLocalizedStrings }) {
-  const headerText = localizedStrings
-    ? localizeString(localizedStrings, '%webView_footnoteList_header%')
-    : 'Footnotes';
+}: FootnoteListProps) {
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
   const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
     onFootnoteSelected?.(footnote, index, listId);
@@ -112,75 +82,72 @@ export function FootnoteList({
    * wide/skinny layouts.
    */
   return (
-    <>
-      {layout === 'vertical' && <h2 className="tw-mb-1 tw-font-semibold">{headerText}</h2>}
-      <div
-        role="listbox"
-        aria-label="Footnotes"
-        tabIndex={0}
-        className={cn('tw-h-full tw-overflow-y-auto', className)}
-        onKeyDown={handleListKeyDown}
+    <div
+      role="listbox"
+      aria-label="Footnotes"
+      tabIndex={0}
+      className={cn('tw-h-full tw-overflow-y-auto', className)}
+      onKeyDown={handleListKeyDown}
+    >
+      <ul
+        className={cn(
+          'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
+          'tw-grid',
+          layout === 'horizontal'
+            ? 'tw-grid-cols-[min-content_min-content_1fr]'
+            : 'tw-grid-cols-[min-content_1fr]',
+          !suppressFormatting && 'formatted-font',
+        )}
       >
-        <ul
-          className={cn(
-            'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
-            'tw-grid',
-            layout === 'horizontal'
-              ? 'tw-grid-cols-[min-content_min-content_1fr]'
-              : 'tw-grid-cols-[min-content_1fr]',
-            !suppressFormatting && 'formatted-font',
-          )}
-        >
-          {footnotes.map((footnote, idx) => {
-            const isSelected = footnote === selectedFootnote;
-            const key = `${listId}-${idx}`;
-            return (
-              <>
-                <li
-                  ref={(el) => {
-                    rowRefs.current[idx] = el;
-                  }}
-                  role="option"
-                  aria-selected={isSelected}
-                  key={key}
-                  data-marker={footnote.marker}
-                  data-state={isSelected ? 'selected' : undefined}
-                  tabIndex={idx === focusedIndex ? 0 : -1}
-                  className={cn(
-                    'data-[state=selected]:tw-bg-muted',
-                    onFootnoteSelected && 'hover:tw-bg-muted/50',
-                    'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
-                    'focus:tw-outline-none focus-visible:tw-outline-none',
-                    /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
-                       that looks great in Storybook. However, the left edge of the ring is clipped in
-                       P.B app. These are similar, but not identical to, the customizations made in
-                       our shadcn table component.
-                    */
-                    'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
-                    'tw-grid tw-grid-flow-col tw-grid-cols-subgrid',
-                    layout === 'horizontal' ? 'tw-col-span-3' : 'tw-col-span-2 tw-row-span-2',
-                    classNameForItems,
-                  )}
-                  onClick={() => handleFootnoteClick(footnote, idx)}
-                  onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
-                >
-                  <FootnoteItem
-                    footnote={footnote}
-                    layout={layout}
-                    formatCaller={() => handleFormatCaller(footnote.caller, idx)}
-                    showMarkers={showMarkers}
-                  />
-                </li>
-                {/* Only render separator if not the last item */}
-                {idx < footnotes.length - 1 && layout === 'vertical' && (
-                  <Separator tabIndex={-1} className="tw-col-span-2" />
+        {footnotes.map((footnote, idx) => {
+          const isSelected = footnote === selectedFootnote;
+          const key = `${listId}-${idx}`;
+          return (
+            <>
+              <li
+                ref={(el) => {
+                  rowRefs.current[idx] = el;
+                }}
+                role="option"
+                aria-selected={isSelected}
+                key={key}
+                data-marker={footnote.marker}
+                data-state={isSelected ? 'selected' : undefined}
+                tabIndex={idx === focusedIndex ? 0 : -1}
+                className={cn(
+                  'data-[state=selected]:tw-bg-muted',
+                  onFootnoteSelected && 'hover:tw-bg-muted/50',
+                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
+                  'focus:tw-outline-none focus-visible:tw-outline-none',
+                  /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
+                     that looks great in Storybook. However, the left edge of the ring is clipped in
+                     P.B app. These are similar, but not identical to, the customizations made in
+                     our shadcn table component.
+                  */
+                  'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
+                  'tw-grid tw-grid-flow-col tw-grid-cols-subgrid',
+                  layout === 'horizontal' ? 'tw-col-span-3' : 'tw-col-span-2 tw-row-span-2',
+                  classNameForItems,
                 )}
-              </>
-            );
-          })}
-        </ul>
-      </div>
-    </>
+                onClick={() => handleFootnoteClick(footnote, idx)}
+                onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
+              >
+                <FootnoteItem
+                  footnote={footnote}
+                  layout={layout}
+                  formatCaller={() => handleFormatCaller(footnote.caller, idx)}
+                  showMarkers={showMarkers}
+                />
+              </li>
+              {/* Only render separator if not the last item */}
+              {idx < footnotes.length - 1 && layout === 'vertical' && (
+                <Separator tabIndex={-1} className="tw-col-span-2" />
+              )}
+            </>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

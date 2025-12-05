@@ -1,13 +1,11 @@
 import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
-  FOOTNOTE_LIST_STRING_KEYS,
   FootnoteList,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from 'platform-bible-react';
-import { useLocalizedStrings } from '@papi/frontend/react';
 import {
   getErrorMessage,
   getPaneSizeLimits,
@@ -227,8 +225,6 @@ export function FootnotesLayout({
     [footnotes, footnoteListKey, onFootnoteSelected],
   );
 
-  const [localizedStrings] = useLocalizedStrings(FOOTNOTE_LIST_STRING_KEYS);
-
   return (
     <div ref={setContainerRef} className="tw-h-full tw-w-full tw-min-h-0">
       <ResizablePanelGroup
@@ -255,7 +251,6 @@ export function FootnotesLayout({
               listId={footnoteListKey}
               layout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
               footnotes={footnotes}
-              localizedStrings={localizedStrings}
               showMarkers={showMarkers}
               selectedFootnote={selectedFootnote?.footnote}
               onFootnoteSelected={handleFootnoteSelected}
