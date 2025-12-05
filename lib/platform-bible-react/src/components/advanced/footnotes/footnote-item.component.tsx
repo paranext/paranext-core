@@ -162,7 +162,7 @@ export function FootnoteItem({
       {caller}{' '}
     </span>
   );
-  const markerAndTargetRef = targetRef && (
+  const footnoteTargetRef = targetRef && (
     <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
   );
 
@@ -189,7 +189,7 @@ export function FootnoteItem({
           baseClasses,
         )}
       >
-        {markerAndTargetRef}
+        {footnoteTargetRef}
       </div>
       <div className={cn('textual-note-body tw-pr-0.5', footnoteBodyClass, baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (

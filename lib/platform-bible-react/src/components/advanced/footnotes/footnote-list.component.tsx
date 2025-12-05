@@ -126,8 +126,8 @@ export function FootnoteList({
             'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
             'tw-grid',
             layout === 'horizontal'
-              ? 'tw-grid-cols-3 tw-grid-cols-[min-content_min-content_1fr]'
-              : 'tw-grid-cols-2 tw-grid-cols-[min-content_1fr]',
+              ? 'tw-grid-cols-[min-content_min-content_1fr]'
+              : 'tw-grid-cols-[min-content_1fr]',
             !suppressFormatting && 'formatted-font',
           )}
         >
@@ -145,7 +145,7 @@ export function FootnoteList({
                   key={key}
                   data-marker={footnote.marker}
                   data-state={isSelected ? 'selected' : undefined}
-                  tabIndex={0}
+                  tabIndex={idx === focusedIndex ? 0 : -1}
                   className={cn(
                     'data-[state=selected]:tw-bg-muted',
                     onFootnoteSelected && 'hover:tw-bg-muted/50',
@@ -173,9 +173,7 @@ export function FootnoteList({
                 </li>
                 {/* Only render separator if not the last item */}
                 {idx < footnotes.length - 1 && layout === 'vertical' && (
-                  <li tabIndex={-1} className="tw-col-span-2">
-                    <Separator />
-                  </li>
+                  <Separator tabIndex={-1} className="tw-col-span-2" />
                 )}
               </>
             );
