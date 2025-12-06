@@ -115,7 +115,7 @@ export function FootnoteList({
                 data-state={isSelected ? 'selected' : undefined}
                 tabIndex={idx === focusedIndex ? 0 : -1}
                 className={cn(
-                  'data-[state=selected]:tw-bg-muted',
+                  'tw-gap-x-3 tw-gap-y-1 tw-p-2 data-[state=selected]:tw-bg-muted',
                   onFootnoteSelected && 'hover:tw-bg-muted/50',
                   'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
                   'focus:tw-outline-none focus-visible:tw-outline-none',

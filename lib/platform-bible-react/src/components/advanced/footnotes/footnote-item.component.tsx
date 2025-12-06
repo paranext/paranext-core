@@ -48,7 +48,7 @@ function renderParagraphs(
   return paragraphs.map((para, i) => {
     const isLast = i === paragraphs.length - 1;
     return (
-      <p key={makeKey(parentMarker, para)} className="tw-mb-2">
+      <p key={makeKey(parentMarker, para)}>
         {renderContent(parentMarker, para, showMarkers, true, markerHierarchy)}
         {isLast && footnoteClosing}
       </p>
@@ -174,24 +174,20 @@ export function FootnoteItem({
 
   return (
     <>
-      <div
-        className={cn(
-          'textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap tw-pr-2',
-          baseClasses,
-        )}
-      >
+      <div className={cn('textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap', baseClasses)}>
         {footnoteOpening}
         {footnoteCaller}
       </div>
+      <div className={cn('textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap', baseClasses)}>
+        {footnoteTargetRef}
+      </div>
       <div
         className={cn(
-          'textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap tw-pr-2',
+          'textual-note-body tw-flex tw-flex-col tw-gap-1',
+          footnoteBodyClass,
           baseClasses,
         )}
       >
-        {footnoteTargetRef}
-      </div>
-      <div className={cn('textual-note-body tw-pr-0.5', footnoteBodyClass, baseClasses)}>
         {remainingContent && remainingContent.length > 0 && (
           <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
         )}
