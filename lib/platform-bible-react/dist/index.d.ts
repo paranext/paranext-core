@@ -811,19 +811,8 @@ export interface FootnoteEditorProps {
 export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Object containing all keys used for localization in this component. If you're using this
- * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStrings prop of this component
- */
-export declare const FOOTNOTE_LIST_STRING_KEYS: LocalizeKey[];
-type FootnoteListLocalizedStrings = {
-	[localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
-	localizedStrings?: FootnoteListLocalizedStrings;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
