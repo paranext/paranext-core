@@ -26,7 +26,7 @@ export function FootnoteList({
 
   const initialFocusedIndex = selectedFootnote
     ? footnotes.findIndex((f) => f === selectedFootnote)
-    : 0;
+    : -1;
 
   const [focusedIndex, setFocusedIndex] = useState<number>(initialFocusedIndex);
 
@@ -85,7 +85,7 @@ export function FootnoteList({
     <div
       role="listbox"
       aria-label="Footnotes"
-      tabIndex={0}
+      tabIndex={focusedIndex < 0 ? 0 : -1}
       className={cn('tw-h-full tw-overflow-y-auto', className)}
       onKeyDown={handleListKeyDown}
     >
