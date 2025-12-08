@@ -33,6 +33,8 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  COMMENT_EDITOR_STRING_KEYS,
+  CommentEditor,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
@@ -66,6 +68,7 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
+  ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
@@ -115,7 +118,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
 
-  // These two control the placement of the note editor popover by setting the location of the anchor
+  // These control the placement of editor popovers (footnote editor, comment editor) by setting the location of the anchor
   const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
@@ -123,6 +126,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
   const editingNoteKey = useRef<string>();
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+
+  const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
+  const [commentEditorAssignableUsers, setCommentEditorAssignableUsers] = useState<string[]>([]);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -301,6 +307,34 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'insertCrossReferenceAtSelection': {
           editorRef.current?.insertNote('x');
+          break;
+        }
+        case 'insertCommentAtSelection': {
+          const { assignableUsers } = editorMessage;
+          setCommentEditorAssignableUsers(assignableUsers);
+
+          // Find the verse element to anchor the popover
+          const verseElement = document.querySelector<HTMLElement>(
+            `[data-marker="v"][data-number="${scrRef.verseNum}"]`,
+          );
+
+          if (verseElement) {
+            const rect = verseElement.getBoundingClientRect();
+            setNotePopoverAnchorX(rect.left);
+            setNotePopoverAnchorY(rect.top);
+            setNotePopoverAnchorHeight(rect.height);
+          } else {
+            // Fallback to center of editor viewport
+            const editorContainer = document.querySelector<HTMLElement>('.editor-container');
+            if (editorContainer) {
+              const rect = editorContainer.getBoundingClientRect();
+              setNotePopoverAnchorX(rect.left + rect.width / 2);
+              setNotePopoverAnchorY(rect.top + rect.height / 2);
+              setNotePopoverAnchorHeight(0);
+            }
+          }
+
+          setShowCommentEditor(true);
           break;
         }
         case 'changeFootnotesPaneLocation': {
@@ -656,6 +690,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     onFootnoteEditorClose();
   };
 
+  const onCommentEditorClose = useCallback(() => {
+    setCommentEditorAssignableUsers([]);
+    setShowCommentEditor(false);
+  }, []);
+
+  const onCommentEditorSave = useCallback(
+    async (contents: string, assignedUser?: string) => {
+      if (!projectId) {
+        logger.warn('Cannot create comment: no projectId');
+        return;
+      }
+
+      try {
+        const legacyCommentManagerPdp = await papi.projectDataProviders.get(
+          'legacyCommentManager.comments',
+          projectId,
+        );
+
+        // Convert SerializedVerseRef to string format "GEN 1:1"
+        const verseRefString = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}`;
+
+        await legacyCommentManagerPdp.createComment({
+          contents,
+          assignedUser,
+          verseRef: verseRefString,
+        });
+
+        onCommentEditorClose();
+      } catch (error) {
+        logger.error(`Error creating comment: ${getErrorMessage(error)}`);
+      }
+    },
+    [projectId, scrRef, onCommentEditorClose],
+  );
+
   function renderEditor() {
     const commonProps = {
       ref: editorRef,
@@ -792,6 +861,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
+            localizedStrings={localizedStrings}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Comment editor for creating new comment threads */}
+      <Popover open={showCommentEditor}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: notePopoverAnchorY,
+            left: notePopoverAnchorX,
+            height: notePopoverAnchorHeight,
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent className="tw-w-[400px] tw-p-[10px]">
+          <CommentEditor
+            assignableUsers={commentEditorAssignableUsers}
+            onSave={onCommentEditorSave}
+            onClose={onCommentEditorClose}
             localizedStrings={localizedStrings}
           />
         </PopoverContent>

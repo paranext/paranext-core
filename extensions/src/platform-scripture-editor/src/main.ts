@@ -232,6 +232,25 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   await webViewController.insertCrossReferenceAtSelection();
 }
 
+async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting project comment...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertCommentAtSelection();
+}
+
 /** Function to prompt for a project and open it in the editor */
 async function open(
   isReadOnly: boolean,
@@ -710,6 +729,44 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           message,
         );
       },
+      async insertCommentAtSelection() {
+        const projectId = currentWebViewDefinition.projectId;
+        if (!projectId) {
+          logger.warn('Cannot insert comment: No project ID associated with this editor');
+          return;
+        }
+
+        try {
+          // Get the legacy comment manager PDP
+          const commentManagerPdp = await papi.projectDataProviders.get(
+            'legacyCommentManager.comments',
+            projectId,
+          );
+
+          // Check if the user has permission to create comments
+          const canCreate = await commentManagerPdp.canUserCreateComments();
+          if (!canCreate) {
+            logger.warn(`User does not have permission to create comments in project ${projectId}`);
+            return;
+          }
+
+          // Fetch the list of assignable users
+          const assignableUsers = await commentManagerPdp.findAssignableUsers();
+
+          // Post the message to the WebView with assignable users
+          const message: EditorWebViewMessage = {
+            method: 'insertCommentAtSelection',
+            assignableUsers,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          logger.warn(`Failed to open comment editor: ${getErrorMessage(e)}`);
+        }
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -762,6 +819,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             summary:
               'The ID of the web view tied to the project that we are inserting the footnote',
             schema: { type: 'null' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertCommentPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertCommentAtSelection',
+    insertCommentAtSelection,
+    {
+      method: {
+        summary:
+          'Open the comment editor to insert a project comment at the current verse in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project where we are inserting the comment',
+            schema: { type: 'string' },
           },
         ],
         result: {
@@ -910,6 +990,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await insertCommentPromise,
     await annotationStyleDataProviderPromise,
   );
 

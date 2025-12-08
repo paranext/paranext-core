@@ -865,6 +865,56 @@ type FootnoteListLocalizedStrings = {
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, localizedStrings, }: FootnoteListProps & {
 	localizedStrings?: FootnoteListLocalizedStrings;
 }): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in the CommentEditor component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const COMMENT_EDITOR_STRING_KEYS: readonly [
+	"%commentEditor_placeholder%",
+	"%commentEditor_saveButton_tooltip%",
+	"%commentEditor_cancelButton_tooltip%",
+	"%commentEditor_assignTo_label%",
+	"%commentEditor_unassigned%",
+	"%commentEditor_team%"
+];
+export type CommentEditorLocalizedStrings = {
+	[localizedKey in (typeof COMMENT_EDITOR_STRING_KEYS)[number]]?: string;
+};
+type CommentEditorLocalizedStringsSubset = {
+	[key: LocalizeKey]: string | undefined;
+	"%commentEditor_placeholder%"?: string;
+	"%commentEditor_saveButton_tooltip%"?: string;
+	"%commentEditor_cancelButton_tooltip%"?: string;
+	"%commentEditor_assignTo_label%"?: string;
+	"%commentEditor_unassigned%"?: string;
+	"%commentEditor_team%"?: string;
+};
+/** Interface containing the types of the properties that are passed to the `CommentEditor` */
+export interface CommentEditorProps {
+	/** List of users that can be assigned to the new comment thread */
+	assignableUsers: string[];
+	/**
+	 * External function to handle saving the new comment
+	 *
+	 * @param contents HTML content of the comment
+	 * @param assignedUser Optional user to assign the comment to
+	 */
+	onSave: (contents: string, assignedUser?: string) => void;
+	/**
+	 * External function to handle closing the comment editor. Gets called when the editor is closed
+	 * without saving changes
+	 */
+	onClose: () => void;
+	/** Localized strings to be passed to the comment editor component */
+	localizedStrings: CommentEditorLocalizedStringsSubset;
+}
+/**
+ * Component to create a new project comment from within the scripture editor
+ *
+ * @param CommentEditorProps - The properties for the comment editor component
+ */
+export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */

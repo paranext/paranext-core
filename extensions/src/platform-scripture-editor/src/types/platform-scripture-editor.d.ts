@@ -62,6 +62,16 @@ declare module 'platform-scripture-editor' {
     method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
   };
 
+  /**
+   * Tell the editor to open the comment editor for inserting a new project comment at the current
+   * verse
+   */
+  export type EditorMessageInsertCommentAtSelection = {
+    method: 'insertCommentAtSelection';
+    /** Users that can be assigned to the new comment thread */
+    assignableUsers: string[];
+  };
+
   /** Messages sent to the editor web view */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
@@ -69,7 +79,8 @@ declare module 'platform-scripture-editor' {
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
-    | EditorMessageInsertTextualNoteAtSelection;
+    | EditorMessageInsertTextualNoteAtSelection
+    | EditorMessageInsertCommentAtSelection;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
@@ -224,6 +235,11 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /**
+     * Function to open the comment editor for inserting a new project comment at the current verse.
+     * Checks permissions and fetches assignable users before opening the editor.
+     */
+    insertCommentAtSelection(): Promise<void>;
   }>;
 }
 
@@ -308,6 +324,16 @@ declare module 'papi-shared-types' {
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert a project comment at the current verse in a given editor web view. Opens a
+     * comment editor popover for drafting the comment content and optionally assigning to a user.
+     *
+     * @param editorWebViewId The ID of the web view to insert the comment for
+     */
+    'platformScriptureEditor.insertCommentAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
   }
