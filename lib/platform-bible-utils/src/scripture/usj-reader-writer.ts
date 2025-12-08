@@ -326,7 +326,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             this.usj.version
           }, but provided markers map has version ${
             this.markersMap.version
-          }. This may cause unexpected issues when transforming between formats.`,
+          }. This may cause unexpected issues when transforming between formats.\nUSJ: ${JSON.stringify(
+            this.usj,
+          )}`,
         );
     }
     // They didn't pass in a markers map, so try to use a built-in markers map matching the USJ version
