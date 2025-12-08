@@ -26,6 +26,10 @@
         "items": []
       }
     },
-    "platformScripture.checksSidePanel": {}
+    "platformScripture.checksSidePanel": {},
+    "platformScripture.characterInventory": {},
+    "platformScripture.repeatedWordsInventory": {},
+    "platformScripture.markersInventory": {},
+    "platformScripture.punctuationInventory": {}
   }
 }
