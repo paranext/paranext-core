@@ -37,7 +37,6 @@ import { getAssignedUserDisplayName } from './comment-list.utils';
 export function CommentItem({
   comment,
   isReply = false,
-  isEditable = false,
   localizedStrings,
   isThreadExpanded = false,
   threadStatus = 'Unspecified',
@@ -45,12 +44,38 @@ export function CommentItem({
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
+  canUserEditOrDeleteCommentCallback,
+  canUserResolveThread = false,
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editorState, setEditorState] = useState<SerializedEditorState>();
+  const [canEditOrDelete, setCanEditOrDelete] = useState(false);
 
   // eslint-disable-next-line no-null/no-null
   const editContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Check if the user can edit or delete this comment
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isThreadExpanded) {
+      setCanEditOrDelete(false);
+      return undefined;
+    }
+
+    const checkPermission = async () => {
+      const canEdit = canUserEditOrDeleteCommentCallback
+        ? await canUserEditOrDeleteCommentCallback(comment.id)
+        : false;
+
+      if (isMounted) setCanEditOrDelete(canEdit);
+    };
+
+    checkPermission();
+    return () => {
+      isMounted = false;
+    };
+  }, [canUserEditOrDeleteCommentCallback, comment.id, isThreadExpanded]);
 
   // Focus the editor when entering edit mode, after dropdown menu has fully closed
   useEffect(() => {
@@ -135,7 +160,7 @@ export function CommentItem({
 
   const dropdownContent = useMemo(() => {
     if (!isThreadExpanded) return undefined;
-    if (!isEditable) return undefined;
+    if (!canEditOrDelete) return undefined;
 
     return (
       <>
@@ -164,7 +189,7 @@ export function CommentItem({
       </>
     );
   }, [
-    isEditable,
+    canEditOrDelete,
     isThreadExpanded,
     localizedStrings,
     comment.contents,
@@ -272,19 +297,23 @@ export function CommentItem({
           </>
         )}
       </div>
-      {isThreadExpanded && !isReply && threadStatus !== 'Resolved' && handleAddCommentToThread && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="tw-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering the expand/collapse
-            handleAddCommentToThread({ threadId: comment.thread, status: 'Resolved' });
-          }}
-        >
-          <Check />
-        </Button>
-      )}
+      {isThreadExpanded &&
+        canUserResolveThread &&
+        !isReply &&
+        threadStatus !== 'Resolved' &&
+        handleAddCommentToThread && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering the expand/collapse
+              handleAddCommentToThread({ threadId: comment.thread, status: 'Resolved' });
+            }}
+          >
+            <Check />
+          </Button>
+        )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

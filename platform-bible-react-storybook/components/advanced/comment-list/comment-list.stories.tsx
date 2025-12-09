@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample.data';
 import { AddCommentToThreadOptions } from './comment-list.types';
@@ -27,7 +27,21 @@ const commentListLocalizedStrings: LanguageStrings = {
 
 const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];
 
-function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThread[] }) {
+type CommentListStoryProps = {
+  initialThreads: LegacyCommentThread[];
+  canUserAddCommentToThread?: boolean;
+  canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+  canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+};
+
+function CommentListStory({
+  initialThreads,
+  canUserAddCommentToThread = true,
+  canUserAssignThreadCallback,
+  canUserResolveThreadCallback,
+  canUserEditOrDeleteCommentCallback,
+}: CommentListStoryProps) {
   const [threads, setThreads] = useState<LegacyCommentThread[]>(initialThreads);
 
   const handleAddCommentToThread = async (
@@ -135,6 +149,17 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return commentFound;
   };
 
+  // Default permission callback for edit/delete - only allow for current user's comments
+  const defaultCanUserEditOrDeleteCallback = useMemo(() => {
+    return async (commentId: string): Promise<boolean> => {
+      console.log(`Checking if user can edit/delete comment ${commentId}`);
+      const comment = threads
+        .flatMap((thread) => thread.comments)
+        .find((c) => c.id === commentId && !c.deleted);
+      return comment?.user === 'Current User';
+    };
+  }, [threads]);
+
   return (
     <CommentList
       threads={threads}
@@ -144,6 +169,12 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
       assignableUsers={mockAssignableUsers}
+      canUserAddCommentToThread={canUserAddCommentToThread}
+      canUserAssignThreadCallback={canUserAssignThreadCallback}
+      canUserResolveThreadCallback={canUserResolveThreadCallback}
+      canUserEditOrDeleteCommentCallback={
+        canUserEditOrDeleteCommentCallback ?? defaultCanUserEditOrDeleteCallback
+      }
     />
   );
 }
@@ -170,5 +201,30 @@ export default meta;
 type Story = StoryObj<typeof CommentListStory>;
 
 export const Default: Story = {
-  render: () => <CommentListStory initialThreads={sampleComments} />,
+  render: () => (
+    <CommentListStory
+      initialThreads={sampleComments}
+      canUserAssignThreadCallback={async (threadId) => {
+        console.log(`Checking if user can assign thread ${threadId}`);
+        return true;
+      }}
+      canUserResolveThreadCallback={async (threadId) => {
+        console.log(`Checking if user can resolve thread ${threadId}`);
+        return true;
+      }}
+    />
+  ),
+};
+
+/** Story demonstrating restricted permissions - user cannot add comments, assign, or resolve */
+export const RestrictedPermissions: Story = {
+  render: () => (
+    <CommentListStory
+      initialThreads={sampleComments}
+      canUserAddCommentToThread={false}
+      canUserAssignThreadCallback={async () => false}
+      canUserResolveThreadCallback={async () => false}
+      canUserEditOrDeleteCommentCallback={async () => false}
+    />
+  ),
 };
