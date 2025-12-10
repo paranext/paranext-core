@@ -153,9 +153,11 @@ export const CheckCards: Story = {
               isSelected={isSelected}
               isDenied={card.isDenied}
               accentColor={accentColor}
-              onSelect={() =>
-                setSelectedCardKey((current) => (current === card.key ? undefined : card.key))
-              }
+              onSelect={() => {
+                console.log('Card selected:', card.key);
+                setSelectedCardKey(card.key);
+              }}
+              onDoubleClick={() => console.log('Card double clicked:', card.key)}
               dropdownContent={mockDropdownContent}
               additionalSelectedContent={
                 <Badge className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md tw-bg-blue-500">
@@ -235,9 +237,11 @@ export const FindCards: Story = {
                 text: card.search,
               }}
               isSelected={isSelected}
-              onSelect={() =>
-                setSelectedCardKey((current) => (current === card.key ? undefined : card.key))
-              }
+              onSelect={() => {
+                console.log('Card selected:', card.key);
+                setSelectedCardKey(card.key);
+              }}
+              onDoubleClick={() => console.log('Card double clicked:', card.key)}
               dropdownContent={mockDropdownContent}
               additionalSelectedContent={
                 <div className="tw-text-xs tw-font-medium tw-text-muted-foreground">
