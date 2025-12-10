@@ -1,6 +1,6 @@
 import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
-import { DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import { DropdownMenuItem, ResultsCard, ScrRefBtnProps } from 'platform-bible-react';
 import {
   getErrorMessage,
   LocalizedStringValue,
@@ -207,13 +207,13 @@ export default function SearchResult({
     book: getBookFromVerseRef(searchResult.end),
     chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.end),
   };
-  const scrRef = {
+  const scrRef: ScrRefBtnProps = {
     startRef,
     endRef:
       startRef.book === endRef.book && startRef.chapterAndVerse === endRef.chapterAndVerse
         ? undefined
         : endRef,
-    searchText: searchResult.text,
+    text: searchResult.text,
   };
 
   const additionalSelectedContent = (
