@@ -1660,6 +1660,19 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+type ScrRef = {
+	book: string;
+	chapterAndVerse: string;
+};
+export type ScrRefBtnProps = {
+	startRef: ScrRef;
+	endRef?: ScrRef;
+	text?: string;
+	className?: string;
+	onClick?: () => void;
+	remainderTextLength?: number;
+};
+export declare function ScrRefButton({ startRef, endRef, text, className, onClick, remainderTextLength, }: ScrRefBtnProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
@@ -1667,14 +1680,20 @@ interface ResultsCardProps {
 	isSelected: boolean;
 	/** Callback function called when the card is clicked */
 	onSelect: () => void;
+	/** Callback function called when the card is double-clicked */
+	onDoubleClick?: () => void;
 	/** Whether the content of this card are in a denied state */
 	isDenied?: boolean;
 	/** Whether the card should be hidden */
 	isHidden?: boolean;
 	/** Additional CSS classes to apply to the card */
 	className?: string;
+	/** Scripture reference as link */
+	scrRef: ScrRefBtnProps;
+	/** Badges to display on the card */
+	badges?: React$1.ReactNode[];
 	/** Main content to display on the card */
-	children: React$1.ReactNode;
+	children?: React$1.ReactNode;
 	/** Content to show in the dropdown menu when selected */
 	dropdownContent?: React$1.ReactNode;
 	/** Additional content to show below the main content when selected */
@@ -1687,7 +1706,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, onDoubleClick, scrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */

@@ -5,6 +5,7 @@ import {
   getErrorMessage,
   LocalizedStringValue,
   LocalizeKey,
+  UsfmVerseRefVerseLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
@@ -38,6 +39,8 @@ interface SearchResultProps {
   localizedBookData: Map<string, { localizedId: string }>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when the user double clicks on this search result */
+  onResultDoubleClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
   localizedStrings: {
@@ -76,6 +79,7 @@ export default function SearchResult({
   usjReaderWriter,
   localizedBookData,
   onResultClick,
+  onResultDoubleClick,
   onHideResult,
   localizedStrings,
 }: SearchResultProps) {
@@ -184,15 +188,33 @@ export default function SearchResult({
     </>
   );
 
-  const cardContent = (
-    <div className="tw-text-xs tw-font-medium">
-      {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-        searchResult.start.verseRef.book}{' '}
-      {searchResult.start.verseRef.chapterNum}:
-      {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-      <span className="scripture-font">{searchResult.text ?? ''}</span>
-    </div>
-  );
+  const getBookFromVerseRef = (verseLocation: UsfmVerseRefVerseLocation): string => {
+    return (
+      localizedBookData.get(verseLocation.verseRef.book)?.localizedId ?? verseLocation.verseRef.book
+    );
+  };
+  const getChapterAndVerseFromVerseRef = (verseLocation: UsfmVerseRefVerseLocation): string => {
+    return `${verseLocation.verseRef.chapterNum}:${
+      verseLocation.verseRef.verse || verseLocation.verseRef.verseNum
+    }`;
+  };
+
+  const startRef = {
+    book: getBookFromVerseRef(searchResult.start),
+    chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.start),
+  };
+  const endRef = {
+    book: getBookFromVerseRef(searchResult.end),
+    chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.end),
+  };
+  const scrRef = {
+    startRef,
+    endRef:
+      startRef.book === endRef.book && startRef.chapterAndVerse === endRef.chapterAndVerse
+        ? undefined
+        : endRef,
+    searchText: searchResult.text,
+  };
 
   const additionalSelectedContent = (
     <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
@@ -205,16 +227,19 @@ export default function SearchResult({
       cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
         searchResult.start.verseRef.verseNum
       }${searchResult.text}${globalResultsIndex}`}
+      scrRef={scrRef}
       isHidden={searchResult.isHidden}
       isSelected={isSelected}
       onSelect={() => {
         setShouldGetVerseText(true);
         onResultClick(searchResult, globalResultsIndex);
       }}
+      onDoubleClick={() => () => {
+        setShouldGetVerseText(true);
+        onResultDoubleClick(searchResult, globalResultsIndex);
+      }}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
-    >
-      {cardContent}
-    </ResultsCard>
+    />
   );
 }
