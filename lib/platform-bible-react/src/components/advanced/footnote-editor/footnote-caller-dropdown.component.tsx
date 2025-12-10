@@ -66,26 +66,18 @@ export function FootnoteCallerDropdown({
   updateCustomCaller,
   localizedStrings,
 }: FootnoteCallerDropdownProps) {
+  // The ref must start with being null to be passed as an element ref
   // eslint-disable-next-line no-null/no-null
   const customCallerInputRef = useRef<HTMLInputElement>(null);
+  // The ref must start with being null to be passed as an element ref
   // eslint-disable-next-line no-null/no-null
   const customCallerSelectRef = useRef<HTMLDivElement>(null);
+  // The ref must start with being null to be passed as an element ref
+  // eslint-disable-next-line no-null/no-null
   const isCustomCallerInputFocused = useRef(false);
   const [selectedCallerType, setSelectedCallerType] = useState<FootnoteCallerType>(callerType);
   const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    const clickHandler = () => {
-      if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
-    };
-
-    globalThis.addEventListener('click', clickHandler);
-
-    return () => {
-      globalThis.removeEventListener('click', clickHandler);
-    };
-  }, []);
 
   // If the caller type changes, the selected caller type needs to change also
   useEffect(() => {
@@ -103,6 +95,7 @@ export function FootnoteCallerDropdown({
   }, [customCaller]);
 
   const handleDropdownOpenChange = (open: boolean) => {
+    isCustomCallerInputFocused.current = false;
     setIsDropdownOpen(open);
     if (!open) {
       // This makes it so that if the custom caller is invalid, then reverts back to the previous
@@ -119,19 +112,23 @@ export function FootnoteCallerDropdown({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     // Allow to navigate to the input field
+    const isRtl = customCallerSelectRef.current?.dir !== 'ltr';
     if (
-      (event.key === 'ArrowDown' || event.key === 'ArrowRight') &&
-      document.activeElement === customCallerSelectRef.current
+      event.key === 'ArrowDown' ||
+      (isRtl && event.key === 'ArrowRight') ||
+      (!isRtl && event.key === 'ArrowLeft')
     ) {
       customCallerInputRef.current?.focus();
-    } else if (event.key === 'ArrowUp' && document.activeElement === customCallerInputRef.current) {
+      isCustomCallerInputFocused.current = true;
+    } else if (event.key === 'ArrowUp') {
       customCallerSelectRef.current?.focus();
+      isCustomCallerInputFocused.current = false;
     } else if (
-      event.key === 'ArrowLeft' &&
-      document.activeElement === customCallerInputRef.current &&
+      ((isRtl && event.key === 'ArrowLeft') || (!isRtl && event.key === 'ArrowRight')) &&
       customCallerInputRef.current?.selectionStart === 0
     ) {
       customCallerSelectRef.current?.focus();
+      isCustomCallerInputFocused.current = false;
     }
 
     // Allow the dropdown menu to be submitted if the custom caller is selected when you press enter
@@ -163,6 +160,9 @@ export function FootnoteCallerDropdown({
       </TooltipProvider>
       <DropdownMenuContent
         className="tw-z-[300]"
+        onClick={() => {
+          if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
+        }}
         onKeyDown={handleKeyDown}
         onMouseMove={() => {
           if (isCustomCallerInputFocused.current) customCallerInputRef.current?.focus();
@@ -194,6 +194,11 @@ export function FootnoteCallerDropdown({
           ref={customCallerSelectRef}
           checked={selectedCallerType === 'custom'}
           onCheckedChange={() => setSelectedCallerType('custom')}
+          onClick={(event) => {
+            event.stopPropagation();
+            isCustomCallerInputFocused.current = true;
+            customCallerInputRef.current?.focus();
+          }}
           onSelect={(event) => event.preventDefault()}
         >
           <div className="tw-flex tw-w-full tw-justify-between">
@@ -202,11 +207,13 @@ export function FootnoteCallerDropdown({
               tabIndex={0}
               onClick={(event) => {
                 event.stopPropagation();
+                setSelectedCallerType('custom');
                 isCustomCallerInputFocused.current = true;
               }}
               ref={customCallerInputRef}
               className="tw-h-auto tw-w-10 tw-p-0 tw-text-center"
               value={newCustomCaller}
+              onKeyDown={(event) => event.stopPropagation()}
               maxLength={1}
               onChange={(event) => setNewCustomCaller(event.target.value)}
             />
