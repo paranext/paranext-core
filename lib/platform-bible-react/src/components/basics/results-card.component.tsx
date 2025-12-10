@@ -65,9 +65,17 @@ export function ResultsCard({
   badges,
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const activeEl = document.activeElement as HTMLElement;
+    const isButtonFocused = activeEl?.closest('button') || activeEl?.tagName === 'BUTTON';
+
     if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onSelect();
+      // Avoid interfering with button clicks inside the card
+      if (!isButtonFocused) {
+        // Card selection
+        event.preventDefault();
+        onSelect?.();
+      }
     }
   };
 
@@ -76,10 +84,11 @@ export function ResultsCard({
       hidden={isHidden}
       key={cardKey}
       onClick={onSelect}
-      onDoubleClick={(e) => {
-        e.preventDefault();
-        if (onDoubleClick) onDoubleClick();
+      onMouseDown={(e) => {
+        // cancel double‑click text selection
+        if (e.detail > 1) e.preventDefault();
       }}
+      onDoubleClick={onDoubleClick}
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
@@ -106,7 +115,10 @@ export function ResultsCard({
               startRef={scrRef?.startRef}
               endRef={scrRef?.endRef}
               text={scrRef?.text}
-              onClick={onDoubleClick}
+              onClick={() => {
+                onSelect();
+                onDoubleClick?.();
+              }}
               className="tw-whitespace-normal tw-rounded-sm tw-text-xs tw-font-medium"
             />
             {badges && (
