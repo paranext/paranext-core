@@ -1,6 +1,13 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { COMMENT_LIST_STRING_KEYS, CommentList, Label, Skeleton } from 'platform-bible-react';
+import {
+  AddCommentToThreadOptions,
+  COMMENT_LIST_STRING_KEYS,
+  CommentList,
+  Label,
+  Skeleton,
+  usePromise,
+} from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread } from 'platform-bible-utils';
@@ -56,33 +63,74 @@ global.webViewComponent = function CommentListWebView({
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
-  const handleAddComment = useCallback(
-    async (threadId: string, contents: string): Promise<string | undefined> => {
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!commentsPdp) {
+      logger.error('Comments PDP is not available');
+      return [];
+    }
+    return commentsPdp.findAssignableUsers();
+  }, [commentsPdp]);
+  const [assignableUsers] = usePromise(fetchAssignableUsers, []);
+
+  const fetchCanUserAddCommentToThread = useCallback(async () => {
+    if (!commentsPdp) {
+      logger.error('Comments PDP is not available');
+      return false;
+    }
+    return commentsPdp.canUserAddCommentToThread();
+  }, [commentsPdp]);
+  const [canUserAddCommentToThread] = usePromise(fetchCanUserAddCommentToThread, false);
+
+  const canUserAssignThreadCallback = useCallback(
+    async (threadId: string): Promise<boolean> => {
       if (!commentsPdp) {
         logger.error('Comments PDP is not available');
-        return undefined;
+        return false;
       }
-      const newCommentId = await commentsPdp.createComment({
-        thread: threadId,
-        contents,
-      });
-      return newCommentId;
+      return commentsPdp.canUserAssignThread(threadId);
     },
     [commentsPdp],
   );
 
-  const handleResolveCommentThread = useCallback(
-    async (threadId: string, resolve: boolean, contents?: string): Promise<boolean> => {
+  const canUserResolveThreadCallback = useCallback(
+    async (threadId: string): Promise<boolean> => {
       if (!commentsPdp) {
         logger.error('Comments PDP is not available');
         return false;
       }
-      try {
-        const result = await commentsPdp.resolveCommentThread(threadId, resolve, contents);
-        return result !== false;
-      } catch (error) {
-        logger.error(`Failed to set comment thread status for ${threadId}:`, error);
+      return commentsPdp.canUserResolveThread(threadId);
+    },
+    [commentsPdp],
+  );
+
+  const canUserEditOrDeleteCommentCallback = useCallback(
+    async (commentId: string): Promise<boolean> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
         return false;
+      }
+      return commentsPdp.canUserEditOrDeleteComment(commentId);
+    },
+    [commentsPdp],
+  );
+
+  const handleAddCommentToThread = useCallback(
+    async (options: AddCommentToThreadOptions): Promise<string | undefined> => {
+      if (!commentsPdp) {
+        logger.error('Comments PDP is not available');
+        return undefined;
+      }
+      try {
+        const newCommentId = await commentsPdp.addCommentToThread({
+          thread: options.threadId,
+          contents: options.contents,
+          status: options.status,
+          assignedUser: options.assignedUser,
+        });
+        return newCommentId;
+      } catch (error) {
+        logger.error(`Failed to add comment to thread ${options.threadId}:`, error);
+        return undefined;
       }
     },
     [commentsPdp],
@@ -148,10 +196,14 @@ global.webViewComponent = function CommentListWebView({
           threads={commentThreads}
           currentUser={currentUserName}
           localizedStrings={localizedStrings}
-          handleAddComment={handleAddComment}
-          handleResolveCommentThread={handleResolveCommentThread}
+          handleAddCommentToThread={handleAddCommentToThread}
           handleUpdateComment={handleUpdateComment}
           handleDeleteComment={handleDeleteComment}
+          assignableUsers={assignableUsers}
+          canUserAddCommentToThread={canUserAddCommentToThread}
+          canUserAssignThreadCallback={canUserAssignThreadCallback}
+          canUserResolveThreadCallback={canUserResolveThreadCallback}
+          canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
         />
       )}
     </div>

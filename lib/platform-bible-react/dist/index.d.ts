@@ -358,6 +358,17 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
+/** Options for adding a comment to a thread */
+export type AddCommentToThreadOptions = {
+	/** The ID of the thread to add the comment to */
+	threadId: string;
+	/** The content of the comment (optional - can be omitted when only changing status or assignment) */
+	contents?: string;
+	/** Status to set on the thread ('Resolved' or 'Todo') */
+	status?: CommentStatus;
+	/** User to assign to the thread. Use "" for unassigned, "Team" for team assignment. */
+	assignedUser?: string;
+};
 /**
  * Object containing all keys used for localization in the CommentList component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -375,23 +386,53 @@ export interface CommentListProps {
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
 	/**
-	 * Handler for adding a comment to a thread. If successful, returns the auto-generated comment ID
-	 * (format: "threadId/userName/date"). Otherwise, returns undefined.
+	 * Handler for adding a comment to a thread. This unified handler supports:
+	 *
+	 * - Adding a comment (provide contents)
+	 * - Resolving/unresolving a thread (provide status: 'Resolved' or 'Todo')
+	 * - Assigning a user (provide assignedUser)
+	 * - Any combination of the above
+	 *
+	 * If successful, returns the auto-generated comment ID (format: "threadId/userName/date").
+	 * Otherwise, returns undefined.
 	 */
-	handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-	/** Handler for setting the comment thread status (resolve/unresolve) */
-	handleResolveCommentThread: (threadId: string, resolve: boolean, contents?: string) => Promise<boolean>;
+	handleAddCommentToThread: (options: AddCommentToThreadOptions) => Promise<string | undefined>;
 	/** Handler for updating a comment's content */
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
 	handleDeleteComment: (commentId: string) => Promise<boolean>;
+	/**
+	 * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
+	 * (empty string) for unassigned.
+	 */
+	assignableUsers?: string[];
+	/**
+	 * Whether the current user can add comments to existing threads in this project. When false, UI
+	 * elements for adding comments to threads should be hidden or disabled.
+	 */
+	canUserAddCommentToThread?: boolean;
+	/**
+	 * Callback to check if the current user can assign a specific thread. Returns a promise that
+	 * resolves to true if the user can assign the thread, false otherwise.
+	 */
+	canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+	/**
+	 * Callback to check if the current user can resolve or re-open a specific thread. Returns a
+	 * promise that resolves to true if the user can resolve the thread, false otherwise.
+	 */
+	canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+	/**
+	 * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+	 * that resolves to true if the user can edit or delete the comment, false otherwise.
+	 */
+	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddComment, handleResolveCommentThread, handleUpdateComment, handleDeleteComment, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

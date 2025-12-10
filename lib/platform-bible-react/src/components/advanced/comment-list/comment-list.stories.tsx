@@ -1,17 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import {
-  CommentStatus,
-  LanguageStrings,
-  LegacyComment,
-  LegacyCommentThread,
-} from 'platform-bible-utils';
-import { useState } from 'react';
+import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
+import { useMemo, useState } from 'react';
 import CommentList from './comment-list.component';
 import { sampleComments } from './comment-sample.data';
+import { AddCommentToThreadOptions } from './comment-list.types';
 
 const commentListLocalizedStrings: LanguageStrings = {
+  '%comment_assign_team%': 'Team',
+  '%comment_assign_unassigned%': 'Unassigned',
   '%comment_assigned_to%': 'Assigned to {assignedUser}',
+  '%comment_assigning_to%': 'Assigning to: {assignedUser}',
   '%comment_dateAtTime%': '{date} at {time}',
   '%comment_date_today%': 'today',
   '%comment_date_yesterday%': 'yesterday',
@@ -26,15 +25,30 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%no_comments%': 'No comments yet',
 };
 
-function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThread[] }) {
+const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];
+
+type CommentListStoryProps = {
+  initialThreads: LegacyCommentThread[];
+  canUserAddCommentToThread?: boolean;
+  canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+  canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+};
+
+function CommentListStory({
+  initialThreads,
+  canUserAddCommentToThread = true,
+  canUserAssignThreadCallback,
+  canUserResolveThreadCallback,
+  canUserEditOrDeleteCommentCallback,
+}: CommentListStoryProps) {
   const [threads, setThreads] = useState<LegacyCommentThread[]>(initialThreads);
 
-  const handleAddComment = async (
-    threadId: string,
-    contents: string,
-    status?: CommentStatus,
+  const handleAddCommentToThread = async (
+    options: AddCommentToThreadOptions,
   ): Promise<string | undefined> => {
-    console.log(`Adding comment to thread ${threadId}: ${contents}`);
+    const { threadId, contents, status, assignedUser } = options;
+    console.log(`Adding comment to thread ${threadId}`, { contents, status, assignedUser });
 
     let newCommentId: string | undefined;
 
@@ -55,7 +69,7 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
             id: newCommentId,
             user: 'Current User',
             date: new Date().toISOString(),
-            contents,
+            contents: contents ?? '',
             deleted: false,
             hideInTextWindow: false,
             language: 'en',
@@ -66,11 +80,13 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
             thread: thread.id,
             verseRef: thread.verseRef,
             ...(commentStatus && { status: commentStatus }),
+            ...(assignedUser !== undefined && { assignedUser }),
           };
           return {
             ...thread,
             comments: [...thread.comments, newComment],
             ...(commentStatus && { status: commentStatus }),
+            ...(assignedUser !== undefined && { assignedUser }),
           };
         }
         return thread;
@@ -78,50 +94,6 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     );
 
     return newCommentId;
-  };
-
-  const handleResolveCommentThread = async (
-    threadId: string,
-    resolve: boolean,
-    contents?: string,
-  ): Promise<boolean> => {
-    console.log(`Setting thread ${threadId} status to ${resolve ? 'resolved' : 'unresolved'}`);
-
-    let success = false;
-
-    // Add a status comment to the thread (mimics PT9 behavior of adding a comment with status)
-    setThreads((prevThreads) =>
-      prevThreads.map((thread) => {
-        if (thread.id === threadId) {
-          const statusCommentId = `${thread.id}-status-${Date.now()}`;
-          const statusComment: LegacyComment = {
-            id: statusCommentId,
-            user: 'Current User',
-            date: new Date().toISOString(),
-            contents: contents || '',
-            deleted: false,
-            hideInTextWindow: false,
-            language: 'en',
-            startPosition: 0,
-            selectedText: '',
-            contextBefore: '',
-            contextAfter: '',
-            thread: thread.id,
-            verseRef: thread.verseRef,
-            status: resolve ? 'Resolved' : 'Todo',
-          };
-          success = true;
-          return {
-            ...thread,
-            comments: [...thread.comments, statusComment],
-            status: resolve ? 'Resolved' : 'Todo',
-          };
-        }
-        return thread;
-      }),
-    );
-
-    return success;
   };
 
   const handleUpdateComment = async (commentId: string, contents: string): Promise<boolean> => {
@@ -177,15 +149,32 @@ function CommentListStory({ initialThreads }: { initialThreads: LegacyCommentThr
     return commentFound;
   };
 
+  // Default permission callback for edit/delete - only allow for current user's comments
+  const defaultCanUserEditOrDeleteCallback = useMemo(() => {
+    return async (commentId: string): Promise<boolean> => {
+      console.log(`Checking if user can edit/delete comment ${commentId}`);
+      const comment = threads
+        .flatMap((thread) => thread.comments)
+        .find((c) => c.id === commentId && !c.deleted);
+      return comment?.user === 'Current User';
+    };
+  }, [threads]);
+
   return (
     <CommentList
       threads={threads}
       localizedStrings={commentListLocalizedStrings}
       currentUser="Current User"
-      handleAddComment={handleAddComment}
-      handleResolveCommentThread={handleResolveCommentThread}
+      handleAddCommentToThread={handleAddCommentToThread}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
+      assignableUsers={mockAssignableUsers}
+      canUserAddCommentToThread={canUserAddCommentToThread}
+      canUserAssignThreadCallback={canUserAssignThreadCallback}
+      canUserResolveThreadCallback={canUserResolveThreadCallback}
+      canUserEditOrDeleteCommentCallback={
+        canUserEditOrDeleteCommentCallback ?? defaultCanUserEditOrDeleteCallback
+      }
     />
   );
 }
@@ -212,5 +201,30 @@ export default meta;
 type Story = StoryObj<typeof CommentListStory>;
 
 export const Default: Story = {
-  render: () => <CommentListStory initialThreads={sampleComments} />,
+  render: () => (
+    <CommentListStory
+      initialThreads={sampleComments}
+      canUserAssignThreadCallback={async (threadId) => {
+        console.log(`Checking if user can assign thread ${threadId}`);
+        return true;
+      }}
+      canUserResolveThreadCallback={async (threadId) => {
+        console.log(`Checking if user can resolve thread ${threadId}`);
+        return true;
+      }}
+    />
+  ),
+};
+
+/** Story demonstrating restricted permissions - user cannot add comments, assign, or resolve */
+export const RestrictedPermissions: Story = {
+  render: () => (
+    <CommentListStory
+      initialThreads={sampleComments}
+      canUserAddCommentToThread={false}
+      canUserAssignThreadCallback={async () => false}
+      canUserResolveThreadCallback={async () => false}
+      canUserEditOrDeleteCommentCallback={async () => false}
+    />
+  ),
 };

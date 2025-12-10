@@ -14,10 +14,14 @@ export default function CommentList({
   threads,
   currentUser,
   localizedStrings,
-  handleAddComment,
-  handleResolveCommentThread,
+  handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
+  assignableUsers,
+  canUserAddCommentToThread,
+  canUserAssignThreadCallback,
+  canUserResolveThreadCallback,
+  canUserEditOrDeleteCommentCallback,
 }: CommentListProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
 
@@ -90,10 +94,14 @@ export default function CommentList({
             currentUser={currentUser}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
-            handleAddComment={handleAddComment}
-            handleResolveCommentThread={handleResolveCommentThread}
+            handleAddCommentToThread={handleAddCommentToThread}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
+            assignableUsers={assignableUsers}
+            canUserAddCommentToThread={canUserAddCommentToThread}
+            canUserAssignThreadCallback={canUserAssignThreadCallback}
+            canUserResolveThreadCallback={canUserResolveThreadCallback}
+            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
           />
         </div>
       ))}

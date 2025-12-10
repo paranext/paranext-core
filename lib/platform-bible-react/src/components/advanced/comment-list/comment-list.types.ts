@@ -6,13 +6,28 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 
+/** Options for adding a comment to a thread */
+export type AddCommentToThreadOptions = {
+  /** The ID of the thread to add the comment to */
+  threadId: string;
+  /** The content of the comment (optional - can be omitted when only changing status or assignment) */
+  contents?: string;
+  /** Status to set on the thread ('Resolved' or 'Todo') */
+  status?: CommentStatus;
+  /** User to assign to the thread. Use "" for unassigned, "Team" for team assignment. */
+  assignedUser?: string;
+};
+
 /**
  * Object containing all keys used for localization in the CommentList component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
 export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
+  '%comment_assign_team%',
+  '%comment_assign_unassigned%',
   '%comment_assigned_to%',
+  '%comment_assigning_to%',
   '%comment_dateAtTime%',
   '%comment_date_today%',
   '%comment_date_yesterday%',
@@ -43,20 +58,46 @@ export interface CommentListProps {
   /** Localized strings for the component */
   localizedStrings: LanguageStrings;
   /**
-   * Handler for adding a comment to a thread. If successful, returns the auto-generated comment ID
-   * (format: "threadId/userName/date"). Otherwise, returns undefined.
+   * Handler for adding a comment to a thread. This unified handler supports:
+   *
+   * - Adding a comment (provide contents)
+   * - Resolving/unresolving a thread (provide status: 'Resolved' or 'Todo')
+   * - Assigning a user (provide assignedUser)
+   * - Any combination of the above
+   *
+   * If successful, returns the auto-generated comment ID (format: "threadId/userName/date").
+   * Otherwise, returns undefined.
    */
-  handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-  /** Handler for setting the comment thread status (resolve/unresolve) */
-  handleResolveCommentThread: (
-    threadId: string,
-    resolve: boolean,
-    contents?: string,
-  ) => Promise<boolean>;
+  handleAddCommentToThread: (options: AddCommentToThreadOptions) => Promise<string | undefined>;
   /** Handler for updating a comment's content */
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
   handleDeleteComment: (commentId: string) => Promise<boolean>;
+  /**
+   * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
+   * (empty string) for unassigned.
+   */
+  assignableUsers?: string[];
+  /**
+   * Whether the current user can add comments to existing threads in this project. When false, UI
+   * elements for adding comments to threads should be hidden or disabled.
+   */
+  canUserAddCommentToThread?: boolean;
+  /**
+   * Callback to check if the current user can assign a specific thread. Returns a promise that
+   * resolves to true if the user can assign the thread, false otherwise.
+   */
+  canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can resolve or re-open a specific thread. Returns a
+   * promise that resolves to true if the user can resolve the thread, false otherwise.
+   */
+  canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+   * that resolves to true if the user can edit or delete the comment, false otherwise.
+   */
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 }
 
 /** Props for the CommentThread component */
@@ -80,20 +121,46 @@ export interface CommentThreadProps {
   /** Status of the thread */
   threadStatus?: CommentStatus;
   /**
-   * Handler for adding a comment to a thread. If successful, returns the auto-generated comment ID
-   * (format: "threadId/userName/date"). Otherwise, returns undefined.
+   * Handler for adding a comment to a thread. This unified handler supports:
+   *
+   * - Adding a comment (provide contents)
+   * - Resolving/unresolving a thread (provide status: 'Resolved' or 'Todo')
+   * - Assigning a user (provide assignedUser)
+   * - Any combination of the above
+   *
+   * If successful, returns the auto-generated comment ID (format: "threadId/userName/date").
+   * Otherwise, returns undefined.
    */
-  handleAddComment: (threadId: string, contents: string) => Promise<string | undefined>;
-  /** Handler for setting the comment thread status (resolve/unresolve) */
-  handleResolveCommentThread: (
-    threadId: string,
-    resolve: boolean,
-    contents?: string,
-  ) => Promise<boolean>;
+  handleAddCommentToThread: (options: AddCommentToThreadOptions) => Promise<string | undefined>;
   /** Handler for updating a comment's content */
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
   handleDeleteComment: (commentId: string) => Promise<boolean>;
+  /**
+   * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
+   * (empty string) for unassigned.
+   */
+  assignableUsers?: string[];
+  /**
+   * Whether the current user can add comments to existing threads in this project. When false, UI
+   * elements for adding comments to threads should be hidden or disabled.
+   */
+  canUserAddCommentToThread?: boolean;
+  /**
+   * Callback to check if the current user can assign a specific thread. Returns a promise that
+   * resolves to true if the user can assign the thread, false otherwise.
+   */
+  canUserAssignThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can resolve or re-open a specific thread. Returns a
+   * promise that resolves to true if the user can resolve the thread, false otherwise.
+   */
+  canUserResolveThreadCallback?: (threadId: string) => Promise<boolean>;
+  /**
+   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+   * that resolves to true if the user can edit or delete the comment, false otherwise.
+   */
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 }
 
 /** Props for the CommentItem component */
@@ -102,23 +169,28 @@ export interface CommentItemProps {
   comment: LegacyComment;
   /** Whether the comment is a reply or a top-level comment */
   isReply?: boolean;
-  /**
-   * Whether the comment is editable or not. Only the most recent comment on a thread can be edited
-   * and it can only be edited by its author.
-   */
-  isEditable?: boolean;
   /** Localized strings for the component */
   localizedStrings: LanguageStrings;
   /** Whether the thread is expanded */
   isThreadExpanded?: boolean;
   /** Current status of the thread */
   threadStatus?: CommentStatus;
-  /** Handler for setting the comment thread status (resolve/unresolve) */
-  handleResolveCommentThread?: (threadId: string, resolve: boolean) => Promise<boolean>;
+  /**
+   * Handler for adding a comment to a thread (used for resolving). If successful, returns the
+   * auto-generated comment ID. Otherwise, returns undefined.
+   */
+  handleAddCommentToThread?: (options: AddCommentToThreadOptions) => Promise<string | undefined>;
   /** Handler for updating a comment's content */
   handleUpdateComment?: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
   handleDeleteComment?: (commentId: string) => Promise<boolean>;
   /** Callback when editing state changes */
   onEditingChange?: (isEditing: boolean) => void;
+  /**
+   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
+   * that resolves to true if the user can edit or delete the comment, false otherwise.
+   */
+  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+  /** Whether the current user can resolve or re-open this thread. */
+  canUserResolveThread?: boolean;
 }
