@@ -234,8 +234,7 @@ export default function SearchResult({
         setShouldGetVerseText(true);
         onResultClick(searchResult, globalResultsIndex);
       }}
-      onDoubleClick={() => () => {
-        setShouldGetVerseText(true);
+      onDoubleClick={() => {
         onResultDoubleClick(searchResult, globalResultsIndex);
       }}
       dropdownContent={dropdownContent}
