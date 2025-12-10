@@ -1,17 +1,17 @@
+import { useLocalizedStrings } from '@papi/frontend/react';
+import { Check, Settings, X } from 'lucide-react';
 import {
   Badge,
-  cn,
   DropdownMenuItem,
   ResultsCard,
+  ScrRefBtnProps,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { Check, Settings, X } from 'lucide-react';
-import { useMemo } from 'react';
 import { CheckRunResult } from 'platform-scripture';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useMemo } from 'react';
 
 /** Enum representing the possible states of a check */
 export enum CheckStates {
@@ -75,8 +75,8 @@ export type CheckCardProps = {
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
   handleDenyCheck: (result: CheckRunResult) => Promise<boolean>;
-  /** The title of the card */
-  checkCardTitle: string;
+  /** Scripture reference as link */
+  scrRef: ScrRefBtnProps;
   /** A brief description of the check result. Optional. */
   checkCardDescription?: string;
   /** Callback function triggered to open the configure checks webview */
@@ -87,8 +87,6 @@ export type CheckCardProps = {
   checkName: string;
   /** Whether the check is fully set up or not */
   isCheckSetup?: boolean;
-  /** Additional class names for custom styling */
-  className?: string;
 };
 
 /**
@@ -103,13 +101,12 @@ export function CheckCard({
   handleSelectCheck,
   handleAllowCheck,
   handleDenyCheck,
-  checkCardTitle,
   checkCardDescription,
   handleOpenSettingsAndInventories,
   showBadge = false,
   checkName,
   isCheckSetup = true,
-  className,
+  scrRef,
 }: CheckCardProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
@@ -182,53 +179,44 @@ export function CheckCard({
     [checkName],
   );
 
-  const cardContent = (
-    <div className={cn('tw-flex tw-flex-col tw-gap-2', className)}>
-      <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-        <span className="tw-shrink-0 tw-text-nowrap tw-text-xs tw-font-medium">
-          {checkCardTitle}
-        </span>
-        {showBadge &&
-          (checkState === CheckStates.Fixed ||
-            checkState === CheckStates.Denied ||
-            checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />}
-        {!isCheckSetup && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  key={`${checkId}-requires-setup-badge`}
-                  className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
-                  variant="secondary"
-                >
-                  {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">
-                  {localizedStrings['%webView_checksSidePanel_checkRequiresSetup_tooltip%']}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
-      <span className="tw-font-regular tw-overflow-hidden tw-text-ellipsis tw-text-xs tw-text-muted-foreground">
-        {checkCardDescription}
-      </span>
-    </div>
-  );
+  const badges = () => [
+    showBadge &&
+      (checkState === CheckStates.Fixed ||
+        checkState === CheckStates.Denied ||
+        checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />,
+    !isCheckSetup && (
+      <TooltipProvider key={`${checkId}-requires-setup-badge`}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
+              variant="secondary"
+            >
+              {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="tw-font-light">
+              {localizedStrings['%webView_checksSidePanel_checkRequiresSetup_tooltip%']}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    ),
+  ];
 
   return (
     <ResultsCard
       cardKey={checkId}
       isSelected={isSelected}
+      scrRef={scrRef}
+      badges={badges() ?? undefined}
       onSelect={() => handleSelectCheck(checkId)}
       isDenied={isFixedOrDenied}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
     >
-      {cardContent}
+      {checkCardDescription}
     </ResultsCard>
   );
 }

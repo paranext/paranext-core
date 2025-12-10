@@ -856,7 +856,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 checkId={writeCheckId(result, index)}
                 isSelected={selectedCheckId === writeCheckId(result, index)}
                 handleSelectCheck={handleSelectCheck}
-                checkCardTitle={`${result.verseRef.book} ${result.verseRef.chapterNum}:${result.verseRef.verseNum} ${result.itemText}`}
+                scrRef={{
+                  startRef: {
+                    book: result.verseRef.book,
+                    chapterAndVerse: `${result.verseRef.chapterNum}:${result.verseRef.verseNum}`,
+                  },
+                  text: result.itemText,
+                }}
                 checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
                 handleDenyCheck={handleDenyCheck}
                 handleAllowCheck={handleAllowCheck}

@@ -3,6 +3,7 @@ import { MoreHorizontal } from 'lucide-react';
 import React, { ReactNode } from 'react';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
+import ScrRefButton, { ScrRefBtnProps } from './scripture-reference-button.component';
 
 /** Props interface for the ResultsCard base component */
 export interface ResultsCardProps {
@@ -12,14 +13,20 @@ export interface ResultsCardProps {
   isSelected: boolean;
   /** Callback function called when the card is clicked */
   onSelect: () => void;
+  /** Callback function called when the card is double-clicked */
+  onDoubleClick?: () => void;
   /** Whether the content of this card are in a denied state */
   isDenied?: boolean;
   /** Whether the card should be hidden */
   isHidden?: boolean;
   /** Additional CSS classes to apply to the card */
   className?: string;
+  /** Scripture reference as link */
+  scrRef: ScrRefBtnProps;
+  /** Badges to display on the card */
+  badges?: ReactNode[];
   /** Main content to display on the card */
-  children: ReactNode;
+  children?: ReactNode;
   /** Content to show in the dropdown menu when selected */
   dropdownContent?: ReactNode;
   /** Additional content to show below the main content when selected */
@@ -44,6 +51,9 @@ export function ResultsCard({
   dropdownContent,
   additionalSelectedContent,
   accentColor,
+  onDoubleClick,
+  scrRef,
+  badges,
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -57,38 +67,76 @@ export function ResultsCard({
       hidden={isHidden}
       key={cardKey}
       onClick={onSelect}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        if (onDoubleClick) onDoubleClick();
+      }}
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
       className={cn(
-        'tw-relative tw-min-w-36 tw-rounded-xl tw-border tw-shadow-none hover:tw-bg-muted/50',
+        'tw-relative tw-min-w-36 tw-cursor-default tw-rounded-xl tw-border tw-shadow-none hover:tw-bg-muted/50',
         { 'tw-opacity-50 hover:tw-opacity-100': isDenied && !isSelected },
-        { 'tw-bg-accent': isSelected },
+        { 'tw-bg-muted': isSelected },
         { 'tw-bg-transparent': !isSelected },
         className,
       )}
     >
-      <div className="tw-flex tw-flex-col tw-gap-2 tw-p-4">
+      <div className={cn('tw-flex tw-flex-col tw-px-4 tw-py-3', { 'tw-pb-4': isSelected })}>
         <div className="tw-flex tw-justify-between tw-overflow-hidden">
-          <div className="tw-min-w-0 tw-flex-1">{children}</div>
+          <div
+            className={cn(
+              'tw-flex tw-max-w-[calc(100%-0.5rem)] tw-flex-wrap tw-items-baseline tw-gap-x-2',
+              {
+                'tw-w-[calc(100%-3rem)]': isSelected && dropdownContent,
+              },
+            )}
+          >
+            <ScrRefButton
+              startRef={scrRef?.startRef}
+              endRef={scrRef?.endRef}
+              text={scrRef?.text}
+              onClick={onDoubleClick}
+              className="tw-whitespace-normal tw-rounded-sm tw-text-xs tw-font-medium"
+            />
+            {badges && (
+              <div className="tw-flex tw-gap-2 tw-whitespace-normal tw-break-words">{badges}</div>
+            )}
+            {children && (
+              <div
+                className={cn(
+                  'tw-ms-1 tw-overflow-hidden tw-text-ellipsis tw-py-1 tw-text-xs tw-text-muted-foreground',
+                  {
+                    'tw-break-words': isSelected,
+                  },
+                )}
+              >
+                {children}
+              </div>
+            )}
+          </div>
           {isSelected && dropdownContent && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
-                <Button className="tw-m-1 tw-h-6 tw-w-6" variant="ghost" size="icon">
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
-            </DropdownMenu>
+            <div className="tw-p-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger className={accentColor} asChild>
+                  <Button className="tw-h-6 tw-w-8" variant="ghost" size="icon">
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
+
         {isSelected && additionalSelectedContent && (
-          <div className="tw-w-fit tw-min-w-0 tw-max-w-full tw-overflow-hidden">
+          <div className="tw-ms-1 tw-w-fit tw-min-w-0 tw-max-w-full tw-overflow-hidden tw-break-words">
             {additionalSelectedContent}
           </div>
         )}
       </div>
+      {/* Color indicator bar */}
       {accentColor && (
         <div
           className={`tw-absolute tw-right-0 tw-top-0 tw-h-full tw-w-2 tw-rounded-r-xl ${accentColor}`}
