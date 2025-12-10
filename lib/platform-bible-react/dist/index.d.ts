@@ -1767,7 +1767,7 @@ export type ScrRefBtnProps = {
 	endRef?: ScrRef;
 	text?: string;
 	className?: string;
-	onClick?: () => void;
+	onClick?: (e: unknown) => void;
 	remainderTextLength?: number;
 };
 export declare function ScrRefButton({ startRef, endRef, text, className, onClick, remainderTextLength, }: ScrRefBtnProps): import("react/jsx-runtime").JSX.Element;
