@@ -3,16 +3,33 @@ export type Direction = 'rtl' | 'ltr';
 
 const STORAGE_KEY: string = 'layoutDirection';
 
+function hasLocalStorage(): boolean {
+  try {
+    return typeof window !== 'undefined' && !!window.localStorage;
+  } catch {
+    return false;
+  }
+}
+
 /** Read layout direction from localStorage or return 'ltr' */
 export function readDirection(): Direction {
-  const retrieved = localStorage.getItem(STORAGE_KEY);
-  if (retrieved === 'rtl') {
-    return retrieved;
+  if (!hasLocalStorage()) return 'ltr';
+
+  try {
+    const retrieved = window.localStorage.getItem(STORAGE_KEY);
+    if (retrieved === 'rtl') return 'rtl';
+    return 'ltr';
+  } catch {
+    return 'ltr';
   }
-  return 'ltr';
 }
 
 /** Write layout direction to localStorage */
 export function persistDirection(dir: Direction): void {
-  localStorage.setItem(STORAGE_KEY, dir);
+  if (!hasLocalStorage()) return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, dir);
+  } catch {
+    // ignore failures (e.g., storage disabled)
+  }
 }
