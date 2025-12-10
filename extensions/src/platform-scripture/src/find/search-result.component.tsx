@@ -295,7 +295,6 @@ export default function SearchResult({
           onResultClick(searchResult, globalResultsIndex);
         }}
         onDoubleClick={() => {
-          setShouldGetVerseText(true);
           onResultDoubleClick(searchResult, globalResultsIndex);
         }}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
