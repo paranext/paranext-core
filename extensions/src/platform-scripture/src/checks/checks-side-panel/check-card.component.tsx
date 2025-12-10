@@ -71,6 +71,8 @@ export type CheckCardProps = {
   checkState: CheckStates;
   /** Callback function triggered when the check is selected */
   handleSelectCheck: (checkTitle: string) => void;
+  /** Callback function triggered when the check is double-clicked */
+  handleDoubleClick: (checkTitle: string) => void;
   /** Callback for denying a check */
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
@@ -99,6 +101,7 @@ export function CheckCard({
   isSelected,
   checkState,
   handleSelectCheck,
+  handleDoubleClick,
   handleAllowCheck,
   handleDenyCheck,
   checkCardDescription,
@@ -212,6 +215,7 @@ export function CheckCard({
       scrRef={scrRef}
       badges={badges() ?? undefined}
       onSelect={() => handleSelectCheck(checkId)}
+      onDoubleClick={() => handleDoubleClick(checkId)}
       isDenied={isFixedOrDenied}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
