@@ -11,7 +11,7 @@ export type ScrRefBtnProps = {
   endRef?: ScrRef;
   text?: string;
   className?: string;
-  onClick?: () => void;
+  onClick?: (e: unknown) => void;
   remainderTextLength?: number;
 };
 
@@ -43,7 +43,15 @@ function ScrRefButton({
       : `${endRef?.book} ${endRef?.chapterAndVerse}`;
   return (
     <div className={cn('tw-overflow-hidden tw-truncate tw-p-1 tw-text-start tw-leading-none')}>
-      <Button variant="link" onClick={onClick} className={cn('tw-me-2 tw-h-4 tw-p-0', className)}>
+      <Button
+        variant="link"
+        aria-label="Submit reference change"
+        onClick={(e) => {
+          e.stopPropagation(); // Stops bubbling to outer div
+          onClick?.(e);
+        }}
+        className={cn('tw-me-2 tw-h-4 tw-p-0', className)}
+      >
         {startRef.book} {startRef.chapterAndVerse}
         {endRef ? ` - ${endRefString}` : ''}
       </Button>
