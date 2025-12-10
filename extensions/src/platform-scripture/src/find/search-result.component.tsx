@@ -5,6 +5,7 @@ import {
   getErrorMessage,
   LocalizedStringValue,
   LocalizeKey,
+  UsfmVerseRefVerseLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
@@ -42,6 +43,8 @@ interface SearchResultProps {
   localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when the user double clicks on this search result */
+  onResultDoubleClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
@@ -88,6 +91,7 @@ export default function SearchResult({
   usjReaderWriter,
   localizedBookData,
   onResultClick,
+  onResultDoubleClick,
   onHideResult,
   onReplace,
   onCancelReplace,
@@ -242,43 +246,33 @@ export default function SearchResult({
     </>
   );
 
-  const cardContent = (
-    <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
-      <div className="tw-shrink-0">
-        {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-          searchResult.start.verseRef.book}{' '}
-        {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-        <span className="scripture-font">{searchResult.text ?? ''}</span>
-      </div>
-      {searchResult.isReplaced && (
-        <>
-          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
-            {localizedStrings['%webView_find_replaced%']}
-          </span>
-          <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
-            <div
-              className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
-              style={{ width: isProgressAnimating ? '100%' : '0%' }}
-            />
-          </div>
-          {onCancelReplace && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCancelReplace();
-              }}
-            >
-              {localizedStrings['%general_cancel%']}
-            </Button>
-          )}
-        </>
-      )}
-    </div>
-  );
+  const getBookFromVerseRef = (verseLocation: UsfmVerseRefVerseLocation): string => {
+    return (
+      localizedBookData.get(verseLocation.verseRef.book)?.localizedId ?? verseLocation.verseRef.book
+    );
+  };
+  const getChapterAndVerseFromVerseRef = (verseLocation: UsfmVerseRefVerseLocation): string => {
+    return `${verseLocation.verseRef.chapterNum}:${
+      verseLocation.verseRef.verse || verseLocation.verseRef.verseNum
+    }`;
+  };
+
+  const startRef = {
+    book: getBookFromVerseRef(searchResult.start),
+    chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.start),
+  };
+  const endRef = {
+    book: getBookFromVerseRef(searchResult.end),
+    chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.end),
+  };
+  const scrRef = {
+    startRef,
+    endRef:
+      startRef.book === endRef.book && startRef.chapterAndVerse === endRef.chapterAndVerse
+        ? undefined
+        : endRef,
+    text: searchResult.text,
+  };
 
   const additionalSelectedContent = (
     <div className="tw-text-xs tw-m-1 tw-font-normal tw-text-muted-foreground scripture-font">
@@ -292,17 +286,50 @@ export default function SearchResult({
         cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
           searchResult.start.verseRef.verseNum
         }${searchResult.text}${globalResultsIndex}`}
+        scrRef={scrRef}
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
         className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
-        onSelect={() => onResultClick(searchResult, globalResultsIndex)}
+        onSelect={() => {
+          setShouldGetVerseText(true);
+          onResultClick(searchResult, globalResultsIndex);
+        }}
+        onDoubleClick={() => {
+          setShouldGetVerseText(true);
+          onResultDoubleClick(searchResult, globalResultsIndex);
+        }}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
         showDropdownOnHover={!searchResult.isReplaced}
         additionalContent={additionalSelectedContent}
       >
-        {cardContent}
+        {searchResult.isReplaced && (
+          <div className="tw-flex tw-items-center tw-gap-2">
+            <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+              {localizedStrings['%webView_find_replaced%']}
+            </span>
+            <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
+              <div
+                className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
+                style={{ width: isProgressAnimating ? '100%' : '0%' }}
+              />
+            </div>
+            {onCancelReplace && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancelReplace();
+                }}
+              >
+                {localizedStrings['%general_cancel%']}
+              </Button>
+            )}
+          </div>
+        )}
       </ResultsCard>
     </div>
   );

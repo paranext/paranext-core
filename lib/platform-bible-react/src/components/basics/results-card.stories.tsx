@@ -3,9 +3,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { BookOpen, Copy, ExternalLink, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { fn } from 'storybook/test';
+import { Badge } from '../shadcn-ui/badge';
 import { DropdownMenuItem } from '../shadcn-ui/dropdown-menu';
 import { ResultsCard } from './results-card.component';
-import { Badge } from '../shadcn-ui/badge';
+import { ScrRef } from './scripture-reference-button.component';
 
 const meta: Meta<typeof ResultsCard> = {
   title: 'Basics/ResultsCard',
@@ -66,6 +67,7 @@ export const Default: Story = {
     isSelected: false,
     onSelect: fn(),
     cardKey: 'default-card',
+    scrRef: { startRef: { book: 'John', chapterAndVerse: '3:16' } },
     children: (
       <div className="tw-space-y-1">
         <h3 className="tw-text-lg tw-font-semibold">John 3:16</h3>
@@ -80,7 +82,9 @@ export const Default: Story = {
 
 type CardConfig = {
   key: string;
-  title: string;
+  ref: ScrRef;
+  endRef?: ScrRef;
+  search?: string;
   badges?: string[];
   description: string;
   isDenied?: boolean;
@@ -92,20 +96,28 @@ export const CheckCards: Story = {
     const checkCards: CardConfig[] = [
       {
         key: 'check-card-1',
-        title: 'GEN 1:1',
+        ref: { book: 'GEN', chapterAndVerse: '1:1' },
         badges: ['Setup required'],
         description: 'Invalid or unknown character: (',
       },
       {
         key: 'check-card-2',
-        title: 'GEN 1:1',
+        ref: { book: 'GEN', chapterAndVerse: '1:1' },
+        search: '(',
+        description: 'Invalid or unknown character: (',
+        defaultSelected: false,
+      },
+      {
+        key: 'check-card-2a',
+        ref: { book: 'GEN', chapterAndVerse: '1:1' },
+        search: 'Some a bit longer text',
         badges: ['Setup required'],
         description: 'Invalid or unknown character: (',
-        defaultSelected: true,
       },
       {
         key: 'check-card-3',
-        title: 'GEN 1:1',
+        ref: { book: 'GEN', chapterAndVerse: '1:1' },
+        search: 'Invalid name Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch',
         badges: ['Denied', 'Setup required'],
         description:
           "There's a place in Scotland called Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, which has the longest place name in Europe.",
@@ -128,6 +140,16 @@ export const CheckCards: Story = {
           return (
             <ResultsCard
               cardKey={card.key}
+              scrRef={{
+                startRef: card.ref,
+                endRef: card.endRef,
+                text: card.search,
+              }}
+              badges={card.badges?.map((badge) => (
+                <Badge key={`${card.key}-${badge}`} className="tw-rounded-md" variant="muted">
+                  {badge}
+                </Badge>
+              ))}
               isSelected={isSelected}
               isDenied={card.isDenied}
               accentColor={accentColor}
@@ -141,26 +163,7 @@ export const CheckCards: Story = {
                 </Badge>
               }
             >
-              <div className="tw-flex tw-flex-col tw-gap-2">
-                <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-                  <span className="tw-shrink-0 tw-text-nowrap tw-text-xs tw-font-medium">
-                    {card.title}
-                  </span>
-                  {card.badges &&
-                    card.badges.map((badge) => (
-                      <Badge
-                        key={`${card.key}-${badge}`}
-                        className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
-                        variant="secondary"
-                      >
-                        {badge}
-                      </Badge>
-                    ))}
-                </div>
-                <span className="tw-font-regular tw-overflow-hidden tw-text-ellipsis tw-text-xs tw-text-muted-foreground">
-                  {card.description}
-                </span>
-              </div>
+              {card.description}
             </ResultsCard>
           );
         })}
@@ -182,20 +185,33 @@ export const FindCards: Story = {
     const findCards: CardConfig[] = [
       {
         key: 'find-card-1',
-        title: 'GEN 1:1 God',
+        ref: { book: 'GEN', chapterAndVerse: '1:1' },
+        search: 'God',
         description: 'In the beginning God created the heavens and the earth.',
       },
       {
         key: 'find-card-2',
-        title: 'GEN 1:3 God',
+        ref: { book: 'GEN', chapterAndVerse: '1:3' },
+        search: 'God',
         description: 'And God said, "Let there be light," and there was light.',
         defaultSelected: true,
       },
       {
         key: 'find-card-3',
-        title: 'GEN 1:5 God',
+        ref: { book: 'GEN', chapterAndVerse: '1:5' },
+        search:
+          'abc abc ThisIsAVeryLongTitleToTestOverflowHandlingEasily abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc abc',
         description:
-          'God called the light "day," and the darkness he called "night." And there was evening and there was morning, the first day.',
+          'God called the light "day," and the darkness he called "night." ThisIsAVeryLongTextToTestOverflowHandlingEasily And there was evening and there was morning, the first day. ',
+      },
+      {
+        key: 'find-card-4',
+        ref: { book: 'JHN', chapterAndVerse: '1:14' },
+        endRef: { book: 'JHN', chapterAndVerse: '1:15' },
+        search:
+          'The Word became flesh and made his dwelling among us. We have seen his glory, the glory of the one and only Son, who came from the Father, full of grace and truth. \v15 John testified concerning him. He cried out, saying, “This is the one I spoke about when I said, ‘He who comes after me has surpassed me because he was before me.’”)',
+        description:
+          'God called the light "day," and the darkness he called "night." ThisIsAVeryLongTextToTestOverflowHandlingEasily And there was evening and there was morning, the first day. ',
       },
     ];
 
@@ -213,6 +229,11 @@ export const FindCards: Story = {
           return (
             <ResultsCard
               cardKey={card.key}
+              scrRef={{
+                startRef: card.ref,
+                endRef: card.endRef,
+                text: card.search,
+              }}
               isSelected={isSelected}
               onSelect={() =>
                 setSelectedCardKey((current) => (current === card.key ? undefined : card.key))
@@ -223,9 +244,7 @@ export const FindCards: Story = {
                   {card.description}
                 </div>
               }
-            >
-              <div className="tw-text-xs tw-font-medium">{card.title}</div>
-            </ResultsCard>
+            />
           );
         })}
       </div>

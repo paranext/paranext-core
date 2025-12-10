@@ -1765,6 +1765,19 @@ export type UndoRedoButtonsProps = {
  * make those shortcuts functional.
  */
 export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, showKeyboardShortcuts, className, variant, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
+type ScrRef = {
+	book: string;
+	chapterAndVerse: string;
+};
+export type ScrRefBtnProps = {
+	startRef: ScrRef;
+	endRef?: ScrRef;
+	text?: string;
+	className?: string;
+	onClick?: () => void;
+	remainderTextLength?: number;
+};
+export declare function ScrRefButton({ startRef, endRef, text, className, onClick, remainderTextLength, }: ScrRefBtnProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
@@ -1772,14 +1785,20 @@ interface ResultsCardProps {
 	isSelected: boolean;
 	/** Callback function called when the card is clicked */
 	onSelect: () => void;
+	/** Callback function called when the card is double-clicked */
+	onDoubleClick?: () => void;
 	/** Whether the content of this card are in a denied state */
 	isDenied?: boolean;
 	/** Whether the card should be hidden */
 	isHidden?: boolean;
 	/** Additional CSS classes to apply to the card */
 	className?: string;
+	/** Scripture reference as link */
+	scrRef: ScrRefBtnProps;
+	/** Badges to display on the card */
+	badges?: React$1.ReactNode[];
 	/** Main content to display on the card */
-	children: React$1.ReactNode;
+	children?: React$1.ReactNode;
 	/** Additional buttons to show to the end of the card when selected, before the dropdown menu */
 	selectedButtons?: React$1.ReactNode;
 	/** Additional buttons to show when the card is hovered but not selected */
@@ -1798,7 +1817,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalContent, accentColor, showDropdownOnHover, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalSelectedContent, accentColor, showDropdownOnHover, onDoubleClick, scrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
