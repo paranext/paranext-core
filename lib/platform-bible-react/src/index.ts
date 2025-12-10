@@ -223,6 +223,8 @@ export {
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
 export type { Scope } from './components/utils/scripture.util';
+export { default as ScrRefButton } from './components/basics/scripture-reference-button.component';
+export type { ScrRefBtnProps } from './components/basics/scripture-reference-button.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
