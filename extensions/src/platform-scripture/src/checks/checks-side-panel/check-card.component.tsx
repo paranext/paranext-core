@@ -4,7 +4,6 @@ import { Check, Settings, X } from 'lucide-react';
 import {
   Badge,
   DropdownMenuItem,
-  LinkedScrRefDisplayProps,
   ResultsCard,
   Tooltip,
   TooltipContent,
