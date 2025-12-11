@@ -49,12 +49,7 @@ export interface MarkerMenuProps {
   markerMenuItems: MarkerMenuItem[];
 }
 
-/**
- * Marker menu component to render the list of markers and a few commands in the scripture editor
- *
- * @param localizedStrings Localized strings passed to the command
- * @param markerMenuItems A list of the items to be displayed in the marker menu
- */
+/** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProps) {
   return (
     <Command className="tw-bg-white">
@@ -62,14 +57,12 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>
         <CommandGroup>
-          {markerMenuItems.map((item, index) => (
+          {markerMenuItems.map((item) => (
             <CommandItem
               className="tw-flex tw-gap-2 hover:tw-bg-accent"
               disabled={item.isDisallowed || item.isDeprecated}
               onSelect={item.action}
-              // There's no other way to identify these command items uniquely so must use keys
-              // eslint-disable-next-line react/no-array-index-key
-              key={`command-${index}`}
+              key={`item-${item.title}`}
             >
               <div className="tw-w-6">
                 {item.marker ? (

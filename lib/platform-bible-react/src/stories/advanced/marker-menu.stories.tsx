@@ -12,8 +12,7 @@ const meta: Meta<typeof MarkerMenu> = {
   parameters: {
     docs: {
       description: {
-        component: `A component that lists the markers and a few commands that can be used in the
-        scripture editor.`,
+        component: `A component that lists the markers and a few commands that can be used in the scripture editor.`,
       },
     },
   },
