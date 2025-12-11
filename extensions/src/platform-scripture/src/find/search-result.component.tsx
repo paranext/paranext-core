@@ -1,11 +1,15 @@
 import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
-import { Button, DropdownMenuItem, ResultsCard, ScrRefBtnProps } from 'platform-bible-react';
+import {
+  Button,
+  DropdownMenuItem,
+  LinkedScrRefDisplayProps,
+  ResultsCard,
+} from 'platform-bible-react';
 import {
   getErrorMessage,
   LocalizedStringValue,
   LocalizeKey,
-  UsfmVerseRefVerseLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
@@ -246,33 +250,16 @@ export default function SearchResult({
     </>
   );
 
-  const getBookFromVerseRef = (verseLocation: UsfmVerseRefVerseLocation): string => {
-    return (
-      localizedBookData.get(verseLocation.verseRef.book)?.localizedId ?? verseLocation.verseRef.book
-    );
-  };
-  const getChapterAndVerseFromVerseRef = (verseLocation: UsfmVerseRefVerseLocation): string => {
-    return `${verseLocation.verseRef.chapterNum}:${
-      verseLocation.verseRef.verse || verseLocation.verseRef.verseNum
-    }`;
-  };
-
-  const startRef = {
-    book: getBookFromVerseRef(searchResult.start),
-    chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.start),
-  };
-  const endRef = {
-    book: getBookFromVerseRef(searchResult.end),
-    chapterAndVerse: getChapterAndVerseFromVerseRef(searchResult.end),
-  };
-  const scrRef: ScrRefBtnProps = {
-    startRef,
-    endRef:
-      startRef.book === endRef.book && startRef.chapterAndVerse === endRef.chapterAndVerse
-        ? undefined
-        : endRef,
-    text: searchResult.text,
-  };
+  const linkedScrRef: LinkedScrRefDisplayProps = useMemo(() => {
+    return {
+      startRef: searchResult.start.verseRef,
+      endRef: searchResult.end.verseRef,
+      textParts: searchResult.text, // TODO: use truncateOmittingMiddleWords once https://github.com/paranext/paranext-core/pull/1952 is merged
+      scrRefFormattingProps: {
+        localizedBookNames: localizedBookData,
+      },
+    };
+  }, [searchResult, localizedBookData]);
 
   const additionalSelectedContent = (
     <div className="tw-text-xs tw-m-1 tw-font-normal tw-text-muted-foreground scripture-font">
@@ -286,7 +273,7 @@ export default function SearchResult({
         cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
           searchResult.start.verseRef.verseNum
         }${searchResult.text}${globalResultsIndex}`}
-        scrRef={scrRef}
+        linkedScrRef={linkedScrRef}
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
         className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
