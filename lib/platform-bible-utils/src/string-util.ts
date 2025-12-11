@@ -827,7 +827,7 @@ export function truncateOmittingMiddleWords(
   const words = text.split(/\s+/);
 
   // If the text is too short to truncate, return as-is
-  if (words.length <= wordsToKeepBeforeAndAfter * 2) {
+  if (words.length <= wordsToKeepBeforeAndAfter * 2 || wordsToKeepBeforeAndAfter < 1) {
     return text;
   }
 
