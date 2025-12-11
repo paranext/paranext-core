@@ -1519,6 +1519,29 @@ export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (Scroll
  */
 export declare function formatScrRef(scrRef: SerializedVerseRef, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
 /**
+ * Formats a range of two Scripture references.
+ *
+ * @param startScrRef The Scripture reference to format at the start of the range. Empty book,
+ *   negative chapter or verse results in omitting that part.
+ * @param endScrRef The Scripture reference to format at the end of the range. Empty book, negative
+ *   chapter or verse results in omitting that part.
+ * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
+ *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
+ *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
+ *   etc.) to use.
+ * @param endOptionOrLocalizedBookName Default: uses value from optionOrLocalizedBookName
+ * @param chapterVerseSeparator The character(s) used to separate the chapter number from the verse
+ *   number. Default is a colon (:). Note: More than one character is allowed.
+ * @param bookChapterSeparator The character(s) used to separate the book from the chapter number.
+ *   Default is a single space. Note: More than one character is allowed.
+ * @param rangeSeparator The character(s) used to separate the two references. Default is a hyphen
+ *   surrounded by two spaces. Note: More than one character is allowed.
+ * @param omitSimilarParts Wether or not to repeat the book name in the end reference if it is the
+ *   same
+ * @returns The formatted range.
+ */
+export declare function formatScrRefRange(startScrRef: SerializedVerseRef, endScrRef: SerializedVerseRef, optionOrLocalizedBookName?: "id" | "English" | string, endOptionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string, rangeSeparator?: string, omitSimilarParts?: boolean): string;
+/**
  * Represents the major sections of the Bible and extra materials. Used for grouping and filtering
  * books in the book selector.
  */
@@ -3420,11 +3443,12 @@ export declare function toKebabCase(input: string): string;
  * Truncates text by removing words from the middle and replacing them with `[...]`
  *
  * @param text The input text
- * @param wordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the text
+ * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the
+ *   text
  * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
  *   x words, followed by `[...]` and the last x words
  */
-export declare function truncateOmittingMiddleWords(text: string, wordsToKeepBeforeAndAfter: number): string;
+export declare function truncateOmittingMiddleWords(text: string, numberOfWordsToKeepBeforeAndAfter: number): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**
