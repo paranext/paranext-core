@@ -205,7 +205,8 @@ export function FootnoteCallerDropdown({
             <span>{localizedStrings['%footnoteEditor_callerDropdown_item_custom%']}</span>
             <Input
               tabIndex={0}
-              onClick={(event) => {
+              onMouseDown={(event) => {
+                console.log('trigger');
                 event.stopPropagation();
                 setSelectedCallerType('custom');
                 isCustomCallerInputFocused.current = true;
