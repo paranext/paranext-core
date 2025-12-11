@@ -19,16 +19,201 @@ import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
+import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEventHandler, PropsWithChildren, ReactNode } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
+type Unsubscriber = () => boolean;
+type UnsubscriberAsync = () => Promise<boolean>;
+type PlatformEventHandler<T> = (event: T) => void;
+type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
+type ScriptureNode = SerializedVerseRef & {
+	jsonPath: string;
+};
+type ScriptureTextAnchor = ScriptureNode & {
+	offset: number;
+};
+type ScriptureSelection = {
+	start: ScriptureNode | ScriptureTextAnchor;
+	end?: ScriptureNode | ScriptureTextAnchor;
+};
+type ScrollGroupId = number;
+type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
+	[K in keyof T]: ReplaceType<T[K], A, B>;
+} : T;
+type LocalizeKey = `%${string}%`;
+type ReferencedItem = `${string}.${string}`;
+type OrderedItem = {
+	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
+	order: number;
+};
+type OrderedExtensibleContainer = OrderedItem & {
+	/** Determines whether other items can be added to this after it has been defined */
+	isExtensible?: boolean;
+};
+type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
+	/** ID of column in which this group resides */
+	column: ReferencedItem;
+};
+type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
+	/** ID of menu item hosting the submenu in which this group resides */
+	menuItem: ReferencedItem;
+};
+type MenuColumnWithHeader = OrderedExtensibleContainer & {
+	/** Key that represents the text of the header text of the column */
+	label: LocalizeKey;
+};
+type MenuItemBase = OrderedItem & {
+	/** Menu group to which this menu item belongs */
+	group: ReferencedItem;
+	/** Key that represents the text of this menu item to display */
+	label: LocalizeKey;
+	/** Key that represents words the platform should reference when users are searching for menu items */
+	searchTerms?: LocalizeKey;
+	/** Key that represents the text to display if a mouse pointer hovers over the menu item */
+	tooltip?: LocalizeKey;
+	/** Additional information provided by developers to help people who perform localization */
+	localizeNotes: string;
+};
+type MenuItemContainingSubmenu = MenuItemBase & {
+	/** ID for this menu item that holds a submenu */
+	id: ReferencedItem;
+};
+type MenuItemContainingCommand = MenuItemBase & {
+	/** Name of the PAPI command to run when this menu item is selected. */
+	command: ReferencedItem;
+	/**
+	 * Uri path to the icon to display after the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
+	iconPathAfter?: string;
+	/**
+	 * Uri path to the icon to display before the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
+	iconPathBefore?: string;
+};
+type GroupsInMultiColumnMenu = {
+	/** Named menu group */
+	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
+};
+type ColumnsWithHeaders = {
+	/** Named column of a menu */
+	[property: ReferencedItem]: MenuColumnWithHeader;
+	/** Defines whether columns can be added to this multi-column menu */
+	isExtensible?: boolean;
+};
+type MultiColumnMenu = {
+	/** Columns that belong in this menu */
+	columns: ColumnsWithHeaders;
+	/** Groups that belong in this menu */
+	groups: GroupsInMultiColumnMenu;
+	/** List of menu items that belong in this menu */
+	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
+};
+type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+type LocalizedStringValue = string;
+interface LanguageStrings {
+	[k: LocalizeKey]: LocalizedStringValue;
+}
+type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
+type CommentType = "Unspecified" | "Normal" | "Conflict";
+type LegacyComment = {
+	/** Present in a note when it has been assigned to a particular user */
+	assignedUser?: string;
+	/** Present when there is a Biblical Term Id associated with the note */
+	biblicalTermId?: string;
+	/**
+	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
+	 * message when displaying the note.
+	 */
+	conflictType?: string;
+	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
+	contents: string;
+	/**
+	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
+	 * after the selection.
+	 */
+	contextAfter?: string;
+	/**
+	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
+	 * before the selection.
+	 */
+	contextBefore?: string;
+	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
+	date: string;
+	/** True if the comment has been deleted */
+	deleted: boolean;
+	/** Additional information for the note header, added for Biblical Term notes. */
+	extraHeadingInfo?: string;
+	/** Present in a comment to hide the note when showing notes in teh Scripture text windows. */
+	hideInTextWindow: boolean;
+	/** Unique id of the comment, unchanged by subsequent editing */
+	id: string;
+	/** Language of note */
+	language: string;
+	/** Present in a note when it has been assigned to reply-to a particular user */
+	replyToUser?: string;
+	/** Text which was selected in comment, or "" for none */
+	selectedText?: string;
+	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
+	shared?: string;
+	/** Approximate position where the comment begins. Zero for attached to a verse. */
+	startPosition: number;
+	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
+	status?: CommentStatus;
+	/** Tags added in this note, joined with (',') */
+	tagAdded?: string;
+	/** Tags removed in this note, joined with (',') */
+	tagRemoved?: string;
+	/** Guid of the thread of comments */
+	thread: string;
+	/**
+	 * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have type
+	 * "conflict."
+	 */
+	type?: string;
+	/** Name of the user who created this comment */
+	user: string;
+	/** Original USFM content of verse */
+	verse?: string;
+	/** Verse reference in which comment appears */
+	verseRef: string;
+};
+type LegacyCommentThread = {
+	/** Thread identifier (from first comment) */
+	id: string;
+	/** All comments in this thread */
+	comments: LegacyComment[];
+	/** Thread status (aggregated from most recent non-Unspecified comment) */
+	status: CommentStatus;
+	/** Thread type (from first comment) */
+	type: CommentType;
+	/** User to whom the thread is assigned */
+	assignedUser: string;
+	/** User to reply to */
+	replyToUser: string;
+	/** Last modified date (ISO 8601 string) */
+	modifiedDate: string;
+	/** Scripture reference for this thread */
+	verseRef: string;
+	/** Name of the context scripture text */
+	contextScrTextName?: string;
+	/** Whether this is a spelling note */
+	isSpellingNote: boolean;
+	/** Whether this is a back translation note */
+	isBTNote: boolean;
+	/** Whether this is a consultant note */
+	isConsultantNote: boolean;
+	/** Biblical term ID if this is a biblical term note */
+	biblicalTermId?: string;
+};
 /**
  * Object containing all keys used for localization in the BookChapterControl component. If you're
  * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -274,8 +459,6 @@ export interface CommentListProps {
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
 	handleDeleteComment: (commentId: string) => Promise<boolean>;
-	/** Handler for updating a thread's read status */
-	handleReadStatusChange: (threadId: string, markRead: boolean) => Promise<boolean>;
 	/**
 	 * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
 	 * (empty string) for unassigned.
@@ -301,15 +484,13 @@ export interface CommentListProps {
 	 * that resolves to true if the user can edit or delete the comment, false otherwise.
 	 */
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
-	/** Callback when the user clicks a verse reference in a comment thread. */
-	onVerseRefClick?: (thread: LegacyCommentThread) => void;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -790,12 +971,7 @@ export declare const getBookIdFromUSFM: (text: string) => string;
  * @returns The status for the specified item
  */
 export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
-/**
- * Represents an item in the inventory with associated text and verse reference.
- *
- * @deprecated 12 January 2026. Use InventorySummaryItem instead for better performance and
- *   functionality.
- */
+/** Represents an item in the inventory with associated text and verse reference. */
 export type InventoryItem = {
 	/**
 	 * The label by which the item is shown in the inventory (e.g. the word that is repeated in case
@@ -814,22 +990,6 @@ export type InventoryItem = {
 	 * `verse` string
 	 */
 	offset: number;
-};
-/**
- * Represents a summary item in the inventory with aggregated count and optional detailed
- * occurrences. This type is used for displaying inventory data in a summarized format, where each
- * item shows the total count and can optionally include detailed occurrence information that gets
- * loaded dynamically when the user selects the item.
- */
-export type InventorySummaryItem = {
-	/** The item key (e.g., character, word, etc.) */
-	key: string | string[];
-	/** Total count of occurrences */
-	count: number;
-	/** Status of the item */
-	status?: Status;
-	/** Detailed occurrences - optional, loaded on demand */
-	occurrences?: InventoryItemOccurrence[];
 };
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -859,7 +1019,7 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The inventory items that the inventory should be populated with */
-	inventoryItems: InventorySummaryItem[] | undefined;
+	inventoryItems: InventoryItem[] | undefined;
 	/** Callback function that is executed when the scripture reference is changed */
 	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
@@ -895,19 +1055,9 @@ type InventoryProps = {
 	areInventoryItemsLoading?: boolean;
 	/** Class name to apply to the provided occurrence verse text in the `OccurrencesTable` component */
 	classNameForVerseText?: string;
-	/** Optional callback that is called when an item is selected. Receives the selected item key. */
-	onItemSelected?: (itemKey: string) => void;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, onItemSelected, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Generates a responsive column header for inventory columns with tooltip and sorting functionality
- *
- * @param column The column received from ColumnDef.header
- * @param label The label field to display in the header and tooltip
- * @returns A ReactNode representing the header
- */
-export declare const getInventoryHeader: (column: Column<InventoryTableData, unknown>, label: string, buttonClassName?: string) => React$1.ReactNode;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -950,12 +1100,6 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 export type MarkerMenuLocalizedStrings = {
 	[localizedKey in (typeof MARKER_MENU_STRING_KEYS)[number]]?: string;
 };
-interface MarkerIconProps {
-	/** CSS class name to apply to the icon */
-	className?: string;
-	/** Size in px that the icon should be */
-	size?: string | number;
-}
 /** Type for the markers that contain all necessary information to be displayed in the list */
 export interface MarkerMenuItem {
 	/** If the item is a marker, then this is the marker code */
@@ -965,7 +1109,7 @@ export interface MarkerMenuItem {
 	/** An optional subtitle for the marker */
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
-	icon?: React$1.FC<MarkerIconProps>;
+	icon?: React$1.ReactNode;
 	/** Whether the command/marker is deprecated */
 	isDeprecated?: boolean;
 	/** Whether the command/marker is disallowed for this project */
@@ -1676,19 +1820,34 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-type ScrRef = {
-	book: string;
-	chapterAndVerse: string;
+type LocalizedBookNames = Map<string, string | {
+	localizedId: string;
+}>;
+type ScrRefFormattingOptions = {
+	/** Map of localized book names */
+	localizedBookNames?: LocalizedBookNames;
+	/** Separating character(s) between chapter and verse */
+	chapterVerseSeparator?: string;
+	/** Separating character(s) between book and chapter */
+	bookChapterSeparator?: string;
+	/** Separating character(s) between start and end reference */
+	rangeSeparator?: string;
+	/**
+	 * If or not to repeat the book and/or chapter for the end reference, when the range is inside the
+	 * same book or chapter. Example for false: `GEN 1 - 2`, example for true: `GEN 1 - GEN 2`
+	 */
+	repeatBookAndChapterOnRange?: boolean;
 };
-export type ScrRefBtnProps = {
-	startRef: ScrRef;
-	endRef?: ScrRef;
-	text?: string;
+/** Props interface for the LinkedScrRefDisplay component */
+export type LinkedScrRefDisplayProps = {
+	startRef: SerializedVerseRef;
+	endRef?: SerializedVerseRef;
+	scrRefFormattingProps?: ScrRefFormattingOptions;
+	scriptureTextPart?: string;
 	className?: string;
-	onClick?: (e: unknown) => void;
-	remainderTextLength?: number;
+	onClick?: React$1.MouseEventHandler | undefined;
+	includeInLink?: "allText" | "onlyScrRef";
 };
-export declare function ScrRefButton({ startRef, endRef, text, className, onClick, remainderTextLength, }: ScrRefBtnProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
@@ -1705,7 +1864,7 @@ interface ResultsCardProps {
 	/** Additional CSS classes to apply to the card */
 	className?: string;
 	/** Scripture reference as link */
-	scrRef: ScrRefBtnProps;
+	linkedScrRef: LinkedScrRefDisplayProps;
 	/** Badges to display on the card */
 	badges?: React$1.ReactNode[];
 	/** Main content to display on the card */
@@ -1722,7 +1881,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, onDoubleClick, scrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, onDoubleClick, linkedScrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
@@ -1819,6 +1978,51 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
+ */
+export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
+type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+	className?: string;
+};
+/** @inheritdoc Tabs */
+export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+type LeftTabsTriggerProps = TabsTriggerProps & {
+	value: string;
+	ref?: React$1.Ref<HTMLButtonElement>;
+};
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
+ */
+export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc VerticalTabs */
+export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc VerticalTabs */
+export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc VerticalTabs */
+export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
@@ -2288,7 +2492,7 @@ export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProvide
  */
 export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
 /** @inheritdoc Tooltip */
-export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tooltip */
 export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 type Side = "primary" | "secondary";
@@ -2439,51 +2643,6 @@ export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTML
 export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
 /** @inheritdoc Table */
 export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
-/**
- * Tabs components provide a set of layered sections of content—known as tab panels–that are
- * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
- */
-export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
-type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
-	className?: string;
-};
-/** @inheritdoc Tabs */
-export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc Tabs */
-export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Tabs */
-export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-type LeftTabsTriggerProps = TabsTriggerProps & {
-	value: string;
-	ref?: React$1.Ref<HTMLButtonElement>;
-};
-/**
- * Tabs components provide a set of layered sections of content—known as tab panels–that are
- * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
- */
-export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc VerticalTabs */
-export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc VerticalTabs */
-export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc VerticalTabs */
-export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
  * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
