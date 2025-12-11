@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { MoreHorizontal } from 'lucide-react';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useRef } from 'react';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
 import { LinkedScrRefDisplay, LinkedScrRefDisplayProps } from './linked-scr-ref-display.component';
@@ -55,18 +55,15 @@ export function ResultsCard({
   linkedScrRef,
   badges,
 }: ResultsCardProps) {
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const activeEl = document.activeElement as HTMLElement;
-    const isButtonFocused = activeEl?.closest('button') || activeEl?.tagName === 'BUTTON';
+  // This ref will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const resultCardDivRef = useRef<HTMLDivElement>(undefined!);
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (document.activeElement !== resultCardDivRef?.current) return;
     if (event.key === 'Enter' || event.key === ' ') {
-      // Avoid interfering with button clicks inside the card
-      if (!isButtonFocused) {
-        // Card selection
-        event.preventDefault();
-        onSelect?.();
-      }
+      event.preventDefault();
+      onSelect?.();
     }
   };
 
@@ -81,6 +78,7 @@ export function ResultsCard({
       }}
       onDoubleClick={onDoubleClick}
       onKeyDown={handleKeyDown}
+      ref={resultCardDivRef}
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
