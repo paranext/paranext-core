@@ -27,13 +27,8 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
-    try {
-      if (typeof window === 'undefined' || !window.localStorage) return defaultTheme;
-      const stored = window.localStorage.getItem(storageKey);
-      return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : defaultTheme;
-    } catch {
-      return defaultTheme;
-    }
+    const stored = localStorage.getItem(storageKey);
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : defaultTheme;
   });
 
   useEffect(() => {
@@ -57,13 +52,7 @@ export function ThemeProvider({
     () => ({
       theme: currentTheme,
       setTheme: (newTheme: Theme) => {
-        try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            window.localStorage.setItem(storageKey, newTheme);
-          }
-        } catch {
-          // ignore storage failures
-        }
+        localStorage.setItem(storageKey, newTheme);
         setCurrentTheme(newTheme);
       },
     }),
