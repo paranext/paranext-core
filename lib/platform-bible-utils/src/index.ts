@@ -63,6 +63,7 @@ export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
+  formatScrRefRange,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
   normalizeScriptureSpaces,
