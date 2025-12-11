@@ -1,10 +1,11 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Check, Settings, X } from 'lucide-react';
 import {
   Badge,
   DropdownMenuItem,
+  LinkedScrRefDisplayProps,
   ResultsCard,
-  ScrRefBtnProps,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -77,8 +78,8 @@ export type CheckCardProps = {
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
   handleDenyCheck: (result: CheckRunResult) => Promise<boolean>;
-  /** Scripture reference as link */
-  scrRef: ScrRefBtnProps;
+  /** Scripture reference of the check result */
+  scrRef: SerializedVerseRef;
   /** A brief description of the check result. Optional. */
   checkCardDescription?: string;
   /** Callback function triggered to open the configure checks webview */
@@ -212,7 +213,7 @@ export function CheckCard({
     <ResultsCard
       cardKey={checkId}
       isSelected={isSelected}
-      scrRef={scrRef}
+      linkedScrRef={{ startRef: scrRef, scriptureTextPart: checkResult.itemText }}
       badges={badges() ?? undefined}
       onSelect={() => handleSelectCheck(checkId)}
       onDoubleClick={() => handleDoubleClick(checkId)}

@@ -3,7 +3,7 @@ import { MoreVertical } from 'lucide-react';
 import React, { ReactNode } from 'react';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
-import ScrRefButton, { ScrRefBtnProps } from './scripture-reference-button.component';
+import { LinkedScrRefDisplay, LinkedScrRefDisplayProps } from './linked-scr-ref-display.component';
 
 /** Props interface for the ResultsCard base component */
 export interface ResultsCardProps {
@@ -22,7 +22,7 @@ export interface ResultsCardProps {
   /** Additional CSS classes to apply to the card */
   className?: string;
   /** Scripture reference as link */
-  scrRef: ScrRefBtnProps;
+  linkedScrRef: LinkedScrRefDisplayProps;
   /** Badges to display on the card */
   badges?: ReactNode[];
   /** Main content to display on the card */
@@ -61,7 +61,7 @@ export function ResultsCard({
   accentColor,
   showDropdownOnHover = false,
   onDoubleClick,
-  scrRef,
+  linkedScrRef,
   badges,
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -111,12 +111,13 @@ export function ResultsCard({
               },
             )}
           >
-            <ScrRefButton
-              startRef={scrRef?.startRef}
-              endRef={scrRef?.endRef}
-              text={scrRef?.text}
-              onClick={() => {
-                onSelect();
+            <LinkedScrRefDisplay
+              startRef={linkedScrRef?.startRef}
+              endRef={linkedScrRef?.endRef}
+              scriptureTextPart={linkedScrRef.scriptureTextPart}
+              onClick={(e) => {
+                e?.stopPropagation(); // stop bubbling to ResultCard to prevent unnecessary additional select call
+                onSelect(); // make sure select is called first
                 onDoubleClick?.();
               }}
               className="tw-whitespace-normal tw-rounded-sm tw-text-xs tw-font-medium"
