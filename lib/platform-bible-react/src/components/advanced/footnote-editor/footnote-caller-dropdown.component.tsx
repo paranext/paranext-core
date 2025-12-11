@@ -111,20 +111,20 @@ export function FootnoteCallerDropdown({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    event.stopPropagation();
     // Allow to navigate to the input field
-    const isRtl = customCallerSelectRef.current?.dir !== 'ltr';
     if (
-      event.key === 'ArrowDown' ||
-      (isRtl && event.key === 'ArrowRight') ||
-      (!isRtl && event.key === 'ArrowLeft')
+      (document.activeElement === customCallerSelectRef.current && event.key === 'ArrowDown') ||
+      event.key === 'ArrowRight'
     ) {
       customCallerInputRef.current?.focus();
       isCustomCallerInputFocused.current = true;
-    } else if (event.key === 'ArrowUp') {
+    } else if (document.activeElement === customCallerInputRef.current && event.key === 'ArrowUp') {
       customCallerSelectRef.current?.focus();
       isCustomCallerInputFocused.current = false;
     } else if (
-      ((isRtl && event.key === 'ArrowLeft') || (!isRtl && event.key === 'ArrowRight')) &&
+      document.activeElement === customCallerInputRef.current &&
+      event.key === 'ArrowLeft' &&
       customCallerInputRef.current?.selectionStart === 0
     ) {
       customCallerSelectRef.current?.focus();
@@ -135,8 +135,8 @@ export function FootnoteCallerDropdown({
     if (
       selectedCallerType === 'custom' &&
       event.key === 'Enter' &&
-      (document.activeElement === customCallerInputRef.current ||
-        document.activeElement === customCallerSelectRef.current)
+      (document.activeElement === customCallerSelectRef.current ||
+        document.activeElement === customCallerInputRef.current)
     ) {
       handleDropdownOpenChange(false);
     }
@@ -213,7 +213,18 @@ export function FootnoteCallerDropdown({
               ref={customCallerInputRef}
               className="tw-h-auto tw-w-10 tw-p-0 tw-text-center"
               value={newCustomCaller}
-              onKeyDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (
+                  !(
+                    event.key === 'Enter' ||
+                    event.key === 'ArrowUp' ||
+                    event.key === 'ArrowDown' ||
+                    event.key === 'ArrowLeft' ||
+                    event.key === 'ArrowRight'
+                  )
+                )
+                  event.stopPropagation();
+              }}
               maxLength={1}
               onChange={(event) => setNewCustomCaller(event.target.value)}
             />
