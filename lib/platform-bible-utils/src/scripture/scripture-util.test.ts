@@ -4,6 +4,7 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
+  formatScrRefRange,
   getLocalizedIdFromBookNumber,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
@@ -167,6 +168,121 @@ describe('formatScrRef', () => {
     expect(formatScrRef({ book: 'EXO', chapterNum: 10, verseNum: 1 }, 'Ex', ';', '-')).toBe(
       'Ex-10;1',
     );
+  });
+
+  it('using empty book name', async () => {
+    expect(formatScrRef({ book: '', chapterNum: 5, verseNum: 4 })).toBe('5:4');
+  });
+
+  it('using not existing book name', async () => {
+    expect(formatScrRef({ book: 'NOT_EXISTING', chapterNum: 5, verseNum: 4 })).toBe(
+      'NOT_EXISTING 5:4',
+    );
+  });
+
+  it('using negative numbers', async () => {
+    expect(formatScrRef({ book: 'GEN', chapterNum: -1, verseNum: 1 })).toBe('GEN');
+
+    expect(formatScrRef({ book: 'GEN', chapterNum: 1, verseNum: -1 })).toBe('GEN 1');
+  });
+
+  it('using chapter 0', async () => {
+    expect(formatScrRef({ book: 'GEN', chapterNum: 0, verseNum: 1 })).toBe('GEN 0:1');
+  });
+});
+
+describe('formatScrRefRange', () => {
+  it('using arbitrary book name, abbrev, etc.', async () => {
+    expect(
+      formatScrRefRange(
+        { book: 'DEU', chapterNum: 5, verseNum: 4 },
+        { book: 'DEU', chapterNum: 6, verseNum: 2 },
+      ),
+    ).toBe('DEU 5:4 - 6:2');
+
+    expect(
+      formatScrRefRange(
+        { book: 'REV', chapterNum: 4, verseNum: 6 },
+        { book: 'REV', chapterNum: 5, verseNum: 1 },
+        'Offb', // German: Offenbarung
+        undefined,
+        ',', // chapterVerseSeparator
+        '. ', // bookChapterSeparator
+        '-', // rangeSeparator
+      ),
+    ).toBe('Offb. 4,6-5,1');
+
+    expect(
+      formatScrRefRange(
+        { book: 'EXO', chapterNum: 10, verseNum: 1 },
+        { book: 'LEV', chapterNum: 2, verseNum: 3 },
+        'Ex',
+        'Le',
+        ';', // chapterVerseSeparator
+        '', // bookChapterSeparator
+        ' - ', // rangeSeparator
+        false,
+      ),
+    ).toBe('Ex10;1 - Le2;3');
+  });
+
+  it('using chapter verse only', async () => {
+    expect(
+      formatScrRefRange(
+        { book: '', chapterNum: 10, verseNum: 1 },
+        { book: '', chapterNum: 2, verseNum: 3 },
+        undefined,
+        undefined,
+        ',', // chapterVerseSeparator
+        ' ', // bookChapterSeparator
+        ' - ', // rangeSeparator
+        false,
+      ),
+    ).toBe('10,1 - 2,3');
+  });
+
+  it('using range of books', async () => {
+    expect(
+      formatScrRefRange(
+        { book: 'GEN', chapterNum: -1, verseNum: -1 },
+        { book: 'EXO', chapterNum: -1, verseNum: -1 },
+      ),
+    ).toBe('GEN - EXO');
+  });
+
+  it('using range of chapters', async () => {
+    expect(
+      formatScrRefRange(
+        { book: '', chapterNum: 1, verseNum: -1 },
+        { book: '', chapterNum: 2, verseNum: 15 },
+      ),
+    ).toBe('1 - 2:15');
+
+    expect(
+      formatScrRefRange(
+        { book: 'DEU', chapterNum: 1, verseNum: -1 },
+        { book: 'DEU', chapterNum: 2, verseNum: -1 },
+      ),
+    ).toBe('DEU 1 - 2');
+
+    expect(
+      formatScrRefRange(
+        { book: 'GEN', chapterNum: 1, verseNum: -1 },
+        { book: 'REV', chapterNum: 22, verseNum: -1 },
+      ),
+    ).toBe('GEN 1 - REV 22');
+
+    expect(
+      formatScrRefRange(
+        { book: 'DEU', chapterNum: 1, verseNum: -1 },
+        { book: 'DEU', chapterNum: 2, verseNum: -1 },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '~', // rangeSeparator
+      ),
+    ).toBe('DEU 1~2');
   });
 });
 

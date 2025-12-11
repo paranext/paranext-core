@@ -95,6 +95,7 @@ export {
   toKebabCase,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
+  truncateOmittingMiddleWords,
 } from './string-util';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';

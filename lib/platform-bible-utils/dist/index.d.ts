@@ -1505,14 +1505,15 @@ export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (Scroll
 /**
  * Formats a Scripture reference.
  *
- * @param scrRef The Scripture reference to format.
+ * @param scrRef The Scripture reference to format. Empty book, negative chapter or verse results in
+ *   omitting that part.
  * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
  *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
  *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
  *   etc.) to use.
- * @param chapterVerseSeparator The character used to separate the chapter number from the verse
+ * @param chapterVerseSeparator The characters(s) used to separate the chapter number from the verse
  *   number. Default is a colon (:). Note: More than one character is allowed.
- * @param bookChapterSeparator The character used to separate the book from the chapter number.
+ * @param bookChapterSeparator The character(s) used to separate the book from the chapter number.
  *   Default is a single space. Note: More than one character is allowed.
  * @returns The formatted reference.
  */
@@ -3415,6 +3416,15 @@ export declare function isWhiteSpace(ch: string): boolean;
  * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
  */
 export declare function toKebabCase(input: string): string;
+/**
+ * Truncates text by removing words from the middle and replacing them with `[...]`
+ *
+ * @param text The input text
+ * @param wordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the text
+ * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
+ *   x words, followed by `[...]` and the last x words
+ */
+export declare function truncateOmittingMiddleWords(text: string, wordsToKeepBeforeAndAfter: number): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**
