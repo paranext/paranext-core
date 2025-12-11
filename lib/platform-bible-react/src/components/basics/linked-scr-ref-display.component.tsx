@@ -1,7 +1,7 @@
-import { MouseEventHandler } from 'react';
+import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef } from 'platform-bible-utils';
-import { cn } from '@/utils/shadcn-ui.util';
+import { MouseEventHandler } from 'react';
 import { Button } from '../shadcn-ui/button';
 
 export type LocalizedBookNames = Map<string, string | { localizedId: string }>;
@@ -28,19 +28,19 @@ export type ScrRefFormattingOptions = {
 
 /** Props interface for the LinkedScrRefDisplay component */
 export type LinkedScrRefDisplayProps = {
-  /* Single reference or start reference of a range to display as part of the link */
+  /** Single reference or start reference of a range to display as part of the link */
   startRef: SerializedVerseRef;
-  /* End reference of a range to display as part of the link */
+  /** End reference of a range to display as part of the link */
   endRef?: SerializedVerseRef;
-  /* Additional properties to format the scripture references */
+  /** Additional properties to format the scripture references */
   scrRefFormattingProps?: ScrRefFormattingOptions;
-  /* Part of Scripture text to display after the scripture reference */
+  /** Part of Scripture text to display after the scripture reference */
   scriptureTextPart?: string;
-  /* Optional class name to style the button and text section */
+  /** Optional class name to style the button and text section */
   className?: string;
-  /* OnClick handler to react on click or submit of the button */
+  /** OnClick handler to react on click or submit of the button */
   onClick?: MouseEventHandler | undefined;
-  /* If to make the part of Scripture text part of the link or not */
+  /** If to make the part of Scripture text part of the link or not */
   includeInLink?: 'allText' | 'onlyScrRef';
 };
 
