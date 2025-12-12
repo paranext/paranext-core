@@ -122,7 +122,7 @@ export function FindHeaderDemo() {
 
     setSubmittedSearchTerm(searchTerm);
     setSubmittedScrollGroupId(scrollGroupId);
-    setSubmittedScope(submittedScope);
+    setSubmittedScope(scope);
     setSubmittedVerseRef(verseRefSetting);
     setSubmittedBookIds(selectedBookIds);
     setSubmittedShouldMatchCase(shouldMatchCase);
@@ -130,7 +130,9 @@ export function FindHeaderDemo() {
   };
 
   // custom for demo
-  const clearSearchResults = () => {};
+  const clearSearchResults = () => {
+    setSubmittedSearchTerm('');
+  };
 
   // custom for demo
   const availableBookIds =
