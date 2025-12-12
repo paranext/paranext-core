@@ -449,6 +449,10 @@ export function Home({
                     <TableBody>
                       {filteredAndSortedProjects.map((project) => (
                         <TableRow
+                          onMouseDown={(e) => {
+                            // cancel double‑click text selection
+                            if (e.detail > 1) e.preventDefault();
+                          }}
                           onDoubleClick={() =>
                             project.isLocallyAvailable
                               ? onOpenProject(project.projectId, project.isEditable)
