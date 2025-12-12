@@ -21,21 +21,7 @@ import RecentSearches from './recent-searches.component';
 type HidableFindResult = FindResult & { isHidden?: boolean };
 
 export function FindHeaderDemo() {
-  const [searchTerm, _setSearchTerm] = useState<string>('');
-  // custom for demo
-  const setSearchTerm = (searchTerm: string) => {
-    recentSearches.push(searchTerm);
-    setRecentSearches(recentSearches);
-    _setSearchTerm(searchTerm);
-
-    setSubmittedSearchTerm(searchTerm);
-    setSubmittedScrollGroupId(scrollGroupId);
-    setSubmittedScope(submittedScope);
-    setSubmittedVerseRef(verseRefSetting);
-    setSubmittedBookIds(selectedBookIds);
-    setSubmittedShouldMatchCase(shouldMatchCase);
-    setSubmittedIsRegexAllowed(isRegexAllowed);
-  };
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // custom for demo
   const [verseRefSetting, setVerseRefSetting] = useState<SerializedVerseRef>({
@@ -130,6 +116,17 @@ export function FindHeaderDemo() {
     setTimeout(() => {
       setSearchStatus('completed');
     }, 1000);
+
+    recentSearches.push(searchTerm);
+    setRecentSearches(recentSearches);
+
+    setSubmittedSearchTerm(searchTerm);
+    setSubmittedScrollGroupId(scrollGroupId);
+    setSubmittedScope(submittedScope);
+    setSubmittedVerseRef(verseRefSetting);
+    setSubmittedBookIds(selectedBookIds);
+    setSubmittedShouldMatchCase(shouldMatchCase);
+    setSubmittedIsRegexAllowed(isRegexAllowed);
   };
 
   // custom for demo
@@ -142,24 +139,24 @@ export function FindHeaderDemo() {
   return (
     <Card>
       <CardContent className="tw-space-y-4 tw-p-6">
-        <TooltipProvider>
-          <div className="tw-flex tw-gap-2 tw-flex-wrap">
-            <div className="tw-relative tw-flex-1">
-              <Input
-                id="search-term"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleStartSearch();
-                  }
-                }}
-                placeholder="%webView_find_searchPlaceholder%"
-                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
-              />
-              <RecentSearches recentSearches={recentSearches} onSearchTermSelect={setSearchTerm} />
-            </div>
+        <div className="tw-flex tw-gap-2 tw-flex-wrap">
+          <div className="tw-relative tw-flex-1">
+            <Input
+              id="search-term"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleStartSearch();
+                }
+              }}
+              placeholder="%webView_find_searchPlaceholder%"
+              className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+            />
+            <RecentSearches recentSearches={recentSearches} onSearchTermSelect={setSearchTerm} />
+          </div>
 
+          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -172,7 +169,7 @@ export function FindHeaderDemo() {
                   <SlidersHorizontal className="tw-h-4 tw-w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>@@Options@@</TooltipContent>
+              <TooltipContent>%webView_find_toggleFilters%</TooltipContent>
             </Tooltip>
 
             <Tooltip>
@@ -200,8 +197,8 @@ export function FindHeaderDemo() {
                 )}
               </TooltipContent>
             </Tooltip>
-          </div>
-        </TooltipProvider>
+          </TooltipProvider>
+        </div>
 
         {areFiltersShown && (
           <div className="tw-space-y-4 tw-border-t tw-pt-4">

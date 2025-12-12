@@ -625,7 +625,7 @@ global.webViewComponent = function FindWebView({
       {/* Header with searchbar and filters */}
       <Card>
         <CardContent className="tw-space-y-4 tw-p-6">
-          <div className="tw-flex tw-gap-2">
+          <div className="tw-flex tw-gap-2 tw-flex-wrap">
             <div className="tw-relative tw-flex-1">
               <Input
                 id="search-term"
@@ -637,7 +637,7 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-text-ellipsis tw-w-full ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
               />
               <RecentSearches
                 recentSearches={recentSearches}
@@ -646,16 +646,23 @@ global.webViewComponent = function FindWebView({
                 groupHeading={localizedStrings['%webView_find_recent%']}
               />
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setAreFiltersShown(!areFiltersShown)}
-              aria-label={localizedStrings['%webView_find_toggleFilters%']}
-              className={areFiltersShown ? 'tw-bg-muted' : ''}
-            >
-              <SlidersHorizontal className="tw-h-4 tw-w-4" />
-            </Button>
+
             <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setAreFiltersShown(!areFiltersShown)}
+                    aria-label={localizedStrings['%webView_find_toggleFilters%']}
+                    className={areFiltersShown ? 'tw-bg-muted' : ''}
+                  >
+                    <SlidersHorizontal className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings['%webView_find_toggleFilters%']}</TooltipContent>
+              </Tooltip>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   {canClearResults ? (
