@@ -23,7 +23,7 @@ import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirectio
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEventHandler, PropsWithChildren, ReactNode } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -1726,6 +1726,41 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+type LocalizedBookNames = Map<string, string | {
+	localizedId: string;
+}>;
+type ScrRefFormattingOptions = {
+	/** Map of localized book names */
+	localizedBookNames?: LocalizedBookNames;
+	/** Separating character(s) between chapter and verse */
+	chapterVerseSeparator?: string;
+	/** Separating character(s) between book and chapter */
+	bookChapterSeparator?: string;
+	/** Separating character(s) between start and end reference */
+	rangeSeparator?: string;
+	/**
+	 * If or not to repeat the book and/or chapter for the end reference, when the range is inside the
+	 * same book or chapter. Example for false: `GEN 1 - 2`, example for true: `GEN 1 - GEN 2`
+	 */
+	repeatBookAndChapterOnRange?: boolean;
+};
+/** Props interface for the LinkedScrRefDisplay component */
+export type LinkedScrRefDisplayProps = {
+	/** Single reference or start reference of a range to display as part of the link */
+	startRef: SerializedVerseRef;
+	/** End reference of a range to display as part of the link */
+	endRef?: SerializedVerseRef;
+	/** Additional properties to format the scripture references */
+	scrRefFormattingProps?: ScrRefFormattingOptions;
+	/** Part of Scripture text to display after the scripture reference */
+	scriptureTextPart?: string;
+	/** Optional class name to style the button and text section */
+	className?: string;
+	/** OnClick handler to react on click or submit of the button */
+	onClick?: React$1.MouseEventHandler | undefined;
+	/** If to make the part of Scripture text part of the link or not */
+	includeInLink?: "allText" | "onlyScrRef";
+};
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
@@ -1733,14 +1768,20 @@ interface ResultsCardProps {
 	isSelected: boolean;
 	/** Callback function called when the card is clicked */
 	onSelect: () => void;
+	/** Callback function called when the card is double-clicked */
+	onDoubleClick?: () => void;
 	/** Whether the content of this card are in a denied state */
 	isDenied?: boolean;
 	/** Whether the card should be hidden */
 	isHidden?: boolean;
 	/** Additional CSS classes to apply to the card */
 	className?: string;
+	/** Scripture reference as link */
+	linkedScrRef: LinkedScrRefDisplayProps;
+	/** Badges to display on the card */
+	badges?: React$1.ReactNode[];
 	/** Main content to display on the card */
-	children: React$1.ReactNode;
+	children?: React$1.ReactNode;
 	/** Content to show in the dropdown menu when selected */
 	dropdownContent?: React$1.ReactNode;
 	/** Additional content to show below the main content when selected */
@@ -1753,7 +1794,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, onDoubleClick, linkedScrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
@@ -1850,6 +1891,51 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
+ */
+export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
+type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+	className?: string;
+};
+/** @inheritdoc Tabs */
+export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Tabs */
+export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+type LeftTabsTriggerProps = TabsTriggerProps & {
+	value: string;
+	ref?: React$1.Ref<HTMLButtonElement>;
+};
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
+ */
+export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc VerticalTabs */
+export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc VerticalTabs */
+export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc VerticalTabs */
+export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
@@ -2470,51 +2556,6 @@ export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTML
 export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
 /** @inheritdoc Table */
 export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
-/**
- * Tabs components provide a set of layered sections of content—known as tab panels–that are
- * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
- */
-export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
-type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
-	className?: string;
-};
-/** @inheritdoc Tabs */
-export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc Tabs */
-export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Tabs */
-export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-type LeftTabsTriggerProps = TabsTriggerProps & {
-	value: string;
-	ref?: React$1.Ref<HTMLButtonElement>;
-};
-/**
- * Tabs components provide a set of layered sections of content—known as tab panels–that are
- * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
- */
-export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc VerticalTabs */
-export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc VerticalTabs */
-export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc VerticalTabs */
-export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
  * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea

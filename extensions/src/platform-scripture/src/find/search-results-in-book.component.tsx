@@ -26,6 +26,8 @@ type SearchResultsInBookProps = {
   focusedResultIndex: number | undefined;
   /** Callback function called when the user clicks on a search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when the user double clicks on a search result */
+  onResultDoubleClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
   localizedStrings: {
@@ -41,6 +43,7 @@ export function SearchResultsInBook({
   localizedBookData,
   focusedResultIndex,
   onResultClick,
+  onResultDoubleClick,
   onHideResult,
   localizedStrings,
 }: SearchResultsInBookProps) {
@@ -90,6 +93,7 @@ export function SearchResultsInBook({
           usjReaderWriter={usjReaderWriter}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
+          onResultDoubleClick={onResultDoubleClick}
           onHideResult={onHideResult}
           localizedStrings={localizedStrings}
         />
