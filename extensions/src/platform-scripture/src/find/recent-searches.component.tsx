@@ -66,9 +66,9 @@ export default function RecentSearches({
         <Command>
           <CommandList>
             <CommandGroup heading={localizedString('%webView_find_recent%')}>
-              {recentSearches.map((term) => (
+              {recentSearches.map((term, index) => (
                 <CommandItem
-                  key={term}
+                  key={`${term}${index}`}
                   onSelect={() => handleSearchTermSelect(term)}
                   className="tw-flex tw-items-center"
                 >
