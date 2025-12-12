@@ -33,7 +33,7 @@ process.on('message', (message) => {
     logger.info('Beginning to shut down process due to graceful shutdown message');
     (async () => {
       try {
-        await extensionService.deactivateActiveExtensions();
+        await extensionService.deactivateAllExtensions();
       } catch (error) {
         logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
       } finally {
