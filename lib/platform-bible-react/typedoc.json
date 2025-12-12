@@ -12,6 +12,7 @@
     "unusedMergeModuleWith": true
   },
   "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"],
+  "treatWarningsAsErrors": true,
   "externalSymbolLinkMappings": {
     "@eten-tech-foundation/scripture-utilities": {
       "MarkerObject": "https://github.com/eten-tech-foundation/scripture-editors/blob/e6b360c7f01a67f46ab804edefb3e518f337bb52/packages/utilities/src/converters/usj/usj.model.ts#L54",
