@@ -1,21 +1,12 @@
-import {
-  BookOpen,
-  ChevronDown,
-  ChevronsUpDown,
-  ChevronUp,
-  Ellipsis,
-  ScrollText,
-} from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, ScrollText } from 'lucide-react';
 import {
   Button,
   Card,
   CardContent,
   CardFooter,
   CardHeader,
-  DropdownMenu,
-  DropdownMenuContent,
+  cn,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   Label,
   SearchBar,
   Spinner,
@@ -30,6 +21,7 @@ import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
+import { HomeItemDropdownMenu } from './home-item-menu';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -41,6 +33,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_activity%',
   '%resources_clearSearch%',
   '%resources_filterInput%',
+  '%resources_shortNameText%',
   '%resources_fullName%',
   '%resources_get%',
   '%resources_getStarted%',
@@ -48,7 +41,6 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
-  '%resources_loading%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
@@ -63,7 +55,7 @@ type HomeLocalizedStrings = {
 };
 
 export type SortConfig = {
-  key: 'fullName' | 'language' | 'activity' | 'action';
+  key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
 };
 
@@ -94,7 +86,7 @@ export type HomeProps = {
    * from this library, pass it in to the Platform's localization hook, and pass the localized keys
    * that are returned by the hook into this prop.
    */
-  localizedStrings?: HomeLocalizedStrings;
+  localizedStringsWithLoadingState?: [HomeLocalizedStrings, boolean];
   /**
    * Locales for formatting dates and times. This is used to format the last send/receive date of
    * projects.
@@ -142,7 +134,8 @@ export type HomeProps = {
  * A component that displays a list of local and remote projects, allowing users to open,
  * synchronize, and manage them. It also provides a button to get more resources.
  *
- * @param {localizedStrings} - Object with localized strings for the component.
+ * @param {localizedStringsWithLoadingState} - Array of [Object with localized strings for the
+ *   component, isLoading].
  * @param {uiLocales} - Locales for formatting dates and times.
  * @param {onOpenGetResources} - Callback function to open the Get Resources dialog.
  * @param {onOpenProject} - Callback function to open a project.
@@ -162,7 +155,7 @@ export type HomeProps = {
  * @returns
  */
 export function Home({
-  localizedStrings = {},
+  localizedStringsWithLoadingState = [{}, false],
   uiLocales = [],
   onOpenGetResources = () => {},
   onOpenProject = () => {},
@@ -178,20 +171,23 @@ export function Home({
   headerContent,
 }: HomeProps) {
   const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
-    return localizedStrings[localizeKey] ?? localizeKey;
+    return localizedStringsWithLoadingState[0][localizeKey] ?? localizeKey;
   };
+  const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
+  const shortNameText: string = getLocalizedString('%resources_shortNameText%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
-  const itemsText: string = getLocalizedString('%resources_items%');
+  const itemsText: string = isLocalizedStringsLoading
+    ? ''
+    : getLocalizedString('%resources_items%');
   const languageText: string = getLocalizedString('%resources_language%');
-  const loadingText: string = getLocalizedString('%resources_loading%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
@@ -227,6 +223,7 @@ export function Home({
           language: project.language,
           isEditable: project.isEditable,
           isSendReceivable: false,
+          isLocallyAvailable: true,
         });
       }
     });
@@ -254,6 +251,14 @@ export function Home({
 
     return textFilteredProjects.sort((a, b) => {
       switch (sortConfig.key) {
+        case 'shortName':
+          if (a.name < b.name) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+          }
+          if (a.name > b.name) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+          }
+          return 0;
         case 'fullName':
           if (a.fullName < b.fullName) {
             return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -299,8 +304,8 @@ export function Home({
   };
 
   const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
-    <TableHead onClick={() => handleSort(key)} className={className}>
-      <div className="tw-flex tw-items-center tw-px-0">
+    <TableHead onClick={() => handleSort(key)} className={cn('tw-px-2', className)}>
+      <Button className="tw-flex tw-items-center tw-px-2" variant="ghost">
         <div className="tw-font-normal">{label}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
@@ -309,7 +314,7 @@ export function Home({
           ) : (
             <ChevronDown className="tw-pl-1" size={16} />
           ))}
-      </div>
+      </Button>
     </TableHead>
   );
 
@@ -358,30 +363,34 @@ export function Home({
 
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-      <CardHeader className="tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2">
+      <CardHeader
+        className={cn(
+          'tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-pb-0',
+          { 'max-[300px]:!tw-pb-2': showGetResourcesButton },
+        )}
+      >
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
-            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden">
+            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden max-[300px]:!tw-hidden">
               {headerContent}
             </div>
             <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
-          <div className="tw-self-end">
-            {showGetResourcesButton && (
+          {showGetResourcesButton && (
+            <div className="tw-self-end">
               <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
                 {`+ ${getResourcesText}`}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </CardHeader>
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
         <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
-          <Label>{loadingText}</Label>
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32">
+        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32 tw-px-0">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
@@ -427,9 +436,9 @@ export function Home({
                   </div>
                 ) : (
                   <Table stickyHeader>
-                    <TableHeader className="tw-bg-none" stickyHeader>
-                      <TableRow>
-                        <TableHead />
+                    <TableHeader className="tw-bg-none max-[300px]:tw-hidden" stickyHeader>
+                      <TableRow className="tw-rounded-sm">
+                        {buildTableHead('shortName', shortNameText, 'tw-ps-4')}
                         {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
                         {buildTableHead('language', languageText, 'tw-hidden sm:!tw-table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
@@ -440,30 +449,63 @@ export function Home({
                     <TableBody>
                       {filteredAndSortedProjects.map((project) => (
                         <TableRow
-                          onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
+                          onMouseDown={(e) => {
+                            // cancel double‑click text selection
+                            if (e.detail > 1) e.preventDefault();
+                          }}
+                          onDoubleClick={() =>
+                            project.isLocallyAvailable
+                              ? onOpenProject(project.projectId, project.isEditable)
+                              : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
+                          }
                           key={project.projectId}
+                          className={cn('tw-rounded-sm', {
+                            'tw-text-muted-foreground/70': !project.isLocallyAvailable,
+                          })}
                         >
-                          <TableCell>
-                            <div className="tw-flex tw-flex-row tw-items-center tw-ms-4 tw-gap-4">
-                              {project.isEditable ? (
-                                <ScrollText
-                                  className="tw-pr-0"
-                                  size={18}
-                                  style={{ minWidth: '24px' }}
-                                />
-                              ) : (
-                                <BookOpen
-                                  className="tw-pr-0"
-                                  size={18}
-                                  style={{ minWidth: '24px' }}
-                                />
+                          <TableCell
+                            className={cn({ 'tw-ps-2': project.editedStatus === 'edited' })}
+                          >
+                            <div
+                              className={cn(
+                                'tw-flex tw-flex-row tw-items-center tw-gap-4 tw-ps-2',
+                                { 'tw-ps-0': project.editedStatus === 'edited' },
                               )}
+                            >
+                              <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
+                                {project.editedStatus === 'edited' && (
+                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
+                                )}
+                                {project.isEditable ? (
+                                  <ScrollText className="tw-pr-0" size={18} />
+                                ) : (
+                                  <BookOpen className="tw-pr-0" size={18} />
+                                )}
+                              </div>
+
                               <div className="tw-whitespace-nowrap tw-cursor-default">
                                 {project.name}
                               </div>
+
+                              <div className="tw-grow tw-hidden max-[300px]:!tw-flex">
+                                <div className="tw-grow" />
+                                <HomeItemDropdownMenu ellipsisButtonClassName="tw-h-6">
+                                  {(!project.isLocallyAvailable ||
+                                    project.editedStatus === 'edited') && (
+                                    <DropdownMenuItem asChild>
+                                      {syncOrGetButton(project, true)}
+                                    </DropdownMenuItem>
+                                  )}
+                                  {project.isLocallyAvailable && (
+                                    <DropdownMenuItem asChild>
+                                      {openButton(project, true)}
+                                    </DropdownMenuItem>
+                                  )}
+                                </HomeItemDropdownMenu>
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default">
+                          <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default tw-break-all">
                             {project.fullName}
                           </TableCell>
                           <TableCell className="tw-hidden sm:!tw-table-cell tw-cursor-default">
@@ -478,27 +520,20 @@ export function Home({
                                 )}
                             </TableCell>
                           )}
-                          <TableCell>
+                          <TableCell className="max-[300px]:tw-hidden">
                             <div className="tw-flex tw-justify-between tw-items-center">
                               {project.isSendReceivable &&
                               (!project.isLocallyAvailable || project.editedStatus === 'edited')
                                 ? syncOrGetButton(project)
                                 : openButton(project)}
                               {project.isSendReceivable && project.isLocallyAvailable && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost">
-                                      <Ellipsis className="tw-w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="start">
-                                    <DropdownMenuItem asChild>
-                                      {project.editedStatus === 'edited'
-                                        ? openButton(project, true)
-                                        : syncOrGetButton(project, true)}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                <HomeItemDropdownMenu>
+                                  <DropdownMenuItem asChild>
+                                    {project.editedStatus === 'edited'
+                                      ? openButton(project, true)
+                                      : syncOrGetButton(project, true)}
+                                  </DropdownMenuItem>
+                                </HomeItemDropdownMenu>
                               )}
                             </div>
                           </TableCell>
