@@ -812,6 +812,35 @@ export function toKebabCase(input: string): string {
   return result;
 }
 
+/**
+ * Shortens text by removing words from the middle and replacing them with `[...]`
+ *
+ * @param text The input text
+ * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the
+ *   text
+ * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
+ *   x words, followed by `[...]` and the last x words
+ */
+export function collapseMiddleWords(
+  text: string,
+  numberOfWordsToKeepBeforeAndAfter: number,
+): string {
+  const words = text.split(/\s+/);
+
+  // If the text is too short to truncate, return as-is
+  if (
+    words.length <= numberOfWordsToKeepBeforeAndAfter * 2 ||
+    numberOfWordsToKeepBeforeAndAfter < 1
+  ) {
+    return text;
+  }
+
+  const startWords = words.slice(0, numberOfWordsToKeepBeforeAndAfter);
+  const endWords = words.slice(-numberOfWordsToKeepBeforeAndAfter);
+
+  return [...startWords, `[...]`, ...endWords].join(' ');
+}
+
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingStringUtils = {
   indexOfClosestClosingCurlyBrace,
