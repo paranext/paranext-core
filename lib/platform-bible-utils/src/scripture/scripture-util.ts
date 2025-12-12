@@ -307,15 +307,17 @@ export function formatScrRef(
       book = scrRef.book;
       break;
     default:
-      // We already dealt with undefined about in the switch, but TS is getting confused.
+      // We already dealt with undefined above in the switch, but TS is getting confused.
       book = optionOrLocalizedBookName ?? '';
       break;
   }
-  const finalBookChapterSeparator = book ? (bookChapterSeparator ?? ' ') : '';
-  const finalVerse = scrRef.verseNum < 0 ? '' : `${chapterVerseSeparator ?? ':'}${scrRef.verseNum}`;
-  const finalChapterAndVerse =
-    scrRef.chapterNum < 0 ? '' : `${finalBookChapterSeparator}${scrRef.chapterNum}${finalVerse}`;
-  return `${book}${finalChapterAndVerse}`;
+
+  const formattedBCSeparator = book ? (bookChapterSeparator ?? ' ') : '';
+  const formattedVerse =
+    scrRef.verseNum < 0 ? '' : `${chapterVerseSeparator ?? ':'}${scrRef.verseNum}`;
+  const chapterAndVerse =
+    scrRef.chapterNum < 0 ? '' : `${formattedBCSeparator}${scrRef.chapterNum}${formattedVerse}`;
+  return `${book}${chapterAndVerse}`;
 }
 
 /**

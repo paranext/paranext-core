@@ -813,7 +813,7 @@ export function toKebabCase(input: string): string {
 }
 
 /**
- * Truncates text by removing words from the middle and replacing them with `[...]`
+ * Shortens text by removing words from the middle and replacing them with `[...]`
  *
  * @param text The input text
  * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the
@@ -821,7 +821,7 @@ export function toKebabCase(input: string): string {
  * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
  *   x words, followed by `[...]` and the last x words
  */
-export function truncateOmittingMiddleWords(
+export function collapseMiddleWords(
   text: string,
   numberOfWordsToKeepBeforeAndAfter: number,
 ): string {
