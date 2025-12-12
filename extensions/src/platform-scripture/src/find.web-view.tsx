@@ -62,6 +62,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_searchPlaceholder%',
   '%webView_find_showingResults%',
   '%webView_find_toggleFilters%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_recent%',
 ];
 
 const defaultBooksPresent: string = '';
@@ -708,7 +710,7 @@ global.webViewComponent = function FindWebView({
                     // in the `availableScrollGroupIds` variable in
                     // `src\renderer\services\scroll-group.service-host.ts`
                     // Both there and here they are a placeholder to be replaced as part of
-                    // https://github.com/paranext/paranext-core/issues/788
+                    // https://paratextstudio.atlassian.net/browse/PT-1514
                     availableScrollGroupIds={[undefined, ...Array(5).keys()]}
                     onChangeScrollGroupId={setScrollGroupId}
                     scrollGroupId={scrollGroupId}
