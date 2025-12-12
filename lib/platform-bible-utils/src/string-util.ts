@@ -813,8 +813,7 @@ export function toKebabCase(input: string): string {
 }
 
 /**
- * Shortens text by splitting by space, removing tokens from the middle and replacing them with
- * `[...]`
+ * Shortens text by removing words from the middle and replacing them with `[...]`
  *
  * @param text The input text
  * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the

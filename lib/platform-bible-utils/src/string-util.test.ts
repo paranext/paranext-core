@@ -861,7 +861,7 @@ describe('truncateOmittingMiddleWords', () => {
   });
 
   it('truncated', () => {
-    expect(collapseMiddleWords(unmodifiedText, 1)).toEqual('this [...] text');
+    expect(collapseMiddleWords('this is some text', 1)).toEqual('this [...] text');
     expect(collapseMiddleWords('this is some unbalanced text', 2)).toEqual(
       'this is [...] unbalanced text',
     );

@@ -3440,7 +3440,7 @@ export declare function isWhiteSpace(ch: string): boolean;
  */
 export declare function toKebabCase(input: string): string;
 /**
- * Truncates text by removing words from the middle and replacing them with `[...]`
+ * Shortens text by removing words from the middle and replacing them with `[...]`
  *
  * @param text The input text
  * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the
@@ -3448,7 +3448,7 @@ export declare function toKebabCase(input: string): string;
  * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
  *   x words, followed by `[...]` and the last x words
  */
-export declare function truncateOmittingMiddleWords(text: string, numberOfWordsToKeepBeforeAndAfter: number): string;
+declare function collapseMiddleWords(text: string, numberOfWordsToKeepBeforeAndAfter: number): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**
@@ -5492,6 +5492,7 @@ export type LegacyCommentThread = {
 export {
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+	collapseMiddleWords as truncateOmittingMiddleWords,
 };
 
 export {};
