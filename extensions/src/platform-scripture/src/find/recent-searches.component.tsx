@@ -1,4 +1,3 @@
-import { useLocalizedStrings } from '@papi/frontend/react';
 import { Clock } from 'lucide-react';
 import {
   Button,
@@ -9,14 +8,21 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
-import { useMemo, useState } from 'react';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { useState } from 'react';
 
 export interface RecentSearchesProps {
   /** Array of recent search terms */
   recentSearches: string[];
   /** Callback when a recent search term is selected */
   onSearchTermSelect: (term: string) => void;
+  /** Localized strings ['%webView_find_showRecentSearches%', '%webView_find_recent%'] */
+  localizedStrings?: LanguageStrings;
 }
 
 /**
@@ -26,11 +32,9 @@ export interface RecentSearchesProps {
 export default function RecentSearches({
   recentSearches,
   onSearchTermSelect,
+  localizedStrings,
 }: RecentSearchesProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => ['%webView_find_showRecentSearches%', '%webView_find_recent%'], []),
-  );
 
   if (recentSearches.length === 0) {
     return undefined;
@@ -41,22 +45,34 @@ export default function RecentSearches({
     setIsOpen(false);
   };
 
+  const localizedString = (key: LocalizeKey) => {
+    if (!localizedStrings) return key;
+    return localizedStrings[key];
+  };
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2"
-          aria-label={localizedStrings['%webView_find_showRecentSearches%']}
-        >
-          <Clock className="tw-h-4 tw-w-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2"
+                aria-label={localizedString('%webView_find_showRecentSearches%')}
+              >
+                <Clock className="tw-h-4 tw-w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{localizedString('%webView_find_showRecentSearches%')}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </PopoverTrigger>
       <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
         <Command>
           <CommandList>
-            <CommandGroup heading={localizedStrings['%webView_find_recent%']}>
+            <CommandGroup heading={localizedString('%webView_find_recent%')}>
               {recentSearches.map((term) => (
                 <CommandItem
                   key={term}
