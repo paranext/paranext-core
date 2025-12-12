@@ -1556,3 +1556,8 @@ export const initialize = () => {
 export const getActiveExtensions = () => {
   return [...activeExtensions.keys()];
 };
+
+/** Deactivate all available extensions */
+export const deactivateAllExtensions = async (): Promise<void> => {
+  await deactivateExtensions(availableExtensions);
+};
