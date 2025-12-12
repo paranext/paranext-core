@@ -53,21 +53,14 @@ export default function RecentSearches({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2"
-                aria-label={localizedString('%webView_find_showRecentSearches%')}
-              >
-                <Clock className="tw-h-4 tw-w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{localizedString('%webView_find_showRecentSearches%')}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2"
+          aria-label={localizedString('%webView_find_showRecentSearches%')}
+        >
+          <Clock className="tw-h-4 tw-w-4" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
         <Command>
