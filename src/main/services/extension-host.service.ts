@@ -67,6 +67,9 @@ async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher 
     extensionHostWatcher = undefined;
   }
 
+  // Try to shut down gracefully with 3/4 of the time budget first
+  const gracefulShutdownTimeMs = (maxWaitTimeInMS * 3) / 4;
+
   let didExit = await waitForDuration(async () => {
     if (!processLifetimeVariable) {
       logger.warn('Extension host process lifetime variable was not initialized');
@@ -77,15 +80,16 @@ async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher 
     });
     await processLifetimeVariable.promise;
     return true;
-  }, maxWaitTimeInMS / 2);
+  }, gracefulShutdownTimeMs);
 
+  // Didn't succeed in gracefully shutting down, so hard kill
   if (!didExit) hardKillExtensionHost();
 
   // Give the hard "kill" time to complete before returning so we don't restart too soon
   didExit = await waitForDuration(async () => {
     if (processLifetimeVariable) await processLifetimeVariable.promise;
     return true;
-  }, maxWaitTimeInMS / 2);
+  }, maxWaitTimeInMS - gracefulShutdownTimeMs);
 
   if (!didExit) logger.warn(`Extension host did not exit within ${maxWaitTimeInMS.toString()} ms`);
 }
