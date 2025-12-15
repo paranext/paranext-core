@@ -20,7 +20,6 @@ import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/fr
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  deepClone,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -71,7 +70,11 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
 ];
 
-const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
+const defaultUsj: Usj = correctEditorUsjVersion({
+  type: USJ_TYPE,
+  version: USJ_VERSION,
+  content: [],
+});
 
 const defaultEditorDecorations: EditorDecorations = {};
 
@@ -423,11 +426,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     logger.error(`Error getting USJ from PDP: ${errorMessage}`);
     return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
   }, [usjFromPdpPossiblyError]);
-  const usjFromPdpCorrectedVersion = useRef<Usj>(defaultUsj);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
-
-  const [usjForFootnoteDisplay, setUsjForFootnoteDisplay] = useState<Usj | undefined>();
 
   const handleFootnoteSelected = useCallback((index: number) => {
     // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
@@ -442,16 +442,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
-    function saveUsjToPdpIfUpdatedInternal(usJFromEditor = editorRef.current?.getUsj()) {
-      if (!usJFromEditor) return;
+    function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
+      if (!usjFromEditor) return;
 
-      const usjFromEditorWithCorrectedVersion = correctEditorUsjVersion(usJFromEditor);
-      if (
-        !areUsjContentsEqualExceptWhitespace(
-          usjFromPdpCorrectedVersion.current,
-          usjFromEditorWithCorrectedVersion,
-        )
-      )
+      const usjFromEditorWithCorrectedVersion = correctEditorUsjVersion(usjFromEditor);
+      if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjFromEditorWithCorrectedVersion))
         saveUsjToPdpInternal(usjFromEditorWithCorrectedVersion);
     }
 
@@ -464,13 +459,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
 
-      const usjToPersist = deepClone(newUsj);
-
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
-      usjSentToPdp.current = usjToPersist;
+      usjSentToPdp.current = newUsj;
       try {
-        if (!(await saveUsjToPdpRaw(usjToPersist)) && currentlyWritingUsjToPdp.current) {
+        if (!(await saveUsjToPdpRaw(newUsj)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -487,7 +480,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [saveUsjToPdpRaw]);
+  }, [saveUsjToPdpRaw, usjFromPdp]);
 
   const openFootnoteEditorOnNewNote = useCallback(
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
@@ -533,27 +526,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
-    usjFromPdpCorrectedVersion.current = correctEditorUsjVersion(usjFromPdp);
-
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (
-      !areUsjContentsEqualExceptWhitespace(usjFromPdpCorrectedVersion.current, usjSentToPdp.current)
-    ) {
-      usjSentToPdp.current = usjFromPdpCorrectedVersion.current;
+    if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
+      usjSentToPdp.current = usjFromPdp;
       editorRef.current.setUsj(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
-
-    // --- Ensure footnotes reflect the authoritative USJ after PDP update / reconciliation ---
-    // Prefer whatever is actually in the editor (editorRef), because earlier in this effect
-    // we may have set the editor from the PDP if the PDP had a "trumping" change.
-    const authoritativeUsj =
-      editorRef.current?.getUsj() ?? usjFromPdpCorrectedVersion.current ?? usjFromPdp;
-    if (authoritativeUsj) setUsjForFootnoteDisplay(authoritativeUsj);
-  }, [saveUsjToPdpIfUpdated, usjFromPdp, setUsjForFootnoteDisplay]);
+  }, [saveUsjToPdpIfUpdated, usjFromPdp]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -751,9 +733,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 </Alert>
               ))}
 
-              {footnotesPaneVisible && usjForFootnoteDisplay ? (
+              {footnotesPaneVisible && usjFromPdp ? (
                 <FootnotesLayout
-                  usj={usjForFootnoteDisplay}
+                  usj={usjFromPdp}
                   onFootnoteSelected={handleFootnoteSelected}
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
