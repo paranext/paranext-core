@@ -33,7 +33,7 @@ process.on('message', (message) => {
     logger.info('Beginning to shut down process due to graceful shutdown message');
     (async () => {
       try {
-        await extensionService.deactivateAllExtensions();
+        await extensionService.shutdown();
       } catch (error) {
         logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
       } finally {
@@ -48,6 +48,7 @@ process.on('message', (message) => {
 process.on('exit', () => {
   logger.info('Killing child processes created by extensions');
   killChildProcessesFromExtensions();
+  logger.info('Finished killing child processes created by extensions');
 });
 
 // Add unhandled exception and rejection handlers

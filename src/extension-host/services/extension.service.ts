@@ -1460,7 +1460,7 @@ async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> 
 }
 
 /** Deactivate all available extensions. Catch all errors and continue deactivating the rest. */
-export async function deactivateAllExtensions(): Promise<void> {
+async function deactivateAllExtensions(): Promise<void> {
   await deactivateExtensions(availableExtensions);
 }
 
