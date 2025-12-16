@@ -206,7 +206,6 @@ export function FootnoteCallerDropdown({
             <Input
               tabIndex={0}
               onMouseDown={(event) => {
-                console.log('trigger');
                 event.stopPropagation();
                 setSelectedCallerType('custom');
                 isCustomCallerInputFocused.current = true;
