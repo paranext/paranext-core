@@ -29,6 +29,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.VERSE_PLAIN_TEXT,
     ];
 
+    // All data types related to Scripture editing plus project settings. This is useful when an edit
+    // changes Scripture and also causes a project setting to change (e.g., adding a new book updates
+    // the BooksPresent setting)
+    public static readonly List<string> AllScriptureDataTypesPlusSettings =
+    [
+        .. AllScriptureDataTypes,
+        ProjectDataType.SETTING,
+    ];
+
     public static readonly List<string> AllCommentDataTypes =
     [
         ProjectDataType.COMMENTS,
@@ -1042,8 +1051,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Copied from `ScrText.StandardizeCrLfsIfNecessary`. We need to do this when setting book USFM
-    /// because we do not go through `ScrText.PutText`, and we strip out CR.
+    /// Copied from `ScrText.StandardizeCrLfsIfNecessary`. We need to do this when setting USFM
+    /// because we need to normalize USFM with CrLfs before we run `ScrText.PutText`, and we expect
+    /// CR not to be present on the USFM received for setting.
     ///
     /// Some programs (include cc which is used for mapin/mapout) strip out cr's.
     /// Put them back in if missing. Also terminates with CR/LF
@@ -1077,39 +1087,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Make newlines have CRLF because Paratext 9.4 always does this regardless of operating
         // system, and we want to match Paratext 9.4's whitespace.
-        // ScrText.PutText runs other private methods to standardize the text before saving to file
-        // as well. Maybe sometime we should see if we can get ScrText.PutBook created or something
-        // so we don't have to copy stuff here or have inconsistencies.
         data = StandardizeCrLfsIfNecessary(data);
         // Normalize the USFM before saving (note: this is now done twice when called from SetBookUsx,
         // but that normalization is done before making sure everything is CRLF which does affect
         // the normalization code, unfortunately. Could optimize)
         data = UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, data);
 
+        var isNewBook = false;
+
         RunWithinLock(
             WriteScope.EntireProject(scrText),
-            _ =>
+            writeLock =>
             {
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
-                if (
-                    !localBooksPresentSet.IsSelected(verseRef.BookNum)
-                    && !scrText.Creatable(verseRef.BookNum)
-                )
-                    throw new InvalidOperationException($"{verseRef.Book} cannot be created");
-                if (!scrText.Writable(verseRef.BookNum, 0))
-                    throw new InvalidOperationException($"{verseRef.Book} is not writable");
-                if (!scrText.Settings.Editable)
-                    throw new InvalidOperationException($"{verseRef.Book} is not editable");
-                byte[] rawData = scrText.Settings.Encoder.Convert(data, out string errorMessage);
-                if (!string.IsNullOrEmpty(errorMessage))
-                    throw new InvalidOperationException(errorMessage);
-                string bookFilePath = scrText.Settings.BookFileName(verseRef.BookNum, true);
-                File.WriteAllBytes(bookFilePath, rawData);
-                scrText.Reload();
+                isNewBook = localBooksPresentSet.IsSelected(verseRef.BookNum);
+                // Set with chapter 0 sets the whole book
+                scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
         );
 
-        SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
+        if (isNewBook)
+            SendDataUpdateEvent(
+                AllScriptureDataTypesPlusSettings,
+                "USFM book data update event - new book added"
+            );
+        else
+            SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
         return true;
     }
 
