@@ -64,15 +64,15 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
       return markerMenuItems;
     }
 
-    return markerMenuItems.filter(
-      (markerItem) =>
-        markerItem.marker?.toLowerCase().includes(query) ||
-        markerItem.title.toLowerCase().includes(query),
+    return markerMenuItems.filter((markerItem) =>
+      markerItem.marker
+        ? markerItem.marker?.toLowerCase().includes(query)
+        : markerItem.title.toLowerCase().includes(query),
     );
-  }, [commandSearch]);
+  }, [commandSearch, markerMenuItems]);
 
   return (
-    <Command shouldFilter={false} loop>
+    <Command className="tw-p-1" shouldFilter={false} loop>
       <CommandInput
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}

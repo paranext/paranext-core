@@ -1068,7 +1068,12 @@ export interface MarkerMenuItem {
 }
 /** Props for the marker menu component */
 export interface MarkerMenuProps {
+	/** Localized strings to pass through for the marker menu */
 	localizedStrings: MarkerMenuLocalizedStrings;
+	/**
+	 * A list of the marker menu items which can either be a marker to insert or some basic command
+	 * actions
+	 */
 	markerMenuItems: MarkerMenuItem[];
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
