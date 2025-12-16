@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import {
   Command,
   CommandEmpty,
@@ -45,19 +45,43 @@ export interface MarkerMenuItem {
 
 /** Props for the marker menu component */
 export interface MarkerMenuProps {
+  /** Localized strings to pass through for the marker menu */
   localizedStrings: MarkerMenuLocalizedStrings;
+  /**
+   * A list of the marker menu items which can either be a marker to insert or some basic command
+   * actions
+   */
   markerMenuItems: MarkerMenuItem[];
 }
 
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProps) {
+  const [commandSearch, setCommandSearch] = useState<string>('');
+
+  const filteredMarkerItems = useMemo(() => {
+    const query = commandSearch.trim().toLowerCase();
+    if (!query) {
+      return markerMenuItems;
+    }
+
+    return markerMenuItems.filter(
+      (markerItem) =>
+        markerItem.marker?.toLowerCase().includes(query) ||
+        markerItem.title.toLowerCase().includes(query),
+    );
+  }, [commandSearch]);
+
   return (
-    <Command className="tw-bg-white">
-      <CommandInput placeholder={localizedStrings['%markerMenu_searchPlaceholder%']} />
+    <Command shouldFilter={false} loop>
+      <CommandInput
+        value={commandSearch}
+        onValueChange={(value) => setCommandSearch(value)}
+        placeholder={localizedStrings['%markerMenu_searchPlaceholder%']}
+      />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>
         <CommandGroup>
-          {markerMenuItems.map((item) => (
+          {filteredMarkerItems.map((item) => (
             <CommandItem
               className="tw-flex tw-gap-2 hover:tw-bg-accent"
               disabled={item.isDisallowed || item.isDeprecated}
