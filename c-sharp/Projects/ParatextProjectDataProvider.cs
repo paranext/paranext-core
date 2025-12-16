@@ -1200,8 +1200,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Copied from `ScrText.StandardizeCrLfsIfNecessary`. We need to do this when setting book USFM
-    /// because we do not go through `ScrText.PutText`, and we strip out CR.
+    /// Copied from `ScrText.StandardizeCrLfsIfNecessary`. We need to do this when setting USFM
+    /// because we need to normalize USFM with CrLfs before we run `ScrText.PutText`, and we expect
+    /// CR not to be present on the USFM received for setting.
     ///
     /// Some programs (include cc which is used for mapin/mapout) strip out cr's.
     /// Put them back in if missing. Also terminates with CR/LF
@@ -1235,9 +1236,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Make newlines have CRLF because Paratext 9.4 always does this regardless of operating
         // system, and we want to match Paratext 9.4's whitespace.
-        // ScrText.PutText runs other private methods to standardize the text before saving to file
-        // as well. Maybe sometime we should see if we can get ScrText.PutBook created or something
-        // so we don't have to copy stuff here or have inconsistencies.
         data = StandardizeCrLfsIfNecessary(data);
         // Normalize the USFM before saving (note: this is now done twice when called from SetBookUsx,
         // but that normalization is done before making sure everything is CRLF which does affect
