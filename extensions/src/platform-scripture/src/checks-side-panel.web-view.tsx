@@ -764,9 +764,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
     return (
       <div className="pr-twp tw-h-screen tw-box-border tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
-        <span className="tw-text-sm">
-          {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
-        </span>
       </div>
     );
   }
