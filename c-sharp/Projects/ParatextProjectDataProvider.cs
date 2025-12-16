@@ -30,6 +30,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.VERSE_PLAIN_TEXT,
     ];
 
+    // All data types related to Scripture editing plus project settings. This is useful when an edit
+    // changes Scripture and also causes a project setting to change (e.g., adding a new book updates
+    // the BooksPresent setting)
+    public static readonly List<string> AllScriptureDataTypesPlusSettings =
+    [
+        .. AllScriptureDataTypes,
+        ProjectDataType.SETTING,
+    ];
+
     public static readonly List<string> AllCommentDataTypes =
     [
         ProjectDataType.COMMENTS,
@@ -1107,30 +1116,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         verseRef.ChapterNum = 0;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        var isNewBook = false;
+
         RunWithinLock(
             WriteScope.EntireProject(scrText),
-            _ =>
+            writeLock =>
             {
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
-                if (
-                    !localBooksPresentSet.IsSelected(verseRef.BookNum)
-                    && !scrText.Creatable(verseRef.BookNum)
-                )
-                    throw new InvalidOperationException($"{verseRef.Book} cannot be created");
-                if (!scrText.Writable(verseRef.BookNum, 0))
-                    throw new InvalidOperationException($"{verseRef.Book} is not writable");
-                if (!scrText.Settings.Editable)
-                    throw new InvalidOperationException($"{verseRef.Book} is not editable");
-                byte[] rawData = scrText.Settings.Encoder.Convert(data, out string errorMessage);
-                if (!string.IsNullOrEmpty(errorMessage))
-                    throw new InvalidOperationException(errorMessage);
-                string bookFilePath = scrText.Settings.BookFileName(verseRef.BookNum, true);
-                File.WriteAllBytes(bookFilePath, rawData);
-                scrText.Reload();
+                isNewBook = localBooksPresentSet.IsSelected(verseRef.BookNum);
+                // Set with chapter 0 sets the whole book
+                scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
         );
 
-        SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
+        if (isNewBook)
+            SendDataUpdateEvent(
+                AllScriptureDataTypesPlusSettings,
+                "USFM book data update event - new book added"
+            );
+        else
+            SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
         return true;
     }
 
