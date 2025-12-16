@@ -3,6 +3,7 @@ declare module 'platform-scripture-editor' {
   // Used in TSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { CheckLocation } from 'platform-scripture';
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { DataProviderDataType, IDataProvider, NetworkableObject } from '@papi/core';
   import type {
     KebabCase,
