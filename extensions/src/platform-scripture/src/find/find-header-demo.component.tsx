@@ -13,10 +13,9 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { SearchX, SlidersHorizontal } from 'lucide-react';
-import { Scope, Spinner } from 'platform-bible-react';
+import { Scope, Spinner, RecentSearches } from 'platform-bible-react';
 import { FindJobStatus, FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useState } from 'react';
-import RecentSearches from './recent-searches.component';
 
 type HidableFindResult = FindResult & { isHidden?: boolean };
 
@@ -117,8 +116,10 @@ export function FindHeaderDemo() {
       setSearchStatus('completed');
     }, 1000);
 
-    recentSearches.push(searchTerm);
-    setRecentSearches(recentSearches);
+    if (!recentSearches.includes(searchTerm)) {
+      recentSearches.push(searchTerm);
+      setRecentSearches(recentSearches);
+    }
 
     setSubmittedSearchTerm(searchTerm);
     setSubmittedScrollGroupId(scrollGroupId);
