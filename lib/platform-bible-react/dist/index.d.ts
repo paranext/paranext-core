@@ -1025,6 +1025,49 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
 /**
+ * Object containing all keys used for localization in the FootnoteEditor component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const MARKER_MENU_STRING_KEYS: readonly [
+	"%markerMenu_deprecated_label%",
+	"%markerMenu_disallowed_label%",
+	"%markerMenu_noResults%",
+	"%markerMenu_searchPlaceholder%"
+];
+export type MarkerMenuLocalizedStrings = {
+	[localizedKey in (typeof MARKER_MENU_STRING_KEYS)[number]]?: string;
+};
+/** Type for the markers that contain all necessary information to be displayed in the list */
+export interface MarkerMenuItem {
+	/** If the item is a marker, then this is the marker code */
+	marker?: string;
+	/** The main title for the marker or command */
+	title: string;
+	/** An optional subtitle for the marker */
+	subtitle?: string;
+	/** Optional name of icon to use instead of the marker */
+	icon?: React$1.ReactNode;
+	/** Whether the command/marker is deprecated */
+	isDeprecated?: boolean;
+	/** Whether the command/marker is disallowed for this project */
+	isDisallowed?: boolean;
+	/** Function to be triggered when the marker or command is selected */
+	action: () => void;
+}
+/** Props for the marker menu component */
+export interface MarkerMenuProps {
+	/** Localized strings to pass through for the marker menu */
+	localizedStrings: MarkerMenuLocalizedStrings;
+	/**
+	 * A list of the marker menu items which can either be a marker to insert or some basic command
+	 * actions
+	 */
+	markerMenuItems: MarkerMenuItem[];
+}
+/** Marker menu component to render the list of markers and a few commands in the scripture editor */
+export declare function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+/**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
  */

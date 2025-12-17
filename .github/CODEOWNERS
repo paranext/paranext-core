@@ -7,8 +7,8 @@
 
 # extension apis
 /extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts @lyonsil @tjcouch-sil @irahopkinson
-/extensions/src/paratext-registration/src/types/paratext-registration.d.ts @tjcouch-sil @lyonsil
-/extensions/src/platform-lexical-tools/src/types/platform-lexical-tools.d.ts @tjcouch-sil @lyonsil @jolierabideau
+/extensions/src/paratext-registration/src/types/paratext-registration.d.ts @tjcouch-sil @lyonsil @irahopkinson
+/extensions/src/platform-lexical-tools/src/types/platform-lexical-tools.d.ts @tjcouch-sil @lyonsil @jolierabideau @irahopkinson
 /extensions/src/platform-scripture-editor/src/types/platform-scripture-editor.d.ts @tjcouch-sil @lyonsil @irahopkinson
 /extensions/src/platform-scripture/src/types/platform-scripture.d.ts @tjcouch-sil @lyonsil @irahopkinson
 
