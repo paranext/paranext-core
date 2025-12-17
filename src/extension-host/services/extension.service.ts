@@ -189,11 +189,17 @@ let isInitialized = false;
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
 
+/** Whether we are currently shutting down this service */
+let isShuttingDown = false;
+
+/** Run to stop watching extension files to reload extensions */
+let extensionFileWatchUnsubscriber: UnsubscriberAsync | undefined;
+
 /**
  * Extensions that are available to us excluding extensions that do not have a JavaScript `main`
  * file to run
  */
-let availableExtensions: ExtensionInfo[];
+let availableExtensions: ExtensionInfo[] = [];
 
 /**
  * Event emitter to tell any extension listening that the extensions finished reloading. The boolean
@@ -790,8 +796,14 @@ async function normalizeExtensionFileName(baseUri: string, zipUri: string) {
  * Function to wait for the extensions to be reloaded. If for some reason the event didn't get
  * emitted or something else happened, there is an automatic timeout that will reject the Promise if
  * the reload took too long.
+ *
+ * @param shouldSkipIfNotReloading If `true`, the function will return immediately if extensions are
+ *   not currently reloading. If `false`, the function will wait for a reload to finish regardless
+ *   of whether one is in progress. Defaults to `false`.
  */
-async function waitForExtensionsReload(): Promise<void> {
+async function waitForExtensionsReload(shouldSkipIfNotReloading = false): Promise<void> {
+  if (!isReloading && shouldSkipIfNotReloading) return;
+
   const responseAsyncVariable = new AsyncVariable<void>(
     'response for extensions reload wait',
     RESTART_WAIT_TIMEOUT_MS,
@@ -1388,6 +1400,8 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
  *   `undefined` otherwise, e.g. not active, not registered.
  */
 async function deactivateExtension(extension: ActiveExtension): Promise<boolean | undefined> {
+  logger.info(`extension.service: deactivating ${extension.info.name}`);
+
   if (!extension.registrations)
     logger.error(
       `Extension '${extension.info.name}' does not have a registrations object to unregister.`,
@@ -1417,7 +1431,7 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
 }
 
 /**
- * Deactivate all given extensions.
+ * Deactivate all given extensions. Catch all errors and continue deactivating the rest.
  *
  * @param extensions - Extension info for the extensions we want to deactivate.
  * @returns An array of the deactivation results - `true`, `false`, or `undefined`.
@@ -1445,10 +1459,17 @@ async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> 
   }
 }
 
+/** Deactivate all available extensions. Catch all errors and continue deactivating the rest. */
+async function deactivateAllExtensions(): Promise<void> {
+  await deactivateExtensions(availableExtensions);
+}
+
 async function reloadExtensions(
   shouldDeactivateExtensions: boolean,
   shouldEmitDidReloadEvent: boolean,
 ): Promise<void> {
+  if (isShuttingDown) return;
+
   if (isReloading) {
     shouldReload = true;
     return;
@@ -1458,8 +1479,8 @@ async function reloadExtensions(
   let errorMessage = '';
 
   try {
-    if (shouldDeactivateExtensions && availableExtensions) {
-      await deactivateExtensions(availableExtensions);
+    if (shouldDeactivateExtensions) {
+      await deactivateAllExtensions();
     }
 
     await unzipCompressedExtensionFiles();
@@ -1501,7 +1522,7 @@ async function reloadExtensions(
   }
 
   isReloading = false;
-  if (shouldReload) {
+  if (shouldReload && !isShuttingDown) {
     (async () => {
       try {
         await platformBibleUtils.wait(RESTART_DELAY_MS);
@@ -1517,6 +1538,13 @@ async function reloadExtensions(
   if (errorMessage) throw new Error(errorMessage);
 }
 
+/** Get a list of names of all active extensions */
+export const getActiveExtensions = () => {
+  return [...activeExtensions.keys()];
+};
+
+// #region Service initialization and shutdown
+
 /**
  * Sets up the ExtensionService. Runs only once
  *
@@ -1527,6 +1555,8 @@ export const initialize = () => {
 
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
+
+    logger.info('Extension service initializing');
 
     appUriScheme = (await appService.getAppInfo()).uriScheme;
 
@@ -1544,15 +1574,56 @@ export const initialize = () => {
     );
     await reloadExtensions(false, didRestart);
 
-    watchForExtensionChanges();
+    extensionFileWatchUnsubscriber = watchForExtensionChanges();
 
     isInitialized = true;
+    logger.info('Extension service finished initializing');
   })();
 
   return initializePromise;
 };
 
-/** Get a list of names of all active extensions */
-export const getActiveExtensions = () => {
-  return [...activeExtensions.keys()];
-};
+export async function shutdown() {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  // Make sure the service is stood up so we don't have partially loaded state
+  if (initializePromise && !isInitialized) {
+    logger.info('Waiting for extension service to finish initializing before shutdown');
+    try {
+      await initializePromise;
+    } catch (e) {
+      logger.error(
+        `Extension service failed to initialize, so no longer waiting before shutdown: ${getErrorMessage(
+          e,
+        )}`,
+      );
+    }
+  }
+
+  // Wait for reload to finish before shutting down to avoid partially loaded state
+  if (isReloading) {
+    logger.info('Waiting for extension service to finish reloading before shutdown');
+    try {
+      await waitForExtensionsReload(true);
+    } catch (e) {
+      logger.error(
+        `Extension service failed to wait for extension reload, so no longer waiting before shutdown: ${getErrorMessage(
+          e,
+        )}`,
+      );
+    }
+  }
+
+  logger.info('Shutting down extension service');
+
+  // Stop watching for file changes
+  if (extensionFileWatchUnsubscriber) await extensionFileWatchUnsubscriber();
+
+  reloadFinishedEventEmitter.dispose();
+
+  // Deactivate all extensions
+  await deactivateAllExtensions();
+}
+
+// #endregion Service initialization and shutdown

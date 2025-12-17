@@ -30,14 +30,25 @@ logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
 // Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
 process.on('message', (message) => {
   if (isString(message) && message === gracefulShutdownMessage) {
-    logger.info('Shutting down process due to graceful shutdown message');
-    process.exit();
+    logger.info('Beginning to shut down process due to graceful shutdown message');
+    (async () => {
+      try {
+        await extensionService.shutdown();
+      } catch (error) {
+        logger.error(`Failed to deactivate extensions. ${getErrorMessage(error)}`);
+      } finally {
+        logger.info('Finally shutting down process due to graceful shutdown message');
+        process.exit();
+      }
+    })();
   }
 });
 
 // Try to kill child processes that extensions created
 process.on('exit', () => {
+  logger.info('Killing child processes created by extensions');
   killChildProcessesFromExtensions();
+  logger.info('Finished killing child processes created by extensions');
 });
 
 // Add unhandled exception and rejection handlers
