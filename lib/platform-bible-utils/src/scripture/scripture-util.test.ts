@@ -5,7 +5,6 @@ import {
   compareScrRefs,
   FormatScrOptions,
   FormatScrRangeOptions,
-  formatScrRef,
   formatScrRefRange,
   formatScrRefWithOptions,
   getLocalizedIdFromBookNumber,
