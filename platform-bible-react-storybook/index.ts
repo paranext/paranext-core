@@ -85,6 +85,12 @@ export {
   inventoryCountColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
+export { MarkerMenu, MARKER_MENU_STRING_KEYS } from './components/advanced/marker-menu.component';
+export type {
+  MarkerMenuProps,
+  MarkerMenuItem,
+  MarkerMenuLocalizedStrings,
+} from './components/advanced/marker-menu.component';
 export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
