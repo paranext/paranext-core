@@ -261,6 +261,13 @@ describe('formatScrRefRange', () => {
         { book: 'EXO', chapterNum: -1, verseNum: -1 },
       ),
     ).toBe('GEN - EXO');
+
+    expect(
+      formatScrRefRange(
+        { book: 'GEN', chapterNum: -1, verseNum: 2 },
+        { book: 'EXO', chapterNum: -1, verseNum: 3 },
+      ),
+    ).toBe('GEN - EXO');
   });
 
   it('using range of chapters', async () => {
