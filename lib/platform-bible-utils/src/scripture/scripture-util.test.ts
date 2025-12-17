@@ -3,8 +3,6 @@ import { Canon } from '@sillsdev/scripture';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  FormatScrOptions,
-  FormatScrRangeOptions,
   formatScrRefRange,
   formatScrRefWithOptions,
   getLocalizedIdFromBookNumber,
@@ -242,7 +240,7 @@ describe('formatScrRefRange', () => {
           chapterVerseSeparator: ',',
           bookChapterSeparator: '. ',
           rangeSeparator: '-',
-        } as FormatScrRangeOptions,
+        },
       ),
     ).toBe('Offb. 4,6-5,1');
 
@@ -257,7 +255,7 @@ describe('formatScrRefRange', () => {
           bookChapterSeparator: '',
           rangeSeparator: ' - ',
           repeatBookName: true,
-        } as FormatScrRangeOptions,
+        },
       ),
     ).toBe('Ex10;1 - Le2;3');
   });
@@ -272,7 +270,7 @@ describe('formatScrRefRange', () => {
           bookChapterSeparator: ' ',
           rangeSeparator: ' - ',
           repeatBookName: true,
-        } as FormatScrRangeOptions,
+        },
       ),
     ).toBe('10,1 - 2,3');
   });
