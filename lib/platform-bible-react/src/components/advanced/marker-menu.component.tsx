@@ -64,10 +64,10 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
       return markerMenuItems;
     }
 
-    return markerMenuItems.filter((markerItem) =>
-      markerItem.marker
-        ? markerItem.marker?.toLowerCase().includes(query)
-        : markerItem.title.toLowerCase().includes(query),
+    return markerMenuItems.filter(
+      (markerItem) =>
+        markerItem.marker?.toLowerCase().includes(query) ||
+        markerItem.title.toLowerCase().includes(query),
     );
   }, [commandSearch, markerMenuItems]);
 
