@@ -1,3 +1,5 @@
+/** WARNING: This file is generated in https://github.com/paranext/usfm-tools. Make changes there */
+
 /**
  * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
  * other kinds of markers.
@@ -795,7 +797,7 @@ export const USFM_MARKERS_MAP: MarkersMap = deepFreeze({
   schemaRepo: 'https://github.com/usfm-bible/tcdocs.git',
   schemaCommit: '50f2a6ac3fc1d867d906df28bc00fcff729a7b76',
   markersMapVersion: '1.0.0',
-  usfmToolsCommit: '6c7bb8d75eda47893296a635c1e6e0b67165ac7f',
+  usfmToolsCommit: '979b4d5cf16c04f6744fe1fc5c730807a8b90187',
   markers: {
     add: {
       type: 'char',

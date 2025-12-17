@@ -8,7 +8,7 @@
     "notExported": false,
     "invalidLink": true,
     "notDocumented": true,
-    "rewrittenLink": true,
+    "rewrittenLink": false,
     "unusedMergeModuleWith": true
   },
   "highlightLanguages": [
