@@ -171,7 +171,7 @@ export function FindHeaderDemo() {
                   variant="outline"
                   size="icon"
                   onClick={() => setAreFiltersShown(!areFiltersShown)}
-                  aria-label={'%webView_find_toggleFilters%'}
+                  aria-label="%webView_find_toggleFilters%"
                   className={areFiltersShown ? 'tw-bg-muted' : ''}
                 >
                   <SlidersHorizontal className="tw-h-4 tw-w-4" />
@@ -221,7 +221,7 @@ export function FindHeaderDemo() {
             />
             {(scope === 'chapter' || scope === 'book') && (
               <div className="tw-flex tw-flex-col tw-items-start tw-gap-4">
-                <Label>'%webView_find_scrollGroup%</Label>
+                <Label>%webView_find_scrollGroup%</Label>
                 <ScrollGroupSelector
                   // This is kinda hacky, but the real scrollgroup keys are also defined like this
                   // in the `availableScrollGroupIds` variable in
