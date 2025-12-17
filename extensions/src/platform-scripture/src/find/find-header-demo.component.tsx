@@ -1,19 +1,22 @@
-import ScopeSelector from '@/components/advanced/scope-selector/scope-selector.component';
-import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
-import { Button } from '@/components/shadcn-ui/button';
-import { Card, CardContent } from '@/components/shadcn-ui/card';
-import Checkbox from '@/components/shadcn-ui/checkbox';
-import { Input } from '@/components/shadcn-ui/input';
-import { Label } from '@/components/shadcn-ui/label';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { SearchX, SlidersHorizontal } from 'lucide-react';
 import {
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Input,
+  Label,
+  RecentSearches,
+  Scope,
+  ScopeSelector,
+  ScrollGroupSelector,
+  Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/shadcn-ui/tooltip';
-import { SerializedVerseRef } from '@sillsdev/scripture';
-import { SearchX, SlidersHorizontal } from 'lucide-react';
-import { Scope, Spinner, RecentSearches } from 'platform-bible-react';
+} from 'platform-bible-react';
 import { FindJobStatus } from 'platform-scripture';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
 
