@@ -14,16 +14,14 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { SearchX, SlidersHorizontal } from 'lucide-react';
 import { Scope, Spinner, RecentSearches } from 'platform-bible-react';
-import { FindJobStatus, FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useState } from 'react';
-
-type HidableFindResult = FindResult & { isHidden?: boolean };
+import { FindJobStatus } from 'platform-scripture';
+import { SetStateAction, useEffect, useMemo, useState } from 'react';
 
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   // custom for demo
-  const [verseRefSetting, setVerseRefSetting] = useState<SerializedVerseRef>({
+  const [verseRefSetting] = useState<SerializedVerseRef>({
     book: 'GEN',
     chapterNum: 1,
     verseNum: 1,
@@ -49,17 +47,18 @@ export function FindHeaderDemo() {
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
   const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
 
-  const [activeJobId, setActiveJobId] = useState<string>();
-  const [searchProgress, setSearchProgress] = useState<number>(0);
-  const [totalNumberOfResults, setTotalNumberOfResults] = useState<number>(0);
+  // not used in demo component
+  // const [activeJobId, setActiveJobId] = useState<string>();
+  // const [searchProgress, setSearchProgress] = useState<number>(0);
+  // const [totalNumberOfResults, setTotalNumberOfResults] = useState<number>(0);
   const [searchStatus, setSearchStatus] = useState<FindJobStatus | undefined>(undefined);
-  const [searchError, setSearchError] = useState<string | undefined>();
+  // const [searchError, setSearchError] = useState<string | undefined>();
 
-  const [results, setResults] = useState<HidableFindResult[]>([]);
-  const [numberOfHiddenResults, setNumberOfHiddenResults] = useState<number>(0);
-  const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
+  // const [results, setResults] = useState<HidableFindResult[]>([]);
+  // const [numberOfHiddenResults, setNumberOfHiddenResults] = useState<number>(0);
+  // const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
-  const [editorWebViewId] = useState<string | undefined>(undefined);
+  // const [editorWebViewId] = useState<string | undefined>(undefined);
 
   const searchQueryChanged = useMemo(() => {
     return (
@@ -147,8 +146,11 @@ export function FindHeaderDemo() {
             <Input
               id="search-term"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
+              /* custom for demo: types added */
+              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+                setSearchTerm(e.target.value)
+              }
+              onKeyDown={(e: { key: string }) => {
                 if (e.key === 'Enter') {
                   handleStartSearch();
                 }
@@ -156,7 +158,7 @@ export function FindHeaderDemo() {
               placeholder="%webView_find_searchPlaceholder%"
               className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
             />
-            <RecentSearches recentSearches={recentSearches} onSearchTermSelect={setSearchTerm} />
+            <RecentSearches recentSearches={recentSearches} onSearchItemSelect={setSearchTerm} />
           </div>
 
           <TooltipProvider>
