@@ -813,32 +813,33 @@ export function toKebabCase(input: string): string {
 }
 
 /**
- * Shortens text by removing words from the middle and replacing them with `[...]`
+ * Shortens text by splitting by space, removing tokens from the middle and replacing them with
+ * `[...]`
  *
  * @param text The input text
- * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the
- *   text
- * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
- *   x words, followed by `[...]` and the last x words
+ * @param numberOfTokensToKeepBeforeAndAfter Count of space separated tokens to keep at the
+ *   beginning and end of the text
+ * @returns The full text if shorter than tokens to keep for beginning plus end, otherwise the first
+ *   x tokens, followed by `[...]` and the last x tokens
  */
 export function collapseMiddleWords(
   text: string,
-  numberOfWordsToKeepBeforeAndAfter: number,
+  numberOfTokensToKeepBeforeAndAfter: number,
 ): string {
-  const words = text.split(/\s+/);
+  const tokens = text.split(/\s+/);
 
   // If the text is too short to truncate, return as-is
   if (
-    words.length <= numberOfWordsToKeepBeforeAndAfter * 2 ||
-    numberOfWordsToKeepBeforeAndAfter < 1
+    tokens.length <= numberOfTokensToKeepBeforeAndAfter * 2 ||
+    numberOfTokensToKeepBeforeAndAfter < 1
   ) {
     return text;
   }
 
-  const startWords = words.slice(0, numberOfWordsToKeepBeforeAndAfter);
-  const endWords = words.slice(-numberOfWordsToKeepBeforeAndAfter);
+  const startTokens = tokens.slice(0, numberOfTokensToKeepBeforeAndAfter);
+  const endTokens = tokens.slice(-numberOfTokensToKeepBeforeAndAfter);
 
-  return [...startWords, `[...]`, ...endWords].join(' ');
+  return [...startTokens, `[...]`, ...endTokens].join(' ');
 }
 
 /** This is an internal-only export for testing purposes and should not be used in development */
