@@ -143,59 +143,83 @@ describe('formatScrRef', () => {
   it('using 3-letter book id', async () => {
     expect(formatScrRefWithOptions({ book: 'DEU', chapterNum: 5, verseNum: 4 })).toBe('DEU 5:4');
     expect(
-      formatScrRefWithOptions({ book: 'REV', chapterNum: 4, verseNum: 6 }, {
-        optionOrLocalizedBookName: undefined,
-        chapterVerseSeparator: '.',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'REV', chapterNum: 4, verseNum: 6 },
+        {
+          optionOrLocalizedBookName: undefined,
+          chapterVerseSeparator: '.',
+        },
+      ),
     ).toBe('REV 4.6');
     expect(
-      formatScrRefWithOptions({ book: 'EXO', chapterNum: 10, verseNum: 1 }, {
-        optionOrLocalizedBookName: 'id',
-        chapterVerseSeparator: ';',
-        bookChapterSeparator: '-',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'EXO', chapterNum: 10, verseNum: 1 },
+        {
+          optionOrLocalizedBookName: 'id',
+          chapterVerseSeparator: ';',
+          bookChapterSeparator: '-',
+        },
+      ),
     ).toBe('EXO-10;1');
   });
 
   it('using English book name', async () => {
     expect(
-      formatScrRefWithOptions({ book: 'DEU', chapterNum: 5, verseNum: 4 }, {
-        optionOrLocalizedBookName: 'English',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'DEU', chapterNum: 5, verseNum: 4 },
+        {
+          optionOrLocalizedBookName: 'English',
+        },
+      ),
     ).toBe('Deuteronomy 5:4');
     expect(
-      formatScrRefWithOptions({ book: 'REV', chapterNum: 4, verseNum: 6 }, {
-        optionOrLocalizedBookName: 'English',
-        chapterVerseSeparator: '.',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'REV', chapterNum: 4, verseNum: 6 },
+        {
+          optionOrLocalizedBookName: 'English',
+          chapterVerseSeparator: '.',
+        },
+      ),
     ).toBe('Revelation 4.6');
     expect(
-      formatScrRefWithOptions({ book: 'EXO', chapterNum: 10, verseNum: 1 }, {
-        optionOrLocalizedBookName: 'English',
-        chapterVerseSeparator: ';',
-        bookChapterSeparator: '-',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'EXO', chapterNum: 10, verseNum: 1 },
+        {
+          optionOrLocalizedBookName: 'English',
+          chapterVerseSeparator: ';',
+          bookChapterSeparator: '-',
+        },
+      ),
     ).toBe('Exodus-10;1');
   });
 
   it('using arbitrary book name, abbrev, etc.', async () => {
     expect(
-      formatScrRefWithOptions({ book: 'DEU', chapterNum: 5, verseNum: 4 }, {
-        optionOrLocalizedBookName: 'Deuteronomio',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'DEU', chapterNum: 5, verseNum: 4 },
+        {
+          optionOrLocalizedBookName: 'Deuteronomio',
+        },
+      ),
     ).toBe('Deuteronomio 5:4');
     expect(
-      formatScrRefWithOptions({ book: 'REV', chapterNum: 4, verseNum: 6 }, {
-        optionOrLocalizedBookName: 'Rev.',
-        chapterVerseSeparator: '.',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'REV', chapterNum: 4, verseNum: 6 },
+        {
+          optionOrLocalizedBookName: 'Rev.',
+          chapterVerseSeparator: '.',
+        },
+      ),
     ).toBe('Rev. 4.6');
     expect(
-      formatScrRefWithOptions({ book: 'EXO', chapterNum: 10, verseNum: 1 }, {
-        optionOrLocalizedBookName: 'Ex',
-        chapterVerseSeparator: ';',
-        bookChapterSeparator: '-',
-      } as FormatScrOptions),
+      formatScrRefWithOptions(
+        { book: 'EXO', chapterNum: 10, verseNum: 1 },
+        {
+          optionOrLocalizedBookName: 'Ex',
+          chapterVerseSeparator: ';',
+          bookChapterSeparator: '-',
+        },
+      ),
     ).toBe('Ex-10;1');
   });
 });
