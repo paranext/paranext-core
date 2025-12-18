@@ -44,6 +44,8 @@
       "%webView_platformScriptureEditor_insert%": "Insert",
       "%webView_platformScriptureEditor_insertCrossReferenceAtSelection%": "Insert cross-reference",
       "%webView_platformScriptureEditor_insertFootnoteAtSelection%": "Insert footnote",
+      "%webView_platformScriptureEditor_insertCommentAtSelection%": "Insert comment",
+      "%webView_platformScriptureEditor_error_noTextSelected%": "Please select a range of text before inserting a comment.",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
       "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Open Checks Side Panel",

@@ -65,6 +65,14 @@ export { default as FootnoteItem } from './components/advanced/footnotes/footnot
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export { FOOTNOTE_LIST_STRING_KEYS } from './components/advanced/footnotes/footnote-list.component';
 export {
+  default as CommentEditor,
+  type CommentEditorProps,
+} from './components/advanced/comment-editor/comment-editor.component';
+export {
+  COMMENT_EDITOR_STRING_KEYS,
+  type CommentEditorLocalizedStrings,
+} from './components/advanced/comment-editor/comment-editor.types';
+export {
   default as Inventory,
   type InventoryItem,
 } from './components/advanced/inventory/inventory.component';

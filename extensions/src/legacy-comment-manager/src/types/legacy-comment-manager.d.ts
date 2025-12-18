@@ -3,6 +3,7 @@ declare module 'legacy-comment-manager' {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
+    NetworkableObject,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
@@ -330,11 +331,24 @@ declare module 'legacy-comment-manager' {
       // #endregion
     };
 
+  /** Web view controller for the Comment List web view */
+  export type CommentListWebViewController = NetworkableObject<{
+    /**
+     * Scroll the comment list to show a specific thread and select it.
+     *
+     * @param threadId The ID of the thread to scroll to and select
+     */
+    scrollToThread(threadId: string): Promise<void>;
+  }>;
+
   // #endregion
 }
 
 declare module 'papi-shared-types' {
-  import type { ILegacyCommentProjectDataProvider } from 'legacy-comment-manager';
+  import type {
+    CommentListWebViewController,
+    ILegacyCommentProjectDataProvider,
+  } from 'legacy-comment-manager';
 
   export interface ProjectDataProviderInterfaces {
     'legacyCommentManager.comments': ILegacyCommentProjectDataProvider;
@@ -344,5 +358,9 @@ declare module 'papi-shared-types' {
     'legacyCommentManager.openCommentList': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+  }
+
+  export interface WebViewControllers {
+    'legacyCommentManager.commentList': CommentListWebViewController;
   }
 }

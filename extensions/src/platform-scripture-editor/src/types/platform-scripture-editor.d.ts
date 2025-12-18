@@ -15,6 +15,7 @@ declare module 'platform-scripture-editor' {
   } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
+  import type { CommandHandlers } from 'papi-shared-types';
 
   // #region editor WebViewController messages
 
@@ -59,6 +60,55 @@ declare module 'platform-scripture-editor' {
     method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
   };
 
+  /** Tell the editor to open the comment editor for inserting a new comment at the current verse */
+  export type EditorMessageInsertCommentAtSelection = {
+    method: 'insertCommentAtSelection';
+  };
+
+  /**
+   * The action that triggered an annotation interaction.
+   *
+   * - `'clicked'` - The user clicked on the annotation
+   * - `'deleted'` - The annotation was removed (e.g., the annotated text was deleted)
+   */
+  export type AnnotationAction = 'clicked' | 'deleted';
+
+  /** Tell the editor to set an annotation on the specified range */
+  export type EditorMessageSetAnnotation = {
+    method: 'setAnnotation';
+    /** Goes to this Scripture Reference before setting the annotation */
+    scrRef: SerializedVerseRef;
+    /** The annotation range in editor-usable format */
+    annotationRange: {
+      start: { jsonPath: string; offset: number };
+      end: { jsonPath: string; offset: number };
+    };
+    /** The type of annotation (e.g., 'translatorComment') */
+    annotationType: string;
+    /** Unique identifier for this annotation */
+    annotationId: string;
+    /**
+     * Optional command to execute when the annotation is interacted with (clicked or deleted). The
+     * command will be called with the following parameters:
+     *
+     * - `annotationId: string` - The unique identifier of the annotation
+     * - `action: AnnotationAction` - The action that triggered the interaction (`'clicked'` or
+     *   `'deleted'`)
+     *
+     * @example // Register a command handler for annotation interactions
+     * papi.commands.registerCommand( 'myExtension.handleAnnotationInteraction', (annotationId:
+     * string, action: AnnotationAction) => { if (action === 'clicked') { // Handle click - e.g.,
+     * open a details panel } else { // Handle deletion - e.g., clean up related data } }, );
+     */
+    interactionCommand?: keyof CommandHandlers;
+    /**
+     * Optional thread ID for comment annotations. When provided with an `interactionCommand`,
+     * clicking the annotation will scroll the comment list to this thread. This allows the
+     * Annotation Handler to specify which thread an annotation is related to.
+     */
+    threadId?: string;
+  };
+
   /** Messages sent to the editor web view */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
@@ -66,7 +116,9 @@ declare module 'platform-scripture-editor' {
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
-    | EditorMessageInsertTextualNoteAtSelection;
+    | EditorMessageInsertTextualNoteAtSelection
+    | EditorMessageInsertCommentAtSelection
+    | EditorMessageSetAnnotation;
 
   // #endregion editor WebViewController messages
 
@@ -239,6 +291,49 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /**
+     * Function to open the comment editor for inserting a new project comment at the current verse.
+     * Checks permissions and fetches assignable users before opening the editor.
+     */
+    insertCommentAtSelection(): Promise<void>;
+    /**
+     * Set an annotation on the specified Scripture range. The annotation will be highlighted in the
+     * editor. Used by the Annotation Handler to mark up the Scripture text.
+     *
+     * @param range The Scripture range to annotate
+     * @param annotationType The type of annotation (e.g., 'translatorComment', 'spelling')
+     * @param annotationId Unique identifier for this annotation
+     * @param interactionCommand Optional command to execute when the annotation is interacted with.
+     *   The command will be called with `(annotationId: string, action: AnnotationAction)` where
+     *   `action` is `'clicked'` when the user clicks the annotation or `'deleted'` when the
+     *   annotation is removed (e.g., annotated text was deleted).
+     * @param threadId Optional thread ID for comment annotations. When provided with an
+     *   `interactionCommand`, clicking the annotation will scroll the comment list to this thread.
+     */
+    setAnnotation(
+      range: ScriptureRange,
+      annotationType: string,
+      annotationId: string,
+      interactionCommand?: keyof CommandHandlers,
+      threadId?: string,
+    ): Promise<void>;
+    /**
+     * Create a new comment at the specified Scripture range. This will create the comment in the
+     * project data provider and add an annotation to highlight the commented text.
+     *
+     * @param range The Scripture range to attach the comment to
+     * @param contents The HTML content of the comment
+     * @param assignedUser Optional user to assign the comment to
+     * @returns The ID of the newly created comment thread
+     */
+    createComment(range: ScriptureRange, contents: string, assignedUser?: string): Promise<string>;
+    /**
+     * Focus on a specific comment thread. Opens the Comments List web view for this project (or
+     * focuses it if already open) and scrolls to the specified thread.
+     *
+     * @param threadId The ID of the thread to focus on
+     */
+    focusComment(threadId: string): Promise<void>;
   }>;
 
   // #endregion editor WebView types
@@ -558,6 +653,16 @@ declare module 'papi-shared-types' {
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert a project comment at the current verse in a given editor web view. Opens a
+     * comment editor popover for drafting the comment content and optionally assigning to a user.
+     *
+     * @param editorWebViewId The ID of the web view to insert the comment for
+     */
+    'platformScriptureEditor.insertCommentAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
   }
