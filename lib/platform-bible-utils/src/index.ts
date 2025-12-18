@@ -59,10 +59,7 @@ export {
   getNthCaller,
   getFormatCallerFunction,
 } from './scripture/footnote-util';
-export type {
-  FormatScrRefOptions as FormatScrOptions,
-  FormatScrRangeOptions,
-} from './scripture/scripture-util';
+export type { FormatScrRefOptions, FormatScrRefRangeOptions } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
