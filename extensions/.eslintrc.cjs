@@ -144,6 +144,14 @@ module.exports = {
         'import/no-self-import': 'off',
       },
     },
+    {
+      files: ['*.stories.tsx'],
+      rules: {
+        // Dropping some rules for storybook stories
+        'no-alert': 'off', // alert is fine here
+        'jsx-a11y/control-has-associated-label': 'off', // no need for a11y
+      },
+    },
   ],
   parserOptions: {
     ecmaVersion: 2022,

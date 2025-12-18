@@ -6,18 +6,43 @@ import { ReactElement, useState } from 'react';
 import { Home, HomeProps, LocalProjectInfo } from './home.component';
 
 /* This is a minimal set of Tailwind styles needed for the Home component to display correctly in Storybook
-Remove this when we can correctly import the tailwind styles */
+Remove this when we can correctly import the tailwind styles
+Numbers are also different in Storybook due to a 50px margin left and right of the Story */
 const styles = `
-  @media (min-width: 768px) {
+  @media (min-width: 868px) {
     .md\\:\\!tw-table-cell {
       display: table-cell !important;
     }
   }
 
-  @media (min-width: 640px) {
+  @media (min-width: 740px) {
     .sm\\:\\!tw-table-cell {
       display: table-cell !important;
     }
+  }
+
+  @media (max-width: 400px) {
+    .max-\\[300px\\]\\:tw-hidden {
+      display: none;
+    }
+    .max-\\[300px\\]\\:\\!tw-hidden {
+      display: none !important;
+    }
+    .max-\\[300px\\]\\:\\!tw-flex {
+      display: flex !important;
+    }
+    .max-\\[300px\\]\\:\\!tw-px-4 {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+  }
+
+  .tw-ps-2 {
+    padding-left: 0.5rem;
+  }
+
+  .tw-text-muted-foreground\\/70 {
+    color: hsl(var(--muted-foreground) / 0.7);
   }
 `;
 const styleElement = document.createElement('style');
@@ -73,7 +98,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
 const staticProjectsAndResources: SharedProjectsInfo = {
   '13': {
     id: '13',
-    name: 'Pr4-fromRemote',
+    name: 'Pr4--S/R',
     fullName: 'Project 4 - fromRemote-wasEditable',
     language: '2ndLanguage-fromRemote',
     editedStatus: 'edited',
@@ -81,7 +106,7 @@ const staticProjectsAndResources: SharedProjectsInfo = {
   },
   '17': {
     id: '17',
-    name: 'Pr7-fromRemote',
+    name: 'HPUX-S/R',
     fullName: 'Project 7 - fromRemote',
     language: '2ndLanguage-fromRemote',
     editedStatus: 'new',
@@ -123,11 +148,15 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   return (
     <Story
       args={{
-        localizedStrings: {
-          '%resources_open%': 'Open',
-          '%resources_sync%': 'Sync',
-          '%resources_get%': 'Get',
-        },
+        localizedStringsWithLoadingState: [
+          {
+            '%resources_open%': 'Open',
+            '%resources_sync%': 'Sync',
+            '%resources_get%': 'Get',
+            '%resources_shortNameText%': 'Name',
+          },
+          false,
+        ],
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
@@ -135,9 +164,15 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
         headerContent: (
           <>
             <HomeIcon size="36" />
-            <CardTitle>Home Story</CardTitle>
+            <CardTitle>Home or New Tab</CardTitle>
           </>
         ),
+        onOpenProject: () => {
+          alert('Open project');
+        },
+        onSendReceiveProject: () => {
+          alert('Send/Receive project');
+        },
       }}
     />
   );
