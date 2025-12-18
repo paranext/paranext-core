@@ -39,6 +39,48 @@ interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   options?: OpenEditorOptions;
 }
 
+/** Time in ms to wait for the comment list web view to load before scrolling to a thread */
+const COMMENT_LIST_LOAD_DELAY_MS = 500;
+
+/**
+ * Opens the comment list for an editor and scrolls to a specific thread.
+ *
+ * @param editorWebViewId The ID of the editor web view (used to determine which project's comments)
+ * @param threadId The ID of the thread to scroll to
+ */
+async function openCommentListAndScrollToThread(
+  editorWebViewId: string,
+  threadId: string,
+): Promise<void> {
+  const commentListWebViewId = await papi.commands.sendCommand(
+    'legacyCommentManager.openCommentList',
+    editorWebViewId,
+  );
+
+  if (!commentListWebViewId) {
+    logger.warn('Failed to open comment list: no web view ID returned');
+    return;
+  }
+
+  // Wait for the comment list to load before scrolling
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, COMMENT_LIST_LOAD_DELAY_MS);
+  });
+
+  // Get the comment list controller and scroll to the thread
+  const commentListController = await papi.webViews.getWebViewController(
+    'legacyCommentManager.commentList',
+    commentListWebViewId,
+  );
+
+  if (!commentListController) {
+    logger.warn(`Failed to get comment list controller for web view ${commentListWebViewId}`);
+    return;
+  }
+
+  await commentListController.scrollToThread(threadId);
+}
+
 // #region selectRange helper functions
 
 /**
@@ -150,6 +192,144 @@ function calculateUsjLocationProperties(
   return { jsonPath, jsonPathOffset, usjContentLocation };
 }
 
+/** Result of converting a ScriptureRange to an editor-usable range */
+interface ConvertedEditorRange {
+  /** The scripture reference for the start of the range */
+  scrRef: SerializedVerseRef;
+  /** The editor-usable range with jsonPath and offset */
+  editorRange: {
+    start: { jsonPath: string; offset: number };
+    end: { jsonPath: string; offset: number };
+  };
+  /** The UsjReaderWriter instance used for conversion, for further text extraction */
+  usjReaderWriter: UsjReaderWriter;
+  /** The start location in USJ format */
+  startLocation: UsjNodeAndDocumentLocation;
+  /** The end location in USJ format */
+  endLocation: UsjNodeAndDocumentLocation;
+}
+
+/**
+ * Convert a ScriptureRange to an editor-usable range format. This function handles the complex
+ * conversion between USFM/USJ location types and the editor's internal range format.
+ *
+ * @param range The ScriptureRange to convert
+ * @param projectId The project ID to fetch USJ data from
+ * @returns The converted range with editor-usable format and a UsjReaderWriter for text extraction
+ * @throws If the range spans chapters or books, or if required data cannot be fetched
+ */
+async function convertScriptureRangeToEditorRange(
+  range: ScriptureRange,
+  projectId: string,
+): Promise<ConvertedEditorRange> {
+  // Figure out the information needed to make the USJ range to give to the editor:
+  // book, chapter, start jsonPath and offset, and end jsonPath and offset.
+  // Also need to get the verse to set the scroll group verse to because the editor doesn't
+  // do it automatically right now
+  let startVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: -1 };
+  let startJsonPath = '';
+  let endJsonPath = '';
+  // Start and end offsets based on the USJ JSONPath location
+  let startJsonPathOffset: number | undefined;
+  let endJsonPathOffset: number | undefined;
+
+  // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
+  let endVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
+
+  // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
+  // passed to us
+  // Process the starting location
+  const { verseOffset: startVerseOffset, ...startLocationProperties } = determineLocationProperties(
+    range.start,
+    startVerseRef,
+  );
+  ({
+    jsonPath: startJsonPath,
+    jsonPathOffset: startJsonPathOffset,
+    verseRef: startVerseRef,
+  } = startLocationProperties);
+
+  // Process the ending location
+  const { verseOffset: endVerseOffset, ...endLocationProperties } = determineLocationProperties(
+    range.end,
+    endVerseRef,
+  );
+  ({
+    jsonPath: endJsonPath,
+    jsonPathOffset: endJsonPathOffset,
+    verseRef: endVerseRef,
+  } = endLocationProperties);
+  if (
+    startVerseRef.book !== endVerseRef.book ||
+    startVerseRef.chapterNum !== endVerseRef.chapterNum
+  )
+    throw new Error(
+      'Could not get targetScrRef from range! Selection range cannot (yet) span chapters or books',
+    );
+
+  // Get the USJ chapter we're on so we can determine the missing USJ range properties
+  const pdp = await papi.projectDataProviders.get('platformScripture.USJ_Chapter', projectId);
+  const usjChapter = await pdp.getChapterUSJ(startVerseRef);
+
+  if (!usjChapter)
+    throw new Error(
+      `USJ Chapter for project id ${projectId} target scrRef ${serialize(startVerseRef)} is undefined!`,
+    );
+
+  const usjRW = new UsjReaderWriter(usjChapter, {
+    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+  });
+
+  // Convert the UsfmVerseLocations to get jsonPath and offset from them
+  const startLocationResult = calculateUsjLocationProperties(
+    usjRW,
+    startVerseRef,
+    startVerseOffset,
+    startJsonPath,
+    startJsonPathOffset,
+  );
+  startJsonPath = startLocationResult.jsonPath;
+  startJsonPathOffset = startLocationResult.jsonPathOffset;
+  const startContentLocation = startLocationResult.usjContentLocation;
+
+  const endLocationResult = calculateUsjLocationProperties(
+    usjRW,
+    endVerseRef,
+    endVerseOffset,
+    endJsonPath,
+    endJsonPathOffset,
+  );
+  endJsonPath = endLocationResult.jsonPath;
+  endJsonPathOffset = endLocationResult.jsonPathOffset;
+  const endContentLocation = endLocationResult.usjContentLocation;
+
+  // If we don't have which verse we're setting the scroll group to, get it
+  if (startVerseRef.verseNum === -1) {
+    const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+      (startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath))
+        .documentLocation,
+    );
+    startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
+  }
+
+  // Get or create the content locations for return
+  const finalStartLocation =
+    startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath);
+  const finalEndLocation =
+    endContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(endJsonPath);
+
+  return {
+    scrRef: startVerseRef,
+    editorRange: {
+      start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
+      end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
+    },
+    usjReaderWriter: usjRW,
+    startLocation: finalStartLocation,
+    endLocation: finalEndLocation,
+  };
+}
+
 // #endregion selectRange helper functions
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
@@ -208,6 +388,25 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   }
 
   await webViewController.insertCrossReferenceAtSelection();
+}
+
+async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting project comment...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertCommentAtSelection();
 }
 
 /** Function to prompt for a project and open it in the editor */
@@ -464,114 +663,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          // Figure out the information needed to make the USJ range to give to the editor:
-          // book, chapter, start jsonPath and offset, and end jsonPath and offset.
-          // Also need to get the verse to set the scroll group verse to because the editor doesn't
-          // do it automatically right now
-          let startVerseRef = { book: '', chapterNum: 0, verseNum: -1 };
-          let startJsonPath = '';
-          let endJsonPath = '';
-          // Start and end offsets based on the USJ JSONPath location
-          let startJsonPathOffset: number | undefined;
-          let endJsonPathOffset: number | undefined;
-
-          // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
-          let endVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
-
-          // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
-          // passed to us
-          // Process the starting location
-          const { verseOffset: startVerseOffset, ...startLocationProperties } =
-            determineLocationProperties(range.start, startVerseRef);
-          ({
-            jsonPath: startJsonPath,
-            jsonPathOffset: startJsonPathOffset,
-            verseRef: startVerseRef,
-          } = startLocationProperties);
-
-          // Process the ending location
-          const { verseOffset: endVerseOffset, ...endLocationProperties } =
-            determineLocationProperties(range.end, endVerseRef);
-          ({
-            jsonPath: endJsonPath,
-            jsonPathOffset: endJsonPathOffset,
-            verseRef: endVerseRef,
-          } = endLocationProperties);
-          if (
-            startVerseRef.book !== endVerseRef.book ||
-            startVerseRef.chapterNum !== endVerseRef.chapterNum
-          )
-            throw new Error(
-              'Could not get targetScrRef from range! Selection range cannot (yet) span chapters or books',
-            );
-
-          // If we don't have at least one of the USJ range properties or the verse number, need to
-          // process the chapter to find them based on what we have
-          if (
-            !startJsonPath ||
-            !endJsonPath ||
-            startJsonPathOffset === undefined ||
-            endJsonPathOffset === undefined ||
-            startVerseRef.verseNum === -1
-          ) {
-            // Get the USJ chapter we're on so we can determine the missing USJ range properties
-            const pdp = await papi.projectDataProviders.get(
-              'platformScripture.USJ_Chapter',
-              currentWebViewDefinition.projectId,
-            );
-            const usjChapter = await pdp.getChapterUSJ(startVerseRef);
-
-            if (!usjChapter)
-              throw new Error(
-                `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(startVerseRef)} is undefined!`,
-              );
-
-            const usjRW = new UsjReaderWriter(usjChapter, {
-              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-            });
-
-            // Convert the UsfmVerseLocations to get jsonPath and offset from them
-            let startContentLocation: UsjNodeAndDocumentLocation | undefined;
-            ({
-              jsonPath: startJsonPath,
-              jsonPathOffset: startJsonPathOffset,
-              usjContentLocation: startContentLocation,
-            } = calculateUsjLocationProperties(
-              usjRW,
-              startVerseRef,
-              startVerseOffset,
-              startJsonPath,
-              startJsonPathOffset,
-            ));
-
-            ({ jsonPath: endJsonPath, jsonPathOffset: endJsonPathOffset } =
-              calculateUsjLocationProperties(
-                usjRW,
-                endVerseRef,
-                endVerseOffset,
-                endJsonPath,
-                endJsonPathOffset,
-              ));
-
-            // If we don't have which verse we're setting the scroll group to, get it
-            if (startVerseRef.verseNum === -1) {
-              const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-                (startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath))
-                  .documentLocation,
-              );
-              startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
-            }
-          }
-
-          const convertedRange = {
-            start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
-            end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
-          };
+          const { scrRef, editorRange } = await convertScriptureRangeToEditorRange(
+            range,
+            currentWebViewDefinition.projectId,
+          );
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
-            scrRef: startVerseRef,
-            range: convertedRange,
+            scrRef,
+            range: editorRange,
           };
           await papi.webViewProviders.postMessageToWebView(
             currentWebViewDefinition.id,
@@ -702,6 +802,104 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           message,
         );
       },
+      async insertCommentAtSelection() {
+        const { projectId } = currentWebViewDefinition;
+        if (!projectId) {
+          logger.warn('Cannot insert comment: No project ID associated with this editor');
+          return;
+        }
+
+        try {
+          const commentManagerPdp = await papi.projectDataProviders.get(
+            'legacyCommentManager.comments',
+            projectId,
+          );
+
+          const canCreate = await commentManagerPdp.canUserCreateComments();
+          if (!canCreate) {
+            logger.warn(`User does not have permission to create comments in project ${projectId}`);
+            return;
+          }
+
+          const message: EditorWebViewMessage = {
+            method: 'insertCommentAtSelection',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          logger.warn(`Failed to open comment editor: ${getErrorMessage(e)}`);
+        }
+      },
+      async setAnnotation(range, annotationType, annotationId, interactionCommand) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to setAnnotation ${serialize({ annotationType, annotationId, interactionCommand })}`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const { scrRef, editorRange } = await convertScriptureRangeToEditorRange(
+            range,
+            currentWebViewDefinition.projectId,
+          );
+
+          const message: EditorWebViewMessage = {
+            method: 'setAnnotation',
+            scrRef,
+            annotationRange: editorRange,
+            annotationType,
+            annotationId,
+            interactionCommand,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const errorMessage = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running setAnnotation! ${getErrorMessage(e)}`;
+          logger.warn(errorMessage);
+          throw new Error(errorMessage);
+        }
+      },
+      async focusComment(threadId) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to focusComment ${threadId}`,
+          );
+
+          await openCommentListAndScrollToThread(currentWebViewDefinition.id, threadId);
+        } catch (e) {
+          logger.warn(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running focusComment: ${getErrorMessage(e)}`,
+          );
+        }
+      },
+      async runAnnotationCommand(annotationId, interactionCommand) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to runAnnotationCommand ${serialize({ annotationId, interactionCommand })}`,
+          );
+
+          const message: EditorWebViewMessage = {
+            method: 'runAnnotationCommand',
+            annotationId,
+            interactionCommand,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const errorMessage = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running runAnnotationCommand! ${getErrorMessage(e)}`;
+          logger.warn(errorMessage);
+          throw new Error(errorMessage);
+        }
+      },
       async dispose() {
         return unsubFromWebViewUpdates();
       },
@@ -754,6 +952,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             summary:
               'The ID of the web view tied to the project that we are inserting the footnote',
             schema: { type: 'null' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertCommentPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertCommentAtSelection',
+    insertCommentAtSelection,
+    {
+      method: {
+        summary:
+          'Open the comment editor to insert a project comment at the current verse in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project where we are inserting the comment',
+            schema: { type: 'string' },
           },
         ],
         result: {
@@ -905,6 +1126,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await insertCommentPromise,
     await annotationStyleDataProviderPromise,
     ...markerNotifierUnsubscribers,
   );
