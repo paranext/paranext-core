@@ -37,14 +37,8 @@ export default meta;
 type Story = StoryObj<typeof FootnoteList>;
 
 // Shared template with selection state
-function Template({
-  footnotes = [],
-  listId = 'default-list-id',
-  ...restArgs
-}: Story['args'] = {}) {
-  const [selectedFootnote, setSelectedFootnote] = useState<
-    MarkerObject | undefined
-  >();
+function Template({ footnotes = [], listId = 'default-list-id', ...restArgs }: Story['args'] = {}) {
+  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>();
 
   return (
     <FootnoteList
@@ -64,9 +58,7 @@ function ScripturePanelTemplate({
   showMarkers,
   ...restArgs
 }: Story['args'] = {}) {
-  const [selectedFootnote, setSelectedFootnote] = useState<
-    MarkerObject | undefined
-  >();
+  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>();
 
   return (
     <ResizablePanelGroup
@@ -130,13 +122,7 @@ export const WithCustomCallerFormatting: Story = {
     listId: 'storybook-WithCustomCallerFormatting',
     showMarkers: true,
     layout: 'horizontal',
-    formatCaller: getFormatCallerFunction(usjFootnotes, [
-      '†',
-      '‡',
-      '⁂',
-      '★',
-      '☆',
-    ]),
+    formatCaller: getFormatCallerFunction(usjFootnotes, ['†', '‡', '⁂', '★', '☆']),
   },
 };
 
