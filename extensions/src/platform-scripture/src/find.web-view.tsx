@@ -62,6 +62,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_searchPlaceholder%',
   '%webView_find_showingResults%',
   '%webView_find_toggleFilters%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_recent%',
 ];
 
 const defaultBooksPresent: string = '';
@@ -133,7 +135,9 @@ global.webViewComponent = function FindWebView({
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
+    useMemo(() => LOCALIZED_STRINGS, []),
+  );
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -612,12 +616,16 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const findButtonText = isLocalizedStringsLoading
+    ? ''
+    : localizedStrings['%webView_find_findButton%'];
+
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
       <Card>
         <CardContent className="tw-space-y-4 tw-p-6">
-          <div className="tw-flex tw-gap-2">
+          <div className="tw-flex tw-gap-2 tw-flex-wrap">
             <div className="tw-relative tw-flex-1">
               <Input
                 id="search-term"
@@ -629,7 +637,7 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-text-ellipsis tw-w-full ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
               />
               <RecentSearches
                 recentSearches={recentSearches}
@@ -638,16 +646,23 @@ global.webViewComponent = function FindWebView({
                 groupHeading={localizedStrings['%webView_find_recent%']}
               />
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setAreFiltersShown(!areFiltersShown)}
-              aria-label={localizedStrings['%webView_find_toggleFilters%']}
-              className={areFiltersShown ? 'tw-bg-muted' : ''}
-            >
-              <SlidersHorizontal className="tw-h-4 tw-w-4" />
-            </Button>
+
             <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setAreFiltersShown(!areFiltersShown)}
+                    aria-label={localizedStrings['%webView_find_toggleFilters%']}
+                    className={areFiltersShown ? 'tw-bg-muted' : ''}
+                  >
+                    <SlidersHorizontal className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings['%webView_find_toggleFilters%']}</TooltipContent>
+              </Tooltip>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   {canClearResults ? (
@@ -657,13 +672,11 @@ global.webViewComponent = function FindWebView({
                   ) : (
                     <Button
                       onClick={handleStartSearch}
-                      disabled={!isSearchQueryValid || searchStatus === 'running'}
+                      disabled={
+                        !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                      }
                     >
-                      {searchStatus === 'running' ? (
-                        <Spinner />
-                      ) : (
-                        localizedStrings['%webView_find_findButton%']
-                      )}
+                      {searchStatus === 'running' ? <Spinner /> : findButtonText}
                     </Button>
                   )}
                 </TooltipTrigger>
@@ -704,7 +717,7 @@ global.webViewComponent = function FindWebView({
                     // in the `availableScrollGroupIds` variable in
                     // `src\renderer\services\scroll-group.service-host.ts`
                     // Both there and here they are a placeholder to be replaced as part of
-                    // https://github.com/paranext/paranext-core/issues/788
+                    // https://paratextstudio.atlassian.net/browse/PT-1514
                     availableScrollGroupIds={[undefined, ...Array(5).keys()]}
                     onChangeScrollGroupId={setScrollGroupId}
                     scrollGroupId={scrollGroupId}

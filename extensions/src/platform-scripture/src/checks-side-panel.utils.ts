@@ -15,7 +15,6 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkRequiresSetup%',
   '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
   '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
-  '%webView_checksSidePanel_loadingCheckResults%',
   '%webView_checksSidePanel_noCheckResults%',
   '%webView_checksSidePanel_noChecksSelected%',
   '%webView_checksSidePanel_selectChecks%',
