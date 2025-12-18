@@ -214,7 +214,7 @@
     "run-script-os": "^1.1.6",
     "sass": "^1.85.0",
     "sass-loader": "^16.0.5",
-    "storybook": "9.0.17",
+    "storybook": "9.1.17",
     "storybook-addon-rtl": "^2.0.0",
     "style-loader": "^4.0.0",
     "stylelint": "^16.11.0",
