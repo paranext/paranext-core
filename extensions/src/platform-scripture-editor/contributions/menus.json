@@ -137,6 +137,12 @@
             "command": "platformScriptureEditor.insertCrossReferenceAtSelection"
           },
           {
+            "label": "%webView_platformScriptureEditor_insertCommentAtSelection%",
+            "group": "platformScriptureEditor.insertTextualNotes",
+            "order": 3,
+            "command": "platformScriptureEditor.insertCommentAtSelection"
+          },
+          {
             "label": "%webView_legacyCommentManager_openComments%",
             "group": "platformScriptureEditor.comments",
             "order": 1,

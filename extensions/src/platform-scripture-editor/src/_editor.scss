@@ -197,6 +197,25 @@
   border-bottom: 2px solid rgba(255, 212, 0, 0.7);
 }
 
+/* Translator Comment annotations */
+.editor-typed-mark-external-translator-comment {
+  background: rgba(255, 212, 0, 0.2);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.5);
+  padding-bottom: 2px;
+  cursor: pointer;
+}
+
+.editor-typed-mark-external-translator-comment:hover {
+  background: rgba(255, 212, 0, 0.35);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.7);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.editor-typed-markOverlap-external-translator-comment {
+  background: rgba(255, 212, 0, 0.35);
+  border-bottom: 2px solid rgba(255, 212, 0, 0.8);
+}
+
 .marker-editable [class^='editor-typed-mark'] {
   background: none;
   border-bottom: 0;

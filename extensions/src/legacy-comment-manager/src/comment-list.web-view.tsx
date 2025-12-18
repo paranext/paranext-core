@@ -10,9 +10,15 @@ import {
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
-import { isPlatformError, LegacyCommentThread } from 'platform-bible-utils';
+import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+/** Message types that can be received from the Comment List web view controller */
+type CommentListWebViewMessage = {
+  method: 'scrollToThread';
+  threadId: string;
+};
 
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
@@ -21,8 +27,33 @@ global.webViewComponent = function CommentListWebView({
   const [localizedStrings] = useLocalizedStrings(COMMENT_LIST_STRING_KEYS);
   const [scrRef] = useWebViewScrollGroupScrRef();
   const [currentUserName, setCurrentUserName] = useState<string>('');
+  const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  // Listen for messages from the web view controller
+  useEffect(() => {
+    const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
+      if (data.method === 'scrollToThread') {
+        logger.debug(`Comment list received scrollToThread message: ${serialize(data)}`);
+        const { threadId } = data;
+
+        // Find the thread element and scroll to it
+        const threadElement = document.getElementById(threadId);
+        if (threadElement) {
+          setSelectedThreadId(threadId);
+          threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          logger.warn(`Could not find thread element with id: ${threadId}`);
+        }
+      }
+    };
+
+    window.addEventListener('message', messageListener);
+    return () => {
+      window.removeEventListener('message', messageListener);
+    };
+  }, []);
 
   // Fetch current user's registration data on mount
   useEffect(() => {
@@ -59,13 +90,13 @@ global.webViewComponent = function CommentListWebView({
           },
         ],
       };
-    }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]),
+    }, [scrRef.book, scrRef.chapterNum]),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
   const fetchAssignableUsers = useCallback(async () => {
     if (!commentsPdp) {
-      logger.error('Comments PDP is not available');
+      logger.debug('Comments PDP is not yet available for fetchAssignableUsers');
       return [];
     }
     return commentsPdp.findAssignableUsers();
@@ -74,7 +105,7 @@ global.webViewComponent = function CommentListWebView({
 
   const fetchCanUserAddCommentToThread = useCallback(async () => {
     if (!commentsPdp) {
-      logger.error('Comments PDP is not available');
+      logger.debug('Comments PDP is not yet available for fetchCanUserAddCommentToThread');
       return false;
     }
     return commentsPdp.canUserAddCommentToThread();
@@ -84,7 +115,7 @@ global.webViewComponent = function CommentListWebView({
   const canUserAssignThreadCallback = useCallback(
     async (threadId: string): Promise<boolean> => {
       if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
+        logger.debug('Comments PDP is not yet available for canUserAssignThreadCallback');
         return false;
       }
       return commentsPdp.canUserAssignThread(threadId);
@@ -95,7 +126,7 @@ global.webViewComponent = function CommentListWebView({
   const canUserResolveThreadCallback = useCallback(
     async (threadId: string): Promise<boolean> => {
       if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
+        logger.debug('Comments PDP is not yet available for canUserResolveThreadCallback');
         return false;
       }
       return commentsPdp.canUserResolveThread(threadId);
@@ -106,7 +137,7 @@ global.webViewComponent = function CommentListWebView({
   const canUserEditOrDeleteCommentCallback = useCallback(
     async (commentId: string): Promise<boolean> => {
       if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
+        logger.debug('Comments PDP is not yet available for canUserEditOrDeleteCommentCallback');
         return false;
       }
       return commentsPdp.canUserEditOrDeleteComment(commentId);
@@ -117,7 +148,7 @@ global.webViewComponent = function CommentListWebView({
   const handleAddCommentToThread = useCallback(
     async (options: AddCommentToThreadOptions): Promise<string | undefined> => {
       if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
+        logger.debug('Comments PDP is not yet available for handleAddCommentToThread');
         return undefined;
       }
       try {
@@ -139,7 +170,7 @@ global.webViewComponent = function CommentListWebView({
   const handleUpdateComment = useCallback(
     async (commentId: string, contents: string): Promise<boolean> => {
       if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
+        logger.debug('Comments PDP is not yet available for handleUpdateComment');
         return false;
       }
       try {
@@ -156,7 +187,7 @@ global.webViewComponent = function CommentListWebView({
   const handleDeleteComment = useCallback(
     async (commentId: string): Promise<boolean> => {
       if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
+        logger.debug('Comments PDP is not yet available for handleDeleteComment');
         return false;
       }
       try {
@@ -204,6 +235,8 @@ global.webViewComponent = function CommentListWebView({
           canUserAssignThreadCallback={canUserAssignThreadCallback}
           canUserResolveThreadCallback={canUserResolveThreadCallback}
           canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+          selectedThreadId={selectedThreadId}
+          onSelectedThreadChange={setSelectedThreadId}
         />
       )}
     </div>
