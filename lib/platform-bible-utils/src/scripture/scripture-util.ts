@@ -337,7 +337,6 @@ export function formatScrRefWithOptions(
 /**
  * Formats a Scripture reference
  *
- * @deprecated Use formatScrRefWithOptions instead
  * @param scrRef The Scripture reference to format.
  * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
  *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled

@@ -65,7 +65,6 @@ export {
   compareScrRefs,
   formatScrRef,
   formatScrRefRange,
-  formatScrRefWithOptions,
   getBookNameFromVerseRef,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
