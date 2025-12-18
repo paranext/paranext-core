@@ -1,6 +1,4 @@
-import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Card } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { getFormatCallerFunction, LocalizedStringValue, LocalizeKey } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
@@ -51,9 +49,6 @@ export function FootnoteList({
     ? localizeString(localizedStrings, '%webView_footnoteList_header%')
     : 'Footnotes';
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
-  const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
-    onFootnoteSelected?.(footnote, index, listId);
-  };
   const initialFocusedIndex = selectedFootnote
     ? footnotes.findIndex((f) => f === selectedFootnote)
     : 0;
@@ -100,60 +95,66 @@ export function FootnoteList({
         role="listbox"
         aria-label="Footnotes"
         tabIndex={0}
-        className={cn('tw-h-full tw-overflow-y-auto', className)}
         onKeyDown={handleListKeyDown}
+        className={cn(
+          'tw-h-full tw-overflow-y-auto tw-p-0.5 tw-pt-1',
+          !suppressFormatting && 'formatted-font',
+          className,
+        )}
       >
-        <div
-          className={cn(
-            'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
-            layout === 'horizontal' ? 'tw-table tw-min-w-full' : 'tw-flex tw-flex-col tw-gap-0.5',
-            !suppressFormatting && 'formatted-font',
-          )}
-        >
+        <style>{`
+          /* Parent grid controls the column tracks; children will either use subgrid or fall back to display:contents */
+          .footnote-list-grid { container-type: inline-size; display: grid; grid-template-columns: [col-caller-start col-ref-start col-body-start] 1fr [col-caller-end col-ref-end col-body-end]; grid-auto-rows: auto; gap: 0.25rem 0.5rem; }
+
+          /* Fallback for environments without Container Queries: also provide a viewport-based media query */
+          @media (min-width: 640px) {
+            .footnote-list-grid { grid-template-columns: [col-caller-start] auto [col-caller-end col-ref-start] auto [col-ref-end col-body-start] 1fr [col-body-end]; }
+          }
+
+          /* Preferred: when container queries are supported, switch at container size */
+          @container (min-width: 640px) {
+            .footnote-list-grid { grid-template-columns: [col-caller-start] auto [col-caller-end col-ref-start] auto [col-ref-end col-body-start] 1fr [col-body-end]; }
+          }
+
+          /* If subgrid is supported, let each item inherit the parent's column tracks */
+          @supports (grid-template-columns: subgrid) {
+            .footnote-list-grid .footnote-item-root { display: grid; grid-template-columns: subgrid; align-items: start; gap: 0; }
+          }
+          /* Otherwise fall back to display:contents so the internal cells participate in the parent grid */
+          @supports not (grid-template-columns: subgrid) {
+            .footnote-list-grid .footnote-item-root { display: contents; }
+            /* ensure the inner cells still get the proper flow */
+            .footnote-item-root .textual-note-header, .footnote-item-root .textual-note-body { display: block; }
+          }
+
+          /* Body spans all columns when layout is explicitly vertical */
+          .footnote-item-root[data-layout="vertical"] .textual-note-body { grid-column: 1 / -1; }
+        `}</style>
+
+        <div className="footnote-list-grid">
           {footnotes.map((footnote, idx) => {
             const isSelected = footnote === selectedFootnote;
             const key = `${listId}-${idx}`;
             return (
-              <>
-                <Card
+              <React.Fragment key={key}>
+                <FootnoteItem
                   ref={(el) => {
                     rowRefs.current[idx] = el;
                   }}
                   role="option"
-                  aria-selected={isSelected}
-                  key={key}
-                  data-marker={footnote.marker}
-                  data-state={isSelected ? 'selected' : undefined}
+                  isSelected={isSelected}
                   tabIndex={-1}
-                  className={cn(
-                    'data-[state=selected]:tw-bg-muted',
-                    onFootnoteSelected && 'hover:tw-bg-muted/50',
-                    'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
-                    'focus:tw-outline-none focus-visible:tw-outline-none',
-                    /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
-                     that looks great in Storybook. However, the left edge of the ring is clipped in
-                     P.B app. These are similar, but not identical to, the customizations made in
-                     our shadcn table component.
-                  */
-                    'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
-                    layout === 'horizontal'
-                      ? 'horizontal tw-table-row'
-                      : 'vertical tw-block tw-text-sm',
-                    classNameForItems,
-                  )}
-                  onClick={() => handleFootnoteClick(footnote, idx)}
-                >
-                  <FootnoteItem
-                    footnote={footnote}
-                    layout={layout}
-                    formatCaller={() => handleFormatCaller(footnote.caller, idx)}
-                    showMarkers={showMarkers}
-                  />
-                </Card>
-
-                {/* Only render separator if not the last item */}
-                {idx < footnotes.length - 1 && layout === 'vertical' && <Separator />}
-              </>
+                  marker={footnote.marker}
+                  state={isSelected ? 'selected' : undefined}
+                  className={cn(onFootnoteSelected && 'hover:tw-bg-muted/50', classNameForItems)}
+                  footnote={footnote}
+                  layout={layout}
+                  formatCaller={(caller) => handleFormatCaller(caller, idx)}
+                  showMarkers={showMarkers}
+                  onClick={() => onFootnoteSelected?.(footnote, idx, listId)}
+                />
+                {layout === 'vertical' && idx < footnotes.length - 1 && <Separator />}
+              </React.Fragment>
             );
           })}
         </div>

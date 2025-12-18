@@ -4,6 +4,8 @@ export type FootnoteLayout = 'horizontal' | 'vertical';
 
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
+  /** Optional additional class name for styling */
+  className?: string;
   /**
    * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
    * array of {@link MarkerObject}, in practice, for footnotes that array contains only one
@@ -23,8 +25,26 @@ export interface FootnoteItemProps {
    * @default 'horizontal'
    */
   layout?: FootnoteLayout;
+  /** Callback to handle clicking the footnote */
+  onClick?: () => void;
   /** Flag indicating whether to display USFM-style markers */
   showMarkers?: boolean;
+  /** Optional tab index for keyboard navigation */
+  tabIndex?: number;
+  /** Optional ARIA role for accessibility */
+  role?: string;
+  /** ARIA selected state for accessibility */
+  isSelected?: boolean;
+  /**
+   * The footnote marker (f, fe, or x) this row represents. Used for styling hooks (data-marker="f"
+   * / "fe" / etc.).
+   */
+  marker?: string;
+  /**
+   * Internal UI state (data-state). This is used for Tailwind attribute styling. Usually "selected"
+   * or undefined.
+   */
+  state?: string;
   /**
    * A function that can interpret the two special footnote caller codes defined by USFM, `+` and
    * `-` in order to display (or suppress display of) a meaningful caller in the context where this
