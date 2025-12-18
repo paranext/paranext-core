@@ -59,16 +59,17 @@ export {
   getNthCaller,
   getFormatCallerFunction,
 } from './scripture/footnote-util';
-export type { FormatScrOptions, FormatScrRangeOptions } from './scripture/scripture-util';
+export type {
+  FormatScrRefOptions as FormatScrOptions,
+  FormatScrRangeOptions,
+} from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  formatChapterAndVerseWithOptionalParts,
   formatScrRef,
   formatScrRefRange,
   formatScrRefWithOptions,
-  formatScrRefWithOptionalParts,
-  getBook,
+  getBookNameFromVerseRef,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
   normalizeScriptureSpaces,

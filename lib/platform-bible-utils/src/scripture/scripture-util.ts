@@ -287,41 +287,32 @@ export function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (ScrollGroupId 
  *   etc.) to use.
  * @returns The formatted or provided book name of a Scripture reference
  */
-export function getBook(
+export function getBookNameFromVerseRef(
   scrRef: SerializedVerseRef,
   optionOrLocalizedBookName?: 'id' | 'English' | string,
 ): string {
-  let book: string;
-  switch (optionOrLocalizedBookName ?? 'id') {
+  switch (optionOrLocalizedBookName) {
     case 'English':
-      book = Canon.bookIdToEnglishName(scrRef.book);
-      break;
+      return Canon.bookIdToEnglishName(scrRef.book);
     case 'id':
-      book = scrRef.book;
-      break;
+    case undefined:
+      return scrRef.book;
     default:
-      // We already dealt with undefined above in the switch, but TS is getting confused.
-      book = optionOrLocalizedBookName ?? '';
-      break;
+      return optionOrLocalizedBookName;
   }
-  return book;
 }
 
-/**
- * Formatting options for formatScrRef
- *
- * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
- *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
- *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
- *   etc.) to use.
- * @param chapterVerseSeparator The character used to separate the chapter number from the verse
- *   number. Default is a colon (:). Note: More than one character is allowed.
- * @param bookChapterSeparator The character used to separate the book from the chapter number.
- *   Default is a single space. Note: More than one character is allowed.
- */
-export type FormatScrOptions = {
+/** Formatting options for formatScrRef */
+export type FormatScrRefOptions = {
+  /**
+   * Either 'id' (the default) to format using the "standard" (as defined by SIL/UBS) 3-letter book
+   * ID, 'English' to format using the English book name spelled out, or some other string (e.g., a
+   * localized book name, vernacular abbreviation, FCBH book id, etc.) to use.
+   */
   optionOrLocalizedBookName?: 'id' | 'English' | string;
+  /** The character(s) used to separate the chapter number from the verse number. */
   chapterVerseSeparator?: string;
+  /** The character(s) used to separate the book from the chapter number. */
   bookChapterSeparator?: string;
 };
 
@@ -329,14 +320,18 @@ export type FormatScrOptions = {
  * Formats a Scripture reference
  *
  * @param scrRef The Scripture reference to format.
- * @param formatScrOptions Optional FormatScrOptions to format the scripture reference
+ * @param formatScrRefOptions Optional FormatScrRefOptions to format the scripture reference.
+ *   Default chapterVerseSepator is a colon (:). Default chapterVerseSeparator is a single space.
  * @returns The formatted reference.
  */
 export function formatScrRefWithOptions(
   scrRef: SerializedVerseRef,
-  formatScrOptions?: FormatScrOptions,
+  formatScrRefOptions?: FormatScrRefOptions,
 ) {
-  return `${getBook(scrRef, formatScrOptions?.optionOrLocalizedBookName)}${formatScrOptions?.bookChapterSeparator ?? ' '}${scrRef.chapterNum}${formatScrOptions?.chapterVerseSeparator ?? ':'}${scrRef.verseNum}`;
+  const bookName = getBookNameFromVerseRef(scrRef, formatScrRefOptions?.optionOrLocalizedBookName);
+  const bookChapterSeparator = formatScrRefOptions?.bookChapterSeparator ?? ' ';
+  const chapterVerseSeparator = formatScrRefOptions?.chapterVerseSeparator ?? ':';
+  return `${bookName}${bookChapterSeparator}${scrRef.chapterNum}${chapterVerseSeparator}${scrRef.verseNum}`;
 }
 
 /**
@@ -348,10 +343,10 @@ export function formatScrRefWithOptions(
  *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
  *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
  *   etc.) to use.
- * @param chapterVerseSeparator The character used to separate the chapter number from the verse
- *   number. Default is a colon (:). Note: More than one character is allowed.
- * @param bookChapterSeparator The character used to separate the book from the chapter number.
- *   Default is a single space. Note: More than one character is allowed.
+ * @param chapterVerseSeparator The character(s) used to separate the chapter number from the verse
+ *   number. Default is a colon (:).
+ * @param bookChapterSeparator The character(s) used to separate the book from the chapter number.
+ *   Default is a single space.
  * @returns The formatted reference.
  */
 export function formatScrRef(
@@ -373,7 +368,7 @@ export function formatScrRef(
  *
  * @param scrRef The Scripture reference to format.
  * @param chapterVerseSeparator The characters(s) used to separate the chapter number from the verse
- *   number. Default is a colon (:). Note: More than one character is allowed.
+ *   number. Default is a colon (:).
  * @returns The formatted chapter and/or verse.
  */
 export function formatChapterAndVerseWithOptionalParts(
@@ -390,15 +385,15 @@ export function formatChapterAndVerseWithOptionalParts(
  * part.
  *
  * @param scrRef The Scripture reference to format.
- * @param formatScrOptions Optional FormatScrOptions to format the scripture reference
+ * @param FormatScrRefOptions Optional FormatScrRefOptions to format the scripture reference
  * @returns The formatted reference. This may be only parts like only book or only chapter or only
  *   verse or a combination.
  */
 export function formatScrRefWithOptionalParts(
   scrRef: SerializedVerseRef,
-  options?: FormatScrOptions,
+  options?: FormatScrRefOptions,
 ): string {
-  const book = getBook(scrRef, options?.optionOrLocalizedBookName);
+  const book = getBookNameFromVerseRef(scrRef, options?.optionOrLocalizedBookName);
   const chapterAndVerse = formatChapterAndVerseWithOptionalParts(
     scrRef,
     options?.chapterVerseSeparator,
@@ -409,17 +404,14 @@ export function formatScrRefWithOptionalParts(
 /**
  * Options to format a scripture reference or range
  *
- * Extends FormatScrOptions
- *
- * @param endOptionOrLocalizedBookName See optionOrLocalizedBookName
- * @param rangeSeparator The character(s) used to separate the two references. Note: More than one
- *   character is allowed.
- * @param repeatBookName Wether or not to repeat the book name in the end reference if it is the
- *   same. Default false.
+ * Extends FormatScrRefOptions
  */
-export type FormatScrRangeOptions = FormatScrOptions & {
+export type FormatScrRefRangeOptions = FormatScrRefOptions & {
+  /** See optionOrLocalizedBookName */
   endRefOptionOrLocalizedBookName?: 'id' | 'English' | string;
+  /** The character(s) used to separate the two references. */
   rangeSeparator?: string;
+  /** Wether or not to repeat the book name in the end reference if it is the same. Default false. */
   repeatBookName?: boolean;
 };
 
@@ -429,7 +421,7 @@ export type FormatScrRangeOptions = FormatScrOptions & {
  *
  * @param startScrRef The Scripture reference to format at the start of the range.
  * @param endScrRef The Scripture reference to format at the end of the range.
- * @param options Optional FormatScrRangeOptions to format the scripture reference range. Default
+ * @param options Optional FormatScrRefRangeOptions to format the scripture reference range. Default
  *   range separator is a hyphen surrounded by two spaces. Default book name options for the end ref
  *   are the book name options for the start ref. The book name is not repeated by default.
  * @returns The formatted range.
@@ -437,7 +429,7 @@ export type FormatScrRangeOptions = FormatScrOptions & {
 export function formatScrRefRange(
   startScrRef: SerializedVerseRef,
   endScrRef: SerializedVerseRef,
-  options?: FormatScrRangeOptions,
+  options?: FormatScrRefRangeOptions,
 ): string {
   const formattedStartRef = formatScrRefWithOptionalParts(startScrRef, options);
   if (compareScrRefs(startScrRef, endScrRef) === 0) return formattedStartRef;
