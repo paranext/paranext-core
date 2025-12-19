@@ -59,10 +59,12 @@ export {
   getNthCaller,
   getFormatCallerFunction,
 } from './scripture/footnote-util';
+export type { FormatScrRefRangeOptions } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
+  formatScrRefRange,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
   normalizeScriptureSpaces,
@@ -95,6 +97,7 @@ export {
   toKebabCase,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
+  collapseMiddleWords,
 } from './string-util';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
