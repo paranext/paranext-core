@@ -39,6 +39,27 @@ function scripturePartDisplay(scriptureTextPart?: string, className?: string) {
 }
 
 /**
+ * A function to retrieve the localized book name from a map, e.g. returned by papi function
+ * useLocalizedStrings
+ *
+ * @param scrRef A SerializedVerseRef
+ * @param localizedBookNames A map of localization key to string | localization key to an object
+ *   with localizedId holding the localized book name
+ * @returns The book name localized if found or the pure book name from the ref
+ */
+export function getLocalizedBookName(
+  scrRef: SerializedVerseRef,
+  localizedBookNames?: LocalizedBookNames,
+) {
+  const bookNameOrObject = localizedBookNames?.get(scrRef.book);
+  return typeof bookNameOrObject === 'object' &&
+    bookNameOrObject !== undefined &&
+    'localizedId' in bookNameOrObject
+    ? bookNameOrObject?.localizedId
+    : bookNameOrObject;
+}
+
+/**
  * LinkedScrRefDisplay is a component that renders a Scripture reference as formatted single
  * reference or range, together with some part of Scripture text. Choices are to use only the
  * Scripture reference or the whole display as a shadcn link button. Use cases include any rendering
