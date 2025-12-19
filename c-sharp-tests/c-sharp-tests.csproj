@@ -23,11 +23,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="ParatextData" Version="9.5.0.18" />
+    <PackageReference Include="ParatextData" Version="9.5.0.20" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\c-sharp\ParanextDataProvider.csproj" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
   </ItemGroup>
 
 </Project>

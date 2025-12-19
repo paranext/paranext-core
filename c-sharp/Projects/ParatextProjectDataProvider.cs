@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -199,11 +200,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
         if (!string.IsNullOrEmpty(selector.CommentId))
             comments = comments.FindAll((c) => selector.CommentId == c.Id);
-        return comments;
+
+        List<Comment> updatedComments = new List<Comment>();
+        foreach (Comment comment in comments)
+        {
+            Comment clonedComment = (Comment)comment.Clone();
+            CommentThread owner = _commentManager.FindThread(comment.Thread);
+            if (owner == null)
+                throw new InvalidDataException(
+                    $"Comment thread '{comment.Thread}' not found for comment thread id '{comment.Id}. A comment should always belong to a thread.'"
+                );
+            ReplaceCommentXMLContentsWithHtmlContents(clonedComment, owner, false, false);
+            updatedComments.Add(clonedComment);
+        }
+        return updatedComments;
     }
 
-    // For now, only allow adding comments, not changing or removing existing PT 9 comments
-    // Too much risk of data loss while there are other bugs related to comments floating around
     public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -282,7 +294,24 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
             filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
 
-        return filteredThreads.ToList();
+        List<CommentThread> updatedThreads = new List<CommentThread>();
+        foreach (CommentThread thread in filteredThreads)
+        {
+            CommentThread clonedThread = thread.DeepClone();
+            foreach (Comment comment in clonedThread.Comments)
+            {
+                Comment clonedComment = (Comment)comment.Clone();
+                CommentThread owner = _commentManager.FindThread(comment.Thread);
+                if (owner == null)
+                    throw new InvalidDataException(
+                        $"Comment thread '{comment.Thread}' not found for comment thread id '{comment.Id}. A comment should always belong to a thread.'"
+                    );
+                ReplaceCommentXMLContentsWithHtmlContents(clonedComment, owner, false, false);
+            }
+            updatedThreads.Add(clonedThread);
+        }
+
+        return updatedThreads;
     }
 
     public bool DeleteComment(string commentId)
@@ -514,6 +543,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             throw new InvalidDataException($"Updated content is not valid XML/HTML: {ex.Message}");
         }
+        commentToUpdate.SetContentsFromHtml(updatedContent);
         commentToUpdate.Contents = xmlDoc.DocumentElement;
 
         // Reset the status field to Unspecified when a comment is edited
@@ -1398,5 +1428,28 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
+    private static void ReplaceCommentXMLContentsWithHtmlContents(
+        Comment comment,
+        CommentThread owner,
+        bool skipFirstChildNode,
+        bool ignoreScriptureLinks
+    )
+    {
+        string html = comment.GetContentsAsHtml(
+            owner,
+            comment.Id == owner.Id,
+            skipFirstChildNode,
+            ignoreScriptureLinks
+        );
+
+        // Wrap HTML in CDATA so it's preserved exactly as-is through serialization
+        XmlDocument doc = new() { PreserveWhitespace = true };
+        XmlElement root = doc.CreateElement("Contents");
+        XmlCDataSection cdata = doc.CreateCDataSection(html);
+        root.AppendChild(cdata);
+        doc.AppendChild(root);
+
+        comment.Contents = doc.DocumentElement;
+    }
     #endregion
 }
