@@ -1,0 +1,43 @@
+import{j as o}from"./jsx-runtime-DkZffS7G.js";import{U as p,G as i}from"./index-CQVHRrhN.js";import{S as r}from"./scroll-group-selector.component-BijZJ14F.js";import{B as u}from"./book-chapter-control.component-CVJSEOpP.js";import{r as G}from"./iframe-BOdkGgb4.js";import{T as d}from"./tab-toolbar.component-BZ9RW5oM.js";import"./index-D2w9gCAG.js";import"./select-DxR2WIac.js";import"./index-CrEK2TMc.js";import"./index-DmDjGDmO.js";import"./index-BaQP4hhM.js";import"./index-DTAXz6r9.js";import"./index-DOeKkLkx.js";import"./index-Bv4A9Uov.js";import"./index-DxTEeOx6.js";import"./index-xra8YWXu.js";import"./index-BKWcVqVT.js";import"./index-CVeA4Vps.js";import"./index-WJpgKkg-.js";import"./index--Qn4kpjW.js";import"./floating-ui.react-dom-B6h_DaBK.js";import"./index-BoWhEbbY.js";import"./index-DT9sRWeX.js";import"./index-Becm028O.js";import"./index-Dkfd4Xtk.js";import"./index-Cntnp3Dp.js";import"./index-DL2o-57T.js";import"./index-BwNZBAo5.js";import"./index-CrW9142N.js";import"./index-Cw5WMMpA.js";import"./shadcn-ui.util-DMJ19wEV.js";import"./index-BPbCuWFR.js";import"./chevron-down-E9BWtUXA.js";import"./createLucideIcon-Cw_VjTcB.js";import"./check-BiP2JcRq.js";import"./chevron-up-M_5ZOnUD.js";import"./book-item.utils-D2dHlk3u.js";import"./command-joGLopC_.js";import"./index-CqG8aQv1.js";import"./index-Dd6x5cpO.js";import"./index-DljIFHvA.js";import"./dialog-C2VN4R8m.js";import"./index-Czfav6j7.js";import"./x-Bg_Q4Dns.js";import"./search-Nf6mSlg5.js";import"./index.es-D4jfZzAn.js";import"./button-qAHwBZzJ.js";import"./popover-C0-_H479.js";import"./chevron-left-CVfEtRoy.js";import"./chevron-right-Dos5Kskp.js";import"./arrow-right-DMsKclWM.js";import"./tab-dropdown-menu.component-BrntNosO.js";import"./dropdown-menu-93KzOLuq.js";import"./index-Bg6JEhbJ.js";import"./index-DceM0lWD.js";import"./circle-BWpIfP1s.js";import"./tooltip-DYlwQV7H.js";import"./menu.util-Dxh7JGT4.js";import"./menu-icon.component-BM8iP6kr.js";import"./tab-toolbar-container.component-B5wBXzR3.js";function c({children:e,minWidth:y="0%",maxWidth:T="calc(100vw - 4rem)",skipAhead:A="0%"}){const m=G.useMemo(()=>`widthAnimation-${Math.random().toString(36).substr(2,9)}`,[]);return o.jsxs(o.Fragment,{children:[o.jsxs("div",{style:{animation:`${m} 6s infinite alternate ease-in-out`,animationDelay:`-${A}`,border:"2px solid #ccc",borderRadius:"16px",marginBlock:"1rem",background:"#fdfdfd",boxShadow:"0 4px 8px rgba(0,0,0,0.08)",overflow:"hidden",padding:".5rem",maxWidth:"100%"},children:[e,o.jsx("style",{children:`
+            @keyframes ${m} {
+              0% {
+                width: ${y};
+              }
+              100% {
+                width: ${T};
+              }
+            }
+          `})]}),o.jsx("p",{style:{paddingInlineStart:"1rem",fontSize:12,color:"#888"},children:"Container width is animated"})]})}c.__docgenInfo={description:"",methods:[],displayName:"AnimatedContainer",props:{children:{required:!0,tsType:{name:"ReactNode"},description:""},minWidth:{required:!1,tsType:{name:"string"},description:"",defaultValue:{value:"'0%'",computed:!1}},maxWidth:{required:!1,tsType:{name:"string"},description:"",defaultValue:{value:"'calc(100vw - 4rem)'",computed:!1}},skipAhead:{required:!1,tsType:{name:"string"},description:"",defaultValue:{value:"'0%'",computed:!1}}}};const t=e=>{console.log("New Scroll Group Id: ",e)},h=[{book:"GEN",chapterNum:1,verseNum:1},{book:"PSA",chapterNum:23,verseNum:1},{book:"MAT",chapterNum:5,verseNum:3}],g=e=>{console.log("Adding recent search: ",e)},N={columns:{tools:{label:"Tools",order:1},info:{label:"Info",order:2},project:{label:"Project",order:3}},groups:{general:{column:"info",order:1},inventory:{column:"tools",order:1},checks:{column:"tools",order:2},projectTop:{column:"project",order:1,isExtensible:!0},manageBooks:{column:"project",order:2},deleteProject:{column:"project",order:3},projectDetails:{column:"project",order:4,isExtensible:!0}},items:[{label:"Inventory: Characters...",group:"inventory",order:1,command:"openCharactersInventory",localizeNotes:""},{label:"Inventory: Repeated Words...",group:"inventory",order:2,command:"openRepeatedWordsInventory",localizeNotes:""},{label:"Publisher Info",group:"general",order:1,command:"showPublisherInfo",localizeNotes:""},{label:"Assignments and Progress",group:"projectTop",order:2,command:"assignments",localizeNotes:""},{label:"Open Project Settings",group:"projectTop",order:3,command:"openSettings",localizeNotes:""}]},k={columns:{options:{label:"Options",order:1},viewOptions:{label:"View Options",order:2}},groups:{layout:{column:"options",order:1},colors:{column:"viewOptions",order:2}},items:[{label:"Background Color",group:"colors",order:1,command:"changeBackgroundColor",localizeNotes:""},{label:"Text Color",group:"colors",order:2,command:"changeTextColor",localizeNotes:""},{label:"Thick Borders",group:"layout",order:1,command:"showThickBorders",localizeNotes:""}]},a={[i("undefined")]:"Ø",[i(0)]:"A",[i(1)]:"B",[i(2)]:"C",[i(3)]:"D",[i(4)]:"E"},Do={title:"Advanced/TabToolbar",component:d,tags:["autodocs"],args:{onSelectProjectMenuItem:e=>console.log("Project Menu Run command: ",e),onSelectViewInfoMenuItem:e=>console.log("View Info Run command: ",e),projectMenuData:N,tabViewMenuData:k,startAreaChildren:o.jsxs(o.Fragment,{children:[o.jsx(u,{scrRef:p,handleSubmit:()=>{},recentSearches:h,onAddRecentSearch:g}),o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"})]}),centerAreaChildren:o.jsxs(o.Fragment,{children:[o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"}),o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"}),o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"})]}),endAreaChildren:o.jsxs(o.Fragment,{children:[o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"}),o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"}),o.jsx(r,{availableScrollGroupIds:[0,1,2,3,4],localizedStrings:a,scrollGroupId:0,onChangeScrollGroupId:t,size:"sm"}),o.jsx(u,{scrRef:p,handleSubmit:()=>{},recentSearches:h,onAddRecentSearch:g})]})}},n={},s={render:e=>o.jsxs(o.Fragment,{children:[o.jsx(c,{minWidth:"0%",maxWidth:"30vw",children:o.jsx(d,{...e})}),o.jsx(c,{minWidth:"200px",maxWidth:"60vw",skipAhead:"2s",children:o.jsx(d,{...e})}),o.jsx(c,{minWidth:"300px",skipAhead:"4s",children:o.jsx(d,{...e})})]}),parameters:{controls:{hideNoControlsWarning:!0},docs:{description:{story:"Uses CSS animations to smoothly animate the TabToolbar container width from 300px to the full viewport width and back, allowing you to observe its responsive behavior."}}}},l={args:{className:"tw-bg-red-100 tw-border-red-400"},parameters:{docs:{description:{story:"TabToolbar with custom background and border color using the className prop."}}}};var b,S,f;n.parameters={...n.parameters,docs:{...(b=n.parameters)==null?void 0:b.docs,source:{originalSource:"{}",...(f=(S=n.parameters)==null?void 0:S.docs)==null?void 0:f.source}}};var x,j,v;s.parameters={...s.parameters,docs:{...(x=s.parameters)==null?void 0:x.docs,source:{originalSource:`{
+  render: args => <>
+      <AnimatedContainer minWidth="0%" maxWidth="30vw">
+        <TabToolbar {...args} />
+      </AnimatedContainer>
+      <AnimatedContainer minWidth="200px" maxWidth="60vw" skipAhead="2s">
+        <TabToolbar {...args} />
+      </AnimatedContainer>
+      <AnimatedContainer minWidth="300px" skipAhead="4s">
+        <TabToolbar {...args} />
+      </AnimatedContainer>
+    </>,
+  parameters: {
+    controls: {
+      hideNoControlsWarning: true
+    },
+    docs: {
+      description: {
+        story: 'Uses CSS animations to smoothly animate the TabToolbar container width from 300px to the full viewport width and back, allowing you to observe its responsive behavior.'
+      }
+    }
+  }
+}`,...(v=(j=s.parameters)==null?void 0:j.docs)==null?void 0:v.source}}};var C,I,w;l.parameters={...l.parameters,docs:{...(C=l.parameters)==null?void 0:C.docs,source:{originalSource:`{
+  args: {
+    className: 'tw-bg-red-100 tw-border-red-400'
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'TabToolbar with custom background and border color using the className prop.'
+      }
+    }
+  }
+}`,...(w=(I=l.parameters)==null?void 0:I.docs)==null?void 0:w.source}}};const Vo=["Default","AnimatedWidth","WithCustomClassName"];export{s as AnimatedWidth,n as Default,l as WithCustomClassName,Vo as __namedExportsOrder,Do as default};
