@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Reflection;
 using Paranext.DataProvider.ParatextUtils;
 
 namespace TestParanextDataProvider.Projects
@@ -21,6 +23,15 @@ namespace TestParanextDataProvider.Projects
             // throws an error if the directory doesn't exist.
             if (!Directory.Exists(s_testFolder))
                 Directory.CreateDirectory(s_testFolder);
+
+            var dllPath = Assembly.GetExecutingAssembly().Location;
+            var srcDir = Path.Combine(dllPath, "..", "..", "..", "..", "..", "c-sharp", "assets");
+            var sourcePath = Path.Combine(srcDir, "usfm.sty");
+            var destPath = Path.Combine(s_testFolder, "usfm.sty");
+
+            // Only copy the usfm.sty file if it doesn't already exist.
+            if (!File.Exists(destPath))
+                File.Copy(sourcePath, destPath);
 
             ParatextGlobals.Initialize(s_testFolder);
         }

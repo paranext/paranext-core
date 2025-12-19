@@ -1,7 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Xml;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
+using Paratext.Data.Users;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
@@ -501,6 +504,150 @@ namespace TestParanextDataProvider.Projects
 
             // Assert
             Assert.That(result, Is.False, "Update with null comment ID should fail");
+        }
+
+        [Test]
+        public void UpdateComment_TimBasicXml_UpdatesContentsSuccessfully()
+        {
+            var xmlDoc = new XmlDocument();
+            xmlDoc.LoadXml($"<CommentList>{CommentsTestData.Tim_Basic_Xml}</CommentList>");
+            var commentNode = xmlDoc.SelectSingleNode("//Comment");
+            Assert.That(commentNode, Is.Not.Null);
+
+            // Extract fields from XML
+            var user = commentNode.Attributes?["User"]?.Value ?? string.Empty;
+            var verseRef = commentNode.Attributes?["VerseRef"]?.Value ?? string.Empty;
+            var date = commentNode.Attributes?["Date"]?.Value ?? string.Empty;
+            var selectedText =
+                commentNode.SelectSingleNode("SelectedText")?.InnerText ?? string.Empty;
+            var startPos = int.TryParse(
+                commentNode.SelectSingleNode("StartPosition")?.InnerText,
+                out var sp
+            )
+                ? sp
+                : 0;
+            var contextBefore =
+                commentNode.SelectSingleNode("ContextBefore")?.InnerText ?? string.Empty;
+            var contextAfter =
+                commentNode.SelectSingleNode("ContextAfter")?.InnerText ?? string.Empty;
+            var status = commentNode.SelectSingleNode("Status")?.InnerText ?? string.Empty;
+            var contentsXml = commentNode.SelectSingleNode("Contents")?.InnerXml ?? string.Empty;
+
+            // Create Comment object
+            var comment = new Comment(new ParatextUser(user, null))
+            {
+                VerseRefStr = verseRef,
+                Date = date,
+                SelectedText = selectedText,
+                StartPosition = startPos,
+                ContextBefore = contextBefore,
+                ContextAfter = contextAfter,
+                Status = new Enum<NoteStatus>(status),
+                Contents = new XmlDocument().CreateElement("Contents")
+            };
+            comment.Thread = null; // Will be set in _provider.CreateComment
+
+            // Properly set Contents to ensure InnerText is populated
+            var contentsDoc = new XmlDocument();
+            contentsDoc.LoadXml($"<Contents>{contentsXml}</Contents>");
+            comment.Contents = contentsDoc.DocumentElement;
+
+            // Add to provider using CreateComment
+            string commentId = _provider.CreateComment(comment);
+            var originalComments = _provider.GetComments(
+                new CommentSelector { CommentId = commentId }
+            );
+            var originalComment = originalComments.FirstOrDefault();
+            string threadId = originalComment?.Thread ?? string.Empty;
+
+            // Modify contents: change "Test Comment" to "Updated Test Comment"
+            var newHtmlContent = "<p>Updated Test Comment</p>";
+
+            // Call UpdateComment on the provider
+            bool result = _provider.UpdateComment(commentId, newHtmlContent);
+            Assert.That(result, Is.True);
+
+            // Verify the change by retrieving the comment
+            var comments = _provider.GetComments(new CommentSelector { CommentId = commentId });
+            var updatedComment = comments.FirstOrDefault();
+            Assert.That(updatedComment, Is.Not.Null);
+            Assert.That(updatedComment!.Contents.InnerText, Does.Contain("Updated Test Comment"));
+            Assert.That(string.Equals(updatedComment.Id, commentId), Is.True);
+            Assert.That(string.Equals(updatedComment.Thread, threadId), Is.True);
+        }
+
+        [Test]
+        public void UpdateComment_TimConflictXml_UpdatesContentsSuccessfully()
+        {
+            var xmlDoc = new XmlDocument();
+            xmlDoc.LoadXml($"<CommentList>{CommentsTestData.Tim_Conflict_Xml}</CommentList>");
+            var commentNode = xmlDoc.SelectSingleNode("//Comment");
+            Assert.That(commentNode, Is.Not.Null);
+
+            // Extract fields from XML
+            var user = commentNode.Attributes?["User"]?.Value ?? string.Empty;
+            var verseRef = commentNode.Attributes?["VerseRef"]?.Value ?? string.Empty;
+            var date = commentNode.Attributes?["Date"]?.Value ?? string.Empty;
+            var selectedText =
+                commentNode.SelectSingleNode("SelectedText")?.InnerText ?? string.Empty;
+            var startPos = int.TryParse(
+                commentNode.SelectSingleNode("StartPosition")?.InnerText,
+                out var sp
+            )
+                ? sp
+                : 0;
+            var contextBefore =
+                commentNode.SelectSingleNode("ContextBefore")?.InnerText ?? string.Empty;
+            var contextAfter =
+                commentNode.SelectSingleNode("ContextAfter")?.InnerText ?? string.Empty;
+            var status = commentNode.SelectSingleNode("Status")?.InnerText ?? string.Empty;
+            var type = commentNode.SelectSingleNode("Type")?.InnerText ?? string.Empty;
+            var contentsXml = commentNode.SelectSingleNode("Contents")?.InnerXml ?? string.Empty;
+
+            // Create Comment object
+            var comment = new Comment(new ParatextUser(user, null))
+            {
+                VerseRefStr = verseRef,
+                Date = date,
+                SelectedText = selectedText,
+                StartPosition = startPos,
+                ContextBefore = contextBefore,
+                ContextAfter = contextAfter,
+                Status = new Enum<NoteStatus>(status),
+                Type = new Enum<NoteType>(type),
+                Contents = new XmlDocument().CreateElement("Contents")
+            };
+            comment.Thread = null; // Will be set in _provider.CreateComment
+
+            // Properly set Contents to ensure InnerText is populated
+            var contentsDoc = new XmlDocument();
+            contentsDoc.LoadXml($"<Contents>{contentsXml}</Contents>");
+            comment.Contents = contentsDoc.DocumentElement;
+
+            // Add to provider using CreateComment
+            string commentId = _provider.CreateComment(comment);
+            var originalComments = _provider.GetComments(
+                new CommentSelector { CommentId = commentId }
+            );
+            var originalComment = originalComments.FirstOrDefault();
+            string threadId = originalComment?.Thread ?? string.Empty;
+
+            var newHtmlContent = "<p>Updated: Two different people edited this verse. ... </p>";
+
+            // Call UpdateComment on the provider
+            bool result = _provider.UpdateComment(commentId, newHtmlContent);
+            Assert.That(result, Is.True);
+
+            // Verify the change by retrieving the comment
+            var comments = _provider.GetComments(new CommentSelector { CommentId = commentId });
+            var updatedComment = comments.FirstOrDefault();
+            Assert.That(updatedComment, Is.Not.Null);
+            Assert.That(
+                updatedComment!.Contents.InnerText,
+                Does.Contain("Updated: Two different people edited this verse")
+            );
+            Assert.That(string.Equals(updatedComment.Id, commentId), Is.True);
+            Assert.That(string.Equals(updatedComment.Thread, threadId), Is.True);
         }
 
         [Test]
