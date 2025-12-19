@@ -190,7 +190,15 @@ declare module 'platform-scripture-editor' {
     iconUrl?: string;
     /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
-     * WebView
+     * WebView.
+     *
+     * If a localized string is passed in, the following replacement strings will be processed in
+     * the localized string:
+     *
+     * - `{projectId}`: The name of the project opened in the editor (`platform.name` setting)
+     * - `{editable}`: Will be replaced with an empty string for non-editable projects and the
+     *   localized value of `%webView_platformScriptureEditor_title_editable_indicator%` (in
+     *   English, `(Editable)`) for editable projects.
      */
     title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */

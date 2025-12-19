@@ -8,11 +8,7 @@ import type {
 } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  formatReplacementString,
   getErrorMessage,
-  isLocalizeKey,
-  LanguageStrings,
-  LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjNodeAndDocumentLocation,
@@ -29,15 +25,11 @@ import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provi
 import { mergeDecorations } from './decorations.util';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
+import { formatEditorTitle } from './platform-scripture-editor.utils';
 
 logger.debug('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
-
-const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
-const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
-const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
-const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -157,22 +149,6 @@ function calculateUsjLocationProperties(
 }
 
 // #endregion selectRange helper functions
-
-/**
- * Get localized strings for creating the editor WebView tab
- *
- * @param tabTitleFormatString Localize key or plain string for title of the tab
- * @returns Localized strings
- */
-async function getEditorTabLocalizations(
-  tabTitleFormatString: LocalizeKey,
-): Promise<LanguageStrings> {
-  const localizationData = await papi.localization.getLocalizedStrings({
-    localizeKeys: [EDITABLE_KEY, tabTitleFormatString],
-    locales: ['en'],
-  });
-  return localizationData;
-}
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformScriptureEditor(
@@ -409,28 +385,22 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
-    const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
-    let title = getWebViewOptions.options?.title ?? savedWebView.title;
-    if (!title) {
-      if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
-      else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
-    }
-    if (isLocalizeKey(title)) {
-      const localizedStrings = await getEditorTabLocalizations(title);
-      const localizedTitleFormatStr = localizedStrings[title];
-      const localizedEditable = localizedStrings[EDITABLE_KEY];
-
-      let projectName = projectId;
-      if (projectId) {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        projectName = (await pdp.getSetting('platform.name')) ?? projectName;
-      }
-
-      title = formatReplacementString(localizedTitleFormatStr, {
-        projectId: projectName,
-        editable: isReadOnly ? '' : localizedEditable,
-      });
-    }
+    const isReadOnly = getWebViewOptions.isReadOnly ?? !!savedWebView.state?.isReadOnly;
+    const unformattedTitle =
+      getWebViewOptions.options?.title ??
+      // WebView state is not yet typed, but we know this is string | undefined
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.unformattedTitle as string | undefined);
+    const title = await formatEditorTitle(
+      unformattedTitle,
+      projectId,
+      isReadOnly,
+      async (projectIdFormat) => {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
+        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
+      },
+      papi.localization.getLocalizedStrings,
+    );
 
     return {
       ...savedWebView,
@@ -448,6 +418,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           savedWebView.state?.decorations as EditorDecorations,
           getWebViewOptions.options?.decorations,
         ),
+        /**
+         * The original title string or localized string key passed in for us to use to format the
+         * title when it should change
+         */
+        unformattedTitle,
       },
       projectId,
       allowPopups: true,
