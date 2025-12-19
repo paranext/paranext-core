@@ -1502,45 +1502,59 @@ export declare function getLocalizeKeyForScrollGroupId(scrollGroupId: ScrollGrou
  * @returns List of localized string keys for scroll group Ids
  */
 export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (ScrollGroupId | undefined)[]): `%${string}%`[];
+/** Formatting options for formatScrRef */
+export type FormatScrRefOptions = {
+	/**
+	 * Either 'id' (the default) to format using the "standard" (as defined by SIL/UBS) 3-letter book
+	 * ID, 'English' to format using the English book name spelled out, or some other string (e.g., a
+	 * localized book name, vernacular abbreviation, FCBH book id, etc.) to use.
+	 */
+	optionOrLocalizedBookName?: "id" | "English" | string;
+	/** The character(s) used to separate the chapter number from the verse number. */
+	chapterVerseSeparator?: string;
+	/** The character(s) used to separate the book from the chapter number. */
+	bookChapterSeparator?: string;
+};
 /**
- * Formats a Scripture reference.
+ * Formats a Scripture reference
  *
- * @param scrRef The Scripture reference to format. Empty book, negative chapter or verse results in
- *   omitting that part.
+ * @param scrRef The Scripture reference to format.
  * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
  *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
  *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
  *   etc.) to use.
- * @param chapterVerseSeparator The characters(s) used to separate the chapter number from the verse
- *   number. Default is a colon (:). Note: More than one character is allowed.
+ * @param chapterVerseSeparator The character(s) used to separate the chapter number from the verse
+ *   number. Default is a colon (:).
  * @param bookChapterSeparator The character(s) used to separate the book from the chapter number.
- *   Default is a single space. Note: More than one character is allowed.
+ *   Default is a single space.
  * @returns The formatted reference.
  */
 export declare function formatScrRef(scrRef: SerializedVerseRef, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
 /**
- * Formats a range of two Scripture references.
+ * Options to format a scripture reference or range
  *
- * @param startScrRef The Scripture reference to format at the start of the range. Empty book,
- *   negative chapter or verse results in omitting that part.
- * @param endScrRef The Scripture reference to format at the end of the range. Empty book, negative
- *   chapter or verse results in omitting that part.
- * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
- *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
- *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
- *   etc.) to use.
- * @param endOptionOrLocalizedBookName Default: uses value from optionOrLocalizedBookName
- * @param chapterVerseSeparator The character(s) used to separate the chapter number from the verse
- *   number. Default is a colon (:). Note: More than one character is allowed.
- * @param bookChapterSeparator The character(s) used to separate the book from the chapter number.
- *   Default is a single space. Note: More than one character is allowed.
- * @param rangeSeparator The character(s) used to separate the two references. Default is a hyphen
- *   surrounded by two spaces. Note: More than one character is allowed.
- * @param omitSimilarParts Wether or not to repeat the book name in the end reference if it is the
- *   same
+ * Extends FormatScrRefOptions
+ */
+export type FormatScrRefRangeOptions = FormatScrRefOptions & {
+	/** See optionOrLocalizedBookName */
+	endRefOptionOrLocalizedBookName?: "id" | "English" | string;
+	/** The character(s) used to separate the two references. */
+	rangeSeparator?: string;
+	/** Wether or not to repeat the book name in the end reference if it is the same. Default false. */
+	repeatBookName?: boolean;
+};
+/**
+ * Formats a range of two Scripture references. Empty book, negative chapter or verse results in
+ * omitting that part.
+ *
+ * @param startScrRef The Scripture reference to format at the start of the range.
+ * @param endScrRef The Scripture reference to format at the end of the range.
+ * @param options Optional FormatScrRefRangeOptions to format the scripture reference range. Default
+ *   range separator is a hyphen surrounded by two spaces. Default book name options for the end ref
+ *   are the book name options for the start ref. The book name is not repeated by default.
  * @returns The formatted range.
  */
-export declare function formatScrRefRange(startScrRef: SerializedVerseRef, endScrRef: SerializedVerseRef, optionOrLocalizedBookName?: "id" | "English" | string, endOptionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string, rangeSeparator?: string, omitSimilarParts?: boolean): string;
+export declare function formatScrRefRange(startScrRef: SerializedVerseRef, endScrRef: SerializedVerseRef, options?: FormatScrRefRangeOptions): string;
 /**
  * Represents the major sections of the Bible and extra materials. Used for grouping and filtering
  * books in the book selector.
@@ -1585,6 +1599,7 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * are shallow equaled.
  */
 export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+/** WARNING: This file is generated in https://github.com/paranext/usfm-tools. Make changes there */
 /**
  * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
  * other kinds of markers.
@@ -1791,7 +1806,7 @@ export type NormalMarkerInfo = {
 	 * attribute on that previous marker in USX/USJ.
 	 *
 	 * Note: the attribute names for attribute markers may be different than the marker names. See
-	 * {@link AttributeMarkerInfo["attributeMarkerAttributeName"]} for more information.
+	 * {@link AttributeMarkerInfo.attributeMarkerAttributeName} for more information.
 	 *
 	 * @example
 	 *
@@ -1802,9 +1817,9 @@ export type NormalMarkerInfo = {
 	 * Whether the normal closing marker for this marker is considered optional in USFM, meaning in
 	 * some cases that the normal closing marker would be expected not to be present.
 	 *
-	 * If this marker's type has {@link CloseableMarkerTypeInfo["isCloseable"]} set to `true`, this
-	 * marker may or may not be expected to have a normal closing marker actually present in USFM
-	 * depending on the value of this property.
+	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `true`, this marker
+	 * may or may not be expected to have a normal closing marker actually present in USFM depending
+	 * on the value of this property.
 	 *
 	 * - If this is `true`, the normal closing marker for this marker in USFM may be expected to be
 	 *   present or absent depending on the value of
@@ -1820,7 +1835,7 @@ export type NormalMarkerInfo = {
 	 *   present. If the normal closing marker is absent in USFM, the USX/USJ for this marker should
 	 *   have the attribute `closed` set to `false`.
 	 *
-	 * If this marker's type has {@link CloseableMarkerTypeInfo["isCloseable"]} set to `false`, this
+	 * If this marker's type has {@link CloseableMarkerTypeInfo.isCloseable} set to `false`, this
 	 * property is unused; markers of that type do not have a normal closing marker.
 	 *
 	 * If not present or `undefined`, defaults to `false`
@@ -3085,7 +3100,8 @@ export declare function charAt(string: string, index: number): string;
  * handles Unicode code points instead of UTF-16 character codes.
  *
  * Returns a non-negative integer that is the Unicode code point value of the character starting at
- * the given index.
+ * the given index. Usage Warning: This function only takes the first code point in a multi-code
+ * point grapheme.
  *
  * @param string String to index
  * @param index Position of the string character to be returned, in the range of 0 to
@@ -3440,15 +3456,16 @@ export declare function isWhiteSpace(ch: string): boolean;
  */
 export declare function toKebabCase(input: string): string;
 /**
- * Shortens text by removing words from the middle and replacing them with `[...]`
+ * Shortens text by splitting by space, removing tokens from the middle and replacing them with
+ * `[...]`
  *
  * @param text The input text
- * @param numberOfWordsToKeepBeforeAndAfter Count of words to keep at the beginning and end of the
- *   text
- * @returns The full text if shorter than words to keep for beginning plus end, otherwise the first
- *   x words, followed by `[...]` and the last x words
+ * @param numberOfTokensToKeepBeforeAndAfter Count of space separated tokens to keep at the
+ *   beginning and end of the text
+ * @returns The full text if shorter than tokens to keep for beginning plus end, otherwise the first
+ *   x tokens, followed by `[...]` and the last x tokens
  */
-declare function collapseMiddleWords(text: string, numberOfWordsToKeepBeforeAndAfter: number): string;
+export declare function collapseMiddleWords(text: string, numberOfTokensToKeepBeforeAndAfter: number): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**
@@ -5492,7 +5509,6 @@ export type LegacyCommentThread = {
 export {
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
-	collapseMiddleWords as truncateOmittingMiddleWords,
 };
 
 export {};
