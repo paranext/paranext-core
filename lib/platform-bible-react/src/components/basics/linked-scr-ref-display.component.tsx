@@ -1,30 +1,10 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef } from 'platform-bible-utils';
+import { formatScrRef, formatScrRefRange, FormatScrRefRangeOptions } from 'platform-bible-utils';
 import { MouseEventHandler } from 'react';
 import { Button } from '../shadcn-ui/button';
 
 export type LocalizedBookNames = Map<string, string | { localizedId: string }>;
-
-/**
- * Props interface for formatting a SerializedVerseRef. For defaults see platform-bible-utils >
- * scripture-utils.ts > `formatScrRefRange`
- */
-export type ScrRefFormattingOptions = {
-  /** Map of localized book names */
-  localizedBookNames?: LocalizedBookNames;
-  /** Separating character(s) between chapter and verse */
-  chapterVerseSeparator?: string;
-  /** Separating character(s) between book and chapter */
-  bookChapterSeparator?: string;
-  /** Separating character(s) between start and end reference */
-  rangeSeparator?: string;
-  /**
-   * If or not to repeat the book and/or chapter for the end reference, when the range is inside the
-   * same book or chapter. Example for false: `GEN 1 - 2`, example for true: `GEN 1 - GEN 2`
-   */
-  repeatBookAndChapterOnRange?: boolean;
-};
 
 /** Props interface for the LinkedScrRefDisplay component */
 export type LinkedScrRefDisplayProps = {
@@ -33,7 +13,7 @@ export type LinkedScrRefDisplayProps = {
   /** End reference of a range to display as part of the link */
   endRef?: SerializedVerseRef;
   /** Additional properties to format the scripture references */
-  scrRefFormattingProps?: ScrRefFormattingOptions;
+  scrRefFormattingProps?: FormatScrRefRangeOptions;
   /** Part of Scripture text to display after the scripture reference */
   scriptureTextPart?: string;
   /** Optional class name to style the button and text section */
@@ -43,48 +23,6 @@ export type LinkedScrRefDisplayProps = {
   /** If to make the part of Scripture text part of the link or not */
   includeInLink?: 'allText' | 'onlyScrRef';
 };
-
-function getLocalizedBookName(
-  scrRef: SerializedVerseRef,
-  scrRefFormattingProps: ScrRefFormattingOptions | undefined,
-) {
-  const bookNameOrObject = scrRefFormattingProps?.localizedBookNames?.get(scrRef.book);
-  return typeof bookNameOrObject === 'object' &&
-    bookNameOrObject !== undefined &&
-    'localizedId' in bookNameOrObject
-    ? bookNameOrObject?.localizedId
-    : bookNameOrObject;
-}
-
-function formatScrRefWithOptions(
-  scrRef: SerializedVerseRef,
-  scrRefFormattingProps: ScrRefFormattingOptions | undefined,
-) {
-  return formatScrRef(
-    scrRef,
-    getLocalizedBookName(scrRef, scrRefFormattingProps),
-    scrRefFormattingProps?.chapterVerseSeparator,
-    scrRefFormattingProps?.bookChapterSeparator,
-  );
-}
-
-function formatScrRangeWithOptions(
-  startRef: SerializedVerseRef,
-  _endRef: SerializedVerseRef, // TODO remove _
-  scrRefFormattingProps: ScrRefFormattingOptions | undefined,
-) {
-  return formatScrRef(
-    // TODO: switch to formatScrRefRange once implemented in pbu + use all available options
-    startRef,
-    // _endRef,
-    getLocalizedBookName(startRef, scrRefFormattingProps),
-    // getLocalizedBookName(_endRef, scrRefFormattingProps),
-    scrRefFormattingProps?.chapterVerseSeparator,
-    scrRefFormattingProps?.bookChapterSeparator,
-    // scrRefFormattingProps?.rangeSeparator;
-    // scrRefFormattingProps?.repeatBookAndChapterOnRange;
-  );
-}
 
 function scripturePartDisplay(scriptureTextPart?: string, className?: string) {
   if (!scriptureTextPart) return undefined;
@@ -126,8 +64,13 @@ export function LinkedScrRefDisplay({
       >
         <span className={cn({ 'tw-me-2': includeInLink === 'allText' })}>
           {endRef
-            ? formatScrRangeWithOptions(startRef, endRef, scrRefFormattingProps)
-            : formatScrRefWithOptions(startRef, scrRefFormattingProps)}
+            ? formatScrRefRange(startRef, endRef, scrRefFormattingProps)
+            : formatScrRef(
+                startRef,
+                scrRefFormattingProps?.optionOrLocalizedBookName,
+                scrRefFormattingProps?.chapterVerseSeparator,
+                scrRefFormattingProps?.bookChapterSeparator,
+              )}
         </span>
         {includeInLink === 'allText' && scripturePartDisplay(scriptureTextPart, className)}
       </Button>
