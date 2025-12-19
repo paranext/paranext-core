@@ -164,7 +164,11 @@ export type {
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
-export type { LinkedScrRefDisplayProps } from './components/basics/linked-scr-ref-display.component';
+export type {
+  LinkedScrRefDisplayProps,
+  LocalizedBookNames,
+} from './components/basics/linked-scr-ref-display.component';
+export { getLocalizedBookName } from './components/basics/linked-scr-ref-display.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';

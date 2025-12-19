@@ -13,7 +13,7 @@ export type LinkedScrRefDisplayProps = {
   /** End reference of a range to display as part of the link */
   endRef?: SerializedVerseRef;
   /** Additional properties to format the scripture references */
-  scrRefFormattingProps?: FormatScrRefRangeOptions;
+  scrRefFormattingOptions?: FormatScrRefRangeOptions;
   /** Part of Scripture text to display after the scripture reference */
   scriptureTextPart?: string;
   /** Optional class name to style the button and text section */
@@ -51,7 +51,7 @@ export function LinkedScrRefDisplay({
   scriptureTextPart,
   className,
   onClick,
-  scrRefFormattingProps,
+  scrRefFormattingOptions: scrRefFormattingProps,
   includeInLink = 'onlyScrRef',
 }: LinkedScrRefDisplayProps) {
   return (

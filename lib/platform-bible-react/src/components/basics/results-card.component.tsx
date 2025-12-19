@@ -104,6 +104,7 @@ export function ResultsCard({
               startRef={linkedScrRef?.startRef}
               endRef={linkedScrRef?.endRef}
               scriptureTextPart={linkedScrRef.scriptureTextPart}
+              scrRefFormattingOptions={linkedScrRef.scrRefFormattingOptions}
               onClick={(e) => {
                 e?.stopPropagation(); // stop bubbling to ResultCard to prevent unnecessary additional select call
                 onSelect(); // make sure select is called first
