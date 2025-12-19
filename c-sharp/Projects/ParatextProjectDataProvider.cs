@@ -29,6 +29,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.VERSE_PLAIN_TEXT,
     ];
 
+    public static readonly List<string> AllCommentDataTypes =
+    [
+        ProjectDataType.COMMENTS,
+        ProjectDataType.COMMENT_THREADS,
+    ];
+
     private readonly LocalParatextProjects _paratextProjects;
 
     private readonly CommentManager _commentManager;
@@ -78,8 +84,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("setComments", SetComments));
         retVal.Add(("getCommentThreads", GetCommentThreads));
         retVal.Add(("createComment", CreateComment));
+        retVal.Add(("addCommentToThread", AddCommentToThread));
         retVal.Add(("deleteComment", DeleteComment));
         retVal.Add(("updateComment", UpdateComment));
+        retVal.Add(("findAssignableUsers", FindAssignableUsers));
+        retVal.Add(("canUserCreateComments", CanUserCreateComments));
+        retVal.Add(("canUserAddCommentToThread", CanUserAddCommentToThread));
+        retVal.Add(("canUserAssignThread", CanUserAssignThread));
+        retVal.Add(("canUserResolveThread", CanUserResolveThread));
+        retVal.Add(("canUserEditOrDeleteComment", CanUserEditOrDeleteComment));
 
         retVal.Add(("getSetting", GetProjectSetting));
         retVal.Add(("setSetting", SetProjectSetting));
@@ -169,20 +182,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Comments
 
-    public bool CommentsEnabled
-    {
-        get
-        {
-            return SettingsService.GetSetting<bool?>(PapiClient, Settings.COMMENTS_ENABLED)
-                ?? false;
-        }
-    }
-
     public List<Comment> GetComments(CommentSelector selector)
     {
-        if (!CommentsEnabled)
-            return [];
-
         List<Comment> comments = _commentManager.AllComments.ToList();
         if (comments.Count == 0)
             return comments;
@@ -205,9 +206,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     // Too much risk of data loss while there are other bugs related to comments floating around
     public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
     {
-        if (!CommentsEnabled)
-            return false;
-
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         bool madeChange = false;
         foreach (var ic in incomingComments)
@@ -231,16 +229,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         if (madeChange)
-            SendDataUpdateEvent(ProjectDataType.COMMENTS, "comments data update event");
+            SendDataUpdateEvent(AllCommentDataTypes, "comments data update event");
 
         return madeChange;
     }
 
     public List<CommentThread> GetCommentThreads(CommentThreadSelector selector)
     {
-        if (!CommentsEnabled)
-            return [];
-
         // Get all threads (activeOnly=false to include threads with deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
@@ -292,22 +287,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
-        if (!CommentsEnabled)
-            return false;
-
-        // Find the comment by ID across all comments
-        Comment? commentToDelete = _commentManager.AllComments.FirstOrDefault(c =>
-            c.Id == commentId
-        );
-
-        if (commentToDelete == null)
+        // Find the comment by ID and its parent thread
+        var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
+        if (commentToDelete == null || parentThread == null)
             return false;
 
         // Do not allow deletion of comments not created by the current user
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (commentToDelete.User != scrText.User.Name)
             throw new InvalidOperationException(
-                "Cannot delete a comment that is not created by the current user"
+                $"Cannot delete comment {commentId} in thread {commentToDelete.Thread} - not created by current user {scrText.User.Name} (created by {commentToDelete.User})"
+            );
+
+        // Only allow deleting the last comment in the thread
+        var lastComment = parentThread.LastComment;
+        if (lastComment == null || lastComment.Id != commentId)
+            throw new InvalidOperationException(
+                $"Cannot delete comment {commentId} in thread {parentThread.Id} - only the last comment can be deleted (last comment ID: {lastComment?.Id})"
             );
 
         // Remove the comment using CommentManager
@@ -315,118 +311,378 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         _commentManager.SaveUser(commentToDelete.User, false);
 
-        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment deleted event");
+        SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
         return true;
     }
 
+    /// <summary>
+    /// Creates a new comment and a new thread. Any thread id, user, or date provided in the
+    /// comment parameter will be ignored - these are auto-generated by the Comment constructor.
+    /// </summary>
+    /// <param name="comment">Comment data. Thread, User, and Date will be ignored/auto-generated.</param>
+    /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     public string CreateComment(Comment comment)
     {
-        if (!CommentsEnabled)
-            throw new InvalidOperationException("Comments are not enabled for this project");
-
-        // Check if the XML has actual text content
-        if (string.IsNullOrWhiteSpace(comment.Contents.InnerText))
-            throw new InvalidDataException("Comment Contents must contain text");
-
-        // Throw if thread does not exist
-        if (
-            !string.IsNullOrEmpty(comment.Thread)
-            && _commentManager.FindThread(comment.Thread) == null
-        )
-            throw new InvalidDataException("Thread with given ThreadId does not exist");
-
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        if (comment.AssignedUser != null)
+        {
+            var assignableUsers = CommentThread
+                .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
+                .ToList();
+            if (!assignableUsers.Contains(comment.AssignedUser))
+                throw new InvalidOperationException(
+                    $"User '{comment.AssignedUser}' cannot be assigned to threads in this project."
+                );
+        }
 
         Comment newComment = new(scrText.User);
 
-        if (!string.IsNullOrEmpty(comment.ContextAfter))
-            newComment.ContextAfter = comment.ContextAfter;
-        if (!string.IsNullOrEmpty(comment.ContextBefore))
-            newComment.ContextBefore = comment.ContextBefore;
-        if (!string.IsNullOrEmpty(comment.SelectedText))
-            newComment.SelectedText = comment.SelectedText;
-        if (comment.StartPosition != 0)
-            newComment.StartPosition = comment.StartPosition;
-        if (!string.IsNullOrEmpty(comment.AssignedUser))
-            newComment.AssignedUser = comment.AssignedUser;
-        if (!string.IsNullOrEmpty(comment.BiblicalTermId))
-            newComment.BiblicalTermId = comment.BiblicalTermId;
-        if (comment.ConflictType != default)
-            newComment.ConflictType = comment.ConflictType;
-        if (comment.Deleted)
-            newComment.Deleted = comment.Deleted;
-        if (comment.ExtraHeadingInfo != null)
-            newComment.ExtraHeadingInfo = comment.ExtraHeadingInfo;
-        if (comment.HideInTextWindow)
-            newComment.HideInTextWindow = comment.HideInTextWindow;
-        if (!string.IsNullOrEmpty(comment.Language))
-            newComment.Language = comment.Language;
-        if (!string.IsNullOrEmpty(comment.ReplyToUser))
-            newComment.ReplyToUser = comment.ReplyToUser;
-        if (!string.IsNullOrEmpty(comment.Shared))
-            newComment.Shared = comment.Shared;
-        if (comment.Status != NoteStatus.Unspecified)
-            newComment.Status = comment.Status;
-        if (!string.IsNullOrEmpty(comment.Thread))
-            newComment.Thread = comment.Thread;
-        if (comment.Type != NoteType.Normal)
-            newComment.Type = comment.Type;
-        if (!string.IsNullOrEmpty(comment.Verse))
-            newComment.Verse = comment.Verse;
-        if (!string.IsNullOrEmpty(comment.VerseRefStr))
-            newComment.VerseRefStr = comment.VerseRefStr;
-        if (comment.Contents != null)
-            newComment.Contents = comment.Contents;
-        if (comment.TagsAdded != null && comment.TagsAdded.Length > 0)
-            newComment.TagsAdded = comment.TagsAdded;
-        if (comment.TagsRemoved != null && comment.TagsRemoved.Length > 0)
-            newComment.TagsRemoved = comment.TagsRemoved;
+        CopyCommentProperties(comment, newComment);
 
         _commentManager.AddComment(newComment);
-
         _commentManager.SaveUser(newComment.User, false);
 
-        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment created event");
+        SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
 
-        // Return the generated comment ID
         return newComment.Id;
+    }
+
+    /// <summary>
+    /// Adds a comment to an existing thread. The thread must already exist.
+    /// Can also be used to modify thread-level properties (status, assignedUser) without
+    /// adding comment content.
+    /// </summary>
+    /// <param name="comment">Comment data. Must have a valid Thread ID that exists.</param>
+    /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
+    /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
+    public string AddCommentToThread(Comment comment)
+    {
+        if (string.IsNullOrEmpty(comment.Thread))
+            throw new InvalidDataException("Thread ID is required for AddCommentToThread");
+
+        bool hasContents =
+            comment.Contents != null && !string.IsNullOrEmpty(comment.Contents.InnerText);
+        bool hasStatus = comment.Status != NoteStatus.Unspecified;
+        bool hasAssignedUser = comment.AssignedUser != null;
+
+        if (!hasContents && !hasStatus && !hasAssignedUser)
+            throw new InvalidDataException(
+                "At least one of Contents, Status, or AssignedUser must be provided for AddCommentToThread"
+            );
+
+        CommentThread? existingThread = _commentManager.FindThread(comment.Thread);
+        if (existingThread == null)
+            throw new InvalidDataException($"Thread with id {comment.Thread} does not exist");
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Validate permissions for status changes (resolve/unresolve)
+        if (
+            comment.Status != NoteStatus.Unspecified
+            && (comment.Status == NoteStatus.Resolved || comment.Status == NoteStatus.Todo)
+        )
+        {
+            CommentTags tags = CommentTags.Get(scrText);
+            bool canResolve = existingThread.TagIds.All(tagId =>
+                existingThread.CanCurrentUserResolve(tags.Get(tagId))
+            );
+
+            if (!canResolve)
+            {
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot resolve or re-open thread '{existingThread.Id}' - insufficient permissions."
+                );
+            }
+        }
+
+        // Validate assigned user is in the assignable users list
+        if (comment.AssignedUser != null)
+        {
+            var assignableUsers = CommentThread
+                .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
+                .ToList();
+            if (!assignableUsers.Contains(comment.AssignedUser))
+                throw new InvalidOperationException(
+                    $"User '{comment.AssignedUser}' cannot be assigned to threads in this project."
+                );
+        }
+
+        Comment newComment = existingThread.AddNewComment();
+
+        CopyCommentProperties(comment, newComment);
+
+        if (
+            comment.Status == NoteStatus.Unspecified
+            && existingThread.Status == NoteStatus.Resolved
+            && hasContents
+        )
+        {
+            Console.WriteLine(
+                $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
+            );
+            newComment.Status = NoteStatus.Todo;
+        }
+
+        _commentManager.AddComment(newComment);
+        _commentManager.SaveUser(newComment.User, false);
+
+        SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
+
+        return newComment.Id;
+    }
+
+    /// <summary>
+    /// Copies properties from the source comment to the target comment, excluding
+    /// auto-generated fields (Thread, User, Date).
+    /// </summary>
+    private static void CopyCommentProperties(Comment source, Comment target)
+    {
+        if (!string.IsNullOrEmpty(source.ContextAfter))
+            target.ContextAfter = source.ContextAfter;
+        if (!string.IsNullOrEmpty(source.ContextBefore))
+            target.ContextBefore = source.ContextBefore;
+        if (!string.IsNullOrEmpty(source.SelectedText))
+            target.SelectedText = source.SelectedText;
+        if (source.StartPosition != -1)
+            target.StartPosition = source.StartPosition;
+        // AssignedUser allows empty string (means "unassigned"), so only check for null
+        if (source.AssignedUser != null)
+            target.AssignedUser = source.AssignedUser;
+        if (!string.IsNullOrEmpty(source.BiblicalTermId))
+            target.BiblicalTermId = source.BiblicalTermId;
+        if (source.ConflictType != default)
+            target.ConflictType = source.ConflictType;
+        if (source.Deleted)
+            target.Deleted = source.Deleted;
+        if (source.HideInTextWindow)
+            target.HideInTextWindow = source.HideInTextWindow;
+        if (!string.IsNullOrEmpty(source.Language))
+            target.Language = source.Language;
+        if (!string.IsNullOrEmpty(source.ReplyToUser))
+            target.ReplyToUser = source.ReplyToUser;
+        if (!string.IsNullOrEmpty(source.Shared))
+            target.Shared = source.Shared;
+        if (source.Status != NoteStatus.Unspecified)
+            target.Status = source.Status;
+        if (source.Type != NoteType.Normal)
+            target.Type = source.Type;
+        if (!string.IsNullOrEmpty(source.Verse))
+            target.Verse = source.Verse;
+        if (!string.IsNullOrEmpty(source.VerseRefStr))
+            target.VerseRefStr = source.VerseRefStr;
+        if (source.Contents != null)
+            target.Contents = source.Contents;
+        if (source.TagsAdded != null && source.TagsAdded.Length > 0)
+            target.TagsAdded = source.TagsAdded;
+        if (source.TagsRemoved != null && source.TagsRemoved.Length > 0)
+            target.TagsRemoved = source.TagsRemoved;
+        if (!string.IsNullOrEmpty(source.ExtraHeadingInfoInternal))
+            target.ExtraHeadingInfoInternal = source.ExtraHeadingInfoInternal;
     }
 
     public bool UpdateComment(string commentId, string updatedContent)
     {
-        if (!CommentsEnabled)
-            return false;
-
         if (string.IsNullOrEmpty(commentId))
             return false;
 
-        // Find the comment by ID
-        var commentToUpdate = FindCommentById(commentId);
-        if (commentToUpdate == null)
+        // Find the comment by ID and its parent thread
+        var (commentToUpdate, parentThread) = FindCommentByIdWithThread(commentId);
+        if (commentToUpdate == null || parentThread == null)
             return false;
 
         // Do not allow updating of comments not created by the current user
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (commentToUpdate.User != scrText.User.Name)
             throw new InvalidOperationException(
-                "Cannot update a comment that is not created by the current user"
+                $"Cannot update comment {commentId} in thread {commentToUpdate.Thread} - not created by current user {scrText.User.Name} (created by {commentToUpdate.User})"
             );
 
-        commentToUpdate.AddTextToContent("", false); // Clear existing content
-        commentToUpdate.AddTextToContent(updatedContent, true); // Add new content
+        // Only allow updating the last comment in the thread
+        var lastComment = parentThread.LastComment;
+        if (lastComment == null || lastComment.Id != commentId)
+            throw new InvalidOperationException(
+                $"Cannot update comment {commentId} in thread {parentThread.Id} - only the last comment can be updated (last comment ID: {lastComment?.Id})"
+            );
+
+        XmlDocument xmlDoc = new() { PreserveWhitespace = true };
+        try
+        {
+            xmlDoc.LoadXml($"<Contents>{updatedContent ?? string.Empty}</Contents>");
+        }
+        catch (XmlException ex)
+        {
+            throw new InvalidDataException($"Updated content is not valid XML/HTML: {ex.Message}");
+        }
+        commentToUpdate.Contents = xmlDoc.DocumentElement;
+
+        // Reset the status field to Unspecified when a comment is edited
+        commentToUpdate.Status = NoteStatus.Unspecified;
 
         _commentManager.SaveUser(commentToUpdate.User, false);
 
-        SendDataUpdateEvent(ProjectDataType.COMMENTS, "comment updated");
+        SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
 
         return true;
     }
 
-    private Comment? FindCommentById(string commentId)
+    /// <summary>
+    /// Finds the list of users that can be assigned to comment threads in this project.
+    /// </summary>
+    /// <returns>List of usernames that can be assigned to threads. Includes special values:
+    /// "Team" for team assignment, and "" (empty string) for unassigned.</returns>
+    public List<string> FindAssignableUsers()
     {
-        if (!CommentsEnabled)
-            return null;
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return
+        [
+            .. CommentThread.GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true),
+        ];
+    }
 
+    #region Permission Checks
+
+    /// <summary>
+    /// Determines if the current user can create new comment threads in this project.
+    /// </summary>
+    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default: false)</param>
+    /// <returns>True if the user can create comments, false otherwise</returns>
+    public bool CanUserCreateComments(bool allowInSba = false)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Cannot create comments in resource projects
+        if (scrText.IsResourceProject)
+            return false;
+
+        // Must have a role other than Observer or None
+        if (!scrText.Permissions.HaveRoleNotObserver)
+            return false;
+
+        // Cannot create comments in Study Bible Additions (unless explicitly allowed)
+        if (!allowInSba && scrText.Settings.IsStudyBibleAdditions)
+            return false;
+
+        // Cannot create comments in Transliteration with Encoder projects
+        if (scrText.Settings.TranslationInfo.Type == ProjectType.TransliterationWithEncoder)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Determines if the current user can add comments to existing threads in this project.
+    /// This is slightly different from CanUserAddNotes - it allows adding to threads
+    /// in resource projects that aren't global note types.
+    /// </summary>
+    /// <returns>True if the user can add comments to threads, false otherwise</returns>
+    public bool CanUserAddCommentToThread()
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Must have a role other than Observer or None
+        if (!scrText.Permissions.HaveRoleNotObserver)
+            return false;
+
+        // Resource projects with global note types are read-only
+        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Determines if the current user can change the assigned user on a specific thread.
+    /// </summary>
+    /// <param name="threadId">The ID of the thread to check</param>
+    /// <returns>True if the user can assign the thread, false otherwise</returns>
+    public bool CanUserAssignThread(string threadId)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Must have a role other than Observer or None
+        if (!scrText.Permissions.HaveRoleNotObserver)
+            return false;
+
+        CommentThread? thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            return false;
+
+        // Biblical Term notes cannot have assignments
+        if (thread.IsBTNote)
+            return false;
+
+        // Spelling notes cannot have assignments
+        if (thread.IsSpellingNote)
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Determines if the current user can resolve or re-open a specific thread.
+    /// </summary>
+    /// <param name="threadId">The ID of the thread to check</param>
+    /// <returns>True if the user can resolve the thread, false otherwise</returns>
+    public bool CanUserResolveThread(string threadId)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        CommentThread? thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            return false;
+
+        CommentTags tags = CommentTags.Get(scrText);
+
+        // Check if user can resolve based on all tags on the thread
+        return thread.TagIds.All(tagId => thread.CanCurrentUserResolve(tags.Get(tagId)));
+    }
+
+    /// <summary>
+    /// Determines if the current user can edit or delete a specific comment.
+    /// In Paratext 9, edit and delete have identical permission requirements.
+    /// </summary>
+    /// <param name="commentId">The ID of the comment to check</param>
+    /// <returns>True if the user can edit or delete the comment, false otherwise</returns>
+    public bool CanUserEditOrDeleteComment(string commentId)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Must have general edit permission on the project
+        if (!scrText.Permissions.HaveRoleNotObserver)
+            return false;
+
+        // Resource projects with global note types are read-only
+        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
+            return false;
+
+        var (comment, thread) = FindCommentByIdWithThread(commentId);
+        if (comment == null || thread == null)
+            return false;
+
+        // Must be the last comment in the thread
+        if (comment != thread.LastComment)
+            return false;
+
+        // Must be the author of the comment
+        if (comment.User != scrText.User.Name)
+            return false;
+
+        // Cannot edit/delete if it's a conflict resolution action
+        if (comment.ConflictResolutionAction != NoteConflictResolutions.None)
+            return false;
+
+        // Cannot edit/delete the first comment of a conflict note
+        if (thread.Type == NoteType.Conflict && thread.Comments[0] == comment)
+            return false;
+
+        return true;
+    }
+
+    #endregion
+
+    private (Comment?, CommentThread?) FindCommentByIdWithThread(string commentId)
+    {
         // Get all threads (activeOnly=false to include deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
@@ -435,10 +691,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             var comment = thread.Comments.FirstOrDefault(c => c.Id == commentId);
             if (comment != null)
-                return comment;
+                return (comment, thread);
         }
 
-        return null;
+        return (null, null);
     }
 
     private static IEnumerable<CommentThread> FilterByDate(
@@ -999,7 +1255,62 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
     {
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
-        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(scrText, verseRef.BookNum, usfmData);
+        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(
+            scrText,
+            scrText.ScrStylesheet(verseRef.BookNum),
+            usfmData,
+            // We should convert with "forExport" because of some of the following differences
+            // between for and not for export:
+            // - not for export
+            //   - sid, eid, and vid derived metadata is absent
+            //   - char marker with `link-href` attribute gets changed to `link` marker type, which
+            //     is an internal Paratext marker used for detecting where to put link anchors
+            //   - figure `src` attribute stays `src` instead of changing to `file` which is the
+            //     name of this attribute in USX/USJ
+            // - for export
+            //   - sid, eid, and vid derived metadata is present (not really important for us, most
+            //     likely)
+            //   - char markers with `link-href` attribute stay normal and don't get changed
+            //     (important for us because we don't want to pass around this non-standard `link`
+            //     marker type)
+            //   - figure `src` attribute appropriately changes to `file` (important)
+            //
+            // Note: it appears UsfmToUsx.ConvertToXmlDocument wasn't particularly written for
+            // exporting one chapter at a time. When exporting any chapter after chapter 1, the sid,
+            // eid, and vid attributes will be missing the book ID (for chapter markers) or be
+            // completely empty (for verse and para markers). This happens because the parser state
+            // verse ref doesn't get set up right because we're just getting the chapter; it doesn't
+            // see the book ID because the id marker is not in chapters after chapter 1. We may need
+            // to change ParatextData.dll if we ever actually need these to be right. Probably need
+            // to pass a VerseRef with the right book ID into the third parameter of
+            // `new UsfmParserState(...)` in `UsfmToUsx.RunConverter`.
+            // TJ doesn't think this really matters for us, but we can fix it one day if we find we
+            // need to.
+            //
+            // Note: `xt` markers get `ref`s wrapped around their contents in `JumpDecorater.cs`,
+            // used in `ExportUsxForm.cs`. `JumpDecorater.cs` also makes independent `ref` markers
+            // get properly translated to USX as `ref`-type markers as well. This seems nice for
+            // accurately translating to USX; however, TJ thinks we should not do this right now
+            // because Paratext 9.4 always removes `ref`-type markers when transforming to USFM. It
+            // does not support adding the `gen` attribute to generated `ref`s or only removing
+            // `ref`s with `gen` attribute, so there is no way to know which `ref`s to automatically
+            // remove and which to preserve when transforming back to USFM. Hopefully, when Paratext
+            // supports 3.1+, this whole situation will be fixed, and we won't need to worry about
+            // accidentally deleting user data.
+            // - Without `JumpDecorater.cs`, we can preserve USFM `ref`s because of the following:
+            //   - unclosed `ref` markers get set to `para` type because they are unknown
+            //   - closed `ref` markers get split into `para` type for opening and `unmatched` for
+            //     closing because `ref` is unknown as they are not in USFM 3.0
+            // - With `JumpDecorater.cs`, we cannot preserve USFM `ref`s because `ref`s are removed
+            //   when importing USX into USFM because `ref` marker is not in USFM 3.0 and therefore
+            //   Paratext always removes them regardless of `gen` attribute:
+            //   - unclosed `ref` markers get set to `char` type because the `ref` marker gets added
+            //     as a `char`-type marker in `JumpDecorater.cs` (these probably
+            //     would round trip; just including this as a note about the differences)
+            //   - closed `ref` markers get transformed into normal `ref` markers (this causes these
+            //     markers to be removed when importing back into USFM)
+            true
+        );
         return xmlDoc.OuterXml;
     }
 

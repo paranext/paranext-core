@@ -4,7 +4,7 @@ import type {
   AnnotationStyleDataProviderDataTypes,
   AnnotationStyleNonce,
   AnnotationStyleProperties,
-} from 'annotation-style.data-provider';
+} from 'platform-scripture-editor';
 import { KebabCase, newGuid, toKebabCase } from 'platform-bible-utils';
 
 /**
@@ -36,9 +36,6 @@ type AnnotationStyleEntry = {
 /**
  * Data provider engine for managing annotation styles. Converts style objects to CSS stylesheets
  * that can be injected into the editor.
- *
- * This engine is defined as an object (rather than a class) for simplicity and better IntelliSense
- * support. See the hello-someone example for more details on this pattern.
  */
 export class AnnotationStyleDataProviderEngine
   extends DataProviderEngine<AnnotationStyleDataProviderDataTypes>

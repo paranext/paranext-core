@@ -178,17 +178,6 @@ public class CommentConverter : JsonConverter<Comment>
             }
         }
 
-        VerifyDataProvided(CONTENTS, contents);
-        VerifyDataProvided(DATE, date);
-        VerifyDataProvided(DELETED, deleted);
-        VerifyDataProvided(HIDE_IN_TEXT_WINDOW, hideInTextWindow);
-        VerifyDataProvided(ID, id);
-        VerifyDataProvided(LANGUAGE, language);
-        VerifyDataProvided(START_POSITION, startPosition);
-        VerifyDataProvided(THREAD, thread);
-        VerifyDataProvided(USER, user);
-        VerifyDataProvided(VERSE_REF, verseRef);
-
         XmlElement? contentsXml;
         try
         {
@@ -201,36 +190,38 @@ public class CommentConverter : JsonConverter<Comment>
             throw new InvalidDataException($"Contents are not valid XML: {contents}");
         }
 
-        var conflictTypeEnum =
-            ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType) ?? NoteConflictType.None;
-        var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status) ?? NoteStatus.Todo;
-        var typeEnum = ConvertToEnum<NoteType>(TYPE, type) ?? NoteType.Normal;
+        if (!string.IsNullOrEmpty(status))
+            status = JsonConverterUtils.ConvertCommentStatusToNoteStatus(status);
+
+        var conflictTypeEnum = ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType);
+        var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status);
+        var typeEnum = ConvertToEnum<NoteType>(TYPE, type);
 
         Comment comment =
-            new(new ParatextUser(user, null))
+            new(new ParatextUser(user ?? string.Empty, null))
             {
                 AssignedUser = assignedUser,
                 BiblicalTermId = biblicalTermId,
-                ConflictType = conflictTypeEnum,
+                ConflictType = conflictTypeEnum ?? NoteConflictType.None,
                 Contents = contentsXml,
                 ContextAfter = contextAfter,
                 ContextBefore = contextBefore,
-                Date = date,
-                Deleted = deleted!.Value,
+                Date = date ?? string.Empty,
+                Deleted = deleted ?? false,
                 ExtraHeadingInfoInternal = extraHeadingInfo,
-                HideInTextWindow = hideInTextWindow!.Value,
-                Language = language,
+                HideInTextWindow = hideInTextWindow ?? false,
+                Language = language ?? string.Empty,
                 ReplyToUser = replyToUser,
                 SelectedText = selectedText,
                 Shared = shared,
-                StartPosition = startPosition!.Value,
-                Status = statusEnum,
+                StartPosition = startPosition ?? -1,
+                Status = statusEnum ?? NoteStatus.Unspecified,
                 TagsAdded = tagAdded?.Split(","),
                 TagsRemoved = tagRemoved?.Split(","),
-                Thread = thread,
-                Type = typeEnum,
+                Thread = thread ?? string.Empty,
+                Type = typeEnum ?? NoteType.Unspecified,
                 Verse = verse,
-                VerseRefStr = verseRef,
+                VerseRefStr = verseRef ?? string.Empty,
             };
 
         if (comment.Id != id)
@@ -257,14 +248,23 @@ public class CommentConverter : JsonConverter<Comment>
         JsonConverterUtils.TryWriteString(writer, CONTEXT_BEFORE, value.ContextBefore);
         JsonConverterUtils.TryWriteString(writer, CONTEXT_AFTER, value.ContextAfter);
         if (value.Status != NoteStatus.Unspecified)
-            writer.WriteString(STATUS, value.Status.ToString());
+        {
+            string noteStatusValue = value.Status.ToString();
+            string commentStatusValue = JsonConverterUtils.ConvertNoteStatusToCommentStatus(
+                noteStatusValue
+            );
+            writer.WriteString(STATUS, commentStatusValue);
+        }
         if (value.Type != NoteType.Unspecified && value.Type != NoteType.Normal)
             writer.WriteString(TYPE, value.Type.ToString());
         if (value.ConflictType != NoteConflictType.None)
             writer.WriteString(CONFLICT_TYPE, value.ConflictType.ToString());
         JsonConverterUtils.TryWriteString(writer, VERSE, value.Verse);
         JsonConverterUtils.TryWriteString(writer, SHARED, value.Shared);
-        JsonConverterUtils.TryWriteString(writer, ASSIGNED_USER, value.AssignedUser);
+        // AssignedUser: null means no assignment info, empty string means explicitly unassigned
+        // We need to write empty string to distinguish from undefined
+        if (value.AssignedUser != null)
+            writer.WriteString(ASSIGNED_USER, value.AssignedUser);
         JsonConverterUtils.TryWriteString(writer, REPLY_TO_USER, value.ReplyToUser);
         JsonConverterUtils.TryWriteString(
             writer,

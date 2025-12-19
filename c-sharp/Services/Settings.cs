@@ -6,7 +6,5 @@ public sealed class Settings
         "platform.paratextDataLastRegistryDataCachedTimes";
     public const string PTX_UTILS_MEMENTO_DATA = "platform.ptxUtilsMementoData";
 
-    public const string COMMENTS_ENABLED = "platform.commentsEnabled";
-
     public const string REQUEST_TIMEOUT = "platform.requestTimeout";
 }

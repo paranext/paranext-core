@@ -57,9 +57,13 @@ function useSidebar() {
 const SidebarProvider = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<'div'> & {
+    /** Whether the sidebar is initially open. */
     defaultOpen?: boolean;
+    /** Whether the sidebar is open. */
     open?: boolean;
+    /** Callback fired when the open state changes. */
     onOpenChange?: (open: boolean) => void;
+    /** The side of the sidebar. */
     side?: Side;
   }
 >(

@@ -1,21 +1,18 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useWebViewController,
+} from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { ChevronDown } from 'lucide-react';
 import {
   Button,
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
+  ComboBox,
+  ComboBoxGroup,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Progress,
   Select,
   SelectContent,
@@ -29,7 +26,6 @@ import {
 import {
   deepEqual,
   formatReplacementString,
-  formatReplacementStringToArray,
   getChaptersForBook,
   getErrorMessage,
   isPlatformError,
@@ -92,7 +88,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'selectedCheckTypes',
     [],
   );
-  const [isSelectProjectsOpen, setIsSelectProjectsOpen] = useState(false);
   const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [activeRanges, setActiveRanges] = useState<CheckInputRange[]>(() => []);
@@ -117,8 +112,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useCallback(async () => {
       const projectDict: { [projectId: string]: ProjectOption } = {};
 
-      // Fetch projects metadata to get ids
-      const allMetadata = await papi.projectLookup.getMetadataForAllProjects();
+      // Fetch only scripture projects metadata - those with Scripture or Paratext interfaces
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['Scripture', 'Paratext'],
+      });
 
       // Map through all metadata to get ids and names
       await Promise.all(
@@ -132,6 +129,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
       return projectDict;
     }, []),
     useMemo(() => ({}), []),
+  );
+
+  const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+
+  const editorWebViewController = useWebViewController(
+    'platformScriptureEditor.react',
+    editorWebViewId,
   );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -516,7 +520,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [checksInfo, setChecksInfo] = useState<CheckInfo[]>([]);
 
   useEffect(() => {
-    if (!checkAggregator || !projectId || isPlatformError(availableChecks)) {
+    if (
+      !checkAggregator ||
+      !projectId ||
+      isPlatformError(availableChecks) ||
+      availableChecks.length === 0 ||
+      availableChecks[0] === defaultCheckRunnerCheckDetails
+    ) {
       setChecksInfo([]);
       return;
     }
@@ -538,31 +548,55 @@ global.webViewComponent = function ChecksSidePanelWebView({
     fetchChecksInfo();
   }, [checkAggregator, projectId, availableChecks, getLocalizedCheckDescription]);
 
-  // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
-   * Scrolls the editor to the reference of the selected check result by setting the scripture
-   * reference of the scroll group shared by the side panel and the editor.
+   * Selects the check result in the editor and focuses the editor.
    *
    * @param id - The unique identifier of the selected check result.
    */
-  const scrollToCheckReferenceInEditor = useCallback(
+  const selectCheckReferenceInEditor = useCallback(
     (id: string) => {
       const selectedResult = checkResultsRef.current.find(
         (result, index) => writeCheckId(result, index) === id,
       );
       if (!selectedResult) return;
 
-      setScrRef(selectedResult.verseRef);
+      if (editorWebViewId && editorWebViewController) {
+        // Set the focus and the range to the result in the editor
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        editorWebViewController.selectRange({
+          // Transform deprecated check result locations to the new format. The old check result
+          // types don't have book/chapter info in the location, so we need to add them.
+          start:
+            'jsonPath' in selectedResult.start
+              ? {
+                  book: selectedResult.verseRef.book,
+                  chapterNum: selectedResult.verseRef.chapterNum,
+                  ...selectedResult.start,
+                }
+              : selectedResult.start,
+          end:
+            'jsonPath' in selectedResult.end
+              ? {
+                  book: selectedResult.verseRef.book,
+                  chapterNum: selectedResult.verseRef.chapterNum,
+                  ...selectedResult.end,
+                }
+              : selectedResult.end,
+        });
+      } else {
+        // Could not get controller to set specific range, so at least set the verse ref
+        setScrRef(selectedResult.verseRef);
+      }
     },
-    [setScrRef, writeCheckId],
+    [setScrRef, writeCheckId, editorWebViewId, editorWebViewController],
   );
 
   const handleSelectCheck = useCallback(
     async (id: string) => {
       setSelectedCheckId(id);
-      scrollToCheckReferenceInEditor(id);
+      selectCheckReferenceInEditor(id);
     },
-    [scrollToCheckReferenceInEditor],
+    [selectCheckReferenceInEditor],
   );
 
   const setDeniedStatusForResult = useCallback(
@@ -646,29 +680,42 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setSelectedCheckTypeIds(updatedCheckIds);
   };
 
-  // Helper functions for project and scope filters
-  const writeProjectName = useCallback(
-    (fullName: string, shortName: string) => {
-      return formatReplacementStringToArray(
-        localizedStrings['%webView_checksSidePanel_projectFilter_projectName_format%'],
-        { fullName, shortName },
-      );
-    },
-    [localizedStrings],
+  type ProjectEntry = {
+    id: string;
+    fullName: string;
+    shortName: string;
+    label: string;
+    secondaryLabel?: string;
+  };
+
+  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
+    const allProjects = Object.entries(projectIdsAndNames)
+      .sort(([, a], [, b]) =>
+        a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+      )
+      .map(([id, project]) => ({
+        id,
+        fullName: project.fullName,
+        shortName: project.shortName,
+        label: project.shortName,
+        secondaryLabel: project.fullName,
+      }));
+    return [
+      {
+        groupHeading:
+          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
+        options: allProjects,
+      },
+    ];
+  }, [projectIdsAndNames, localizedStrings]);
+
+  const selectedProjectOption = useMemo(
+    () =>
+      projectOptionsGrouped
+        .flatMap((group) => group.options)
+        .find((option) => option.id === projectId),
+    [projectOptionsGrouped, projectId],
   );
-
-  const getProjectShortNameLabel = useCallback(() => {
-    return (
-      projectIdsAndNames[projectId ?? '']?.shortName ??
-      localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-    );
-  }, [localizedStrings, projectIdsAndNames, projectId]);
-
-  const sortedProjectEntries = useMemo(() => {
-    return Object.entries(projectIdsAndNames).sort(([, a], [, b]) =>
-      a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
-    );
-  }, [projectIdsAndNames]);
 
   const getScopeLabel = useCallback(
     (scopeValue: string) => {
@@ -717,9 +764,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
     return (
       <div className="pr-twp tw-h-screen tw-box-border tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
-        <span className="tw-text-sm">
-          {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
-        </span>
       </div>
     );
   }
@@ -729,52 +773,25 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
-        <Popover open={isSelectProjectsOpen} onOpenChange={setIsSelectProjectsOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="tw-flex-1 tw-min-w-32 tw-font-normal"
-              aria-label={
-                localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-              }
-            >
-              <div className="tw-flex tw-w-full tw-items-center tw-justify-between">
-                {getProjectShortNameLabel()}
-                <ChevronDown className="tw-opacity-50" />
-              </div>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="tw-max-w-sm tw-p-0" align="start">
-            <Command>
-              <CommandInput />
-              <CommandList>
-                <CommandEmpty>
-                  {localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']}
-                </CommandEmpty>
-                <CommandGroup
-                  heading={
-                    localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-                  }
-                >
-                  {sortedProjectEntries.map(([projectIdOption, project]) => (
-                    <CommandItem
-                      key={projectIdOption}
-                      onSelect={() => {
-                        handleSelectProject(projectIdOption);
-                        setIsSelectProjectsOpen(false);
-                      }}
-                      className="tw-flex tw-items-center"
-                    >
-                      <span className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
-                        {writeProjectName(project.fullName, project.shortName)}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        <ComboBox<ProjectEntry>
+          options={projectOptionsGrouped}
+          value={selectedProjectOption}
+          onChange={(newProject) => handleSelectProject(newProject.id)}
+          getButtonLabel={(project) => project.shortName}
+          buttonPlaceholder={
+            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
+          }
+          commandEmptyMessage={
+            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
+          }
+          ariaLabel={
+            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+          }
+          buttonVariant="outline"
+          buttonClassName="tw-flex-1 tw-min-w-32 tw-font-normal"
+          popoverContentClassName="tw-w-[300px]"
+          alignDropDown="start"
+        />
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>

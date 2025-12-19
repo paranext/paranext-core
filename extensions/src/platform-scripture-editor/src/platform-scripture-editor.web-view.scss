@@ -1,12 +1,10 @@
 @use './usj-nodes';
-@use './commenting';
 @use './editor';
 @use './editor-overrides';
 @use './nodes-menu';
 @use './tailwind';
 
 body {
-  background-color: hsl(var(--background));
   // remove margins added by the electron browser user-agent style sheet
   margin: 0;
 }

@@ -1,0 +1,329 @@
+import { Editor } from '@/components/advanced/editor/editor';
+import {
+  editorStateToHtml,
+  focusContentEditable,
+  handleEditorKeyNavigation,
+  hasEditorContent,
+  htmlToEditorState,
+} from '@/components/advanced/editor/editor-utils';
+import { Avatar, AvatarFallback } from '@/components/shadcn-ui/avatar';
+import { Badge } from '@/components/shadcn-ui/badge';
+import { Button } from '@/components/shadcn-ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import { cn } from '@/utils/shadcn-ui.util';
+import { SerializedEditorState } from 'lexical';
+import { ArrowUp, Check, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import {
+  formatRelativeDate,
+  formatReplacementString,
+  hasCustomParatextTags,
+  parseParatextHtml,
+  sanitizeHtml,
+} from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CommentItemProps } from './comment-list.types';
+import { getAssignedUserDisplayName } from './comment-list.utils';
+
+/**
+ * A single comment item in the comment list.
+ *
+ * @param CommentItemProps The properties for the CommentItem component
+ */
+export function CommentItem({
+  comment,
+  isReply = false,
+  localizedStrings,
+  isThreadExpanded = false,
+  threadStatus = 'Unspecified',
+  handleAddCommentToThread,
+  handleUpdateComment,
+  handleDeleteComment,
+  onEditingChange,
+  canUserEditOrDeleteCommentCallback,
+  canUserResolveThread = false,
+}: CommentItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editorState, setEditorState] = useState<SerializedEditorState>();
+  const [canEditOrDelete, setCanEditOrDelete] = useState(false);
+
+  // eslint-disable-next-line no-null/no-null
+  const editContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Check if the user can edit or delete this comment
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isThreadExpanded) {
+      setCanEditOrDelete(false);
+      return undefined;
+    }
+
+    const checkPermission = async () => {
+      const canEdit = canUserEditOrDeleteCommentCallback
+        ? await canUserEditOrDeleteCommentCallback(comment.id)
+        : false;
+
+      if (isMounted) setCanEditOrDelete(canEdit);
+    };
+
+    checkPermission();
+    return () => {
+      isMounted = false;
+    };
+  }, [canUserEditOrDeleteCommentCallback, comment.id, isThreadExpanded]);
+
+  // Focus the editor when entering edit mode, after dropdown menu has fully closed
+  useEffect(() => {
+    if (!isEditing) return undefined;
+
+    let isMounted = true;
+    const container = editContainerRef.current;
+    if (!container) return undefined;
+
+    /**
+     * The `Edit Comment` menu item is inside a dropdown that takes time to close. When the dropdown
+     * closes, it brings focus back to the dropdown trigger button, which steals focus from the
+     * editor. To work around this, we add a slight delay before focusing the editor. Unfortunately
+     * there is no reliable way to detect when the dropdown has fully closed, which leaves us with
+     * no other option than to use a timeout.
+     */
+    const timeoutId = setTimeout(() => {
+      if (!isMounted) return;
+      focusContentEditable(container);
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [isEditing]);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditing(false);
+    setEditorState(undefined);
+    onEditingChange?.(false);
+  }, [onEditingChange]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editorState || !handleUpdateComment) return;
+    const isUpdateSuccessful = await handleUpdateComment(
+      comment.id,
+      editorStateToHtml(editorState),
+    );
+    if (isUpdateSuccessful) {
+      setIsEditing(false);
+      setEditorState(undefined);
+      onEditingChange?.(false);
+    }
+  }, [editorState, handleUpdateComment, comment.id, onEditingChange]);
+
+  const displayDate = useMemo(() => {
+    const date = new Date(comment.date);
+    const relativeDate = formatRelativeDate(
+      date,
+      localizedStrings['%comment_date_today%'],
+      localizedStrings['%comment_date_yesterday%'],
+    );
+    const time = date.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    return formatReplacementString(localizedStrings['%comment_dateAtTime%'], {
+      date: relativeDate,
+      time,
+    });
+  }, [comment.date, localizedStrings]);
+
+  const userLabel = useMemo(() => comment.user, [comment.user]);
+
+  // Generate initials for avatar
+  const initials = useMemo(
+    () =>
+      comment.user
+        .split(' ')
+        .map((name) => name[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2),
+    [comment.user],
+  );
+
+  const sanitizedContent = useMemo(
+    () => sanitizeHtml(parseParatextHtml(comment.contents)),
+    [comment.contents],
+  );
+
+  const dropdownContent = useMemo(() => {
+    if (!isThreadExpanded) return undefined;
+    if (!canEditOrDelete) return undefined;
+
+    return (
+      <>
+        {!hasCustomParatextTags(comment.contents) && (
+          <DropdownMenuItem
+            onClick={() => {
+              setIsEditing(true);
+              setEditorState(htmlToEditorState(parseParatextHtml(comment.contents)));
+              onEditingChange?.(true);
+            }}
+          >
+            <Pencil className="tw-me-2 tw-h-4 tw-w-4" />
+            {localizedStrings['%comment_editComment%']}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          onClick={async () => {
+            if (handleDeleteComment) {
+              await handleDeleteComment(comment.id);
+            }
+          }}
+        >
+          <Trash2 className="tw-me-2 tw-h-4 tw-w-4" />
+          {localizedStrings['%comment_deleteComment%']}
+        </DropdownMenuItem>
+      </>
+    );
+  }, [
+    canEditOrDelete,
+    isThreadExpanded,
+    localizedStrings,
+    comment.contents,
+    comment.id,
+    handleDeleteComment,
+    onEditingChange,
+  ]);
+
+  return (
+    <div
+      className={cn('tw-flex tw-w-full tw-flex-row tw-items-baseline tw-gap-3 tw-space-y-3', {
+        'tw-text-sm': isReply,
+      })}
+    >
+      <Avatar className="tw-h-8 tw-w-8">
+        <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
+      </Avatar>
+      <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
+        <div className="tw-flex tw-w-full tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
+          <p className="tw-text-sm tw-font-medium">{userLabel}</p>
+          <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
+          <div className="tw-flex-1" />
+          {isReply && comment.assignedUser !== undefined && (
+            <Badge variant="secondary" className="tw-text-xs tw-font-normal">
+              → {getAssignedUserDisplayName(comment.assignedUser, localizedStrings)}
+            </Badge>
+          )}
+        </div>
+        {isEditing && (
+          <div
+            role="textbox"
+            tabIndex={-1}
+            className="tw-flex tw-flex-col tw-gap-2"
+            ref={editContainerRef}
+            onKeyDownCapture={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCancelEdit();
+              } else if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (hasEditorContent(editorState)) {
+                  handleSaveEdit();
+                }
+              }
+            }}
+            onKeyDown={(e) => {
+              handleEditorKeyNavigation(e);
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+              }
+            }}
+          >
+            <Editor
+              editorSerializedState={editorState}
+              onSerializedChange={(value) => setEditorState(value)}
+            />
+            <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
+              <Button
+                size="icon"
+                onClick={handleCancelEdit}
+                variant="outline"
+                className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+              >
+                <X />
+              </Button>
+              <Button
+                size="icon"
+                onClick={handleSaveEdit}
+                className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                disabled={!hasEditorContent(editorState)}
+              >
+                <ArrowUp />
+              </Button>
+            </div>
+          </div>
+        )}
+        {!isEditing && (
+          <>
+            {comment.status === 'Resolved' && (
+              <div className="tw-text-sm tw-italic">
+                {localizedStrings['%comment_status_resolved%']}
+              </div>
+            )}
+            {comment.status === 'Todo' && (
+              <div className="tw-text-sm tw-italic">
+                {localizedStrings['%comment_status_todo%']}
+              </div>
+            )}
+            <div
+              className={cn(
+                'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
+                // tw-prose has a max width defined on it, that we choose to override
+                'tw-max-w-none',
+                {
+                  'tw-line-clamp-3': !isThreadExpanded,
+                },
+              )}
+              // The comment content is stored in HTML so it needs to be set directly. To make sure
+              // it is safe we have sanitized it first.
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+            />
+          </>
+        )}
+      </div>
+      {isThreadExpanded &&
+        canUserResolveThread &&
+        !isReply &&
+        threadStatus !== 'Resolved' &&
+        handleAddCommentToThread && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering the expand/collapse
+              handleAddCommentToThread({ threadId: comment.thread, status: 'Resolved' });
+            }}
+          >
+            <Check />
+          </Button>
+        )}
+      {dropdownContent && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}

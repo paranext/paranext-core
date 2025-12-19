@@ -12,6 +12,7 @@
       "%resources_dialog_title%": "Get Resources",
       "%resources_filterBy%": "Filter by",
       "%resources_filterInput%": "Search by name, language, type",
+      "%resources_shortNameText%": "Name",
       "%resources_fullName%": "Full Name",
       "%resources_get%": "Get",
       "%resources_getResources%": "Get resources",

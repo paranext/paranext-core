@@ -15,7 +15,6 @@ export const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkRequiresSetup%',
   '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
   '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
-  '%webView_checksSidePanel_loadingCheckResults%',
   '%webView_checksSidePanel_noCheckResults%',
   '%webView_checksSidePanel_noChecksSelected%',
   '%webView_checksSidePanel_selectChecks%',
@@ -76,10 +75,9 @@ export type ProjectOption = {
  * Gets the short and full names of a project from its ID.
  *
  * @param projectId The ID of the project to get the names of.
- * @returns An object with the short and full names of the project, or undefined if the project is
- *   not editable.
+ * @returns An object with the short and full names of the project.
  */
-export async function getProjectNames(projectId: string): Promise<ProjectOption | undefined> {
+export async function getProjectNames(projectId: string): Promise<ProjectOption> {
   const pdp = await projectDataProviders.get('platform.base', projectId);
 
   const projectShortName = await pdp.getSetting('platform.name');

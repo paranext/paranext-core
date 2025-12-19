@@ -1,18 +1,19 @@
 import {
+  DeltaOp,
+  DeltaOpInsertNoteEmbed,
   Editorial,
   EditorOptions,
   EditorRef,
   GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
   HIDDEN_NOTE_CALLER,
+  isInsertEmbedOpOfType,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CanvasWithDescription } from '@/components/demo/scripture-editor/canvas-with-description.component';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
 import {
   annotationRangeWeb1,
@@ -22,6 +23,9 @@ import {
   usjWeb,
 } from '@/components/demo/scripture-editor/usj.data';
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
+import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
+import { FootnoteEditorLocalizedStrings } from '@/components/advanced/footnote-editor/footnote-editor.types';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
@@ -85,6 +89,16 @@ export default meta;
 
 type Story = StoryObj<typeof Editorial>;
 
+/** Story type with custom flattened ViewOptions args for the Controls panel */
+type ViewOptionsStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
+  args: ViewOptions;
+  argTypes: Partial<Record<keyof ViewOptions, object>>;
+  render: (
+    args: ViewOptions,
+    context: { viewMode: string; parameters?: { docs?: { description?: { story?: string } } } },
+  ) => ReactNode;
+};
+
 export const Default: Story = {
   args: {
     defaultUsj: usjWeb,
@@ -130,6 +144,21 @@ export const RTL: Story = {
   },
 };
 
+function handleAnnotationOnClick(
+  event: globalThis.MouseEvent,
+  type: string,
+  id: string,
+  textContent: string,
+) {
+  // eslint-disable-next-line no-console
+  console.log('handleAnnotationOnClick', { event, type, id, textContent });
+}
+
+function handleAnnotationOnRemove(type: string, id: string, cause: string, textContent: string) {
+  // eslint-disable-next-line no-console
+  console.log('handleAnnotationOnRemove', { type, id, cause, textContent });
+}
+
 export const Annotated: Story = {
   render: (args) => {
     // eslint-disable-next-line no-null/no-null
@@ -138,8 +167,20 @@ export const Annotated: Story = {
     useEffect(() => {
       const timeoutId = setTimeout(() => {
         if (editorRef.current) {
-          editorRef.current.addAnnotation(annotationRangeWeb1, 'spelling', 'annotationId');
-          editorRef.current.addAnnotation(annotationRangeWeb2, 'grammar', 'abc123');
+          editorRef.current.setAnnotation(
+            annotationRangeWeb1,
+            'spelling',
+            'annotationId',
+            handleAnnotationOnClick,
+            handleAnnotationOnRemove,
+          );
+          editorRef.current.setAnnotation(
+            annotationRangeWeb2,
+            'grammar',
+            'abc123',
+            handleAnnotationOnClick,
+            handleAnnotationOnRemove,
+          );
         }
       }, 0);
       return () => clearTimeout(timeoutId);
@@ -270,111 +311,202 @@ export const CustomMarkerTrigger: Story = {
   },
 };
 
-export const MarkersView: Story = {
-  render: (args, context) => {
+const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
+  '%footnoteEditor_callerDropdown_label%': 'Footnote caller',
+  '%footnoteEditor_callerDropdown_item_generated%': 'Auto-generated',
+  '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
+  '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
+  '%footnoteEditor_callerDropdown_tooltip%': 'Footnote caller',
+  '%footnoteEditor_cancelButton_tooltip%': 'Cancel',
+  '%footnoteEditor_copyButton_tooltip%': 'Copy footnote',
+  '%footnoteEditor_noteType_crossReference_label%': 'Cross reference',
+  '%footnoteEditor_noteType_endNote_label%': 'Endnote',
+  '%footnoteEditor_noteType_footnote_label%': 'Footnote',
+  '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
+  '%footnoteEditor_noteTypeDropdown_label%': 'Type',
+  '%footnoteEditor_saveButton_tooltip%': 'Save',
+};
+
+export const FootnoteEditorView: Story = {
+  render: (args) => {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
-    // eslint-disable-next-line no-null/no-null
-    const [toolbarEndEl, setToolbarEndEl] = useState<HTMLElement | null>(null);
-    const [showMarkers, setShowMarkers] = useState(false);
 
-    const mergedOptions = useMemo(() => {
-      const base = args.options ?? {};
-      const view: ViewOptions = {
-        markerMode: showMarkers ? 'visible' : 'hidden',
+    const noteKey = useRef<string>();
+    const noteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+
+    const [popoverX, setPopoverX] = useState<number>();
+    const [popoverY, setPopoverY] = useState<number>();
+    const [popoverHeight, setPopoverHeight] = useState<number>();
+
+    const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
+
+    const viewOptions = useMemo<ViewOptions>(
+      () => ({
+        markerMode: 'hidden',
+        noteMode: 'collapsed',
         hasSpacing: true,
         isFormattedFont: true,
-      };
+      }),
+      [],
+    );
+
+    const mergedOptions = useMemo<EditorOptions>(() => {
+      const base = args.options ?? {};
       return {
         ...base,
-        view,
+        nodes: {
+          noteCallerOnClick: (
+            event,
+            noteNodeKey,
+            isCollapsed,
+            _getCaller,
+            _setCaller,
+            getNoteOps,
+          ) => {
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setPopoverX(targetRect.left);
+            setPopoverY(targetRect.top);
+            setPopoverHeight(targetRect.height);
+
+            if (isCollapsed) {
+              // (event as SyntheticEvent<)
+              if (noteKey.current) return;
+
+              // Makes sure the note op is the correct type and is defined
+              const noteOp = getNoteOps()?.at(0);
+              if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
+              noteKey.current = noteNodeKey;
+              noteOps.current = [noteOp];
+              setShowFootnoteEditor(true);
+            }
+          },
+        },
+        view: viewOptions,
       };
-    }, [args.options, showMarkers]);
+    }, [args.options, viewOptions, noteKey]);
 
-    useEffect(() => {
-      const el = editorRef.current?.toolbarEndRef?.current;
-      if (el) setToolbarEndEl(el);
-      else {
-        // Retry once on next tick in case the toolbar mounts after the ref effect
-        const id = window.setTimeout(() => {
-          const el2 = editorRef.current?.toolbarEndRef?.current;
-          if (el2) setToolbarEndEl(el2);
-        }, 0);
-        return () => window.clearTimeout(id);
+    const onEditorClose = () => {
+      noteKey.current = undefined;
+      noteOps.current = undefined;
+      setShowFootnoteEditor(false);
+    };
+
+    const onEditorSave = (newNoteOps: DeltaOp[]) => {
+      if (noteKey.current) {
+        editorRef.current?.replaceEmbedUpdate(noteKey.current, newNoteOps);
       }
-      return undefined;
-    }, [mergedOptions]);
-
-    const handleShowMarkerToggle = useCallback(() => setShowMarkers((v) => !v), []);
+      onEditorClose();
+    };
 
     return (
-      <CanvasWithDescription
-        viewMode={context.viewMode}
-        description={
-          context.parameters?.docs?.description?.story ?? context.parameters?.description
-        }
-      >
-        <Editorial {...args} options={mergedOptions} ref={editorRef} />
-        {toolbarEndEl &&
-          createPortal(
-            <button
-              type="button"
-              title="Show/hide markers"
-              aria-label="Show/hide markers"
-              aria-pressed={showMarkers}
-              className={`toolbar-item ${showMarkers ? 'active' : ''}`}
-              onClick={handleShowMarkerToggle}
-            >
-              <span className="icon pilcrow-icon" aria-hidden="true">
-                ¶
-              </span>
-            </button>,
-            toolbarEndEl,
-          )}
-      </CanvasWithDescription>
+      <div>
+        <Editorial
+          {...args}
+          options={mergedOptions}
+          ref={editorRef}
+          onScrRefChange={() => undefined}
+        />
+        <Popover open={showFootnoteEditor}>
+          <PopoverAnchor
+            className="tw-absolute"
+            style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
+          />
+          <PopoverContent className="tw-w-[500px] tw-p-[10px]">
+            <FootnoteEditor
+              noteKey={noteKey.current}
+              noteOps={noteOps.current}
+              onSave={onEditorSave}
+              onClose={onEditorClose}
+              scrRef={args.scrRef ?? defaultScrRef}
+              editorOptions={mergedOptions}
+              localizedStrings={sampleFootnoteEditorLocalizedStrings}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   },
   parameters: {
     docs: {
       description: {
         story:
-          'This story demonstrates the Markers view, which shows USFM markers inline with the ' +
-          'text. Click the **Show/hide markers** (¶) button in the editor toolbar to toggle the ' +
-          'Markers view on and off. ',
+          'This story demonstrates the use of the new footnote editor on the side of the ' +
+          ' editorial component',
       },
     },
   },
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
+    options: {
+      hasExternalUI: false,
+      markerMenuTrigger: '\\',
+    },
   },
 };
 
-export const ViewOptionsStory: Story = {
+export const EditorViewOptions: ViewOptionsStory = {
   name: 'View Options',
-  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
+  render: (args, context) => {
+    // Destructure flattened view options from args
+    const { markerMode, noteMode, hasSpacing, isFormattedFont } = args;
+
+    // Reconstruct the args with the options.view settings
+    const mergedArgs = {
+      defaultUsj: usjWeb,
+      options: {
+        hasExternalUI: true,
+        view: {
+          markerMode,
+          noteMode,
+          hasSpacing,
+          isFormattedFont,
+        },
+      },
+    };
+
+    return renderEditorialWithToolbar(mergedArgs, context, defaultScrRef);
+  },
+  argTypes: {
+    markerMode: {
+      control: { type: 'select' },
+      options: ['hidden', 'visible', 'editable'],
+      description: 'Controls how USFM markers are displayed in the editor',
+      table: { category: 'View Options' },
+    },
+    noteMode: {
+      control: { type: 'select' },
+      options: ['collapsed', 'expandInline', 'expanded'],
+      description: 'Controls how notes are displayed in the editor',
+      table: { category: 'View Options' },
+    },
+    hasSpacing: {
+      control: { type: 'boolean' },
+      description: 'Whether to add spacing between paragraphs',
+      table: { category: 'View Options' },
+    },
+    isFormattedFont: {
+      control: { type: 'boolean' },
+      description: 'Whether to use formatted font styling',
+      table: { category: 'View Options' },
+    },
+  },
   parameters: {
     docs: {
       description: {
         story:
           'Demonstrates the editor view options (marker visibility, spacing, and formatted font) ' +
-          'using USX input. Below in the **Controls** tab, try changing the **options.view** ' +
-          'values to see how they affect the editor display. Valid values for **markerMode** are ' +
-          '_"hidden"_, _"visible"_, and _"editable"_. Valid values for **noteMode** are ' +
-          '_"collapsed"_, _"expandInline"_, and _"expanded"_.',
+          'using USX input. Below in the **Controls** tab, try changing the **View Options** ' +
+          'to see how they affect the editor display.',
       },
     },
   },
   args: {
-    defaultUsj: usjWeb,
-    options: {
-      hasExternalUI: true,
-      view: {
-        markerMode: 'hidden',
-        noteMode: 'collapsed',
-        hasSpacing: true,
-        isFormattedFont: true,
-      },
-    },
+    markerMode: 'hidden',
+    noteMode: 'collapsed',
+    hasSpacing: true,
+    isFormattedFont: true,
   },
 };

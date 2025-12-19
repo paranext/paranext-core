@@ -7,17 +7,15 @@ declare module 'legacy-comment-manager' {
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { ScriptureRange } from 'platform-scripture';
-  import { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
-
-  // #region Enums
-
-  /** Possible status of a comment/note as defined in Paratext 9 */
-  export type CommentStatus = 'Unspecified' | 'Todo' | 'Done' | 'Resolved';
-
-  /** Possible types of comment/note as defined in Paratext 9 */
-  export type CommentType = 'Unspecified' | 'Normal' | 'Conflict';
-
-  // #endregion
+  import {
+    CommentStatus,
+    CommentType,
+    LegacyComment,
+    LegacyCommentThread,
+    PlatformError,
+    Prettify,
+    UnsubscriberAsync,
+  } from 'platform-bible-utils';
 
   // #region Scripture Range Types
 
@@ -148,66 +146,28 @@ declare module 'legacy-comment-manager' {
 
   // #region Legacy Types
 
-  export type LegacyComment = {
-    assignedUser?: string;
-    biblicalTermId?: string;
-    conflictType?: string;
-    contents: string;
-    contextAfter?: string;
-    contextBefore?: string;
-    date: string;
-    deleted: boolean;
-    extraHeadingInfo?: string;
-    hideInTextWindow: boolean;
-    id: string;
-    language: string;
-    replyToUser?: string;
-    selectedText?: string;
-    shared?: string;
-    startPosition: number;
-    status?: string;
-    tagAdded?: string;
-    tagRemoved?: string;
-    thread: string;
-    type?: string;
-    user: string;
-    verse?: string;
-    verseRef: string;
-  };
+  /**
+   * Represents a new comment to be created. It is a subtype of {@link LegacyComment} with some
+   * properties omitted (`id`, `user`, `date`, `thread`).Besides `contents`, all properties are
+   * optional.
+   *
+   * This is used when creating a new comment via the
+   * {@link ILegacyCommentProjectDataProvider.createComment} method.
+   */
+  export type NewLegacyComment = Prettify<
+    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread'>> & { contents: string }
+  >;
 
   /**
-   * Represents a comment thread - a collection of related comments
+   * Represents a comment to add to an existing thread. It is a subtype of {@link LegacyComment} with
+   * some properties omitted (`id`, `user`, `date`). The `thread` property is required.
    *
-   * This is the C# CommentThread type from Paratext.Data.ProjectComments
+   * This is used when adding a comment to an existing thread via the
+   * {@link ILegacyCommentProjectDataProvider.addCommentToThread} method.
    */
-  export type LegacyCommentThread = {
-    /** Thread identifier (from first comment) */
-    id: string;
-    /** All comments in this thread */
-    comments: LegacyComment[];
-    /** Thread status (aggregated from most recent non-Unspecified comment) */
-    status: CommentStatus;
-    /** Thread type (from first comment) */
-    type: CommentType;
-    /** User to whom the thread is assigned */
-    assignedUser: string;
-    /** User to reply to */
-    replyToUser: string;
-    /** Last modified date (ISO 8601 string) */
-    modifiedDate: string;
-    /** Scripture reference for this thread */
-    verseRef: string;
-    /** Name of the context scripture text */
-    contextScrTextName?: string;
-    /** Whether this is a spelling note */
-    isSpellingNote: boolean;
-    /** Whether this is a back translation note */
-    isBTNote: boolean;
-    /** Whether this is a consultant note */
-    isConsultantNote: boolean;
-    /** Biblical term ID if this is a biblical term note */
-    biblicalTermId?: string;
-  };
+  export type LegacyCommentReply = Prettify<
+    Partial<Omit<LegacyComment, 'id' | 'user' | 'date'>> & { thread: string }
+  >;
 
   // #endregion
 
@@ -257,17 +217,31 @@ declare module 'legacy-comment-manager' {
       getCommentThreads(selector?: LegacyCommentThreadSelector): Promise<LegacyCommentThread[]>;
 
       /**
-       * Creates a new comment
+       * Creates a new comment (which will automatically also create a new thread). Use
+       * `addCommentToThread` to add a comment to an existing thread.
        *
-       * @param comment Comment data to create a new comment through ParatextData. 'id', 'user', and
-       *   'date' properties will be auto-generated and should not be provided. If no 'thread' ID is
-       *   provided, a new threadId will also be auto-generated.
+       * @param comment Comment data to create a new comment through ParatextData. Besides
+       *   `contents`, all properties are optional, and the 'thread', 'id', 'user', and 'date'
+       *   properties are omitted as they will be auto-generated and should not be provided.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
-       * @throws If no valid comment content is provided, or when trying to add a comment to a
-       *   non-existing thread
        */
-      createComment(comment: Omit<LegacyComment, 'id' | 'user' | 'date'>): Promise<string>;
+      createComment(comment: NewLegacyComment): Promise<string>;
+
+      /**
+       * Adds a comment to an existing thread. The thread must already exist.
+       *
+       * Can also be used to modify thread-level properties (status, assignedUser) without adding
+       * comment content by omitting the `contents` property.
+       *
+       * @param comment Comment data. Must have a valid `thread` ID that exists.
+       * @returns Promise that resolves to the auto-generated comment ID (format:
+       *   "threadId/userName/date")
+       * @throws If the thread ID is missing or doesn't exist
+       * @throws If trying to resolve/unresolve without permission
+       * @throws If the assignedUser is not a valid assignable user for this project
+       */
+      addCommentToThread(comment: LegacyCommentReply): Promise<string>;
 
       /**
        * Deletes a comment by its ID
@@ -297,6 +271,62 @@ declare module 'legacy-comment-manager' {
         updatedContent: string,
       ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
 
+      /**
+       * Finds the list of users that can be assigned to comment threads in this project
+       *
+       * @returns Promise that resolves to an array of usernames that can be assigned to threads.
+       *   Includes special values: "Team" for team assignment, and "" (empty string) for
+       *   unassigned.
+       */
+      findAssignableUsers(): Promise<string[]>;
+
+      // #region Permission Check Functions
+
+      /**
+       * Determines if the current user can create new comment threads in this project
+       *
+       * @param allowInSba Allow creating comments in Study Bible Additions projects (default:
+       *   false)
+       * @returns Promise that resolves to true if the user can create comments, false otherwise
+       */
+      canUserCreateComments(allowInSba?: boolean): Promise<boolean>;
+
+      /**
+       * Determines if the current user can add comments to existing threads in this project. This
+       * is slightly different from canUserCreateComments - it allows adding to threads in resource
+       * projects that aren't global note types.
+       *
+       * @returns Promise that resolves to true if the user can add comments to threads, false
+       *   otherwise
+       */
+      canUserAddCommentToThread(): Promise<boolean>;
+
+      /**
+       * Determines if the current user can change the assigned user on a specific thread
+       *
+       * @param threadId The ID of the thread to check
+       * @returns Promise that resolves to true if the user can assign the thread, false otherwise
+       */
+      canUserAssignThread(threadId: string): Promise<boolean>;
+
+      /**
+       * Determines if the current user can resolve or re-open a specific thread
+       *
+       * @param threadId The ID of the thread to check
+       * @returns Promise that resolves to true if the user can resolve the thread, false otherwise
+       */
+      canUserResolveThread(threadId: string): Promise<boolean>;
+
+      /**
+       * Determines if the current user can edit or delete a specific comment. In Paratext 9, edit
+       * and delete have identical permission requirements.
+       *
+       * @param commentId The ID of the comment to check
+       * @returns Promise that resolves to true if the user can edit or delete the comment, false
+       *   otherwise
+       */
+      canUserEditOrDeleteComment(commentId: string): Promise<boolean>;
+
       // #endregion
     };
 
@@ -308,5 +338,11 @@ declare module 'papi-shared-types' {
 
   export interface ProjectDataProviderInterfaces {
     'legacyCommentManager.comments': ILegacyCommentProjectDataProvider;
+  }
+
+  export interface CommandHandlers {
+    'legacyCommentManager.openCommentList': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 }

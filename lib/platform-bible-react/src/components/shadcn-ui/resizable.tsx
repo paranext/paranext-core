@@ -4,6 +4,12 @@ import * as ResizablePrimitive from 'react-resizable-panels';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * Accessible resizable panel groups and layouts with keyboard support. This component is built on
+ * react-resizable-panels and styled with Shadcn UI. See Shadcn UI documentation:
+ * https://ui.shadcn.com/docs/components/resizable See react-resizable-panels documentation:
+ * https://github.com/bvaughn/react-resizable-panels/tree/main/packages/react-resizable-panels
+ */
 function ResizablePanelGroup({
   className,
   ...props
@@ -19,8 +25,10 @@ function ResizablePanelGroup({
   );
 }
 
+/** @inheritdoc ResizablePanelGroup */
 const ResizablePanel = ResizablePrimitive.Panel;
 
+/** @inheritdoc ResizablePanelGroup */
 function ResizableHandle({
   withHandle,
   className,

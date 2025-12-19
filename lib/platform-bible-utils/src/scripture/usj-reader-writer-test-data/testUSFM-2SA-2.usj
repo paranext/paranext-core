@@ -1,0 +1,264 @@
+{
+  "type": "USJ",
+  "version": "3.0",
+  "content": [
+    {
+      "type": "chapter",
+      "marker": "c",
+      "number": "2",
+      "sid": " 2"
+    },
+    {
+      "type": "char",
+      "marker": "ca",
+      "closed": "false",
+      "content": ["2 ca"]
+    },
+    {
+      "type": "para",
+      "marker": "cp",
+      "content": [
+        "2 cp ",
+        {
+          "type": "note",
+          "marker": "f",
+          "caller": "+",
+          "content": [
+            {
+              "type": "char",
+              "marker": "fr",
+              "closed": "false",
+              "content": ["2.0 "]
+            },
+            {
+              "type": "char",
+              "marker": "ft",
+              "closed": "false",
+              "content": [
+                "For some reason, Paratext's backslash menu allows you to insert a note and nothing else in a cp marker. You can add "
+              ]
+            },
+            {
+              "type": "char",
+              "marker": "wj",
+              "content": ["character markers"]
+            },
+            " inside the note."
+          ]
+        },
+        " more ",
+        {
+          "type": "char",
+          "marker": "wj",
+          "content": ["cp"]
+        },
+        " text"
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "1",
+          "sid": ""
+        },
+        "Notice that this chapter's attribute marker ca does not apply to the chapter as the altnumber attribute because the ca is not closed and therefore has the closed=\"true\" attribute. Because ca is not translated to an attribute, attribute marker cp also follows suit and is not translated into pubnumber. This prior separation of cp from the chapter marker allows Paratext 9.5 to understand that it should make cp an independent marker that may have other marker contents in it. But see chapter 3 in which Paratext 9.5 fails to recognize that cp should be an independent marker."
+      ]
+    },
+    {
+      "type": "para",
+      "marker": "p",
+      "content": [
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "2",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "3",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "4",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "5",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "6",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "7",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "8",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "9",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "10",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "11",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "12",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "13",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "14",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "15",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "16",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "17",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "18",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "19",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "20",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "21",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "22",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "23",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "24",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "25",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "26",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "27",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "28",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "29",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "30",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "31",
+          "sid": ""
+        },
+        {
+          "type": "verse",
+          "marker": "v",
+          "number": "32",
+          "sid": ""
+        }
+      ]
+    }
+  ]
+}

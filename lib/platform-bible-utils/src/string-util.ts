@@ -833,6 +833,36 @@ export function toKebabCase(input: string): string {
   return result;
 }
 
+/**
+ * Shortens text by splitting by space, removing tokens from the middle and replacing them with
+ * `[...]`
+ *
+ * @param text The input text
+ * @param numberOfTokensToKeepBeforeAndAfter Count of space separated tokens to keep at the
+ *   beginning and end of the text
+ * @returns The full text if shorter than tokens to keep for beginning plus end, otherwise the first
+ *   x tokens, followed by `[...]` and the last x tokens
+ */
+export function collapseMiddleWords(
+  text: string,
+  numberOfTokensToKeepBeforeAndAfter: number,
+): string {
+  const tokens = text.split(/\s+/);
+
+  // If the text is too short to truncate, return as-is
+  if (
+    tokens.length <= numberOfTokensToKeepBeforeAndAfter * 2 ||
+    numberOfTokensToKeepBeforeAndAfter < 1
+  ) {
+    return text;
+  }
+
+  const startTokens = tokens.slice(0, numberOfTokensToKeepBeforeAndAfter);
+  const endTokens = tokens.slice(-numberOfTokensToKeepBeforeAndAfter);
+
+  return [...startTokens, `[...]`, ...endTokens].join(' ');
+}
+
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingStringUtils = {
   indexOfClosestClosingCurlyBrace,

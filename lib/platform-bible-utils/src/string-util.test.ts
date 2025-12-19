@@ -23,6 +23,7 @@ import {
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
   toKebabCase,
+  collapseMiddleWords,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -1126,5 +1127,30 @@ describe('toKebabCase', () => {
     expect(toKebabCase('Person20Address')).toEqual('person20-address');
     expect(toKebabCase('UserAPI2.0Endpoint')).toEqual('user-api2.0-endpoint');
     expect(toKebabCase('CdÁb')).toEqual('cd-áb');
+  });
+});
+
+describe('truncateOmittingMiddleWords', () => {
+  const unmodifiedText = 'this is some text';
+  it('no truncation', () => {
+    expect(collapseMiddleWords(unmodifiedText, 2)).toEqual(unmodifiedText);
+    expect(collapseMiddleWords('', 2)).toEqual('');
+    expect(collapseMiddleWords('this', 2)).toEqual('this');
+    expect(collapseMiddleWords(unmodifiedText, 0)).toEqual(unmodifiedText);
+  });
+
+  it('negative words to keep', () => {
+    expect(collapseMiddleWords(unmodifiedText, -1)).toEqual(unmodifiedText);
+    expect(collapseMiddleWords(unmodifiedText, -100)).toEqual(unmodifiedText);
+  });
+
+  it('truncated', () => {
+    expect(collapseMiddleWords(unmodifiedText, 1)).toEqual('this [...] text');
+    expect(collapseMiddleWords('this is some unbalanced text', 2)).toEqual(
+      'this is [...] unbalanced text',
+    );
+    expect(
+      collapseMiddleWords('- ? lorem ipsum dolor sit amed 0 0 - hi 0 1 2 3 4 5 6 7', 7),
+    ).toEqual('- ? lorem ipsum dolor sit amed [...] 1 2 3 4 5 6 7');
   });
 });

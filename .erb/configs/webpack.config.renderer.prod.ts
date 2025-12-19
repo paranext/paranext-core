@@ -34,6 +34,18 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  // Enable persistent caching for faster rebuilds
+  cache: {
+    type: 'filesystem',
+    cacheDirectory: path.join(webpackPaths.rootPath, 'node_modules', '.cache', 'webpack-renderer'),
+    buildDependencies: {
+      config: [__filename],
+      tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+    },
+    compression: 'gzip',
+    maxMemoryGenerations: 5,
+  },
+
   module: {
     rules: [
       {

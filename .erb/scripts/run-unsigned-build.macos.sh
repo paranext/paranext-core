@@ -37,6 +37,9 @@ echo "Starting app installation process..."
 # Define variables
 TEMP_DIR="/tmp/app_install_$$"
 
+# Ensure temp directory is cleaned up on exit (both success and error)
+trap 'if [ -d "$TEMP_DIR" ]; then rm -rf "$TEMP_DIR"; fi' EXIT
+
 # Find the zip file based on provided path or default
 SEARCH_PATH="${1:-$HOME/Downloads}"  # Use first argument or default to ~/Downloads
 
@@ -56,19 +59,67 @@ if [ -f "$SEARCH_PATH" ]; then
 elif [ -d "$SEARCH_PATH" ]; then
     # Path is a directory - search for dmg or app-macos*.zip files
     echo "Looking for DMG or app-macos*.zip files in $SEARCH_PATH..."
-    DMG_FILE=$(ls -t "$SEARCH_PATH"/*.dmg 2>/dev/null | head -1)
-    if [ -z "$DMG_FILE" ]; then
-        APP_ARCHIVE=$(ls -t "$SEARCH_PATH/app-macos"*.zip 2>/dev/null | head -1)
+
+    # First, look for Platform.Bible or Paratext-specific files (prioritize these)
+    PLATFORM_DMG=$(ls -t "$SEARCH_PATH"/*Platform*.dmg "$SEARCH_PATH"/*Paratext*.dmg 2>/dev/null | head -1)
+    PLATFORM_ZIP=$(ls -t "$SEARCH_PATH"/app-macos*.zip 2>/dev/null | head -1)
+
+    # If we found Platform-specific files, choose the most recent one
+    if [ -n "$PLATFORM_DMG" ] || [ -n "$PLATFORM_ZIP" ]; then
+        # Compare timestamps of Platform-specific files
+        if [ -n "$PLATFORM_DMG" ] && [ -n "$PLATFORM_ZIP" ]; then
+            # Both exist, choose the newer one
+            if [ "$PLATFORM_DMG" -nt "$PLATFORM_ZIP" ]; then
+                DMG_FILE="$PLATFORM_DMG"
+                echo "Found most recent Platform-specific DMG file: $(basename "$DMG_FILE")"
+            else
+                APP_ARCHIVE="$PLATFORM_ZIP"
+                echo "Found most recent Platform-specific zip file: $(basename "$APP_ARCHIVE")"
+            fi
+        elif [ -n "$PLATFORM_DMG" ]; then
+            DMG_FILE="$PLATFORM_DMG"
+            echo "Found Platform-specific DMG file: $(basename "$DMG_FILE")"
+        else
+            APP_ARCHIVE="$PLATFORM_ZIP"
+            echo "Found Platform-specific zip file: $(basename "$APP_ARCHIVE")"
+        fi
+    else
+        # No Platform-specific files found, fall back to generic search
+        echo "No Platform-specific files found, searching for any DMG or app-macos*.zip files..."
+
+        # Get all matching files and find the most recent
+        ALL_FILES=()
+        while IFS= read -r -d '' file; do
+            ALL_FILES+=("$file")
+        done < <(find "$SEARCH_PATH" -maxdepth 1 \( -name "*.dmg" -o -name "app-macos*.zip" \) -print0 2>/dev/null | sort -z)
+
+        if [ ${#ALL_FILES[@]} -eq 0 ]; then
+            echo "Error: No app-macos*.zip or *.dmg file found in $SEARCH_PATH!"
+            echo "Available files in $SEARCH_PATH:"
+            ls -la "$SEARCH_PATH/"*.{zip,dmg} 2>/dev/null || echo "No zip or dmg files found"
+            exit 1
+        fi
+
+        # Find the most recent file among all matches
+        NEWEST_FILE=""
+        for file in "${ALL_FILES[@]}"; do
+            if [ -z "$NEWEST_FILE" ] || [ "$file" -nt "$NEWEST_FILE" ]; then
+                NEWEST_FILE="$file"
+            fi
+        done
+
+        if [[ "$NEWEST_FILE" == *.dmg ]]; then
+            DMG_FILE="$NEWEST_FILE"
+            echo "Found most recent DMG file: $(basename "$DMG_FILE")"
+        else
+            APP_ARCHIVE="$NEWEST_FILE"
+            echo "Found most recent zip file: $(basename "$APP_ARCHIVE")"
+        fi
     fi
 
-    if [ -n "$DMG_FILE" ]; then
-        echo "Found most recent DMG file: $(basename "$DMG_FILE")"
-    elif [ -n "$APP_ARCHIVE" ]; then
-        echo "Found most recent zip file: $(basename "$APP_ARCHIVE")"
-    else
-        echo "Error: No app-macos*.zip or *.dmg file found in $SEARCH_PATH!"
-        echo "Available files in $SEARCH_PATH:"
-        ls -la "$SEARCH_PATH/"*.{zip,dmg} 2>/dev/null || echo "No zip or dmg files found"
+    # Validate that we found a file
+    if [ -z "$DMG_FILE" ] && [ -z "$APP_ARCHIVE" ]; then
+        echo "Error: No suitable file found in $SEARCH_PATH!"
         exit 1
     fi
 else
@@ -85,7 +136,6 @@ if [ -n "$APP_ARCHIVE" ]; then
     DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" -type f | head -1)
     if [ -z "$DMG_FILE" ]; then
         echo "Error: No DMG found inside zip archive"
-        rm -rf "$TEMP_DIR"
         exit 1
     fi
 fi
@@ -142,24 +192,11 @@ cp -R "$APP_PATH" "/Applications/"
 echo "Unmounting DMG..."
 hdiutil detach "$MOUNT_POINT" -quiet
 
-# Clean up temporary directory
-rm -rf "$TEMP_DIR"
-
 # Remove quarantine attribute to avoid Gatekeeper issues
 echo "Removing quarantine attribute..."
 xattr -dr com.apple.quarantine "/Applications/$APP_NAME" 2>/dev/null || true
 
-# Always re-sign the app to ensure all components have a matching signature
-echo "Code signing the application (force, deep)..."
-codesign --deep --force --sign - "/Applications/$APP_NAME"
-if [ $? -eq 0 ]; then
-    echo "✅ Code signing successful!"
-else
-    echo "❌ Code signing failed!"
-    exit 1
-fi
-
-# Explicitly sign all .dylib and .so files in dotnet (sometimes --deep misses these)
+# Explicitly sign all .dylib and .so files in dotnet before signing the main app (sometimes --deep misses these)
 DOTNET_DIR="/Applications/$APP_NAME/Contents/Resources/dotnet"
 if [ -d "$DOTNET_DIR" ]; then
     echo "Explicitly signing all binaries in $DOTNET_DIR..."
@@ -170,6 +207,32 @@ if [ -d "$DOTNET_DIR" ]; then
         fi
     done
 fi
+
+# Sign Python framework components if they exist
+PYTHON_DIRS=("/Applications/$APP_NAME/Contents/Resources/hg-universal" "/Applications/$APP_NAME/Contents/Frameworks")
+for PYTHON_DIR in "${PYTHON_DIRS[@]}"; do
+    if [ -d "$PYTHON_DIR" ]; then
+        echo "Signing Python components in $PYTHON_DIR..."
+        # Sign Python framework binaries
+        find "$PYTHON_DIR" -name "Python" -type f | while read PYTHON_BIN; do
+            echo "Signing Python binary: $PYTHON_BIN"
+            codesign --force --sign - "$PYTHON_BIN" 2>/dev/null || echo "Warning: Failed to sign $PYTHON_BIN"
+        done
+        # Sign Python .dylib and .so files
+        find "$PYTHON_DIR" -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.framework" \) | while read PYTHON_LIB; do
+            echo "Signing Python library: $PYTHON_LIB"
+            codesign --force --sign - "$PYTHON_LIB" 2>/dev/null || echo "Warning: Failed to sign $PYTHON_LIB"
+        done
+        # Sign any executables in the Python directory
+        find "$PYTHON_DIR" -type f -perm +111 | while read PYTHON_EXEC; do
+            # Skip if it's already been signed above
+            if [[ "$PYTHON_EXEC" != *.dylib ]] && [[ "$PYTHON_EXEC" != *.so ]] && [[ "$PYTHON_EXEC" != *Python ]]; then
+                echo "Signing Python executable: $PYTHON_EXEC"
+                codesign --force --sign - "$PYTHON_EXEC" 2>/dev/null || echo "Warning: Failed to sign $PYTHON_EXEC"
+            fi
+        done
+    fi
+done
 
 # Verify critical dotnet binaries are properly signed
 echo "Verifying critical dotnet binaries..."
@@ -185,10 +248,31 @@ for lib in "${CRITICAL_LIBS[@]}"; do
     fi
 done
 
+# Sign the main app bundle AFTER signing all internal components
+echo "Code signing the main application bundle (force, deep)..."
+codesign --deep --force --sign - "/Applications/$APP_NAME"
+if [ $? -eq 0 ]; then
+    echo "✅ Main app code signing successful!"
+else
+    echo "❌ Main app code signing failed!"
+    exit 1
+fi
+
 
 # Add to Gatekeeper approval (this will prompt for admin password if needed)
 echo "Adding app to Gatekeeper approval..."
-spctl --add "/Applications/$APP_NAME" 2>/dev/null || echo "Note: Could not add to spctl (may require admin privileges)"
+if spctl --add "/Applications/$APP_NAME" 2>/dev/null; then
+    echo "✅ Successfully added app to Gatekeeper approval"
+else
+    echo "⚠️  Could not add to spctl - trying alternative approach..."
+    # Try to enable the app in Gatekeeper by assessing it first
+    if spctl --assess --type execute "/Applications/$APP_NAME" 2>/dev/null; then
+        echo "✅ App is already approved by Gatekeeper"
+    else
+        echo "ℹ️  App not in Gatekeeper database, but this is normal for unsigned apps"
+        echo "ℹ️  The app should still launch successfully due to code signing"
+    fi
+fi
 
 # Verify the app is properly installed and signed
 if [ -d "/Applications/$APP_NAME" ]; then

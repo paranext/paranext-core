@@ -1,0 +1,61 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Interactions" />
+
+# Application wide interaction patterns
+
+Consistent interaction patterns are important for users to feel comfortable and confident while using the application.
+
+## Menus
+Platform.Bible embraces the following menu patterns
+
+| Menu          | Description      | Use |
+| ------------- | ---------------- | --- |
+| Main application menu | A [Menubar](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/menubar.stories.tsx) on the application title bar's start side, that has individual dropdown menus per menu category. This menu hosts all menu items that apply to the application as a whole. | in use |
+| Tab menu | A [Dropdown menu](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/dropdown-menu.stories.tsx) under a [Hamburger](https://lucide.dev/icons/menu) icon button at the start side of the [Tab Toolbar](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/tab-navigation/toolbar.stories.tsx). This menu hosts all cross-launch and insert related menu entries that relate to the current tab. | in use |
+| Tab view options menu | A [Dropdown menu](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/dropdown-menu.stories.tsx) under a [Vertical Ellipsis](https://lucide.dev/icons/ellipsis-vertical) button on the end side of the [Tab Toolbar](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/tab-navigation/toolbar.stories.tsx). This menu host options to configure how the current tab should display. | planned |
+| Context menu | A [Context menu](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/shadcn-ui/context-menu.stories.tsx), that launches on right click and offers actions in the context of the text or ui part under the cursor | partially used |
+| Text overlay menu | Actions offered next to text selection, without the need to do another right click or the like | idea |
+
+## Tab navigation
+Tabs can be navigated using keyboard shortcuts:
+- `Ctrl + Tab` to move to the next tab
+- `Ctrl + Shift + Tab` to move to the previous tab
+
+New Tabs can be opened by
+- Pressing the `+` button. This will bring up the `New Tab` dialog on the newly opened tab.
+- Pressing the Home button or selecting any option from the menu that launches a specific new tab.
+
+If more tabs are present they will overflow into a menu accessible on hover of the `↕` button.
+
+## Layout
+Tabs can be rearranged by dragging and dropping them into the desired position.
+
+Tabs can be floated by right clicking on the tab header and selecting `Float Tab` from the context menu.
+
+Floating tabs can be docked back into the main window by dragging and dropping them back into the tab header bar.
+
+## Scripture reference selection
+Scripture reference selection and displaying is done using the [Book-Chapter-Verse (BCV) control](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/book-chapter-control.stories.tsx). Scripture references can be entered via mouse or keyboard. There is
+- a global BCV control on the application title bar - always showing all books
+- an in-tab BCV control on the tab toolbar of every tab that holds Scripture or content relating to some part of Scripture - showing only books of the project in the respective tab
+
+All BCV controls can be used for navigation. Tabs inside Platform.Bible that hold or relate to Scripture content automatically follow the selected new scriture reference.
+
+Scroll groups can be selected via the [Scroll Group Selector](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/stories/advanced/scroll-group-selector.stories.tsx) on the end side of the tab toolbar, respectively in the center of the application title bar. When doing this on a tab, the respective tab gets disconnected from the original scroll group and now scrolls with other tabs assigned to the respective scroll group. When doing this on the application title bar, only the scroll group selection of the global BCV control switches.
+
+In future scroll groups should be synced with other applications, like Paratext 9 and Logos.
+
+## Scripture Editor ↔ lists
+Following diagram shows how the Scripture Editor interacts with lists of items in projects / resources or list of Scripture pieces.
+Examples: Comments, Check Results, Find Results, Footnotes, Occurrences, etc.
+
+Interactions exist in both directions:
+- from Scripture Editor: `on Scripture reference change`, `on annotation or caller selection`, `on command / shortcut key press`
+- from list: `on hover`, `on single click`, `on double click`, `on reference click`
+and respective keyboard interactions
+
+<iframe src="https://embed.figma.com/board/qAjw7U4EcXbi7UDpMwYGsD/Design-System-Content?node-id=1-2&t=QZDawBfx1n2dOTjC-4&embed-host=paratext-design-system" width="100%" height="400" style={{border: "none"}}>
+  Your browser does not support iframes.
+</iframe>
+

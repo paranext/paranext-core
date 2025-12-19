@@ -18,6 +18,12 @@ export {
 } from './components/advanced/recent-searches.component';
 export type { RecentSearchesProps } from './components/advanced/recent-searches.component';
 export type { BookSelectorLocalizedStrings } from './components/advanced/book-selector.component';
+export type {
+  CommentListProps,
+  AddCommentToThreadOptions,
+} from './components/advanced/comment-list/comment-list.types';
+export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
+export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -46,6 +52,15 @@ export type {
   FootnoteLayout,
   FootnoteListProps,
 } from './components/advanced/footnotes/footnotes.types';
+export {
+  default as FootnoteEditor,
+  type FootnoteEditorProps,
+} from './components/advanced/footnote-editor/footnote-editor.component';
+export {
+  FOOTNOTE_EDITOR_STRING_KEYS,
+  type FootnoteEditorLocalizedStrings,
+  type FootnoteCallerType,
+} from './components/advanced/footnote-editor/footnote-editor.types';
 export { default as FootnoteItem } from './components/advanced/footnotes/footnote-item.component';
 export { default as FootnoteList } from './components/advanced/footnotes/footnote-list.component';
 export {
@@ -69,6 +84,12 @@ export {
   inventoryCountColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
+export { MarkerMenu, MARKER_MENU_STRING_KEYS } from './components/advanced/marker-menu.component';
+export type {
+  MarkerMenuProps,
+  MarkerMenuItem,
+  MarkerMenuLocalizedStrings,
+} from './components/advanced/marker-menu.component';
 export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
@@ -127,6 +148,7 @@ export type {
   ComboBoxLabelOption,
   ComboBoxProps,
   ComboBoxOption,
+  ComboBoxGroup,
 } from './components/basics/combo-box.component';
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';

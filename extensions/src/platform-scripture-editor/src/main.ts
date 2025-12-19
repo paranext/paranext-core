@@ -6,6 +6,7 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   formatReplacementString,
   getErrorMessage,
@@ -13,6 +14,8 @@ import {
   LanguageStrings,
   LocalizeKey,
   serialize,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjNodeAndDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -20,11 +23,12 @@ import {
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
+  ScriptureRange,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provider-engine.model';
-import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
-import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
+import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
+import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -40,6 +44,119 @@ interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   isReadOnly: boolean;
   options?: OpenEditorOptions;
 }
+
+// #region selectRange helper functions
+
+/**
+ * Figure out the location properties on a {@link ScriptureRange} `start` or `end`. Takes the complex
+ * disparate USFM and USJ location types and returns the properties in them
+ *
+ * @param rangeLocation {@link ScriptureRange} `start` or `end`
+ * @param baseVerseRef Verse reference to start with. In some cases, only certain properties on this
+ *   verse reference will be changed
+ * @returns Location properties found in `rangeLocation`
+ */
+function determineLocationProperties(
+  rangeLocation: ScriptureRange['start'],
+  baseVerseRef: SerializedVerseRef,
+): {
+  /** Empty string if not found */
+  jsonPath: string;
+  /** `undefined` if not found */
+  jsonPathOffset: number | undefined;
+  verseRef: SerializedVerseRef;
+  /** `undefined` if not found */
+  verseOffset: number | undefined;
+} {
+  let jsonPath = '';
+  let jsonPathOffset: number | undefined;
+  let verseRef = { ...baseVerseRef };
+  let verseOffset: number | undefined;
+
+  if ('jsonPath' in rangeLocation || 'documentLocation' in rangeLocation) {
+    const chapterLocation =
+      UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(rangeLocation);
+    verseRef.book = chapterLocation.verseRef.book;
+    verseRef.chapterNum = chapterLocation.verseRef.chapterNum;
+    jsonPath = chapterLocation.documentLocation.jsonPath;
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(chapterLocation.documentLocation))
+      jsonPathOffset = chapterLocation.documentLocation.offset;
+  } else {
+    const startVerseLocation =
+      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(rangeLocation);
+    verseRef = startVerseLocation.verseRef;
+    verseOffset = startVerseLocation.offset;
+  }
+
+  return {
+    jsonPath,
+    jsonPathOffset,
+    verseRef,
+    verseOffset,
+  };
+}
+
+/**
+ * Calculate the USJ JSONPath and offset within it to a text location from USFM verse location
+ * information if the USJ location information is not already determined
+ *
+ * @param usjRW {@link UsjReaderWriter} to use for getting the USJ location info
+ * @param verseRef Which verse the location is in
+ * @param verseOffset The offset in USFM space from the start of the verse
+ * @param currentJsonPath Current value of the JSONPath for this location. Empty string if not
+ *   determined yet
+ * @param currentJsonPathOffset Current value of the USJ offset in the location. `undefined` if not
+ *   determined yet
+ * @returns USJ location properties
+ */
+function calculateUsjLocationProperties(
+  usjRW: UsjReaderWriter,
+  verseRef: SerializedVerseRef,
+  verseOffset: number | undefined,
+  currentJsonPath: string,
+  currentJsonPathOffset: number | undefined,
+): {
+  jsonPath: string;
+  jsonPathOffset: number;
+  usjContentLocation: UsjNodeAndDocumentLocation | undefined;
+} {
+  let jsonPath = currentJsonPath;
+  let jsonPathOffset = currentJsonPathOffset;
+
+  // Convert the UsfmVerseLocation to get jsonPath and offset from them
+  let usjContentLocation: UsjNodeAndDocumentLocation | undefined;
+  if (!jsonPath) {
+    usjContentLocation = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
+      verseRef,
+      offset: verseOffset,
+    });
+
+    jsonPath = usjContentLocation.documentLocation.jsonPath;
+    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(usjContentLocation.documentLocation)) {
+      jsonPathOffset = usjContentLocation.documentLocation.offset;
+    }
+  }
+
+  // If we haven't found JSONPath offsets, find the nearest text location. We only need to do
+  // this because the editor does not support the full `UsjDocumentLocation`; once it is
+  // updated to support them, we can stop tracking jsonPathOffsets
+  if (jsonPathOffset === undefined) {
+    usjContentLocation = usjContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(jsonPath);
+    const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(usjContentLocation, '');
+    if (nextTextContentLocation) {
+      jsonPath = nextTextContentLocation.documentLocation.jsonPath;
+      jsonPathOffset = nextTextContentLocation.documentLocation.offset;
+    } else
+      // Just put the offset at the start of the marker pointed to by the jsonPath and
+      // hope that's good enough for now. This probably won't happen much, and this case
+      // will not exist once the editor is updated
+      jsonPathOffset = 0;
+  }
+
+  return { jsonPath, jsonPathOffset, usjContentLocation };
+}
+
+// #endregion selectRange helper functions
 
 /**
  * Get localized strings for creating the editor WebView tab
@@ -63,7 +180,7 @@ async function openPlatformScriptureEditor(
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
-  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(false, projectId, existingTabIdToReplace, options);
 }
 
@@ -73,7 +190,7 @@ async function openPlatformResourceViewer(
   options?: OpenEditorOptions,
   existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
-  // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
+  // The first argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
   return open(true, projectId, existingTabIdToReplace, options);
 }
 
@@ -185,7 +302,97 @@ async function open(
   return undefined;
 }
 
-/** Simple web view provider that provides Resource web views when papi requests them */
+async function changeScriptureView(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.changeScriptureView();
+}
+
+async function toggleFootnotesPane(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.toggleFootnotesPaneVisibility();
+}
+
+async function changeFootnotesPaneLocation(webViewId: string | undefined): Promise<void> {
+  if (!webViewId) {
+    logger.debug('No editor WebView ID!');
+    return;
+  }
+
+  const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (!webViewDefinition) {
+    logger.debug(`No webViewDefinition found for ${webViewId}!`);
+    return;
+  }
+
+  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+    logger.debug(`WebView is not a Scripture editor!`);
+    return;
+  }
+
+  const controller = await papi.webViews.getWebViewController(
+    scriptureEditorWebViewType,
+    webViewId,
+  );
+
+  if (!controller) {
+    logger.debug(`WebView controller could not be obtained for ${webViewId}!`);
+    return;
+  }
+
+  await controller.changeFootnotesPaneLocation();
+}
+
+/** Simple WebView provider so PAPI can get a Scripture Editor upon request */
 class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
   constructor() {
     super(scriptureEditorWebViewType);
@@ -197,7 +404,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== scriptureEditorWebViewType)
       throw new Error(
-        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
@@ -260,134 +467,118 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async selectRange(range) {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          let targetScrRef = { book: '', chapterNum: 0, verseNum: 0 };
-
-          // Temporarily disabled setting specific range for USFM ranges until we fix the offset
-          // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
-          let skipRange = false;
-
-          // Figure out the book and chapter
-          if ('jsonPath' in range.start && 'jsonPath' in range.end) {
-            // Use the chapter and verse number from the range
-            if (
-              range.start.book !== range.end.book ||
-              range.start.chapterNum !== range.end.chapterNum
-            ) {
-              throw new Error(
-                'Could not get targetScrRef from jsonPaths! Selection range cannot (yet) span chapters or books',
-              );
-            }
-
-            targetScrRef.book = range.start.book;
-            targetScrRef.chapterNum = range.start.chapterNum;
-          } else {
-            // At least one range location is USFM specification. Will convert to USJ for jsonPath
-            skipRange = true;
-
-            if (
-              'scrRef' in range.start &&
-              'scrRef' in range.end &&
-              (range.start.scrRef.book !== range.end.scrRef.book ||
-                range.start.scrRef.chapterNum !== range.end.scrRef.chapterNum)
-            ) {
-              throw new Error(
-                'Could not get targetScrRef from scrRefs! Selection range cannot (yet) span chapters or books',
-              );
-            }
-
-            // Establish the book and chapter we're working with by what the range says
-            if ('scrRef' in range.start) {
-              targetScrRef = range.start.scrRef;
-            } else if ('scrRef' in range.end) {
-              targetScrRef = range.end.scrRef;
-            } else
-              throw new Error('Could not determine target scrRef to convert scrRef to jsonPath');
-          }
-
-          // Get the USJ chapter we're on so we can determine some things
-          const pdp = await papi.projectDataProviders.get(
-            'platformScripture.USJ_Chapter',
-            currentWebViewDefinition.projectId,
-          );
-          const usjChapter = await pdp.getChapterUSJ(targetScrRef);
-
-          if (!usjChapter)
-            throw new Error(
-              `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(targetScrRef)} is undefined!`,
-            );
-
-          const usjRW = new UsjReaderWriter(usjChapter);
-
-          // Convert the range now - easy conversion if already jsonPath, but need to run conversion
-          // if in USFM verse ref
+          // Figure out the information needed to make the USJ range to give to the editor:
+          // book, chapter, start jsonPath and offset, and end jsonPath and offset.
+          // Also need to get the verse to set the scroll group verse to because the editor doesn't
+          // do it automatically right now
+          let startVerseRef = { book: '', chapterNum: 0, verseNum: -1 };
           let startJsonPath = '';
           let endJsonPath = '';
-          // Assume offset is 0 if not provided
-          let startOffset = 0;
-          let endOffset = 0;
+          // Start and end offsets based on the USJ JSONPath location
+          let startJsonPathOffset: number | undefined;
+          let endJsonPathOffset: number | undefined;
 
-          if (!skipRange) {
-            if ('scrRef' in range.start) {
-              const startContentLocation = usjRW.verseRefToUsjContentLocation(
-                range.start.scrRef,
-                range.start.offset,
-              );
-              startJsonPath = startContentLocation.jsonPath;
-              startOffset = startContentLocation.offset;
-            } else {
-              startJsonPath = range.start.jsonPath;
-              if (range.start.offset !== undefined) startOffset = range.start.offset;
-            }
+          // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
+          let endVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
 
-            if ('scrRef' in range.end) {
-              const endContentLocation = usjRW.verseRefToUsjContentLocation(
-                range.end.scrRef,
-                range.end.offset,
-              );
-              endJsonPath = endContentLocation.jsonPath;
-              endOffset = endContentLocation.offset;
+          // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
+          // passed to us
+          // Process the starting location
+          const { verseOffset: startVerseOffset, ...startLocationProperties } =
+            determineLocationProperties(range.start, startVerseRef);
+          ({
+            jsonPath: startJsonPath,
+            jsonPathOffset: startJsonPathOffset,
+            verseRef: startVerseRef,
+          } = startLocationProperties);
 
-              if (endOffset < (range.end.offset ?? 0) - 50) {
-                logger.warn(
-                  `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
-                );
-                endJsonPath = startJsonPath;
-                endOffset = startOffset + 1;
-              }
-            } else {
-              endJsonPath = range.end.jsonPath;
-              if (range.end.offset !== undefined) endOffset = range.end.offset;
-              else if (range.start.offset !== undefined) endOffset = range.start.offset;
-            }
-          }
-
-          const convertedRange = skipRange
-            ? undefined
-            : {
-                start: { jsonPath: startJsonPath, offset: startOffset },
-                end: { jsonPath: endJsonPath, offset: endOffset },
-              };
-
-          if (convertedRange) {
-            // Figure out which verse we're on using the jsonPath
-            // Note: we could just use the verse if we receive a scrRef in the range, but our
-            // verseRefToUsjContentLocation doesn't always get the conversion right. So might as well
-            // use whatever verse it ends up on
-            const targetScrRefFromJsonPath = usjRW.jsonPathToVerseRefAndOffset(
-              convertedRange.start.jsonPath,
-              targetScrRef.book,
+          // Process the ending location
+          const { verseOffset: endVerseOffset, ...endLocationProperties } =
+            determineLocationProperties(range.end, endVerseRef);
+          ({
+            jsonPath: endJsonPath,
+            jsonPathOffset: endJsonPathOffset,
+            verseRef: endVerseRef,
+          } = endLocationProperties);
+          if (
+            startVerseRef.book !== endVerseRef.book ||
+            startVerseRef.chapterNum !== endVerseRef.chapterNum
+          )
+            throw new Error(
+              'Could not get targetScrRef from range! Selection range cannot (yet) span chapters or books',
             );
-            targetScrRef.verseNum = targetScrRefFromJsonPath.verseRef.verseNum;
+
+          // If we don't have at least one of the USJ range properties or the verse number, need to
+          // process the chapter to find them based on what we have
+          if (
+            !startJsonPath ||
+            !endJsonPath ||
+            startJsonPathOffset === undefined ||
+            endJsonPathOffset === undefined ||
+            startVerseRef.verseNum === -1
+          ) {
+            // Get the USJ chapter we're on so we can determine the missing USJ range properties
+            const pdp = await papi.projectDataProviders.get(
+              'platformScripture.USJ_Chapter',
+              currentWebViewDefinition.projectId,
+            );
+            const usjChapter = await pdp.getChapterUSJ(startVerseRef);
+
+            if (!usjChapter)
+              throw new Error(
+                `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(startVerseRef)} is undefined!`,
+              );
+
+            const usjRW = new UsjReaderWriter(usjChapter, {
+              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+            });
+
+            // Convert the UsfmVerseLocations to get jsonPath and offset from them
+            let startContentLocation: UsjNodeAndDocumentLocation | undefined;
+            ({
+              jsonPath: startJsonPath,
+              jsonPathOffset: startJsonPathOffset,
+              usjContentLocation: startContentLocation,
+            } = calculateUsjLocationProperties(
+              usjRW,
+              startVerseRef,
+              startVerseOffset,
+              startJsonPath,
+              startJsonPathOffset,
+            ));
+
+            ({ jsonPath: endJsonPath, jsonPathOffset: endJsonPathOffset } =
+              calculateUsjLocationProperties(
+                usjRW,
+                endVerseRef,
+                endVerseOffset,
+                endJsonPath,
+                endJsonPathOffset,
+              ));
+
+            // If we don't have which verse we're setting the scroll group to, get it
+            if (startVerseRef.verseNum === -1) {
+              const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
+                (startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath))
+                  .documentLocation,
+              );
+              startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
+            }
           }
+
+          const convertedRange = {
+            start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
+            end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
+          };
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
-            scrRef: targetScrRef,
+            scrRef: startVerseRef,
             range: convertedRange,
           };
           await papi.webViewProviders.postMessageToWebView(
@@ -396,7 +587,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running selectRange! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -404,7 +595,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       async updateDecorations(decorationsToAdd, decorationsToRemove) {
         try {
           logger.debug(
-            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
           );
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
@@ -420,7 +611,81 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             message,
           );
         } catch (e) {
-          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async changeScriptureView() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to changeScriptureView`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'changeScriptureView',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeScriptureView! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async toggleFootnotesPaneVisibility() {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to toggleFootnotesPaneVisibility`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'toggleFootnotesPaneVisibility',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running toggleFootnotesPaneVisibility! ${getErrorMessage(e)}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'> {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to changeFootnotesPaneLocation`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          // Determine current location from saved state (default to 'bottom') and toggle it
+          const currentLocation = currentWebViewDefinition.state?.footnotesPanePosition ?? 'bottom';
+          const newLocation: 'bottom' | 'trailing' =
+            currentLocation === 'bottom' ? 'trailing' : 'bottom';
+
+          const message: EditorWebViewMessage = {
+            method: 'changeFootnotesPaneLocation',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+
+          // Return the new location as required by the interface
+          return newLocation;
+        } catch (e) {
+          const message = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running changeFootnotesPaneLocation! ${getErrorMessage(e)}`;
           logger.warn(message);
           throw new Error(message);
         }
@@ -478,7 +743,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened web view',
+          summary: 'The ID of the opened WebView',
           schema: { type: 'string' },
         },
       },
@@ -551,7 +816,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened web view',
+          summary: 'The ID of the opened WebView',
           schema: { type: 'string' },
         },
       },
@@ -568,11 +833,81 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     scriptureEditorWebViewProvider,
   );
 
+  const changeScriptureViewPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.changeView',
+    changeScriptureView,
+    {
+      method: {
+        summary: 'Change the Scripture view type in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose Scripture view is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const toggleFootnotesPanePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.toggleFootnotes',
+    toggleFootnotesPane,
+    {
+      method: {
+        summary: 'Toggle the visibility of the footnotes pane',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView to toggle the footnotes pane for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  const changeFootnotesPaneLocationPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.changeFootnotesPaneLocation',
+    changeFootnotesPaneLocation,
+    {
+      method: {
+        summary: 'Toggle the location of the footnotes pane (bottom vs. side-by-side)',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the WebView whose footnotes pane location is to be changed',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The new location of the footnotes pane',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
     await openPlatformResourceViewerPromise,
+    await changeScriptureViewPromise,
+    await toggleFootnotesPanePromise,
+    await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
     await annotationStyleDataProviderPromise,

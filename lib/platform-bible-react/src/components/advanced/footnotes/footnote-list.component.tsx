@@ -1,40 +1,15 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Card } from '@/components/shadcn-ui/card';
-import { getFormatCallerFunction, LocalizedStringValue } from 'platform-bible-utils';
+import { Separator } from '@/components/shadcn-ui/separator';
+import { getFormatCallerFunction } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
 
-/**
- * Object containing all keys used for localization in this component. If you're using this
- * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStrings prop of this component
- */
-export const FOOTNOTE_LIST_STRING_KEYS = Object.freeze(['%webView_footnoteList_header%'] as const);
-
-export type FootnoteListLocalizedStrings = {
-  [localizedFootnoteListKey in (typeof FOOTNOTE_LIST_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
-
-/**
- * Gets the localized value for the provided key
- *
- * @param strings Object containing localized string
- * @param key Key for a localized string
- * @returns The localized value for the provided key, if available. Returns the key if no localized
- *   value is available
- */
-const localizeString = (
-  strings: FootnoteListLocalizedStrings,
-  key: keyof FootnoteListLocalizedStrings,
-) => {
-  return strings[key] ?? key;
-};
-
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
   className,
+  classNameForItems,
   footnotes,
   layout = 'horizontal',
   listId,
@@ -43,20 +18,36 @@ export function FootnoteList({
   suppressFormatting = false,
   formatCaller,
   onFootnoteSelected,
-  localizedStrings,
-}: FootnoteListProps & { localizedStrings?: FootnoteListLocalizedStrings }) {
-  const headerText = localizedStrings
-    ? localizeString(localizedStrings, '%webView_footnoteList_header%')
-    : 'Footnotes';
+}: FootnoteListProps) {
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
   const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
     onFootnoteSelected?.(footnote, index, listId);
   };
+
   const initialFocusedIndex = selectedFootnote
     ? footnotes.findIndex((f) => f === selectedFootnote)
-    : 0;
+    : -1;
 
   const [focusedIndex, setFocusedIndex] = useState<number>(initialFocusedIndex);
+
+  const handleFootnoteKeyDown = (
+    e: React.KeyboardEvent<HTMLLIElement>,
+    footnote: MarkerObject,
+    index: number,
+  ) => {
+    if (!footnotes.length) return;
+
+    switch (e.key) {
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        onFootnoteSelected?.(footnote, index, listId);
+        break;
+
+      default:
+        break;
+    }
+  };
 
   const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!footnotes.length) return;
@@ -72,18 +63,12 @@ export function FootnoteList({
         setFocusedIndex((prev) => Math.max(prev - 1, 0));
         break;
 
-      case 'Enter':
-      case ' ':
-        e.preventDefault();
-        onFootnoteSelected?.(footnotes[focusedIndex], focusedIndex, listId);
-        break;
-
       default:
         break;
     }
   };
 
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
     if (focusedIndex >= 0 && focusedIndex < rowRefs.current.length) {
@@ -91,28 +76,35 @@ export function FootnoteList({
     }
   }, [focusedIndex]);
 
+  /*
+   * TODO(PT-3743): After upgrading to Tailwind v4, move to using @container and @sm/@lg css
+   * styling to replace the use of the `layout` variable to distinguish between
+   * wide/skinny layouts.
+   */
   return (
-    <>
-      {layout === 'vertical' && <h2 className="tw-mb-1 tw-font-semibold">{headerText}</h2>}
-      <div
-        role="listbox"
-        aria-label="Footnotes"
-        tabIndex={0}
-        className={cn('tw-h-full tw-overflow-y-auto', className)}
-        onKeyDown={handleListKeyDown}
+    <div
+      role="listbox"
+      aria-label="Footnotes"
+      tabIndex={focusedIndex < 0 ? 0 : -1}
+      className={cn('tw-h-full tw-overflow-y-auto', className)}
+      onKeyDown={handleListKeyDown}
+    >
+      <ul
+        className={cn(
+          'tw-p-0.5 tw-pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
+          'tw-grid',
+          layout === 'horizontal'
+            ? 'tw-grid-cols-[min-content_min-content_1fr]'
+            : 'tw-grid-cols-[min-content_1fr]',
+          !suppressFormatting && 'formatted-font',
+        )}
       >
-        <div
-          className={cn(
-            'tw-p-0.5',
-            layout === 'horizontal' ? 'tw-table' : 'tw-flex tw-flex-col tw-gap-1',
-            !suppressFormatting && 'formatted-font',
-          )}
-        >
-          {footnotes.map((footnote, idx) => {
-            const isSelected = footnote === selectedFootnote;
-            const key = `${listId}-${idx}`;
-            return (
-              <Card
+        {footnotes.map((footnote, idx) => {
+          const isSelected = footnote === selectedFootnote;
+          const key = `${listId}-${idx}`;
+          return (
+            <>
+              <li
                 ref={(el) => {
                   rowRefs.current[idx] = el;
                 }}
@@ -121,16 +113,24 @@ export function FootnoteList({
                 key={key}
                 data-marker={footnote.marker}
                 data-state={isSelected ? 'selected' : undefined}
-                tabIndex={-1}
+                tabIndex={idx === focusedIndex ? 0 : -1}
                 className={cn(
-                  'data-[state=selected]:tw-bg-muted',
-                  onFootnoteSelected && 'tw-cursor-pointer hover:tw-bg-muted/50',
-                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-py-0 tw-shadow-none',
-                  layout === 'horizontal'
-                    ? 'horizontal tw-table-row'
-                    : 'vertical tw-block tw-text-sm',
+                  'tw-gap-x-3 tw-gap-y-1 tw-p-2 data-[state=selected]:tw-bg-muted',
+                  onFootnoteSelected && 'hover:tw-bg-muted/50',
+                  'tw-w-full tw-rounded-sm tw-border-0 tw-bg-transparent tw-shadow-none',
+                  'focus:tw-outline-none focus-visible:tw-outline-none',
+                  /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
+                     that looks great in Storybook. However, the left edge of the ring is clipped in
+                     P.B app. These are similar, but not identical to, the customizations made in
+                     our shadcn table component.
+                  */
+                  'focus-visible:tw-ring-offset-0.5 focus-visible:tw-relative focus-visible:tw-z-10 focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
+                  'tw-grid tw-grid-flow-col tw-grid-cols-subgrid',
+                  layout === 'horizontal' ? 'tw-col-span-3' : 'tw-col-span-2 tw-row-span-2',
+                  classNameForItems,
                 )}
                 onClick={() => handleFootnoteClick(footnote, idx)}
+                onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
               >
                 <FootnoteItem
                   footnote={footnote}
@@ -138,12 +138,16 @@ export function FootnoteList({
                   formatCaller={() => handleFormatCaller(footnote.caller, idx)}
                   showMarkers={showMarkers}
                 />
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-    </>
+              </li>
+              {/* Only render separator if not the last item */}
+              {idx < footnotes.length - 1 && layout === 'vertical' && (
+                <Separator tabIndex={-1} className="tw-col-span-2" />
+              )}
+            </>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

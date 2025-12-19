@@ -32,21 +32,18 @@ import {
 import {
   formatReplacementString,
   getErrorMessage,
+  groupBy,
   isPlatformError,
   LocalizeKey,
   Mutex,
 } from 'platform-bible-utils';
-import {
-  FindJobStatus,
-  FindJobStatusReport,
-  FindOptions,
-  FindResult,
-  FindScope,
-} from 'platform-scripture';
+import { FindJobStatus, FindJobStatusReport, FindOptions, FindScope } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import SearchResult from './find/search-result.component';
-
-type HidableFindResult = FindResult & { isHidden?: boolean };
+import {
+  HidableFindResult,
+  SEARCH_RESULT_LOCALIZED_STRING_KEYS,
+} from './find/search-result.component';
+import { SearchResultsInBook } from './find/search-results-in-book.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_allowRegex%',
@@ -65,6 +62,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_searchPlaceholder%',
   '%webView_find_showingResults%',
   '%webView_find_toggleFilters%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_recent%',
 ];
 
 const defaultBooksPresent: string = '';
@@ -112,6 +111,18 @@ global.webViewComponent = function FindWebView({
   const [numberOfHiddenResults, setNumberOfHiddenResults] = useState<number>(0);
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
+  /**
+   * Search results grouped by book. Keys are book IDs and values are search results in that book
+   * and their index in the original search results array
+   */
+  const resultsByBook = useMemo(() => {
+    return groupBy(
+      results,
+      (result) => result.start.verseRef.book,
+      (result, _key, index) => ({ result, originalIndex: index }),
+    );
+  }, [results]);
+
   const [verseRefSetting, setVerseRefSetting, scrollGroupId, setScrollGroupId] =
     useWebViewScrollGroupScrRef();
 
@@ -124,11 +135,19 @@ global.webViewComponent = function FindWebView({
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
+    useMemo(() => LOCALIZED_STRINGS, []),
+  );
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
       return Array.from(SCOPE_SELECTOR_STRING_KEYS);
+    }, []),
+  );
+
+  const [searchResultLocalizedStrings] = useLocalizedStrings(
+    useMemo(() => {
+      return Array.from(SEARCH_RESULT_LOCALIZED_STRING_KEYS);
     }, []),
   );
 
@@ -568,20 +587,12 @@ global.webViewComponent = function FindWebView({
   ]);
 
   const handleFocusedResultChange = useCallback(
-    (
-      verseRef: SerializedVerseRef,
-      index: number,
-      occurrenceTextPositionStart?: number,
-      occurrenceTextPositionEnd?: number,
-    ) => {
+    (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
-      setVerseRefSetting(verseRef);
+      setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        editorWebViewController.selectRange({
-          start: { scrRef: verseRef, offset: occurrenceTextPositionStart },
-          end: { scrRef: verseRef, offset: occurrenceTextPositionEnd },
-        });
+        editorWebViewController.selectRange(searchResult);
       }
     },
     [editorWebViewController, editorWebViewId, setVerseRefSetting],
@@ -600,41 +611,21 @@ global.webViewComponent = function FindWebView({
     [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
   );
 
-  const getOccurrenceInVerseIndex = useCallback(
-    (currentIndex: number): number => {
-      const currentResult = results[currentIndex];
-      let occurrenceIndex = 0;
-
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        const prevResult = results[i];
-
-        if (
-          prevResult.verseRef.book !== currentResult.verseRef.book ||
-          prevResult.verseRef.chapterNum !== currentResult.verseRef.chapterNum ||
-          prevResult.verseRef.verseNum !== currentResult.verseRef.verseNum
-        ) {
-          break;
-        }
-
-        occurrenceIndex += 1;
-      }
-
-      return occurrenceIndex;
-    },
-    [results],
-  );
-
   const canClearResults = useMemo(
     () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
     [searchQueryChanged, searchStatus],
   );
+
+  const findButtonText = isLocalizedStringsLoading
+    ? ''
+    : localizedStrings['%webView_find_findButton%'];
 
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
       <Card>
         <CardContent className="tw-space-y-4 tw-p-6">
-          <div className="tw-flex tw-gap-2">
+          <div className="tw-flex tw-gap-2 tw-flex-wrap">
             <div className="tw-relative tw-flex-1">
               <Input
                 id="search-term"
@@ -646,7 +637,7 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-text-ellipsis tw-w-full ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
               />
               <RecentSearches
                 recentSearches={recentSearches}
@@ -655,16 +646,23 @@ global.webViewComponent = function FindWebView({
                 groupHeading={localizedStrings['%webView_find_recent%']}
               />
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setAreFiltersShown(!areFiltersShown)}
-              aria-label={localizedStrings['%webView_find_toggleFilters%']}
-              className={areFiltersShown ? 'tw-bg-muted' : ''}
-            >
-              <SlidersHorizontal className="tw-h-4 tw-w-4" />
-            </Button>
+
             <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setAreFiltersShown(!areFiltersShown)}
+                    aria-label={localizedStrings['%webView_find_toggleFilters%']}
+                    className={areFiltersShown ? 'tw-bg-muted' : ''}
+                  >
+                    <SlidersHorizontal className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings['%webView_find_toggleFilters%']}</TooltipContent>
+              </Tooltip>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   {canClearResults ? (
@@ -674,13 +672,11 @@ global.webViewComponent = function FindWebView({
                   ) : (
                     <Button
                       onClick={handleStartSearch}
-                      disabled={!isSearchQueryValid || searchStatus === 'running'}
+                      disabled={
+                        !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                      }
                     >
-                      {searchStatus === 'running' ? (
-                        <Spinner />
-                      ) : (
-                        localizedStrings['%webView_find_findButton%']
-                      )}
+                      {searchStatus === 'running' ? <Spinner /> : findButtonText}
                     </Button>
                   )}
                 </TooltipTrigger>
@@ -721,7 +717,7 @@ global.webViewComponent = function FindWebView({
                     // in the `availableScrollGroupIds` variable in
                     // `src\renderer\services\scroll-group.service-host.ts`
                     // Both there and here they are a placeholder to be replaced as part of
-                    // https://github.com/paranext/paranext-core/issues/788
+                    // https://paratextstudio.atlassian.net/browse/PT-1514
                     availableScrollGroupIds={[undefined, ...Array(5).keys()]}
                     onChangeScrollGroupId={setScrollGroupId}
                     scrollGroupId={scrollGroupId}
@@ -787,23 +783,27 @@ global.webViewComponent = function FindWebView({
         className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
         onScroll={handleResultsScroll}
       >
-        {results &&
-          results.map((result, index) => {
-            const occurrenceInVerseIndex = getOccurrenceInVerseIndex(index);
-            return (
-              <SearchResult
-                key={`${result.verseRef.book + result.verseRef.chapterNum}:${result.verseRef.verseNum}${result.text}${occurrenceInVerseIndex}`}
-                searchResult={result}
-                globalResultsIndex={index}
-                isSelected={index === focusedResultIndex}
-                projectId={projectId}
-                localizedBookData={localizedBookData}
-                occurrenceInVerseIndex={occurrenceInVerseIndex}
-                onResultClick={handleFocusedResultChange}
-                onHideResult={handleHideResult}
-              />
-            );
-          })}
+        {[...resultsByBook.entries()].map(([bookId, bookResults]) => {
+          return (
+            <SearchResultsInBook
+              key={bookId}
+              projectId={projectId}
+              bookId={bookId}
+              results={bookResults.map(({ result }) => result)}
+              localizedBookData={localizedBookData}
+              focusedResultIndex={bookResults.findIndex(
+                ({ originalIndex }) => originalIndex === focusedResultIndex,
+              )}
+              onResultClick={(result, indexInBookResults) =>
+                handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+              }
+              onHideResult={(indexInBookResults) =>
+                handleHideResult(bookResults[indexInBookResults].originalIndex)
+              }
+              localizedStrings={searchResultLocalizedStrings}
+            />
+          );
+        })}
       </div>
 
       {/* Status bar */}

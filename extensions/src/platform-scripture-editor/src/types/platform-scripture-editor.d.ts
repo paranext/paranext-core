@@ -4,16 +4,19 @@ declare module 'platform-scripture-editor' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { CheckLocation } from 'platform-scripture';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
-  import type { NetworkableObject } from '@papi/core';
-  import type { LocalizeKey } from 'platform-bible-utils';
+  import type { DataProviderDataType, IDataProvider, NetworkableObject } from '@papi/core';
+  import type {
+    KebabCase,
+    LocalizeKey,
+    UsfmScrRefVerseLocation,
+    UsfmVerseLocation,
+    UsjChapterLocation,
+    UsjFlatTextChapterLocation,
+  } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
 
-  /**
-   * @deprecated 4 September 2025. Use `SelectionRange` from '@eten-tech-foundation/platform-editor'
-   *   instead.
-   */
-  export type SelectionRange = PlatformEditorSelectionRange;
+  // #region editor WebViewController messages
 
   /** Tell the editor to select a specific range */
   export type EditorMessageSelectRange = {
@@ -21,10 +24,7 @@ declare module 'platform-scripture-editor' {
     /** Goes to this Scripture Reference before setting the selection */
     scrRef: SerializedVerseRef;
     /** Endpoints of the selection. Should start at the same place as the scrRef */
-    // Temporarily disabled setting specific range for USFM ranges until we fix the offset
-    // translation problem USFM->USJ https://paratextstudio.atlassian.net/browse/PT-2358
-    // so this is temporarily able to be undefined
-    range?: SelectionRange;
+    range: SelectionRange;
   };
 
   /** Tell the editor to merge these decorations into its existing decorations */
@@ -36,8 +36,26 @@ declare module 'platform-scripture-editor' {
     decorationsToRemove?: string[];
   };
 
-  /** Tell the editor to insert a footnote */
-  export type EditorMessageInsertFootnoteAtSelection = {
+  /**
+   * Tell the editor to cycle between the Scripture view types (currently just a toggle between
+   * formatted and Marker view)
+   */
+  export type EditorMessageChangeScriptureView = {
+    method: 'changeScriptureView';
+  };
+
+  /** Tell the editor to toggle footnotes pane visibility */
+  export type EditorMessageToggleFootnotesPaneVisibility = {
+    method: 'toggleFootnotesPaneVisibility';
+  };
+
+  /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
+  export type EditorMessageChangeFootnotesPaneLocation = {
+    method: 'changeFootnotesPaneLocation';
+  };
+
+  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  export type EditorMessageInsertTextualNoteAtSelection = {
     method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
   };
 
@@ -45,48 +63,59 @@ declare module 'platform-scripture-editor' {
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
-    | EditorMessageInsertFootnoteAtSelection;
+    | EditorMessageChangeScriptureView
+    | EditorMessageToggleFootnotesPaneVisibility
+    | EditorMessageChangeFootnotesPaneLocation
+    | EditorMessageInsertTextualNoteAtSelection;
+
+  // #endregion editor WebViewController messages
+
+  // #region USFM locations and ranges
+
+  /**
+   * @deprecated 4 September 2025. Use `SelectionRange` from '@eten-tech-foundation/platform-editor'
+   *   instead.
+   */
+  export type SelectionRange = PlatformEditorSelectionRange;
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
    * {@link CheckLocation}.
    *
    * Also added `bookNum` and `chapterNum` to the `jsonPath` result
+   *
+   * @deprecated 13 November 2025. This type of location is not generic enough to support all
+   *   positions we need to be able to represent in USJ space. Use {@link UsjChapterLocation} and
+   *   {@link UsfmVerseLocation} instead.
    */
-  export type ScriptureLocation =
-    | {
-        /** To which book this jsonPath is relative */
-        book: string;
-        /** To which chapter this jsonPath is relative */
-        chapterNum: number;
-        /** JSONPath expression pointing to a location within USJ data */
-        jsonPath: string;
-        /**
-         * Offset to apply to the content inside of the property indicated by `jsonPath` to
-         * determine the start of the range.
-         *
-         * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
-         * Matthew. If no offset is provided, then the entire object with type "para" is being
-         * pointed to.
-         *
-         * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
-         */
-        offset?: number;
-      }
-    | {
-        /** Verse reference to a location with the document */
-        scrRef: SerializedVerseRef;
-        /** Offset to apply to start of the verse indicated by `scrRef` */
-        offset?: number;
-      };
+  export type ScriptureLocation = UsjFlatTextChapterLocation | UsfmScrRefVerseLocation;
 
-  /** A pair of Scripture positions that are either in USFM or USJ format */
+  /**
+   * A pair of Scripture positions that are either in USFM or USJ format
+   *
+   * Note: some forms of properties in this type are deprecated; see {@link ScriptureLocation} for
+   * details.
+   */
   export type ScriptureRange = {
-    /** Starting point where the check result applies in the document */
-    start: ScriptureLocation;
-    /** Ending point where the check result applies in the document */
-    end: ScriptureLocation;
+    /**
+     * Starting point where the check result applies in the document
+     *
+     * Note: some forms of this type are deprecated and will be removed eventually; see
+     * {@link ScriptureLocation} for details.
+     */
+    start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    /**
+     * Ending point where the check result applies in the document
+     *
+     * Note: some forms of this type are deprecated and will be removed eventually; see
+     * {@link ScriptureLocation} for details.
+     */
+    end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
   };
+
+  // #endregion USFM locations and ranges
+
+  // #region editor decorations
 
   export type EditorContainer = {
     /** Styles applied to the div */
@@ -132,10 +161,42 @@ declare module 'platform-scripture-editor' {
     containers?: { [containerId: string]: EditorContainer };
   };
 
+  // #endregion editor decorations
+
+  // #region editor WebView types
+
+  export type ScriptureEditorViewType = 'formatted' | 'markers';
+
   /** Options for configuring the editor you are opening */
   export type OpenEditorOptions = {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
+    /**
+     * Ways Scripture project text can be viewed in the editor
+     *
+     * Defaults to 'formatted'.
+     */
+    scriptureViewType?: ScriptureEditorViewType;
+    /**
+     * When the footnote pane is shown, where it should be positioned
+     *
+     * Defaults to 'bottom'.
+     */
+    footnotesPanePosition?: 'bottom' | 'trailing';
+    /**
+     * Percentage of the available space that the footnote pane should take up when it is shown.
+     * This should be a number between 3 and 97. (0-100 are "legal" values for the components but
+     * nonsensical from a UX perspective.)
+     *
+     * Defaults to 20.
+     */
+    footnotesPaneSize?: number;
+    /**
+     * Flag indicating whether the footnote pane should be displayed
+     *
+     * Defaults to false.
+     */
+    footnotesPaneVisible?: boolean;
     /**
      * Url of image to show on the title bar of the tab
      *
@@ -155,6 +216,15 @@ declare module 'platform-scripture-editor' {
     /** Set the current selection on the editor */
     selectRange(range: ScriptureRange): Promise<void>;
     /**
+     * Cycle through the Scripture view types in the editor (currently just a toggle between
+     * formatted and Marker view)
+     */
+    changeScriptureView(): Promise<void>;
+    /** Toggle the visibility of the footnotes pane in the editor */
+    toggleFootnotesPaneVisibility(): Promise<void>;
+    /** Toggle the visibility of the footnotes pane in the editor */
+    changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
+    /**
      * Add or update decorations in the editor. New decoration definitions with the same id
      * overwrite existing decorations
      *
@@ -170,10 +240,245 @@ declare module 'platform-scripture-editor' {
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
   }>;
+
+  // #endregion editor WebView types
+
+  // #region annotation style data provider types
+
+  /**
+   * CSS-like style properties for annotations. This is a constrained subset of CSS that allows
+   * extensions to define custom annotation styles while supporting theme variables.
+   *
+   * Supports CSS custom properties (e.g., `var(--primary)`) for theme-aware styling.
+   */
+  export type AnnotationStyleProperties = {
+    /**
+     * Background color. Supports CSS color values including theme variables.
+     *
+     * @example 'yellow'
+     *
+     * @example 'rgba(255, 255, 0, 0.3)'
+     *
+     * @example 'hsl(var(--accent))'
+     */
+    backgroundColor?: string;
+
+    /**
+     * Border style.
+     *
+     * @example '1px solid red'
+     *
+     * @example '2px dashed hsl(var(--border))'
+     */
+    border?: string;
+
+    /**
+     * Border radius for rounded corners.
+     *
+     * @example '4px'
+     *
+     * @example '0.25rem'
+     */
+    borderRadius?: string;
+
+    /**
+     * Text color. Supports CSS color values including theme variables.
+     *
+     * @example 'red'
+     *
+     * @example '#ff0000'
+     *
+     * @example 'hsl(var(--primary))'
+     *
+     * @example 'var(--destructive)'
+     */
+    color?: string;
+
+    /**
+     * Cursor style when hovering over annotated text.
+     *
+     * @example 'pointer'
+     *
+     * @example 'help'
+     */
+    cursor?: string;
+
+    /**
+     * Font style.
+     *
+     * @example 'italic'
+     *
+     * @example 'oblique'
+     */
+    fontStyle?: string;
+
+    /**
+     * Font weight (normal, bold, or numeric values 100-900).
+     *
+     * @example 'bold'
+     *
+     * @example '600'
+     */
+    fontWeight?: string | number;
+
+    /**
+     * Margin.
+     *
+     * @example '2px'
+     *
+     * @example '0.25rem 0.5rem'
+     */
+    margin?: string;
+
+    /**
+     * Opacity (0 to 1).
+     *
+     * @example 0.5
+     *
+     * @example '0.8'
+     */
+    opacity?: string | number;
+
+    /**
+     * Padding.
+     *
+     * @example '2px'
+     *
+     * @example '0.25rem 0.5rem'
+     */
+    padding?: string;
+
+    /**
+     * Text decoration color. Supports CSS color values including theme variables.
+     *
+     * @example 'red'
+     *
+     * @example 'hsl(var(--destructive))'
+     */
+    textDecorationColor?: string;
+
+    /**
+     * Text decoration line (underline, overline, line-through, or combinations).
+     *
+     * @example 'underline'
+     *
+     * @example 'underline wavy'
+     *
+     * @example 'line-through'
+     */
+    textDecorationLine?: string;
+
+    /**
+     * Text decoration style (solid, double, dotted, dashed, wavy).
+     *
+     * @example 'wavy'
+     *
+     * @example 'dotted'
+     */
+    textDecorationStyle?: string;
+
+    /**
+     * Text decoration thickness.
+     *
+     * @example '2px'
+     *
+     * @example '0.1em'
+     */
+    textDecorationThickness?: string;
+  };
+
+  /**
+   * A nonce (unique identifier) returned when setting an annotation style, used for deleting that
+   * style later.
+   */
+  export type AnnotationStyleNonce = string;
+
+  /** Data types for the annotation style data provider. */
+  export type AnnotationStyleDataProviderDataTypes = {
+    /** Complete CSS stylesheet containing all registered annotation styles. */
+    AnnotationStylesheet: DataProviderDataType<undefined, string, never>;
+  };
+
+  /** Custom methods for the annotation style data provider. */
+  export type AnnotationStyleDataProviderMethods = {
+    /**
+     * Register a new annotation style or update an existing one.
+     *
+     * Note that if the same `typeName` is used again, it will throw an error. Each annotation style
+     * must have a unique `typeName`. To update an existing style, delete it first using its nonce
+     * and then register the new style.
+     *
+     * @example
+     *
+     * ```typescript
+     * const nonce = await annotationStyleDataProvider.registerAnnotationStyle(
+     *   'spelling-error',
+     *   {
+     *     textDecorationLine: 'underline',
+     *     textDecorationStyle: 'wavy',
+     *     textDecorationColor: 'hsl(var(--destructive))',
+     *     cursor: 'pointer',
+     *   },
+     * );
+     * ```
+     *
+     * @param typeName A unique name for the annotation style type. This should be in kebab-case
+     *   (lowercase letters and hyphens only) to ensure valid CSS class naming.
+     * @param definition The annotation style definition containing style properties
+     * @returns A nonce (unique identifier) that can be used to delete this style later
+     */
+    registerAnnotationStyle<T extends string>(
+      typeName: KebabCase<T>,
+      definition: AnnotationStyleProperties,
+    ): Promise<AnnotationStyleNonce>;
+
+    /**
+     * Delete an annotation style using its nonce.
+     *
+     * @example
+     *
+     * ```typescript
+     * const deleted = await annotationStyleDataProvider?.deleteAnnotationStyle(nonce);
+     * if (deleted) {
+     *   console.debug('Annotation style successfully deleted');
+     * } else {
+     *   console.warn('Annotation style not found');
+     * }
+     * ```
+     *
+     * @param nonce The nonce returned from registerAnnotationStyle
+     * @returns True if the style was successfully deleted, false if the nonce was not found
+     */
+    deleteAnnotationStyle(nonce: AnnotationStyleNonce): Promise<boolean>;
+
+    /**
+     * Provides all registered annotation styles in stylesheet form
+     *
+     * @example
+     *
+     * ```typescript
+     * const stylesheet = await annotationStyleDataProvider.getAnnotationStylesheet();
+     * console.log('Current annotation styles stylesheet:', stylesheet);
+     * ```
+     *
+     * @returns Complete CSS stylesheet containing all registered annotation styles
+     */
+    getAnnotationStylesheet(): Promise<string>;
+  };
+
+  /**
+   * Data provider for managing annotation styles. Allows extensions to register custom annotation
+   * styles that are converted to CSS stylesheets for use in the editor.
+   */
+  export type AnnotationStyleDataProvider = IDataProvider<AnnotationStyleDataProviderDataTypes> &
+    AnnotationStyleDataProviderMethods;
+
+  // #endregion annotation style data provider types
 }
 
 declare module 'papi-shared-types' {
   import type {
+    AnnotationStyleDataProvider,
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
   } from 'platform-scripture-editor';
@@ -214,10 +519,34 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Command to insert a foot note into a given editor web view.
+     * Cycles through the Scripture view types in the editor (currently just a toggle between
+     * formatted and Marker view) for the given the WebView ID
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScriptureEditor.changeView': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Toggles the visibility of the footnotes pane for the given the WebView ID
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Changes the location of the footnotes pane (if visible) for the given the WebView ID,
+     * toggling between showing it at the bottom or side-by-side.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScriptureEditor.changeFootnotesPaneLocation': (
+      webViewId: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert a footnote into a given editor web view.
      *
      * @param editorWebViewId The ID of the web view to insert the footnote for
-     * @returns
      */
     'platformScriptureEditor.insertFootnoteAtSelection': (
       editorWebViewId?: string | undefined,
@@ -227,11 +556,14 @@ declare module 'papi-shared-types' {
      * Command to insert a cross-reference into a given editor web view.
      *
      * @param editorWebViewId The ID of the web view to insert the footnote for
-     * @returns
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
+  }
+
+  export interface DataProviders {
+    'platformScriptureEditor.annotationStyle': AnnotationStyleDataProvider;
   }
 
   export interface WebViewControllers {

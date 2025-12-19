@@ -4,6 +4,7 @@ import { Command, CommandGroup, CommandItem, CommandList } from '@/components/sh
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { useState } from 'react';
 
+/** Interface defining the properties for the RecentSearches component */
 export interface RecentSearchesProps<T> {
   /** Array of recent search items */
   recentSearches: T[];

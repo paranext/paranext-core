@@ -157,16 +157,16 @@ namespace TestParanextDataProvider.Projects
             1,
             4,
             0,
-            @"<usx version=""3.0""><chapter number=""4"" style=""c"" />"
-                + @"<para style=""p""><verse number=""3"" style=""v"" />a whole new chapter!</para></usx>",
+            @"<usx version=""3.0""><chapter number=""4"" style=""c"" sid="" 4"" />"
+                + @"<para style=""p""><verse number=""3"" style=""v"" sid="""" />a whole new chapter!<verse eid="""" /></para><chapter eid="" 4"" /></usx>",
             @"\id GEN \ip intro \c 2 \p \v 1 verse one \v 7 verse seven \c 3 \p \v 1 bla \c 4 \p \v 3 a whole new chapter!"
         )]
         [TestCase(
             1,
             2,
             0,
-            @"<usx version=""3.0""><chapter number=""2"" style=""c"" />"
-                + @"<para style=""p""><verse number=""2"" style=""v"" />New chapter text.</para></usx>",
+            @"<usx version=""3.0""><chapter number=""2"" style=""c"" sid="" 2"" />"
+                + @"<para style=""p""><verse number=""2"" style=""v"" sid="""" />New chapter text.<verse eid="""" /></para><chapter eid="" 2"" /></usx>",
             @"\id GEN \ip intro \c 2 \p \v 2 New chapter text. \c 3 \p \v 1 bla"
         )]
         public void SetChapterUsx_ValidResults(

@@ -1,6 +1,45 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%comment_assign_team%": "Team",
+      "%comment_assign_unassigned%": "Unassigned",
+      "%comment_assigned_to%": "Assigned to {assignedUser}",
+      "%comment_assigning_to%": "Assigning to: {assignedUser}",
+      "%comment_dateAtTime%": "{date} at {time}",
+      "%comment_date_today%": "today",
+      "%comment_date_yesterday%": "yesterday",
+      "%comment_deleteComment%": "Delete Comment",
+      "%comment_editComment%": "Edit Comment",
+      "%comment_replyOrAssign%": "Reply or assign with @",
+      "%comment_reopenResolved%": "Adding a comment will re-open this discussion...",
+      "%comment_status_resolved%": "Marked as resolved",
+      "%comment_status_todo%": "Re-opened",
+      "%comment_thread_multiple_replies%": "{count} replies",
+      "%comment_thread_single_reply%": "1 reply",
+      "%no_comments%": "No comments yet",
+      "%webView_legacyCommentManager_commentList_title%": "Comments",
+      "%webView_legacyCommentManager_openComments%": "Open Comments"
+    },
+    "es": {
+      "%comment_assign_team%": "Equipo",
+      "%comment_assign_unassigned%": "Sin asignar",
+      "%comment_assigned_to%": "Asignado a {assignedUser}",
+      "%comment_assigning_to%": "Asignando a: {assignedUser}",
+      "%comment_dateAtTime%": "{date} a las {time}",
+      "%comment_date_today%": "hoy",
+      "%comment_date_yesterday%": "ayer",
+      "%comment_deleteComment%": "Eliminar Comentario",
+      "%comment_editComment%": "Editar Comentario",
+      "%comment_replyOrAssign%": "Responder o asignar con @",
+      "%comment_reopenResolved%": "Agregar un comentario reabrirá esta discusión...",
+      "%comment_status_resolved%": "Marcado como resuelto",
+      "%comment_status_todo%": "Reabierto",
+      "%comment_thread_multiple_replies%": "{count} respuestas",
+      "%comment_thread_single_reply%": "1 respuesta",
+      "%no_comments%": "No hay comentarios todavía",
+      "%webView_legacyCommentManager_commentList_title%": "Comentarios",
+      "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
+    }
   }
 }

@@ -44,8 +44,7 @@ export class UnicodeString {
 
   constructor(string: string, graphemes?: string[] | undefined) {
     this._string = string;
-    this._graphemes = graphemes !== undefined
-      ? graphemes : stringzToArray(this._string);
+    this._graphemes = graphemes !== undefined ? graphemes : stringzToArray(this._string);
     this._indecies = [];
 
     let index: number = 0;
@@ -108,11 +107,21 @@ export class UnicodeString {
     // TODO(mattg): refactor these checks
     if (indexStart > this.length) return '';
     if (indexEnd) {
-      if (indexStart > indexEnd && !(indexStart >= 0 && indexStart < this.length && indexEnd < 0 && indexEnd > -this.length) || indexEnd < -this.length) return '';
+      if (
+        (indexStart > indexEnd &&
+          !(
+            indexStart >= 0 &&
+            indexStart < this.length &&
+            indexEnd < 0 &&
+            indexEnd > -this.length
+          )) ||
+        indexEnd < -this.length
+      )
+        return '';
     }
 
-    let newStart = this._correctSliceIndex(indexStart);
-    let newEnd = indexEnd ? this._correctSliceIndex(indexEnd) : undefined;
+    const newStart = this._correctSliceIndex(indexStart);
+    const newEnd = indexEnd ? this._correctSliceIndex(indexEnd) : undefined;
     return this.substring(newStart, newEnd);
   }
 

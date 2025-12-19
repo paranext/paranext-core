@@ -26,6 +26,40 @@ export class SortedNumberMap<T> {
   private sortedKeys: number[] = [];
 
   /**
+   * Returns an iterable of keys in the map sorted in ascending order.
+   *
+   * Time complexity: internal detail to JavaScript engine. Reasonable expectation:
+   *
+   * - Executing this method to return an iterator: O(1)
+   * - Iterating over the returned iterator: O(n)
+   *
+   * Note that iterating over the keys this way negates the benefits of using this class over a
+   * using a {@link Map}. To access individual keys more quickly, use
+   * {@link SortedNumberMap.findClosestLessThanOrEqual} or {@link SortedNumberMap.get}.
+   *
+   * TSDoc adapted from {@link Map.keys}
+   */
+  keys() {
+    return this.sortedKeys.values();
+  }
+
+  /**
+   * Returns a specified element from the Map object. If the value that is associated to the
+   * provided key is an object, then you will get a reference to that object and any change made to
+   * that object will effectively modify it inside the Map.
+   *
+   * Time complexity: O(1)
+   *
+   * @returns Returns the element associated with the specified key. If no element is associated
+   *   with the specified key, returns `undefined`.
+   *
+   *   TSDoc adapted from {@link Map.get}
+   */
+  get(key: number) {
+    return this.map.get(key);
+  }
+
+  /**
    * Sets a key-value pair in the map. If the key already exists, its value is updated. If the key
    * is new, it's inserted in the correct sorted position.
    *

@@ -433,8 +433,12 @@ const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(asy
   return dataProvider;
 }, checkAggregatorServiceObjectToProxy);
 
-function dispose() {
-  return dataProvider.dispose();
+async function dispose(): Promise<boolean> {
+  const disposalResults: boolean[] = await Promise.all([
+    dataProvider.dispose(),
+    resultsInvalidatedEventEmitter.dispose(),
+  ]);
+  return disposalResults.every((result) => result);
 }
 
 /** Service for communicating with all {@link ICheckRunner} instances on the network. */

@@ -2,6 +2,7 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
+/** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
   /**
    * The footnote to display (typically from JSX). Note: Although {@link MarkerObject.content} is an
@@ -32,9 +33,12 @@ export interface FootnoteItemProps {
   formatCaller?: (caller: string | undefined) => string | undefined;
 }
 
+/** Interface defining the properties for the FootnoteList component */
 export interface FootnoteListProps {
   /** Optional additional class name for styling */
   className?: string;
+  /** Optional additional class name for styling the `Card` for each `FootnoteItem` in the list */
+  classNameForItems?: string;
   /** The footnotes to display (typically from JSX). See {@link FootnoteItemProps.footnote} */
   footnotes: MarkerObject[];
   /**

@@ -15,7 +15,7 @@ namespace Paranext.DataProvider.Checks;
 /// objects for reporting problems to the user. This class is essentially an adapter for storing a
 /// list of problems from checks.
 /// </summary>
-public sealed partial class CheckResultsRecorder(string checkId, string projectId)
+internal sealed partial class CheckResultsRecorder(string checkId, string projectId)
     : IRecordCheckError
 {
     /// <summary>
@@ -69,22 +69,32 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
         VerseListItemType type = VerseListItemType.Error
     )
     {
-        (string normalizedMessage, string itemText) = ParseAndNormalizeMessage(message);
-        CheckRunResults.Add(
-            new CheckRunResult(
-                checkId,
-                messageId.InternalValue,
-                projectId,
-                normalizedMessage,
-                // ParatextData adds a space at the end sometimes that isn't in the text
-                token.Text.TrimEnd(),
-                itemText,
-                false,
-                token.VerseRef,
-                // Actual offsets will be calculated below after results have been filtered
-                new CheckLocation(token.VerseRef, offset),
-                new CheckLocation(token.VerseRef, 0)
-            )
+        // Implementation copied from RunBasicChecks.RecordError
+
+        // Essentially, all CheckDataSource.TextTokens are ParatextTextTokens, but they publicly
+        // are typed as ITextToken for some reason. We need ParatextTextToken.VerseOffset here.
+        ParatextTextToken paratextToken = (ParatextTextToken)token;
+
+        string text = "";
+        int selectionStart = 0;
+
+        if (paratextToken.Text != null)
+        {
+            text = paratextToken.Text.Substring(
+                offset,
+                Math.Min(length, paratextToken.Text.Length - offset)
+            );
+            selectionStart = paratextToken.VerseOffset + offset;
+        }
+
+        RecordError(
+            paratextToken.VerseRef,
+            text,
+            selectionStart,
+            message,
+            checkType,
+            messageId,
+            type
         );
     }
 
@@ -105,14 +115,13 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
                 messageId.InternalValue,
                 projectId,
                 normalizedMessage,
-                // ParatextData adds a space at the end sometimes that isn't in the text
-                text.TrimEnd(),
+                text,
                 itemText,
                 false,
                 vref,
                 // Actual offsets will be calculated below after results have been filtered
-                new CheckLocation(vref, selectionStart),
-                new CheckLocation(vref, 0)
+                new UsfmLocation(vref, selectionStart),
+                new UsfmLocation(vref, selectionStart + text.Length)
             )
         );
     }
@@ -141,7 +150,7 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
         }
     }
 
-    public IEnumerable<CheckRunResult> GetResultsInRange(CheckInputRange range)
+    public IEnumerable<CheckRunResult> GetResultsInRange(InputRange range)
     {
         foreach (var result in CheckRunResults)
         {
@@ -158,11 +167,9 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
 
     /// <summary>
     /// After a check has finished running, filter and complete filling in data on the results found.
-    /// This will:<br/>
-    /// 1. Lookup whether each check result was previously denied<br/>
-    /// 2. Calculate actual offsets for each result
+    /// This will look up whether each check result was previously denied
     /// </summary>
-    public void PostProcessResults(ErrorMessageDenials? denials, UsfmBookIndexer? indexer)
+    public void PostProcessResults(ErrorMessageDenials? denials)
     {
         for (int i = CheckRunResults.Count - 1; i >= 0; i--)
         {
@@ -190,27 +197,6 @@ public sealed partial class CheckResultsRecorder(string checkId, string projectI
                         result.Start,
                         result.End
                     );
-            }
-
-            // Calculate actual offsets
-            if (indexer != null)
-            {
-                var verseIndex = indexer.GetIndex(result.Start.VerseRef);
-                if (!verseIndex.HasValue)
-                {
-                    result.Start.Offset = 0;
-                    continue;
-                }
-
-                var textIndex = indexer.Usfm.IndexOf(result.VerseText, verseIndex.Value);
-                if (textIndex < 0)
-                {
-                    result.Start.Offset = 0;
-                    continue;
-                }
-
-                result.Start.Offset += textIndex - verseIndex.Value;
-                result.End.Offset = result.Start.Offset + result.VerseText.Length;
             }
         }
     }

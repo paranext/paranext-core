@@ -53,15 +53,18 @@ export {
   wait,
   waitForDuration,
 } from './util';
+export { hasCustomParatextTags, parseParatextHtml, sanitizeHtml } from './html-utils';
 export {
   getDefaultCallerSequence,
   getNthCaller,
   getFormatCallerFunction,
 } from './scripture/footnote-util';
+export type { FormatScrRefRangeOptions } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
+  formatScrRefRange,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
   normalizeScriptureSpaces,
@@ -94,7 +97,9 @@ export {
   toKebabCase,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
+  collapseMiddleWords,
 } from './string-util';
+export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
@@ -102,17 +107,18 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
-export { default as formatTimeSpan } from './date-time-format-util';
+export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS } from './keyboard-util';
 
 // Types
-export type { DeepPartial, KebabCase, ReplaceType, UnionToIntersection } from './util';
+export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
 export type {
   Dispose,
   OnDidDispose,
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
 } from './lifetime-management/disposal.model';
+export type { PaneSizeLimitsOptions } from './pane-utils';
 export type { PlatformError } from './platform-error';
 export type {
   PlatformEventHandler,
@@ -189,9 +195,51 @@ export {
 export * from './extension-contributions/theme.model';
 export * from './extension-contributions/theme.util';
 export type {
+  AttributeMarkerInfo,
+  CloseableMarkerTypeInfo,
+  MarkerInfo,
+  MarkersMap,
+  MarkerTypeInfoBase,
+  MarkerTypeInfo,
+  NonCloseableMarkerTypeInfo,
+  NormalMarkerInfo,
+} from './scripture/markers-maps/markers-map-3.0.model';
+export {
+  USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
+  USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+} from './scripture/markers-maps/markers-map-3.0.model';
+export type {
+  ContentJsonPath,
   IUsjReaderWriter,
-  UsjContentLocation,
+  PropertyJsonPath,
+  UsfmScrRefVerseLocation,
+  UsfmVerseLocation,
+  UsfmVerseRefVerseLocation,
+  UsjAttributeKeyLocation,
+  UsjAttributeMarkerLocation,
+  UsjBookLocation,
+  UsjChapterLocation,
+  UsjClosingAttributeMarkerLocation,
+  UsjClosingMarkerLocation,
+  UsjDocumentLocation,
+  UsjFlatBookLocation,
+  UsjFlatChapterLocation,
+  UsjFlatTextChapterLocation,
+  UsjLocation,
+  UsjMarkerLocation,
+  UsjNodeAndDocumentLocation,
+  UsjPropertyValueLocation,
+  UsjReaderWriterOptions,
   UsjSearchResult,
+  UsjTextContentLocation,
+  UsjVerseRefBookLocation,
+  UsjVerseRefChapterLocation,
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
+export type {
+  CommentStatus,
+  CommentType,
+  LegacyComment,
+  LegacyCommentThread,
+} from './comments.types';
