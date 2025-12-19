@@ -22,47 +22,6 @@ on:
         default: false
 
 jobs:
-  run-checks:
-    name: Run Checks on ${{ matrix.os }}
-
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        # Make sure the ubuntu version matches with the other job and env values
-        os: [ubuntu-22.04]
-
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v4
-
-      - name: Read package.json
-        id: package_json
-        uses: zoexx/github-action-json-file-properties@1.0.6
-        with:
-          file_path: 'package.json'
-
-      - name: Install Node.js and NPM
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
-          cache: npm
-
-      - name: Install packages
-        run: npm ci
-
-      # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
-      - name: type checking
-        run: |
-          npm run build:main
-          npm run typecheck
-
-      - name: check JS/TS formatting
-        run: npm run format:check
-
-      - name: check JS/TS linting
-        run: npm run lint
-
   test:
     name: Build on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
 
@@ -168,6 +127,13 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
+      - name: type checking
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          npm run build:main
+          npm run typecheck
+
       - name: Build
         run: npm run build
 
@@ -192,13 +158,20 @@ jobs:
       - name: npm unit tests
         run: npm test
 
-      # I didn't move this to checks because it only takes a few seconds
-      # and each OS has to install this anyway.
       - name: check dotnet formatting
+        if: ${{ matrix.os == env.OS_LINUX }}
         run: |
           cd c-sharp
           dotnet tool restore
           dotnet csharpier --check .
+
+      - name: check JS/TS formatting
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run format:check
+
+      - name: check JS/TS linting
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run lint
 
       - name: check packaging
         env:
