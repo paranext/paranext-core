@@ -3,10 +3,12 @@ import { Copy, X } from 'lucide-react';
 import {
   Button,
   DropdownMenuItem,
+  getLocalizedBookName,
   LinkedScrRefDisplayProps,
   ResultsCard,
 } from 'platform-bible-react';
 import {
+  collapseMiddleWords,
   getErrorMessage,
   LocalizedStringValue,
   LocalizeKey,
@@ -254,9 +256,16 @@ export default function SearchResult({
     return {
       startRef: searchResult.start.verseRef,
       endRef: searchResult.end.verseRef,
-      textParts: searchResult.text, // TODO: use truncateOmittingMiddleWords once https://github.com/paranext/paranext-core/pull/1952 is merged
+      textParts: collapseMiddleWords(searchResult.text, 7),
       scrRefFormattingProps: {
-        localizedBookNames: localizedBookData,
+        optionOrLocalizedBookName: getLocalizedBookName(
+          searchResult.start.verseRef,
+          localizedBookData,
+        ),
+        endRefOptionOrLocalizedBookName: getLocalizedBookName(
+          searchResult.end.verseRef,
+          localizedBookData,
+        ),
       },
     };
   }, [searchResult, localizedBookData]);
