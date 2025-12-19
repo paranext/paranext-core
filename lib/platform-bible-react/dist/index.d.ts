@@ -118,6 +118,26 @@ type MultiColumnMenu = {
 	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
 type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+type FormatScrRefOptions = {
+	/**
+	 * Either 'id' (the default) to format using the "standard" (as defined by SIL/UBS) 3-letter book
+	 * ID, 'English' to format using the English book name spelled out, or some other string (e.g., a
+	 * localized book name, vernacular abbreviation, FCBH book id, etc.) to use.
+	 */
+	optionOrLocalizedBookName?: "id" | "English" | string;
+	/** The character(s) used to separate the chapter number from the verse number. */
+	chapterVerseSeparator?: string;
+	/** The character(s) used to separate the book from the chapter number. */
+	bookChapterSeparator?: string;
+};
+type FormatScrRefRangeOptions = FormatScrRefOptions & {
+	/** See optionOrLocalizedBookName */
+	endRefOptionOrLocalizedBookName?: "id" | "English" | string;
+	/** The character(s) used to separate the two references. */
+	rangeSeparator?: string;
+	/** Wether or not to repeat the book name in the end reference if it is the same. Default false. */
+	repeatBookName?: boolean;
+};
 type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
@@ -1758,24 +1778,6 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-type LocalizedBookNames = Map<string, string | {
-	localizedId: string;
-}>;
-type ScrRefFormattingOptions = {
-	/** Map of localized book names */
-	localizedBookNames?: LocalizedBookNames;
-	/** Separating character(s) between chapter and verse */
-	chapterVerseSeparator?: string;
-	/** Separating character(s) between book and chapter */
-	bookChapterSeparator?: string;
-	/** Separating character(s) between start and end reference */
-	rangeSeparator?: string;
-	/**
-	 * If or not to repeat the book and/or chapter for the end reference, when the range is inside the
-	 * same book or chapter. Example for false: `GEN 1 - 2`, example for true: `GEN 1 - GEN 2`
-	 */
-	repeatBookAndChapterOnRange?: boolean;
-};
 /** Props interface for the LinkedScrRefDisplay component */
 export type LinkedScrRefDisplayProps = {
 	/** Single reference or start reference of a range to display as part of the link */
@@ -1783,7 +1785,7 @@ export type LinkedScrRefDisplayProps = {
 	/** End reference of a range to display as part of the link */
 	endRef?: SerializedVerseRef;
 	/** Additional properties to format the scripture references */
-	scrRefFormattingProps?: ScrRefFormattingOptions;
+	scrRefFormattingProps?: FormatScrRefRangeOptions;
 	/** Part of Scripture text to display after the scripture reference */
 	scriptureTextPart?: string;
 	/** Optional class name to style the button and text section */
