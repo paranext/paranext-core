@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -523,7 +524,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.ExtraHeadingInfoInternal = source.ExtraHeadingInfoInternal;
     }
 
-    public bool UpdateComment(string commentId, string updatedContent)
+    public bool UpdateComment(string commentId, string updatedContentHtml)
     {
         if (string.IsNullOrEmpty(commentId))
             return false;
@@ -547,16 +548,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Cannot update comment {commentId} in thread {parentThread.Id} - only the last comment can be updated (last comment ID: {lastComment?.Id})"
             );
 
-        XmlDocument xmlDoc = new() { PreserveWhitespace = true };
-        try
-        {
-            xmlDoc.LoadXml($"<Contents>{updatedContent ?? string.Empty}</Contents>");
-        }
-        catch (XmlException ex)
-        {
-            throw new InvalidDataException($"Updated content is not valid XML/HTML: {ex.Message}");
-        }
-        commentToUpdate.Contents = xmlDoc.DocumentElement;
+        // Update the comment contents from HTML
+        var commentWrapper = new PlatformCommentWrapper(
+            commentToUpdate,
+            new PlatformCommentThreadWrapper(parentThread)
+        );
+        commentWrapper.ContentsHtml = updatedContentHtml;
 
         // Reset the status field to Unspecified when a comment is edited
         commentToUpdate.Status = NoteStatus.Unspecified;

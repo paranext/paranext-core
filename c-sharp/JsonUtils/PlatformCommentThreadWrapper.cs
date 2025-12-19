@@ -34,4 +34,9 @@ public class PlatformCommentThreadWrapper
     public bool IsRead => ThreadStatus.IsThreadRead(_thread);
 
     internal bool IsCommentRead(Comment comment) => ThreadStatus.IsCommentRead(_thread, comment);
+
+    /// <summary>
+    /// Gets the underlying CommentThread object.
+    /// </summary>
+    internal CommentThread ThreadInternal => _thread;
 }
