@@ -172,7 +172,11 @@ export type {
   UndoRedoButtonsLocalizedStrings,
   UndoRedoButtonsProps,
 } from './components/basics/undo-redo-buttons.component';
-export type { LinkedScrRefDisplayProps } from './components/basics/linked-scr-ref-display.component';
+export type {
+  LinkedScrRefDisplayProps,
+  LocalizedBookNames,
+} from './components/basics/linked-scr-ref-display.component';
+export { getLocalizedBookName } from './components/basics/linked-scr-ref-display.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
