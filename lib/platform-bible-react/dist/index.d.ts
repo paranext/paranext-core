@@ -1778,6 +1778,9 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export type LocalizedBookNames = Map<string, string | {
+	localizedId: string;
+}>;
 /** Props interface for the LinkedScrRefDisplay component */
 export type LinkedScrRefDisplayProps = {
 	/** Single reference or start reference of a range to display as part of the link */
@@ -1785,7 +1788,7 @@ export type LinkedScrRefDisplayProps = {
 	/** End reference of a range to display as part of the link */
 	endRef?: SerializedVerseRef;
 	/** Additional properties to format the scripture references */
-	scrRefFormattingProps?: FormatScrRefRangeOptions;
+	scrRefFormattingOptions?: FormatScrRefRangeOptions;
 	/** Part of Scripture text to display after the scripture reference */
 	scriptureTextPart?: string;
 	/** Optional class name to style the button and text section */
@@ -1795,6 +1798,16 @@ export type LinkedScrRefDisplayProps = {
 	/** If to make the part of Scripture text part of the link or not */
 	includeInLink?: "allText" | "onlyScrRef";
 };
+/**
+ * A function to retrieve the localized book name from a map, e.g. returned by papi function
+ * useLocalizedStrings
+ *
+ * @param scrRef A SerializedVerseRef
+ * @param localizedBookNames A map of localization key to string | localization key to an object
+ *   with localizedId holding the localized book name
+ * @returns The book name localized if found or the pure book name from the ref
+ */
+export declare function getLocalizedBookName(scrRef: SerializedVerseRef, localizedBookNames?: LocalizedBookNames): string | undefined;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
