@@ -618,7 +618,7 @@ export interface IUsjReaderWriter {
   ): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
   /**
    * Given a starting point, find the next node location in this USJ data that matches the search
-   * conditions
+   * conditions. The given starting point is included in the search.
    *
    * @param nodeAndLocation Node from which the search will start
    * @param searchFunction Function that nodes and their locations will be passed into to determine
