@@ -1,4 +1,4 @@
-import { deserialize, isSerializable, serialize } from 'platform-bible-utils';
+import { deserialize, serialize } from 'platform-bible-utils';
 
 const WEBVIEW_STATE_KEY = 'web-view-state';
 const stateMap = new Map<string, Record<string, unknown>>();
@@ -50,8 +50,10 @@ export function getFullWebViewStateById(id: string): Record<string, unknown> {
 }
 
 /**
- * Set the web view state associated with the given ID This function is only intended to be used at
- * startup. setWebViewState is intended for web views to call.
+ * Set the web view state associated with the given ID
+ *
+ * This function is only intended to be used at startup. setWebViewState is intended for web views
+ * to call.
  *
  * @param id ID of the web view
  * @param state State to set for the given web view
@@ -65,49 +67,15 @@ export function setFullWebViewStateById(id: string, state: Record<string, unknow
 }
 
 /**
- * Get the web view state associated with the given ID
+ * Delete the web view state associated with the given ID
  *
  * @param id ID of the web view
- * @param stateKey Key used to retrieve the state value
- * @returns String (if it exists) containing the state for the given key of the given web view.
- *   Otherwise default value is returned.
  */
-export function getWebViewStateById<T>(id: string, stateKey: string, defaultValue: T): T {
-  if (!id || !stateKey) throw new Error('id and stateKey must be provided to get webview state');
-  const state = getRecord(id);
-  // We don't have any way to know what type this is, so just type assert for convenience
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return stateKey in state ? (state[stateKey] as T) : defaultValue;
-}
-
-/**
- * Set the web view state object associated with the given ID
- *
- * @param id ID of the web view
- * @param stateKey Key for the associated state
- * @param stateValue Value of the state for the given key of the given web view - must work with
- *   serialize/deserialize
- */
-export function setWebViewStateById<T>(id: string, stateKey: string, stateValue: T): void {
-  if (!id || !stateKey) throw new Error('id and stateKey must be provided to set webview state');
-  if (!isSerializable(stateValue))
-    throw new Error(`"${stateKey}" value cannot round trip with serialize and deserialize.`);
-
-  const state = getRecord(id);
-  state[stateKey] = stateValue;
-  save();
-}
-
-/**
- * Remove the web view state object associated with the given ID
- *
- * @param id ID of the web view
- * @param stateKey Key for the associated state
- */
-export function resetWebViewStateById(id: string, stateKey: string): void {
-  if (!id || !stateKey) throw new Error('id and stateKey must be provided to remove webview state');
-  const state = getRecord(id);
-  delete state[stateKey];
+export function deleteFullWebViewStateById(id: string): void {
+  if (!id) throw new Error('id must be provided to delete webview state');
+  loadIfNeeded();
+  idsLookedUp.add(id);
+  stateMap.delete(id);
   save();
 }
 

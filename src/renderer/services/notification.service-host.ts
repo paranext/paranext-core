@@ -28,12 +28,16 @@ async function send(notification: PlatformNotification): Promise<string | number
   const { message, severity, clickCommand, clickCommandLabel, notificationId } = notification;
   const localizedMessage = await localize(message);
   let toastId = notificationId ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;
+  // Need to define effectiveNotificationId here to access it in onClick, but we need toastId to
+  // be definitely assigned before we can assign effectiveNotificationId, so we use a let and
+  // assign it after the switch.
+  let effectiveNotificationId: number | string;
   const toastOptions = {
     action:
       clickCommandLabel && clickCommand
         ? {
             label: await localize(clickCommandLabel),
-            onClick: () => commandService.sendCommand(clickCommand),
+            onClick: () => commandService.sendCommand(clickCommand, effectiveNotificationId),
             id: toastId,
           }
         : undefined,
@@ -54,7 +58,7 @@ async function send(notification: PlatformNotification): Promise<string | number
       toastId = toast(localizedMessage, toastOptions);
       break;
   }
-  const effectiveNotificationId = notificationId ?? toastId;
+  effectiveNotificationId = notificationId ?? toastId;
   mapOfNotificationIdsToToastIds.set(effectiveNotificationId, toastId);
   return effectiveNotificationId;
 }

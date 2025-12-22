@@ -396,6 +396,7 @@ declare module 'shared/models/web-view.model' {
     'tooltip',
     'projectId',
     'scrollGroupScrRef',
+    'state',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -754,6 +755,9 @@ declare module 'shared/global-this.model' {
       webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
     ) => boolean;
+    var getWebViewStateById: <T>(id: string, stateKey: string, defaultValue: T) => T;
+    var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: T) => void;
+    var resetWebViewStateById: (id: string, stateKey: string) => void;
     /**
      *
      * Gets the saved properties on this WebView's WebView definition
@@ -2946,7 +2950,10 @@ declare module 'shared/models/docking-framework.model' {
      *
      * @param webViewId The ID of the WebView to update
      * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
-     *   same
+     *   same. Note: `state` will be treated like any other property, meaning it will be overwritten
+     *   completely if specified here and the object is referentially different from the current state
+     *   object. It is not compared deeply (because we are working across contexts, where `deepEqual`
+     *   doesn't always work well) or merged (so we can remove properties from `state`).
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `false`
      * @returns True if successfully found the WebView to update; false otherwise
@@ -4118,11 +4125,27 @@ declare module 'shared/models/notification.service-model' {
      * Automatically localized if this is a {@link LocalizeKey}.
      */
     clickCommandLabel?: string | LocalizeKey;
-    /** Optional command to run if users click on the label in the notification */
+    /**
+     * Optional command to run if users click on the label in the notification. The command will be
+     * sent one argument:
+     *
+     * - NotificationId: The ID of the notification that was clicked
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     */
     clickCommand?: keyof CommandHandlers;
     /** Optional ID of a previous notification to update instead of showing a new notification */
     notificationId?: string | number;
   }
+  /**
+   * Type signature for a command handler that is called when a user clicks on a notification.
+   *
+   * Register a command handler with this signature and pass its name as the `clickCommand` property
+   * of a {@link PlatformNotification} to have it called when the user clicks on the notification.
+   *
+   * @param notificationId ID of the notification that was clicked
+   */
+  export type NotificationClickCommandHandler = (notificationId: string | number) => Promise<void>;
   /**
    *
    * Service that sends notifications to users in the UI
@@ -7218,7 +7241,10 @@ declare module '@papi/core' {
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { DirectionFromTab } from 'shared/models/docking-framework.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
-  export type { PlatformNotification } from 'shared/models/notification.service-model';
+  export type {
+    NotificationClickCommandHandler,
+    PlatformNotification,
+  } from 'shared/models/notification.service-model';
   export type {
     Components as ComponentsDocumentation,
     MethodDocumentationWithoutName,

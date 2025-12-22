@@ -1,6 +1,8 @@
-﻿import papi, { logger, WebViewFactory } from '@papi/backend';
+﻿// eslint-disable-next-line max-classes-per-file
+import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
+  ExecutionToken,
   IWebViewProvider,
   OpenWebViewOptions,
   SavedWebViewDefinition,
@@ -10,6 +12,8 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   getErrorMessage,
   serialize,
+  Unsubscriber,
+  UnsubscriberAsync,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjNodeAndDocumentLocation,
   UsjReaderWriter,
@@ -30,6 +34,8 @@ import { formatEditorTitle } from './platform-scripture-editor.utils';
 logger.debug('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
+
+const READONLY_NOTIFICATION_DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -386,15 +392,44 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     const isReadOnly = getWebViewOptions.isReadOnly ?? !!savedWebView.state?.isReadOnly;
+
+    // Get the options out that we need to do more stuff with
+    const {
+      decorations: optionsDecorations,
+      iconUrl: optionsIconUrl,
+      title: optionsTitle,
+      tooltip: optionsTooltip,
+      ...optionsWebViewState
+    } = getWebViewOptions.options ?? {};
+
     const unformattedTitle =
-      getWebViewOptions.options?.title ??
+      optionsTitle ??
       // WebView state is not yet typed, but we know this is string | undefined
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       (savedWebView.state?.unformattedTitle as string | undefined);
+
+    // Overwrite the saved state with the relevant options passed in and some other updated values
+    const savedWebViewStateUpdated = {
+      ...savedWebView.state,
+      ...optionsWebViewState,
+      decorations: mergeDecorations(
+        // We know this will be EditorDecorations though webView state doesn't have types
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        savedWebView.state?.decorations as EditorDecorations,
+        optionsDecorations,
+      ),
+      isReadOnly,
+      /**
+       * The original title string or localized string key passed in for us to use to format the
+       * title when it should change
+       */
+      unformattedTitle,
+    };
+
     const title = await formatEditorTitle(
       unformattedTitle,
       projectId,
-      isReadOnly,
+      isReadOnly || savedWebViewStateUpdated.viewType === 'markers',
       async (projectIdFormat) => {
         const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
         return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
@@ -405,25 +440,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
     return {
       ...savedWebView,
       title,
-      iconUrl: getWebViewOptions.options?.iconUrl ?? savedWebView.iconUrl,
-      tooltip: getWebViewOptions.options?.tooltip ?? savedWebView.tooltip,
+      iconUrl: optionsIconUrl ?? savedWebView.iconUrl,
+      tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
-      state: {
-        ...savedWebView.state,
-        isReadOnly,
-        decorations: mergeDecorations(
-          // We know this will be EditorDecorations though webView state doesn't have types
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          savedWebView.state?.decorations as EditorDecorations,
-          getWebViewOptions.options?.decorations,
-        ),
-        /**
-         * The original title string or localized string key passed in for us to use to format the
-         * title when it should change
-         */
-        unformattedTitle,
-      },
+      state: savedWebViewStateUpdated,
       projectId,
       allowPopups: true,
       shouldShowToolbar: true,
@@ -693,6 +714,146 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 }
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
+/**
+ * Notifier that alerts users when a Scripture Editor WebView is opened or updated with
+ * `state.viewType === 'markers'`. Allows dismissing notifications per-project for 24 hours.
+ */
+class MarkerViewNotifier {
+  /** UserData storage key for the disabled map */
+  private readonly disabledMapUserDataKey =
+    'platformScriptureEditor.markerViewNotificationDisabled';
+
+  /** Map of notification IDs to project IDs */
+  private readonly projectIdsByNotificationId = new Map<string | number, string>();
+
+  /** Map of project IDs to the time (in milliseconds) they were disabled */
+  private disabledMap: Record<string, number> = {};
+
+  constructor(
+    private papiInstance: typeof papi,
+    private executionToken: ExecutionToken,
+  ) {}
+
+  /**
+   * Starts the notifier by loading persisted state and registering necessary commands and listeners
+   *
+   * @returns Array of disposables for the registered commands and listeners
+   */
+  async start(): Promise<(Unsubscriber | UnsubscriberAsync)[]> {
+    // Load persisted disable map once and cache it in memory
+    try {
+      const rawDisableMap =
+        (await this.papiInstance.storage.readUserData(
+          this.executionToken,
+          this.disabledMapUserDataKey,
+        )) ?? '{}';
+      this.disabledMap = JSON.parse(rawDisableMap);
+    } catch (e) {
+      logger.warn(`Failed to load marker-view disable map from storage: ${getErrorMessage(e)}`);
+      this.disabledMap = {};
+    }
+    // Register command to dismiss for a project for 24 hours
+    const dismissCommand = this.papiInstance.commands.registerCommand(
+      'platformScriptureEditor.dismissMarkerNotificationForProjectToday',
+      async (notificationId) => {
+        if (!notificationId) return;
+        const projectId = this.projectIdsByNotificationId.get(notificationId);
+        if (!projectId) return;
+        // Update in-memory map and persist
+        this.disabledMap[projectId] = Date.now();
+        try {
+          await this.papiInstance.storage.writeUserData(
+            this.executionToken,
+            this.disabledMapUserDataKey,
+            JSON.stringify(this.disabledMap),
+          );
+        } catch (e) {
+          logger.warn(
+            `Failed to persist marker-view disable map for project ${projectId}: ${getErrorMessage(e)}`,
+          );
+        }
+        // Clean up the runtime mapping
+        this.projectIdsByNotificationId.delete(notificationId);
+      },
+      {
+        method: {
+          summary: "Don't show marker view readonly notification for this project for 24 hours",
+          params: [{ name: 'notificationId', required: true, schema: { type: 'string' } }],
+          result: { name: 'return value', schema: { type: 'null' } },
+        },
+      },
+    );
+
+    // Listeners for new or updated webviews
+    const onOpen = this.papiInstance.webViews.onDidOpenWebView(({ webView }) =>
+      this.handleWebView(webView),
+    );
+    const onUpdate = this.papiInstance.webViews.onDidUpdateWebView(({ webView }) =>
+      this.handleWebView(webView),
+    );
+
+    return [await dismissCommand, onOpen, onUpdate];
+  }
+
+  /**
+   * Handles a WebView being opened or updated, sending a notification if it is a markers view and
+   * notifications are not disabled for its project
+   *
+   * @param webViewDefinition WebView that was opened or updated
+   */
+  private async handleWebView(webViewDefinition: SavedWebViewDefinition | WebViewDefinition) {
+    try {
+      // We are only interested in our editor WebViews, so ignore others
+      if (webViewDefinition.webViewType !== scriptureEditorWebViewType) return;
+      // TypeScript doesn't know the shape of state, but we know viewType (if present) is string
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const viewType = webViewDefinition.state?.viewType as string | undefined;
+
+      // Only need to send a notification if this is the markers view which is currently readonly
+      if (viewType !== 'markers') return;
+
+      const { projectId } = webViewDefinition;
+      // If no projectId, can't proceed. Just warn and be done
+      if (!projectId) {
+        logger.warn(
+          `MarkerViewNotifier found an editor view WebView (${webViewDefinition.id}) with no projectId!`,
+        );
+        return;
+      }
+
+      const disabledTime = this.disabledMap[projectId];
+      // If the disable time hasn't elapsed yet, don't send another notification
+      if (disabledTime && Date.now() < disabledTime + READONLY_NOTIFICATION_DISMISS_DURATION_MS)
+        return;
+
+      // Resolve project name if possible
+      let projectName = projectId;
+      try {
+        const pdp = await this.papiInstance.projectDataProviders.get('platform.base', projectId);
+        projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+      } catch (e) {
+        // fall back to id
+        logger.warn(
+          `MarkerViewNotifier failed to get project name for project ${projectId}: ${getErrorMessage(
+            e,
+          )}`,
+        );
+      }
+
+      // Send notification informing that markers view is read-only for this WebView/project
+      const notificationId = await this.papiInstance.notifications.send({
+        severity: 'info',
+        // Include project name in the message
+        message: `The markers view for ${projectName} is read-only.`,
+        clickCommand: 'platformScriptureEditor.dismissMarkerNotificationForProjectToday',
+        clickCommandLabel: "Don't show again today",
+      });
+      this.projectIdsByNotificationId.set(notificationId, projectId);
+    } catch (e) {
+      logger.warn(`MarkerViewNotifier failed handling WebView: ${getErrorMessage(e)}`);
+    }
+  }
+}
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
 
@@ -876,6 +1037,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Await the registration promises at the end so we don't hold everything else up
+  const markerNotifier = new MarkerViewNotifier(papi, context.executionToken);
+  const markerNotifierUnsubscribers = await markerNotifier.start();
+
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
@@ -886,6 +1050,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertFootnotePromise,
     await insertCrossReferencePromise,
     await annotationStyleDataProviderPromise,
+    ...markerNotifierUnsubscribers,
   );
 
   logger.debug('Scripture editor is finished activating!');

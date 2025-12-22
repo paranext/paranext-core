@@ -161,7 +161,7 @@ declare module 'platform-scripture-editor' {
      *
      * Defaults to 'formatted'.
      */
-    scriptureViewType?: ScriptureEditorViewType;
+    viewType?: ScriptureEditorViewType;
     /**
      * When the footnote pane is shown, where it should be positioned
      *
@@ -175,7 +175,7 @@ declare module 'platform-scripture-editor' {
      *
      * Defaults to 20.
      */
-    footnotesPaneSize?: number;
+    footnotesPaneSizePercent?: number;
     /**
      * Flag indicating whether the footnote pane should be displayed
      *
@@ -240,6 +240,7 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
   } from 'platform-scripture-editor';
+  import { NotificationClickCommandHandler } from '@papi/core';
 
   export interface CommandHandlers {
     /**
@@ -318,6 +319,11 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
+    /**
+     * Dismiss the marker-view readonly notification for a given notification id. The command
+     * receives the `notificationId` when the notification's click action is used.
+     */
+    'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
   }
 
   export interface WebViewControllers {

@@ -657,7 +657,10 @@ export function updateTabPartial(
  *
  * @param webViewId The id of the WebView to update
  * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
- *   same
+ *   same. Note: `state` will be treated like any other property, meaning it will be overwritten
+ *   completely if specified here and the object is referentially different from the current state
+ *   object. It is not compared deeply (because we are working across contexts, where `deepEqual`
+ *   doesn't always work well) or merged (so we can remove properties from `state`).
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
