@@ -1052,10 +1052,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     /// <summary>
     /// Copied from `ScrText.StandardizeCrLfsIfNecessary`. We need to do this when setting USFM
-    /// because we need to normalize USFM with CrLfs before we run `ScrText.PutText`, and we expect
+    /// because we need to normalize USFM with CR/LFs before we run `ScrText.PutText`, and we expect
     /// CR not to be present on the USFM received for setting.
     ///
-    /// Some programs (include cc which is used for mapin/mapout) strip out cr's.
+    /// Some programs (include cc which is used for mapin/mapout) strip out CRs.
     /// Put them back in if missing. Also terminates with CR/LF
     /// </summary>
     private static string StandardizeCrLfsIfNecessary(string text)
