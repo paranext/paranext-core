@@ -3,6 +3,8 @@ import { formatReplacementString, isLocalizeKey, LanguageStrings } from 'platfor
 
 /* Small utility helpers for the platform-scripture-editor extension. */
 
+export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal
