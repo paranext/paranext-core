@@ -17,6 +17,9 @@ import {
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjNodeAndDocumentLocation,
   UsjReaderWriter,
+  Mutex,
+  MutexMap,
+  formatReplacementString,
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
@@ -35,7 +38,14 @@ logger.debug('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
 
+/**
+ * Time in milliseconds to wait before sending another notification informing the user that the
+ * editor is read-only because they are in the markers view
+ */
 const READONLY_NOTIFICATION_DISMISS_DURATION_MS = 24 * 60 * 60 * 1000;
+
+/** Time in milliseconds to throttle repeat notifications for the same project */
+const READONLY_NOTIFICATION_THROTTLE_MS = 5 * 1000;
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -728,6 +738,10 @@ class MarkerViewNotifier {
 
   /** Map of project IDs to the time (in milliseconds) they were disabled */
   private disabledMap: Record<string, number> = {};
+  /** Map of project IDs to timestamp (ms) of the last sent notification */
+  private lastNotificationByProject: Record<string, number> = {};
+  /** Map of per-project mutexes to avoid races when checking/updating last notification timestamps */
+  private projectMutexes = new MutexMap();
 
   constructor(
     private papiInstance: typeof papi,
@@ -812,7 +826,7 @@ class MarkerViewNotifier {
       // Only need to send a notification if this is the markers view which is currently readonly
       if (viewType !== 'markers') return;
 
-      const { projectId } = webViewDefinition;
+      const { projectId, state } = webViewDefinition;
       // If no projectId, can't proceed. Just warn and be done
       if (!projectId) {
         logger.warn(
@@ -821,34 +835,67 @@ class MarkerViewNotifier {
         return;
       }
 
+      // If the view is already read-only, no need to notify
+      if (state?.isReadOnly) return;
+
+      // Check if this notification is disabled for this project
       const disabledTime = this.disabledMap[projectId];
       // If the disable time hasn't elapsed yet, don't send another notification
       if (disabledTime && Date.now() < disabledTime + READONLY_NOTIFICATION_DISMISS_DURATION_MS)
         return;
 
-      // Resolve project name if possible
-      let projectName = projectId;
-      try {
-        const pdp = await this.papiInstance.projectDataProviders.get('platform.base', projectId);
-        projectName = (await pdp.getSetting('platform.name')) ?? projectId;
-      } catch (e) {
-        // fall back to id
-        logger.warn(
-          `MarkerViewNotifier failed to get project name for project ${projectId}: ${getErrorMessage(
-            e,
-          )}`,
-        );
-      }
+      // Acquire a per-project mutex and atomically check/reserve the last-notification timestamp
+      // so we don't send the same notification multiple times in quick succession
+      const projectMutex: Mutex = this.projectMutexes.get(projectId);
+      await projectMutex.runExclusive(async () => {
+        const lastSent = this.lastNotificationByProject[projectId];
+        if (lastSent && Date.now() < lastSent + READONLY_NOTIFICATION_THROTTLE_MS) return;
 
-      // Send notification informing that markers view is read-only for this WebView/project
-      const notificationId = await this.papiInstance.notifications.send({
-        severity: 'info',
-        // Include project name in the message
-        message: `The markers view for ${projectName} is read-only.`,
-        clickCommand: 'platformScriptureEditor.dismissMarkerNotificationForProjectToday',
-        clickCommandLabel: "Don't show again today",
+        // Resolve project name if possible
+        let projectName = projectId;
+        try {
+          const pdp = await this.papiInstance.projectDataProviders.get('platform.base', projectId);
+          projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+        } catch (e) {
+          // fall back to id
+          logger.warn(
+            `MarkerViewNotifier failed to get project name for project ${projectId}: ${getErrorMessage(
+              e,
+            )}`,
+          );
+        }
+
+        // Localize and format the notification message and click label
+        const messageKey = '%platformScriptureEditor_markersView_readonly_message_format%';
+        const clickLabelKey = '%platformScriptureEditor_markersView_readonly_dismiss%';
+        let localizedMessageTemplate = messageKey;
+        let localizedClickLabel = clickLabelKey;
+        try {
+          const localized = await this.papiInstance.localization.getLocalizedStrings({
+            localizeKeys: [messageKey, clickLabelKey],
+          });
+          localizedMessageTemplate = localized[messageKey] ?? messageKey;
+          localizedClickLabel = localized[clickLabelKey] ?? localizedClickLabel;
+        } catch (e) {
+          logger.warn(
+            `Failed to get localized strings for marker-view notification: ${getErrorMessage(e)}`,
+          );
+        }
+
+        const message = formatReplacementString(localizedMessageTemplate, { projectName });
+
+        // Send notification informing that markers view is read-only for this WebView/project
+        const notificationId = await this.papiInstance.notifications.send({
+          severity: 'info',
+          message,
+          clickCommand: 'platformScriptureEditor.dismissMarkerNotificationForProjectToday',
+          clickCommandLabel: localizedClickLabel,
+        });
+        this.projectIdsByNotificationId.set(notificationId, projectId);
+
+        // Record the last-send time so we don't send duplicates too quickly
+        this.lastNotificationByProject[projectId] = Date.now();
       });
-      this.projectIdsByNotificationId.set(notificationId, projectId);
     } catch (e) {
       logger.warn(`MarkerViewNotifier failed handling WebView: ${getErrorMessage(e)}`);
     }

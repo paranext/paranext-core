@@ -66,6 +66,8 @@
       "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Choose a resource to open:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Choose a project to open:",
+      "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location"
     },
     "es": {
