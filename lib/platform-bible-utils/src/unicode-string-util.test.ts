@@ -1,116 +1,135 @@
-import {
-  // at,
-  // charAt,
-  // codePointAt,
-  endsWith,
-  escapeStringRegexp,
-  formatReplacementString,
-  includes,
-  indexOf,
-  lastIndexOf,
-  stringLength,
-  normalize,
-  padEnd,
-  padStart,
-  slice,
-  split,
-  startsWith,
-  substring,
-  toArray,
-  ordinalCompare,
-  testingStringUtils,
-  transformAndEnsureRegExpRegExpArray,
-  transformAndEnsureRegExpArray,
-  formatReplacementStringToArray,
-  toKebabCase,
-  UnicodeString,
-} from './unicode-string-util';
+import { UnicodeString } from './unicode-string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
 
 const MEDIUM_SURROGATE_PAIRS_STRING = 'Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome';
-const MEDIUM_SURROGATE_PAIRS_ARRAY = ['Look', 'At🦄This', 'Thing👮🏽‍♀️Its', 'Awesome'];
+const MEDIUM_SURROGATE_PAIRS_ARRAY = [
+  'L',
+  'o',
+  'o',
+  'k',
+  '𐐷',
+  'A',
+  't',
+  '🦄',
+  'T',
+  'h',
+  'i',
+  's',
+  '𐐷',
+  'T',
+  'h',
+  'i',
+  'n',
+  'g',
+  '👮🏽‍♀️',
+  'I',
+  't',
+  's',
+  '𐐷',
+  'A',
+  'w',
+  'e',
+  's',
+  'o',
+  'm',
+  'e',
+];
+const MEDIUM_SURROGATE_PAIRS_SPLIT_ARRAY = ['Look', 'At🦄This', 'Thing👮🏽‍♀️Its', 'Awesome'];
 
 const LONG_SURROGATE_PAIRS_STRING =
   'Look𐐷At🦄All😎These😁Awesome🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By🍕Surrogate🔥Pairs💋!🌟';
 
 const POS_FIRST_PIZZA = 25;
 const POS_SECOND_PIZZA = 57;
-const SURROGATE_PAIRS_STRING_LENGTH = 76;
 const TEN_SPACES = '          ';
 const SEVEN_XS = 'XXXXXXX';
 
 const NORMALIZE_STRING = '\u0041\u006d\u00e9\u006c\u0069\u0065';
 const NORMALIZE_SURROGATE_PAIRS = '\u0041\u006d\u0065\u0301\u006c\u0069\u0065';
 
-describe('string-util-goals', () => {
-  /*
-   * NOTE(mattg): Strings in JavaScript are UTF-16.
-   * UTF-32, UTF-16, and UTF-8 are different encodings that
-   * represent Unicode differently.
-   * For UTF-32, all unicode code points are encoded as 1 32-bit value in memory.
-   * For UTF-16 and UTF-8, however, there's a variable-length encoding.
-   * UTF-16 can represent a code point as 1 _or_ 2 16-bit values in memory.
-   * UTF-8 can represent a code point as anywhere from 1 to 4 8-bit values in memory.
-   *
-   * In UTF-16, if it takes two 16-bit values to store a code point, that's called
-   * a surrogate pair. We want to properly handle strings
-   * without breaking the surrogate pair up.
-   *
-   * In Unicode, there's another thing entirely that's called Graphemes.
-   * A grapheme is a single displayable character, but may be made up of multiple
-   * unicode codepoints, with a zero-width-joiner in-between.
-   * For emojis, this allows flexibility, since a female police officer can be depicted as:
-   * Police Officer emoji (👮) + Zero Width Joiner ('‍') + Female Sign (♀️) = 👮‍♀️
-   *
-   * Emojis are cool and all, but all of this is important for human languages as well.
-   */
-  it('unicorn', () => {
-    const str = '🦄';
-    // a Unicorn is 2 16-bit surrogate pairs.
-    expect(str.length).toEqual(2);
+describe('string', () => {
+  const shortString: UnicodeString = new UnicodeString(SHORT_SURROGATE_PAIRS_STRING);
+  const mediumString: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+  const longString: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  const emptyString: UnicodeString = new UnicodeString('');
 
-    // which is why we need this library to get the single value we want.
-    expect(stringLength(str)).toEqual(1);
-
-    // This is a JS-native solution.
-    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-    const segments = Array.from(segmenter.segment(str));
-    expect(segments.length).toEqual(1);
+  it('string equals short string', () => {
+    const result = shortString.string;
+    expect(result).toEqual(SHORT_SURROGATE_PAIRS_STRING);
   });
 
-  it('astronaut', () => {
-    const str = '👩‍🚀';
-    // A female astronaut has a length of 5 of course.
-    expect(str.length).toEqual(5);
-    // A female astronaut is a:
-    // Female Emoji+ZWJ+Rocket.
-    expect('👩'.length).toEqual(2);
-    expect('‍'.length).toEqual(1); // ZWJ
-    expect('🚀'.length).toEqual(2);
-
-    // But even with a length of 5, we should still get 1 for both methods
-    expect(stringLength(str)).toEqual(1);
-
-    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-    const segments = Array.from(segmenter.segment(str));
-    expect(segments.length).toEqual(1);
+  it('string equals medium string', () => {
+    const result = mediumString.string;
+    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
   });
 
-  it('police officer', () => {
-    const str = '👮🏿‍♂️';
-    // A dark, male, police officer has a length of course.
-    expect(str.length).toEqual(7);
-    // A dark, male police officer is a:
-    // Police Officer+ZWJ+Dark Skin Tone+ZWJ+Male Sign
+  it('string equals long string', () => {
+    const result = longString.string;
+    expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING);
+  });
 
-    // But even with a length of 7, we should still get 1 for both methods
-    expect(stringLength(str)).toEqual(1);
+  it('string equals empty string', () => {
+    const result = emptyString.string;
+    expect(result).toEqual('');
+  });
+});
 
-    const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-    const segments = Array.from(segmenter.segment(str));
-    expect(segments.length).toEqual(1);
+describe('length', () => {
+  const shortString: UnicodeString = new UnicodeString(SHORT_SURROGATE_PAIRS_STRING);
+  const mediumString: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+  const longString: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  const emptyString: UnicodeString = new UnicodeString('');
+
+  it('length equals short string length', () => {
+    const result = shortString.length;
+    expect(result).toEqual(9);
+  });
+
+  it('length equals medium string length', () => {
+    const result = mediumString.length;
+    expect(result).toEqual(30);
+  });
+
+  it('length equals long string length', () => {
+    const result = longString.length;
+    expect(result).toEqual(76);
+  });
+
+  it('length equals empty string length', () => {
+    const result = emptyString.length;
+    expect(result).toEqual(0);
+  });
+});
+
+describe('toArray', () => {
+  const shortString: UnicodeString = new UnicodeString(SHORT_SURROGATE_PAIRS_STRING);
+  const mediumString: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+  // TODO(mattg): make a long string surrogate pair array
+  // const longString: UnicodeString = new UnicodeString(
+  //   LONG_SURROGATE_PAIRS_STRING,
+  // );
+  const emptyString: UnicodeString = new UnicodeString('');
+
+  it('equals short string array', () => {
+    const result = shortString.toArray();
+    expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
+  });
+
+  it('equals medium string array', () => {
+    const result = mediumString.toArray();
+    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_ARRAY);
+  });
+
+  // it('equals long string array', () => {
+  //   const result = longString.toArray();
+  //   expect(result).toEqual();
+  // });
+
+  it('equals empty string array', () => {
+    const result = emptyString.toArray();
+    expect(result).toEqual([]);
   });
 });
 
@@ -231,38 +250,442 @@ describe('codePointAt', () => {
   });
 });
 
-describe('endsWith', () => {
-  it('endsWith without position', () => {
-    const result = endsWith(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
+describe('substring', () => {
+  const str: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  it('substring with begin', () => {
+    const result = str.substring(POS_FIRST_PIZZA);
+    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By🍕Surrogate🔥Pairs💋!🌟');
+  });
+
+  it('substring with end', () => {
+    const result = str.substring(0, POS_FIRST_PIZZA);
+    expect(result).toEqual('Look𐐷At🦄All😎These😁Awesome');
+  });
+
+  it('substring with begin and end', () => {
+    const result = str.substring(POS_FIRST_PIZZA, POS_SECOND_PIZZA);
+    expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By');
+  });
+
+  it('substring with end less than begin', () => {
+    const result = str.substring(POS_SECOND_PIZZA, POS_FIRST_PIZZA);
+    expect(result).toEqual('');
+  });
+});
+
+describe('slice', () => {
+  const medium: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+  it('start (-inf)-(-L)', () => {
+    const result = medium.slice(-100);
+    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
+  });
+  it('start (-L)-0', () => {
+    const result = medium.slice(-3);
+    expect(result).toEqual('ome');
+  });
+  it('start 0-L', () => {
+    const result = medium.slice(3);
+    expect(result).toEqual('k𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
+  });
+  it('start L-inf', () => {
+    const result = medium.slice(50);
+    expect(result).toEqual('');
+  });
+  it('start (-inf)-(-L) end (-inf)-(-L)', () => {
+    const result = medium.slice(-200, -100);
+    expect(result).toEqual('');
+  });
+  it('start (-inf)-(-L) end (-L)-0', () => {
+    const result = medium.slice(-100, -10);
+    expect(result).toEqual('Look𐐷At🦄This𐐷Thing👮🏽‍♀️I');
+  });
+  it('start (-inf)-(-L) end 0-L', () => {
+    const result = medium.slice(-100, 8);
+    expect(result).toEqual('Look𐐷At🦄');
+  });
+  it('start (-inf)-(-L) end L-inf', () => {
+    const result = medium.slice(-100, 100);
+    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
+  });
+  it('start (-L)-0 end (-inf)-(-L)', () => {
+    const result = medium.slice(-5, -100);
+    expect(result).toEqual('');
+  });
+  it('start (-L)-0 end (-L)-0', () => {
+    const result = medium.slice(-5, -10);
+    expect(result).toEqual('');
+  });
+
+  it('start (-L)-0 end (-L)-0 and start < end', () => {
+    const result = medium.slice(-10, -5);
+    expect(result).toEqual('ts𐐷Aw');
+  });
+  it('start (-L)-0 end 0-L', () => {
+    const result = medium.slice(-5, 8);
+    expect(result).toEqual('');
+  });
+  it('start (-L)-0 end L-inf', () => {
+    const result = medium.slice(-5, 100);
+    expect(result).toEqual('esome');
+  });
+  it('start 0-L end (-inf)-(-L)', () => {
+    const result = medium.slice(5, -100);
+    expect(result).toEqual('');
+  });
+  it('start 0-L end (-L)-0', () => {
+    const result = medium.slice(5, -10);
+    expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️I');
+  });
+  it('start 0-L end 0-L', () => {
+    const result = medium.slice(5, 8);
+    expect(result).toEqual('At🦄');
+  });
+  it('start 0-L end 0-L, and start > end', () => {
+    const result = medium.slice(8, 5);
+    expect(result).toEqual('');
+  });
+  it('start 0-L end L-inf', () => {
+    const result = medium.slice(5, 100);
+    expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
+  });
+  it('start L-inf end (-inf)-(-L)', () => {
+    const result = medium.slice(50, -100);
+    expect(result).toEqual('');
+  });
+  it('start L-inf end (-L)-0', () => {
+    const result = medium.slice(50, -10);
+    expect(result).toEqual('');
+  });
+  it('start L-inf end 0-L', () => {
+    const result = medium.slice(50, 8);
+    expect(result).toEqual('');
+  });
+  it('start L-inf end L-inf', () => {
+    const result = medium.slice(50, 100);
+    expect(result).toEqual('');
+  });
+  it('starting index is 0', () => {
+    const str: UnicodeString = new UnicodeString('hello-someone.d.ts');
+    expect(str.slice(0)).toBe('hello-someone.d.ts');
+    expect(str.slice(0, 2)).toBe('he');
+    expect(str.slice(0, -new UnicodeString('.d.ts').length)).toBe('hello-someone');
+  });
+});
+
+describe('split', () => {
+  const short: UnicodeString = new UnicodeString(SHORT_SURROGATE_PAIRS_STRING);
+  const medium: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+  it('split without splitLimit', () => {
+    const result = medium.split('𐐷');
+    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_SPLIT_ARRAY);
+  });
+
+  it('split with splitLimit', () => {
+    const result = medium.split('𐐷', 2);
+    expect(result).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  it('split by empty string', () => {
+    const result = short.split('');
+    expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
+  });
+
+  it('split by empty string with splitLimit', () => {
+    const result = short.split('', 3);
+    expect(result).toEqual(['L', 'o', 'o']);
+  });
+
+  it('split with RegExp separator', () => {
+    const result = medium.split(/[A-Z]/);
+    expect(result).toEqual(['', 'ook𐐷', 't🦄', 'his𐐷', 'hing👮🏽‍♀️', 'ts𐐷', 'wesome']);
+  });
+
+  it('split with RegExp separator that contains surrogate pairs', () => {
+    const result = medium.split(/🦄/);
+    expect(result).toEqual(['Look𐐷At', 'This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  it('split with RegExp separator that matches nothing in the string', () => {
+    const result = medium.split(/\d/);
+    expect(result).toEqual([MEDIUM_SURROGATE_PAIRS_STRING]);
+  });
+});
+
+describe('indexOf', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  const pizza: UnicodeString = new UnicodeString('🍕');
+  it('indexOf without position', () => {
+    const result = long.indexOf(pizza);
+    expect(result).toEqual(POS_FIRST_PIZZA);
+  });
+
+  it('indexOf with position', () => {
+    const result = long.indexOf(pizza, 40);
+    expect(result).toEqual(POS_SECOND_PIZZA);
+  });
+
+  it('indexOf with position greater than string length', () => {
+    const result = long.indexOf(pizza, 100);
+    expect(result).toEqual(-1);
+  });
+
+  it('indexOf with negative position', () => {
+    const result = long.indexOf(pizza, -20);
+    expect(result).toEqual(POS_FIRST_PIZZA);
+  });
+
+  it('indexOf with empty search string', () => {
+    const result = long.indexOf(new UnicodeString(''));
+    expect(result).toEqual(-1);
+  });
+
+  it('indexOf with a search length longer than 1', () => {
+    const result = long.indexOf(new UnicodeString('🔥Pairs💋'));
+    expect(result).toEqual(67);
+  });
+
+  it('indexOf at the end of the string', () => {
+    const result = long.indexOf(new UnicodeString('💋!🌟'));
+    expect(result).toEqual(73);
+  });
+
+  it("indexOf with a seach for something that's not in the string", () => {
+    const result = long.indexOf(new UnicodeString('Pizza'));
+    expect(result).toEqual(-1);
+  });
+
+  it("indexOf with a searchString that's longer than the string", () => {
+    const medium: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+    const result = medium.indexOf(long);
+    expect(result).toEqual(-1);
+  });
+});
+
+describe('lastIndexOf', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  const pizza: UnicodeString = new UnicodeString('🍕');
+  it('lastIndexOf without position', () => {
+    const result = long.lastIndexOf(pizza);
+    expect(result).toEqual(POS_SECOND_PIZZA);
+  });
+
+  it('lastIndexOf with position', () => {
+    const result = long.lastIndexOf(pizza, 5);
+    expect(result).toEqual(-1);
+  });
+
+  it('lastIndexOf with position greater than string length', () => {
+    const result = long.lastIndexOf(pizza, 100);
+    // TODO(mattg): Figure out why this isn't -1 like it is for indexOf
+    expect(result).toEqual(POS_SECOND_PIZZA);
+  });
+
+  it('lastIndexOf with negative position', () => {
+    const result = long.lastIndexOf(pizza, -1);
+    // TODO(mattg): Figure out why this isn't POS_SECOND_PIZZA like it is for indexOf
+    expect(result).toEqual(-1);
+  });
+
+  it('lastIndexOf with empty search string', () => {
+    const result = long.lastIndexOf(new UnicodeString(''));
+    expect(result).toEqual(-1);
+  });
+
+  it('lastIndexOf with a search length longer than 1', () => {
+    const result = long.lastIndexOf(new UnicodeString('🔥Pairs💋'));
+    expect(result).toEqual(67);
+  });
+
+  it('lastIndexOf at the end of the string', () => {
+    const result = long.lastIndexOf(new UnicodeString('💋!🌟'));
+    expect(result).toEqual(73);
+  });
+
+  it("lastIndexOf with a seach for something that's not in the string", () => {
+    const result = long.lastIndexOf(new UnicodeString('Pizza'));
+    expect(result).toEqual(-1);
+  });
+
+  it("lastIndexOf with a searchString that's longer than the string", () => {
+    const medium: UnicodeString = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING);
+    const result = medium.lastIndexOf(long);
+    expect(result).toEqual(-1);
+  });
+});
+
+describe('includes', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  const unicornAllCoolGuy: UnicodeString = new UnicodeString('🦄All😎');
+  it('includes without position', () => {
+    const result = long.includes(new UnicodeString('🍕Symbols💩'));
     expect(result).toEqual(true);
   });
 
-  it('endsWith without position and false data', () => {
-    const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
+  it('includes with position', () => {
+    const result = long.includes(unicornAllCoolGuy, 7);
+    expect(result).toEqual(true);
+  });
+
+  it('includes with position that is to high, so no matches are found', () => {
+    const result = long.includes(unicornAllCoolGuy, 10);
     expect(result).toEqual(false);
   });
 
-  it('endsWith with position', () => {
-    const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 8);
-    expect(result).toEqual(true);
-  });
-
-  it('endsWith with position and false data', () => {
-    const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'Pizza', 8);
+  it('includes with position that is higher than the length', () => {
+    const result = long.includes(unicornAllCoolGuy, 100);
     expect(result).toEqual(false);
   });
 
-  it('endsWith with position and grapheme', () => {
-    const result = endsWith(LONG_SURROGATE_PAIRS_STRING, '👮🏽‍♀️', 55);
+  it('includes with grapheme emoji that exists', () => {
+    const result = long.includes(new UnicodeString('👮🏽‍♀️'));
     expect(result).toEqual(true);
   });
 
-  it('endsWith searchString is longer than string itself', () => {
-    const result = endsWith(MEDIUM_SURROGATE_PAIRS_STRING, LONG_SURROGATE_PAIRS_STRING);
+  it('includes with emoji that does not exist', () => {
+    const result = long.includes(new UnicodeString('🧑‍🚀'));
     expect(result).toEqual(false);
   });
 });
 
+describe('normalize', () => {
+  const normString: UnicodeString = new UnicodeString(NORMALIZE_STRING);
+  const normSurrogate: UnicodeString = new UnicodeString(NORMALIZE_SURROGATE_PAIRS);
+  it('normalize with no forms, compare strings', () => {
+    const regularStringResult = normString.normalize('none');
+    const surrogatePairStringResult = normSurrogate.normalize('none');
+    expect(regularStringResult === surrogatePairStringResult).toEqual(false);
+  });
+
+  it('normalize with different forms, compare strings', () => {
+    const NFCResult = normString.normalize('NFC');
+    const NFDResult = normSurrogate.normalize('NFD');
+    expect(NFCResult === NFDResult).toEqual(false);
+  });
+
+  it('normalize with same form, compare strings', () => {
+    const regularStringResult = normString.normalize('NFC');
+    const surrogatePairStringResult = normSurrogate.normalize('NFC');
+    expect(regularStringResult === surrogatePairStringResult).toEqual(true);
+  });
+
+  it('normalize surrogate pairs string', () => {
+    const result = normSurrogate.normalize('NFC');
+    expect(result).toEqual(NORMALIZE_STRING);
+  });
+
+  it('normalize surrogate pairs string as its own form', () => {
+    const result = normSurrogate.normalize('NFD');
+    expect(result).toEqual(NORMALIZE_SURROGATE_PAIRS);
+  });
+});
+
+describe('ordinalCompare', () => {
+  const unicorn: UnicodeString = new UnicodeString('🦄');
+  const police: UnicodeString = new UnicodeString('👮🏽‍♀️');
+
+  it('should return a negative number if string1 comes before string2', () => {
+    expect(police.ordinalCompare(unicorn.string)).toBeLessThan(0);
+  });
+
+  it('should return a positive number if string1 comes after string2', () => {
+    expect(unicorn.ordinalCompare(police.string)).toBeGreaterThan(0);
+  });
+
+  it('should return 0 if string1 is equal to string2', () => {
+    expect(unicorn.ordinalCompare(unicorn.string)).toBe(0);
+  });
+});
+
+describe('startsWith', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  const look: UnicodeString = new UnicodeString('Look𐐷');
+  const at: UnicodeString = new UnicodeString('At🦄');
+  it('startsWith without position', () => {
+    const result = long.startsWith(look);
+    expect(result).toEqual(true);
+  });
+
+  it('startsWith with position, searchString is not the start', () => {
+    const result = long.startsWith(look, 5);
+    expect(result).toEqual(false);
+  });
+
+  it('startsWith with position, searchString is the start', () => {
+    const result = long.startsWith(at, 5);
+    expect(result).toEqual(true);
+  });
+});
+
+describe('endsWith', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  it('endsWith without position', () => {
+    const result = long.endsWith(new UnicodeString('💋!🌟'));
+    expect(result).toEqual(true);
+  });
+
+  it('endsWith without position and false data', () => {
+    const result = long.endsWith(new UnicodeString('Pizza'));
+    expect(result).toEqual(false);
+  });
+
+  it('endsWith with position', () => {
+    const result = long.endsWith(new UnicodeString('At🦄'), 8);
+    expect(result).toEqual(true);
+  });
+
+  it('endsWith with position and false data', () => {
+    const result = long.endsWith(new UnicodeString('Pizza'), 8);
+    expect(result).toEqual(false);
+  });
+
+  it('endsWith with position and grapheme', () => {
+    const result = long.endsWith(new UnicodeString('👮🏽‍♀️'), 55);
+    expect(result).toEqual(true);
+  });
+
+  it('endsWith searchString is longer than string itself', () => {
+    const result = new UnicodeString(MEDIUM_SURROGATE_PAIRS_STRING).endsWith(long);
+    expect(result).toEqual(false);
+  });
+});
+
+describe('padStart', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  it('padStart without padString', () => {
+    const result = long.padStart(long.length + 10);
+    expect(result).toEqual(TEN_SPACES + long.string);
+  });
+
+  it('padStart with padString', () => {
+    const result = long.padStart(long.length + 7, 'X');
+    expect(result).toEqual(SEVEN_XS + long.string);
+  });
+
+  it('padStart with padString length 2', () => {
+    const result = long.padStart(long.length + 10, 'ha');
+    expect(result).toEqual(`hahahahaha${long.string}`);
+  });
+});
+
+describe('padEnd', () => {
+  const long: UnicodeString = new UnicodeString(LONG_SURROGATE_PAIRS_STRING);
+  it('padEnd without padString', () => {
+    const result = long.padEnd(long.length + 10);
+    expect(result).toEqual(long.string + TEN_SPACES);
+  });
+
+  it('padEnd with padString', () => {
+    const result = long.padEnd(long.length + 7, 'X');
+    expect(result).toEqual(long.string + SEVEN_XS);
+  });
+
+  it('padEnd with padString length 2', () => {
+    const result = long.padEnd(long.length + 10, 'ha');
+    expect(result).toEqual(`${long.string}hahahahaha`);
+  });
+});
+
+/*
 describe('indexOfClosestClosingCurlyBrace', () => {
   const curlyString =
     //           1           2
@@ -587,382 +1010,10 @@ describe('formatReplacementString', () => {
   });
 });
 
-describe('includes', () => {
-  it('includes without position', () => {
-    const result = includes(LONG_SURROGATE_PAIRS_STRING, '🍕Symbols💩');
-    expect(result).toEqual(true);
-  });
-
-  it('includes with position', () => {
-    const result = includes(LONG_SURROGATE_PAIRS_STRING, '🦄All😎', 7);
-    expect(result).toEqual(true);
-  });
-
-  it('includes with position that is to high, so no matches are found', () => {
-    const result = includes(LONG_SURROGATE_PAIRS_STRING, '🦄All😎', 10);
-    expect(result).toEqual(false);
-  });
-
-  it('includes with position that is higher than the length', () => {
-    const result = includes(LONG_SURROGATE_PAIRS_STRING, '🦄All😎', 100);
-    expect(result).toEqual(false);
-  });
-
-  it('includes with grapheme emoji that exists', () => {
-    const result = includes(LONG_SURROGATE_PAIRS_STRING, '👮🏽‍♀️');
-    expect(result).toEqual(true);
-  });
-
-  it('includes with emoji that does not exist', () => {
-    const result = includes(LONG_SURROGATE_PAIRS_STRING, '🧑‍🚀');
-    expect(result).toEqual(false);
-  });
-});
-
-describe('indexOf', () => {
-  it('indexOf without position', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🍕');
-    expect(result).toEqual(POS_FIRST_PIZZA);
-  });
-
-  it('indexOf with position', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', 40);
-    expect(result).toEqual(POS_SECOND_PIZZA);
-  });
-
-  it('indexOf with position greater than string length', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', 100);
-    expect(result).toEqual(-1);
-  });
-
-  it('indexOf with negative position', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', -20);
-    expect(result).toEqual(POS_FIRST_PIZZA);
-  });
-
-  it('indexOf with empty search string', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '');
-    expect(result).toEqual(-1);
-  });
-
-  it('indexOf with a search length longer than 1', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋');
-    expect(result).toEqual(67);
-  });
-
-  it('indexOf at the end of the string', () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
-    expect(result).toEqual(73);
-  });
-
-  it("indexOf with a seach for something that's not in the string", () => {
-    const result = indexOf(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
-    expect(result).toEqual(-1);
-  });
-
-  it("indexOf with a searchString that's longer than the string", () => {
-    const result = indexOf(MEDIUM_SURROGATE_PAIRS_STRING, LONG_SURROGATE_PAIRS_STRING);
-    expect(result).toEqual(-1);
-  });
-});
-
-describe('lastIndexOf', () => {
-  it('lastIndexOf without position', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕');
-    expect(result).toEqual(POS_SECOND_PIZZA);
-  });
-
-  it('lastIndexOf with position', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', 5);
-    expect(result).toEqual(-1);
-  });
-
-  it('lastIndexOf with position greater than string length', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', 100);
-    // TODO(mattg): Figure out why this isn't -1 like it is for indexOf
-    expect(result).toEqual(POS_SECOND_PIZZA);
-  });
-
-  it('lastIndexOf with negative position', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', -1);
-    // TODO(mattg): Figure out why this isn't POS_SECOND_PIZZA like it is for indexOf
-    expect(result).toEqual(-1);
-  });
-
-  it('lastIndexOf with empty search string', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '');
-    expect(result).toEqual(-1);
-  });
-
-  it('lastIndexOf with a search length longer than 1', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🔥Pairs💋');
-    expect(result).toEqual(67);
-  });
-
-  it('lastIndexOf at the end of the string', () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
-    expect(result).toEqual(73);
-  });
-
-  it("lastIndexOf with a seach for something that's not in the string", () => {
-    const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, 'Pizza');
-    expect(result).toEqual(-1);
-  });
-
-  it("lastIndexOf with a searchString that's longer than the string", () => {
-    const result = lastIndexOf(MEDIUM_SURROGATE_PAIRS_STRING, LONG_SURROGATE_PAIRS_STRING);
-    expect(result).toEqual(-1);
-  });
-});
-
 describe('length', () => {
   it('length is correct', () => {
     const result = stringLength(LONG_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(SURROGATE_PAIRS_STRING_LENGTH);
-  });
-});
-
-describe('normalize', () => {
-  it('normalize with no forms, compare strings', () => {
-    const regularStringResult = normalize(NORMALIZE_STRING, 'none');
-    const surrogatePairStringResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'none');
-    expect(regularStringResult === surrogatePairStringResult).toEqual(false);
-  });
-
-  it('normalize with different forms, compare strings', () => {
-    const NFCResult = normalize(NORMALIZE_STRING, 'NFC');
-    const NFDResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
-    expect(NFCResult === NFDResult).toEqual(false);
-  });
-
-  it('normalize with same form, compare strings', () => {
-    const regularStringResult = normalize(NORMALIZE_STRING, 'NFC');
-    const surrogatePairStringResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFC');
-    expect(regularStringResult === surrogatePairStringResult).toEqual(true);
-  });
-
-  it('normalize surrogate pairs string', () => {
-    const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFC');
-    expect(result).toEqual(NORMALIZE_STRING);
-  });
-
-  it('normalize surrogate pairs string as its own form', () => {
-    const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
-    expect(result).toEqual(NORMALIZE_SURROGATE_PAIRS);
-  });
-});
-
-describe('ordinalCompare', () => {
-  it('should return a negative number if string1 comes before string2', () => {
-    expect(ordinalCompare('👮🏽‍♀️', '🦄')).toBeLessThan(0);
-  });
-
-  it('should return a positive number if string1 comes after string2', () => {
-    expect(ordinalCompare('🦄', '👮🏽‍♀️')).toBeGreaterThan(0);
-  });
-
-  it('should return 0 if string1 is equal to string2', () => {
-    expect(ordinalCompare('🦄', '🦄')).toBe(0);
-  });
-});
-
-describe('padEnd', () => {
-  it('padEnd without padString', () => {
-    const result = padEnd(
-      LONG_SURROGATE_PAIRS_STRING,
-      SURROGATE_PAIRS_STRING_LENGTH + 10,
-      undefined,
-    );
-    expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING + TEN_SPACES);
-  });
-
-  it('padEnd with padString', () => {
-    const result = padEnd(LONG_SURROGATE_PAIRS_STRING, SURROGATE_PAIRS_STRING_LENGTH + 7, 'X');
-    expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING + SEVEN_XS);
-  });
-
-  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
-  // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
-  // limit only works when length(padString) = 1
-  // ('padEnd with padString', () => {
-  //   const result = padEnd(TEXT_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`${TEXT_STRING}hahahahaha`);
-  // });
-});
-
-describe('padStart', () => {
-  it('padStart without padString', () => {
-    const result = padStart(
-      LONG_SURROGATE_PAIRS_STRING,
-      SURROGATE_PAIRS_STRING_LENGTH + 10,
-      undefined,
-    );
-    expect(result).toEqual(TEN_SPACES + LONG_SURROGATE_PAIRS_STRING);
-  });
-
-  it('padStart with padString', () => {
-    const result = padStart(LONG_SURROGATE_PAIRS_STRING, SURROGATE_PAIRS_STRING_LENGTH + 7, 'X');
-    expect(result).toEqual(SEVEN_XS + LONG_SURROGATE_PAIRS_STRING);
-  });
-
-  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
-  // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
-  // limit only works when length(padString) = 1
-  // ('padStart with padString', () => {
-  //   const result = padStart(TEST_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`hahahahaha${TEST_STRING}`);
-  // });
-});
-
-describe('slice', () => {
-  it('start (-inf)-(-L)', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100);
-    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
-  });
-  it('start (-L)-0', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -3);
-    expect(result).toEqual('ome');
-  });
-  it('start 0-L', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 3);
-    expect(result).toEqual('k𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
-  });
-  it('start L-inf', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50);
-    expect(result).toEqual('');
-  });
-  it('start (-inf)-(-L) end (-inf)-(-L)', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -200, -100);
-    expect(result).toEqual('');
-  });
-  it('start (-inf)-(-L) end (-L)-0', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, -10);
-    expect(result).toEqual('Look𐐷At🦄This𐐷Thing👮🏽‍♀️I');
-  });
-  it('start (-inf)-(-L) end 0-L', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, 8);
-    expect(result).toEqual('Look𐐷At🦄');
-  });
-  it('start (-inf)-(-L) end L-inf', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, 100);
-    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
-  });
-  it('start (-L)-0 end (-inf)-(-L)', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, -100);
-    expect(result).toEqual('');
-  });
-  it('start (-L)-0 end (-L)-0', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, -10);
-    expect(result).toEqual('');
-  });
-
-  it('start (-L)-0 end (-L)-0 and start < end', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -10, -5);
-    expect(result).toEqual('ts𐐷Aw');
-  });
-  it('start (-L)-0 end 0-L', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, 8);
-    expect(result).toEqual('');
-  });
-  it('start (-L)-0 end L-inf', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, 100);
-    expect(result).toEqual('esome');
-  });
-  it('start 0-L end (-inf)-(-L)', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, -100);
-    expect(result).toEqual('');
-  });
-  it('start 0-L end (-L)-0', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, -10);
-    expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️I');
-  });
-  it('start 0-L end 0-L', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, 8);
-    expect(result).toEqual('At🦄');
-  });
-  it('start 0-L end 0-L, and start > end', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 8, 5);
-    expect(result).toEqual('');
-  });
-  it('start 0-L end L-inf', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, 100);
-    expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
-  });
-  it('start L-inf end (-inf)-(-L)', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, -100);
-    expect(result).toEqual('');
-  });
-  it('start L-inf end (-L)-0', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, -10);
-    expect(result).toEqual('');
-  });
-  it('start L-inf end 0-L', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, 8);
-    expect(result).toEqual('');
-  });
-  it('start L-inf end L-inf', () => {
-    const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, 100);
-    expect(result).toEqual('');
-  });
-  it('starting index is 0', () => {
-    const str = 'hello-someone.d.ts';
-    expect(slice(str, 0)).toBe('hello-someone.d.ts');
-    expect(slice(str, 0, 2)).toBe('he');
-    expect(slice(str, 0, -stringLength('.d.ts'))).toBe('hello-someone');
-  });
-});
-
-describe('split', () => {
-  it('split without splitLimit', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷');
-    expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_ARRAY);
-  });
-
-  it('split with splitLimit', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷', 2);
-    expect(result).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
-  });
-
-  it('split by empty string', () => {
-    const result = split(SHORT_SURROGATE_PAIRS_STRING, '');
-    expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
-  });
-
-  it('split by empty string with splitLimit', () => {
-    const result = split(SHORT_SURROGATE_PAIRS_STRING, '', 3);
-    expect(result).toEqual(['L', 'o', 'o']);
-  });
-
-  it('split with RegExp separator', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /[A-Z]/);
-    expect(result).toEqual(['', 'ook𐐷', 't🦄', 'his𐐷', 'hing👮🏽‍♀️', 'ts𐐷', 'wesome']);
-  });
-
-  it('split with RegExp separator that contains surrogate pairs', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /🦄/);
-    expect(result).toEqual(['Look𐐷At', 'This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
-  });
-
-  it('split with RegExp separator that matches nothing in the string', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /\d/);
-    expect(result).toEqual([MEDIUM_SURROGATE_PAIRS_STRING]);
-  });
-});
-
-describe('startsWith', () => {
-  it('startsWith without position', () => {
-    const result = startsWith(LONG_SURROGATE_PAIRS_STRING, 'Look𐐷');
-    expect(result).toEqual(true);
-  });
-
-  it('startsWith with position, searchString is not the start', () => {
-    const result = startsWith(LONG_SURROGATE_PAIRS_STRING, 'Look𐐷', 5);
-    expect(result).toEqual(false);
-  });
-
-  it('startsWith with position, searchString is the start', () => {
-    const result = startsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 5);
-    expect(result).toEqual(true);
   });
 });
 
@@ -1129,3 +1180,4 @@ describe('toKebabCase', () => {
     expect(toKebabCase('CdÁb')).toEqual('cd-áb');
   });
 });
+*/

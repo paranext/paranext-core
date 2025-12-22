@@ -38,59 +38,46 @@ import { isString } from './util';
  * - Mark previous functions as deprecated.
  */
 export class UnicodeString {
-  private readonly _string: string;
-  private readonly _graphemes: string[];
-  private readonly _indecies: number[];
+  private readonly str: string;
+  private readonly graphemes: string[];
+  private readonly indecies: number[];
 
   constructor(string: string, graphemes?: string[] | undefined) {
-    this._string = string;
-    this._graphemes = graphemes !== undefined ? graphemes : stringzToArray(this._string);
-    this._indecies = [];
+    this.str = string;
+    this.graphemes = graphemes !== undefined ? graphemes : stringzToArray(this.str);
+    this.indecies = [];
 
     let index: number = 0;
-    for (const grapheme of this._graphemes) {
-      this._indecies.push(index);
+    this.graphemes.forEach((grapheme) => {
+      this.indecies.push(index);
       index += grapheme.length;
-    }
+    });
   }
 
   get string(): string {
-    return this._string;
+    return this.str;
   }
 
   get length(): number {
-    return this._graphemes.length;
+    return this.graphemes.length;
   }
 
   toArray(): string[] {
-    return this._graphemes;
+    return this.graphemes;
   }
 
   at(index: number): string | undefined {
-    return this._graphemes.at(index);
+    return this.graphemes.at(index);
   }
 
   charAt(index: number): string {
     if (index < 0 || index >= this.length) return '';
-    return this._graphemes.at(index)!;
+    return this.graphemes.at(index) ?? '';
   }
 
   codePointAt(index: number): number | undefined {
     if (index < 0 || index >= this.length) return undefined;
-    return this._graphemes.at(index)?.codePointAt(0);
-  }
-
-  private _substr(begin: number = 0, len: number = this.length - begin): string {
-    if (begin >= this.length) return '';
-    if (begin < 0) begin += this.length;
-    if (begin < 0) begin = 0;
-
-    if (len > this.length) len = this.length;
-    if (len < 0) return '';
-
-    const start: number = this._indecies.at(begin)!;
-    const end: number = begin === this.length - 1 ? this.length : this._indecies.at(begin + len)!;
-    return this.string.substring(start, end);
+    return this.graphemes.at(index)?.codePointAt(0);
   }
 
   substring(begin: number, end: number = this.length): string {
@@ -98,9 +85,12 @@ export class UnicodeString {
     // NOTE(mattg): `>` instead of `>=` is intentional
     if (end < 0 || end > this.length || end < begin) return '';
 
-    const start: number = this._indecies.at(begin)!;
-    const stop: number = this._indecies.at(end)!;
-    return this._string.substring(start, stop);
+    const start = this.indecies.at(begin);
+    const stop = this.indecies.at(end);
+    if (start === undefined) {
+      return '';
+    }
+    return this.str.substring(start, stop);
   }
 
   slice(indexStart: number, indexEnd?: number): string {
@@ -120,36 +110,66 @@ export class UnicodeString {
         return '';
     }
 
-    const newStart = this._correctSliceIndex(indexStart);
-    const newEnd = indexEnd ? this._correctSliceIndex(indexEnd) : undefined;
+    const newStart = this.correctSliceIndex(indexStart);
+    const newEnd = indexEnd ? this.correctSliceIndex(indexEnd) : undefined;
     return this.substring(newStart, newEnd);
   }
 
-  private _correctSliceIndex(index: number): number {
-    if (index > this.length) return this.length;
-    if (index < -this.length) return 0;
-    if (index < 0) return index + this.length;
-    return index;
-  }
+  split(separator: string | RegExp, splitLimit?: number): string[] {
+    const result: string[] = [];
 
-  // TODO(mattg): finish this function
-  split() {}
+    if (splitLimit !== undefined && splitLimit <= 0) {
+      return [this.string];
+    }
+
+    if (separator === '') return this.toArray().slice(0, splitLimit);
+
+    let regexSeparator = separator;
+    if (
+      typeof separator === 'string' ||
+      (separator instanceof RegExp && !includes(separator.flags, 'g'))
+    ) {
+      regexSeparator = new RegExp(separator, 'g');
+    }
+
+    const matches: RegExpMatchArray | null = this.string.match(regexSeparator);
+
+    if (!matches) return [this.string];
+
+    let currentIndex = 0;
+    for (let index = 0; index < (splitLimit ? splitLimit - 1 : matches.length); index++) {
+      const matchString: UnicodeString = new UnicodeString(matches[index]);
+      const matchIndex = this.indexOf(matchString, currentIndex);
+
+      result.push(this.substring(currentIndex, matchIndex));
+      currentIndex = matchIndex + matchString.length;
+
+      if (splitLimit !== undefined && result.length === splitLimit) {
+        break;
+      }
+    }
+
+    result.push(this.substring(currentIndex));
+
+    return result;
+  }
 
   indexOf(searchString: UnicodeString, position: number = 0): number {
     if (searchString.length === 0) return -1;
 
     const maxSearchIndex: number = this.length - searchString.length;
     if (maxSearchIndex < 0) return -1;
-    if (position < 0) position = 0;
-    if (position > maxSearchIndex) return -1;
+    let cleanPosition = position;
+    if (cleanPosition < 0) cleanPosition = 0;
+    if (cleanPosition > maxSearchIndex) return -1;
 
-    for (let index = position; index <= maxSearchIndex; index++) {
+    for (let index = cleanPosition; index <= maxSearchIndex; index++) {
       if (this.charAt(index) === searchString.charAt(0)) {
         if (searchString.length === 1) {
           // charAt did the comparison, we can stop now.
           return index;
         }
-        if (this._substr(index, searchString.length) === searchString.string) {
+        if (this.substr(index, searchString.length) === searchString.string) {
           return index;
         }
       }
@@ -157,23 +177,23 @@ export class UnicodeString {
     return -1;
   }
 
-  lastIndexOf(searchString: UnicodeString, position: number): number {
+  lastIndexOf(searchString: UnicodeString, position?: number): number {
     if (searchString.length === 0) return -1;
 
     const maxSearchableIndex: number = this.length - searchString.length;
     if (maxSearchableIndex < 0) return -1;
 
-    position = position === undefined ? maxSearchableIndex : position;
-    if (position < 0) position = 0;
-    else if (position >= this.length) position = this.length - 1;
+    let cleanPosition = position === undefined ? maxSearchableIndex : position;
+    if (cleanPosition < 0) cleanPosition = 0;
+    else if (cleanPosition >= this.length) cleanPosition = this.length - 1;
 
-    for (let index = position; index >= 0; index--) {
+    for (let index = cleanPosition; index >= 0; index--) {
       if (this.charAt(index) === searchString.charAt(0)) {
         if (searchString.length === 1) {
           // charAt did the comparison, we can stop now.
           return index;
         }
-        if (this._substr(index, searchString.length) === searchString.string) {
+        if (this.substr(index, searchString.length) === searchString.string) {
           return index;
         }
       }
@@ -194,64 +214,109 @@ export class UnicodeString {
     return this.string.normalize(upperCaseForm);
   }
 
-  ordinalCompare(otherString: string | UnicodeString, options?: Intl.CollatorOptions): number {
-    const str = typeof otherString === 'string' ? otherString : otherString.string;
-    return this.string.localeCompare(str, 'en', options);
+  ordinalCompare(otherString: string, options?: Intl.CollatorOptions): number {
+    return this.string.localeCompare(otherString, 'en', options);
   }
 
   startsWith(searchString: UnicodeString, position: number = 0): boolean {
-    // NOTE(mattg): _substr checks the bounds
-    return this._substr(position, searchString.length) === searchString.string;
+    // NOTE(mattg): substr checks the bounds
+    return this.substr(position, searchString.length) === searchString.string;
   }
 
   endsWith(searchString: UnicodeString, position: number = this.length): boolean {
     const index = position - searchString.length;
     if (index < 0) return false;
-    // NOTE(mattg): _substr checks the bounds
-    return this._substr(index, searchString.length) === searchString.string;
+    // NOTE(mattg): substr checks the bounds
+    return this.substr(index, searchString.length) === searchString.string;
   }
 
   padStart(targetLength: number, padString: string = ' '): string {
     if (targetLength <= this.length) return this.string;
-    // TODO(mattg): rewrite this to not use stringz
-    return stringzLimit(this.string, targetLength, padString, 'left');
+
+    const targetDifference: number = targetLength - this.length;
+    if (targetDifference === 0) {
+      return this.string;
+    }
+    if (targetDifference < 0) {
+      return this.substring(0, targetLength);
+    }
+    const repeatString = padString
+      .repeat(Math.ceil(targetDifference / padString.length))
+      .slice(0, targetDifference);
+    return repeatString + this.string;
   }
 
   padEnd(targetLength: number, padString: string = ' '): string {
     if (targetLength <= this.length) return this.string;
-    // TODO(mattg): rewrite this to not use stringz
-    return stringzLimit(this.string, targetLength, padString, 'right');
+
+    const targetDifference: number = targetLength - this.length;
+    if (targetDifference === 0) {
+      return this.string;
+    }
+    if (targetDifference < 0) {
+      return this.substring(0, targetLength);
+    }
+    const repeatString = padString
+      .repeat(Math.ceil(targetDifference / padString.length))
+      .slice(0, targetDifference);
+    return this.string + repeatString;
   }
 
   // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
-  isLocalizeKey() {}
+  // isLocalizeKey() {}
 
   // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
-  isWhiteSpace() {}
+  // isWhiteSpace() {}
 
   // TODO(mattg): finish this function
   // NOTE(mattg): this may not need to be apart of the class
-  toKebabCase() {}
+  // toKebabCase() {}
 
   // TODO(mattg): finish this function
   // private _indexOfClosestClosingCurlyBrace() {}
 
   // TODO(mattg): finish this function
-  formatReplacementStringToArray() {}
+  // formatReplacementStringToArray() {}
 
   // TODO(mattg): finish this function
-  formatReplacementString() {}
+  // formatReplacementString() {}
 
   // TODO(mattg): finish this function
-  escapeStringRegexp() {}
+  // escapeStringRegexp() {}
 
   // TODO(mattg): finish this function
-  transformAndEnsureRegExpRegExpArray() {}
+  // transformAndEnsureRegExpRegExpArray() {}
 
   // TODO(mattg): finish this function
-  transformAndEnsureRegExpArray() {}
+  // transformAndEnsureRegExpArray() {}
+
+  private substr(begin: number = 0, len: number = this.length - begin): string {
+    let cleanBegin = begin;
+    if (cleanBegin >= this.length) return '';
+    if (cleanBegin < 0) cleanBegin += this.length;
+    if (cleanBegin < 0) cleanBegin = 0;
+
+    let cleanLen = len;
+    if (cleanLen > this.length) cleanLen = this.length;
+    if (cleanLen < 0) return '';
+
+    const start = this.indecies.at(cleanBegin);
+    const end =
+      cleanBegin === this.length - 1 ? this.length : this.indecies.at(cleanBegin + cleanLen);
+    if (start === undefined) {
+      return '';
+    }
+    return this.string.substring(start, end);
+  }
+
+  private correctSliceIndex(index: number): number {
+    if (index > this.length) return this.length;
+    if (index < -this.length) return 0;
+    if (index < 0) return index + this.length;
+    return index;
+  }
 }
 
 // DecomposedString or GraphemeString
@@ -270,10 +335,10 @@ export function segmentString(string: string): SegmentedString {
 
   ss.segments = stringzToArray(ss.string);
   let index = 0;
-  for (const segment of ss.segments) {
+  ss.segments.forEach((segment) => {
     ss.indecies.push(index);
     index += segment.length;
-  }
+  });
   return ss;
 }
 
@@ -314,7 +379,7 @@ export function charAt(string: string | SegmentedString, index: number): string 
   const ss: SegmentedString = ensureSegmentedString(string);
   if (index < 0 || index >= stringLength(ss)) return '';
 
-  return ss.segments.at(index)!;
+  return ss.segments.at(index) ?? '';
 }
 
 /**
@@ -648,10 +713,11 @@ export function indexOf(
 
   const searchableIndex: number = stringLen - searchStringLen;
   if (searchableIndex < 0) return -1;
-  if (position < 0) position = 0;
-  if (position > searchableIndex) return -1;
+  let cleanPosition = position;
+  if (cleanPosition < 0) cleanPosition = 0;
+  if (cleanPosition > searchableIndex) return -1;
 
-  for (let index = position; index <= searchableIndex; index++) {
+  for (let index = cleanPosition; index <= searchableIndex; index++) {
     if (charAt(segString, index) === charAt(segSearchString, 0)) {
       if (searchStringLen === 1) {
         // charAt did the work, we can exit now.
@@ -941,17 +1007,22 @@ function substr(
 ): string {
   const ss: SegmentedString = ensureSegmentedString(string);
   const stringLen: number = stringLength(ss);
-  if (begin >= stringLen) return '';
-  if (begin < 0) begin += stringLen;
-  if (begin < 0) begin = 0;
+  let cleanBegin = begin;
+  if (cleanBegin >= stringLen) return '';
+  if (cleanBegin < 0) cleanBegin += stringLen;
+  if (cleanBegin < 0) cleanBegin = 0;
 
-  if (len === undefined) len = stringLen - begin;
-  if (len > stringLen) len = stringLen;
-  if (len < 0) return '';
+  let cleanLen = len;
+  if (cleanLen === undefined) cleanLen = stringLen - cleanBegin;
+  if (cleanLen > stringLen) cleanLen = stringLen;
+  if (cleanLen < 0) return '';
 
-  const start: number = ss.indecies.at(begin)!;
-  const end: number =
-    begin === stringLength(ss) - 1 ? ss.string.length : ss.indecies.at(begin + len)!;
+  const start = ss.indecies.at(cleanBegin);
+  const end =
+    cleanBegin === stringLength(ss) - 1 ? ss.string.length : ss.indecies.at(cleanBegin + cleanLen);
+  if (start === undefined || end === undefined) {
+    return '';
+  }
   return ss.string.substring(start, end);
 }
 
@@ -978,8 +1049,12 @@ export function substring(
   // NOTE(mattg): end is inclusive I guess?
   if (cleanEnd < 0 || cleanEnd > stringLen) return '';
   if (cleanEnd < begin) return '';
-  const start: number = ss.indecies.at(begin)!;
-  const newEnd: number = ss.indecies.at(cleanEnd)!;
+
+  const start = ss.indecies.at(begin);
+  const newEnd = ss.indecies.at(cleanEnd);
+  if (start === undefined || newEnd === undefined) {
+    return '';
+  }
   return ss.string.substring(start, newEnd);
 }
 
