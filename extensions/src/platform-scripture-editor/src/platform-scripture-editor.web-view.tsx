@@ -1,22 +1,47 @@
 import {
-  EditorOptions,
-  Editorial,
-  EditorRef,
-  SelectionRange,
-  getDefaultViewOptions,
-  UsjNodeOptions,
+  AnnotationRange,
   DeltaOp,
-  ViewOptions,
-  DeltaSource,
-  isInsertEmbedOpOfType,
   DeltaOpInsertNoteEmbed,
+  DeltaSource,
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getDefaultViewOptions,
+  isInsertEmbedOpOfType,
+  SelectionRange,
+  TypedMarkOnClick,
+  TypedMarkOnRemove,
+  TypedMarkRemovalCause,
+  UsjNodeOptions,
+  ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { USJ_TYPE, USJ_VERSION, Usj } from '@eten-tech-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
+import {
+  useLocalizedStrings,
+  useProjectData,
+  useProjectDataProvider,
+  useProjectSetting,
+} from '@papi/frontend/react';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { CommandHandlers, CommandNames } from 'papi-shared-types';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  COMMENT_EDITOR_STRING_KEYS,
+  CommentEditor,
+  FOOTNOTE_EDITOR_STRING_KEYS,
+  FootnoteEditor,
+  MarkdownRenderer,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  Spinner,
+  usePromise,
+} from 'platform-bible-react';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
@@ -25,35 +50,25 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  FOOTNOTE_EDITOR_STRING_KEYS,
-  FootnoteEditor,
-  MarkdownRenderer,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  Spinner,
-} from 'platform-bible-react';
-import {
+  AnnotationActionHandler,
   EditorDecorations,
   EditorWebViewMessage,
   ScriptureEditorViewType,
 } from 'platform-scripture-editor';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
-import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
+import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
+import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -65,10 +80,17 @@ import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
+  ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
+  '%webView_platformScriptureEditor_error_noTextSelected%',
 ];
+
+/** Annotation type used for translator comments */
+const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translatorComment';
+/** Annotation ID used for a pending comment that hasn't been saved yet */
+const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 const defaultUsj: Usj = correctEditorUsjVersion({
   type: USJ_TYPE,
@@ -118,7 +140,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
 
-  // These two control the placement of the note editor popover by setting the location of the anchor
+  // These control the placement of editor popovers (footnote editor, comment editor) by setting the location of the anchor
   const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
@@ -126,6 +148,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
   const editingNoteKey = useRef<string>();
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+
+  const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
+  /**
+   * Stores the annotation range for the pending comment being created. This is captured when the
+   * user initiates comment creation and used to create the annotation highlight and to extract
+   * selection info when saving the comment.
+   */
+  const pendingCommentAnnotationRange = useRef<AnnotationRange | undefined>(undefined);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -175,6 +205,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     return textDirection;
   }, [projectName, scrRef, textDirection]);
+
+  const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!commentsPdp) {
+      logger.debug('Comments PDP is not yet available for fetchAssignableUsers');
+      return [];
+    }
+    return commentsPdp.findAssignableUsers();
+  }, [commentsPdp]);
+  const [commentEditorAssignableUsers] = usePromise(fetchAssignableUsers, []);
 
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
@@ -306,6 +347,125 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.insertNote('x');
           break;
         }
+        case 'insertCommentAtSelection': {
+          // Get the current selection from the editor
+          const selection = editorRef.current?.getSelection();
+
+          // Validate that a text range is selected (not just a caret position)
+          if (!selection?.start || !selection?.end) {
+            // No range selected - show notification to the user
+            papi.notifications.send({
+              message: '%webView_platformScriptureEditor_error_noTextSelected%',
+              severity: 'warning',
+            });
+            return;
+          }
+
+          // Store the selection as annotation range for later use
+          const annotationRange: AnnotationRange = {
+            start: { ...selection.start },
+            end: { ...selection.end },
+          };
+          pendingCommentAnnotationRange.current = annotationRange;
+
+          // Create a temporary annotation to highlight the selected text
+          editorRef.current?.setAnnotation(
+            annotationRange,
+            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+            PENDING_COMMENT_ANNOTATION_ID,
+          );
+
+          // Position the popover near the annotation
+          // Try to find the selected text element for positioning
+          const editorContainer = document.querySelector<HTMLElement>('.usfm');
+          if (editorContainer) {
+            // Use the browser's selection to get the bounding rect of the selected text
+            const domSelection = window.getSelection();
+            if (domSelection && domSelection.rangeCount > 0) {
+              const range = domSelection.getRangeAt(0);
+              const rect = range.getBoundingClientRect();
+              setNotePopoverAnchorX(rect.left);
+              setNotePopoverAnchorY(rect.bottom);
+              setNotePopoverAnchorHeight(0);
+            } else {
+              // Fallback to center of editor viewport
+              const rect = editorContainer.getBoundingClientRect();
+              setNotePopoverAnchorX(rect.left + rect.width / 2);
+              setNotePopoverAnchorY(rect.top + rect.height / 2);
+              setNotePopoverAnchorHeight(0);
+            }
+          }
+
+          setShowCommentEditor(true);
+          break;
+        }
+        case 'setAnnotation': {
+          const {
+            scrRef: targetScrRef,
+            annotationRange,
+            annotationType,
+            annotationId,
+            interactionCommand,
+          } = editorMessage;
+          logger.debug(
+            `setAnnotation targetScrRef ${serialize(targetScrRef)} ${serialize(annotationRange)} type=${annotationType} id=${annotationId} interactionCommand=${String(interactionCommand)}`,
+          );
+
+          // If we're on a different book or chapter, don't set the annotation
+          if (scrRef.book !== targetScrRef.book || scrRef.chapterNum !== targetScrRef.chapterNum) {
+            break;
+          }
+
+          // This type helps us enforce that the arguments match the parameters of interactionCommand
+          let argumentsForCommand: Parameters<AnnotationActionHandler>;
+
+          const onClickAnnotation: TypedMarkOnClick | undefined = interactionCommand
+            ? async (_event: MouseEvent, type: string, id: string) => {
+                argumentsForCommand = [type, id, 'clicked'];
+                try {
+                  await papi.commands.sendCommand(
+                    interactionCommand,
+                    // We are dictating the parameters and the command is responsible for implementing
+                    // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    ...(argumentsForCommand as unknown as Parameters<
+                      CommandHandlers[CommandNames]
+                    >),
+                  );
+                } catch (e) {
+                  logger.warn(`Error sending annotation click command: ${getErrorMessage(e)}`);
+                }
+              }
+            : undefined;
+
+          const onRemoveAnnotation: TypedMarkOnRemove | undefined = interactionCommand
+            ? async (type: string, id: string, cause: TypedMarkRemovalCause) => {
+                argumentsForCommand = [type, id, cause];
+                try {
+                  await papi.commands.sendCommand(
+                    interactionCommand,
+                    // We are dictating the parameters and the command is responsible for implementing
+                    // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    ...(argumentsForCommand as unknown as Parameters<
+                      CommandHandlers[CommandNames]
+                    >),
+                  );
+                } catch (e) {
+                  logger.warn(`Error sending annotation removal command: ${getErrorMessage(e)}`);
+                }
+              }
+            : undefined;
+
+          editorRef.current?.setAnnotation(
+            annotationRange,
+            annotationType,
+            annotationId,
+            onClickAnnotation,
+            onRemoveAnnotation,
+          );
+          break;
+        }
         case 'changeFootnotesPaneLocation': {
           break;
         } // handled in FootnoteLayout
@@ -428,6 +588,42 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+
+  /**
+   * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
+   * specified thread.
+   *
+   * @param threadId The ID of the thread to scroll to when the annotation is clicked
+   * @returns A click handler function that can be passed to setAnnotation
+   */
+  const createCommentAnnotationClickHandler = useCallback(
+    (threadId: string) => async (_event: MouseEvent, _type: string) => {
+      // Open the comment list with focus on this thread
+      const commentListWebViewId = await papi.commands.sendCommand(
+        'legacyCommentManager.openCommentList',
+        webViewId,
+      );
+
+      if (commentListWebViewId) {
+        // Wait for the comment list to load before scrolling
+        const COMMENT_LIST_LOAD_DELAY = 200;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, COMMENT_LIST_LOAD_DELAY);
+        });
+
+        // Get the comment list controller and scroll to the thread
+        const commentListController = await papi.webViews.getWebViewController(
+          'legacyCommentManager.commentList',
+          commentListWebViewId,
+        );
+
+        if (commentListController) {
+          await commentListController.scrollToThread(threadId);
+        }
+      }
+    },
+    [webViewId],
+  );
 
   const handleFootnoteSelected = useCallback((index: number) => {
     // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
@@ -638,6 +834,165 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     onFootnoteEditorClose();
   };
 
+  const onCommentEditorCancel = useCallback(() => {
+    // Remove the pending annotation if one was created
+    if (pendingCommentAnnotationRange.current) {
+      editorRef.current?.removeAnnotation(
+        ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+        PENDING_COMMENT_ANNOTATION_ID,
+      );
+      pendingCommentAnnotationRange.current = undefined;
+    }
+    setShowCommentEditor(false);
+  }, []);
+
+  const onCommentEditorSave = useCallback(
+    async (contents: string, assignedUser?: string) => {
+      if (!projectId) {
+        logger.warn('Cannot create comment: no projectId');
+        return;
+      }
+
+      const range = editorRef.current?.getSelection();
+      const startLocation = range?.start;
+      const endLocation = range?.end;
+
+      let startDocLocation: UsjDocumentLocation | undefined;
+      let endDocLocation: UsjDocumentLocation | undefined;
+
+      if (startLocation && endLocation) {
+        if ('jsonPath' in startLocation || 'documentLocation' in startLocation) {
+          const startChapterLocation =
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(
+              startLocation as Parameters<
+                typeof UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation
+              >[0],
+            );
+          startDocLocation = startChapterLocation.documentLocation;
+        }
+
+        if ('jsonPath' in endLocation || 'documentLocation' in endLocation) {
+          const endChapterLocation =
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(
+              endLocation as Parameters<
+                typeof UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation
+              >[0],
+            );
+          endDocLocation = endChapterLocation.documentLocation;
+        }
+      }
+
+      // Extract scripture text snippets using the command
+      let verse: string | undefined;
+      let selectedText: string | undefined;
+      let contextBefore: string | undefined;
+      let contextAfter: string | undefined;
+      let startPosition: number | undefined;
+
+      if (startDocLocation && endDocLocation) {
+        try {
+          const extractionResult = await papi.commands.sendCommand(
+            'legacyCommentManager.extractCommentScriptureText',
+            projectId,
+            startDocLocation,
+            endDocLocation,
+            scrRef,
+          );
+
+          // Check if the result is an error
+          if ('error' in extractionResult) {
+            logger.warn(
+              `Failed to extract scripture text: ${extractionResult.error} (${extractionResult.code})`,
+            );
+          } else {
+            // Successfully extracted text
+            verse = extractionResult.verse;
+            selectedText = extractionResult.selectedText;
+            contextBefore = extractionResult.contextBefore;
+            contextAfter = extractionResult.contextAfter;
+            startPosition = extractionResult.startPosition;
+          }
+        } catch (error) {
+          logger.error(`Error calling extractCommentScriptureText: ${getErrorMessage(error)}`);
+        }
+      }
+
+      try {
+        const legacyCommentManagerPdp = await papi.projectDataProviders.get(
+          'legacyCommentManager.comments',
+          projectId,
+        );
+
+        // Convert SerializedVerseRef to string format "GEN 1:1"
+        const verseRefString = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}`;
+
+        // Create the comment with all available selection info
+        const newCommentId = await legacyCommentManagerPdp.createComment({
+          contents,
+          assignedUser,
+          replyToUser: assignedUser,
+          verseRef: verseRefString,
+          verse,
+          selectedText,
+          contextBefore,
+          contextAfter,
+          startPosition,
+        });
+
+        const newThreadId = newCommentId ? newCommentId.split('/')[0] : undefined;
+
+        // Successfully created comment - update the annotation ID from pending to the actual thread ID
+        if (newThreadId && pendingCommentAnnotationRange.current) {
+          // Remove the pending annotation
+          editorRef.current?.removeAnnotation(
+            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+            PENDING_COMMENT_ANNOTATION_ID,
+          );
+          // Create a new annotation with the actual thread ID and click handler
+          editorRef.current?.setAnnotation(
+            pendingCommentAnnotationRange.current,
+            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+            newThreadId,
+            createCommentAnnotationClickHandler(newThreadId),
+          );
+
+          // Open the comment list and scroll to the new thread
+          const commentListWebViewId = await papi.commands.sendCommand(
+            'legacyCommentManager.openCommentList',
+            webViewId,
+          );
+
+          if (commentListWebViewId) {
+            // Wait for the comment list to load before scrolling
+            const COMMENT_LIST_LOAD_DELAY = 500;
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, COMMENT_LIST_LOAD_DELAY);
+            });
+
+            // Get the comment list controller and scroll to the new thread
+            const commentListController = await papi.webViews.getWebViewController(
+              'legacyCommentManager.commentList',
+              commentListWebViewId,
+            );
+
+            if (commentListController) {
+              await commentListController.scrollToThread(newThreadId);
+            }
+          }
+        }
+
+        // Clear the pending annotation ref (don't remove annotation since we just updated its ID)
+        pendingCommentAnnotationRange.current = undefined;
+        setShowCommentEditor(false);
+      } catch (error) {
+        logger.error(`Error creating comment: ${getErrorMessage(error)}`);
+      }
+    },
+    [projectId, scrRef, usjFromPdp, createCommentAnnotationClickHandler, webViewId],
+  );
+
   function renderEditor() {
     const commonProps = {
       ref: editorRef,
@@ -774,6 +1129,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
+            localizedStrings={localizedStrings}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Comment editor for creating new comment threads */}
+      <Popover open={showCommentEditor}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: notePopoverAnchorY,
+            left: notePopoverAnchorX,
+            height: notePopoverAnchorHeight,
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent className="tw-w-[400px] tw-p-[10px]">
+          <CommentEditor
+            assignableUsers={commentEditorAssignableUsers}
+            onSave={onCommentEditorSave}
+            onClose={onCommentEditorCancel}
             localizedStrings={localizedStrings}
           />
         </PopoverContent>

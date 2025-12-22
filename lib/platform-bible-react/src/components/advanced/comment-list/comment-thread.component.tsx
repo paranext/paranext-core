@@ -91,6 +91,9 @@ export function CommentThread({
   const [pendingAssignedUser, setPendingAssignedUser] = useState<string | undefined>(undefined);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);
+  const [commentEditDeletePermissions, setCommentEditDeletePermissions] = useState<
+    Map<string, boolean>
+  >(new Map());
 
   // Check async permissions when thread is selected
   useEffect(() => {
@@ -99,6 +102,7 @@ export function CommentThread({
     if (!isSelected) {
       setCanAssign(false);
       setCanResolve(false);
+      setCommentEditDeletePermissions(new Map());
       return undefined;
     }
 
@@ -126,6 +130,38 @@ export function CommentThread({
   }, [isSelected, threadId, canUserAssignThreadCallback, canUserResolveThreadCallback]);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
+
+  // Check edit/delete permissions for all comments when thread is selected or comments change
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isSelected || !canUserEditOrDeleteCommentCallback) {
+      setCommentEditDeletePermissions(new Map());
+      return undefined;
+    }
+
+    const checkCommentPermissions = async () => {
+      const permissionsMap = new Map<string, boolean>();
+
+      await Promise.all(
+        activeComments.map(async (comment) => {
+          const canEdit = await canUserEditOrDeleteCommentCallback(comment.id);
+          if (isMounted) {
+            permissionsMap.set(comment.id, canEdit);
+          }
+        }),
+      );
+
+      if (isMounted) {
+        setCommentEditDeletePermissions(permissionsMap);
+      }
+    };
+
+    checkCommentPermissions();
+    return () => {
+      isMounted = false;
+    };
+  }, [isSelected, activeComments, canUserEditOrDeleteCommentCallback]);
 
   const firstComment = useMemo(() => activeComments[0], [activeComments]);
 
@@ -299,7 +335,9 @@ export function CommentThread({
                 { 'tw-whitespace-nowrap': !isVerseExpanded },
               )}
             >
-              {verseRef} {firstComment.verse}
+              {verseRef} {firstComment.contextBefore}
+              <span className="tw-font-bold">{firstComment.selectedText}</span>
+              {firstComment.contextAfter}
             </p>
             {isVerseOverflowing && (
               <Button
@@ -325,7 +363,7 @@ export function CommentThread({
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
-            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+            canEditOrDelete={commentEditDeletePermissions.get(firstComment.id) ?? false}
             canUserResolveThread={canResolve}
           />
         </div>
@@ -385,7 +423,7 @@ export function CommentThread({
                     handleUpdateComment={handleUpdateComment}
                     handleDeleteComment={handleDeleteComment}
                     onEditingChange={setIsAnyCommentEditing}
-                    canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+                    canEditOrDelete={commentEditDeletePermissions.get(reply.id) ?? false}
                   />
                 </div>
               ))}

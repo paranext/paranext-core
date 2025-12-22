@@ -58,6 +58,18 @@ export interface CommentListProps {
   /** Localized strings for the component */
   localizedStrings: LanguageStrings;
   /**
+   * Externally controlled selected thread ID. When provided, this will be used as the selected
+   * thread instead of internal state. The parent component is responsible for updating this value
+   * when the selection changes.
+   */
+  selectedThreadId?: string;
+  /**
+   * Callback when the selected thread changes. Called when a thread is selected via click or
+   * keyboard navigation. Parent components can use this to sync their state with the internal
+   * selection.
+   */
+  onSelectedThreadChange?: (threadId: string | undefined) => void;
+  /**
    * Handler for adding a comment to a thread. This unified handler supports:
    *
    * - Adding a comment (provide contents)
@@ -186,11 +198,8 @@ export interface CommentItemProps {
   handleDeleteComment?: (commentId: string) => Promise<boolean>;
   /** Callback when editing state changes */
   onEditingChange?: (isEditing: boolean) => void;
-  /**
-   * Callback to check if the current user can edit or delete a specific comment. Returns a promise
-   * that resolves to true if the user can edit or delete the comment, false otherwise.
-   */
-  canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+  /** Whether the current user can edit or delete this comment */
+  canEditOrDelete?: boolean;
   /** Whether the current user can resolve or re-open this thread. */
   canUserResolveThread?: boolean;
 }

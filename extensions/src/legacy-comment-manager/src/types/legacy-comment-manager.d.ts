@@ -3,6 +3,7 @@ declare module 'legacy-comment-manager' {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
+    NetworkableObject,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
@@ -330,11 +331,54 @@ declare module 'legacy-comment-manager' {
       // #endregion
     };
 
+  /** Web view controller for the Comment List web view */
+  export type CommentListWebViewController = NetworkableObject<{
+    /**
+     * Scroll the comment list to show a specific thread and select it.
+     *
+     * @param threadId The ID of the thread to scroll to and select
+     */
+    scrollToThread(threadId: string): Promise<void>;
+  }>;
+
+  // #endregion
+
+  // #region Scripture Text Extraction Types
+
+  /** Result of extracting scripture text snippets from a range */
+  export interface ExtractedCommentScriptureText {
+    /** Full verse text (max 500 chars) */
+    verse: string;
+    /** Text within the selection range (no limit) */
+    selectedText: string;
+    /** Text before selection in verse (max 50 chars, closest to range start) */
+    contextBefore: string;
+    /** Text after selection in verse (max 50 chars, closest to range end) */
+    contextAfter: string;
+    /** Offset value of the start range in USFM space */
+    startPosition: number;
+  }
+
+  /** Error result when scripture text extraction fails */
+  export interface ExtractedCommentScriptureTextError {
+    /** Error message describing what went wrong */
+    error: string;
+    /** Error code indicating the type of error */
+    code: 'MULTI_VERSE_RANGE' | 'DATA_NOT_FOUND' | 'INVALID_LOCATION';
+  }
+
   // #endregion
 }
 
 declare module 'papi-shared-types' {
-  import type { ILegacyCommentProjectDataProvider } from 'legacy-comment-manager';
+  import type { SerializedVerseRef } from '@sillsdev/scripture';
+  import type {
+    CommentListWebViewController,
+    ILegacyCommentProjectDataProvider,
+    ExtractedCommentScriptureTextError,
+    ExtractedCommentScriptureText,
+  } from 'legacy-comment-manager';
+  import type { UsjDocumentLocation } from 'platform-bible-utils';
 
   export interface ProjectDataProviderInterfaces {
     'legacyCommentManager.comments': ILegacyCommentProjectDataProvider;
@@ -344,5 +388,15 @@ declare module 'papi-shared-types' {
     'legacyCommentManager.openCommentList': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+    'legacyCommentManager.extractCommentScriptureText': (
+      projectId: string,
+      start: UsjDocumentLocation,
+      end: UsjDocumentLocation,
+      verseRef: SerializedVerseRef,
+    ) => Promise<ExtractedCommentScriptureText | ExtractedCommentScriptureTextError>;
+  }
+
+  export interface WebViewControllers {
+    'legacyCommentManager.commentList': CommentListWebViewController;
   }
 }

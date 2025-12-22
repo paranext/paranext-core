@@ -323,6 +323,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     public string CreateComment(Comment comment)
     {
+        if (comment.SelectedText.Contains('\\'))
+        {
+            throw new InvalidOperationException(
+                "Invalid selection. Selected text must be a simple word or phrase with no markers."
+            );
+        }
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         if (comment.AssignedUser != null)
@@ -661,7 +668,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return false;
 
         // Must be the last comment in the thread
-        if (comment != thread.LastComment)
+        var lastComment = thread.LastComment;
+        if (lastComment == null || comment.Id != lastComment.Id)
             return false;
 
         // Must be the author of the comment
@@ -673,7 +681,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return false;
 
         // Cannot edit/delete the first comment of a conflict note
-        if (thread.Type == NoteType.Conflict && thread.Comments[0] == comment)
+        if (thread.Type == NoteType.Conflict && thread.Comments[0].Id == comment.Id)
             return false;
 
         return true;

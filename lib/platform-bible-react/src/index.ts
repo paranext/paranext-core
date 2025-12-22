@@ -18,6 +18,14 @@ export {
 } from './components/advanced/recent-searches.component';
 export type { RecentSearchesProps } from './components/advanced/recent-searches.component';
 export type { BookSelectorLocalizedStrings } from './components/advanced/book-selector.component';
+export {
+  default as CommentEditor,
+  type CommentEditorProps,
+} from './components/advanced/comment-editor/comment-editor.component';
+export {
+  COMMENT_EDITOR_STRING_KEYS,
+  type CommentEditorLocalizedStrings,
+} from './components/advanced/comment-editor/comment-editor.types';
 export type {
   CommentListProps,
   AddCommentToThreadOptions,

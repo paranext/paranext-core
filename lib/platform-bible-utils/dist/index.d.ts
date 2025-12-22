@@ -2878,6 +2878,20 @@ export interface IUsjReaderWriter {
 	 *   changing this USJ data.
 	 */
 	findNextLocationOfMatchingText(start: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
+	/**
+	 * Given a starting point, find the next node location in this USJ data that matches the search
+	 * conditions. The given starting point is included in the search.
+	 *
+	 * @param nodeAndLocation Node from which the search will start
+	 * @param searchFunction Function that nodes and their locations will be passed into to determine
+	 *   if they are the correct node. Stops searching and returns the node and location if this
+	 *   function returns `true`
+	 * @returns Object containing the USJ node that matched the condition tested by the search
+	 *   function and a JSONPath string that indicates the location of the of USJ node within `usj`.
+	 *   Note that if the USJ node returned is an object, it is the same object that is within this
+	 *   USJ data. So if you change it, you are changing this USJ data.
+	 */
+	findNextMatchingNode(nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>, searchFunction: (potentiallyMatchingNodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>) => boolean): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> | undefined;
 	/** Find the first value matching the given JSONPath query within this USJ data */
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	/** Find the parent of the first value matching the given JSONPath query within this USJ data */
@@ -2941,7 +2955,7 @@ export interface IUsjReaderWriter {
 	 * @throws If not able to establish relationship between string `node` and `nodeParent`
 	 * @throws If not able to find the node in the USJ document
 	 */
-	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation;
+	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	/**
 	 * Remove all nodes from this USJ data that match a given search function.
 	 *
@@ -5112,9 +5126,10 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @returns Node matching condition tested by the search function
 	 */
 	private static findNextMatchingNodeUsingWorkingStack;
+	findNextMatchingNode(nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>, searchFunction: (potentiallyMatchingNodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>) => boolean): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> | undefined;
 	nodeToJsonPath(node: MarkerObject): ContentJsonPath;
 	nodeToUsfmVerseRefVerseLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
-	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation;
+	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	/**
 	 * Finds the node associated with the JSONPath provided, and also gets the parent of the node if
 	 * the node is a string. This is helpful so you can find a real object that is actually somewhere

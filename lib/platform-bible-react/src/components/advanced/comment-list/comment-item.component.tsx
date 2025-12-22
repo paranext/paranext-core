@@ -44,38 +44,14 @@ export function CommentItem({
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
-  canUserEditOrDeleteCommentCallback,
+  canEditOrDelete = false,
   canUserResolveThread = false,
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editorState, setEditorState] = useState<SerializedEditorState>();
-  const [canEditOrDelete, setCanEditOrDelete] = useState(false);
 
   // eslint-disable-next-line no-null/no-null
   const editContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Check if the user can edit or delete this comment
-  useEffect(() => {
-    let isMounted = true;
-
-    if (!isThreadExpanded) {
-      setCanEditOrDelete(false);
-      return undefined;
-    }
-
-    const checkPermission = async () => {
-      const canEdit = canUserEditOrDeleteCommentCallback
-        ? await canUserEditOrDeleteCommentCallback(comment.id)
-        : false;
-
-      if (isMounted) setCanEditOrDelete(canEdit);
-    };
-
-    checkPermission();
-    return () => {
-      isMounted = false;
-    };
-  }, [canUserEditOrDeleteCommentCallback, comment.id, isThreadExpanded]);
 
   // Focus the editor when entering edit mode, after dropdown menu has fully closed
   useEffect(() => {
@@ -275,7 +251,7 @@ export function CommentItem({
                 {localizedStrings['%comment_status_resolved%']}
               </div>
             )}
-            {comment.status === 'Todo' && (
+            {comment.status === 'Todo' && isReply && (
               <div className="tw-text-sm tw-italic">
                 {localizedStrings['%comment_status_todo%']}
               </div>
