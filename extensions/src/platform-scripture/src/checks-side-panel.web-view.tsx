@@ -591,14 +591,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [setScrRef, writeCheckId, editorWebViewId, editorWebViewController],
   );
 
-  const handleSelectCheck = useCallback(
-    async (id: string) => {
-      setSelectedCheckId(id);
-      selectCheckReferenceInEditor(id);
-    },
-    [selectCheckReferenceInEditor],
-  );
-
   const setDeniedStatusForResult = useCallback(
     (result: CheckRunResult, isDenied: boolean) => {
       if (!result || !projectId || !checkAggregator) return false;
@@ -852,8 +844,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 checkResult={result}
                 checkId={writeCheckId(result, index)}
                 isSelected={selectedCheckId === writeCheckId(result, index)}
-                handleSelectCheck={handleSelectCheck}
-                checkCardTitle={`${result.verseRef.book} ${result.verseRef.chapterNum}:${result.verseRef.verseNum} ${result.itemText}`}
+                handleSelectCheck={setSelectedCheckId}
+                handleDoubleClick={selectCheckReferenceInEditor}
+                scrRef={scrRef}
                 checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
                 handleDenyCheck={handleDenyCheck}
                 handleAllowCheck={handleAllowCheck}
