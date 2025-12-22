@@ -240,7 +240,8 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
   } from 'platform-scripture-editor';
-  import { NotificationClickCommandHandler } from '@papi/core';
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
+  import type { NotificationClickCommandHandler } from '@papi/core';
 
   export interface CommandHandlers {
     /**
