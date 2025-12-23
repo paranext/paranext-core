@@ -195,7 +195,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))
-            filteredThreads = filteredThreads.Where(t => t.Id == selector.ThreadId);
+            filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
         // Filter by status
         if (!string.IsNullOrEmpty(selector.Status))

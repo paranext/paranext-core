@@ -101,7 +101,8 @@ namespace TestParanextDataProvider.Projects
                 comment.Thread = threadId;
 
             // Add the comment text to Contents
-            comment.AddTextToContent(commentText, false);
+            comment.SetContentsFromHtml(commentText);
+            //comment.AddTextToContent(commentText, false);
 
             return comment;
         }
@@ -1473,9 +1474,10 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            assignComment.AddTextToContent("Assigning to team for review", false);
+            // assignComment.AddTextToContent("Assigning to team for review", false);
+            string commentText = "Assigning to team for review";
+            assignComment.SetContentsFromHtml(commentText);
             _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
-            ;
 
             // Assert - Verify the thread is assigned and has the new comment
             var thread = _provider
@@ -1486,7 +1488,7 @@ namespace TestParanextDataProvider.Projects
             // Get the comments and check the last one has the contents
             var lastComment = thread.Comments.OrderByDescending(c => c.Date).First();
             Assert.That(
-                lastComment.Contents?.InnerXml,
+                lastComment.Contents?.InnerText,
                 Does.Contain("Assigning to team for review"),
                 "Last comment should contain the provided contents"
             );
