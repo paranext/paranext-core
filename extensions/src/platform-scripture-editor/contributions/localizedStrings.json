@@ -116,7 +116,10 @@
       "%platformScriptureEditor_dialog_openResourceViewer_title%": "Abrir el visor de recursos",
       "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Elija un recurso para abrir:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
-      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:"
+      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:",
+      "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie"
     }
   }
 }
