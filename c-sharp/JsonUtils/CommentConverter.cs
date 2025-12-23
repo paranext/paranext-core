@@ -224,6 +224,8 @@ public class CommentConverter : JsonConverter<Comment>
                 VerseRefStr = verseRef ?? string.Empty,
             };
 
+        comment.SetContentsFromHtml(contents);
+
         if (comment.Id != id)
             Console.WriteLine(
                 $"WARNING: Actual comment ID ({comment.Id}) doesn't match the provided ID ({id})"
@@ -272,7 +274,7 @@ public class CommentConverter : JsonConverter<Comment>
             value.ExtraHeadingInfo.ToString()
         );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
-        writer.WriteString(CONTENTS, value.Contents?.InnerXml ?? "");
+        writer.WriteString(CONTENTS, value.Contents.InnerXml);
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
         JsonConverterUtils.TryWriteString(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));

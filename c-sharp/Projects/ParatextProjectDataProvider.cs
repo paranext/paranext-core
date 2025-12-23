@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -199,11 +200,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
         if (!string.IsNullOrEmpty(selector.CommentId))
             comments = comments.FindAll((c) => selector.CommentId == c.Id);
-        return comments;
+
+        List<Comment> updatedComments = new List<Comment>();
+        foreach (Comment comment in comments)
+        {
+            Comment clonedComment = (Comment)comment.Clone();
+            CommentThread owner = _commentManager.FindThread(comment.Thread);
+            if (owner == null)
+                throw new InvalidDataException(
+                    $"Comment thread '{comment.Thread}' not found for comment thread id '{comment.Id}. A comment should always belong to a thread.'"
+                );
+            ReplaceCommentXMLContentsWithHtmlContents(clonedComment, owner, false, false);
+            updatedComments.Add(clonedComment);
+        }
+        return updatedComments;
     }
 
-    // For now, only allow adding comments, not changing or removing existing PT 9 comments
-    // Too much risk of data loss while there are other bugs related to comments floating around
     public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -248,7 +260,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))
-            filteredThreads = filteredThreads.Where(t => t.Id == selector.ThreadId);
+            filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
         // Filter by status
         if (!string.IsNullOrEmpty(selector.Status))
@@ -281,6 +293,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Filter by scripture ranges
         if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
             filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
+
+        foreach (CommentThread thread in filteredThreads)
+        {
+            foreach (Comment comment in thread.Comments)
+            {
+                ReplaceCommentXMLContentsWithHtmlContents(comment, thread, false, false);
+            }
+        }
 
         return filteredThreads.ToList();
     }
@@ -514,6 +534,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             throw new InvalidDataException($"Updated content is not valid XML/HTML: {ex.Message}");
         }
+        commentToUpdate.SetContentsFromHtml(updatedContent);
         commentToUpdate.Contents = xmlDoc.DocumentElement;
 
         // Reset the status field to Unspecified when a comment is edited
@@ -1398,5 +1419,33 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
+    private static void ReplaceCommentXMLContentsWithHtmlContents(
+        Comment comment,
+        CommentThread owner,
+        bool skipFirstChildNode,
+        bool ignoreScriptureLinks
+    )
+    {
+        // If the content of the comment already has CDATA, it's already been converted to HTML,
+        // likely as part of a previous call to GetThreads or to GetComments.
+        if (comment.Contents != null && comment.Contents.InnerXml.Contains("![CDATA["))
+            return;
+
+        string html = comment.GetContentsAsHtml(
+            owner,
+            comment.Id == owner.Id,
+            skipFirstChildNode,
+            ignoreScriptureLinks
+        );
+
+        // Wrap HTML in CDATA so it's preserved exactly as-is through serialization
+        XmlDocument doc = new() { PreserveWhitespace = true };
+        XmlElement root = doc.CreateElement("Contents");
+        XmlCDataSection cdata = doc.CreateCDataSection(html);
+        root.AppendChild(cdata);
+        doc.AppendChild(root);
+
+        comment.Contents = doc.DocumentElement;
+    }
     #endregion
 }
