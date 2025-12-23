@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Xml;
 using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
@@ -19,7 +20,7 @@ internal class CommentConverterTests : PapiTestBase
     public override void FixtureSetUp()
     {
         base.FixtureSetUp();
-        ParatextData.Initialize();
+        ParatextGlobals.Initialize("assets");
     }
 
     [SetUp]
@@ -48,7 +49,7 @@ internal class CommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""startPosition"":19"));
         Assert.That(json, Does.Contain(@"""contextBefore"":""\\v 24 God said, “I """));
         Assert.That(json, Does.Contain(@"""contextAfter"":"" the earth to give life"""));
-        Assert.That(json, Does.Contain(@"""status"":""todo"""));
+        Assert.That(json, Does.Contain(@"""status"":""Todo"""));
         Assert.That(json, Does.Contain(@"""hideInTextWindow"":false"));
         Assert.That(json, Does.Contain(@"""contents"":""Test Comment"""));
     }
@@ -85,7 +86,7 @@ internal class CommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""verseRef"":""MAT 2:1"""));
         Assert.That(json, Does.Contain(@"""date"":""2011-08-16T15:49:18.4019847-04:00"""));
         Assert.That(json, Does.Contain(@"""startPosition"":0"));
-        Assert.That(json, Does.Contain(@"""status"":""todo"""));
+        Assert.That(json, Does.Contain(@"""status"":""Todo"""));
         Assert.That(json, Does.Contain(@"""type"":""conflict"""));
         Assert.That(json, Does.Contain(@"""hideInTextWindow"":false"));
         Assert.That(
