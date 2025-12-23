@@ -59,6 +59,9 @@ declare global {
     webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
     shouldBringToFront?: boolean,
   ) => boolean;
+  var getWebViewStateById: <T>(id: string, stateKey: string, defaultValue: T) => T;
+  var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: T) => void;
+  var resetWebViewStateById: (id: string, stateKey: string) => void;
   /** JSDOC DESTINATION GetSavedWebViewDefinition */
   var getSavedWebViewDefinition: GetSavedWebViewDefinition;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
