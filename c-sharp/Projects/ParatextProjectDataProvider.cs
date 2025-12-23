@@ -1170,6 +1170,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             failedMessage = $"Project with ID '{ProjectDetails.Metadata.Id}' was not found";
         }
+        catch (SafetyCheckException e)
+        {
+            throw new PermissionsException(ProjectDetails.Metadata.Id, e.Message);
+        }
 
         if (failedMessage != null)
             throw new Exception(failedMessage);
