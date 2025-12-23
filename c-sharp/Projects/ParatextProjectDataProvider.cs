@@ -260,7 +260,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))
-            filteredThreads = filteredThreads.Where(t => t.Id == selector.ThreadId);
+            filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
         // Filter by status
         if (!string.IsNullOrEmpty(selector.Status))
@@ -294,24 +294,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
             filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
 
-        List<CommentThread> updatedThreads = new List<CommentThread>();
         foreach (CommentThread thread in filteredThreads)
         {
-            CommentThread clonedThread = thread.DeepClone();
-            foreach (Comment comment in clonedThread.Comments)
+            foreach (Comment comment in thread.Comments)
             {
-                Comment clonedComment = (Comment)comment.Clone();
-                CommentThread owner = _commentManager.FindThread(comment.Thread);
-                if (owner == null)
-                    throw new InvalidDataException(
-                        $"Comment thread '{comment.Thread}' not found for comment thread id '{comment.Id}. A comment should always belong to a thread.'"
-                    );
-                ReplaceCommentXMLContentsWithHtmlContents(clonedComment, owner, false, false);
+                ReplaceCommentXMLContentsWithHtmlContents(comment, thread, false, false);
             }
-            updatedThreads.Add(clonedThread);
         }
 
-        return updatedThreads;
+        return filteredThreads.ToList();
     }
 
     public bool DeleteComment(string commentId)
@@ -1439,6 +1430,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         bool ignoreScriptureLinks
     )
     {
+        // If the content of the comment already has CDATA, it's already been converted to HTML,
+        // likely as part of a previous call to GetThreads or to GetComments.
+        if (comment.Contents != null && comment.Contents.InnerXml.Contains("![CDATA["))
+            return;
+
         string html = comment.GetContentsAsHtml(
             owner,
             comment.Id == owner.Id,
