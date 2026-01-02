@@ -8,33 +8,44 @@ import { isString } from './util';
  * to go in the future.
  *
  * CURRENT STATE OF THIS BRANCH:
- * As of 2025/10/30, I, Matthew Getgen, have finished re-writing
- * stringLength, at, charAt, codePointAt, endsWith,
- * includes, indexOf, lastIndexOf, substr, and substring to use the
- * `SegmentedString` type I created. The tests for these have also been updated,
- * with edge cases added. I myself also have a perf testing folder on my computer
- * under `~/repos/test/platform-bible-utils-perf` used to test the perf difference
- * of the JavaScript std functions, the old, and the newer versions. In there I have
- * proven that the new versions of at and charAt are more performant, but in the
- * future it would be good to ensure that more are actually better.
- * Below is a class that I defined. Instead of giving users the option of either a
- * `string` or `SegmentedString`, we should instead provide an API that requires you to
- * use a `UnicodeString` class which requires it, so the performant option is always
- * chosen. This is just the very start of that work.
+ * As of 2026/01/02, I, Matthew Getgen, have finished re-writing:
+ * - toArray
+ * - at
+ * - charAt
+ * - codePointAt
+ * - substring
+ * - slice
+ * - split
+ * - indexOf
+ * - lastIndexOf
+ * - includes
+ * - normalize
+ * - ordinalCompare
+ * - startsWith
+ * - endsWith
+ * - padStart
+ * - padEnd
+ * And I still need to re-write:
+ * - isLocalizedKey
+ * - isWhiteSpace
+ * - toKebabCase
+ * - formatRepalcementStringToArray
+ * - formatReplacementString
+ * - escapeStringRegexp
+ * - transformAndEnsureRegExpRegExpArray
+ * - transformAndEnsureRegExpArray
+ * These functions are apart of the `UnicodeString` TypeScript class, which moves
+ * away from the previous `SegmentedString` struct methods that I wrote for this before.
  *
  * TODOS:
- * - Re-write all functions.
- * - Consider making functions that transform strings into other `UnicodeString`s, instead of just
- *   strings
- * - Ensure tests work to ensure edge cases are met and regressions aren't made.
- * - Add tests when needed.
- * - Compare performance in the perf test folder.
- * - Standardize the way we index into strings (positive,negative,overflow,underflow).
- *   - The current methods don't have a standard, each one follows different rules.
- * - Move all functions to a class-based solution using the UnicodeString class.
- * - Add comments above the classes and functions to describe their usage.
- * - Rename the `segment-string-util.ts` and `segment-string-util.test.ts` files to match
- *   the name chosen for the class. `unicode-string-util.ts` for example.
+ * - Finish re-writing all functions for the UnicodeString class.
+ * - Finish re-writing all tests for the UnicodeString class.
+ * - Finish re-writing all perf tests for the UnicodeString class, ensuring all
+ *   functions perform better (stored at `~/repos/test/platform-bible-utils-perf`
+ *   on Matt G's machine).
+ * - Decide whether to match the JS Stdlib for index patterns, or standardize them
+ *   for all functions (I prefer standardizing myself, since the stdlib is weird).
+ * - Add comments above the functions, ensuring updated documentation.
  * - Mark previous functions as deprecated.
  */
 export class UnicodeString {
