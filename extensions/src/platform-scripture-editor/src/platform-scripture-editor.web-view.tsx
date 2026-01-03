@@ -735,6 +735,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     onFootnoteEditorClose();
   };
 
+  // On loading the editor, add the scripture-font class to the editor. Can't just put this on a div
+  // around the editor because the editor currently renders a toolbar that should have normal UI font
+  useEffect(() => {
+    // Do not add the scripture-font class if the editor isn't rendered (see `renderEditor`)
+    if (!bookExists) return;
+    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
+
+    const cancelRunOnLoad = runOnFirstLoad(() => {
+      const editorElement = document.querySelector('.editor-inner');
+      if (!editorElement) return;
+
+      editorElement.classList.add('scripture-font');
+    });
+
+    return () => {
+      cancelRunOnLoad();
+    };
+  }, [bookExists, usjFromPdp]);
+
   function renderEditor() {
     const commonProps = {
       ref: editorRef,
@@ -746,6 +765,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
+
+    // When not rendering the editor component itself, make sure not to try to apply the scripture-font
+    // in the useEffect above
 
     if (!bookExists) {
       return (
@@ -865,6 +887,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         />
         <PopoverContent className="tw-w-[500px] tw-p-[10px]">
           <FootnoteEditor
+            classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
             onSave={onFootnoteEditorSave}

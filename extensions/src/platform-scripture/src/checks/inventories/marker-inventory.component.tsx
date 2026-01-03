@@ -210,6 +210,7 @@ export function MarkerInventory({
         tableHeaders: [precedingMarkerLabel],
       }}
       areInventoryItemsLoading={areInventoryItemsLoading}
+      classNameForVerseText="scripture-font"
     />
   );
 }
