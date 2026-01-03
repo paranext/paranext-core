@@ -193,6 +193,7 @@ global.webViewComponent = function CommentListWebView({
         </div>
       ) : (
         <CommentList
+          classNameForVerseText="scripture-font"
           threads={commentThreads}
           currentUser={currentUserName}
           localizedStrings={localizedStrings}

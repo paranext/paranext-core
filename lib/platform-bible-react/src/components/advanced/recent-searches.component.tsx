@@ -3,6 +3,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { useState } from 'react';
+import { cn } from '@/utils/shadcn-ui.util';
 
 /** Interface defining the properties for the RecentSearches component */
 export interface RecentSearchesProps<T> {
@@ -20,6 +21,8 @@ export interface RecentSearchesProps<T> {
   groupHeading?: string;
   /** Optional ID for the popover content for accessibility */
   id?: string;
+  /** Class name for styling the `CommandItem` for each recent search result */
+  classNameForItems?: string;
 }
 
 /**
@@ -34,6 +37,7 @@ export default function RecentSearches<T>({
   ariaLabel = 'Show recent searches',
   groupHeading = 'Recent',
   id,
+  classNameForItems,
 }: RecentSearchesProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -66,7 +70,7 @@ export default function RecentSearches<T>({
                 <CommandItem
                   key={getItemKey(item)}
                   onSelect={() => handleSearchItemSelect(item)}
-                  className="tw-flex tw-items-center"
+                  className={cn('tw-flex tw-items-center', classNameForItems)}
                 >
                   <Clock className="tw-mr-2 tw-h-4 tw-w-4 tw-opacity-50" />
                   <span>{renderItem(item)}</span>

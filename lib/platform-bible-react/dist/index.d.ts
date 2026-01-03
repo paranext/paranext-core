@@ -350,12 +350,14 @@ export interface RecentSearchesProps<T> {
 	groupHeading?: string;
 	/** Optional ID for the popover content for accessibility */
 	id?: string;
+	/** Class name for styling the `CommandItem` for each recent search result */
+	classNameForItems?: string;
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 /** Options for adding a comment to a thread */
@@ -379,6 +381,8 @@ export declare const COMMENT_LIST_STRING_KEYS: LocalizeKey[];
 export interface CommentListProps {
 	/** Additional class name for the component */
 	className?: string;
+	/** Class name to apply to the display of the verse text for the first comment in the thread */
+	classNameForVerseText?: string;
 	/** Comment threads to render */
 	threads: LegacyCommentThread[];
 	/** Name of the current user, retrieved from the current user's Paratext Registry user information */
@@ -432,7 +436,7 @@ export interface CommentListProps {
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -826,6 +830,8 @@ export type FootnoteEditorLocalizedStrings = {
 export type FootnoteCallerType = "generated" | "hidden" | "custom";
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
+	/** Class name for styling the embedded `Editor` component in this editor popover */
+	classNameForEditor?: string;
 	/** Delta ops for the current note being edited that are applied to the note editorial */
 	noteOps: DeltaOpInsertNoteEmbed[] | undefined;
 	/** External function to handle saving changes to the footnote */
@@ -849,7 +855,7 @@ export interface FootnoteEditorProps {
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
@@ -993,9 +999,11 @@ type InventoryProps = {
 	id?: string;
 	/** Whether the inventory items are still loading */
 	areInventoryItemsLoading?: boolean;
+	/** Class name to apply to the provided occurrence verse text in the `OccurrencesTable` component */
+	classNameForVerseText?: string;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

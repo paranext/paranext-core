@@ -637,9 +637,10 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'} scripture-font`}
               />
               <RecentSearches
+                classNameForItems="scripture-font"
                 recentSearches={recentSearches}
                 onSearchItemSelect={setSearchTerm}
                 ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
@@ -753,11 +754,16 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Query Summary */}
       <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-        {submittedScope && submittedSearchTerm
-          ? `${projectName} · ${scopeSummaryText} · Find: ${submittedSearchTerm}`
-          : formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-              projectName,
-            })}
+        {submittedScope && submittedSearchTerm ? (
+          <>
+            {`${projectName} · ${scopeSummaryText} · Find: `}
+            <span className="scripture-font">{submittedSearchTerm}</span>
+          </>
+        ) : (
+          formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
+            projectName,
+          })
+        )}
       </div>
 
       {/* Search Results Placeholder */}

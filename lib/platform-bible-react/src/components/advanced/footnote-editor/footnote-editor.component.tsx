@@ -25,6 +25,8 @@ import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-e
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
+  /** Class name for styling the embedded `Editor` component in this editor popover */
+  classNameForEditor?: string;
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOpInsertNoteEmbed[] | undefined;
   /** External function to handle saving changes to the footnote */
@@ -50,6 +52,7 @@ export interface FootnoteEditorProps {
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
 export default function FootnoteEditor({
+  classNameForEditor,
   noteOps,
   onSave,
   onClose,
@@ -204,7 +207,9 @@ export default function FootnoteEditor({
         ref={editorParentRef}
         className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
       >
-        <Editorial options={options} onScrRefChange={() => {}} scrRef={scrRef} ref={editorRef} />
+        <div className={classNameForEditor}>
+          <Editorial options={options} onScrRefChange={() => {}} scrRef={scrRef} ref={editorRef} />
+        </div>
         <div className="tw-absolute tw-bottom-0 tw-right-0">
           <TooltipProvider>
             <Tooltip>

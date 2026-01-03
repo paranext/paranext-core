@@ -220,6 +220,8 @@ type InventoryProps = {
   id?: string;
   /** Whether the inventory items are still loading */
   areInventoryItemsLoading?: boolean;
+  /** Class name to apply to the provided occurrence verse text in the `OccurrencesTable` component */
+  classNameForVerseText?: string;
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -235,6 +237,7 @@ export function Inventory({
   columns,
   id,
   areInventoryItemsLoading = false,
+  classNameForVerseText,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -427,6 +430,7 @@ export function Inventory({
       {occurrenceData.length > 0 && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
+            classNameForText={classNameForVerseText}
             occurrenceData={occurrenceData}
             setScriptureReference={setVerseRef}
             localizedStrings={localizedStrings}

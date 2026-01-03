@@ -152,6 +152,7 @@ export function PunctuationInventory({
       onScopeChange={onScopeChange}
       columns={columns}
       areInventoryItemsLoading={areInventoryItemsLoading}
+      classNameForVerseText="scripture-font"
     />
   );
 }

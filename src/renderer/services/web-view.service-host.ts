@@ -13,6 +13,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
 import {
@@ -1369,6 +1370,9 @@ async function openOrReloadWebView(
     <script nonce="${srcNonce}">
     ${imports}
     </script>
+    <style nonce="${srcNonce}">
+      ${FONT_STYLES_RAW}
+    </style>
     <style nonce="${srcNonce}">
       ${SCROLLBAR_STYLES_RAW}
     </style>

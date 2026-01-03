@@ -6,8 +6,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { LanguageStrings } from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import { ReactNode, useMemo } from 'react';
 import { InventoryItemOccurrence } from './inventory-utils';
 
@@ -55,6 +55,8 @@ type OccurrencesTableProps = {
    * languages
    */
   localizedStrings: LanguageStrings;
+  /** Class name to apply to the occurrence text */
+  classNameForText?: string;
 };
 
 /**
@@ -66,6 +68,7 @@ export function OccurrencesTable({
   occurrenceData,
   setScriptureReference,
   localizedStrings,
+  classNameForText,
 }: OccurrencesTableProps) {
   const referenceHeaderText =
     localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
@@ -107,8 +110,10 @@ export function OccurrencesTable({
                 setScriptureReference(occurrence.reference);
               }}
             >
-              <TableCell>{`${Canon.bookIdToEnglishName(occurrence.reference.book)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
-              <TableCell>{formatTextWithBold(occurrence.text)}</TableCell>
+              <TableCell>{formatScrRef(occurrence.reference, 'English')}</TableCell>
+              <TableCell className={classNameForText}>
+                {formatTextWithBold(occurrence.text)}
+              </TableCell>
             </TableRow>
           ))}
       </TableBody>

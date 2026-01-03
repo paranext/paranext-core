@@ -190,12 +190,12 @@ export default function SearchResult({
         searchResult.start.verseRef.book}{' '}
       {searchResult.start.verseRef.chapterNum}:
       {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-      {searchResult.text ?? ''}
+      <span className="scripture-font">{searchResult.text ?? ''}</span>
     </div>
   );
 
   const additionalSelectedContent = (
-    <div className="tw-text-xs tw-font-normal tw-text-muted-foreground">
+    <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
       {getFocusedVerseText()}
     </div>
   );
