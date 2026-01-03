@@ -64,6 +64,7 @@ const initialValue: SerializedEditorState<
  * @props CommentThreadProps
  */
 export function CommentThread({
+  classNameForVerseText,
   comments,
   localizedStrings,
   isSelected = false,
@@ -299,7 +300,7 @@ export function CommentThread({
                 { 'tw-whitespace-nowrap': !isVerseExpanded },
               )}
             >
-              {verseRef} {firstComment.verse}
+              {verseRef} <span className={classNameForVerseText}>{firstComment.verse}</span>
             </p>
             {isVerseOverflowing && (
               <Button

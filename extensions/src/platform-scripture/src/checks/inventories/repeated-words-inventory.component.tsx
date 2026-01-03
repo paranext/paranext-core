@@ -123,6 +123,7 @@ export function RepeatedWordsInventory({
       onScopeChange={onScopeChange}
       columns={columns}
       areInventoryItemsLoading={areInventoryItemsLoading}
+      classNameForVerseText="scripture-font"
     />
   );
 }
