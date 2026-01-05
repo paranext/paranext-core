@@ -55,6 +55,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
+import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -353,6 +354,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [webViewId]);
+
+  // Apply annotation styles from extensions
+  useAnnotationStyleSheet();
 
   const [decorationsLocalizedStringsBase] = useLocalizedStrings(
     useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),
@@ -656,6 +660,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement?.classList.remove('highlighted');
     };
   }, [scrRef]);
+
+  // Test annotation
+  useEffect(() => {
+    // Editor doesn't load in these conditions, so don't add an annotation
+    if (!bookExists) return;
+    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
+
+    const cancelRunOnLoad = runOnFirstLoad(() => {
+      console.info('Adding tj-test annotation');
+      const path = localStorage.getItem('tj-test-path') ?? '$.content[8].content[0]';
+      editorRef?.current?.setAnnotation(
+        {
+          start: {
+            jsonPath: path,
+            offset: 3,
+          },
+          end: {
+            jsonPath: path,
+            offset: 8,
+          },
+        },
+        'tj-test',
+        'asdf',
+        () => console.info('clicked tj-test annotation'),
+      );
+    });
+
+    return () => {
+      cancelRunOnLoad();
+    };
+  }, [bookExists, usjFromPdp]);
 
   const onFootnoteEditorClose = useCallback(() => {
     editingNoteKey.current = undefined;

@@ -2639,6 +2639,14 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+/**
+ * Adds a CSS stylesheet to the current document in a
+ * [`style`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/style) element
+ *
+ * @param stylesheet The CSS stylesheet to apply to the current document. If `undefined`, this hook
+ *   does nothing.
+ */
+export declare function useStylesheet(stylesheet: string | undefined): void;
 /** Properties of one option contained in a listbox */
 export interface ListboxOption {
 	/** Unique identifier for the option */
