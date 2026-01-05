@@ -661,37 +661,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
-  // Test annotation
-  useEffect(() => {
-    // Editor doesn't load in these conditions, so don't add an annotation
-    if (!bookExists) return;
-    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
-
-    const cancelRunOnLoad = runOnFirstLoad(() => {
-      console.info('Adding tj-test annotation');
-      const path = localStorage.getItem('tj-test-path') ?? '$.content[8].content[0]';
-      editorRef?.current?.setAnnotation(
-        {
-          start: {
-            jsonPath: path,
-            offset: 3,
-          },
-          end: {
-            jsonPath: path,
-            offset: 8,
-          },
-        },
-        'tj-test',
-        'asdf',
-        () => console.info('clicked tj-test annotation'),
-      );
-    });
-
-    return () => {
-      cancelRunOnLoad();
-    };
-  }, [bookExists, usjFromPdp]);
-
   const onFootnoteEditorClose = useCallback(() => {
     editingNoteKey.current = undefined;
     editingNoteOps.current = undefined;
