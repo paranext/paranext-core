@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using System.Xml.Linq;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 
@@ -24,6 +25,7 @@ namespace TestParanextDataProvider
         {
             // Required for the Paratext.Data.Encodings.StringEncoders static constructor
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            ParatextGlobals.Initialize(FixtureSetup.TestFolderPath);
         }
 
         [SetUp]
