@@ -38,11 +38,13 @@ function getRecord(id: string): Record<string, unknown> {
 }
 
 /**
- * Get the web view state associated with the given ID This function is only intended to be used at
- * startup. getWebViewState is intended for web views to call.
+ * Get the WebView state associated with the given ID.
  *
- * @param id ID of the web view
- * @returns State object of the given web view
+ * This function is only intended to be used at startup. getWebViewState is intended for WebViews to
+ * call.
+ *
+ * @param id ID of the WebView
+ * @returns State object of the given WebView
  */
 export function getFullWebViewStateById(id: string): Record<string, unknown> {
   if (!id) throw new Error('id must be provided to get webview state');
@@ -50,13 +52,13 @@ export function getFullWebViewStateById(id: string): Record<string, unknown> {
 }
 
 /**
- * Set the web view state associated with the given ID
+ * Set the WebView state associated with the given ID
  *
- * This function is only intended to be used at startup. setWebViewState is intended for web views
- * to call.
+ * This function is only intended to be used at startup. setWebViewState is intended for WebViews to
+ * call.
  *
- * @param id ID of the web view
- * @param state State to set for the given web view
+ * @param id ID of the WebView
+ * @param state State to set for the given WebView
  */
 export function setFullWebViewStateById(id: string, state: Record<string, unknown>): void {
   if (!id || !state) throw new Error('id and state must be provided to set webview state');
@@ -67,9 +69,9 @@ export function setFullWebViewStateById(id: string, state: Record<string, unknow
 }
 
 /**
- * Delete the web view state associated with the given ID
+ * Delete the WebView state associated with the given ID
  *
- * @param id ID of the web view
+ * @param id ID of the WebView
  */
 export function deleteFullWebViewStateById(id: string): void {
   if (!id) throw new Error('id must be provided to delete webview state');
@@ -80,8 +82,8 @@ export function deleteFullWebViewStateById(id: string): void {
 }
 
 /**
- * Purge any web view state that hasn't been touched since the process has been running. Only call
- * this once all web views have been loaded.
+ * Purge any WebView state that hasn't been touched since the process has been running. Only call
+ * this once all WebViews have been loaded.
  */
 export function cleanupOldWebViewState(): void {
   if (stateMap.size <= 0 || idsLookedUp.size <= 0) return;

@@ -653,9 +653,9 @@ export function updateTabPartial(
 }
 
 /**
- * Updates the WebView with the specified id with the specified properties
+ * Updates the WebView with the specified ID with the specified properties
  *
- * @param webViewId The id of the WebView to update
+ * @param webViewId The ID of the WebView to update
  * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
  *   same. Note: `state` will be treated like any other property, meaning it will be overwritten
  *   completely if specified here and the object is referentially different from the current state

@@ -81,7 +81,11 @@ const defaultEditorDecorations: EditorDecorations = {};
 
 const defaultProjectName = '';
 
-const DEFAULT_TITLE = '__default_title_do_not_use__';
+/**
+ * Special value we use internally to check if formatting the title produces a different value that
+ * should be set on the web view definition
+ */
+const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 
 const defaultTextDirection = 'ltr';
 
@@ -140,7 +144,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>('viewType', 'formatted');
 
-  const [unformattedTitle] = useWebViewState<string | undefined>('unformattedTitle', DEFAULT_TITLE);
+  const [unformattedTitle] = useWebViewState<string | undefined>(
+    'unformattedTitle',
+    NO_UPDATE_TITLE,
+  );
 
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
 
@@ -217,11 +224,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, viewType],
   );
 
-  // Get the updated title. Note this is DEFAULT_TITLE if no update is needed
+  // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
-      if (unformattedTitle === DEFAULT_TITLE || projectName === defaultProjectName)
-        return DEFAULT_TITLE;
+      if (unformattedTitle === NO_UPDATE_TITLE || projectName === defaultProjectName)
+        return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
@@ -231,16 +238,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
 
       // Don't need to update if the title is the same as before
-      if (updatedTitle === title) return DEFAULT_TITLE;
+      if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
     }, [isReadOnlyEffective, title, projectId, projectName, unformattedTitle]),
-    DEFAULT_TITLE,
+    NO_UPDATE_TITLE,
   );
 
   // Keep the title up-to-date
   useEffect(() => {
-    if (newTitleIfUpdated === DEFAULT_TITLE) return;
+    if (newTitleIfUpdated === NO_UPDATE_TITLE) return;
 
     updateWebViewDefinition({
       title: newTitleIfUpdated,

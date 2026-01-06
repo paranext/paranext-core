@@ -321,7 +321,7 @@ declare module 'papi-shared-types' {
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
     /**
-     * Dismiss the marker-view readonly notification for a given notification id. The command
+     * Dismiss the marker-view readonly notification for a given notification ID. The command
      * receives the `notificationId` when the notification's click action is used.
      */
     'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;

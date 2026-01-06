@@ -956,10 +956,10 @@ export function getSavedWebViewDefinitionSync(
 // #region WebViewState
 
 /**
- * Get the full web view state object associated with the given ID.
+ * Get the full WebView state object associated with the given ID.
  *
- * @param webViewId ID of the web view
- * @returns The full web view state object associated with the given ID or `{}` if none exists
+ * @param webViewId ID of the WebView
+ * @returns The full WebView state object associated with the given ID or `{}` if none exists
  * @throws If the papi dock layout has not been registered
  */
 function getFullWebViewStateSync(webViewId: WebViewId): Record<string, unknown> {
@@ -967,13 +967,13 @@ function getFullWebViewStateSync(webViewId: WebViewId): Record<string, unknown> 
 }
 
 /**
- * Get the web view state associated with the given ID
+ * Get the WebView state associated with the given ID
  *
- * @param webViewId ID of the web view
+ * @param webViewId ID of the WebView
  * @param stateKey Key used to retrieve the state value
  * @param defaultValue Default value to return if the state for the given key does not exist
- * @returns The state for the given key of the given web view if that state exists. Otherwise
- *   default value is returned.
+ * @returns The state for the given key of the given WebView if that state exists. Otherwise default
+ *   value is returned.
  * @throws If webViewId or stateKey are not provided
  * @throws If the papi dock layout has not been registered
  */
@@ -989,11 +989,11 @@ function getWebViewStateSync<T>(webViewId: WebViewId, stateKey: string, defaultV
 }
 
 /**
- * Set the web view state object associated with the given ID
+ * Set the WebView state object associated with the given ID
  *
- * @param webViewId ID of the web view
+ * @param webViewId ID of the WebView
  * @param stateKey Key for the associated state
- * @param stateValue Value of the state for the given key of the given web view - must work with
+ * @param stateValue Value of the state for the given key of the given WebView - must work with
  *   serialize/deserialize
  * @throws If webViewId or stateKey are not provided
  * @throws If stateValue cannot round trip with serialize and deserialize
@@ -1016,9 +1016,9 @@ function setWebViewStateSync<T>(webViewId: string, stateKey: string, stateValue:
 }
 
 /**
- * Remove the web view state object associated with the given ID
+ * Remove the WebView state object associated with the given ID
  *
- * @param webViewId ID of the web view
+ * @param webViewId ID of the WebView
  * @param stateKey Key for the associated state
  * @throws If webViewId or stateKey are not provided
  * @throws If the papi dock layout has not been registered

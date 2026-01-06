@@ -1,7 +1,7 @@
+/* Small utility helpers for the platform-scripture-editor extension. */
+
 import { LocalizationSelectors } from '@papi/core';
 import { formatReplacementString, isLocalizeKey, LanguageStrings } from 'platform-bible-utils';
-
-/* Small utility helpers for the platform-scripture-editor extension. */
 
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
