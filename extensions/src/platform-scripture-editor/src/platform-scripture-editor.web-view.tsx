@@ -569,6 +569,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     else saveUsjToPdpIfUpdated();
   }, [saveUsjToPdpIfUpdated, usjFromPdp]);
 
+  // Need to force the editor to have the most up-to-date USJ from the editor when the options
+  // change because it seems to have a bug where it sets the USJ back to its initial value when
+  // options change
+  // Note: this solution does not work when the markers view is editable. If Ira does not believe
+  // this is an editor bug, we will need to find a better long-term solution
+  useEffect(() => {
+    if (!usjSentToPdp.current || !editorRef.current) return;
+
+    editorRef.current.setUsj(usjSentToPdp.current);
+  }, [options]);
+
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
     if (
