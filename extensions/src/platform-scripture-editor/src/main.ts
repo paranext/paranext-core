@@ -8,11 +8,7 @@ import type {
 } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  formatReplacementString,
   getErrorMessage,
-  isLocalizeKey,
-  LanguageStrings,
-  LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjNodeAndDocumentLocation,
@@ -29,15 +25,13 @@ import { AnnotationStyleDataProviderEngine } from './annotations/annotation-styl
 import { mergeDecorations } from './decorations.util';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
+import {
+  formatEditorTitle,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+} from './platform-scripture-editor.utils';
+import { MarkersViewNotifier } from './markers-view-notifier.model';
 
 logger.debug('Scripture Editor is importing!');
-
-const scriptureEditorWebViewType = 'platformScriptureEditor.react';
-
-const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
-const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
-const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
-const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -158,22 +152,6 @@ function calculateUsjLocationProperties(
 
 // #endregion selectRange helper functions
 
-/**
- * Get localized strings for creating the editor WebView tab
- *
- * @param tabTitleFormatString Localize key or plain string for title of the tab
- * @returns Localized strings
- */
-async function getEditorTabLocalizations(
-  tabTitleFormatString: LocalizeKey,
-): Promise<LanguageStrings> {
-  const localizationData = await papi.localization.getLocalizedStrings({
-    localizeKeys: [EDITABLE_KEY, tabTitleFormatString],
-    locales: ['en'],
-  });
-  return localizationData;
-}
-
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformScriptureEditor(
   projectId: string | undefined,
@@ -202,7 +180,7 @@ async function insertFootnoteAtSelection(webViewId: string | undefined): Promise
   }
 
   const webViewController = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -221,7 +199,7 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   }
 
   const webViewController = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -292,7 +270,7 @@ async function open(
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.openWebView(
-      scriptureEditorWebViewType,
+      SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       existingTabIdToReplace
         ? { type: 'replace-tab', targetTabId: existingTabIdToReplace }
         : undefined,
@@ -314,13 +292,13 @@ async function changeScriptureView(webViewId: string | undefined): Promise<void>
     return;
   }
 
-  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
     return;
   }
 
   const controller = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -344,13 +322,13 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<void>
     return;
   }
 
-  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
     return;
   }
 
   const controller = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -374,13 +352,13 @@ async function changeFootnotesPaneLocation(webViewId: string | undefined): Promi
     return;
   }
 
-  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
     return;
   }
 
   const controller = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -393,62 +371,76 @@ async function changeFootnotesPaneLocation(webViewId: string | undefined): Promi
 }
 
 /** Simple WebView provider so PAPI can get a Scripture Editor upon request */
-class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
+class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDITOR_WEBVIEW_TYPE> {
   constructor() {
-    super(scriptureEditorWebViewType);
+    super(SCRIPTURE_EDITOR_WEBVIEW_TYPE);
   }
 
   override async getWebViewDefinition(
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: PlatformScriptureEditorOptions,
   ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== scriptureEditorWebViewType)
+    if (savedWebView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE)
       throw new Error(
-        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} WebView`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
-    const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
-    let title = getWebViewOptions.options?.title ?? savedWebView.title;
-    if (!title) {
-      if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
-      else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
-    }
-    if (isLocalizeKey(title)) {
-      const localizedStrings = await getEditorTabLocalizations(title);
-      const localizedTitleFormatStr = localizedStrings[title];
-      const localizedEditable = localizedStrings[EDITABLE_KEY];
+    const isReadOnly = getWebViewOptions.isReadOnly ?? !!savedWebView.state?.isReadOnly;
 
-      let projectName = projectId;
-      if (projectId) {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        projectName = (await pdp.getSetting('platform.name')) ?? projectName;
-      }
+    // Get the options out that we need to do more stuff with
+    const {
+      decorations: optionsDecorations,
+      iconUrl: optionsIconUrl,
+      title: optionsTitle,
+      tooltip: optionsTooltip,
+      ...optionsWebViewState
+    } = getWebViewOptions.options ?? {};
 
-      title = formatReplacementString(localizedTitleFormatStr, {
-        projectId: projectName,
-        editable: isReadOnly ? '' : localizedEditable,
-      });
-    }
+    const unformattedTitle =
+      optionsTitle ??
+      // WebView state is not yet typed, but we know this is string | undefined
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.unformattedTitle as string | undefined);
+
+    // Overwrite the saved state with the relevant options passed in and some other updated values
+    const savedWebViewStateUpdated = {
+      ...savedWebView.state,
+      ...optionsWebViewState,
+      decorations: mergeDecorations(
+        // We know this will be EditorDecorations though webView state doesn't have types
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        savedWebView.state?.decorations as EditorDecorations,
+        optionsDecorations,
+      ),
+      isReadOnly,
+      /**
+       * The original title string or localized string key passed in for us to use to format the
+       * title when it should change
+       */
+      unformattedTitle,
+    };
+
+    const title = await formatEditorTitle(
+      unformattedTitle,
+      projectId,
+      isReadOnly || savedWebViewStateUpdated.viewType === 'markers',
+      async (projectIdFormat) => {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
+        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
+      },
+      papi.localization.getLocalizedStrings,
+    );
 
     return {
       ...savedWebView,
       title,
-      iconUrl: getWebViewOptions.options?.iconUrl ?? savedWebView.iconUrl,
-      tooltip: getWebViewOptions.options?.tooltip ?? savedWebView.tooltip,
+      iconUrl: optionsIconUrl ?? savedWebView.iconUrl,
+      tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
-      state: {
-        ...savedWebView.state,
-        isReadOnly,
-        decorations: mergeDecorations(
-          // We know this will be EditorDecorations though webView state doesn't have types
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          savedWebView.state?.decorations as EditorDecorations,
-          getWebViewOptions.options?.decorations,
-        ),
-      },
+      state: savedWebViewStateUpdated,
       projectId,
       allowPopups: true,
       shouldShowToolbar: true,
@@ -829,7 +821,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const scriptureEditorWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     scriptureEditorWebViewProvider,
   );
 
@@ -901,6 +893,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Await the registration promises at the end so we don't hold everything else up
+  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
+  const markerNotifierUnsubscribers = await markerNotifier.start();
+
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
@@ -911,6 +906,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertFootnotePromise,
     await insertCrossReferencePromise,
     await annotationStyleDataProviderPromise,
+    ...markerNotifierUnsubscribers,
   );
 
   logger.debug('Scripture editor is finished activating!');

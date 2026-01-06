@@ -1,25 +1,18 @@
 import { useScrollGroupScrRef } from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
-import {
-  GetSavedWebViewDefinition,
-  WebViewDefinitionUpdateInfo,
-} from '@shared/models/web-view.model';
-import type { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent } from 'platform-bible-react';
-import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
+import { ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
 /** See `web-view.model.ts` for normal hook documentation */
-export function useWebViewScrollGroupScrRef(this: {
-  getSavedWebViewDefinition: GetSavedWebViewDefinition;
-  updateWebViewDefinition: (webView: WebViewDefinitionUpdateInfo) => boolean;
-  papi: {
-    webViews: {
-      onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
-    };
-  };
-}): [
+export function useWebViewScrollGroupScrRef(
+  // We need to use some things on the WebView's globalThis. Using `globalThis` directly in this
+  // hook would refer to the renderer's globalThis, not the WebView's. List the specific properties
+  // here so we are more explicit about what we need and do not run into TypeScript complaining
+  // about `this` capturing `globalThis` for some reason.
+  this: Pick<typeof globalThis, 'getSavedWebViewDefinition' | 'updateWebViewDefinition' | 'papi'>,
+): [
   scrRef: SerializedVerseRef,
   setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,

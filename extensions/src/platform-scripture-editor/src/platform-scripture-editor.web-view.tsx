@@ -40,6 +40,7 @@ import {
   PopoverAnchor,
   PopoverContent,
   Spinner,
+  usePromise,
 } from 'platform-bible-react';
 import {
   EditorDecorations,
@@ -48,7 +49,7 @@ import {
 } from 'platform-scripture-editor';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
-import { deepEqualAcrossIframes } from './platform-scripture-editor.utils';
+import { deepEqualAcrossIframes, formatEditorTitle } from './platform-scripture-editor.utils';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
@@ -82,6 +83,12 @@ const defaultUsj: Usj = correctEditorUsjVersion({
 const defaultEditorDecorations: EditorDecorations = {};
 
 const defaultProjectName = '';
+
+/**
+ * Special value we use internally to check if formatting the title produces a different value that
+ * should be set on the web view definition
+ */
+const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 
 const defaultTextDirection = 'ltr';
 
@@ -119,8 +126,10 @@ function correctEditorUsjVersion(editorUsj: Usj): Usj {
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
   projectId,
+  title,
   useWebViewState,
   useWebViewScrollGroupScrRef,
+  updateWebViewDefinition,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
 
@@ -140,6 +149,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>('viewType', 'formatted');
+
+  const [unformattedTitle] = useWebViewState<string | undefined>(
+    'unformattedTitle',
+    NO_UPDATE_TITLE,
+  );
 
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
 
@@ -204,26 +218,62 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, editingNoteKey],
   );
 
-  const [viewOptions, setViewOptions] = useState<ViewOptions>(() => {
-    return getViewOptionsForType(viewType);
-  });
+  /**
+   * Whether the editor is effectively read-only, considering both the isReadOnly flag and the view
+   * type. This can probably be removed and replaced with `isReadOnly` once we allow editing in
+   * markers view
+   */
+  const isReadOnlyEffective = useMemo(
+    () =>
+      isReadOnly ||
+      (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
+    [isReadOnly, viewType],
+  );
 
-  // Keep viewOptions in sync with the `viewType` webview state. When `viewType` changes
-  // we reset the viewOptions to the appropriate default with the requested marker/note modes.
+  // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
+  const [newTitleIfUpdated] = usePromise(
+    useCallback(async () => {
+      if (unformattedTitle === NO_UPDATE_TITLE || projectName === defaultProjectName)
+        return NO_UPDATE_TITLE;
+      const updatedTitle = await formatEditorTitle(
+        unformattedTitle,
+        projectId,
+        isReadOnlyEffective,
+        async () => projectName,
+        papi.localization.getLocalizedStrings,
+      );
+
+      // Don't need to update if the title is the same as before
+      if (updatedTitle === title) return NO_UPDATE_TITLE;
+
+      return updatedTitle;
+    }, [isReadOnlyEffective, title, projectId, projectName, unformattedTitle]),
+    NO_UPDATE_TITLE,
+  );
+
+  // Keep the title up-to-date
   useEffect(() => {
-    setViewOptions(() => getViewOptionsForType(viewType));
+    if (newTitleIfUpdated === NO_UPDATE_TITLE) return;
+
+    updateWebViewDefinition({
+      title: newTitleIfUpdated,
+    });
+  }, [newTitleIfUpdated, updateWebViewDefinition]);
+
+  const viewOptions = useMemo<ViewOptions>(() => {
+    return getViewOptionsForType(viewType);
   }, [viewType]);
 
   const options = useMemo<EditorOptions>(
     () => ({
-      isReadonly: isReadOnly || viewType === 'markers',
+      isReadonly: isReadOnlyEffective,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
       markerMenuTrigger: '\\',
       view: viewOptions,
     }),
-    [isReadOnly, textDirectionEffective, nodeOptions, viewOptions, viewType],
+    [isReadOnlyEffective, textDirectionEffective, nodeOptions, viewOptions],
   );
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(

@@ -6,3 +6,8 @@
     background-color: darkslategray;
   }
 }
+
+hr {
+  margin: 0.5rem;
+  border-color: hsl(var(--primary));
+}

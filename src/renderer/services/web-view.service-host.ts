@@ -10,6 +10,7 @@ import {
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import { localThemeService } from '@renderer/services/theme.service-host';
 import {
+  deleteFullWebViewStateById,
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
@@ -63,6 +64,7 @@ import {
   deserialize,
   getStylesheetForTheme,
   indexOf,
+  isSerializable,
   isString,
   newGuid,
   serialize,
@@ -487,7 +489,7 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
   });
 }
 
-// #endregion
+// #endregion Security
 
 // #region Dock layouts
 
@@ -703,7 +705,7 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   };
 }
 
-// #endregion
+// #endregion Dock layouts
 
 // #region Tabs
 
@@ -790,16 +792,21 @@ export function updateTabPartialSync(
   return getDockLayoutSync().updateTabPartial(tabId, partialTabInfo, shouldBringToFront);
 }
 
-// #endregion
+// #endregion Tabs
 
-// #region Web view definitions
+// #region WebView definitions
 
 /**
  * Updates the WebView with the specified ID with the specified properties and sends an update event
  *
  * @param webViewId The ID of the WebView to update
  * @param webViewDefinitionUpdateInfo Properties to update on the WebView. Any unspecified
- *   properties will stay the same
+ *   properties will stay the same. Note: `state` will be treated like any other property, meaning
+ *   it will be overwritten completely if specified here and the object is referentially different
+ *   from the current state object. It is not compared deeply (because we are working across
+ *   contexts, where `deepEqual` doesn't always work well) or merged (so we can remove properties
+ *   from `state`). See {@link setWebViewStateSync} and {@link resetWebViewStateSync} for methods to
+ *   partially update `state`
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
  *   tabs. Defaults to `false`
  * @returns True if successfully found the WebView to update and actually updated any properties;
@@ -822,10 +829,19 @@ export function updateWebViewDefinitionSync(
       logger.warn(
         `Did not find a web view for id ${webViewId} immediately after updating that web view. Investigate`,
       );
-    } else
+    } else {
+      // Update the state in the web view state store if it was part of the update info
+      if ('state' in webViewDefinitionUpdateInfo) {
+        const newState = webView.state;
+        if (newState !== undefined) setFullWebViewStateById(webViewId, newState);
+        else deleteFullWebViewStateById(webViewId);
+      }
+
+      // Emit the update event
       onDidUpdateWebViewEmitter.emit({
         webView,
       });
+    }
   }
   return didUpdateWebView;
 }
@@ -850,7 +866,19 @@ export function mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent
   // For each updatable property that is specified, overwrite the webViewDefinition's property
   // If update properties aren't specified, keep the original values
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS.forEach((key) => {
-    if (key in updateInfo && updatedWebViewDefinition[key] !== updateInfo[key]) {
+    if (!(key in updateInfo)) return;
+
+    // Make sure `state` isn't set to an invalid value since we access properties in it in our own
+    // code. Trying to avoid letting WebViews break themselves with our code
+    if (
+      key === 'state' &&
+      updateInfo[key] !== undefined &&
+      (typeof updateInfo[key] !== 'object' || Array.isArray(updateInfo[key]))
+    )
+      return;
+
+    // Handle updates to value types and arrays (and set optional objects to undefined)
+    if (updatedWebViewDefinition[key] !== updateInfo[key]) {
       // Everything worked until I added multiple different types for the properties of
       // WebViewDefinitionUpdateInfo. Now I guess TypeScript isn't smart enough to realize that the
       // property is going to be the same between these two objects since they both have all the
@@ -893,8 +921,9 @@ async function getOpenWebViewDefinition(
 
   const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewDefinition);
 
-  // Load the web view state since the web view provider doesn't have access to the data store
-  savedWebViewDefinition.state = getFullWebViewStateById(savedWebViewDefinition.id);
+  // Load the WebView state so the WebViewState service doesn't delete this entry. We should
+  // remove this if/when we feel good about removing the WebViewState service
+  getFullWebViewStateById(savedWebViewDefinition.id);
 
   return savedWebViewDefinition;
 }
@@ -915,15 +944,101 @@ export function getSavedWebViewDefinitionSync(
 
   const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewDefinition);
 
-  // Load the web view state since the web view provider doesn't have access to the data store
-  savedWebViewDefinition.state = getFullWebViewStateById(savedWebViewDefinition.id);
+  // Load the WebView state so the WebViewState service doesn't delete this entry. We should
+  // remove this if/when we feel good about removing the WebViewState service
+  getFullWebViewStateById(savedWebViewDefinition.id);
 
   return savedWebViewDefinition;
 }
 
-// #endregion
+// #endregion WebView definitions
 
-// #region Web view options
+// #region WebViewState
+
+/**
+ * Get the full WebView state object associated with the given ID.
+ *
+ * @param webViewId ID of the WebView
+ * @returns The full WebView state object associated with the given ID or `{}` if none exists
+ * @throws If the papi dock layout has not been registered
+ */
+function getFullWebViewStateSync(webViewId: WebViewId): Record<string, unknown> {
+  return getDockLayoutSync().getWebViewDefinition(webViewId)?.state ?? {};
+}
+
+/**
+ * Get the WebView state associated with the given ID
+ *
+ * @param webViewId ID of the WebView
+ * @param stateKey Key used to retrieve the state value
+ * @param defaultValue Default value to return if the state for the given key does not exist
+ * @returns The state for the given key of the given WebView if that state exists. Otherwise default
+ *   value is returned.
+ * @throws If webViewId or stateKey are not provided
+ * @throws If the papi dock layout has not been registered
+ */
+function getWebViewStateSync<T>(webViewId: WebViewId, stateKey: string, defaultValue: T): T {
+  if (!webViewId || !stateKey)
+    throw new Error('webViewId and stateKey must be provided to get WebView state');
+
+  const webViewState = getFullWebViewStateSync(webViewId);
+
+  // We don't have any way to know what type this is, so just type assert for convenience
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return stateKey in webViewState ? (webViewState[stateKey] as T) : defaultValue;
+}
+
+/**
+ * Set the WebView state object associated with the given ID
+ *
+ * @param webViewId ID of the WebView
+ * @param stateKey Key for the associated state
+ * @param stateValue Value of the state for the given key of the given WebView - must work with
+ *   serialize/deserialize
+ * @throws If webViewId or stateKey are not provided
+ * @throws If stateValue cannot round trip with serialize and deserialize
+ * @throws If the papi dock layout has not been registered
+ */
+function setWebViewStateSync<T>(webViewId: string, stateKey: string, stateValue: T): void {
+  if (!webViewId || !stateKey)
+    throw new Error('webViewId and stateKey must be provided to set WebView state');
+  if (!isSerializable(stateValue))
+    throw new Error(`"${stateKey}" value cannot round trip with serialize and deserialize.`);
+
+  const webViewState = getFullWebViewStateSync(webViewId);
+
+  updateWebViewDefinitionSync(webViewId, {
+    state: {
+      ...webViewState,
+      [stateKey]: stateValue,
+    },
+  });
+}
+
+/**
+ * Remove the WebView state object associated with the given ID
+ *
+ * @param webViewId ID of the WebView
+ * @param stateKey Key for the associated state
+ * @throws If webViewId or stateKey are not provided
+ * @throws If the papi dock layout has not been registered
+ */
+function resetWebViewStateSync(webViewId: string, stateKey: string): void {
+  if (!webViewId || !stateKey)
+    throw new Error('webViewId and stateKey must be provided to remove WebView state');
+
+  const webViewState = { ...getFullWebViewStateSync(webViewId) };
+
+  delete webViewState[stateKey];
+
+  updateWebViewDefinitionSync(webViewId, {
+    state: webViewState,
+  });
+}
+
+// #endregion WebViewState
+
+// #region WebView options
 
 /** Set up defaults for options for getting a web view */
 function getWebViewOptionsDefaults<T extends OpenWebViewOptions | ReloadWebViewOptions>(
@@ -940,7 +1055,7 @@ function getWebViewOptionsDefaults<T extends OpenWebViewOptions | ReloadWebViewO
   return optionsDefaulted;
 }
 
-// #endregion
+// #endregion WebView options
 
 // #region webViewNonce
 
@@ -1001,14 +1116,17 @@ onDidCloseWebView(({ webView: { id, webViewType } }) => {
     );
 });
 
-// #endregion
+// #endregion webViewNonce
 
 // #region Set up global variables to use in `openWebView`'s `imports` below
 
 globalThis.getSavedWebViewDefinitionById = getSavedWebViewDefinitionSync;
 globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
+globalThis.getWebViewStateById = getWebViewStateSync;
+globalThis.setWebViewStateById = setWebViewStateSync;
+globalThis.resetWebViewStateById = resetWebViewStateSync;
 
-// #endregion
+// #endregion Set up global variables to use in `openWebView`'s `imports` below
 
 // #region openWebView and reloadWebView
 
@@ -1479,7 +1597,7 @@ export async function reloadWebView(
   return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
 }
 
-// #endregion
+// #endregion openWebView and reloadWebView
 
 // #region Initialization
 
@@ -1643,7 +1761,7 @@ export const initialize = () => {
   return initializePromise;
 };
 
-// #endregion
+// #endregion Initialization
 
 const papiWebViewService: WebViewServiceType = {
   onDidAddWebView: onDidOpenWebView,

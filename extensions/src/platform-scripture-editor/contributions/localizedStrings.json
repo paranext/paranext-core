@@ -67,6 +67,8 @@
       "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Choose a resource to open:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Choose a project to open:",
+      "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location"
     },
     "es": {
@@ -116,7 +118,10 @@
       "%platformScriptureEditor_dialog_openResourceViewer_title%": "Abrir el visor de recursos",
       "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Elija un recurso para abrir:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
-      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:"
+      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:",
+      "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie"
     }
   }
 }
