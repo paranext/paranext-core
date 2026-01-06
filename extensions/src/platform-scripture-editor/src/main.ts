@@ -25,7 +25,7 @@ import {
   PlatformScriptureEditorWebViewController,
   ScriptureRange,
 } from 'platform-scripture-editor';
-import { AnnotationStyleDataProviderEngine } from './annotation-style.data-provider-engine.model';
+import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';

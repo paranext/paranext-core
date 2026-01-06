@@ -91,9 +91,11 @@ export class AnnotationStyleDataProviderEngine
 
       // Create a CSS rule targeting elements with the annotation type as a class
       // e.g., .annotation-type-spelling-error { ... }
+      // This needs to keep up with the editor's annotation names. See the annotation documentation:
+      // https://github.com/eten-tech-foundation/scripture-editors/tree/main/packages/platform#annotation-styles
       // The regex replaces unexpected characters with hyphens to ensure class names are acceptable
       // Note that the regex could result in consecutive and/or trailing hyphens
-      const className = `annotation-type-${typeName.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+      const className = `editor-typed-mark-external-${typeName.replace(/[^a-zA-Z0-9-]/g, '-')}`;
       cssRules.push(`.${className} {\n${cssProperties}\n}`);
     });
 

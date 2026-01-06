@@ -9,6 +9,12 @@ body {
   margin: 0;
 }
 
+// Reset mark styles to unstyled so they act like spans. mark is used as annotations in the editor
+mark {
+  background-color: initial;
+  color: inherit;
+}
+
 // #region verse number highlight
 
 // Highlight keyframes thanks to chazsolo at https://stackoverflow.com/a/55835473

@@ -55,6 +55,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
+import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -353,6 +354,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [webViewId]);
+
+  // Apply annotation styles from extensions
+  useAnnotationStyleSheet();
 
   const [decorationsLocalizedStringsBase] = useLocalizedStrings(
     useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),
