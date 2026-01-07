@@ -31,6 +31,7 @@ import {
 } from 'platform-bible-react';
 import {
   formatReplacementString,
+  formatReplacementStringToArray,
   getErrorMessage,
   groupBy,
   isPlatformError,
@@ -55,6 +56,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_matchCase%',
   '%webView_find_maxResultsExceeded%',
   '%webView_find_noResultsFound%',
+  '%webView_find_scopeSummary_format%',
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
   '%webView_find_scopeUndetermined%',
@@ -756,8 +758,14 @@ global.webViewComponent = function FindWebView({
       <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
         {submittedScope && submittedSearchTerm ? (
           <>
-            {`${projectName} · ${scopeSummaryText} · Find: `}
-            <span className="scripture-font">{submittedSearchTerm}</span>
+            {formatReplacementStringToArray(
+              localizedStrings['%webView_find_scopeSummary_format%'],
+              {
+                projectName,
+                scope: scopeSummaryText,
+                searchTerm: <span className="scripture-font">{submittedSearchTerm}</span>,
+              },
+            )}
           </>
         ) : (
           formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
