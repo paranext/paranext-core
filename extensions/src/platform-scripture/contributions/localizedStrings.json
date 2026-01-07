@@ -190,6 +190,7 @@
       "%webView_find_noResultsFound%": "No results found",
       "%webView_find_noVerseTextAvailable%": "No verse text available",
       "%webView_find_recent%": "Recent",
+      "%webView_find_scopeSummary_format%": "{projectName} · {scope} · Find: {searchTerm}",
       "%webView_find_scopeUndetermined%": "Scope undetermined",
       "%webView_find_scrollGroup%": "Scroll group",
       "%webView_find_searchPlaceholder%": "Enter search text...",
