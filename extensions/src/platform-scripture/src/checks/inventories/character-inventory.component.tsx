@@ -141,6 +141,7 @@ export function CharacterInventory({
       onScopeChange={onScopeChange}
       columns={columns}
       areInventoryItemsLoading={areInventoryItemsLoading}
+      classNameForVerseText="scripture-font"
     />
   );
 }

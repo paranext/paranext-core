@@ -16,6 +16,7 @@ import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
 import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
+import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
@@ -131,6 +132,10 @@ root.render(<App />);
 // #endregion
 
 // #region set up the current theme
+
+const fontStyleSheet = document.createElement('style');
+fontStyleSheet.textContent = FONT_STYLES_RAW;
+document.head.appendChild(fontStyleSheet);
 
 const scrollbarStyleSheet = document.createElement('style');
 scrollbarStyleSheet.textContent = SCROLLBAR_STYLES_RAW;
