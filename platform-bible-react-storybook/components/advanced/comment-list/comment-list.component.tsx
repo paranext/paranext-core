@@ -11,6 +11,7 @@ import { CommentThread } from './comment-thread.component';
  */
 export default function CommentList({
   className = '',
+  classNameForVerseText,
   threads,
   currentUser,
   localizedStrings,
@@ -85,6 +86,7 @@ export default function CommentList({
           })}
         >
           <CommentThread
+            classNameForVerseText={classNameForVerseText}
             comments={thread.comments}
             localizedStrings={localizedStrings}
             verseRef={thread.verseRef}

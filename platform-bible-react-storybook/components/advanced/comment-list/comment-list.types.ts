@@ -51,6 +51,8 @@ export type CommentListLocalizedStrings = {
 export interface CommentListProps {
   /** Additional class name for the component */
   className?: string;
+  /** Class name to apply to the display of the verse text for the first comment in the thread */
+  classNameForVerseText?: string;
   /** Comment threads to render */
   threads: LegacyCommentThread[];
   /** Name of the current user, retrieved from the current user's Paratext Registry user information */
@@ -102,6 +104,8 @@ export interface CommentListProps {
 
 /** Props for the CommentThread component */
 export interface CommentThreadProps {
+  /** Class name to apply to the display of the verse text for the first comment in the thread */
+  classNameForVerseText?: string;
   /** Comments in the thread */
   comments: LegacyComment[];
   /** Localized strings for the component */
