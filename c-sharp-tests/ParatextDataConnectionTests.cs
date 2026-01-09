@@ -48,9 +48,10 @@ namespace TestParanextDataProvider
             Console.WriteLine(Assembly.GetExecutingAssembly().Location);
             ParatextGlobals.Initialize("assets");
 
-            ScrText scrText = ScrTextCollection.Get("WEB");
+            ScrText scrText = ScrTextCollection.Find("WEB");
             Assert.Multiple(() =>
             {
+                Assert.That(scrText, Is.Not.Null);
                 Assert.That(scrText.Name, Is.EqualTo("WEB"));
                 Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(83));
             });
