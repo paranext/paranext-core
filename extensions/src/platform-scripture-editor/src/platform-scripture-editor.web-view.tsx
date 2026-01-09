@@ -20,7 +20,6 @@ import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/fr
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -71,7 +70,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
-  '%webView_platformScriptureEditor_error_permissions_format%',
 ];
 
 const defaultUsj: Usj = correctEditorUsjVersion({
@@ -104,9 +102,6 @@ const getViewOptionsForType = (viewType: ScriptureEditorViewType): ViewOptions =
 
 // This regex is connected directly to the exception message within MissingBookException.cs
 const bookNotFoundRegex = /Book number \d+ not found in project/;
-
-// This regex is connected directly to the exception message within PermissionsException.cs
-const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
 
 /**
  * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
@@ -533,40 +528,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
-        const errorMessage = getErrorMessage(e);
-        logger.error(`Error saving USJ to PDP: ${errorMessage}`);
+        logger.error(`Error saving USJ to PDP: ${getErrorMessage(e)}`);
         currentlyWritingUsjToPdp.current = false;
-
-        if (!PERMISSIONS_EXCEPTION_REGEX.test(errorMessage)) return;
-
-        // The error is due to a permissions issue, so make a notification to inform the user and
-        // reset the text to how it was before
-        try {
-          if (usjFromPdp && editorRef.current) {
-            usjSentToPdp.current = usjFromPdp;
-            editorRef.current.setUsj(usjFromPdp);
-          }
-          await papi.notifications.send({
-            severity: 'error',
-            message: formatReplacementString(
-              localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-              {
-                projectName,
-              },
-            ),
-          });
-        } catch (innerError) {
-          logger.error(
-            `Error handling permissions exception when saving USJ to PDP: ${getErrorMessage(
-              innerError,
-            )}`,
-          );
-        }
       }
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [saveUsjToPdpRaw, usjFromPdp, projectName, localizedStrings]);
+  }, [saveUsjToPdpRaw, usjFromPdp]);
 
   const openFootnoteEditorOnNewNote = useCallback(
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
