@@ -14,10 +14,25 @@ internal class CommentConverterTests : PapiTestBase
 {
     private JsonSerializerOptions _serializationOptions = null!;
 
+    private ScrText _scrText = null!;
+
+    [OneTimeSetUp]
+    public override void FixtureSetUp()
+    {
+        base.FixtureSetUp();
+        ParatextGlobals.Initialize("assets");
+    }
+
     [SetUp]
     public void Setup()
     {
         _serializationOptions = SerializationOptions.CreateSerializationOptions();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _scrText?.Dispose();
     }
 
     [Test]
