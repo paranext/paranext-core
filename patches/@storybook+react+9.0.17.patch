@@ -1,0 +1,22 @@
+diff --git a/node_modules/@storybook/react/dist/preview.d.ts b/node_modules/@storybook/react/dist/preview.d.ts
+index f4bc888..772784b 100644
+--- a/node_modules/@storybook/react/dist/preview.d.ts
++++ b/node_modules/@storybook/react/dist/preview.d.ts
+@@ -172,6 +172,8 @@ type UnionToIntersection<Union> = (
+ 
+ /** Do not use, use the definePreview exported from the framework instead */
+ declare function __definePreview(preview: ReactPreview['input']): ReactPreview;
++// patch-package note: Ignore the error below until Storybook fixes their types as part of https://github.com/storybookjs/storybook/issues/32190
++// @ts-expect-error this error is ignored in https://github.com/storybookjs/storybook/commit/2182afcae21f6225060a11a036f8abf027b040cd#diff-98c8ef62a236282682d878987cf5e925682f9e123138fce014a6ef235b16d0bf
+ interface ReactPreview extends Preview<ReactRenderer> {
+     meta<TArgs extends Args, Decorators extends DecoratorFunction<ReactRenderer, any>, TMetaArgs extends Partial<TArgs>>(meta: {
+         render?: ArgsStoryFn<ReactRenderer, TArgs>;
+@@ -185,6 +187,8 @@ interface ReactPreview extends Preview<ReactRenderer> {
+     }>;
+ }
+ type DecoratorsArgs<TRenderer extends Renderer, Decorators> = UnionToIntersection<Decorators extends DecoratorFunction<TRenderer, infer TArgs> ? TArgs : unknown>;
++// patch-package note: Ignore the error below until Storybook fixes their types as part of https://github.com/storybookjs/storybook/issues/32190
++// @ts-expect-error this error is ignored in https://github.com/storybookjs/storybook/commit/9c224248fae3ec9395a50d04e7ac1df0d3b3d456#diff-98c8ef62a236282682d878987cf5e925682f9e123138fce014a6ef235b16d0bf
+ interface ReactMeta<Context extends {
+     args: Args;
+ }, MetaInput extends ComponentAnnotations<ReactRenderer>> extends Meta<ReactRenderer, Context['args']> {
