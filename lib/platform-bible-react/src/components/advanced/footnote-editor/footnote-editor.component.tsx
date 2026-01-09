@@ -71,6 +71,8 @@ export default function FootnoteEditor({
 
   const [noteType, setNoteType] = useState<string>('f');
 
+  const [isTypeSwitchable, setIsTypeSwitchable] = useState<boolean>(false);
+
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
     () => ({
@@ -150,7 +152,67 @@ export default function FootnoteEditor({
     const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
       if (currentNoteOp.insert.note) currentNoteOp.insert.note.style = value;
+
+      // If switching between cross-reference and footnote/endnote, need to switch the nodes inside
+      const innerNoteOps = currentNoteOp.insert.note?.contents?.ops;
+      if (noteType !== 'x' && value === 'x') {
+        innerNoteOps?.forEach((op) => {
+          // The built-in type for the delta note ops does not contain the types for the attributes
+          // so have to cast it here
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const nodeCharAttribute = op.attributes?.char as Record<string, string>;
+          if (nodeCharAttribute.style) {
+            nodeCharAttribute.style = nodeCharAttribute.style === 'ft' ? 'xt' : 'xo';
+          }
+        });
+      } else if (noteType === 'x' && value !== 'x') {
+        innerNoteOps?.forEach((op) => {
+          // The built-in type for the delta note ops does not contain the types for the attributes
+          // so have to cast it here
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const nodeCharAttribute = op.attributes?.char as Record<string, string>;
+          if (nodeCharAttribute.style) {
+            nodeCharAttribute.style = nodeCharAttribute.style === 'xt' ? 'ft' : 'fr';
+          }
+        });
+      }
+
       editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOp]);
+    }
+  };
+
+  const handleUsjChange = () => {
+    const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
+    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+      const currentNoteType = noteOp?.insert?.note?.style;
+      const innerNoteOps = noteOp.insert.note?.contents?.ops;
+      if (!currentNoteType) setIsTypeSwitchable(false);
+
+      if (currentNoteType === 'x') {
+        setIsTypeSwitchable(
+          !!innerNoteOps?.every((op) => {
+            if (!op.attributes?.char) return false;
+            // The built-in type for the delta note ops does not contain the types for the attributes
+            // so have to cast it here
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const nodeType = (op.attributes?.char as Record<string, string>).style;
+            return nodeType === 'xt' || nodeType === 'xo';
+          }),
+        );
+      } else {
+        setIsTypeSwitchable(
+          !!innerNoteOps?.every((op) => {
+            if (!op.attributes?.char) return false;
+            // The built-in type for the delta note ops does not contain the types for the attributes
+            // so have to cast it here
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const nodeType = (op.attributes?.char as Record<string, string>).style;
+            return nodeType === 'ft' || nodeType === 'fr';
+          }),
+        );
+      }
+    } else {
+      setIsTypeSwitchable(false);
     }
   };
 
@@ -159,6 +221,7 @@ export default function FootnoteEditor({
       <div className="tw-flex">
         <div className="tw-flex tw-gap-4">
           <FootnoteTypeDropdown
+            isTypeSwitchable={isTypeSwitchable}
             noteType={noteType}
             handleNoteTypeChange={handleNoteTypeChange}
             localizedStrings={localizedStrings}
@@ -208,7 +271,13 @@ export default function FootnoteEditor({
         className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
       >
         <div className={classNameForEditor}>
-          <Editorial options={options} onScrRefChange={() => {}} scrRef={scrRef} ref={editorRef} />
+          <Editorial
+            options={options}
+            onUsjChange={() => handleUsjChange()}
+            onScrRefChange={() => {}}
+            scrRef={scrRef}
+            ref={editorRef}
+          />
         </div>
         <div className="tw-absolute tw-bottom-0 tw-right-0">
           <TooltipProvider>

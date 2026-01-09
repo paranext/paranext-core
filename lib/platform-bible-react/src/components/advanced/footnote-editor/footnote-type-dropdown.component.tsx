@@ -17,6 +17,7 @@ interface FootnoteTypeDropdownProps {
   noteType: string;
   handleNoteTypeChange: (newNoteType: string) => void;
   localizedStrings: FootnoteEditorLocalizedStrings;
+  isTypeSwitchable: boolean;
 }
 
 const renderNoteTypeButtonContent = (
@@ -68,6 +69,7 @@ export function FootnoteTypeDropdown({
   noteType,
   handleNoteTypeChange,
   localizedStrings,
+  isTypeSwitchable,
 }: FootnoteTypeDropdownProps) {
   return (
     <DropdownMenu>
@@ -75,11 +77,7 @@ export function FootnoteTypeDropdown({
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="tw-h-6 disabled:tw-pointer-events-auto"
-                disabled={noteType === 'x'}
-              >
+              <Button variant="outline" className="tw-h-6">
                 {renderNoteTypeButtonContent(noteType, localizedStrings)}
               </Button>
             </DropdownMenuTrigger>
@@ -89,32 +87,39 @@ export function FootnoteTypeDropdown({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      {noteType !== 'x' && (
-        <DropdownMenuContent className="tw-z-[300]">
-          <DropdownMenuLabel>
-            {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {/* <DropdownMenuRadioGroup value={noteType} onValueChange={handleNoteTypeChange}> */}
-          <DropdownMenuCheckboxItem
-            checked={noteType === 'f'}
-            onCheckedChange={() => handleNoteTypeChange('f')}
-            className="tw-gap-2"
-          >
-            <FunctionSquare />
-            <span>{localizedStrings['%footnoteEditor_noteType_footnote_label%']}</span>
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={noteType === 'fe'}
-            onCheckedChange={() => handleNoteTypeChange('fe')}
-            className="tw-gap-2"
-          >
-            <SquareSigma />
-            <span>{localizedStrings['%footnoteEditor_noteType_endNote_label%']}</span>
-          </DropdownMenuCheckboxItem>
-          {/* </DropdownMenuRadioGroup> */}
-        </DropdownMenuContent>
-      )}
+      <DropdownMenuContent className="tw-z-[300]">
+        <DropdownMenuLabel>
+          {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          disabled={noteType !== 'x' && !isTypeSwitchable}
+          checked={noteType === 'x'}
+          onCheckedChange={() => handleNoteTypeChange('x')}
+          className="tw-gap-2"
+        >
+          <SquareX />
+          <span>{localizedStrings['%footnoteEditor_noteType_crossReference_label%']}</span>
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          disabled={noteType === 'x' && !isTypeSwitchable}
+          checked={noteType === 'f'}
+          onCheckedChange={() => handleNoteTypeChange('f')}
+          className="tw-gap-2"
+        >
+          <FunctionSquare />
+          <span>{localizedStrings['%footnoteEditor_noteType_footnote_label%']}</span>
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          disabled={noteType === 'x' && !isTypeSwitchable}
+          checked={noteType === 'fe'}
+          onCheckedChange={() => handleNoteTypeChange('fe')}
+          className="tw-gap-2"
+        >
+          <SquareSigma />
+          <span>{localizedStrings['%footnoteEditor_noteType_endNote_label%']}</span>
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
     </DropdownMenu>
   );
 }
