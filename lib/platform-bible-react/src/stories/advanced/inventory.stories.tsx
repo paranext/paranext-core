@@ -1,5 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Inventory, InventoryItem } from '@/components/advanced/inventory/inventory.component';
+import {
+  Inventory,
+  InventorySummaryItem,
+} from '@/components/advanced/inventory/inventory.component';
 import {
   inventoryCountColumn,
   inventoryItemColumn,
@@ -26,30 +29,46 @@ const localizedStrings = {
   '%webView_inventory_scope_verse%': 'Current verse',
 };
 
-const sampleInventoryItems: InventoryItem[] = [
+const sampleInventoryItems: InventorySummaryItem[] = [
   {
-    inventoryText: 'the the',
-    verse: 'In the the beginning was the Word',
-    verseRef: { book: 'JHN', chapterNum: 1, verseNum: 1 },
-    offset: 7,
+    key: 'the the',
+    count: 1,
+    occurrences: [
+      {
+        reference: { book: 'JHN', chapterNum: 1, verseNum: 1 },
+        text: 'In the the beginning was the Word',
+      },
+    ],
   },
   {
-    inventoryText: 'and and',
-    verse: 'And and God said, Let there be light',
-    verseRef: { book: 'GEN', chapterNum: 1, verseNum: 3 },
-    offset: 4,
+    key: 'and and',
+    count: 1,
+    occurrences: [
+      {
+        reference: { book: 'GEN', chapterNum: 1, verseNum: 3 },
+        text: 'And and God said, Let there be light',
+      },
+    ],
   },
   {
-    inventoryText: 'is is',
-    verse: 'God is is good and merciful',
-    verseRef: { book: 'PSA', chapterNum: 25, verseNum: 8 },
-    offset: 4,
+    key: 'is is',
+    count: 1,
+    occurrences: [
+      {
+        reference: { book: 'PSA', chapterNum: 25, verseNum: 8 },
+        text: 'God is is good and merciful',
+      },
+    ],
   },
   {
-    inventoryText: 'word  word',
-    verse: 'Every word  word has meaning',
-    verseRef: { book: 'MAT', chapterNum: 4, verseNum: 4 },
-    offset: 6,
+    key: 'word  word',
+    count: 1,
+    occurrences: [
+      {
+        reference: { book: 'MAT', chapterNum: 4, verseNum: 4 },
+        text: 'Every word  word has meaning',
+      },
+    ],
   },
 ];
 
@@ -132,24 +151,36 @@ export const Default: Story = {
 
 export const RepeatedWords: Story = {
   render: () => {
-    const repeatedWordsItems: InventoryItem[] = [
+    const repeatedWordsItems: InventorySummaryItem[] = [
       {
-        inventoryText: 'the the',
-        verse: 'In the the beginning was the Word',
-        verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        offset: 7,
+        key: 'the the',
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+            text: 'In the the beginning was the Word',
+          },
+        ],
       },
       {
-        inventoryText: 'and and',
-        verse: 'And and God said, Let there be light',
-        verseRef: { book: 'GEN', chapterNum: 1, verseNum: 3 },
-        offset: 4,
+        key: 'and and',
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 3 },
+            text: 'And and God said, Let there be light',
+          },
+        ],
       },
       {
-        inventoryText: 'is is',
-        verse: 'God is is good and merciful',
-        verseRef: { book: 'PSA', chapterNum: 25, verseNum: 8 },
-        offset: 4,
+        key: 'is is',
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'PSA', chapterNum: 25, verseNum: 8 },
+            text: 'God is is good and merciful',
+          },
+        ],
       },
     ];
 

@@ -28,7 +28,12 @@ import {
   Status,
 } from './inventory-utils';
 
-/** Represents an item in the inventory with associated text and verse reference. */
+/**
+ * Represents an item in the inventory with associated text and verse reference.
+ *
+ * @deprecated 12 January 2026. Use InventorySummaryItem instead for better performance and
+ *   functionality.
+ */
 export type InventoryItem = {
   /**
    * The label by which the item is shown in the inventory (e.g. the word that is repeated in case
@@ -47,6 +52,23 @@ export type InventoryItem = {
    * `verse` string
    */
   offset: number;
+};
+
+/**
+ * Represents a summary item in the inventory with aggregated count and optional detailed
+ * occurrences. This type is used for displaying inventory data in a summarized format, where each
+ * item shows the total count and can optionally include detailed occurrence information that gets
+ * loaded dynamically when the user selects the item.
+ */
+export type InventorySummaryItem = {
+  /** The item key (e.g., character, word, etc.) */
+  key: string | string[];
+  /** Total count of occurrences */
+  count: number;
+  /** Status of the item */
+  status?: Status;
+  /** Detailed occurrences - optional, loaded on demand */
+  occurrences?: InventoryItemOccurrence[];
 };
 
 /**
@@ -115,57 +137,29 @@ const filterItemData = (
 };
 
 /**
- * Turns array of strings into array of inventory items, along with their count and status. The
- * approvedItems and unapprovedItems arrays are used to determine the status of each item, by
- * matching them to the `inventoryText` of the InventoryItem.
+ * Processes InventorySummaryItem array into InventoryTableData for display
  *
- * @param inventoryItems Detailed information on the items that are to be shown in the inventory
- * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
- * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
- * @returns Array of inventory items, along with their count and status
+ * @param inventoryItems Summary items with counts and optional occurrences
+ * @param approvedItems Array of approved items
+ * @param unapprovedItems Array of unapproved items
+ * @returns Array of table data for display
  */
-const processInventoryItems = (
-  inventoryItems: InventoryItem[],
+const processSummaryItems = (
+  inventoryItems: InventorySummaryItem[],
   approvedItems: string[],
   unapprovedItems: string[],
 ): InventoryTableData[] => {
-  const tableData: InventoryTableData[] = [];
+  return inventoryItems.map((item) => {
+    const itemKey = isString(item.key) ? item.key : item.key[0];
+    const items = isString(item.key) ? [item.key] : item.key;
 
-  inventoryItems.forEach((item) => {
-    const existingItem = tableData.find((tableEntry) =>
-      deepEqual(
-        tableEntry.items,
-        isString(item.inventoryText) ? [item.inventoryText] : item.inventoryText,
-      ),
-    );
-
-    if (existingItem) {
-      existingItem.count += 1;
-      existingItem.occurrences.push({
-        reference: item.verseRef,
-        text: item.verse,
-      });
-    } else {
-      const newItem: InventoryTableData = {
-        items: isString(item.inventoryText) ? [item.inventoryText] : item.inventoryText,
-        count: 1,
-        status: getStatusForItem(
-          isString(item.inventoryText) ? item.inventoryText : item.inventoryText[0],
-          approvedItems,
-          unapprovedItems,
-        ),
-        occurrences: [
-          {
-            reference: item.verseRef,
-            text: item.verse,
-          },
-        ],
-      };
-      tableData.push(newItem);
-    }
+    return {
+      items,
+      count: item.count,
+      status: item.status || getStatusForItem(itemKey, approvedItems, unapprovedItems),
+      occurrences: item.occurrences || [],
+    };
   });
-
-  return tableData;
 };
 
 /**
@@ -186,7 +180,7 @@ const localizeString = (
 /** Props for the Inventory component */
 type InventoryProps = {
   /** The inventory items that the inventory should be populated with */
-  inventoryItems: InventoryItem[] | undefined;
+  inventoryItems: InventorySummaryItem[] | undefined;
   /** Callback function that is executed when the scripture reference is changed */
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   /**
@@ -222,6 +216,8 @@ type InventoryProps = {
   areInventoryItemsLoading?: boolean;
   /** Class name to apply to the provided occurrence verse text in the `OccurrencesTable` component */
   classNameForVerseText?: string;
+  /** Optional callback that is called when an item is selected. Receives the selected item key. */
+  onItemSelected?: (itemKey: string) => void;
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -238,6 +234,7 @@ export function Inventory({
   id,
   areInventoryItemsLoading = false,
   classNameForVerseText,
+  onItemSelected,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -261,7 +258,7 @@ export function Inventory({
   const tableData: InventoryTableData[] = useMemo(() => {
     const safeInventoryItems = inventoryItems ?? [];
     if (safeInventoryItems.length === 0) return [];
-    return processInventoryItems(safeInventoryItems, approvedItems, unapprovedItems);
+    return processSummaryItems(safeInventoryItems, approvedItems, unapprovedItems);
   }, [inventoryItems, approvedItems, unapprovedItems]);
 
   const reducedTableData: InventoryTableData[] = useMemo(() => {
@@ -335,7 +332,13 @@ export function Inventory({
       return newSelection;
     });
 
-    setSelectedItem(row.original.items);
+    const selectedItems = row.original.items;
+    setSelectedItem(selectedItems);
+
+    // Call the callback if provided, passing the first item as the key
+    if (onItemSelected && selectedItems.length > 0) {
+      onItemSelected(selectedItems[0]);
+    }
   };
 
   const handleScopeChange = (value: string) => {

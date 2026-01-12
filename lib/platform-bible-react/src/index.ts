@@ -66,6 +66,7 @@ export { default as FootnoteList } from './components/advanced/footnotes/footnot
 export {
   default as Inventory,
   type InventoryItem,
+  type InventorySummaryItem,
 } from './components/advanced/inventory/inventory.component';
 export { INVENTORY_STRING_KEYS } from './components/advanced/inventory/inventory.component';
 export type { InventoryLocalizedStrings } from './components/advanced/inventory/inventory.component';
