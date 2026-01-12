@@ -1395,7 +1395,7 @@ declare module 'platform-scripture' {
      * @param inputRanges Ranges of project text to evaluate for inventory data
      * @returns Promise that resolves to a {@link SummarizedInventory} object
      */
-    buildSummarizedInventory: (
+    buildInventorySummary: (
       inventoryId: string,
       inputRanges: InventoryInputRange[],
     ) => Promise<SummarizedInventory>;
@@ -1407,7 +1407,7 @@ declare module 'platform-scripture' {
      *
      * @param summarizedInventoryId ID of the summarized inventory to discard
      */
-    discardSummarizedInventory: (summarizedInventoryId: string) => Promise<void>;
+    discardInventorySummary: (summarizedInventoryId: string) => Promise<void>;
     /**
      * Begin a new itemized inventory job that will run asynchronously
      *
