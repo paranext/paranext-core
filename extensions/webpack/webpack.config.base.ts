@@ -34,7 +34,7 @@ const configBase: webpack.Configuration = {
   context: rootDir,
   mode: isDev ? 'development' : 'production',
   // Bundle the sourcemap into the file since WebViews are injected as strings into the main file
-  devtool: shouldGenerateSourceMaps ? 'inline-source-map' : false,
+  devtool: shouldGenerateSourceMaps ? 'cheap-module-source-map' : false,
   // Run Tailwind CSS prebuild at the start of each build cycle (including watch rebuilds)
   // Use the singleton so it only runs once when building multiple configs (WebViews and main)
   plugins: [tailwindPrebuildWebpackCompilerPluginSingleton],
