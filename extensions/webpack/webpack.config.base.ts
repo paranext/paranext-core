@@ -32,7 +32,7 @@ const configBase: webpack.Configuration = {
   context: rootDir,
   mode: isDev ? 'development' : 'production',
   // Bundle the sourcemap into the file since WebViews are injected as strings into the main file
-  devtool: shouldGenerateSourceMaps ? 'inline-source-map' : false,
+  devtool: shouldGenerateSourceMaps ? 'cheap-module-source-map' : false,
   watchOptions: {
     ignored: ['**/node_modules'],
   },
