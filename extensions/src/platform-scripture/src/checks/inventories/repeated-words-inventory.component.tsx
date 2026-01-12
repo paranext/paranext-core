@@ -3,7 +3,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
   Inventory,
-  InventoryItem,
+  InventorySummaryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
@@ -52,7 +52,7 @@ const createColumns = (
 ];
 
 interface RepeatedWordsInventoryProps {
-  inventoryItems: InventoryItem[] | undefined;
+  inventoryItems: InventorySummaryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
@@ -62,6 +62,7 @@ interface RepeatedWordsInventoryProps {
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
   areInventoryItemsLoading: boolean;
+  onItemSelected?: (itemKey: string) => void;
 }
 
 export function RepeatedWordsInventory({
@@ -75,6 +76,7 @@ export function RepeatedWordsInventory({
   scope,
   onScopeChange,
   areInventoryItemsLoading,
+  onItemSelected,
 }: RepeatedWordsInventoryProps) {
   const [repeatedWordsInventoryStrings] = useLocalizedStrings(REPEATED_WORDS_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -124,6 +126,7 @@ export function RepeatedWordsInventory({
       columns={columns}
       areInventoryItemsLoading={areInventoryItemsLoading}
       classNameForVerseText="scripture-font"
+      onItemSelected={onItemSelected}
     />
   );
 }

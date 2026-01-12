@@ -1,166 +1,315 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useDataProvider, useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import type { ProjectSettingTypes } from 'papi-shared-types';
-import { INVENTORY_STRING_KEYS, Scope, usePromise } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { CheckInputRange } from 'platform-scripture';
-import { useCallback, useMemo, useState } from 'react';
+import { INVENTORY_STRING_KEYS, Scope } from 'platform-bible-react';
+import { getErrorMessage } from 'platform-bible-utils';
+import type { InventoryInputRange } from 'platform-scripture';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
 import { MarkerInventory } from './checks/inventories/marker-inventory.component';
 import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
 import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
+import { useInventory } from './hooks/use-inventory';
 
-const VALID_ITEMS_DEFAULT = '';
-const INVALID_ITEMS_DEFAULT = '';
-
-// This set of check types is a subset of the CheckType enum in Paratext.Data.Checking
+/** Subset of CheckType enum from Paratext.Data.Checking */
 type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation';
 
+/** Represents an occurrence item for display in the occurrences table */
+type InventoryItemOccurrence = {
+  /** Scripture reference where the occurrence is found */
+  reference: SerializedVerseRef;
+  /** Text content containing the occurrence */
+  text: string;
+};
+
+/** Configuration mapping web view types to their corresponding components and check IDs */
+const INVENTORY_TYPE_CONFIG = {
+  'platformScripture.characterInventory': {
+    component: CharacterInventory,
+    checkId: 'Character' as CheckType,
+  },
+  'platformScripture.repeatedWordsInventory': {
+    component: RepeatedWordsInventory,
+    checkId: 'RepeatedWord' as CheckType,
+  },
+  'platformScripture.markersInventory': {
+    component: MarkerInventory,
+    checkId: 'Marker' as CheckType,
+  },
+  'platformScripture.punctuationInventory': {
+    component: PunctuationInventory,
+    checkId: 'Punctuation' as CheckType,
+  },
+} as const;
+
+type InventoryWebViewType = keyof typeof INVENTORY_TYPE_CONFIG;
+
+/**
+ * Creates a scripture range based on the current verse reference and scope.
+ *
+ * @param verseRef - Current verse reference
+ * @param scope - Scope of analysis ('verse', 'chapter', or 'book')
+ * @param projectId - Project identifier
+ * @returns Formatted inventory input range for the data provider
+ */
+function createInventoryInputRange(
+  verseRef: SerializedVerseRef,
+  scope: Scope,
+  projectId: string,
+): InventoryInputRange {
+  const start: SerializedVerseRef = {
+    book: verseRef.book,
+    chapterNum: verseRef.chapterNum,
+    verseNum: verseRef.verseNum,
+  };
+
+  let end: SerializedVerseRef | undefined = { ...start };
+
+  // Using 999 to indicate "end of chapter" and "end of book" per ScriptureRange docs
+  switch (scope) {
+    case 'book':
+      start.chapterNum = 1;
+      start.verseNum = 0;
+      end.chapterNum = 999;
+      end.verseNum = 999;
+      break;
+    case 'chapter':
+      start.verseNum = 0;
+      end.verseNum = 999;
+      break;
+    case 'verse':
+      end = undefined; // Single verse, no end range needed
+      break;
+    default:
+      throw new Error(`Unsupported scope: ${scope}`);
+  }
+
+  return {
+    projectId,
+    start,
+    end,
+  };
+}
+
+/**
+ * Formats raw inventory occurrences for display in the occurrences table.
+ *
+ * @param occurrences - Raw occurrence data from the inventory service
+ * @returns Formatted occurrences with reference and text fields
+ */
+function formatOccurrencesForDisplay(occurrences: any[]): InventoryItemOccurrence[] {
+  return occurrences.map((occurrence) => ({
+    reference: occurrence.location.verseRef,
+    text: occurrence.sourceText,
+  }));
+}
+
+/**
+ * Main inventory web view component that handles different types of scripture inventories
+ * (characters, repeated words, markers, punctuation). Provides functionality for viewing inventory
+ * summaries, loading detailed occurrences, and managing item approval status.
+ */
 global.webViewComponent = function InventoryWebView({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => {
-      return Array.from(INVENTORY_STRING_KEYS);
-    }, []),
+    useMemo(() => Array.from(INVENTORY_STRING_KEYS), []),
   );
   const [webViewType] = useWebViewState('webViewType', '');
   const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
-
-  let InventoryVariant;
-  let validItemsSetting: keyof ProjectSettingTypes;
-  let invalidItemsSetting: keyof ProjectSettingTypes;
-  let checkId: CheckType;
-  switch (webViewType) {
-    case 'platformScripture.characterInventory':
-      InventoryVariant = CharacterInventory;
-      validItemsSetting = 'platformScripture.validCharacters';
-      invalidItemsSetting = 'platformScripture.invalidCharacters';
-      checkId = 'Character';
-      break;
-    case 'platformScripture.repeatedWordsInventory':
-      InventoryVariant = RepeatedWordsInventory;
-      validItemsSetting = 'platformScripture.repeatableWords';
-      invalidItemsSetting = 'platformScripture.nonRepeatableWords';
-      checkId = 'RepeatedWord';
-      break;
-    case 'platformScripture.markersInventory':
-      InventoryVariant = MarkerInventory;
-      validItemsSetting = 'platformScripture.validMarkers';
-      invalidItemsSetting = 'platformScripture.invalidMarkers';
-      checkId = 'Marker';
-      break;
-    case 'platformScripture.punctuationInventory':
-      InventoryVariant = PunctuationInventory;
-      validItemsSetting = 'platformScripture.validPunctuation';
-      invalidItemsSetting = 'platformScripture.invalidPunctuation';
-      checkId = 'Punctuation';
-      break;
-    default:
-      throw new Error(`${webViewType} is not a valid inventory type`);
-  }
-
   const [scope, setScope] = useState<Scope>('chapter');
 
-  const checkInputRange: CheckInputRange = useMemo(() => {
-    // Default is chapter
-    const defaultScrRef: SerializedVerseRef = {
-      book: verseRef.book,
-      chapterNum: verseRef.chapterNum,
-      verseNum: verseRef.verseNum,
-    };
-    const start = { ...defaultScrRef };
-    let end: SerializedVerseRef | undefined = { ...defaultScrRef };
+  // Validate and get inventory configuration
+  if (!webViewType || !(webViewType in INVENTORY_TYPE_CONFIG)) {
+    throw new Error(`"${webViewType}" is not a valid inventory type`);
+  }
 
-    // Using 999 indicate "end of chapter" and "end of book" per the ScriptureRange docs
-    if (scope === 'book') {
-      start.chapterNum = 1;
-      start.verseNum = 0;
-      end.chapterNum = 999;
-      end.verseNum = 999;
-    } else if (scope === 'chapter') {
-      start.verseNum = 0;
-      end.verseNum = 999;
-    } else if (scope === 'verse') {
-      end = undefined;
+  const config = INVENTORY_TYPE_CONFIG[webViewType as InventoryWebViewType];
+  const { component: InventoryComponent, checkId } = config;
+
+  const inventoryInputRange = useMemo(
+    () => createInventoryInputRange(verseRef, scope, projectId ?? ''),
+    [projectId, scope, verseRef.book, verseRef.chapterNum, verseRef.verseNum],
+  );
+
+  const {
+    inventoryItems,
+    isLoading: areInventoryItemsLoading,
+    error: inventoryError,
+    getItemOccurrences,
+    cleanup,
+  } = useInventory(checkId, inventoryInputRange, projectId);
+
+  // Handle inventory loading errors
+  useEffect(() => {
+    if (inventoryError) {
+      logger.error(`Inventory loading failed: ${inventoryError}`);
     }
+  }, [inventoryError]);
 
-    return {
-      projectId: projectId ?? '',
-      start,
-      end,
-    };
-  }, [projectId, scope, verseRef]);
+  const cleanupRef = useRef<(() => Promise<void>) | undefined>();
 
-  const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+  useEffect(() => {
+    cleanupRef.current = cleanup;
+  }, [cleanup]);
 
-  const [inventoryItems, isLoadingInventoryItems] = usePromise(
-    useCallback(async () => {
-      if (checkAggregator && projectId) {
-        const newInventoryItems = await checkAggregator.retrieveInventoryData(
-          checkId,
-          projectId,
-          checkInputRange,
-        );
-        if (scope === 'verse') {
-          return newInventoryItems.filter((item) => item.verseRef.verseNum === verseRef.verseNum);
-        }
-        return newInventoryItems;
+  // Cleanup only on unmount to prevent race conditions
+  useEffect(() => {
+    return () => {
+      if (cleanupRef.current) {
+        // Don't await - React cleanup must be synchronous
+        cleanupRef.current().catch((error) => {
+          logger.warn('Error during inventory cleanup:', error);
+        });
       }
-      return [];
-    }, [checkAggregator, projectId, checkId, checkInputRange, scope, verseRef.verseNum]),
-    undefined,
+    };
+  }, []); // Empty deps array - only cleanup on unmount
+
+  const [inventoryItemsWithOccurrences, setInventoryItemsWithOccurrences] = useState<{
+    [itemKey: string]: InventoryItemOccurrence[];
+  }>({});
+
+  // Reset loaded occurrences when inventory data changes (scope/verse changes)
+  useEffect(() => {
+    setInventoryItemsWithOccurrences({});
+  }, [inventoryItems]);
+
+  const inventoryDataProvider = useDataProvider('platformScripture.inventoryDataProvider');
+  const [approvedItems, setApprovedItems] = useState<string[]>([]);
+  const [unapprovedItems, setUnapprovedItems] = useState<string[]>([]);
+
+  // Load current item approval statuses
+  useEffect(() => {
+    const loadItemStatuses = async () => {
+      if (!inventoryDataProvider || !projectId) return;
+
+      try {
+        const statuses = await inventoryDataProvider.getInventoryItemStatus({
+          projectId,
+          inventoryId: checkId,
+        });
+
+        const approved = statuses.filter((s) => s.status).map((s) => s.key);
+        const unapproved = statuses.filter((s) => !s.status).map((s) => s.key);
+
+        setApprovedItems(approved);
+        setUnapprovedItems(unapproved);
+      } catch (error) {
+        logger.warn(`Error loading inventory item status: ${getErrorMessage(error)}`);
+        setApprovedItems([]);
+        setUnapprovedItems([]);
+      }
+    };
+
+    loadItemStatuses();
+  }, [inventoryDataProvider, projectId, checkId]);
+
+  /**
+   * Handles item selection by loading detailed occurrences for the selected item. Uses caching to
+   * avoid reloading already-fetched occurrence data.
+   */
+  const handleItemSelected = useCallback(
+    async (itemKey: string) => {
+      // Skip if occurrences already loaded for this item
+      if (inventoryItemsWithOccurrences[itemKey]) {
+        return;
+      }
+
+      try {
+        const rawOccurrences = await getItemOccurrences(itemKey);
+        const formattedOccurrences = formatOccurrencesForDisplay(rawOccurrences);
+
+        setInventoryItemsWithOccurrences((prev) => ({
+          ...prev,
+          [itemKey]: formattedOccurrences,
+        }));
+      } catch (error) {
+        logger.error(`Error loading occurrences for "${itemKey}": ${getErrorMessage(error)}`);
+      }
+    },
+    [getItemOccurrences, inventoryItemsWithOccurrences],
   );
 
-  const [validItemsPossiblyError, setValidItems] = useProjectSetting(
-    projectId,
-    validItemsSetting,
-    VALID_ITEMS_DEFAULT,
+  /** Handles changes to approved items by updating the data provider and local state. */
+  const handleApprovedItemsChange = useCallback(
+    async (items: string[]) => {
+      if (!inventoryDataProvider || !projectId) return;
+
+      try {
+        const statuses = items.map((key) => ({ key, status: true }));
+        await inventoryDataProvider.setInventoryItemStatus(
+          { projectId, inventoryId: checkId },
+          statuses,
+        );
+        setApprovedItems(items);
+      } catch (error) {
+        logger.error(`Error updating approved items: ${getErrorMessage(error)}`);
+      }
+    },
+    [inventoryDataProvider, projectId, checkId],
   );
 
-  const validItems = useMemo(() => {
-    if (isPlatformError(validItemsPossiblyError)) {
-      logger.warn(`Error getting valid items: ${getErrorMessage(validItemsPossiblyError)}`);
-      return VALID_ITEMS_DEFAULT;
-    }
-    return validItemsPossiblyError;
-  }, [validItemsPossiblyError]);
+  /** Handles changes to unapproved items by updating the data provider and local state. */
+  const handleUnapprovedItemsChange = useCallback(
+    async (items: string[]) => {
+      if (!inventoryDataProvider || !projectId) return;
 
-  const [invalidItemsPossiblyError, setInvalidItems] = useProjectSetting(
-    projectId,
-    invalidItemsSetting,
-    INVALID_ITEMS_DEFAULT,
+      try {
+        const statuses = items.map((key) => ({ key, status: false }));
+        await inventoryDataProvider.setInventoryItemStatus(
+          { projectId, inventoryId: checkId },
+          statuses,
+        );
+        setUnapprovedItems(items);
+      } catch (error) {
+        logger.error(`Error updating unapproved items: ${getErrorMessage(error)}`);
+      }
+    },
+    [inventoryDataProvider, projectId, checkId],
   );
 
-  const invalidItems = useMemo(() => {
-    if (isPlatformError(invalidItemsPossiblyError)) {
-      logger.warn(`Error getting invalid items: ${getErrorMessage(invalidItemsPossiblyError)}`);
-      return INVALID_ITEMS_DEFAULT;
-    }
-    return invalidItemsPossiblyError;
-  }, [invalidItemsPossiblyError]);
+  /** Transform inventory items to include loaded occurrence data for the UI components. */
+  const enhancedInventoryItems = useMemo(
+    () =>
+      inventoryItems.map((item) => {
+        const itemKey = item.key as string;
 
-  const validItemsArray = useMemo(() => validItems.split(' '), [validItems]);
-  const invalidItemsArray = useMemo(() => invalidItems.split(' '), [invalidItems]);
+        // Calculate status based on approved/unapproved arrays
+        let status: 'approved' | 'unapproved' | 'unknown' = 'unknown';
+        if (approvedItems.includes(itemKey)) {
+          status = 'approved';
+        } else if (unapprovedItems.includes(itemKey)) {
+          status = 'unapproved';
+        }
+
+        return {
+          key: item.key,
+          count: item.count,
+          status,
+          occurrences: inventoryItemsWithOccurrences[itemKey] || [],
+        };
+      }),
+    [inventoryItems, inventoryItemsWithOccurrences, approvedItems, unapprovedItems],
+  );
 
   return (
-    <InventoryVariant
-      inventoryItems={inventoryItems}
+    <InventoryComponent
+      inventoryItems={enhancedInventoryItems}
       verseRef={verseRef}
       setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
-      approvedItems={validItemsArray}
-      onApprovedItemsChange={(items: string[]) => setValidItems?.(items.join(' '))}
-      unapprovedItems={invalidItemsArray}
-      onUnapprovedItemsChange={(items: string[]) => setInvalidItems?.(items.join(' '))}
+      approvedItems={approvedItems}
+      onApprovedItemsChange={handleApprovedItemsChange}
+      unapprovedItems={unapprovedItems}
+      onUnapprovedItemsChange={handleUnapprovedItemsChange}
       scope={scope}
-      onScopeChange={(newScope: Scope) => setScope(newScope)}
+      onScopeChange={setScope}
       projectId={projectId}
-      areInventoryItemsLoading={inventoryItems === undefined || isLoadingInventoryItems}
+      areInventoryItemsLoading={areInventoryItemsLoading}
+      onItemSelected={handleItemSelected}
     />
   );
 };
