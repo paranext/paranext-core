@@ -1,5 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import {
+  DeltaOp,
   DeltaOpInsertNoteEmbed,
   Editorial,
   EditorOptions,
@@ -44,6 +45,56 @@ export interface FootnoteEditorProps {
   editorOptions: EditorOptions;
   /** Localized strings to be passed to the footnote editor component */
   localizedStrings: FootnoteEditorLocalizedStrings;
+}
+
+/**
+ * Function to convert a footnote/endnote type node to a cross-reference type node
+ *
+ * @param node The node to be converted
+ */
+function footnoteNodeToCrossReferenceNode(node: DeltaOp) {
+  // The built-in type for the delta note ops does not contain the types for the attributes
+  // so have to cast it here
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const nodeCharAttribute = node.attributes?.char as Record<string, string>;
+  if (nodeCharAttribute.style) {
+    if (nodeCharAttribute.style === 'ft') {
+      nodeCharAttribute.style = 'xt';
+    }
+
+    if (nodeCharAttribute.style === 'fr') {
+      nodeCharAttribute.style = 'xo';
+    }
+
+    if (nodeCharAttribute.style === 'fq') {
+      nodeCharAttribute.style = 'xq';
+    }
+  }
+}
+
+/**
+ * Function to convert a cross-reference type node to a footnote/endnote type node
+ *
+ * @param node THe node to be converted
+ */
+function crossReferenceNodeToFootnoteNode(node: DeltaOp) {
+  // The built-in type for the delta note ops does not contain the types for the attributes
+  // so have to cast it here
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const nodeCharAttribute = node.attributes?.char as Record<string, string>;
+  if (nodeCharAttribute.style) {
+    if (nodeCharAttribute.style === 'xt') {
+      nodeCharAttribute.style = 'ft';
+    }
+
+    if (nodeCharAttribute.style === 'xo') {
+      nodeCharAttribute.style = 'fr';
+    }
+
+    if (nodeCharAttribute.style === 'xq') {
+      nodeCharAttribute.style = 'fq';
+    }
+  }
 }
 
 /**
@@ -156,25 +207,9 @@ export default function FootnoteEditor({
       // If switching between cross-reference and footnote/endnote, need to switch the nodes inside
       const innerNoteOps = currentNoteOp.insert.note?.contents?.ops;
       if (noteType !== 'x' && value === 'x') {
-        innerNoteOps?.forEach((op) => {
-          // The built-in type for the delta note ops does not contain the types for the attributes
-          // so have to cast it here
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          const nodeCharAttribute = op.attributes?.char as Record<string, string>;
-          if (nodeCharAttribute.style) {
-            nodeCharAttribute.style = nodeCharAttribute.style === 'ft' ? 'xt' : 'xo';
-          }
-        });
+        innerNoteOps?.forEach((op) => footnoteNodeToCrossReferenceNode(op));
       } else if (noteType === 'x' && value !== 'x') {
-        innerNoteOps?.forEach((op) => {
-          // The built-in type for the delta note ops does not contain the types for the attributes
-          // so have to cast it here
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          const nodeCharAttribute = op.attributes?.char as Record<string, string>;
-          if (nodeCharAttribute.style) {
-            nodeCharAttribute.style = nodeCharAttribute.style === 'xt' ? 'ft' : 'fr';
-          }
-        });
+        innerNoteOps?.forEach((op) => crossReferenceNodeToFootnoteNode(op));
       }
 
       editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOp]);
@@ -183,6 +218,7 @@ export default function FootnoteEditor({
 
   const handleUsjChange = () => {
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
+    console.log(noteOp);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const currentNoteType = noteOp?.insert?.note?.style;
       const innerNoteOps = noteOp.insert.note?.contents?.ops;
@@ -191,23 +227,24 @@ export default function FootnoteEditor({
       if (currentNoteType === 'x') {
         setIsTypeSwitchable(
           !!innerNoteOps?.every((op) => {
-            if (!op.attributes?.char) return false;
+            if (!op.attributes?.char) return true;
             // The built-in type for the delta note ops does not contain the types for the attributes
             // so have to cast it here
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             const nodeType = (op.attributes?.char as Record<string, string>).style;
-            return nodeType === 'xt' || nodeType === 'xo';
+            return nodeType === 'xt' || nodeType === 'xo' || nodeType === 'xq';
           }),
         );
       } else {
         setIsTypeSwitchable(
           !!innerNoteOps?.every((op) => {
-            if (!op.attributes?.char) return false;
+            if (!op.attributes?.char) return true;
             // The built-in type for the delta note ops does not contain the types for the attributes
             // so have to cast it here
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             const nodeType = (op.attributes?.char as Record<string, string>).style;
-            return nodeType === 'ft' || nodeType === 'fr';
+            console.log(nodeType);
+            return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
           }),
         );
       }
