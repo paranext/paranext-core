@@ -331,6 +331,10 @@ declare module 'legacy-comment-manager' {
       // #endregion
     };
 
+  // #endregion
+
+  // #region Comment list WebView types
+
   /** Web view controller for the Comment List web view */
   export type CommentListWebViewController = NetworkableObject<{
     /**
@@ -338,10 +342,15 @@ declare module 'legacy-comment-manager' {
      *
      * @param threadId The ID of the thread to scroll to and select
      */
-    scrollToThread(threadId: string): Promise<void>;
+    selectThread(threadId: string): Promise<void>;
   }>;
 
-  // #endregion
+  export type OpenCommentListWebViewOptions = {
+    /** ID of the thread to select and scroll to in the comment list */
+    threadIdToSelect?: string | undefined;
+  };
+
+  // #endregion Comment list WebView types
 
   // #region Scripture Text Extraction Types
 
@@ -355,7 +364,10 @@ declare module 'legacy-comment-manager' {
     contextBefore: string;
     /** Text after selection in verse (max 50 chars, closest to range end) */
     contextAfter: string;
-    /** Offset value of the start range in USFM space */
+    /**
+     * Index in USFM of the start of the selected text relative to the beginning of the specified
+     * verse (the backslash on the `\v` verse marker)
+     */
     startPosition: number;
   }
 
@@ -368,6 +380,7 @@ declare module 'papi-shared-types' {
     CommentListWebViewController,
     ILegacyCommentProjectDataProvider,
     ExtractedCommentScriptureText,
+    OpenCommentListWebViewOptions,
   } from 'legacy-comment-manager';
   import type { UsjDocumentLocation } from 'platform-bible-utils';
 
@@ -376,8 +389,19 @@ declare module 'papi-shared-types' {
   }
 
   export interface CommandHandlers {
+    /**
+     * Open or focus the Comment List WebView for the project ID associated with the specified
+     * WebView ID
+     *
+     * @param webViewId The ID of the WebView whose project comments to display
+     * @param options Additional options for opening the comment list WebView
+     * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
+     *   project ID could be determined
+     * @throws If something goes wrong with selecting the provided thread ID
+     */
     'legacyCommentManager.openCommentList': (
-      projectId?: string | undefined,
+      webViewId?: string | undefined,
+      options?: OpenCommentListWebViewOptions,
     ) => Promise<string | undefined>;
     'legacyCommentManager.extractCommentScriptureText': (
       start: UsjDocumentLocation,

@@ -11,6 +11,7 @@ import type {
 import type {
   CommentListWebViewController,
   ExtractedCommentScriptureText,
+  OpenCommentListWebViewOptions,
 } from 'legacy-comment-manager';
 import {
   getErrorMessage,
@@ -21,14 +22,12 @@ import {
 } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
+import { CommentListWebViewMessage } from './comment-list-messages.model';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
 
-/** Message types that can be sent to the Comment List web view */
-type CommentListWebViewMessage = {
-  method: 'scrollToThread';
-  threadId: string;
-};
+/** Time in ms to wait for the comment list web view to load before scrolling to a thread */
+const COMMENT_LIST_LOAD_DELAY_MS = 500;
 
 interface CommentListWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -88,13 +87,13 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
     webViewNonce: string,
   ): Promise<CommentListWebViewController> {
     return {
-      async scrollToThread(threadId: string): Promise<void> {
+      async selectThread(threadId: string): Promise<void> {
         logger.debug(
-          `Comment List WebView Controller ${webViewDefinition.id} received request to scrollToThread ${threadId}`,
+          `Comment List WebView Controller ${webViewDefinition.id} received request to selectThread ${threadId}`,
         );
 
         const message: CommentListWebViewMessage = {
-          method: 'scrollToThread',
+          method: 'selectThread',
           threadId,
         };
         await papi.webViewProviders.postMessageToWebView(
@@ -112,6 +111,16 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
 
 const commentListWebViewProvider: IWebViewProvider = new CommentListWebViewFactory();
 
+/**
+ * Get the USFM text snippets for a comment and its context based on the selected text range in a
+ * USJ chapter
+ *
+ * @param selectedTextStart The start location of the selected text in the USJ document
+ * @param selectedTextEnd The end location of the selected text in the USJ document
+ * @param usjChapter The USJ chapter containing the selected text
+ * @param bookId The book ID for the USJ chapter
+ * @returns Information about the selection and its context that are used to create a comment
+ */
 async function extractCommentScriptureText(
   selectedTextStart: UsjDocumentLocation,
   selectedTextEnd: UsjDocumentLocation,
@@ -121,8 +130,7 @@ async function extractCommentScriptureText(
   try {
     const usjRW = new UsjReaderWriter(usjChapter, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
 
-    usjRW.toUsfm();
-
+    // Get the verse ref and offset for the start and end of the selected text
     const selectedTextStartUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
       selectedTextStart,
       bookId,
@@ -132,22 +140,28 @@ async function extractCommentScriptureText(
       bookId,
     );
 
+    // Find the start of the verse containing the selected text
     const verseStart: UsfmVerseRefVerseLocation = {
       verseRef: selectedTextStartUsfmLocation.verseRef,
       offset: 0,
     };
 
-    const selectedTextEndJsonPath = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+    // Find the next verse marker (any verse) after the selection end to determine end of current
+    // verse context
+    const selectedTextEndUsjNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
       selectedTextEnd.jsonPath,
     );
+    const nextVerseNodeAndDoc = usjRW.findNextMatchingNode(
+      selectedTextEndUsjNodeAndDocumentLocation,
+      ({ node }) => {
+        return typeof node === 'object' && node.type === 'verse';
+      },
+    );
 
-    // Find the next verse marker (any verse) to determine end of current verse context
-    const nextVerseNodeAndDoc = usjRW.findNextMatchingNode(selectedTextEndJsonPath, ({ node }) => {
-      return typeof node === 'object' && node.type === 'verse';
-    });
-
+    // Find the end of the verse containing the selected text
     let verseEnd: UsfmVerseRefVerseLocation;
     if (nextVerseNodeAndDoc?.documentLocation) {
+      // There is a verse after this verse - use its start as the end of the current verse
       verseEnd = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
         nextVerseNodeAndDoc.documentLocation,
         bookId,
@@ -157,10 +171,13 @@ async function extractCommentScriptureText(
       const usfmLength = usjRW.toUsfm().length;
       verseEnd = {
         verseRef: selectedTextEndUsfmLocation.verseRef,
-        offset: usfmLength,
+        offset:
+          // Get the length of the rest of the USFM after the verse start
+          usfmLength - usjRW.usfmVerseLocationToIndexInUsfm(selectedTextEndUsfmLocation.verseRef),
       };
     }
 
+    // Get the USFM indices for the verse and selection so we can extract the USFM text for them
     const verseStartIndex = usjRW.usfmVerseLocationToIndexInUsfm(verseStart);
     const verseEndIndex = usjRW.usfmVerseLocationToIndexInUsfm(verseEnd);
     const selectionStartIndex = usjRW.usfmVerseLocationToIndexInUsfm(selectedTextStartUsfmLocation);
@@ -168,13 +185,16 @@ async function extractCommentScriptureText(
 
     const usfmText = usjRW.toUsfm();
 
+    // Pull the verse text out from the USFM
     let verse = usfmText.substring(verseStartIndex, verseEndIndex);
     if (verse.length > 500) {
       verse = verse.substring(0, 500);
     }
 
+    // Pull the selected text out from the USFM
     const selectedText = usfmText.substring(selectionStartIndex, selectionEndIndex);
 
+    // Pull context before and after the selected text, limiting to 50 characters each
     let contextBefore = usfmText.substring(verseStartIndex, selectionStartIndex);
     if (contextBefore.length > 50) {
       contextBefore = contextBefore.substring(contextBefore.length - 50);
@@ -198,15 +218,31 @@ async function extractCommentScriptureText(
   }
 }
 
-async function openCommentList(editorWebViewId: string | undefined): Promise<string | undefined> {
+/**
+ * Open or focus the Comment List WebView for the project ID associated with the specified WebView
+ * ID
+ *
+ * This implements the `legacyCommentManager.openCommentList` command
+ *
+ * @param webViewId The ID of the WebView whose project comments to display
+ * @param options Additional options for opening the comment list WebView
+ * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
+ *   project ID could be determined
+ */
+async function openCommentList(
+  webViewId: string | undefined,
+  options: OpenCommentListWebViewOptions = {},
+): Promise<string | undefined> {
   let projectId: CommentListWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: CommentListWebViewOptions['editorScrollGroupId'];
+  /** The ID of the comment list WebView that was opened or focused */
+  let commentListWebViewId: string | undefined;
 
   logger.debug('Opening comment list');
 
-  if (editorWebViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
     tabIdFromWebViewId = webViewDefinition?.id;
     editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
@@ -229,16 +265,39 @@ async function openCommentList(editorWebViewId: string | undefined): Promise<str
       { existingId: existingWebViewId, bringToFront: true, createNewIfNotFound: false },
     );
 
-    return existingWebViewId;
+    commentListWebViewId = existingWebViewId;
   }
 
-  // No existing comment list, create a new one
-  const options: CommentListWebViewOptions = { projectId, editorScrollGroupId };
-  const commentListWebViewId = await papi.webViews.openWebView(
-    commentListWebViewType,
-    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-    options,
-  );
+  if (!commentListWebViewId) {
+    // No existing comment list, so create a new one
+    const webViewOptions: CommentListWebViewOptions = { projectId, editorScrollGroupId };
+    commentListWebViewId = await papi.webViews.openWebView(
+      commentListWebViewType,
+      { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
+      webViewOptions,
+    );
+  }
+
+  // Scroll to the specified thread in the comment list
+  if (commentListWebViewId && options.threadIdToSelect) {
+    // Wait for the comment list to load before scrolling. This can be removed if we properly buffer
+    // messages to WebView controllers and WebViews that aren't loaded yet.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, COMMENT_LIST_LOAD_DELAY_MS);
+    });
+
+    // Get the comment list controller and select the thread
+    const commentListController = await papi.webViews.getWebViewController(
+      commentListWebViewType,
+      commentListWebViewId,
+    );
+    if (commentListController) {
+      await commentListController.selectThread(options.threadIdToSelect);
+    } else
+      throw new Error(
+        `Could not get WebView Controller for comment list WebView ${commentListWebViewId} to scroll to thread ${options.threadIdToSelect}`,
+      );
+  }
 
   return commentListWebViewId;
 }
@@ -272,14 +331,35 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the comments are for',
+            summary: 'The ID of the WebView tied to the project that the comments are for',
             schema: { type: 'string' },
+          },
+          {
+            name: 'options',
+            required: false,
+            summary: 'Additional options for opening the comment list WebView',
+            schema: {
+              $ref: '#/components/schemas/OpenCommentListWebViewOptions',
+            },
           },
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the new comment list web view',
+          summary: 'The ID of the new comment list WebView',
           schema: { type: 'string' },
+        },
+      },
+      components: {
+        schemas: {
+          OpenCommentListWebViewOptions: {
+            type: 'object',
+            properties: {
+              threadIdToSelect: {
+                type: 'string',
+                description: 'ID of the thread to select and scroll to in the comment list',
+              },
+            },
+          },
         },
       },
     },

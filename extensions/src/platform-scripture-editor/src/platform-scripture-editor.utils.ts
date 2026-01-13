@@ -1,7 +1,14 @@
 /* Small utility helpers for the platform-scripture-editor extension. */
 
 import { LocalizationSelectors } from '@papi/core';
-import { formatReplacementString, isLocalizeKey, LanguageStrings } from 'platform-bible-utils';
+import type PapiBackend from '@papi/backend';
+import type PapiFrontend from '@papi/frontend';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  isLocalizeKey,
+  LanguageStrings,
+} from 'platform-bible-utils';
 
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
@@ -69,3 +76,45 @@ export async function formatEditorTitle(
 }
 
 // #endregion Editor Title Formatting
+
+/**
+ * Opens the comment list for an editor and selects a specific thread.
+ *
+ * @param editorWebViewId The ID of the editor web view (used to determine which project's comments)
+ * @param threadId The ID of the thread to select
+ */
+export async function openCommentListAndSelectThread(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  editorWebViewId: string,
+  threadId: string,
+): Promise<void> {
+  const commentListWebViewId = await papi.commands.sendCommand(
+    'legacyCommentManager.openCommentList',
+    editorWebViewId,
+    { threadIdToSelect: threadId },
+  );
+
+  if (!commentListWebViewId) {
+    throw new Error(`No WebView ID returned`);
+  }
+}
+
+/**
+ * Opens the comment list for an editor and selects a specific thread.
+ *
+ * @param editorWebViewId The ID of the editor web view (used to determine which project's comments)
+ * @param threadId The ID of the thread to select
+ */
+export async function openCommentListAndSelectThreadSafe(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  editorWebViewId: string,
+  threadId: string,
+): Promise<void> {
+  try {
+    await openCommentListAndSelectThread(papi, editorWebViewId, threadId);
+  } catch (e) {
+    papi.logger.warn(
+      `Failed to open comment list from WebView ${editorWebViewId} and select thread ${threadId}: ${getErrorMessage(e)}`,
+    );
+  }
+}

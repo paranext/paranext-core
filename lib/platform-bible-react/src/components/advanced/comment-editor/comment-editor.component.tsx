@@ -22,7 +22,7 @@ import {
 } from 'lexical';
 import { AtSign, Check, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CommentEditorLocalizedStringsSubset } from './comment-editor.types';
+import { CommentEditorLocalizedStrings } from './comment-editor.types';
 
 const initialValue: SerializedEditorState<
   SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
@@ -75,7 +75,7 @@ export interface CommentEditorProps {
    */
   onClose: () => void;
   /** Localized strings to be passed to the comment editor component */
-  localizedStrings: CommentEditorLocalizedStringsSubset;
+  localizedStrings: CommentEditorLocalizedStrings;
 }
 
 /**
@@ -87,7 +87,7 @@ export interface CommentEditorProps {
  */
 function getAssignedUserDisplayName(
   user: string,
-  localizedStrings: CommentEditorLocalizedStringsSubset,
+  localizedStrings: CommentEditorLocalizedStrings,
 ): string {
   if (user === '') {
     return localizedStrings['%commentEditor_unassigned%'] ?? 'Unassigned';

@@ -373,17 +373,9 @@ export declare const COMMENT_EDITOR_STRING_KEYS: readonly [
 	"%commentEditor_unassigned%",
 	"%commentEditor_team%"
 ];
+/** Localized strings needed for the comment editor component */
 export type CommentEditorLocalizedStrings = {
 	[localizedKey in (typeof COMMENT_EDITOR_STRING_KEYS)[number]]?: string;
-};
-type CommentEditorLocalizedStringsSubset = {
-	[key: LocalizeKey]: string | undefined;
-	"%commentEditor_placeholder%"?: string;
-	"%commentEditor_saveButton_tooltip%"?: string;
-	"%commentEditor_cancelButton_tooltip%"?: string;
-	"%commentEditor_assignTo_label%"?: string;
-	"%commentEditor_unassigned%"?: string;
-	"%commentEditor_team%"?: string;
 };
 /** Interface containing the types of the properties that are passed to the `CommentEditor` */
 export interface CommentEditorProps {
@@ -402,7 +394,7 @@ export interface CommentEditorProps {
 	 */
 	onClose: () => void;
 	/** Localized strings to be passed to the comment editor component */
-	localizedStrings: CommentEditorLocalizedStringsSubset;
+	localizedStrings: CommentEditorLocalizedStrings;
 }
 /**
  * Component to create a new project comment from within the scripture editor

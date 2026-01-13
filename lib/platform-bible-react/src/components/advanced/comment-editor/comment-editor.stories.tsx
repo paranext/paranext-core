@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import CommentEditor from './comment-editor.component';
-import { CommentEditorLocalizedStringsSubset } from './comment-editor.types';
+import { CommentEditorLocalizedStrings } from './comment-editor.types';
 
-const commentEditorLocalizedStrings: CommentEditorLocalizedStringsSubset = {
+const commentEditorLocalizedStrings: CommentEditorLocalizedStrings = {
   '%commentEditor_placeholder%': 'Type your comment here...',
   '%commentEditor_saveButton_tooltip%': 'Save comment',
   '%commentEditor_cancelButton_tooltip%': 'Cancel',

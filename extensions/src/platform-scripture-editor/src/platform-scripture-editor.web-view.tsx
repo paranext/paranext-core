@@ -71,7 +71,11 @@ import {
 } from './decorations.util';
 import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
-import { deepEqualAcrossIframes, formatEditorTitle } from './platform-scripture-editor.utils';
+import {
+  deepEqualAcrossIframes,
+  formatEditorTitle,
+  openCommentListAndSelectThreadSafe,
+} from './platform-scripture-editor.utils';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -97,46 +101,6 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
-
-/** Time in ms to wait for the comment list web view to load before scrolling to a thread */
-const COMMENT_LIST_LOAD_DELAY_MS = 500;
-
-/**
- * Opens the comment list for an editor and scrolls to a specific thread.
- *
- * @param editorWebViewId The ID of the editor web view (used to determine which project's comments)
- * @param threadId The ID of the thread to scroll to
- */
-async function openCommentListAndScrollToThread(
-  editorWebViewId: string,
-  threadId: string,
-): Promise<void> {
-  const commentListWebViewId = await papi.commands.sendCommand(
-    'legacyCommentManager.openCommentList',
-    editorWebViewId,
-  );
-
-  if (!commentListWebViewId) {
-    logger.warn('Failed to open comment list: no web view ID returned');
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, COMMENT_LIST_LOAD_DELAY_MS);
-  });
-
-  const commentListController = await papi.webViews.getWebViewController(
-    'legacyCommentManager.commentList',
-    commentListWebViewId,
-  );
-
-  if (!commentListController) {
-    logger.warn(`Failed to get comment list controller for web view ${commentListWebViewId}`);
-    return;
-  }
-
-  await commentListController.scrollToThread(threadId);
-}
 
 /**
  * Converts a selection location to UsjDocumentLocation format. This is needed because the editor
@@ -794,7 +758,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const createCommentAnnotationClickHandler = useCallback(
     (threadId: string) => async () => {
-      await openCommentListAndScrollToThread(webViewId, threadId);
+      await openCommentListAndSelectThreadSafe(papi, webViewId, threadId);
     },
     [webViewId],
   );
@@ -1153,8 +1117,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             createCommentAnnotationClickHandler(newThreadId),
           );
 
-          // Open the comment list and scroll to the new thread
-          await openCommentListAndScrollToThread(webViewId, newThreadId);
+          // Open the comment list and select the new thread
+          await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
         }
 
         pendingCommentAnnotationRange.current = undefined;
