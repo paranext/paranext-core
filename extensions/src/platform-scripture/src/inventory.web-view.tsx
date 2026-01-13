@@ -1,9 +1,9 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { INVENTORY_STRING_KEYS, Scope } from 'platform-bible-react';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import type { InventoryInputRange, ItemizedInventoryItem } from 'platform-scripture';
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
@@ -11,6 +11,9 @@ import { MarkerInventory } from './checks/inventories/marker-inventory.component
 import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
 import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
+
+const VALID_ITEMS_DEFAULT = '';
+const INVALID_ITEMS_DEFAULT = '';
 
 /** Subset of CheckType enum from Paratext.Data.Checking */
 type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation';
@@ -28,18 +31,26 @@ const INVENTORY_TYPE_CONFIG = {
   'platformScripture.characterInventory': {
     component: CharacterInventory,
     checkId: 'Character' satisfies CheckType,
+    validItemsSetting: 'platformScripture.validCharacters',
+    invalidItemsSetting: 'platformScripture.invalidCharacters',
   },
   'platformScripture.repeatedWordsInventory': {
     component: RepeatedWordsInventory,
     checkId: 'RepeatedWord' satisfies CheckType,
+    validItemsSetting: 'platformScripture.repeatableWords',
+    invalidItemsSetting: 'platformScripture.nonRepeatableWords',
   },
   'platformScripture.markersInventory': {
     component: MarkerInventory,
     checkId: 'Marker' satisfies CheckType,
+    validItemsSetting: 'platformScripture.validMarkers',
+    invalidItemsSetting: 'platformScripture.invalidMarkers',
   },
   'platformScripture.punctuationInventory': {
     component: PunctuationInventory,
     checkId: 'Punctuation' satisfies CheckType,
+    validItemsSetting: 'platformScripture.validPunctuation',
+    invalidItemsSetting: 'platformScripture.invalidPunctuation',
   },
 } as const;
 
@@ -129,18 +140,18 @@ function useInventoryInputRange(
       chapterNum: verseRef.chapterNum,
       verseNum: verseRef.verseNum,
     }),
-    // Remove verseRef to avoid unnecessary re-renders
+    // Leave out verseRef to avoid unnecessary re-renders
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       projectId,
       scope,
       verseRef.book,
-      // Only include chapterNum if relevant to the scope
+      // Always include chapterNum, but use stable value for 'book' scope
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      ...(scope === 'chapter' || scope === 'verse' ? [verseRef.chapterNum] : []),
-      // Only include verseNum if relevant to the scope
+      scope === 'book' ? 1 : verseRef.chapterNum,
+      // Always include verseNum, but use stable value for 'book' and 'chapter' scope
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      ...(scope === 'verse' ? [verseRef.verseNum] : []),
+      scope === 'verse' ? verseRef.verseNum : 1,
     ],
   );
 
@@ -196,7 +207,7 @@ global.webViewComponent = function InventoryWebView({
   }
 
   const config = INVENTORY_TYPE_CONFIG[webViewType];
-  const { component: InventoryComponent, checkId } = config;
+  const { component: InventoryComponent, checkId, validItemsSetting, invalidItemsSetting } = config;
 
   const { inventoryInputRange, stableVerseRefForScope } = useInventoryInputRange(
     verseRef,
@@ -226,35 +237,43 @@ global.webViewComponent = function InventoryWebView({
     [itemKey: string]: InventoryItemOccurrence[];
   }>({});
 
-  const inventoryDataProvider = useDataProvider('platformScripture.inventoryDataProvider');
-  const [approvedItems, setApprovedItems] = useState<string[]>([]);
-  const [unapprovedItems, setUnapprovedItems] = useState<string[]>([]);
+  // Use project settings for approved/unapproved items
+  const [validItemsPossiblyError, setValidItems] = useProjectSetting(
+    projectId,
+    validItemsSetting,
+    VALID_ITEMS_DEFAULT,
+  );
 
-  // Load current item approval statuses
-  useEffect(() => {
-    const loadItemStatuses = async () => {
-      if (!inventoryDataProvider || !projectId) return;
+  const validItems = useMemo(() => {
+    if (isPlatformError(validItemsPossiblyError)) {
+      logger.warn(`Error getting valid items: ${getErrorMessage(validItemsPossiblyError)}`);
+      return VALID_ITEMS_DEFAULT;
+    }
+    return validItemsPossiblyError;
+  }, [validItemsPossiblyError]);
 
-      try {
-        const statuses = await inventoryDataProvider.getInventoryItemStatus({
-          projectId,
-          inventoryId: checkId,
-        });
+  const [invalidItemsPossiblyError, setInvalidItems] = useProjectSetting(
+    projectId,
+    invalidItemsSetting,
+    INVALID_ITEMS_DEFAULT,
+  );
 
-        const approved = statuses.filter((s) => s.status).map((s) => s.key);
-        const unapproved = statuses.filter((s) => !s.status).map((s) => s.key);
+  const invalidItems = useMemo(() => {
+    if (isPlatformError(invalidItemsPossiblyError)) {
+      logger.warn(`Error getting invalid items: ${getErrorMessage(invalidItemsPossiblyError)}`);
+      return INVALID_ITEMS_DEFAULT;
+    }
+    return invalidItemsPossiblyError;
+  }, [invalidItemsPossiblyError]);
 
-        setApprovedItems(approved);
-        setUnapprovedItems(unapproved);
-      } catch (error) {
-        logger.warn(`Error loading inventory item status: ${getErrorMessage(error)}`);
-        setApprovedItems([]);
-        setUnapprovedItems([]);
-      }
-    };
-
-    loadItemStatuses();
-  }, [inventoryDataProvider, projectId, checkId]);
+  const approvedItems = useMemo(
+    () => validItems.split(' ').filter((item) => item.length > 0),
+    [validItems],
+  );
+  const unapprovedItems = useMemo(
+    () => invalidItems.split(' ').filter((item) => item.length > 0),
+    [invalidItems],
+  );
 
   /**
    * Handles item selection by loading detailed occurrences for the selected item. Uses caching to
@@ -282,51 +301,37 @@ global.webViewComponent = function InventoryWebView({
     [getItemOccurrences, inventoryItemsWithOccurrences],
   );
 
-  /** Handles changes to approved items by updating the data provider and local state. */
+  /** Handles changes to approved items by updating the project setting. */
   const handleApprovedItemsChange = useCallback(
     async (items: string[]) => {
-      if (!inventoryDataProvider || !projectId) return;
-
       try {
-        const statuses = items.map((key) => ({ key, status: true }));
-        await inventoryDataProvider.setInventoryItemStatus(
-          { projectId, inventoryId: checkId },
-          statuses,
-        );
-        setApprovedItems(items);
+        await setValidItems?.(items.join(' '));
       } catch (error) {
         logger.error(`Error updating approved items: ${getErrorMessage(error)}`);
       }
     },
-    [inventoryDataProvider, projectId, checkId],
+    [setValidItems],
   );
 
-  /** Handles changes to unapproved items by updating the data provider and local state. */
+  /** Handles changes to unapproved items by updating the project setting. */
   const handleUnapprovedItemsChange = useCallback(
     async (items: string[]) => {
-      if (!inventoryDataProvider || !projectId) return;
-
       try {
-        const statuses = items.map((key) => ({ key, status: false }));
-        await inventoryDataProvider.setInventoryItemStatus(
-          { projectId, inventoryId: checkId },
-          statuses,
-        );
-        setUnapprovedItems(items);
+        await setInvalidItems?.(items.join(' '));
       } catch (error) {
         logger.error(`Error updating unapproved items: ${getErrorMessage(error)}`);
       }
     },
-    [inventoryDataProvider, projectId, checkId],
+    [setInvalidItems],
   );
 
   /** Transform inventory items to include loaded occurrence data for the UI components. */
   const enhancedInventoryItems = useMemo(
     () =>
       inventoryItems
-        .filter((item) => item.count > 0) // Filter out items with zero counts
+        .filter((item) => item.count > 0)
         .map((item) => {
-          const itemKey = item.key;
+          const itemKey = String(item.key);
 
           // Calculate status based on approved/unapproved arrays
           let status: 'approved' | 'unapproved' | 'unknown' = 'unknown';
