@@ -11,14 +11,9 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
+import { CommentListWebViewMessage } from './comment-list-messages.model';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
-
-/** Message types that can be received from the Comment List web view controller */
-type CommentListWebViewMessage = {
-  method: 'scrollToThread';
-  threadId: string;
-};
 
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
@@ -34,8 +29,8 @@ global.webViewComponent = function CommentListWebView({
   // Listen for messages from the web view controller
   useEffect(() => {
     const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
-      if (data.method === 'scrollToThread') {
-        logger.debug(`Comment list received scrollToThread message: ${serialize(data)}`);
+      if (data.method === 'selectThread') {
+        logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
         const { threadId } = data;
 
         // Find the thread element and scroll to it

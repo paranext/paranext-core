@@ -27,6 +27,7 @@ import platformScriptureEditorWebViewStyles from './platform-scripture-editor.we
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import {
   formatEditorTitle,
+  openCommentListAndSelectThread,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
@@ -37,48 +38,6 @@ interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
   options?: OpenEditorOptions;
-}
-
-/** Time in ms to wait for the comment list web view to load before scrolling to a thread */
-const COMMENT_LIST_LOAD_DELAY_MS = 500;
-
-/**
- * Opens the comment list for an editor and scrolls to a specific thread.
- *
- * @param editorWebViewId The ID of the editor web view (used to determine which project's comments)
- * @param threadId The ID of the thread to scroll to
- */
-async function openCommentListAndScrollToThread(
-  editorWebViewId: string,
-  threadId: string,
-): Promise<void> {
-  const commentListWebViewId = await papi.commands.sendCommand(
-    'legacyCommentManager.openCommentList',
-    editorWebViewId,
-  );
-
-  if (!commentListWebViewId) {
-    logger.warn('Failed to open comment list: no web view ID returned');
-    return;
-  }
-
-  // Wait for the comment list to load before scrolling
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, COMMENT_LIST_LOAD_DELAY_MS);
-  });
-
-  // Get the comment list controller and scroll to the thread
-  const commentListController = await papi.webViews.getWebViewController(
-    'legacyCommentManager.commentList',
-    commentListWebViewId,
-  );
-
-  if (!commentListController) {
-    logger.warn(`Failed to get comment list controller for web view ${commentListWebViewId}`);
-    return;
-  }
-
-  await commentListController.scrollToThread(threadId);
 }
 
 // #region selectRange helper functions
@@ -817,8 +776,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
 
           const canCreate = await commentManagerPdp.canUserCreateComments();
           if (!canCreate) {
-            logger.warn(`User does not have permission to create comments in project ${projectId}`);
-            return;
+            throw new Error(
+              `User does not have permission to create comments in project ${projectId}`,
+            );
           }
 
           const message: EditorWebViewMessage = {
@@ -831,6 +791,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           );
         } catch (e) {
           logger.warn(`Failed to open comment editor: ${getErrorMessage(e)}`);
+          throw e;
         }
       },
       async setAnnotation(range, annotationType, annotationId, interactionCommand) {
@@ -871,11 +832,12 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
             `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to focusComment ${threadId}`,
           );
 
-          await openCommentListAndScrollToThread(currentWebViewDefinition.id, threadId);
+          await openCommentListAndSelectThread(papi, currentWebViewDefinition.id, threadId);
         } catch (e) {
           logger.warn(
             `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running focusComment: ${getErrorMessage(e)}`,
           );
+          throw e;
         }
       },
       async runAnnotationCommand(annotationId, interactionCommand) {

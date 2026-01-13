@@ -98,7 +98,7 @@ export function CommentThread({
 
   // Check async permissions when thread is selected
   useEffect(() => {
-    let isMounted = true;
+    let isPromiseCurrent = true;
 
     if (!isSelected) {
       setCanAssign(false);
@@ -112,13 +112,13 @@ export function CommentThread({
         ? await canUserAssignThreadCallback(threadId)
         : false;
 
-      if (!isMounted) return;
+      if (!isPromiseCurrent) return;
 
       const resolveResult = canUserResolveThreadCallback
         ? await canUserResolveThreadCallback(threadId)
         : false;
 
-      if (!isMounted) return;
+      if (!isPromiseCurrent) return;
 
       setCanAssign(assignResult);
       setCanResolve(resolveResult);
@@ -126,7 +126,7 @@ export function CommentThread({
 
     checkPermissions();
     return () => {
-      isMounted = false;
+      isPromiseCurrent = false;
     };
   }, [isSelected, threadId, canUserAssignThreadCallback, canUserResolveThreadCallback]);
 
@@ -134,7 +134,7 @@ export function CommentThread({
 
   // Check edit/delete permissions for all comments when thread is selected or comments change
   useEffect(() => {
-    let isMounted = true;
+    let isPromiseCurrent = true;
 
     if (!isSelected || !canUserEditOrDeleteCommentCallback) {
       setCommentEditDeletePermissions(new Map());
@@ -147,20 +147,20 @@ export function CommentThread({
       await Promise.all(
         activeComments.map(async (comment) => {
           const canEdit = await canUserEditOrDeleteCommentCallback(comment.id);
-          if (isMounted) {
+          if (isPromiseCurrent) {
             permissionsMap.set(comment.id, canEdit);
           }
         }),
       );
 
-      if (isMounted) {
+      if (isPromiseCurrent) {
         setCommentEditDeletePermissions(permissionsMap);
       }
     };
 
     checkCommentPermissions();
     return () => {
-      isMounted = false;
+      isPromiseCurrent = false;
     };
   }, [isSelected, activeComments, canUserEditOrDeleteCommentCallback]);
 
