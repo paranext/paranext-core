@@ -216,8 +216,6 @@ export default function FootnoteEditor({
 
   const handleUsjChange = () => {
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
-    console.log(editorRef.current?.getUsj());
-    console.log(noteOp);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const currentNoteType = noteOp?.insert?.note?.style;
       const innerNoteOps = noteOp.insert.note?.contents?.ops;
@@ -242,7 +240,6 @@ export default function FootnoteEditor({
             // so have to cast it here
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             const nodeType = (op.attributes?.char as Record<string, string>).style;
-            console.log(nodeType);
             return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
           }),
         );
