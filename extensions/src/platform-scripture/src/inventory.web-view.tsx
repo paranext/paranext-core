@@ -4,8 +4,8 @@ import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { INVENTORY_STRING_KEYS, Scope } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
-import type { InventoryInputRange } from 'platform-scripture';
-import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import type { InventoryInputRange, ItemizedInventoryItem } from 'platform-scripture';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
 import { MarkerInventory } from './checks/inventories/marker-inventory.component';
 import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
@@ -27,19 +27,19 @@ type InventoryItemOccurrence = {
 const INVENTORY_TYPE_CONFIG = {
   'platformScripture.characterInventory': {
     component: CharacterInventory,
-    checkId: 'Character' as CheckType,
+    checkId: 'Character' satisfies CheckType,
   },
   'platformScripture.repeatedWordsInventory': {
     component: RepeatedWordsInventory,
-    checkId: 'RepeatedWord' as CheckType,
+    checkId: 'RepeatedWord' satisfies CheckType,
   },
   'platformScripture.markersInventory': {
     component: MarkerInventory,
-    checkId: 'Marker' as CheckType,
+    checkId: 'Marker' satisfies CheckType,
   },
   'platformScripture.punctuationInventory': {
     component: PunctuationInventory,
-    checkId: 'Punctuation' as CheckType,
+    checkId: 'Punctuation' satisfies CheckType,
   },
 } as const;
 
@@ -98,11 +98,79 @@ function createInventoryInputRange(
  * @param occurrences - Raw occurrence data from the inventory service
  * @returns Formatted occurrences with reference and text fields
  */
-function formatOccurrencesForDisplay(occurrences: any[]): InventoryItemOccurrence[] {
+function formatOccurrencesForDisplay(
+  occurrences: ItemizedInventoryItem[],
+): InventoryItemOccurrence[] {
   return occurrences.map((occurrence) => ({
     reference: occurrence.location.verseRef,
     text: occurrence.sourceText,
   }));
+}
+
+/**
+ * Creates a stable inventory input range for the given verses reference, scope, and project
+ * identifier.
+ *
+ * @param versesRef - Current verses reference
+ * @param scope - Scope of analysis ('verse', 'chapter', or 'book')
+ * @param projectId - Project identifier
+ * @returns Formatted inventory input range and a stable verses reference for the given scope
+ */
+function useInventoryInputRange(
+  verseRef: SerializedVerseRef,
+  scope: Scope,
+  projectId: string | undefined,
+) {
+  const dependencies = useMemo(
+    () => ({
+      projectId,
+      scope,
+      book: verseRef.book,
+      chapterNum: verseRef.chapterNum,
+      verseNum: verseRef.verseNum,
+    }),
+    // Remove verseRef to avoid unnecessary re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      projectId,
+      scope,
+      verseRef.book,
+      // Only include chapterNum if relevant to the scope
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ...(scope === 'chapter' || scope === 'verse' ? [verseRef.chapterNum] : []),
+      // Only include verseNum if relevant to the scope
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ...(scope === 'verse' ? [verseRef.verseNum] : []),
+    ],
+  );
+
+  const inventoryInputRange = useMemo(() => {
+    return createInventoryInputRange(verseRef, scope, projectId ?? '');
+    // Defining custom dependencies above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dependencies]);
+
+  const stableVerseRefForScope = useMemo(() => {
+    switch (scope) {
+      case 'book':
+        return { book: verseRef.book, chapterNum: 1, verseNum: 1 };
+      case 'chapter':
+        return { book: verseRef.book, chapterNum: verseRef.chapterNum, verseNum: 1 };
+      case 'verse':
+        return verseRef;
+      default:
+        return verseRef;
+    }
+    // Defining custom dependencies above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dependencies]);
+
+  return { inventoryInputRange, stableVerseRefForScope };
+}
+
+/** Checks if the given type is a valid inventory web view type. */
+function isValidInventoryWebViewType(type: string): type is InventoryWebViewType {
+  return type in INVENTORY_TYPE_CONFIG;
 }
 
 /**
@@ -123,59 +191,40 @@ global.webViewComponent = function InventoryWebView({
   const [scope, setScope] = useState<Scope>('chapter');
 
   // Validate and get inventory configuration
-  if (!webViewType || !(webViewType in INVENTORY_TYPE_CONFIG)) {
+  if (!webViewType || !isValidInventoryWebViewType(webViewType)) {
     throw new Error(`"${webViewType}" is not a valid inventory type`);
   }
 
-  const config = INVENTORY_TYPE_CONFIG[webViewType as InventoryWebViewType];
+  const config = INVENTORY_TYPE_CONFIG[webViewType];
   const { component: InventoryComponent, checkId } = config;
 
-  const inventoryInputRange = useMemo(
-    () => createInventoryInputRange(verseRef, scope, projectId ?? ''),
-    [projectId, scope, verseRef.book, verseRef.chapterNum, verseRef.verseNum],
+  const { inventoryInputRange, stableVerseRefForScope } = useInventoryInputRange(
+    verseRef,
+    scope,
+    projectId,
   );
 
   const {
     inventoryItems,
     isLoading: areInventoryItemsLoading,
-    error: inventoryError,
     getItemOccurrences,
     cleanup,
   } = useInventory(checkId, inventoryInputRange, projectId);
 
-  // Handle inventory loading errors
-  useEffect(() => {
-    if (inventoryError) {
-      logger.error(`Inventory loading failed: ${inventoryError}`);
-    }
-  }, [inventoryError]);
-
-  const cleanupRef = useRef<(() => Promise<void>) | undefined>();
-
-  useEffect(() => {
-    cleanupRef.current = cleanup;
-  }, [cleanup]);
-
-  // Cleanup only on unmount to prevent race conditions
   useEffect(() => {
     return () => {
-      if (cleanupRef.current) {
+      if (cleanup) {
         // Don't await - React cleanup must be synchronous
-        cleanupRef.current().catch((error) => {
+        cleanup().catch((error) => {
           logger.warn('Error during inventory cleanup:', error);
         });
       }
     };
-  }, []); // Empty deps array - only cleanup on unmount
+  }, [cleanup]);
 
   const [inventoryItemsWithOccurrences, setInventoryItemsWithOccurrences] = useState<{
     [itemKey: string]: InventoryItemOccurrence[];
   }>({});
-
-  // Reset loaded occurrences when inventory data changes (scope/verse changes)
-  useEffect(() => {
-    setInventoryItemsWithOccurrences({});
-  }, [inventoryItems]);
 
   const inventoryDataProvider = useDataProvider('platformScripture.inventoryDataProvider');
   const [approvedItems, setApprovedItems] = useState<string[]>([]);
@@ -274,31 +323,33 @@ global.webViewComponent = function InventoryWebView({
   /** Transform inventory items to include loaded occurrence data for the UI components. */
   const enhancedInventoryItems = useMemo(
     () =>
-      inventoryItems.map((item) => {
-        const itemKey = item.key as string;
+      inventoryItems
+        .filter((item) => item.count > 0) // Filter out items with zero counts
+        .map((item) => {
+          const itemKey = item.key;
 
-        // Calculate status based on approved/unapproved arrays
-        let status: 'approved' | 'unapproved' | 'unknown' = 'unknown';
-        if (approvedItems.includes(itemKey)) {
-          status = 'approved';
-        } else if (unapprovedItems.includes(itemKey)) {
-          status = 'unapproved';
-        }
+          // Calculate status based on approved/unapproved arrays
+          let status: 'approved' | 'unapproved' | 'unknown' = 'unknown';
+          if (approvedItems.includes(itemKey)) {
+            status = 'approved';
+          } else if (unapprovedItems.includes(itemKey)) {
+            status = 'unapproved';
+          }
 
-        return {
-          key: item.key,
-          count: item.count,
-          status,
-          occurrences: inventoryItemsWithOccurrences[itemKey] || [],
-        };
-      }),
+          return {
+            key: item.key,
+            count: item.count,
+            status,
+            occurrences: inventoryItemsWithOccurrences[itemKey] || [],
+          };
+        }),
     [inventoryItems, inventoryItemsWithOccurrences, approvedItems, unapprovedItems],
   );
 
   return (
     <InventoryComponent
       inventoryItems={enhancedInventoryItems}
-      verseRef={verseRef}
+      verseRef={stableVerseRefForScope}
       setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
       approvedItems={approvedItems}
