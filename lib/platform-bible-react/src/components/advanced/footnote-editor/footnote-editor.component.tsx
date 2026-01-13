@@ -159,11 +159,9 @@ export default function FootnoteEditor({
       setCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
-      // Sets the caller to empty in the footnote editor so that it doesn't show
-      if (noteOp.insert.note) noteOp.insert.note.caller = '';
       // Applies timeout for the apply update operation to avoid flush sync warning
       timeout = setTimeout(() => {
-        editorRef.current?.applyUpdate([{ delete: 1 }, noteOp]);
+        editorRef.current?.applyUpdate([noteOp]);
       }, 0);
     }
 
@@ -218,6 +216,7 @@ export default function FootnoteEditor({
 
   const handleUsjChange = () => {
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
+    console.log(editorRef.current?.getUsj());
     console.log(noteOp);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const currentNoteType = noteOp?.insert?.note?.style;
