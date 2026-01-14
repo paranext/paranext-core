@@ -72,7 +72,10 @@ declare module 'platform-scripture-editor' {
    * The action that triggered an annotation interaction.
    *
    * - `'clicked'` - The user clicked on the annotation
-   * - `TypedMarkRemovalCause` - The annotation was removed for the specified reason
+   * - {@link TypedMarkRemovalCause} - The annotation was removed for the specified reason
+   *
+   *   - `removed` - when the annotation is removed programmatically (manual remove action)
+   *   - `destroyed` - when the text the annotation was on is completely deleted
    */
   export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
 

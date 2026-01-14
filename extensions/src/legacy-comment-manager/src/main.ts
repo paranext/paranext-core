@@ -214,7 +214,7 @@ async function extractCommentScriptureText(
     };
   } catch (error) {
     logger.error(`Error extracting scripture text range: ${getErrorMessage(error)}`);
-    return undefined;
+    throw error;
   }
 }
 
