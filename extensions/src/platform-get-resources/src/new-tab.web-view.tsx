@@ -113,7 +113,6 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
       localProjectsInfo={localProjectsInfo}
       isLoadingLocalProjects={isLoadingLocalProjects}
       onOpenProject={(projectId, isEditable) => openResource(projectId, isEditable)}
-      showGetResourcesButton={false}
       headerContent={
         <>
           <Plus size={36} />

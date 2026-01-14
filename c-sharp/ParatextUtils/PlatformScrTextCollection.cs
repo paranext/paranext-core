@@ -1,4 +1,3 @@
-using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paratext.Data;
 using Paratext.Data.Users;
 using SIL.WritingSystems;
@@ -15,20 +14,12 @@ public class PlatformScrTextCollection : ScrTextCollection
 
     protected override ScrText CreateResourceProject(ProjectName name)
     {
-        return new ResourceScrText(
-            name,
-            RegistrationInfo.DefaultUser,
-            new DblResourcePasswordProvider()
-        );
+        return new ResourceScrText(name, RegistrationInfo.DefaultUser, null);
     }
 
     protected override ScrText CreateXmlResourceProject(ProjectName name)
     {
-        return new XmlResourceScrText(
-            name,
-            RegistrationInfo.DefaultUser,
-            new DblResourcePasswordProvider()
-        );
+        return new XmlResourceScrText(name, RegistrationInfo.DefaultUser, null);
     }
 
     protected override UnsupportedReason MigrateProjectIfNeeded(ScrText scrText)

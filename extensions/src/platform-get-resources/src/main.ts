@@ -7,35 +7,16 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import { isString } from 'platform-bible-utils';
-import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 
-const GET_RESOURCES_WEB_VIEW_TYPE = 'platformGetResources.getResources';
 const HOME_WEB_VIEW_TYPE = 'platformGetResources.home';
 const NEW_TAB_WEB_VIEW_TYPE = 'platformGetResources.newTab';
 
-const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
 const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
 
 let manageExtensions: ManageExtensions;
-
-const getResourcesWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== GET_RESOURCES_WEB_VIEW_TYPE)
-      throw new Error(
-        `${GET_RESOURCES_WEB_VIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
-
-    return {
-      title: '%resources_dialog_title%',
-      ...savedWebView,
-      content: getResourcesDialogReact,
-      styles: tailwindStyles,
-    };
-  },
-};
 
 const homeWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -86,11 +67,6 @@ export async function activate(context: ExecutionActivationContext) {
 
   // #endregion
 
-  const getResourcesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    GET_RESOURCES_WEB_VIEW_TYPE,
-    getResourcesWebViewProvider,
-  );
-
   const homeWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     HOME_WEB_VIEW_TYPE,
     homeWebViewProvider,
@@ -99,21 +75,6 @@ export async function activate(context: ExecutionActivationContext) {
   const newTabWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     NEW_TAB_WEB_VIEW_TYPE,
     newTabWebViewProvider,
-  );
-
-  const openGetResourcesWebViewCommandPromise = papi.commands.registerCommand(
-    'platformGetResources.openGetResources',
-    async () => {
-      return papi.webViews.openWebView(
-        GET_RESOURCES_WEB_VIEW_TYPE,
-        {
-          type: 'float',
-          floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
-        },
-        // Focus existing one if one exists
-        { existingId: '?' },
-      );
-    },
   );
 
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
@@ -182,10 +143,8 @@ export async function activate(context: ExecutionActivationContext) {
 
   context.registrations.add(
     await excludePdpFactoryIdsInHomeValidatorPromise,
-    await getResourcesWebViewProviderPromise,
     await homeWebViewProviderPromise,
     await newTabWebViewProviderPromise,
-    await openGetResourcesWebViewCommandPromise,
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
     await isSendReceiveAvailableCommandPromise,
