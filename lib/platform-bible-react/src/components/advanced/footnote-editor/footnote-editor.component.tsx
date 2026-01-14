@@ -52,7 +52,7 @@ export interface FootnoteEditorProps {
  *
  * @param node The node to be converted
  */
-function footnoteNodeToCrossReferenceNode(node: DeltaOp) {
+function footnoteToCrossReferenceOp(node: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -77,7 +77,7 @@ function footnoteNodeToCrossReferenceNode(node: DeltaOp) {
  *
  * @param node THe node to be converted
  */
-function crossReferenceNodeToFootnoteNode(node: DeltaOp) {
+function crossReferenceToFootnoteOp(node: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -161,7 +161,7 @@ export default function FootnoteEditor({
       setNoteType(noteOp.insert.note?.style ?? 'f');
       // Applies timeout for the apply update operation to avoid flush sync warning
       timeout = setTimeout(() => {
-        editorRef.current?.applyUpdate([noteOp]);
+        editorRef.current?.applyUpdate([{ delete: 1 }, noteOp]);
       }, 0);
     }
 
@@ -205,9 +205,9 @@ export default function FootnoteEditor({
       // If switching between cross-reference and footnote/endnote, need to switch the nodes inside
       const innerNoteOps = currentNoteOp.insert.note?.contents?.ops;
       if (noteType !== 'x' && value === 'x') {
-        innerNoteOps?.forEach((op) => footnoteNodeToCrossReferenceNode(op));
+        innerNoteOps?.forEach((op) => footnoteToCrossReferenceOp(op));
       } else if (noteType === 'x' && value !== 'x') {
-        innerNoteOps?.forEach((op) => crossReferenceNodeToFootnoteNode(op));
+        innerNoteOps?.forEach((op) => crossReferenceToFootnoteOp(op));
       }
 
       editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOp]);
@@ -217,7 +217,7 @@ export default function FootnoteEditor({
   const handleUsjChange = () => {
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
-      const currentNoteType = noteOp?.insert?.note?.style;
+      const currentNoteType = noteOp.insert.note?.style;
       const innerNoteOps = noteOp.insert.note?.contents?.ops;
       if (!currentNoteType) setIsTypeSwitchable(false);
 
