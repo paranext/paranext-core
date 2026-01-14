@@ -94,8 +94,11 @@ declare module 'platform-scripture-editor' {
   /** Tell the editor to set an annotation on the specified range */
   export type EditorMessageSetAnnotation = {
     method: 'setAnnotation';
-    /** Goes to this Scripture Reference before setting the annotation */
-    scrRef: SerializedVerseRef;
+    /**
+     * Target verse ref for the annotation. If this reference is not displayed in the editor, the
+     * annotation will not be added
+     */
+    verseRef: SerializedVerseRef;
     /** The annotation range in editor-usable format */
     annotationRange: {
       start: { jsonPath: string; offset: number };
@@ -120,12 +123,12 @@ declare module 'platform-scripture-editor' {
   };
 
   /** Tell the editor to run a command on an annotation */
-  export type EditorMessageRunAnnotationCommand = {
-    method: 'runAnnotationCommand';
+  export type EditorMessageRunAnnotationAction = {
+    method: 'runAnnotationAction';
     /** The unique identifier of the annotation */
     annotationId: string;
-    /** The command to execute */
-    interactionCommand: CommandNames;
+    /** The action to run on the annotation */
+    action: AnnotationAction;
   };
 
   /** Messages sent to the editor web view */
@@ -138,7 +141,7 @@ declare module 'platform-scripture-editor' {
     | EditorMessageInsertTextualNoteAtSelection
     | EditorMessageInsertCommentAtSelection
     | EditorMessageSetAnnotation
-    | EditorMessageRunAnnotationCommand;
+    | EditorMessageRunAnnotationAction;
 
   // #endregion editor WebViewController messages
 
@@ -328,7 +331,8 @@ declare module 'platform-scripture-editor' {
      * Set an annotation on the specified Scripture range. The annotation will be highlighted in the
      * editor.
      *
-     * @param range The Scripture range to annotate
+     * @param range The Scripture range to annotate. If this reference is not displayed in the
+     *   editor, the annotation will not be added
      * @param annotationType The type of annotation (e.g., 'translator-comment', 'spelling')
      * @param annotationId Unique identifier for this annotation
      * @param interactionCommand Optional command to execute when the annotation is interacted with.
@@ -355,16 +359,12 @@ declare module 'platform-scripture-editor' {
      */
     focusComment(threadId: string): Promise<void>;
     /**
-     * Manually run a command on an annotation. The command will be called with the following
-     * parameters:
+     * Manually run an action on an annotation.
      *
-     * - `annotationId: string` - The unique identifier of the annotation
-     * - `action: 'clicked'` - The action is always 'clicked' for manual invocations
-     *
-     * @param annotationId The ID of the annotation to run the command on
-     * @param interactionCommand The command to execute
+     * @param annotationId The ID of the annotation to run the action on
+     * @param action The action to run on the annotation
      */
-    runAnnotationCommand(annotationId: string, interactionCommand: CommandNames): Promise<void>;
+    runAnnotationAction(annotationId: string, action: AnnotationAction): Promise<void>;
   }>;
 
   // #endregion editor WebView types

@@ -154,7 +154,7 @@ function calculateUsjLocationProperties(
 /** Result of converting a ScriptureRange to an editor-usable range */
 interface ConvertedEditorRange {
   /** The scripture reference for the start of the range */
-  scrRef: SerializedVerseRef;
+  verseRef: SerializedVerseRef;
   /** The editor-usable range with jsonPath and offset */
   editorRange: {
     start: { jsonPath: string; offset: number };
@@ -278,7 +278,7 @@ async function convertScriptureRangeToEditorRange(
     endContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(endJsonPath);
 
   return {
-    scrRef: startVerseRef,
+    verseRef: startVerseRef,
     editorRange: {
       start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
       end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
@@ -622,14 +622,14 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          const { scrRef, editorRange } = await convertScriptureRangeToEditorRange(
+          const { verseRef, editorRange } = await convertScriptureRangeToEditorRange(
             range,
             currentWebViewDefinition.projectId,
           );
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
-            scrRef,
+            scrRef: verseRef,
             range: editorRange,
           };
           await papi.webViewProviders.postMessageToWebView(
@@ -802,14 +802,14 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          const { scrRef, editorRange } = await convertScriptureRangeToEditorRange(
+          const { verseRef, editorRange } = await convertScriptureRangeToEditorRange(
             range,
             currentWebViewDefinition.projectId,
           );
 
           const message: EditorWebViewMessage = {
             method: 'setAnnotation',
-            scrRef,
+            verseRef,
             annotationRange: editorRange,
             annotationType,
             annotationId,
@@ -840,16 +840,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw e;
         }
       },
-      async runAnnotationCommand(annotationId, interactionCommand) {
+      async runAnnotationAction(annotationId, action) {
         try {
           logger.debug(
-            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to runAnnotationCommand ${serialize({ annotationId, interactionCommand })}`,
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to runAnnotationAction ${serialize({ annotationId, action })}`,
           );
 
           const message: EditorWebViewMessage = {
-            method: 'runAnnotationCommand',
+            method: 'runAnnotationAction',
             annotationId,
-            interactionCommand,
+            action,
           };
           await papi.webViewProviders.postMessageToWebView(
             currentWebViewDefinition.id,
@@ -857,7 +857,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
             message,
           );
         } catch (e) {
-          const errorMessage = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running runAnnotationCommand! ${getErrorMessage(e)}`;
+          const errorMessage = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running runAnnotationAction! ${getErrorMessage(e)}`;
           logger.warn(errorMessage);
           throw new Error(errorMessage);
         }
