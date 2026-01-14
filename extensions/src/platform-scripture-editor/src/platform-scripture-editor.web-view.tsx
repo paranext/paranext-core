@@ -47,8 +47,10 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatReplacementString,
+  formatScrRef,
   getErrorMessage,
   isPlatformError,
+  isString,
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -70,7 +72,7 @@ import {
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
+import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   deepEqualAcrossIframes,
@@ -143,16 +145,18 @@ async function extractScriptureTextFromSelection(
   if (!startDocLocation || !endDocLocation) return undefined;
 
   try {
-    return await papi.commands.sendCommand(
+    const extractedText = await papi.commands.sendCommand(
       'legacyCommentManager.extractCommentScriptureText',
       startDocLocation,
       endDocLocation,
       editorUsj,
       bookId,
     );
+
+    return extractedText;
   } catch (error) {
     logger.warn(`Error extracting scripture text: ${getErrorMessage(error)}`);
-    return undefined;
+    throw error;
   }
 }
 
@@ -239,8 +243,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
   const annotationInfoByIdRef = useRef<
-    Map<string, Pick<EditorMessageSetAnnotation, 'annotationType' | 'interactionCommand'>>
+    Map<
+      string,
+      Pick<EditorMessageSetAnnotation, 'annotationType' | 'interactionCommand' | 'annotationRange'>
+    >
   >(new Map());
+
+  /**
+   * Set of annotation IDs that are currently being set - used to prevent removing annotations while
+   * they are being updated
+   */
+  const annotationIdsBeingSet = useRef<Set<string>>(new Set());
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -487,14 +500,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
           // Validate that the selection doesn't contain markers
           const editorUsj = editorRef.current?.getUsj();
-          if (editorUsj) {
-            const extractionResult = await extractScriptureTextFromSelection(
-              selection,
-              editorUsj,
-              scrRef.book,
+          const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+          if (editorUsjCorrected) {
+            const usjRW = new UsjReaderWriter(editorUsjCorrected, {
+              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+            });
+
+            const startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+              selection.start.jsonPath,
+            );
+            const endNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+              selection.end.jsonPath,
             );
 
-            if (extractionResult?.selectedText?.includes('\\')) {
+            // Make sure the selection is in a string and doesn't span multiple USJ nodes
+            const selectionHasMarker =
+              !isString(startNodeAndDocumentLocation?.node) ||
+              startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
+
+            if (selectionHasMarker) {
               papi.notifications.send({
                 message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
                 severity: 'warning',
@@ -543,18 +567,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'setAnnotation': {
           const {
-            verseRef: targetScrRef,
+            verseRef: targetVerseRef,
             annotationRange,
             annotationType,
             annotationId,
             interactionCommand,
           } = editorMessage;
           logger.debug(
-            `setAnnotation targetScrRef ${serialize(targetScrRef)} ${serialize(annotationRange)} type=${annotationType} id=${annotationId} interactionCommand=${String(interactionCommand)}`,
+            `setAnnotation targetScrRef ${serialize(targetVerseRef)} ${serialize(annotationRange)} type=${annotationType} id=${annotationId} interactionCommand=${String(interactionCommand)}`,
           );
 
           // If we're on a different book or chapter, don't set the annotation
-          if (scrRef.book !== targetScrRef.book || scrRef.chapterNum !== targetScrRef.chapterNum) {
+          if (
+            scrRef.book !== targetVerseRef.book ||
+            scrRef.chapterNum !== targetVerseRef.chapterNum
+          ) {
             break;
           }
 
@@ -585,6 +612,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             id: string,
             cause: TypedMarkRemovalCause,
           ) => {
+            // If this annotation is currently being set (when it is being updated), don't remove it
+            if (annotationIdsBeingSet.current.has(id)) {
+              return;
+            }
+
             // When the annotation is removed, remove it from our map
             annotationInfoByIdRef.current.delete(id);
 
@@ -608,15 +640,28 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           annotationInfoByIdRef.current.set(annotationId, {
             annotationType,
             interactionCommand,
+            annotationRange: {
+              start: { ...annotationRange.start },
+              end: { ...annotationRange.end },
+            },
           });
 
-          editorRef.current?.setAnnotation(
-            annotationRange,
-            annotationType,
-            annotationId,
-            onClickAnnotation,
-            onRemoveAnnotation,
-          );
+          // Keeping track of annotations being set because setAnnotation on an existing annotation
+          // removes it (including calling `onRemoveAnnotation`) and adds it again
+          annotationIdsBeingSet.current.add(annotationId);
+
+          try {
+            editorRef.current?.setAnnotation(
+              annotationRange,
+              annotationType,
+              annotationId,
+              onClickAnnotation,
+              onRemoveAnnotation,
+            );
+          } finally {
+            annotationIdsBeingSet.current.delete(annotationId);
+          }
+
           break;
         }
         case 'runAnnotationAction': {
@@ -626,9 +671,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             const info = annotationInfoByIdRef.current.get(annotationId);
             if (!info) throw new Error(`No annotation info found for id ${annotationId}`);
 
-            const { annotationType, interactionCommand } = info;
+            const { annotationType, interactionCommand, annotationRange } = info;
             if (!interactionCommand)
               throw new Error(`No interactionCommand for annotation ${annotationId}`);
+
+            // If this is a click action, set the editor selection to the annotation's range so the
+            // user sees it when the command runs.
+            if (action === 'clicked') {
+              scrollToAnnotation(annotationId);
+              editorRef.current?.setSelection(annotationRange);
+            }
 
             // This type helps us enforce that the arguments match the parameters of interactionCommand
             const argumentsForCommand: Parameters<AnnotationActionHandler> = [
@@ -1092,7 +1144,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         } else {
           const extractionResult = await extractScriptureTextFromSelection(
             capturedSelection,
-            editorUsj,
+            correctEditorUsjVersion(editorUsj),
             scrRef.book,
           );
 
@@ -1114,7 +1166,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           projectId,
         );
 
-        const verseRefString = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}`;
+        const verseRefString = formatScrRef(scrRef);
 
         const newCommentId = await legacyCommentManagerPdp.createComment({
           contents,
