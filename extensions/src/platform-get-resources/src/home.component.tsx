@@ -38,7 +38,6 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_get%',
   '%resources_getStarted%',
   '%resources_getStartedDescription%',
-  '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
   '%resources_noProjects%',
@@ -92,8 +91,6 @@ export type HomeProps = {
    * projects.
    */
   uiLocales?: Intl.LocalesArgument;
-  /** Callback function to open the Get Resources dialog. */
-  onOpenGetResources?: () => void;
   /**
    * Callback function to open a project.
    *
@@ -109,8 +106,6 @@ export type HomeProps = {
   onSendReceiveProject?: (projectId: string) => void;
   /** Callback function to open the get started website of platform. */
   onGetStarted?: () => void;
-  /** Whether to show the Get Resources button. */
-  showGetResourcesButton?: boolean;
   /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
   /** Whether loading local projects is in progress. */
@@ -137,11 +132,9 @@ export type HomeProps = {
  * @param {localizedStringsWithLoadingState} - Array of [Object with localized strings for the
  *   component, isLoading].
  * @param {uiLocales} - Locales for formatting dates and times.
- * @param {onOpenGetResources} - Callback function to open the Get Resources dialog.
  * @param {onOpenProject} - Callback function to open a project.
  * @param {onSendReceiveProject} - Callback function to send/receive a project.
  * @param {onGetStarted} - Callback function to get started with the platform.
- * @param {showGetResourcesButton} - Whether to show the Get Resources button.
  * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
  * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
  * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
@@ -157,11 +150,9 @@ export type HomeProps = {
 export function Home({
   localizedStringsWithLoadingState = [{}, false],
   uiLocales = [],
-  onOpenGetResources = () => {},
   onOpenProject = () => {},
   onSendReceiveProject = () => {},
   onGetStarted = () => {},
-  showGetResourcesButton = true,
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
   isLoadingRemoteProjects = false,
@@ -183,7 +174,6 @@ export function Home({
   const getText: string = getLocalizedString('%resources_get%');
   const getStartedText: string = getLocalizedString('%resources_getStarted%');
   const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
-  const getResourcesText: string = getLocalizedString('%resources_getResources%');
   const itemsText: string = isLocalizedStringsLoading
     ? ''
     : getLocalizedString('%resources_items%');
@@ -363,12 +353,7 @@ export function Home({
 
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-      <CardHeader
-        className={cn(
-          'tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-pb-0',
-          { 'max-[300px]:!tw-pb-2': showGetResourcesButton },
-        )}
-      >
+      <CardHeader className="tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-pb-0">
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
           <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
             <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden max-[300px]:!tw-hidden">
@@ -376,13 +361,6 @@ export function Home({
             </div>
             <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
-          {showGetResourcesButton && (
-            <div className="tw-self-end">
-              <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
-                {`+ ${getResourcesText}`}
-              </Button>
-            </div>
-          )}
         </div>
       </CardHeader>
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
@@ -398,13 +376,6 @@ export function Home({
                 <Label className="tw-text-muted-foreground tw-font-normal">
                   {noProjectsInstructionText}
                 </Label>
-
-                {showGetResourcesButton && (
-                  <Button
-                    onClick={onOpenGetResources}
-                    className="tw-mt-4"
-                  >{`+ ${getResourcesText}`}</Button>
-                )}
               </div>
             ) : (
               <div className="tw-flex-grow tw-h-full">
@@ -414,25 +385,15 @@ export function Home({
                     <Label className="tw-text-muted-foreground tw-font-normal">
                       {`${searchedForText} "${textFilter}".`}
                     </Label>
-                    <div className="tw-flex tw-gap-1  tw-mt-4">
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setTextFilter('');
-                        }}
-                      >
-                        {clearSearchText}
-                      </Button>
-                      {showGetResourcesButton && (
-                        <Button
-                          onClick={onOpenGetResources}
-                          variant="ghost"
-                          className="tw-bg-muted"
-                        >
-                          {`+ ${getResourcesText}`}
-                        </Button>
-                      )}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      className="tw-mt-4"
+                      onClick={() => {
+                        setTextFilter('');
+                      }}
+                    >
+                      {clearSearchText}
+                    </Button>
                   </div>
                 ) : (
                   <Table stickyHeader>

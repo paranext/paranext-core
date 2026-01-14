@@ -2,7 +2,6 @@ using System.Diagnostics;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
-using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -60,13 +59,11 @@ public static class Program
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
-            var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
-                dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync()
             );
 
