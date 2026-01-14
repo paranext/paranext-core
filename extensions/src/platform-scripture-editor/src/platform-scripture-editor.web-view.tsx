@@ -58,6 +58,7 @@ import {
 import {
   AnnotationActionHandler,
   EditorDecorations,
+  EditorMessageSetAnnotation,
   EditorWebViewMessage,
   ScriptureEditorViewType,
 } from 'platform-scripture-editor';
@@ -235,6 +236,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * selection info when saving the comment.
    */
   const pendingCommentAnnotationRange = useRef<AnnotationRange | undefined>(undefined);
+
+  /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
+  const annotationInfoByIdRef = useRef<
+    Map<string, Pick<EditorMessageSetAnnotation, 'annotationType' | 'interactionCommand'>>
+  >(new Map());
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -537,7 +543,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'setAnnotation': {
           const {
-            scrRef: targetScrRef,
+            verseRef: targetScrRef,
             annotationRange,
             annotationType,
             annotationId,
@@ -574,24 +580,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               }
             : undefined;
 
-          const onRemoveAnnotation: TypedMarkOnRemove | undefined = interactionCommand
-            ? async (type: string, id: string, cause: TypedMarkRemovalCause) => {
-                argumentsForCommand = [type, id, cause];
-                try {
-                  await papi.commands.sendCommand(
-                    interactionCommand,
-                    // We are dictating the parameters and the command is responsible for implementing
-                    // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    ...(argumentsForCommand as unknown as Parameters<
-                      CommandHandlers[CommandNames]
-                    >),
-                  );
-                } catch (e) {
-                  logger.warn(`Error sending annotation removal command: ${getErrorMessage(e)}`);
-                }
+          const onRemoveAnnotation: TypedMarkOnRemove | undefined = async (
+            type: string,
+            id: string,
+            cause: TypedMarkRemovalCause,
+          ) => {
+            // When the annotation is removed, remove it from our map
+            annotationInfoByIdRef.current.delete(id);
+
+            if (interactionCommand) {
+              argumentsForCommand = [type, id, cause];
+              try {
+                await papi.commands.sendCommand(
+                  interactionCommand,
+                  // We are dictating the parameters and the command is responsible for implementing
+                  // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  ...(argumentsForCommand as unknown as Parameters<CommandHandlers[CommandNames]>),
+                );
+              } catch (e) {
+                logger.warn(`Error sending annotation removal command: ${getErrorMessage(e)}`);
               }
-            : undefined;
+            }
+          };
+
+          // Keep track of this annotation so messages from the controller can act on it later
+          annotationInfoByIdRef.current.set(annotationId, {
+            annotationType,
+            interactionCommand,
+          });
 
           editorRef.current?.setAnnotation(
             annotationRange,
@@ -602,25 +619,36 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           );
           break;
         }
-        case 'runAnnotationCommand': {
-          const { annotationId, interactionCommand } = editorMessage;
+        case 'runAnnotationAction': {
+          const { annotationId, action } = editorMessage;
 
-          (async () => {
-            try {
-              await papi.commands.sendCommand(
-                interactionCommand,
-                // We are dictating the parameters and the command is responsible for implementing
-                // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                ...([annotationId, 'clicked'] as unknown as Parameters<
-                  CommandHandlers[CommandNames]
-                >),
-              );
-            } catch (e) {
-              logger.warn(`Error running annotation command: ${getErrorMessage(e)}`);
-              throw e;
-            }
-          })();
+          try {
+            const info = annotationInfoByIdRef.current.get(annotationId);
+            if (!info) throw new Error(`No annotation info found for id ${annotationId}`);
+
+            const { annotationType, interactionCommand } = info;
+            if (!interactionCommand)
+              throw new Error(`No interactionCommand for annotation ${annotationId}`);
+
+            // This type helps us enforce that the arguments match the parameters of interactionCommand
+            const argumentsForCommand: Parameters<AnnotationActionHandler> = [
+              annotationType,
+              annotationId,
+              action,
+            ];
+
+            await papi.commands.sendCommand(
+              interactionCommand,
+              // We are dictating the parameters and the command is responsible for implementing
+              // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              ...(argumentsForCommand as unknown as Parameters<CommandHandlers[CommandNames]>),
+            );
+          } catch (e) {
+            logger.warn(
+              `Error running annotation action ${action} on annotation ${annotationId}: ${getErrorMessage(e)}`,
+            );
+          }
           break;
         }
         case 'changeFootnotesPaneLocation': {
