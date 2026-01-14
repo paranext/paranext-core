@@ -195,7 +195,9 @@ global.webViewComponent = function InventoryWebView({
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => Array.from(INVENTORY_STRING_KEYS), []),
+    useMemo(() => {
+      return Array.from(INVENTORY_STRING_KEYS);
+    }, []),
   );
   const [webViewType] = useWebViewState('webViewType', '');
   const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
