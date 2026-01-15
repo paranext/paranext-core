@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { isWithinRange } from './check-aggregator.utils';
 
 describe('isWithinRange', () => {
