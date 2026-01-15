@@ -9,7 +9,7 @@ env:
 
 on:
   push:
-    branches: [main, release-prep, hotfix-*]
+    branches: [main, release-prep, hotfix-*, ai/main]
   workflow_dispatch:
     inputs:
       debug_enabled:
