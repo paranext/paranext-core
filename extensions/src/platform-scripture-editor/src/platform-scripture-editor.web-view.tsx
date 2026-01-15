@@ -1117,9 +1117,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ? usjLocationToUsjDocumentLocation(capturedSelection.end)
           : undefined;
 
-        const newCommentId = await papi.commands.sendCommand(
-          'legacyCommentManager.createCommentUsj',
+        const commentsUsjPdp = await papi.projectDataProviders.get(
+          'legacyCommentManager.commentsUsj',
           projectId,
+        );
+
+        const newCommentId = await commentsUsjPdp.createComment(
           {
             contents,
             assignedUser,
