@@ -43,7 +43,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": ["src", "!**/*.test.{ts,tsx}"],
   "exclude": ["node_modules"],
   "ts-node": {
     // This allows us to use path aliases in ts-node

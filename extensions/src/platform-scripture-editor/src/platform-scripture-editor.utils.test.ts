@@ -53,6 +53,8 @@ function createMockPapi(usjChapter: object | undefined = SAMPLE_USJ_CHAPTER): Mo
   };
   const mockGet = vi.fn().mockResolvedValue(mockPdp);
 
+  // Mocking just the part of the PAPI that we need for these tests
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     projectDataProviders: {
       get: mockGet,
