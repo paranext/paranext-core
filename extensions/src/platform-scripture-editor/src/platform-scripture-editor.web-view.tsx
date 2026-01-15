@@ -220,19 +220,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
 
-  // These control the placement of editor popovers (footnote editor, comment editor) by setting the location of the anchor
+  // These control the placement of the footnote editor popover by setting the location of the anchor
+  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
   const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
-  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
   const editingNoteKey = useRef<string>();
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
 
-  /** Stores the current editor selection, updated on every selection change. */
-  const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
-
+  // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
+  const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
+  const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
+  const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
 
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
@@ -254,6 +255,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * they are being updated
    */
   const annotationIdsBeingSet = useRef<Set<string>>(new Set());
+
+  /** Stores the current editor selection, updated on every selection change. */
+  const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -550,15 +554,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             if (domSelection && domSelection.rangeCount > 0) {
               const range = domSelection.getRangeAt(0);
               const rect = range.getBoundingClientRect();
-              setNotePopoverAnchorX(rect.left);
-              setNotePopoverAnchorY(rect.bottom);
-              setNotePopoverAnchorHeight(0);
+              setCommentPopoverAnchorX(rect.left);
+              setCommentPopoverAnchorY(rect.bottom);
+              setCommentPopoverAnchorHeight(0);
             } else {
               // Fallback to center of editor viewport
               const rect = editorContainer.getBoundingClientRect();
-              setNotePopoverAnchorX(rect.left + rect.width / 2);
-              setNotePopoverAnchorY(rect.top + rect.height / 2);
-              setNotePopoverAnchorHeight(0);
+              setCommentPopoverAnchorX(rect.left + rect.width / 2);
+              setCommentPopoverAnchorY(rect.top + rect.height / 2);
+              setCommentPopoverAnchorHeight(0);
             }
           }
 
@@ -1362,9 +1366,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <PopoverAnchor
           className="tw-absolute"
           style={{
-            top: notePopoverAnchorY,
-            left: notePopoverAnchorX,
-            height: notePopoverAnchorHeight,
+            top: commentPopoverAnchorY,
+            left: commentPopoverAnchorX,
+            height: commentPopoverAnchorHeight,
             width: 0,
             pointerEvents: 'none',
           }}
