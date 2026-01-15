@@ -351,35 +351,14 @@ declare module 'legacy-comment-manager' {
   };
 
   // #endregion Comment list WebView types
-
-  // #region Scripture Text Extraction Types
-
-  /** Result of extracting scripture text snippets from a range */
-  export interface ExtractedCommentScriptureText {
-    /** Full verse text (max 500 chars) */
-    verse: string;
-    /** Text within the selection range (no limit) */
-    selectedText: string;
-    /** Text before selection in verse (max 50 chars, closest to range start) */
-    contextBefore: string;
-    /** Text after selection in verse (max 50 chars, closest to range end) */
-    contextAfter: string;
-    /**
-     * Index in USFM of the start of the selected text relative to the beginning of the specified
-     * verse (the backslash on the `\v` verse marker)
-     */
-    startPosition: number;
-  }
-
-  // #endregion
 }
 
 declare module 'papi-shared-types' {
-  import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+  import type { SerializedVerseRef } from '@sillsdev/scripture';
   import type {
     CommentListWebViewController,
     ILegacyCommentProjectDataProvider,
-    ExtractedCommentScriptureText,
+    NewLegacyComment,
     OpenCommentListWebViewOptions,
   } from 'legacy-comment-manager';
   import type { UsjDocumentLocation } from 'platform-bible-utils';
@@ -403,12 +382,23 @@ declare module 'papi-shared-types' {
       webViewId?: string | undefined,
       options?: OpenCommentListWebViewOptions,
     ) => Promise<string | undefined>;
-    'legacyCommentManager.extractCommentScriptureText': (
-      start: UsjDocumentLocation,
-      end: UsjDocumentLocation,
-      usjChapter: Usj,
-      bookId: string,
-    ) => Promise<ExtractedCommentScriptureText | undefined>;
+    /**
+     * Creates a new comment for the specified project and selected USJ range.
+     *
+     * @param projectId The ID of the project in which to create the comment
+     * @param comment The information for the new comment
+     * @param verseRef The verse reference for the selected text
+     * @param selectedTextStart The start location of the selected text in the USJ
+     * @param selectedTextEnd The end location of the selected text in the USJ
+     * @returns The ID of the new comment thread
+     */
+    'legacyCommentManager.createCommentUsj': (
+      projectId: string,
+      comment: NewLegacyComment,
+      verseRef: SerializedVerseRef,
+      start?: UsjDocumentLocation,
+      end?: UsjDocumentLocation,
+    ) => Promise<string>;
   }
 
   export interface WebViewControllers {

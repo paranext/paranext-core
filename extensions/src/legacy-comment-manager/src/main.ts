@@ -10,16 +10,18 @@ import type {
 } from '@papi/core';
 import type {
   CommentListWebViewController,
-  ExtractedCommentScriptureText,
+  NewLegacyComment,
   OpenCommentListWebViewOptions,
 } from 'legacy-comment-manager';
 import {
+  formatScrRef,
   getErrorMessage,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsfmVerseRefVerseLocation,
   UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
@@ -28,6 +30,25 @@ const commentListWebViewType = 'legacyCommentManager.commentList';
 
 /** Time in ms to wait for the comment list web view to load before scrolling to a thread */
 const COMMENT_LIST_LOAD_DELAY_MS = 500;
+
+/** Result of extracting scripture text snippets from a range */
+interface ExtractedCommentScriptureText {
+  /** Full verse text (max 500 chars) */
+  verse: string;
+  /** Text within the selection range (no limit) */
+  selectedText: string;
+  /** Text before selection in verse (max 50 chars, closest to range start) */
+  contextBefore: string;
+  /** Text after selection in verse (max 50 chars, closest to range end) */
+  contextAfter: string;
+  /**
+   * Index in USFM of the start of the selected text relative to the beginning of the specified
+   * verse (the backslash on the `\v` verse marker)
+   */
+  startPosition: number;
+}
+
+// #region Comment List WebView
 
 interface CommentListWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -110,6 +131,10 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
 }
 
 const commentListWebViewProvider: IWebViewProvider = new CommentListWebViewFactory();
+
+// #endregion Comment List WebView
+
+// #region Comment Scripture Text Extraction from USJ to USFM
 
 /**
  * Get the USFM text snippets for a comment and its context based on the selected text range in a
@@ -217,6 +242,87 @@ async function extractCommentScriptureText(
     throw error;
   }
 }
+
+/**
+ * Creates a new comment for the specified project and selected USJ range.
+ *
+ * @param projectId The ID of the project in which to create the comment
+ * @param comment The information for the new comment
+ * @param verseRef The verse reference for the selected text
+ * @param selectedTextStart The start location of the selected text in the USJ
+ * @param selectedTextEnd The end location of the selected text in the USJ
+ * @returns The ID of the new comment thread
+ */
+async function createCommentUsj(
+  projectId: string,
+  comment: NewLegacyComment,
+  verseRef: SerializedVerseRef,
+  selectedTextStart?: UsjDocumentLocation,
+  selectedTextEnd?: UsjDocumentLocation,
+): Promise<string> {
+  try {
+    let verse: string | undefined;
+    let selectedText: string | undefined;
+    let contextBefore: string | undefined;
+    let contextAfter: string | undefined;
+    let startPosition: number | undefined;
+
+    const usjPdp = await papi.projectDataProviders.get('platformScripture.USJ_Chapter', projectId);
+
+    const usjChapter = await usjPdp.getChapterUSJ(verseRef);
+
+    if (!usjChapter || !selectedTextStart || !selectedTextEnd || !verseRef) {
+      logger.warn(
+        `Cannot extract scripture text for comment ${JSON.stringify(comment)} at ${formatScrRef(
+          verseRef,
+        )}: USJ not available`,
+      );
+    } else {
+      const extraction = await extractCommentScriptureText(
+        selectedTextStart,
+        selectedTextEnd,
+        usjChapter,
+        verseRef.book,
+      );
+
+      if (!extraction) {
+        logger.warn(
+          `Cannot extract scripture text for comment ${JSON.stringify(comment)} at ${formatScrRef(
+            verseRef,
+          )}: Extraction failed`,
+        );
+      } else {
+        verse = extraction.verse;
+        selectedText = extraction.selectedText;
+        contextBefore = extraction.contextBefore;
+        contextAfter = extraction.contextAfter;
+        startPosition = extraction.startPosition;
+      }
+    }
+
+    const commentPDP = await papi.projectDataProviders.get(
+      'legacyCommentManager.comments',
+      projectId,
+    );
+
+    const newCommentId = await commentPDP.createComment({
+      ...comment,
+      verse,
+      verseRef: formatScrRef(verseRef),
+      selectedText,
+      contextBefore,
+      contextAfter,
+      startPosition,
+    });
+
+    return newCommentId;
+  } catch (error) {
+    logger.error(`Error in createCommentUsj: ${getErrorMessage(error)}`);
+    throw error;
+  }
+}
+
+// #endregion Comment Scripture Text Extraction from USJ to USFM
 
 /**
  * Open or focus the Comment List WebView for the project ID associated with the specified WebView
@@ -365,43 +471,24 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  const extractScriptureTextRangePromise = papi.commands.registerCommand(
-    'legacyCommentManager.extractCommentScriptureText',
-    extractCommentScriptureText,
+  const createCommentUsjPromise = papi.commands.registerCommand(
+    'legacyCommentManager.createCommentUsj',
+    createCommentUsj,
     {
       method: {
-        summary: 'Extract scripture text snippets from a range in a chapter',
+        summary: 'Creates a new comment for the specified project and selected USJ range.',
         params: [
+          { name: 'projectId', required: true, schema: { type: 'string' } },
           {
-            name: 'start',
+            name: 'comment',
             required: true,
-            summary: 'Start location of the range in USJ document space',
             schema: { type: 'object' },
           },
-          {
-            name: 'end',
-            required: true,
-            summary: 'End location of the range in USJ document space',
-            schema: { type: 'object' },
-          },
-          {
-            name: 'usjChapter',
-            required: true,
-            summary: 'USJ document containing the chapter to extract text from',
-            schema: { type: 'object' },
-          },
-          {
-            name: 'bookId',
-            required: true,
-            summary: 'Book ID (e.g., "GEN") for the chapter being processed',
-            schema: { type: 'string' },
-          },
+          { name: 'verseRef', required: false, schema: { type: 'object' } },
+          { name: 'start', required: false, schema: { type: 'object' } },
+          { name: 'end', required: false, schema: { type: 'object' } },
         ],
-        result: {
-          name: 'return value',
-          summary: 'Extracted scripture text snippets or error object',
-          schema: { type: 'object' },
-        },
+        result: { name: 'return value', summary: 'New thread ID', schema: { type: 'string' } },
       },
     },
   );
@@ -409,7 +496,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   context.registrations.add(
     await commentListWebViewProviderPromise,
     await openCommentListPromise,
-    await extractScriptureTextRangePromise,
+    await createCommentUsjPromise,
     webViewUpdateUnsub,
   );
 

@@ -25,7 +25,6 @@ import {
   useProjectSetting,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import type { ExtractedCommentScriptureText } from 'legacy-comment-manager';
 import type { CommandHandlers, CommandNames } from 'papi-shared-types';
 import {
   Alert,
@@ -47,7 +46,6 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatReplacementString,
-  formatScrRef,
   getErrorMessage,
   isPlatformError,
   isString,
@@ -134,31 +132,7 @@ function usjLocationToUsjDocumentLocation(
  * @param bookId The book ID (e.g., "GEN")
  * @returns The extracted scripture text or undefined if extraction failed
  */
-async function extractScriptureTextFromSelection(
-  selection: SelectionRange,
-  editorUsj: Usj,
-  bookId: string,
-): Promise<ExtractedCommentScriptureText | undefined> {
-  const startDocLocation = usjLocationToUsjDocumentLocation(selection.start);
-  const endDocLocation = usjLocationToUsjDocumentLocation(selection.end);
-
-  if (!startDocLocation || !endDocLocation) return undefined;
-
-  try {
-    const extractedText = await papi.commands.sendCommand(
-      'legacyCommentManager.extractCommentScriptureText',
-      startDocLocation,
-      endDocLocation,
-      editorUsj,
-      bookId,
-    );
-
-    return extractedText;
-  } catch (error) {
-    logger.warn(`Error extracting scripture text: ${getErrorMessage(error)}`);
-    throw error;
-  }
-}
+// scripture text extraction now handled by legacyCommentManager.createCommentUsj
 
 const defaultUsj: Usj = correctEditorUsjVersion({
   type: USJ_TYPE,
@@ -1134,55 +1108,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       const capturedSelection = pendingCommentAnnotationRange.current;
 
-      let verse: string | undefined;
-      let selectedText: string | undefined;
-      let contextBefore: string | undefined;
-      let contextAfter: string | undefined;
-      let startPosition: number | undefined;
-
-      if (capturedSelection) {
-        const editorUsj = editorRef.current?.getUsj();
-
-        if (!editorUsj) {
-          logger.warn('Cannot extract scripture text: editor USJ not available');
-        } else {
-          const extractionResult = await extractScriptureTextFromSelection(
-            capturedSelection,
-            correctEditorUsjVersion(editorUsj),
-            scrRef.book,
-          );
-
-          if (!extractionResult) {
-            logger.warn('Failed to extract scripture text snippets for comment');
-          } else {
-            verse = extractionResult.verse;
-            selectedText = extractionResult.selectedText;
-            contextBefore = extractionResult.contextBefore;
-            contextAfter = extractionResult.contextAfter;
-            startPosition = extractionResult.startPosition;
-          }
-        }
-      }
-
       try {
-        const legacyCommentManagerPdp = await papi.projectDataProviders.get(
-          'legacyCommentManager.comments',
+        // Transform the captured selection from editor locations to USJ document locations
+        const startDocLocation = capturedSelection
+          ? usjLocationToUsjDocumentLocation(capturedSelection.start)
+          : undefined;
+        const endDocLocation = capturedSelection
+          ? usjLocationToUsjDocumentLocation(capturedSelection.end)
+          : undefined;
+
+        const newCommentId = await papi.commands.sendCommand(
+          'legacyCommentManager.createCommentUsj',
           projectId,
+          {
+            contents,
+            assignedUser,
+            replyToUser: assignedUser,
+          },
+          scrRef,
+          startDocLocation,
+          endDocLocation,
         );
-
-        const verseRefString = formatScrRef(scrRef);
-
-        const newCommentId = await legacyCommentManagerPdp.createComment({
-          contents,
-          assignedUser,
-          replyToUser: assignedUser,
-          verseRef: verseRefString,
-          verse,
-          selectedText,
-          contextBefore,
-          contextAfter,
-          startPosition,
-        });
 
         const newThreadId = newCommentId ? newCommentId.split('/')[0] : undefined;
 
