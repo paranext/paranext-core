@@ -103,6 +103,9 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
+/** Prefix the editor puts on annotation type when calling the annotation's callbacks */
+const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
+
 /**
  * Converts a selection location to UsjDocumentLocation format. This is needed because the editor
  * returns UsjLocation which may have jsonPath, but we need UsjDocumentLocation for the
@@ -569,7 +572,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           let argumentsForCommand: Parameters<AnnotationActionHandler>;
 
           const onClickAnnotation: TypedMarkOnClick | undefined = interactionCommand
-            ? async (_event: MouseEvent, type: string, id: string) => {
+            ? async (_event: MouseEvent, typeEditorInternal: string, id: string) => {
+                const type = typeEditorInternal.startsWith(EDITOR_ANNOTATION_TYPE_PREFIX)
+                  ? typeEditorInternal.slice(EDITOR_ANNOTATION_TYPE_PREFIX.length)
+                  : typeEditorInternal;
+
                 argumentsForCommand = [type, id, 'clicked'];
                 try {
                   await papi.commands.sendCommand(
@@ -588,10 +595,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             : undefined;
 
           const onRemoveAnnotation: TypedMarkOnRemove | undefined = async (
-            type: string,
+            typeEditorInternal: string,
             id: string,
             cause: TypedMarkRemovalCause,
           ) => {
+            const type = typeEditorInternal.startsWith(EDITOR_ANNOTATION_TYPE_PREFIX)
+              ? typeEditorInternal.slice(EDITOR_ANNOTATION_TYPE_PREFIX.length)
+              : typeEditorInternal;
+
             // If this annotation is currently being set (when it is being updated), don't remove it
             if (annotationIdsBeingSet.current.has(id)) {
               return;
@@ -652,6 +663,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             if (!info) throw new Error(`No annotation info found for id ${annotationId}`);
 
             const { annotationType, interactionCommand, annotationRange } = info;
+
+            if (action === 'removed' || action === 'destroyed') {
+              // The onRemoveAnnotation callback will handle removing the annotation from the editor
+              // and calling the command
+              editorRef.current?.removeAnnotation(annotationType, annotationId);
+              break;
+            }
+
             if (!interactionCommand)
               throw new Error(`No interactionCommand for annotation ${annotationId}`);
 
