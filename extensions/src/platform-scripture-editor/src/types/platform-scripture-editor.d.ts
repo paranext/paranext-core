@@ -365,7 +365,9 @@ declare module 'platform-scripture-editor' {
      * Manually run an action on an annotation.
      *
      * @param annotationId The ID of the annotation to run the action on
-     * @param action The action to run on the annotation
+     * @param action The action to run on the annotation. Note: running `destroyed` will trigger the
+     *   annotation `removed` action because `destroyed` is specifically due to the text being
+     *   deleted whereas `removed` is a programmatic removal
      */
     runAnnotationAction(annotationId: string, action: AnnotationAction): Promise<void>;
   }>;
