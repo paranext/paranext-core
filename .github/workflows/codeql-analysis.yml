@@ -2,10 +2,10 @@ name: 'CodeQL'
 
 on:
   push:
-    branches: ['main', 'release-prep', 'hotfix-*']
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: ['main', 'release-prep', 'hotfix-*']
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
   workflow_dispatch:
     inputs:
       debug_enabled:
