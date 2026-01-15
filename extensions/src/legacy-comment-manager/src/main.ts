@@ -1,4 +1,3 @@
-import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
@@ -10,43 +9,21 @@ import type {
 } from '@papi/core';
 import type {
   CommentListWebViewController,
-  NewLegacyComment,
   OpenCommentListWebViewOptions,
 } from 'legacy-comment-manager';
-import {
-  formatScrRef,
-  getErrorMessage,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsfmVerseRefVerseLocation,
-  UsjDocumentLocation,
-  UsjReaderWriter,
-} from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import {
+  LEGACY_COMMENT_USJ_PDPF_ID,
+  LegacyCommentManagerUsjProjectDataProviderEngineFactory,
+} from './project-data-provider/legacy-comment-manager-usj-pdpef.model';
+import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
 
 /** Time in ms to wait for the comment list web view to load before scrolling to a thread */
 const COMMENT_LIST_LOAD_DELAY_MS = 500;
-
-/** Result of extracting scripture text snippets from a range */
-interface ExtractedCommentScriptureText {
-  /** Full verse text (max 500 chars) */
-  verse: string;
-  /** Text within the selection range (no limit) */
-  selectedText: string;
-  /** Text before selection in verse (max 50 chars, closest to range start) */
-  contextBefore: string;
-  /** Text after selection in verse (max 50 chars, closest to range end) */
-  contextAfter: string;
-  /**
-   * Index in USFM of the start of the selected text relative to the beginning of the specified
-   * verse (the backslash on the `\v` verse marker)
-   */
-  startPosition: number;
-}
 
 // #region Comment List WebView
 
@@ -133,196 +110,6 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
 const commentListWebViewProvider: IWebViewProvider = new CommentListWebViewFactory();
 
 // #endregion Comment List WebView
-
-// #region Comment Scripture Text Extraction from USJ to USFM
-
-/**
- * Get the USFM text snippets for a comment and its context based on the selected text range in a
- * USJ chapter
- *
- * @param selectedTextStart The start location of the selected text in the USJ document
- * @param selectedTextEnd The end location of the selected text in the USJ document
- * @param usjChapter The USJ chapter containing the selected text
- * @param bookId The book ID for the USJ chapter
- * @returns Information about the selection and its context that are used to create a comment
- */
-async function extractCommentScriptureText(
-  selectedTextStart: UsjDocumentLocation,
-  selectedTextEnd: UsjDocumentLocation,
-  usjChapter: Usj,
-  bookId: string,
-): Promise<ExtractedCommentScriptureText | undefined> {
-  try {
-    const usjRW = new UsjReaderWriter(usjChapter, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
-
-    // Get the verse ref and offset for the start and end of the selected text
-    const selectedTextStartUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-      selectedTextStart,
-      bookId,
-    );
-    const selectedTextEndUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-      selectedTextEnd,
-      bookId,
-    );
-
-    // Find the start of the verse containing the selected text
-    const verseStart: UsfmVerseRefVerseLocation = {
-      verseRef: selectedTextStartUsfmLocation.verseRef,
-      offset: 0,
-    };
-
-    // Find the next verse marker (any verse) after the selection end to determine end of current
-    // verse context
-    const selectedTextEndUsjNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-      selectedTextEnd.jsonPath,
-    );
-    const nextVerseNodeAndDoc = usjRW.findNextMatchingNode(
-      selectedTextEndUsjNodeAndDocumentLocation,
-      ({ node }) => {
-        return typeof node === 'object' && node.type === 'verse';
-      },
-    );
-
-    // Find the end of the verse containing the selected text
-    let verseEnd: UsfmVerseRefVerseLocation;
-    if (nextVerseNodeAndDoc?.documentLocation) {
-      // There is a verse after this verse - use its start as the end of the current verse
-      verseEnd = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-        nextVerseNodeAndDoc.documentLocation,
-        bookId,
-      );
-    } else {
-      // No next verse found - use end of USFM content
-      const usfmLength = usjRW.toUsfm().length;
-      verseEnd = {
-        verseRef: selectedTextEndUsfmLocation.verseRef,
-        offset:
-          // Get the length of the rest of the USFM after the verse start
-          usfmLength - usjRW.usfmVerseLocationToIndexInUsfm(selectedTextEndUsfmLocation.verseRef),
-      };
-    }
-
-    // Get the USFM indices for the verse and selection so we can extract the USFM text for them
-    const verseStartIndex = usjRW.usfmVerseLocationToIndexInUsfm(verseStart);
-    const verseEndIndex = usjRW.usfmVerseLocationToIndexInUsfm(verseEnd);
-    const selectionStartIndex = usjRW.usfmVerseLocationToIndexInUsfm(selectedTextStartUsfmLocation);
-    const selectionEndIndex = usjRW.usfmVerseLocationToIndexInUsfm(selectedTextEndUsfmLocation);
-
-    const usfmText = usjRW.toUsfm();
-
-    // Pull the verse text out from the USFM
-    let verse = usfmText.substring(verseStartIndex, verseEndIndex);
-    if (verse.length > 500) {
-      verse = verse.substring(0, 500);
-    }
-
-    // Pull the selected text out from the USFM
-    const selectedText = usfmText.substring(selectionStartIndex, selectionEndIndex);
-
-    // Pull context before and after the selected text, limiting to 50 characters each
-    let contextBefore = usfmText.substring(verseStartIndex, selectionStartIndex);
-    if (contextBefore.length > 50) {
-      contextBefore = contextBefore.substring(contextBefore.length - 50);
-    }
-
-    let contextAfter = usfmText.substring(selectionEndIndex, verseEndIndex);
-    if (contextAfter.length > 50) {
-      contextAfter = contextAfter.substring(0, 50);
-    }
-
-    return {
-      verse,
-      selectedText,
-      contextBefore,
-      contextAfter,
-      startPosition: selectedTextStartUsfmLocation.offset ?? 0,
-    };
-  } catch (error) {
-    logger.error(`Error extracting scripture text range: ${getErrorMessage(error)}`);
-    throw error;
-  }
-}
-
-/**
- * Creates a new comment for the specified project and selected USJ range.
- *
- * @param projectId The ID of the project in which to create the comment
- * @param comment The information for the new comment
- * @param verseRef The verse reference for the selected text
- * @param selectedTextStart The start location of the selected text in the USJ
- * @param selectedTextEnd The end location of the selected text in the USJ
- * @returns The ID of the new comment thread
- */
-async function createCommentUsj(
-  projectId: string,
-  comment: NewLegacyComment,
-  verseRef: SerializedVerseRef,
-  selectedTextStart?: UsjDocumentLocation,
-  selectedTextEnd?: UsjDocumentLocation,
-): Promise<string> {
-  try {
-    let verse: string | undefined;
-    let selectedText: string | undefined;
-    let contextBefore: string | undefined;
-    let contextAfter: string | undefined;
-    let startPosition: number | undefined;
-
-    const usjPdp = await papi.projectDataProviders.get('platformScripture.USJ_Chapter', projectId);
-
-    const usjChapter = await usjPdp.getChapterUSJ(verseRef);
-
-    if (!usjChapter || !selectedTextStart || !selectedTextEnd || !verseRef) {
-      logger.warn(
-        `Cannot extract scripture text for comment ${JSON.stringify(comment)} at ${formatScrRef(
-          verseRef,
-        )}: USJ not available`,
-      );
-    } else {
-      const extraction = await extractCommentScriptureText(
-        selectedTextStart,
-        selectedTextEnd,
-        usjChapter,
-        verseRef.book,
-      );
-
-      if (!extraction) {
-        logger.warn(
-          `Cannot extract scripture text for comment ${JSON.stringify(comment)} at ${formatScrRef(
-            verseRef,
-          )}: Extraction failed`,
-        );
-      } else {
-        verse = extraction.verse;
-        selectedText = extraction.selectedText;
-        contextBefore = extraction.contextBefore;
-        contextAfter = extraction.contextAfter;
-        startPosition = extraction.startPosition;
-      }
-    }
-
-    const commentPDP = await papi.projectDataProviders.get(
-      'legacyCommentManager.comments',
-      projectId,
-    );
-
-    const newCommentId = await commentPDP.createComment({
-      ...comment,
-      verse,
-      verseRef: formatScrRef(verseRef),
-      selectedText,
-      contextBefore,
-      contextAfter,
-      startPosition,
-    });
-
-    return newCommentId;
-  } catch (error) {
-    logger.error(`Error in createCommentUsj: ${getErrorMessage(error)}`);
-    throw error;
-  }
-}
-
-// #endregion Comment Scripture Text Extraction from USJ to USFM
 
 /**
  * Open or focus the Comment List WebView for the project ID associated with the specified WebView
@@ -471,39 +258,26 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  const createCommentUsjPromise = papi.commands.registerCommand(
-    'legacyCommentManager.createCommentUsj',
-    createCommentUsj,
-    {
-      method: {
-        summary: 'Creates a new comment for the specified project and selected USJ range.',
-        params: [
-          { name: 'projectId', required: true, schema: { type: 'string' } },
-          {
-            name: 'comment',
-            required: true,
-            schema: { type: 'object' },
-          },
-          { name: 'verseRef', required: false, schema: { type: 'object' } },
-          { name: 'start', required: false, schema: { type: 'object' } },
-          { name: 'end', required: false, schema: { type: 'object' } },
-        ],
-        result: { name: 'return value', summary: 'New thread ID', schema: { type: 'string' } },
-      },
-    },
-  );
+  // createCommentUsj command removed; commentsUsj PDPF provides createComment
+
+  const commentsUsjPdpefPromise =
+    papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+      LEGACY_COMMENT_USJ_PDPF_ID,
+      LEGACY_COMMENT_USJ_PROJECT_INTERFACES,
+      new LegacyCommentManagerUsjProjectDataProviderEngineFactory(LEGACY_COMMENT_USJ_PDPF_ID),
+    );
 
   context.registrations.add(
     await commentListWebViewProviderPromise,
     await openCommentListPromise,
-    await createCommentUsjPromise,
+    await commentsUsjPdpefPromise,
     webViewUpdateUnsub,
   );
 
   /* Potentially helpful code if you need to see comments without the UI
   setTimeout(async () => {
     logger.debug('GETTING COMMENTS');
-    const commentPDP = await papi.projectDataProviders.get('legacyCommentManager.Comments', '93fd8ea0de378f9d331cb798ef8039595524c161');
+    const commentPDP = await papi.projectDataProviders.get('legacyCommentManager.comments', '93fd8ea0de378f9d331cb798ef8039595524c161');
     const comments = await commentPDP.getComments({ bookId: 'GEN' });
     logger.debug(`COMMENTS! => ${JSON.stringify(comments)}`);
   }, 20000);
