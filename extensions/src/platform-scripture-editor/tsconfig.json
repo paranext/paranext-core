@@ -44,7 +44,10 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["node_modules"],
+  // Exclude test files from main typecheck - they are typechecked by vitest which uses
+  // vite's bundler-compatible module resolution. This avoids issues with vite's types
+  // importing from 'rollup/parseAst' which requires moduleResolution: "bundler" or higher.
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx"],
   "ts-node": {
     // This allows us to use path aliases in ts-node
     "require": ["tsconfig-paths/register"],

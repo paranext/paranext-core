@@ -1,4 +1,3 @@
-/* eslint-disable no-type-assertion/no-type-assertion */
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
