@@ -214,7 +214,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * user initiates comment creation and used to create the annotation highlight and to extract
    * selection info when saving the comment.
    */
-  const pendingCommentAnnotationRange = useRef<AnnotationRange | undefined>(undefined);
+  const pendingCommentAnnotationRange = useRef<
+    { range: AnnotationRange; verseRef: SerializedVerseRef } | undefined
+  >(undefined);
 
   /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
   const annotationInfoByIdRef = useRef<
@@ -510,7 +512,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             start: { ...selection.start },
             end: { ...selection.end },
           };
-          pendingCommentAnnotationRange.current = annotationRange;
+          pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
 
           // Create a temporary annotation to highlight the selected text
           editorRef.current?.setAnnotation(
@@ -1111,10 +1113,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       try {
         // Transform the captured selection from editor locations to USJ document locations
         const startDocLocation = capturedSelection
-          ? usjLocationToUsjDocumentLocation(capturedSelection.start)
+          ? usjLocationToUsjDocumentLocation(capturedSelection.range.start)
           : undefined;
         const endDocLocation = capturedSelection
-          ? usjLocationToUsjDocumentLocation(capturedSelection.end)
+          ? usjLocationToUsjDocumentLocation(capturedSelection.range.end)
           : undefined;
 
         const commentsUsjPdp = await papi.projectDataProviders.get(
@@ -1128,7 +1130,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             assignedUser,
             replyToUser: assignedUser,
           },
-          scrRef,
+          // We should have the verseRef from the captured selection, but just use the current
+          // scrRef as a fallback
+          capturedSelection?.verseRef ?? scrRef,
           startDocLocation,
           endDocLocation,
         );
@@ -1144,7 +1148,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           );
           // Create a new annotation with the actual thread ID and click handler
           editorRef.current?.setAnnotation(
-            pendingCommentAnnotationRange.current,
+            pendingCommentAnnotationRange.current.range,
             ANNOTATION_TYPE_TRANSLATOR_COMMENT,
             newThreadId,
             createCommentAnnotationClickHandler(newThreadId),
