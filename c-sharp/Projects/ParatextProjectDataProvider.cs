@@ -87,6 +87,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("addCommentToThread", AddCommentToThread));
         retVal.Add(("deleteComment", DeleteComment));
         retVal.Add(("updateComment", UpdateComment));
+        retVal.Add(("getIsCommentRead", GetIsCommentRead));
+        retVal.Add(("getIsCommentThreadRead", GetIsCommentThreadRead));
+        retVal.Add(("setIsCommentThreadRead", SetIsCommentThreadRead));
         retVal.Add(("findAssignableUsers", FindAssignableUsers));
         retVal.Add(("canUserCreateComments", CanUserCreateComments));
         retVal.Add(("canUserAddCommentToThread", CanUserAddCommentToThread));
@@ -523,6 +526,39 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
 
+        return true;
+    }
+
+    public bool GetIsCommentRead(string commentId)
+    {
+        var (comment, thread) = FindCommentByIdWithThread(commentId);
+        if (comment == null || thread == null)
+            return false;
+
+        return ThreadStatus.IsCommentRead(thread, comment);
+    }
+
+    public bool GetIsCommentThreadRead(string threadId)
+    {
+        CommentThread? thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            return false;
+
+        return ThreadStatus.IsThreadRead(thread);
+    }
+
+    public bool SetIsCommentThreadRead(string threadId, bool markRead)
+    {
+        CommentThread? thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            return false;
+
+        if (markRead)
+            ThreadStatus.MarkThreadRead(thread);
+        else
+            ThreadStatus.MarkThreadUnread(thread);
+
+        SendDataUpdateEvent(AllCommentDataTypes, "comment thread read status updated");
         return true;
     }
 
