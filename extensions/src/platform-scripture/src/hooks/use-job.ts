@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import type { MutableRefObject } from 'react';
 import { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 
@@ -74,16 +75,16 @@ interface JobHandlers<TParams, TJobId, TResult, TStatus> {
  * - Supports configurable terminal statuses and error handling
  *
  * @param handlers - Job execution functions (start, poll, cleanup)
- * @param config - Configuration options for polling behavior and status handling
  * @param isMountedRef - Ref to track if component is still mounted
  * @param activeJobsRef - Ref to track active jobs for cleanup
+ * @param config - Configuration options for polling behavior and status handling
  * @returns Function to execute a job with the given parameters
  */
 export function useJob<TParams, TJobId, TResult, TStatus = string>(
   handlers: JobHandlers<TParams, TJobId, TResult, TStatus>,
+  isMountedRef: MutableRefObject<boolean>,
+  activeJobsRef: MutableRefObject<Set<string>>,
   config: JobConfig<TStatus> = {},
-  isMountedRef: React.MutableRefObject<boolean>,
-  activeJobsRef: React.MutableRefObject<Set<string>>,
 ): (params: TParams) => Promise<TResult[]> {
   const { batchSize = 100, pollInterval = 10, terminalStatuses = [], errorStatus } = config;
   const { startJob, pollJob, cleanupJob } = handlers;

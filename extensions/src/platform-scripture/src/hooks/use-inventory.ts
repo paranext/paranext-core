@@ -186,15 +186,19 @@ export function useInventory(
     ItemizedInventoryItem, // TResult
     ItemizedInventoryJobStatus // TStatus
   >(
-    jobHandlers!,
+    jobHandlers ?? {
+      startJob: () => Promise.reject(new Error('Inventory data provider not available')),
+      pollJob: () => Promise.reject(new Error('Inventory data provider not available')),
+      cleanupJob: () => Promise.reject(new Error('Inventory data provider not available')),
+    },
+    isMountedRef,
+    activeJobsRef,
     {
       batchSize: 100,
       pollInterval: 10,
       terminalStatuses: ['completed', 'stopped', 'errored'],
       errorStatus: 'errored',
     },
-    isMountedRef,
-    activeJobsRef,
   );
 
   /**
