@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDataProvider } from '@papi/frontend/react';
 import { logger } from '@papi/frontend';
 import { getErrorMessage, debounce } from 'platform-bible-utils';
@@ -6,9 +6,10 @@ import type {
   InventoryInputRange,
   SummarizedInventoryItem,
   ItemizedInventoryItem,
-  IInventoryDataProvider,
   SummarizedInventory,
+  ItemizedInventoryJobStatus,
 } from 'platform-scripture';
+import { useJob } from './use-job';
 
 /** Result object returned by the useInventory hook */
 interface UseInventoryResult {
@@ -16,8 +17,8 @@ interface UseInventoryResult {
   inventoryItems: SummarizedInventoryItem[];
   /** Loading state - true when building inventory summary or loading items */
   isLoading: boolean;
-  /** Error message if inventory operations fail, null otherwise */
-  error: string | null;
+  /** Error message if inventory operations fail, undefined otherwise */
+  error: string | undefined;
   /** Function to load detailed occurrences for a specific inventory item */
   getItemOccurrences: (itemKey: string) => Promise<ItemizedInventoryItem[]>;
   /** Function to manually clean up inventory resources */
@@ -45,17 +46,15 @@ export function useInventory(
   inputRange: InventoryInputRange,
   projectId?: string,
 ): UseInventoryResult {
-  const inventoryDataProvider = useDataProvider(
-    'platformScripture.inventoryDataProvider',
-  ) as IInventoryDataProvider;
+  const inventoryDataProvider = useDataProvider('platformScripture.inventoryDataProvider');
 
   // State management
   const [inventoryItems, setInventoryItems] = useState<SummarizedInventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | undefined>();
 
   // Resource tracking for cleanup - using refs to avoid stale closures
-  const currentSummaryRef = useRef<SummarizedInventory | null>(null);
+  const currentSummaryRef = useRef<SummarizedInventory | undefined>();
   const activeJobsRef = useRef<Set<string>>(new Set());
   const isMountedRef = useRef(true);
 
@@ -90,7 +89,7 @@ export function useInventory(
           // Summary may already be discarded, log but don't throw
           logger.debug(`Summary cleanup: ${getErrorMessage(summaryError)}`);
         }
-        currentSummaryRef.current = null;
+        currentSummaryRef.current = undefined;
       }
     } catch (cleanupError) {
       logger.warn(`Inventory cleanup error: ${getErrorMessage(cleanupError)}`);
@@ -102,60 +101,61 @@ export function useInventory(
    * changes rapidly (e.g., during verse navigation). Includes automatic cleanup of previous
    * summaries to prevent resource leaks.
    */
-  const debouncedLoadInventoryItems = useCallback(
-    debounce(async (range: InventoryInputRange) => {
-      // Early return if required dependencies are missing
-      if (!inventoryDataProvider || !projectId || !inventoryId) {
-        setInventoryItems([]);
-        setIsLoading(false);
-        setError(null);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // Clean up any existing summary before creating a new one
-        if (currentSummaryRef.current) {
-          await cleanup();
-        }
-
-        // Build new inventory summary for the specified range
-        const summary = await inventoryDataProvider.buildInventorySummary(inventoryId, [range]);
-
-        // Handle component unmount during async operation
-        if (!isMountedRef.current) {
-          // Component was unmounted while building summary - clean up immediately
-          await inventoryDataProvider.discardInventorySummary(summary.summarizedInventoryId);
+  const debouncedLoadInventoryItems = useMemo(
+    () =>
+      debounce(async (range: InventoryInputRange) => {
+        // Early return if required dependencies are missing
+        if (!inventoryDataProvider || !projectId || !inventoryId) {
+          setInventoryItems([]);
+          setIsLoading(false);
+          setError(undefined);
           return;
         }
 
-        currentSummaryRef.current = summary;
+        try {
+          setIsLoading(true);
+          setError(undefined);
 
-        // Flatten inventory items from all text types into a single array
-        const allItems: SummarizedInventoryItem[] = [];
-        summary.inventoryCountLists.forEach((itemList) => {
-          allItems.push(...itemList.items);
-        });
+          // Clean up any existing summary before creating a new one
+          if (currentSummaryRef.current) {
+            await cleanup();
+          }
 
-        setInventoryItems(allItems);
-        setError(null);
-      } catch (loadError) {
-        // Only update state if component is still mounted
-        if (isMountedRef.current) {
-          const errorMessage = getErrorMessage(loadError);
-          logger.error(`Failed to load inventory items: ${errorMessage}`);
-          setError(errorMessage);
-          setInventoryItems([]);
+          // Build new inventory summary for the specified range
+          const summary = await inventoryDataProvider.buildInventorySummary(inventoryId, [range]);
+
+          // Handle component unmount during async operation
+          if (!isMountedRef.current) {
+            // Component was unmounted while building summary - clean up immediately
+            await inventoryDataProvider.discardInventorySummary(summary.summarizedInventoryId);
+            return;
+          }
+
+          currentSummaryRef.current = summary;
+
+          // Flatten inventory items from all text types into a single array
+          const allItems: SummarizedInventoryItem[] = [];
+          summary.inventoryCountLists.forEach((itemList) => {
+            allItems.push(...itemList.items);
+          });
+
+          setInventoryItems(allItems);
+          setError(undefined);
+        } catch (loadError) {
+          // Only update state if component is still mounted
+          if (isMountedRef.current) {
+            const errorMessage = getErrorMessage(loadError);
+            logger.error(`Failed to load inventory items: ${errorMessage}`);
+            setError(errorMessage);
+            setInventoryItems([]);
+          }
+        } finally {
+          // Always clear loading state if component is still mounted
+          if (isMountedRef.current) {
+            setIsLoading(false);
+          }
         }
-      } finally {
-        // Always clear loading state if component is still mounted
-        if (isMountedRef.current) {
-          setIsLoading(false);
-        }
-      }
-    }, 500), // 500ms debounce delay
+      }, 500), // 500ms debounce delay
     [inventoryDataProvider, projectId, inventoryId, cleanup],
   );
 
@@ -163,6 +163,39 @@ export function useInventory(
   useEffect(() => {
     debouncedLoadInventoryItems(inputRange);
   }, [debouncedLoadInventoryItems, inputRange]);
+
+  // Configure job handlers for inventory itemization
+  const jobHandlers = useMemo(() => {
+    if (!inventoryDataProvider) {
+      return undefined;
+    }
+
+    return {
+      startJob: (params: { summarizedInventoryId: string; key: string }) =>
+        inventoryDataProvider.beginItemizedInventoryJob(params),
+      pollJob: (jobId: string, batchSize: number) =>
+        inventoryDataProvider.retrieveItemizedInventoryJobUpdate(jobId, batchSize),
+      cleanupJob: (jobId: string) => inventoryDataProvider.abandonItemizedInventoryJob(jobId),
+    };
+  }, [inventoryDataProvider]);
+
+  // Create the job executor using the generic useJob hook
+  const executeInventoryJob = useJob<
+    { summarizedInventoryId: string; key: string }, // TParams
+    string, // TJobId
+    ItemizedInventoryItem, // TResult
+    ItemizedInventoryJobStatus // TStatus
+  >(
+    jobHandlers!,
+    {
+      batchSize: 100,
+      pollInterval: 10,
+      terminalStatuses: ['completed', 'stopped', 'errored'],
+      errorStatus: 'errored',
+    },
+    isMountedRef,
+    activeJobsRef,
+  );
 
   /**
    * Loads detailed occurrences for a specific inventory item. Uses polling to retrieve results as
@@ -176,63 +209,12 @@ export function useInventory(
       }
 
       const summary = currentSummaryRef.current;
-      let jobId: string | undefined;
-
-      try {
-        // Start background job to itemize occurrences for the specified key
-        jobId = await inventoryDataProvider.beginItemizedInventoryJob({
-          summarizedInventoryId: summary.summarizedInventoryId,
-          key: itemKey,
-        });
-
-        // Track job for cleanup in case of component unmount
-        activeJobsRef.current.add(jobId);
-
-        // Poll for job results with incremental collection
-        const allResults: ItemizedInventoryItem[] = [];
-        let isComplete = false;
-
-        while (!isComplete && isMountedRef.current) {
-          const statusReport = await inventoryDataProvider.retrieveItemizedInventoryJobUpdate(
-            jobId,
-            100, // Batch size for result retrieval
-          );
-
-          // Collect any new results from this batch
-          if (statusReport.nextResults?.length) {
-            allResults.push(...statusReport.nextResults);
-          }
-
-          // Check if job has completed (successfully, stopped, or errored)
-          isComplete = ['completed', 'stopped', 'errored'].includes(statusReport.status);
-
-          if (statusReport.status === 'errored') {
-            throw new Error(`Itemization job failed: ${statusReport.error || 'Unknown error'}`);
-          }
-
-          // Brief delay between polls to avoid overwhelming the system
-          if (!isComplete) {
-            await new Promise((resolve) => {
-              setTimeout(resolve, 10);
-            });
-          }
-        }
-
-        return allResults;
-      } finally {
-        // Always clean up the job, even if there was an error or component unmounted
-        if (jobId) {
-          try {
-            await inventoryDataProvider.abandonItemizedInventoryJob(jobId);
-            activeJobsRef.current.delete(jobId);
-          } catch (cleanupError) {
-            // Job cleanup errors are non-critical, just log them
-            logger.debug(`Job ${jobId} cleanup failed: ${getErrorMessage(cleanupError)}`);
-          }
-        }
-      }
+      return executeInventoryJob({
+        summarizedInventoryId: summary.summarizedInventoryId,
+        key: itemKey,
+      });
     },
-    [inventoryDataProvider],
+    [inventoryDataProvider, executeInventoryJob],
   );
 
   // Track component mount state to prevent state updates after unmount
