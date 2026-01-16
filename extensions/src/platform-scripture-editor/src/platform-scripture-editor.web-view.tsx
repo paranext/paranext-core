@@ -1187,14 +1187,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   function renderEditor() {
-    const commonProps = {
-      ref: editorRef,
-      scrRef,
-      onScrRefChange: setScrRefNoScroll,
-      options,
-      logger,
-    };
-
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
 
@@ -1218,11 +1210,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         </div>
       );
     }
+
     return (
       <>
         {workaround}
         <Editorial
-          {...commonProps}
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRefNoScroll}
+          options={options}
+          logger={logger}
           onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
           onSelectionChange={(change) => {
             currentSelectionRef.current = change;
