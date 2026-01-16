@@ -1117,8 +1117,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setShowCommentEditor(false);
   }, []);
 
+  /** Flag to indicate if a comment submission is in progress so we don't submit multiple times */
+  const isSubmittingComment = useRef(false);
+
   const onCommentEditorSave = useCallback(
     async (contents: string, assignedUser?: string) => {
+      if (isSubmittingComment.current) {
+        logger.info('Comment submission already in progress');
+        return;
+      }
       if (!projectId) {
         logger.warn('Cannot create comment: no projectId');
         return;
@@ -1127,6 +1134,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const capturedSelection = pendingCommentAnnotationRange.current;
 
       try {
+        isSubmittingComment.current = true;
+
         // Transform the captured selection from editor locations to USJ document locations
         const startDocLocation = capturedSelection
           ? usjLocationToUsjDocumentLocation(capturedSelection.range.start)
@@ -1178,6 +1187,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         setShowCommentEditor(false);
       } catch (error) {
         logger.error(`Error creating comment: ${getErrorMessage(error)}`);
+      } finally {
+        isSubmittingComment.current = false;
       }
     },
     [projectId, scrRef, createCommentAnnotationClickHandler, webViewId],
