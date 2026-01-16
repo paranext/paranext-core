@@ -163,7 +163,7 @@ export function DictionaryEntryDisplay({
       <div className="tw-mb-4">
         <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
           <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
-            <TitleComponent className="tw-text-2xl tw-font-bold">
+            <TitleComponent className="tw-text-2xl tw-font-bold scripture-font">
               {dictionaryEntry.lemma}
             </TitleComponent>
             <DescriptionComponent className="tw-text-lg tw-text-muted-foreground">
