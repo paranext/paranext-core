@@ -50,13 +50,13 @@ export interface FootnoteEditorProps {
 /**
  * Function to convert a footnote/endnote type node to a cross-reference type node
  *
- * @param node The node to be converted
+ * @param op The node to be converted
  */
-function footnoteToCrossReferenceOp(node: DeltaOp) {
+function footnoteToCrossReferenceOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const nodeCharAttribute = node.attributes?.char as Record<string, string>;
+  const nodeCharAttribute = op.attributes?.char as Record<string, string>;
   if (nodeCharAttribute.style) {
     if (nodeCharAttribute.style === 'ft') {
       nodeCharAttribute.style = 'xt';
@@ -75,13 +75,13 @@ function footnoteToCrossReferenceOp(node: DeltaOp) {
 /**
  * Function to convert a cross-reference type node to a footnote/endnote type node
  *
- * @param node THe node to be converted
+ * @param op THe node to be converted
  */
-function crossReferenceToFootnoteOp(node: DeltaOp) {
+function crossReferenceToFootnoteOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const nodeCharAttribute = node.attributes?.char as Record<string, string>;
+  const nodeCharAttribute = op.attributes?.char as Record<string, string>;
   if (nodeCharAttribute.style) {
     if (nodeCharAttribute.style === 'xt') {
       nodeCharAttribute.style = 'ft';
