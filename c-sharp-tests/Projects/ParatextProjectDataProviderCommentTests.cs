@@ -1257,5 +1257,129 @@ namespace TestParanextDataProvider.Projects
         }
 
         #endregion
+
+        #region Comment Read Status Tests
+
+        [Test]
+        public void GetIsCommentRead_ValidComment_ReturnsFalseInitially()
+        {
+            // Arrange - Create a comment to get a valid threadId and commentId
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            string commentId = _provider.CreateComment(comment);
+
+            // Act
+            bool isRead = _provider.GetIsCommentRead(commentId);
+
+            // Assert - Initially, comments are not read
+            Assert.That(isRead, Is.False, "Comments should not be read initially");
+        }
+
+        [Test]
+        public void GetIsCommentThreadRead_ValidThread_ReturnsFalseInitially()
+        {
+            // Arrange - Create a comment to get a valid threadId
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Act
+            bool isRead = _provider.GetIsCommentThreadRead(threadId);
+
+            // Assert - Initially, threads are not read
+            Assert.That(isRead, Is.False, "Threads should not be read initially");
+        }
+
+        [Test]
+        public void SetIsCommentThreadRead_True_ThenGetReadReturnsTrue()
+        {
+            // Arrange - Create a comment to get a valid threadId
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            // Act - Set the thread as read
+            bool result = _provider.SetIsCommentThreadRead(threadId, true);
+
+            // Assert - Now the thread (and comment) should be read
+            Assert.That(result, Is.True, "Setter should return true for valid thread");
+            bool isRead = _provider.GetIsCommentThreadRead(threadId);
+            Assert.That(isRead, Is.True, "Thread should be read after setting it to read");
+            isRead = _provider.GetIsCommentRead(commentId);
+            Assert.That(isRead, Is.True, "Comment should be read after setting its thread to read");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void SetIsCommentThreadRead_False_ThenGetReadReturnsFalse(bool firstSetToRead)
+        {
+            // Arrange - Create a comment to get a valid threadId
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            string commentId = _provider.CreateComment(comment);
+            string threadId = _provider
+                .GetComments(new CommentSelector { CommentId = commentId })
+                .First()
+                .Thread;
+
+            if (firstSetToRead)
+            {
+                // First set to read
+                _provider.SetIsCommentThreadRead(threadId, true);
+            }
+
+            // Act - Set the thread as unread
+            bool result = _provider.SetIsCommentThreadRead(threadId, false);
+
+            // Assert - Now the thread (and comment) should be unread
+            Assert.That(result, Is.True, "Setter should return true for valid thread");
+            bool isRead = _provider.GetIsCommentThreadRead(threadId);
+            Assert.That(isRead, Is.False, "Thread should be unread after setting it to unread");
+            isRead = _provider.GetIsCommentRead(commentId);
+            Assert.That(
+                isRead,
+                Is.False,
+                "Comment should be unread after setting its thread to unread"
+            );
+        }
+
+        [TestCase("invalid-thread-id")]
+        [TestCase("")]
+        public void GetIsCommentRead_InvalidOrEmptyThreadId_ReturnsFalse(string threadId)
+        {
+            // Act
+            bool isRead = _provider.GetIsCommentRead(threadId);
+
+            // Assert - Should return false for invalid or undefined thread IDs
+            Assert.That(isRead, Is.False, $"Should return false for threadId='{threadId}'");
+        }
+
+        [TestCase("invalid-thread-id")]
+        [TestCase("")]
+        public void GetIsCommentThreadRead_InvalidOrEmptyThreadId_ReturnsFalse(string threadId)
+        {
+            // Act
+            bool isRead = _provider.GetIsCommentThreadRead(threadId);
+
+            // Assert - Should return false for invalid or undefined thread IDs
+            Assert.That(isRead, Is.False, $"Should return false for threadId='{threadId}'");
+        }
+
+        [TestCase("invalid-thread-id")]
+        [TestCase("")]
+        public void SetIsCommentThreadRead_InvalidOrEmptyThreadId_ReturnsFalse(string threadId)
+        {
+            // Act
+            bool result = _provider.SetIsCommentThreadRead(threadId, true);
+
+            // Assert - Should return false for invalid or undefined thread IDs
+            Assert.That(result, Is.False, $"Should return false for threadId='{threadId}'");
+        }
+
+        #endregion
     }
 }
