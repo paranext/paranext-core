@@ -56,18 +56,18 @@ function footnoteToCrossReferenceOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const nodeCharAttribute = op.attributes?.char as Record<string, string>;
-  if (nodeCharAttribute.style) {
-    if (nodeCharAttribute.style === 'ft') {
-      nodeCharAttribute.style = 'xt';
+  const opCharAttribute = op.attributes?.char as Record<string, string>;
+  if (opCharAttribute.style) {
+    if (opCharAttribute.style === 'ft') {
+      opCharAttribute.style = 'xt';
     }
 
-    if (nodeCharAttribute.style === 'fr') {
-      nodeCharAttribute.style = 'xo';
+    if (opCharAttribute.style === 'fr') {
+      opCharAttribute.style = 'xo';
     }
 
-    if (nodeCharAttribute.style === 'fq') {
-      nodeCharAttribute.style = 'xq';
+    if (opCharAttribute.style === 'fq') {
+      opCharAttribute.style = 'xq';
     }
   }
 }
@@ -81,18 +81,18 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const nodeCharAttribute = op.attributes?.char as Record<string, string>;
-  if (nodeCharAttribute.style) {
-    if (nodeCharAttribute.style === 'xt') {
-      nodeCharAttribute.style = 'ft';
+  const opCharAttribute = op.attributes?.char as Record<string, string>;
+  if (opCharAttribute.style) {
+    if (opCharAttribute.style === 'xt') {
+      opCharAttribute.style = 'ft';
     }
 
-    if (nodeCharAttribute.style === 'xo') {
-      nodeCharAttribute.style = 'fr';
+    if (opCharAttribute.style === 'xo') {
+      opCharAttribute.style = 'fr';
     }
 
-    if (nodeCharAttribute.style === 'xq') {
-      nodeCharAttribute.style = 'fq';
+    if (opCharAttribute.style === 'xq') {
+      opCharAttribute.style = 'fq';
     }
   }
 }
