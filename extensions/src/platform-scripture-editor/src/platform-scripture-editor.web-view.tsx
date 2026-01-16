@@ -229,6 +229,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     >
   >(new Map());
 
+  /** Function to run to clear all annotation info when the editor clears all annotation info */
+  const clearAnnotationInfo = useRef(() => {
+    annotationInfoByIdRef.current.clear();
+  });
+
   /**
    * Set of annotation IDs that are currently being set - used to prevent removing annotations while
    * they are being updated
@@ -397,6 +402,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  /**
+   * Function to run to set the editor's USJ content. Also clears annotation info because setting
+   * the editor's USJ silently removes all annotations
+   *
+   * @param usj The USJ to set in the editor
+   */
+  const setEditorUsj = useRef((usj: Usj) => {
+    editorRef.current?.setUsj(usj);
+    clearAnnotationInfo.current();
+  });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -898,7 +914,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         try {
           if (usjFromPdp && editorRef.current) {
             usjSentToPdp.current = usjFromPdp;
-            editorRef.current.setUsj(usjFromPdp);
+            setEditorUsj.current(usjFromPdp);
           }
           await papi.notifications.send({
             severity: 'error',
@@ -971,7 +987,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // the editor wrote to the PDP.
     if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
       usjSentToPdp.current = usjFromPdp;
-      editorRef.current.setUsj(usjFromPdp);
+      setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
@@ -985,8 +1001,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     if (!usjSentToPdp.current || !editorRef.current) return;
 
-    editorRef.current.setUsj(usjSentToPdp.current);
-  }, [options]);
+    setEditorUsj.current(usjSentToPdp.current);
+  }, [viewOptions]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -1089,25 +1105,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     onFootnoteEditorClose();
   };
 
-  // On loading the editor, add the scripture-font class to the editor. Can't just put this on a div
-  // around the editor because the editor currently renders a toolbar that should have normal UI font
-  useEffect(() => {
-    // Do not add the scripture-font class if the editor isn't rendered (see `renderEditor`)
-    if (!bookExists) return;
-    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
-
-    const cancelRunOnLoad = runOnFirstLoad(() => {
-      const editorElement = document.querySelector('.editor-inner');
-      if (!editorElement) return;
-
-      editorElement.classList.add('scripture-font');
-    });
-
-    return () => {
-      cancelRunOnLoad();
-    };
-  }, [bookExists, usjFromPdp]);
-
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
     if (pendingCommentAnnotationRange.current) {
@@ -1185,6 +1182,33 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     },
     [projectId, scrRef, createCommentAnnotationClickHandler, webViewId],
   );
+
+  // Clear annotation info when the editor clears annotations internally
+  // Note: the editor does not have any notification to tell us when its annotation clear, so we
+  // are doing our best here and other places clearAnnotationInfo is run
+  useEffect(() => {
+    // Annotations are cleared when viewOptions change
+    clearAnnotationInfo.current();
+  }, [viewOptions]);
+
+  // On loading the editor, add the scripture-font class to the editor. Can't just put this on a div
+  // around the editor because the editor currently renders a toolbar that should have normal UI font
+  useEffect(() => {
+    // Do not add the scripture-font class if the editor isn't rendered (see `renderEditor`)
+    if (!bookExists) return;
+    if (!usjFromPdp || usjFromPdp === defaultUsj) return;
+
+    const cancelRunOnLoad = runOnFirstLoad(() => {
+      const editorElement = document.querySelector('.editor-inner');
+      if (!editorElement) return;
+
+      editorElement.classList.add('scripture-font');
+    });
+
+    return () => {
+      cancelRunOnLoad();
+    };
+  }, [bookExists, usjFromPdp]);
 
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
