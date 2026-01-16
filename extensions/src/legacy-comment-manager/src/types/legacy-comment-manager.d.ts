@@ -241,7 +241,10 @@ declare module 'legacy-comment-manager' {
        *
        * @param comment Comment data to create a new comment through ParatextData. Besides
        *   `contents`, all properties are optional, and the 'thread', 'id', 'user', and 'date'
-       *   properties are omitted as they will be auto-generated and should not be provided.
+       *   properties are omitted as they will be auto-generated and should not be provided. It is
+       *   recommended that you provide `verseRef`, `selectedText`, and `startPosition` but NOT
+       *   `verse`, `contextBefore`, or `contextAfter` as they will be generated to the correct
+       *   value based on the previous three properties.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
        */

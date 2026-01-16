@@ -341,13 +341,52 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             );
         }
 
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
         // Reformat USFM text in the comment by replacing newlines with spaces
         comment.SelectedText = ReplaceNewlinesWithSpaces(comment.SelectedText);
-        comment.ContextBefore = ReplaceNewlinesWithSpaces(comment.ContextBefore);
-        comment.ContextAfter = ReplaceNewlinesWithSpaces(comment.ContextAfter);
-        comment.Verse = ReplaceNewlinesWithSpaces(comment.Verse);
 
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        if (
+            string.IsNullOrEmpty(comment.Verse)
+            && string.IsNullOrEmpty(comment.ContextBefore)
+            && string.IsNullOrEmpty(comment.ContextAfter)
+        )
+        {
+            if (
+                string.IsNullOrEmpty(comment.VerseRefStr)
+                || comment.StartPosition < 0
+                || comment.SelectedText == null
+            )
+                throw new InvalidOperationException(
+                    "VerseRef, StartPosition, and SelectedText are required when Verse, ContextBefore, and ContextAfter are not provided"
+                );
+
+            // Get the values of Verse, ContextBefore, and ContextAfter from the scrText since that's
+            // the data that is supposed to be saved (already has spaces instead of newlines)
+            // From CommentManager.CreateThread
+            comment.Verse = scrText.Parser.GetVerseUsfmText(comment.VerseRef);
+            comment.ContextBefore = comment.Verse[..comment.StartPosition];
+            comment.ContextAfter = comment.Verse[
+                (comment.StartPosition + comment.SelectedText.Length)..
+            ];
+        }
+
+        // Create a ScriptureSelection to put the USFM snippets through the same processing as they
+        // go through in P9
+        var selection = new ScriptureSelection(
+            comment.VerseRef,
+            comment.SelectedText,
+            comment.StartPosition,
+            comment.ContextBefore,
+            comment.ContextAfter
+        );
+
+        // From CommentManager.CreateThread
+        CommentUtils.AdjustNoteSelection(scrText, selection);
+        comment.StartPosition = selection.StartPosition;
+        comment.SelectedText = selection.SelectedText;
+        comment.ContextBefore = selection.ContextBefore;
+        comment.ContextAfter = selection.ContextAfter;
 
         if (comment.AssignedUser != null)
         {
