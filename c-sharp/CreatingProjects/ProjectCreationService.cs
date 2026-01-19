@@ -544,7 +544,7 @@ namespace Paranext.DataProvider.CreatingProjects
             if (scrText == null)
             {
                 return UpdateProjectResult.Failed(
-                    "PROJECT_NOT_FOUND",
+                    ProjectConstants.ProjectNotFoundErrorCode,
                     $"Project '{request.ProjectName}' not found"
                 );
             }

@@ -55,6 +55,11 @@ namespace Paranext.DataProvider.CreatingProjects
         public const string FigMarker = "\\fig ";
 
         /// <summary>
+        /// Error code returned when a project cannot be found.
+        /// </summary>
+        public const string ProjectNotFoundErrorCode = "PROJECT_NOT_FOUND";
+
+        /// <summary>
         /// Windows reserved file names that cannot be used as project names.
         /// These names are reserved by the Windows operating system.
         /// </summary>
