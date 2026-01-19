@@ -74,7 +74,8 @@ namespace TestParanextDataProvider
                 {
                     FullName = "Test ScrText",
                     MinParatextDataVersion = ParatextInfo.MinSupportedParatextDataVersion,
-                    Guid = _id
+                    Guid = _id,
+                    UsfmVersion = UsfmVersionOption.Version3
                 };
 
             return settings;
