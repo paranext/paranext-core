@@ -119,6 +119,35 @@ namespace Paranext.DataProvider.CreatingProjects
         }
 
         /// <summary>
+        /// Updates comment tags for a project.
+        /// Adds new tags, updates existing tags, and removes deleted tags.
+        ///
+        /// Algorithm (from EXT-010):
+        /// 1. Get CommentTags.Get(scrText)
+        /// 2. For each tag in toAdd: AddOrUpdate
+        /// 3. For each tag in toDelete: Remove by ID
+        /// 4. Save CommentTags
+        /// </summary>
+        /// <param name="scrText">The project to update</param>
+        /// <param name="toAdd">Tags to add or update</param>
+        /// <param name="toDelete">Tags to delete</param>
+        /// <exception cref="ArgumentNullException">Thrown when scrText is null</exception>
+        /// <seealso cref="EXT-010 in extraction-plan.md"/>
+        public static void UpdateCommentTags(
+            ScrText scrText,
+            IList<NoteTag> toAdd,
+            IList<NoteTag> toDelete
+        )
+        {
+            ArgumentNullException.ThrowIfNull(scrText);
+
+            // TDD: Stub implementation - will fail tests
+            throw new NotImplementedException(
+                "UpdateCommentTags not yet implemented. See EXT-010 in extraction-plan.md"
+            );
+        }
+
+        /// <summary>
         /// Creates TranslationInformation for project type.
         /// For derived types, ensures base project has GUID first.
         ///
