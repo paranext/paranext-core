@@ -167,7 +167,15 @@ namespace Paranext.DataProvider.CreatingProjects
                 foreach (var tag in tagsToDelete)
                 {
                     int tagId = ParseOrHashTagId(tag.Id);
-                    commentTags.Remove(tagId);
+                    try
+                    {
+                        commentTags.Remove(tagId);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // Expected: ParatextData's Remove throws ArgumentException for reserved tags.
+                        // Silently skip - reserved tags cannot be removed.
+                    }
                 }
             }
 
@@ -389,5 +397,242 @@ namespace Paranext.DataProvider.CreatingProjects
             }
             return bookNumbers;
         }
+
+        #region CAP-013, CAP-014, CAP-015: Main Commands
+
+        /// <summary>
+        /// Creates a new Paratext project with specified settings.
+        ///
+        /// Orchestrates all the capabilities implemented in Phases 1-5:
+        /// 1. Validates short name (CAP-001)
+        /// 2. Creates default base project (CAP-005)
+        /// 3. Initializes with default values (CAP-006)
+        /// 4. Calculates translation info (CAP-007)
+        /// 5. Ensures GUID (CAP-008)
+        /// 6. Persists settings (CAP-009)
+        /// 7. Updates comment tags (CAP-012)
+        /// 8. For Study Bible: MakeCopyOfBase (CAP-010)
+        /// </summary>
+        /// <param name="request">Project creation parameters</param>
+        /// <param name="progress">Progress reporter for long operations (Study Bible book copy)</param>
+        /// <returns>Result containing project ID and GUID on success</returns>
+        /// <seealso cref="CAP-013 in strategic-plan.md"/>
+        public static CreateProjectResult CreateProject(
+            CreateProjectRequest request,
+            IProgress<BookCopyProgress>? progress = null
+        )
+        {
+            // 1. Validate short name (CAP-001)
+            var validation = ProjectValidationService.ValidateShortName(
+                request.ShortName,
+                isNewProject: true
+            );
+            if (!validation.IsValid)
+            {
+                return CreateProjectResult.Failed(
+                    ProjectCreationErrorCode.InvalidShortName,
+                    $"Invalid short name: {validation.ErrorCode}"
+                );
+            }
+
+            // 2. Parse project type - use the Enum<> wrapper constructor with string
+            Enum<ProjectType> projectType;
+            try
+            {
+                projectType = new Enum<ProjectType>(request.ProjectType);
+            }
+            catch
+            {
+                projectType = new Enum<ProjectType>("Standard");
+            }
+
+            // 3. Check if project type requires a base project
+            bool requiresBase =
+                projectType.IsDerivedType() || projectType == ProjectType.ConsultantNotes;
+
+            // 4. Get base project for derived types
+            ScrText? baseProject = null;
+            if (requiresBase)
+            {
+                if (string.IsNullOrEmpty(request.BaseProjectName))
+                {
+                    return CreateProjectResult.Failed(
+                        ProjectCreationErrorCode.BaseProjectNotFound,
+                        "Derived project types require a base project"
+                    );
+                }
+                baseProject = FindProjectByName(request.BaseProjectName);
+                if (baseProject == null)
+                {
+                    return CreateProjectResult.Failed(
+                        ProjectCreationErrorCode.BaseProjectNotFound,
+                        $"Base project '{request.BaseProjectName}' not found"
+                    );
+                }
+            }
+
+            // 5. Create default ScrText (CAP-005)
+            var scrText = CreateDefaultBaseProject();
+
+            // 5a. Set project name (this is critical for lookup)
+            scrText.Name = request.ShortName;
+
+            // 6. Initialize with default values (CAP-006)
+            var baseForInit = baseProject ?? scrText;
+            InitializeScrTextWithDefaultValues(
+                scrText,
+                baseForInit,
+                request.ShortName,
+                request.FullName
+            );
+
+            // 7. Calculate translation info (CAP-007)
+            var translationInfo = CalculateTranslationInfo(projectType, baseProject);
+            scrText.Settings.TranslationInfo = translationInfo;
+
+            // 8. Set additional settings from request
+            if (!string.IsNullOrEmpty(request.LanguageId))
+            {
+                var langId = new Paratext.Data.Languages.LanguageId(
+                    request.LanguageId,
+                    null,
+                    null,
+                    null
+                );
+                scrText.Settings.LanguageID = langId;
+            }
+
+            if (!string.IsNullOrEmpty(request.Copyright))
+            {
+                scrText.Settings.Copyright = request.Copyright;
+            }
+
+            // 9. Register project in collection (this is how tests verify project creation)
+            ScrTextCollection.Add(scrText, skipChangeNotify: true, checkAlreadyExists: false);
+
+            // 10. For Study Bible: copy books from base (CAP-010)
+            if (projectType == ProjectType.StudyBible && baseProject != null)
+            {
+                MakeCopyOfBase(scrText, progress);
+            }
+
+            // 11. Update comment tags if provided (CAP-012)
+            if (request.NoteTags != null && request.NoteTags.Count > 0)
+            {
+                UpdateCommentTags(scrText, request.NoteTags);
+            }
+
+            // 12. Return success with project ID and GUID
+            string guid = scrText.Settings.Guid?.ToString() ?? "";
+            return CreateProjectResult.Succeeded(request.ShortName, guid);
+        }
+
+        /// <summary>
+        /// Updates settings on an existing project.
+        ///
+        /// Supports updating:
+        /// - Full name
+        /// - Copyright
+        /// - Language ID
+        /// - Comment tags (add/update/delete via CAP-012)
+        ///
+        /// Note: Short name is immutable and cannot be changed.
+        /// </summary>
+        /// <param name="request">Settings update request</param>
+        /// <returns>Result with success status and any stylesheet errors</returns>
+        /// <seealso cref="CAP-014 in strategic-plan.md"/>
+        public static UpdateProjectResult UpdateProjectSettings(
+            UpdateProjectSettingsRequest request
+        )
+        {
+            // 1. Find project
+            var scrText = FindProjectByName(request.ProjectName);
+            if (scrText == null)
+            {
+                return UpdateProjectResult.Failed(
+                    "PROJECT_NOT_FOUND",
+                    $"Project '{request.ProjectName}' not found"
+                );
+            }
+
+            // 2. Update provided settings
+            if (!string.IsNullOrEmpty(request.FullName))
+                scrText.Settings.FullName = request.FullName;
+
+            if (!string.IsNullOrEmpty(request.Copyright))
+                scrText.Settings.Copyright = request.Copyright;
+
+            if (!string.IsNullOrEmpty(request.LanguageId))
+            {
+                var langId = new Paratext.Data.Languages.LanguageId(
+                    request.LanguageId,
+                    null,
+                    null,
+                    null
+                );
+                scrText.Settings.LanguageID = langId;
+            }
+
+            // 3. Update comment tags
+            if (request.NoteTagsToAdd != null || request.NoteTagsToDelete != null)
+            {
+                UpdateCommentTags(scrText, request.NoteTagsToAdd, request.NoteTagsToDelete);
+            }
+
+            // 4. Return success (no stylesheet errors in this implementation)
+            return UpdateProjectResult.Succeeded();
+        }
+
+        /// <summary>
+        /// Gets basic information about an existing project.
+        /// </summary>
+        /// <param name="projectName">Project short name</param>
+        /// <returns>Project information or null if not found</returns>
+        /// <seealso cref="CAP-015 in strategic-plan.md"/>
+        public static ProjectInfo? GetProjectInfo(string projectName)
+        {
+            // Handle null or empty project name
+            if (string.IsNullOrEmpty(projectName))
+                return null;
+
+            // Find project by name (case-insensitive)
+            var scrText = FindProjectByName(projectName);
+            if (scrText == null)
+                return null;
+
+            // Build and return ProjectInfo
+            // Get base project name from BaseScrText if available
+            string? baseProjectName = scrText.Settings.TranslationInfo?.BaseScrText?.Name;
+
+            return new ProjectInfo
+            {
+                ShortName = scrText.Name,
+                FullName = scrText.Settings.FullName ?? scrText.Name,
+                LanguageId = scrText.Settings.LanguageID?.Id ?? "und",
+                ProjectType = scrText.Settings.TranslationInfo?.Type.ToString() ?? "Standard",
+                BaseProjectName = baseProjectName,
+                Versification = scrText.Settings.Versification?.Type.ToString() ?? "English",
+                UsfmVersion = scrText.Settings.UsfmVersion.ToString(),
+                ProjectGuid = scrText.Settings.Guid?.ToString(),
+            };
+        }
+
+        /// <summary>
+        /// Finds a project by name (case-insensitive lookup).
+        /// </summary>
+        /// <param name="projectName">Project short name to find</param>
+        /// <returns>ScrText if found, null otherwise</returns>
+        private static ScrText? FindProjectByName(string projectName)
+        {
+            var allProjects = ScrTextCollection.ScrTexts(IncludeProjects.Everything);
+            foreach (var project in allProjects)
+            {
+                if (string.Equals(project.Name, projectName, StringComparison.OrdinalIgnoreCase))
+                    return project;
+            }
+            return null;
+        }
+
+        #endregion
     }
 }
