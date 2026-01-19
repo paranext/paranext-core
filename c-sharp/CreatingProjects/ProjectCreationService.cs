@@ -33,19 +33,39 @@ namespace Paranext.DataProvider.CreatingProjects
 
         public static ScrText CreateDefaultBaseProject()
         {
+            return CreateDefaultBaseProject("_TempBase");
+        }
+
+        /// <summary>
+        /// Creates a new ScrText with default values for a new project.
+        /// Defaults:
+        /// - Versification: English
+        /// - Encoding: UTF-8 (65001)
+        /// - NormalizationForm: NFC
+        /// - UsfmVersion: Version3
+        /// - DefaultStylesheetFileName: "usfm.sty"
+        /// </summary>
+        /// <param name="shortName">The short name for the project</param>
+        /// <returns>ScrText with sensible defaults configured</returns>
+        /// <seealso cref="EXT-001 in extraction-plan.md"/>
+        public static ScrText CreateDefaultBaseProject(string shortName)
+        {
             ScrText scrText;
 
             if (ScrTextFactory != null)
             {
-                // Use factory for testing
+                // Use factory for testing - DummyScrText allows setting Name after creation
                 scrText = ScrTextFactory();
+                scrText.Name = shortName;
             }
             else
             {
-                // Create a temporary ProjectName for the base project
-                // This project serves as a template - the actual name will be set later
+                // Create ProjectName with the actual short name - this is critical because
+                // ScrText.Name cannot be changed after creation
+                // Use the Paratext projects directory (ScrTextCollection.SettingsDirectory)
+                string projectsDir = ScrTextCollection.SettingsDirectory ?? Path.GetTempPath();
                 ProjectName projectName =
-                    new() { ShortName = "_TempBase", ProjectPath = Path.GetTempPath() };
+                    new() { ShortName = shortName, ProjectPath = projectsDir };
 
                 // Use ignoreLoadErrors=true to prevent file system access during creation
                 scrText = new(
@@ -471,11 +491,9 @@ namespace Paranext.DataProvider.CreatingProjects
                 }
             }
 
-            // 5. Create default ScrText (CAP-005)
-            var scrText = CreateDefaultBaseProject();
-
-            // 5a. Set project name (this is critical for lookup)
-            scrText.Name = request.ShortName;
+            // 5. Create default ScrText with the correct name (CAP-005)
+            // Note: ScrText.Name cannot be changed after creation, so we must pass the name here
+            var scrText = CreateDefaultBaseProject(request.ShortName);
 
             // 6. Initialize with default values (CAP-006)
             var baseForInit = baseProject ?? scrText;
@@ -501,22 +519,34 @@ namespace Paranext.DataProvider.CreatingProjects
                 scrText.Settings.Copyright = request.Copyright;
             }
 
-            // 9. Register project in collection (this is how tests verify project creation)
-            ScrTextCollection.Add(scrText, skipChangeNotify: true, checkAlreadyExists: false);
+            // 8a. Ensure project has GUID (CAP-008) - required before adding to collection
+            // For new projects, generate a new GUID if not already set
+            if (scrText.Settings.Guid == null)
+            {
+                scrText.Settings.Guid = HexId.CreateNew();
+            }
 
-            // 10. For Study Bible: copy books from base (CAP-010)
+            // 9. Save project to disk (creates Settings.xml and project folder)
+            // This must happen before adding to collection so the project can be discovered
+            scrText.Settings.Save();
+
+            // 10. Register project in collection with notification so UI updates
+            // skipChangeNotify: false ensures ProjectLookupService gets notified
+            ScrTextCollection.Add(scrText, skipChangeNotify: false, checkAlreadyExists: false);
+
+            // 11. For Study Bible: copy books from base (CAP-010)
             if (projectType == ProjectType.StudyBible && baseProject != null)
             {
                 MakeCopyOfBase(scrText, progress);
             }
 
-            // 11. Update comment tags if provided (CAP-012)
+            // 12. Update comment tags if provided (CAP-012)
             if (request.NoteTags != null && request.NoteTags.Count > 0)
             {
                 UpdateCommentTags(scrText, request.NoteTags);
             }
 
-            // 12. Return success with project ID and GUID
+            // 13. Return success with project ID and GUID
             string guid = scrText.Settings.Guid?.ToString() ?? "";
             return CreateProjectResult.Succeeded(request.ShortName, guid);
         }

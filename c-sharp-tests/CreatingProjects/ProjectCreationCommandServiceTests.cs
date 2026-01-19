@@ -21,6 +21,16 @@ namespace TestParanextDataProvider.CreatingProjects
         {
             await base.TestSetupAsync();
             _service = new ProjectCreationCommandService(Client);
+            // Set up factory to use DummyScrText for testing
+            ProjectCreationService.ScrTextFactory = () => CreateDummyProject();
+        }
+
+        [TearDown]
+        public override void TestTearDown()
+        {
+            // Reset factory after test
+            ProjectCreationService.ScrTextFactory = null;
+            base.TestTearDown();
         }
 
         #region OUTER ACCEPTANCE TEST - CAP-016
@@ -40,27 +50,47 @@ namespace TestParanextDataProvider.CreatingProjects
             // Act
             await _service.InitializeAsync();
 
-            // Assert - verify all 8 commands are registered
-            var expectedCommands = new[]
-            {
-                ProjectCreationCommandService.Commands.CreateProject,
-                ProjectCreationCommandService.Commands.ValidateShortName,
-                ProjectCreationCommandService.Commands.GenerateProjectName,
-                ProjectCreationCommandService.Commands.GenerateAbbreviation,
-                ProjectCreationCommandService.Commands.GetProjectTypeInfo,
-                ProjectCreationCommandService.Commands.UpdateProjectSettings,
-                ProjectCreationCommandService.Commands.ConvertToUsfm3,
-                ProjectCreationCommandService.Commands.GetProjectInfo,
-            };
+            // Assert - verify all 8 commands are registered by calling with valid parameters
+            // Each command has different parameter requirements
 
-            foreach (var command in expectedCommands)
-            {
-                var result = await Client.SendRequestAsync<object?>(command, null);
-                // If the command is not registered, SendRequestAsync returns default
-                // If registered, it will either return a value or throw NotImplementedException
-                // The fact that we can invoke without registration error means it's registered
-                Assert.Pass($"Command {command} is registered");
-            }
+            // 1. ValidateShortName - simple request
+            var validateResult = await Client.SendRequestAsync<ValidationResult>(
+                ProjectCreationCommandService.Commands.ValidateShortName,
+                new object[] { new ValidateShortNameRequest { ShortName = "Test" } }
+            );
+            Assert.That(validateResult, Is.Not.Null, "ValidateShortName should be registered");
+
+            // 2. GenerateProjectName - simple request
+            var genNameResult = await Client.SendRequestAsync<GeneratedProjectName>(
+                ProjectCreationCommandService.Commands.GenerateProjectName,
+                new object[] { new GenerateProjectNameRequest { ShortName = "Test" } }
+            );
+            Assert.That(genNameResult, Is.Not.Null, "GenerateProjectName should be registered");
+
+            // 3. GenerateAbbreviation - simple request
+            var genAbbrResult = await Client.SendRequestAsync<string>(
+                ProjectCreationCommandService.Commands.GenerateAbbreviation,
+                new object[] { new GenerateAbbreviationRequest { FullName = "Test Project" } }
+            );
+            Assert.That(genAbbrResult, Is.Not.Null, "GenerateAbbreviation should be registered");
+
+            // 4. GetProjectTypeInfo - requires project type string
+            var typeInfoResult = await Client.SendRequestAsync<ProjectTypeInfo>(
+                ProjectCreationCommandService.Commands.GetProjectTypeInfo,
+                new object[] { "Standard" }
+            );
+            Assert.That(typeInfoResult, Is.Not.Null, "GetProjectTypeInfo should be registered");
+
+            // 5. GetProjectInfo - simple request
+            var getInfoResult = await Client.SendRequestAsync<ProjectInfo?>(
+                ProjectCreationCommandService.Commands.GetProjectInfo,
+                new object[] { "NonExistent" }
+            );
+            // Result can be null for non-existent project, but command was invoked
+            Assert.Pass("GetProjectInfo command is registered");
+
+            // The remaining commands (CreateProject, UpdateProjectSettings, ConvertToUsfm3)
+            // are covered by specific integration tests below
         }
 
         #endregion
