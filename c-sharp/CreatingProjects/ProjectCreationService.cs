@@ -1,7 +1,9 @@
 using System.Text;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
+using Paratext.Data.Repository;
 using Paratext.Data.Users;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.CreatingProjects
@@ -114,6 +116,57 @@ namespace Paranext.DataProvider.CreatingProjects
             throw new NotImplementedException(
                 "CalcFileNamePostPart not yet implemented. See EXT-008 in extraction-plan.md"
             );
+        }
+
+        /// <summary>
+        /// Creates TranslationInformation for project type.
+        /// For derived types, ensures base project has GUID first.
+        ///
+        /// Algorithm (from EXT-012):
+        /// 1. If scrTextBasedOn != null: VersioningManager.EnsureHasGuid(scrTextBasedOn)
+        /// 2. Return new TranslationInformation(projectType, baseName, baseGuid)
+        ///
+        /// For non-derived types (Standard), no base is required.
+        /// For derived types (BackTranslation, Daughter, StudyBible, etc.), base is required.
+        /// ConsultantNotes also requires a base project even though IsDerivedType returns false.
+        /// </summary>
+        /// <param name="projectType">Type of project to create</param>
+        /// <param name="scrTextBasedOn">Base project (required for derived types, optional for others)</param>
+        /// <returns>TranslationInformation configured for the project type</returns>
+        /// <exception cref="InvalidOperationException">Thrown when derived type has no base project</exception>
+        /// <seealso cref="EXT-012 in extraction-plan.md"/>
+        public static TranslationInformation CalculateTranslationInfo(
+            Enum<ProjectType> projectType,
+            ScrText? scrTextBasedOn = null
+        )
+        {
+            // 1. Check if project type requires a base project
+            // IsDerivedType covers: BackTranslation, Daughter, StudyBible, Auxiliary,
+            // TransliterationManual, TransliterationWithEncoder, StudyBibleAdditions
+            // ConsultantNotes requires base but IsDerivedType returns false
+            bool requiresBase =
+                projectType.IsDerivedType()
+                || projectType == ProjectType.ConsultantNotes
+                || projectType == ProjectType.StudyBibleAdditions;
+
+            if (requiresBase && scrTextBasedOn == null)
+            {
+                throw new InvalidOperationException(
+                    "Derived project types require a base project."
+                );
+            }
+
+            // 2. If base provided, ensure it has GUID
+            if (scrTextBasedOn != null)
+            {
+                VersioningManager.EnsureHasGuid(scrTextBasedOn);
+            }
+
+            // 3. Create TranslationInformation
+            string? baseName = scrTextBasedOn?.Name;
+            HexId? baseGuid = scrTextBasedOn?.Settings.Guid;
+
+            return new TranslationInformation(projectType, baseName, baseGuid);
         }
     }
 }
