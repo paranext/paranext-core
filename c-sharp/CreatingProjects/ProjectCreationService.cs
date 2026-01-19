@@ -145,9 +145,7 @@ namespace Paranext.DataProvider.CreatingProjects
             // TransliterationManual, TransliterationWithEncoder, StudyBibleAdditions
             // ConsultantNotes requires base but IsDerivedType returns false
             bool requiresBase =
-                projectType.IsDerivedType()
-                || projectType == ProjectType.ConsultantNotes
-                || projectType == ProjectType.StudyBibleAdditions;
+                projectType.IsDerivedType() || projectType == ProjectType.ConsultantNotes;
 
             if (requiresBase && scrTextBasedOn == null)
             {
