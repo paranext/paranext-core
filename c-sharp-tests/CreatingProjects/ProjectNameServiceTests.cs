@@ -1,14 +1,21 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.CreatingProjects;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.CreatingProjects
 {
     /// <summary>
-    /// Tests for ProjectNameService (CAP-002: GenerateAbbreviation).
-    /// TDD Variant: Classic TDD
+    /// Tests for ProjectNameService.
     ///
+    /// CAP-002: GenerateAbbreviation (FormTextNameAbbrev)
+    /// TDD Variant: Classic TDD
     /// These tests verify the FormTextNameAbbrev algorithm that auto-generates
     /// a short name abbreviation from a full project name.
+    ///
+    /// CAP-003: GenerateProjectName (NextUnusedProjectName)
+    /// TDD Variant: Outside-In TDD
+    /// These tests verify the NextUnusedProjectName function that generates
+    /// unique project names by appending sequential numbers.
     ///
     /// Algorithm (from EXT-006 in extraction-plan.md):
     /// - First letter of each word (word boundary = non-valid char)
@@ -20,8 +27,7 @@ namespace TestParanextDataProvider.CreatingProjects
     [TestFixture]
     [ExcludeFromCodeCoverage]
     [Category("CreatingProjects")]
-    [Category("CAP-002")]
-    public class ProjectNameServiceTests
+    internal class ProjectNameServiceTests : PapiTestBase
     {
         #region GenerateAbbreviation - Basic Tests
 
@@ -352,5 +358,341 @@ namespace TestParanextDataProvider.CreatingProjects
         }
 
         #endregion
+
+        #region CAP-003: NextUnusedProjectName - Acceptance Test (Outer Loop)
+
+        /// <summary>
+        /// CAP-003 Acceptance Test: NextUnusedProjectName generates unique project names
+        /// by appending sequential numbers when names are taken.
+        /// This is the ACCEPTANCE TEST for CAP-003.
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Category("CAP-003")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("ScenarioId", "TS-022")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Acceptance: NextUnusedProjectName generates unique names")]
+        public void NextUnusedProjectName_AcceptanceTest()
+        {
+            // Arrange - Add existing projects MP, MP1, MP2
+            var mp = CreateDummyProject();
+            mp.Name = "MP";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(mp), mp);
+
+            var mp1 = CreateDummyProject();
+            mp1.Name = "MP1";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(mp1), mp1);
+
+            var mp2 = CreateDummyProject();
+            mp2.Name = "MP2";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(mp2), mp2);
+
+            // Act - Request next unused name starting with "MP"
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName("MP", "My Project");
+
+            // Assert - Should return MP3 as MP, MP1, MP2 are taken
+            Assert.That(shortName, Is.EqualTo("MP3"));
+            Assert.That(fullName, Is.EqualTo("My Project3"));
+        }
+
+        #endregion
+
+        #region CAP-003: NextUnusedProjectName - Default Names
+
+        /// <summary>
+        /// CAP-003: When no input is provided, returns default project names.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-023")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Empty input returns default names")]
+        public void NextUnusedProjectName_EmptyInput_ReturnsDefaultNames()
+        {
+            // Act - Call with no parameters
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName();
+
+            // Assert - Should return default names (implementation defined)
+            Assert.That(shortName, Is.Not.Null.And.Not.Empty);
+            Assert.That(fullName, Is.Not.Null.And.Not.Empty);
+            Assert.That(shortName.Length, Is.InRange(3, 8), "Short name should be 3-8 chars");
+        }
+
+        /// <summary>
+        /// CAP-003: When null is provided, returns default project names.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-023")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Null input returns default names")]
+        public void NextUnusedProjectName_NullInput_ReturnsDefaultNames()
+        {
+            // Act - Call with null parameters
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(null, null);
+
+            // Assert - Should return default names
+            Assert.That(shortName, Is.Not.Null.And.Not.Empty);
+            Assert.That(fullName, Is.Not.Null.And.Not.Empty);
+        }
+
+        #endregion
+
+        #region CAP-003: NextUnusedProjectName - Available Names
+
+        /// <summary>
+        /// CAP-003: When provided name is available, returns it as-is.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-024")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Available name returns as-is")]
+        public void NextUnusedProjectName_AvailableName_ReturnsAsIs()
+        {
+            // Arrange - No existing projects with this name
+
+            // Act
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(
+                "NewProj",
+                "New Project"
+            );
+
+            // Assert - Should return the names unchanged
+            Assert.That(shortName, Is.EqualTo("NewProj"));
+            Assert.That(fullName, Is.EqualTo("New Project"));
+        }
+
+        #endregion
+
+        #region CAP-003: NextUnusedProjectName - Name Conflicts
+
+        /// <summary>
+        /// CAP-003: When name exists, appends number to make it unique.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-022")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Existing name gets number appended")]
+        public void NextUnusedProjectName_NameExists_AppendsNumber()
+        {
+            // Arrange - Add existing project
+            var scrText = CreateDummyProject();
+            scrText.Name = "TestPrj";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(scrText), scrText);
+
+            // Act
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(
+                "TestPrj",
+                "Test Project"
+            );
+
+            // Assert - Should return TestPrj1
+            Assert.That(shortName, Is.EqualTo("TestPrj1"));
+            Assert.That(fullName, Is.EqualTo("Test Project1"));
+        }
+
+        /// <summary>
+        /// CAP-003: When multiple numbered names exist, returns next available.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-078")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Multiple existing names returns next available number")]
+        public void NextUnusedProjectName_MultipleExist_ReturnsNextAvailable()
+        {
+            // Arrange - Add existing projects Test, Test1, Test2
+            var test = CreateDummyProject();
+            test.Name = "Test";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(test), test);
+
+            var test1 = CreateDummyProject();
+            test1.Name = "Test1";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(test1), test1);
+
+            var test2 = CreateDummyProject();
+            test2.Name = "Test2";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(test2), test2);
+
+            // Act
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(
+                "Test",
+                "Test Project"
+            );
+
+            // Assert - Should return Test3
+            Assert.That(shortName, Is.EqualTo("Test3"));
+            Assert.That(fullName, Is.EqualTo("Test Project3"));
+        }
+
+        /// <summary>
+        /// CAP-003: When there's a gap in numbers (e.g., Test, Test2 but no Test1),
+        /// should return the first available number.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-078")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Gap in numbers returns first available")]
+        public void NextUnusedProjectName_GapInNumbers_ReturnsFirstAvailable()
+        {
+            // Arrange - Add Test and Test2, but NOT Test1
+            var test = CreateDummyProject();
+            test.Name = "Test";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(test), test);
+
+            var test2 = CreateDummyProject();
+            test2.Name = "Test2";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(test2), test2);
+
+            // Act
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(
+                "Test",
+                "Test Project"
+            );
+
+            // Assert - Should return Test1 (first available gap)
+            Assert.That(shortName, Is.EqualTo("Test1"));
+            Assert.That(fullName, Is.EqualTo("Test Project1"));
+        }
+
+        #endregion
+
+        #region CAP-003: NextUnusedProjectName - Force Numbered
+
+        /// <summary>
+        /// CAP-003: When forceNumbered is true, always appends number even if base is available.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-078")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Force numbered always appends number")]
+        public void NextUnusedProjectName_ForceNumbered_AlwaysAppendsNumber()
+        {
+            // Arrange - No existing projects, but force numbered
+
+            // Act
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(
+                "NewProj",
+                "New Project",
+                forceNumbered: true
+            );
+
+            // Assert - Should return NewProj1 even though NewProj is available
+            Assert.That(shortName, Is.EqualTo("NewProj1"));
+            Assert.That(fullName, Is.EqualTo("New Project1"));
+        }
+
+        /// <summary>
+        /// CAP-003: When forceNumbered is true and numbered names exist, returns next number.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("CAP-003")]
+        [Property("ScenarioId", "TS-078")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Force numbered with existing numbered names")]
+        public void NextUnusedProjectName_ForceNumbered_WithExistingNumbered_ReturnsNextNumber()
+        {
+            // Arrange - Add existing Test1
+            var test1 = CreateDummyProject();
+            test1.Name = "Test1";
+            ParatextProjects.FakeAddProject(CreateProjectDetails(test1), test1);
+
+            // Act
+            var (shortName, fullName) = ProjectNameService.NextUnusedProjectName(
+                "Test",
+                "Test Project",
+                forceNumbered: true
+            );
+
+            // Assert - Should return Test2 (skipping Test which is available but not numbered)
+            Assert.That(shortName, Is.EqualTo("Test2"));
+            Assert.That(fullName, Is.EqualTo("Test Project2"));
+        }
+
+        #endregion
+
+        #region CAP-003: NextUnusedProjectName - Invariants
+
+        /// <summary>
+        /// CAP-003 Invariant: Returned short name is always valid (3-8 chars, valid chars).
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Category("CAP-003")]
+        [Property("InvariantId", "INV-003")]
+        [Property("BehaviorId", "BHV-007")]
+        [TestCase("ABC", "ABC Project")]
+        [TestCase("Test", "Test Project")]
+        [TestCase("ABCDEFGH", "Very Long Name")]
+        [Description("Returned short name is always valid")]
+        public void NextUnusedProjectName_ReturnsValidShortName(
+            string inputShort,
+            string inputFull
+        )
+        {
+            // Act
+            var (shortName, _) = ProjectNameService.NextUnusedProjectName(inputShort, inputFull);
+
+            // Assert - Short name must be valid
+            Assert.That(shortName, Is.Not.Null.And.Not.Empty);
+            Assert.That(shortName.Length, Is.InRange(3, 8), "Length must be 3-8");
+
+            const string validChars =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+            foreach (char c in shortName)
+            {
+                Assert.That(validChars.Contains(c), Is.True, $"Invalid char '{c}' in short name");
+            }
+        }
+
+        /// <summary>
+        /// CAP-003 Invariant: Returned names are never duplicates of existing projects.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Category("CAP-003")]
+        [Property("InvariantId", "INV-003")]
+        [Property("BehaviorId", "BHV-007")]
+        [Description("Returned name is never a duplicate")]
+        public void NextUnusedProjectName_NeverReturnsDuplicate()
+        {
+            // Arrange - Add several existing projects
+            for (int i = 1; i <= 5; i++)
+            {
+                var scrText = CreateDummyProject();
+                scrText.Name = i == 1 ? "Test" : $"Test{i - 1}";
+                ParatextProjects.FakeAddProject(CreateProjectDetails(scrText), scrText);
+            }
+
+            // Act
+            var (shortName, _) = ProjectNameService.NextUnusedProjectName("Test", "Test Project");
+
+            // Assert - Returned name should not exist in collection
+            var existingProjects = ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .Select(p => p.Name)
+                .ToList();
+            Assert.That(
+                existingProjects,
+                Does.Not.Contain(shortName),
+                $"Returned name '{shortName}' already exists"
+            );
+        }
+
+        #endregion
     }
 }
+
