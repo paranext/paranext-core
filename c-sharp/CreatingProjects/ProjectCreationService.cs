@@ -493,13 +493,7 @@ namespace Paranext.DataProvider.CreatingProjects
             // 8. Set additional settings from request
             if (!string.IsNullOrEmpty(request.LanguageId))
             {
-                var langId = new Paratext.Data.Languages.LanguageId(
-                    request.LanguageId,
-                    null,
-                    null,
-                    null
-                );
-                scrText.Settings.LanguageID = langId;
+                scrText.Settings.LanguageID = CreateLanguageId(request.LanguageId);
             }
 
             if (!string.IsNullOrEmpty(request.Copyright))
@@ -564,13 +558,7 @@ namespace Paranext.DataProvider.CreatingProjects
 
             if (!string.IsNullOrEmpty(request.LanguageId))
             {
-                var langId = new Paratext.Data.Languages.LanguageId(
-                    request.LanguageId,
-                    null,
-                    null,
-                    null
-                );
-                scrText.Settings.LanguageID = langId;
+                scrText.Settings.LanguageID = CreateLanguageId(request.LanguageId);
             }
 
             // 3. Update comment tags
@@ -624,13 +612,21 @@ namespace Paranext.DataProvider.CreatingProjects
         /// <returns>ScrText if found, null otherwise</returns>
         private static ScrText? FindProjectByName(string projectName)
         {
-            var allProjects = ScrTextCollection.ScrTexts(IncludeProjects.Everything);
-            foreach (var project in allProjects)
-            {
-                if (string.Equals(project.Name, projectName, StringComparison.OrdinalIgnoreCase))
-                    return project;
-            }
-            return null;
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .FirstOrDefault(p =>
+                    string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)
+                );
+        }
+
+        /// <summary>
+        /// Creates a LanguageId from a language code string.
+        /// </summary>
+        /// <param name="languageCode">The language code (e.g., "en", "fr", "es")</param>
+        /// <returns>A new LanguageId instance</returns>
+        private static Paratext.Data.Languages.LanguageId CreateLanguageId(string languageCode)
+        {
+            return new Paratext.Data.Languages.LanguageId(languageCode, null, null, null);
         }
 
         #endregion
