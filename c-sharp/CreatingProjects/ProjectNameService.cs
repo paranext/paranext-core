@@ -26,6 +26,7 @@ namespace Paranext.DataProvider.CreatingProjects
             if (string.IsNullOrEmpty(fullName))
                 return "";
 
+            string validChars = ProjectConstants.ValidProjectNameChars;
             StringBuilder letters = new StringBuilder();
             StringBuilder digits = new StringBuilder();
             bool lastWasWordChar = false;
@@ -37,7 +38,7 @@ namespace Paranext.DataProvider.CreatingProjects
                     digits.Append(c);
                     lastWasWordChar = true;
                 }
-                else if (ProjectConstants.ValidProjectNameChars.Contains(c))
+                else if (validChars.Contains(c))
                 {
                     // Take first letter of each "word"
                     if (!lastWasWordChar)
@@ -54,21 +55,18 @@ namespace Paranext.DataProvider.CreatingProjects
             }
 
             // Combine: letters + last 2 digits
-            string digitPart =
-                digits.Length > 2
-                    ? digits.ToString().Substring(digits.Length - 2)
-                    : digits.ToString();
+            string digitPart = digits.Length > 2 ? digits.ToString()[^2..] : digits.ToString();
             string result = letters.ToString() + digitPart;
 
             // Ensure minimum 3 characters (pad from original valid chars)
-            if (result.Length < 3)
+            if (result.Length < ProjectConstants.MinShortNameLength)
             {
                 // First try unique characters
                 foreach (char c in fullName)
                 {
                     if (
-                        ProjectConstants.ValidProjectNameChars.Contains(c)
-                        && result.Length < 3
+                        validChars.Contains(c)
+                        && result.Length < ProjectConstants.MinShortNameLength
                         && !result.Contains(char.ToUpper(c))
                     )
                     {
@@ -77,12 +75,15 @@ namespace Paranext.DataProvider.CreatingProjects
                 }
 
                 // If still too short, allow duplicates from original
-                while (result.Length < 3)
+                while (result.Length < ProjectConstants.MinShortNameLength)
                 {
                     bool added = false;
                     foreach (char c in fullName)
                     {
-                        if (ProjectConstants.ValidProjectNameChars.Contains(c) && result.Length < 3)
+                        if (
+                            validChars.Contains(c)
+                            && result.Length < ProjectConstants.MinShortNameLength
+                        )
                         {
                             result += char.ToUpper(c);
                             added = true;
@@ -94,9 +95,9 @@ namespace Paranext.DataProvider.CreatingProjects
                 }
             }
 
-            // Truncate to maximum 8
-            if (result.Length > 8)
-                result = result.Substring(0, 8);
+            // Truncate to maximum
+            if (result.Length > ProjectConstants.MaxShortNameLength)
+                result = result[..ProjectConstants.MaxShortNameLength];
 
             return result;
         }

@@ -13,6 +13,11 @@ namespace Paranext.DataProvider.CreatingProjects
     public static class ProjectCreationService
     {
         /// <summary>
+        /// Function to create a ScrText. Can be overridden for testing.
+        /// </summary>
+        internal static Func<ScrText>? ScrTextFactory { get; set; }
+
+        /// <summary>
         /// Creates a new ScrText with default values for a new project.
         /// Defaults:
         /// - Versification: English
@@ -23,10 +28,6 @@ namespace Paranext.DataProvider.CreatingProjects
         /// </summary>
         /// <returns>ScrText with sensible defaults configured</returns>
         /// <seealso cref="EXT-001 in extraction-plan.md"/>
-        /// <summary>
-        /// Function to create a ScrText. Can be overridden for testing.
-        /// </summary>
-        internal static Func<ScrText>? ScrTextFactory { get; set; }
 
         public static ScrText CreateDefaultBaseProject()
         {
@@ -80,7 +81,7 @@ namespace Paranext.DataProvider.CreatingProjects
         /// </summary>
         /// <param name="scrText">Target project to initialize</param>
         /// <param name="scrTextBase">Source project for settings</param>
-        /// <param name="shortName">Project short name</param>
+        /// <param name="shortName">Project short name (reserved for FileNamePostPart calculation)</param>
         /// <param name="longName">Project full name</param>
         /// <seealso cref="EXT-002 in extraction-plan.md"/>
         public static void InitializeScrTextWithDefaultValues(
