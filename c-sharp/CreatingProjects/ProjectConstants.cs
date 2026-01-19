@@ -44,6 +44,17 @@ namespace Paranext.DataProvider.CreatingProjects
         public const string StudyBibleStylesheetFileName = "usfm_sb.sty";
 
         /// <summary>
+        /// SFM file extension for Scripture book files.
+        /// Used by CalcFileNamePostPart to generate file name suffixes.
+        /// </summary>
+        public const string SfmFileExtension = ".SFM";
+
+        /// <summary>
+        /// USFM figure marker used to detect books that need USFM 3 conversion.
+        /// </summary>
+        public const string FigMarker = "\\fig ";
+
+        /// <summary>
         /// Windows reserved file names that cannot be used as project names.
         /// These names are reserved by the Windows operating system.
         /// </summary>
