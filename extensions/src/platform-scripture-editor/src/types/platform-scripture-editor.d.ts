@@ -10,6 +10,7 @@ declare module 'platform-scripture-editor' {
     LocalizeKey,
     UsfmScrRefVerseLocation,
     UsfmVerseLocation,
+    UsjDocumentLocation,
     UsjChapterLocation,
     UsjFlatTextChapterLocation,
   } from 'platform-bible-utils';
@@ -103,14 +104,14 @@ declare module 'platform-scripture-editor' {
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
-    start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    start: UsjChapterLocation<UsjDocumentLocation> | UsfmVerseLocation | ScriptureLocation;
     /**
      * Ending point where the check result applies in the document
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
-    end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    end: UsjChapterLocation<UsjDocumentLocation> | UsfmVerseLocation | ScriptureLocation;
   };
 
   // #endregion USFM locations and ranges

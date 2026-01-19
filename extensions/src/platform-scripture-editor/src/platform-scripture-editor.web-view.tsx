@@ -26,6 +26,7 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -550,9 +551,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             severity: 'error',
             message: formatReplacementString(
               localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-              {
-                projectName,
-              },
+              { projectName },
             ),
           });
         } catch (innerError) {
@@ -647,24 +646,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         hasFirstRetrievedScripture.current = true;
         scrollToVerse(scrRef);
 
-        let nextTextLocationJsonPath = '';
+        let nextTextLocation: UsjDocumentLocation | undefined;
         try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
+          nextTextLocation = new UsjReaderWriter(usjFromPdp, {
             markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
+          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
 
         editorRef.current?.focus();
 
-        if (!nextTextLocationJsonPath) return;
+        if (!nextTextLocation) return;
 
         editorRef.current?.setSelection({
-          start: {
-            jsonPath: nextTextLocationJsonPath,
-            offset: 0,
-          },
+          start: nextTextLocation,
         });
       });
 
