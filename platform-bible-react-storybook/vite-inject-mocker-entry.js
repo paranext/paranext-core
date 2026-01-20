@@ -3616,9 +3616,6 @@ video:where(.pr-twp,.pr-twp *) {
 .disabled\\:tw-pointer-events-none:disabled {
   pointer-events: none;
 }
-.disabled\\:tw-pointer-events-auto:disabled {
-  pointer-events: auto;
-}
 .disabled\\:tw-cursor-not-allowed:disabled {
   cursor: not-allowed;
 }
@@ -6651,6 +6648,10 @@ span.read img {
 
 .footnote-editor .typeahead-popover {
   z-index: 300;
+}
+
+.footnote-editor .immutable-note-caller {
+  display: none;
 }
 /**
  * This file was automatically generated on installation of the Shadcn/Lexical editor. The default
