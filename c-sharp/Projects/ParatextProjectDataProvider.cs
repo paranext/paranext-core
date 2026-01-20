@@ -357,18 +357,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 || comment.StartPosition < 0
                 || comment.SelectedText == null
             )
-                throw new InvalidOperationException(
+            {
+                Console.Error.WriteLine(
                     "VerseRef, StartPosition, and SelectedText are required when Verse, ContextBefore, and ContextAfter are not provided"
                 );
+            }
+            else
+            {
+                // Get the values of Verse, ContextBefore, and ContextAfter from the scrText since that's
+                // the data that is supposed to be saved (already has spaces instead of newlines)
+                // From CommentManager.CreateThread
+                comment.Verse = scrText.Parser.GetVerseUsfmText(comment.VerseRef);
 
-            // Get the values of Verse, ContextBefore, and ContextAfter from the scrText since that's
-            // the data that is supposed to be saved (already has spaces instead of newlines)
-            // From CommentManager.CreateThread
-            comment.Verse = scrText.Parser.GetVerseUsfmText(comment.VerseRef);
-            comment.ContextBefore = comment.Verse[..comment.StartPosition];
-            comment.ContextAfter = comment.Verse[
-                (comment.StartPosition + comment.SelectedText.Length)..
-            ];
+                if (comment.Verse == null)
+                {
+                    Console.Error.WriteLine(
+                        $"Unable to retrieve verse text for VerseRef {comment.VerseRef}"
+                    );
+                }
+                else
+                {
+                    comment.ContextBefore = comment.Verse[..comment.StartPosition];
+                    comment.ContextAfter = comment.Verse[
+                        (comment.StartPosition + comment.SelectedText.Length)..
+                    ];
+                }
+            }
         }
 
         // Create a ScriptureSelection to put the USFM snippets through the same processing as they
