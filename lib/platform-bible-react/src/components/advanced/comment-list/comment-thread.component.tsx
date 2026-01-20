@@ -15,7 +15,7 @@ import {
   SerializedParagraphNode,
   SerializedTextNode,
 } from 'lexical';
-import { ArrowUp, AtSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -77,11 +77,14 @@ export function CommentThread({
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
+  handleReadStatusChange,
   assignableUsers,
   canUserAddCommentToThread,
   canUserAssignThreadCallback,
   canUserResolveThreadCallback,
   canUserEditOrDeleteCommentCallback,
+  isRead: isReadProp = false,
+  autoReadDelay = 5,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
@@ -92,6 +95,9 @@ export function CommentThread({
   const [pendingAssignedUser, setPendingAssignedUser] = useState<string | undefined>(undefined);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);
+  const [isRead, setIsRead] = useState<boolean>(isReadProp);
+  const [manuallyUnread, setManuallyUnread] = useState<boolean>(false);
+  const autoReadTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Check async permissions when thread is selected
   useEffect(() => {
@@ -140,9 +146,22 @@ export function CommentThread({
     setEditorState(initialValue);
   }, []);
 
+  const toggleRead = useCallback(() => {
+    const newIsRead = !isRead;
+    setIsRead(newIsRead);
+    if (!newIsRead) {
+      setManuallyUnread(true);
+    } else {
+      setManuallyUnread(false);
+    }
+    handleReadStatusChange?.(threadId, newIsRead);
+  }, [isRead, handleReadStatusChange, threadId]);
+
   useEffect(() => {
     const verseTextElement = verseTextRef.current;
-    if (!verseTextElement) return;
+    if (!verseTextElement) {
+      return undefined;
+    }
 
     const checkOverflow = () => {
       setIsVerseOverflowing(verseTextElement.scrollWidth > verseTextElement.clientWidth);
@@ -156,6 +175,21 @@ export function CommentThread({
   useEffect(() => {
     setShowAllReplies(false);
   }, [isSelected]);
+
+  useEffect((): void | (() => void) => {
+    if (isSelected && !isRead && !manuallyUnread) {
+      const timer = setTimeout(() => {
+        setIsRead(true);
+        handleReadStatusChange?.(threadId, true);
+      }, autoReadDelay * 1000);
+      autoReadTimerRef.current = timer;
+      return () => clearTimeout(timer);
+    }
+    if (autoReadTimerRef.current) {
+      clearTimeout(autoReadTimerRef.current);
+      autoReadTimerRef.current = undefined;
+    }
+  }, [isSelected, isRead, manuallyUnread, autoReadDelay, threadId, handleReadStatusChange]);
 
   const localizedReplies = useMemo(
     () => ({
@@ -269,9 +303,10 @@ export function CommentThread({
         'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         { 'tw-cursor-pointer hover:tw-shadow-md': !isSelected },
         {
-          'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved',
-          'tw-bg-background': isSelected && threadStatus !== 'Resolved',
+          'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
+          'tw-bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
           'tw-bg-muted': threadStatus === 'Resolved',
+          'tw-bg-blue-50': !isRead && !isSelected && threadStatus !== 'Resolved',
         },
       )}
       onClick={() => {
@@ -281,11 +316,25 @@ export function CommentThread({
     >
       <CardContent className="tw-flex tw-flex-col tw-gap-2 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
-          {localizedAssignedToText && (
-            <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
-              {localizedAssignedToText}
-            </Badge>
-          )}
+          <div className="tw-flex tw-items-center tw-gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleRead();
+              }}
+              className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
+              aria-label={isRead ? 'Mark as unread' : 'Mark as read'}
+            >
+              {isRead ? <MailOpen /> : <Mail />}
+            </Button>
+            {localizedAssignedToText && (
+              <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
+                {localizedAssignedToText}
+              </Badge>
+            )}
+          </div>
           <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-baseline tw-gap-2">
             {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}

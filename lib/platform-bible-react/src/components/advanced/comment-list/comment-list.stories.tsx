@@ -73,6 +73,7 @@ function CommentListStory({
             deleted: false,
             hideInTextWindow: false,
             language: 'en',
+            isRead: false,
             startPosition: 0,
             selectedText: '',
             contextBefore: '',

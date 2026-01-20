@@ -140,6 +140,8 @@ export interface CommentThreadProps {
   handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
   /** Handler for deleting a comment */
   handleDeleteComment: (commentId: string) => Promise<boolean>;
+  /** Handler for updating read status */
+  handleReadStatusChange?: (threadId: string, isRead: boolean) => void;
   /**
    * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
    * (empty string) for unassigned.
@@ -165,6 +167,10 @@ export interface CommentThreadProps {
    * that resolves to true if the user can edit or delete the comment, false otherwise.
    */
   canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+  /** Whether the thread has been read (by the current user) */
+  isRead?: boolean;
+  /** Delay in seconds before auto-marking as read when selected, default 5s */
+  autoReadDelay?: number;
 }
 
 /** Props for the CommentItem component */
