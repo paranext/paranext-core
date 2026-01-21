@@ -150,6 +150,28 @@ internal class CommentConverterTests : PapiTestBase
         Assert.That(result.Contents!.InnerXml, Is.EqualTo("<p>content</p>"));
     }
 
+    private Comment CreateBasicComment()
+    {
+        XmlDocument contentsDoc = new XmlDocument();
+        contentsDoc.LoadXml("<Contents>Test Comment</Contents>");
+
+        DummyUser user_Tim = new DummyUser("Tim Steenwyk");
+        Comment testComment = new Comment(user_Tim);
+
+        testComment.Thread = "4217dff8";
+        testComment.VerseRefStr = "GEN 1:24";
+        testComment.Date = "2011-06-20T16:41:13.4239342-04:00";
+        testComment.SelectedText = "command";
+        testComment.StartPosition = 19;
+        testComment.ContextBefore = "\\v 24 God said, “I ";
+        testComment.ContextAfter = " the earth to give life";
+        testComment.Status = NoteStatus.Todo;
+        testComment.HideInTextWindow = false;
+        testComment.Contents = contentsDoc.DocumentElement;
+
+        return testComment;
+    }
+
     private Comment CreateConflictComment()
     {
         XmlDocument contentsDoc = new XmlDocument();

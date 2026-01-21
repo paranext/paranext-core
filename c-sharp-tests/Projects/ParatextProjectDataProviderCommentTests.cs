@@ -97,6 +97,7 @@ namespace TestParanextDataProvider.Projects
 
             // Add the comment text to Contents
             comment.SetContentsFromHtml(commentText);
+            //comment.AddTextToContent(commentText, false);
 
             return comment;
         }
@@ -1161,6 +1162,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = "Team"
             };
+            // assignComment.AddTextToContent("Assigning to team for review", false);
             string commentText = "Assigning to team for review";
             assignComment.SetContentsFromHtml(commentText);
             _provider.AddCommentToThread(assignComment);
