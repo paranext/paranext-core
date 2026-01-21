@@ -48,7 +48,6 @@ export function useInventory(
 ): UseInventoryResult {
   const inventoryDataProvider = useDataProvider('platformScripture.inventoryDataProvider');
 
-  // State management
   const [inventoryItems, setInventoryItems] = useState<SummarizedInventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -104,7 +103,6 @@ export function useInventory(
   const debouncedLoadInventoryItems = useMemo(
     () =>
       debounce(async (range: InventoryInputRange) => {
-        // Early return if required dependencies are missing
         if (!inventoryDataProvider || !projectId || !inventoryId) {
           setInventoryItems([]);
           setIsLoading(false);
@@ -121,7 +119,6 @@ export function useInventory(
             await cleanup();
           }
 
-          // Build new inventory summary for the specified range
           const summary = await inventoryDataProvider.buildInventorySummary(inventoryId, [range]);
 
           // Handle component unmount during async operation
@@ -133,7 +130,6 @@ export function useInventory(
 
           currentSummaryRef.current = summary;
 
-          // Flatten inventory items from all text types into a single array
           const allItems: SummarizedInventoryItem[] = [];
           summary.inventoryCountLists.forEach((itemList) => {
             allItems.push(...itemList.items);
@@ -159,12 +155,10 @@ export function useInventory(
     [inventoryDataProvider, projectId, inventoryId, cleanup],
   );
 
-  // Trigger inventory loading when input range changes
   useEffect(() => {
     debouncedLoadInventoryItems(inputRange);
   }, [debouncedLoadInventoryItems, inputRange]);
 
-  // Configure job handlers for inventory itemization
   const jobHandlers = useMemo(() => {
     if (!inventoryDataProvider) {
       return undefined;
@@ -179,7 +173,6 @@ export function useInventory(
     };
   }, [inventoryDataProvider]);
 
-  // Create the job executor using the generic useJob hook
   const executeInventoryJob = useJob<
     { summarizedInventoryId: string; key: string }, // TParams
     string, // TJobId
@@ -221,7 +214,6 @@ export function useInventory(
     [inventoryDataProvider, executeInventoryJob],
   );
 
-  // Track component mount state to prevent state updates after unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
