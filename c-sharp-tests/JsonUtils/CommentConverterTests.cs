@@ -6,6 +6,7 @@ using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
+using TestParanextDataProvider;
 
 namespace TestParanextDataProvider.JsonUtils;
 
@@ -23,7 +24,7 @@ internal class CommentConverterTests : PapiTestBase
     [Test]
     public void Serialize_CommentWithBasicFields_CorrectJsonProduced()
     {
-        Comment testComment = CreateBasicComment();
+        Comment testComment = CommentTestHelper.CreateBasicComment();
 
         var json = JsonSerializer.Serialize<Comment>(testComment, _serializationOptions);
         Assert.That(json, Does.Contain(@"""thread"":""4217dff8"""));
@@ -42,7 +43,7 @@ internal class CommentConverterTests : PapiTestBase
     [Test]
     public void RoundTrip_CommentWithBasicFields_AllFieldsPreserved()
     {
-        Comment testComment = CreateBasicComment();
+        Comment testComment = CommentTestHelper.CreateBasicComment();
 
         var json = JsonSerializer.Serialize<Comment>(testComment, _serializationOptions);
         var deserialized = JsonSerializer.Deserialize<Comment>(json, _serializationOptions);
@@ -77,7 +78,7 @@ internal class CommentConverterTests : PapiTestBase
         Assert.That(
             json,
             Does.Contain(
-                @"""contents"":""\n    Two different people edited this verse. The change from Tim Steenwyk(Tuesday, August 16, 2011 3:49 PM) was accepted in the text. The change from Michael Lothers(Tuesday, August 16, 2011 3:48 PM) is shown in this note (in red) and is not in the current copy of the text. In some cases you will need to right click in the verse and click \u0027View History for Verse(s)\u0027 to see exactly when and where the change was made.\n    \u003Cp\u003E\u003Clanguage name=\u0022es-015-vaidika\u0022\u003E\u003Cp\u003E\n            \\v 1 When Jesus was born in the\n            \u003Cbold\u003E\u003Ccolor name=\u0022red\u0022\u003Esmall \u003C/color\u003E\u003C/bold\u003E\n            village of Bethlehem in Judea, Herod was king. During this time some wise men\\f \u002B \\fr 2:1 \\fq wise men: \\ft People famous for studying the stars.\\f* from the east came to Jerusalem\n        \u003C/p\u003E\u003C/language\u003E\u003C/p\u003E"""
+                @"""contents"":""\n    Two different people edited this verse. The change from Tim Steenwyk(Tuesday, August 16, 2011 3:49 PM) was accepted in the text. The change from Michael Lothers(Tuesday, August 16, 2011 3:48 PM) is shown in this note (in red) and is not in the current copy of the text. In some cases you will need to right click in the verse and click 'View History for Verse(s)' to see exactly when and where the change was made.\n    <p><language name=""es-015-vaidika""><p>\n            \\v 1 When Jesus was born in the\n            <bold><color name=""red"">small </color></bold>\n            village of Bethlehem in Judea, Herod was king. During this time some wise men\\f + \\fr 2:1 \\fq wise men: \\ft People famous for studying the stars.\\f* from the east came to Jerusalem\n        </p></language></p>"""
             )
         );
     }
@@ -147,28 +148,6 @@ internal class CommentConverterTests : PapiTestBase
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Contents, Is.Not.Null);
         Assert.That(result.Contents!.InnerXml, Is.EqualTo("<p>content</p>"));
-    }
-
-    private Comment CreateBasicComment()
-    {
-        XmlDocument contentsDoc = new XmlDocument();
-        contentsDoc.LoadXml("<Contents>Test Comment</Contents>");
-
-        DummyUser user_Tim = new DummyUser("Tim Steenwyk");
-        Comment testComment = new Comment(user_Tim);
-
-        testComment.Thread = "4217dff8";
-        testComment.VerseRefStr = "GEN 1:24";
-        testComment.Date = "2011-06-20T16:41:13.4239342-04:00";
-        testComment.SelectedText = "command";
-        testComment.StartPosition = 19;
-        testComment.ContextBefore = "\\v 24 God said, “I ";
-        testComment.ContextAfter = " the earth to give life";
-        testComment.Status = NoteStatus.Todo;
-        testComment.HideInTextWindow = false;
-        testComment.Contents = contentsDoc.DocumentElement;
-
-        return testComment;
     }
 
     private Comment CreateConflictComment()

@@ -216,6 +216,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return updatedComments;
     }
 
+    // For now, only allow adding comments, not changing or removing existing PT 9 comments
+    // Too much risk of data loss while there are other bugs related to comments floating around
     public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
