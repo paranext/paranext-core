@@ -11,10 +11,12 @@ declare module 'platform-scripture-editor' {
   import type {
     KebabCase,
     LocalizeKey,
+    PlatformEvent,
     UsfmScrRefVerseLocation,
     UsfmVerseLocation,
     UsjChapterLocation,
     UsjFlatTextChapterLocation,
+    UsjVerseRefChapterLocation,
   } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
@@ -148,6 +150,32 @@ declare module 'platform-scripture-editor' {
 
   // #endregion editor WebViewController messages
 
+  // #region editor selection tracking
+
+  /**
+   * Data emitted when an editor's selection changes. Subscribe to the
+   * `platformScriptureEditor.onDidSelectionChange` network event using
+   * `papi.network.getNetworkEvent()` to receive these events.
+   *
+   * @example
+   *
+   * ```typescript
+   * const unsubscribe = papi.network
+   *   .getNetworkEvent('platformScriptureEditor.onDidSelectionChange')
+   *   .event((data: EditorSelectionData) => {
+   *     console.log(`Editor ${data.webViewId} selection changed:`, data.selection);
+   *   });
+   * ```
+   */
+  export type EditorSelectionData = {
+    /** The WebView ID of the editor whose selection changed */
+    webViewId: string;
+    /** The current selection in the editor, or undefined if there is no selection */
+    selection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
+  };
+
+  // #endregion editor selection tracking
+
   // #region USFM locations and ranges
 
   /**
@@ -189,6 +217,17 @@ declare module 'platform-scripture-editor' {
      * {@link ScriptureLocation} for details.
      */
     end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+  };
+
+  /**
+   * A pair of Scripture positions that are in USJ format specifically using
+   * {@link UsjVerseRefChapterLocation}
+   */
+  export type ScriptureRangeUsjVerseRefChapterLocation = {
+    /** Starting point where the check result applies in the document */
+    start: UsjVerseRefChapterLocation;
+    /** Ending point where the check result applies in the document */
+    end: UsjVerseRefChapterLocation;
   };
 
   // #endregion USFM locations and ranges
@@ -370,6 +409,25 @@ declare module 'platform-scripture-editor' {
      *   deleted whereas `removed` is a programmatic removal
      */
     runAnnotationAction(annotationId: string, action: AnnotationAction): Promise<void>;
+    /**
+     * Get the current selection in the editor.
+     *
+     * @returns The current selection range, or undefined if there is no selection
+     */
+    getSelection(): Promise<ScriptureRangeUsjVerseRefChapterLocation | undefined>;
+    /**
+     * **INTERNAL - DO NOT USE DIRECTLY.** This method is intended to be called only by the
+     * Scripture editor WebView itself to notify the backend of selection changes. External callers
+     * should subscribe to the `platformScriptureEditor.onDidSelectionChange` network event or use
+     * `getSelection()` instead.
+     *
+     * @param selection The new selection in Scripture range format, or undefined if there is no
+     *   selection
+     * @internal
+     */
+    updateSelectionInternal(
+      selection: ScriptureRangeUsjVerseRefChapterLocation | undefined,
+    ): Promise<void>;
   }>;
 
   // #endregion editor WebView types

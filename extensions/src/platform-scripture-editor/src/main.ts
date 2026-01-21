@@ -6,12 +6,14 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { getErrorMessage, serialize } from 'platform-bible-utils';
+import { getErrorMessage, PlatformEventEmitter, serialize } from 'platform-bible-utils';
 import {
   EditorDecorations,
+  EditorSelectionData,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
+  ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
@@ -26,6 +28,46 @@ import {
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
 logger.debug('Scripture Editor is importing!');
+
+// #region Editor Selection Tracking
+
+/**
+ * Network event name for editor selection change events. Use
+ * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')` to subscribe.
+ */
+const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange';
+
+/** Map of WebView IDs to their current selection. Used to track selections for all open editors. */
+const editorSelectionsByWebViewId = new Map<
+  string,
+  ScriptureRangeUsjVerseRefChapterLocation | undefined
+>();
+
+/** Event emitter for selection change events. Created in activate() */
+let selectionChangedEventEmitter: PlatformEventEmitter<EditorSelectionData> | undefined;
+
+/**
+ * Gets the current selection for an editor.
+ *
+ * @param webViewId The WebView ID of the editor
+ * @returns The current selection, or undefined if there is no selection or the editor is not found
+ */
+function getEditorSelection(
+  webViewId: string,
+): ScriptureRangeUsjVerseRefChapterLocation | undefined {
+  return editorSelectionsByWebViewId.get(webViewId);
+}
+
+/**
+ * Cleans up stored selection data for a closed editor.
+ *
+ * @param webViewId The WebView ID of the editor that was closed
+ */
+function cleanupEditorSelection(webViewId: string): void {
+  editorSelectionsByWebViewId.delete(webViewId);
+}
+
+// #endregion Editor Selection Tracking
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -606,7 +648,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(errorMessage);
         }
       },
+      async getSelection() {
+        return getEditorSelection(currentWebViewDefinition.id);
+      },
+      async updateSelectionInternal(selection) {
+        const webViewId = currentWebViewDefinition.id;
+        editorSelectionsByWebViewId.set(webViewId, selection);
+        selectionChangedEventEmitter?.emit({ webViewId, selection });
+      },
       async dispose() {
+        cleanupEditorSelection(currentWebViewDefinition.id);
         return unsubFromWebViewUpdates();
       },
     };
@@ -819,6 +870,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  // Create the selection changed event emitter
+  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<EditorSelectionData>(
+    EDITOR_SELECTION_CHANGED_EVENT,
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -834,6 +890,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertCrossReferencePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
+    selectionChangedEventEmitter,
     ...markerNotifierUnsubscribers,
   );
 
