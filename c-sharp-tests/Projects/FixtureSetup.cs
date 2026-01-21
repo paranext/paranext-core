@@ -26,6 +26,8 @@ public class FixtureSetup
             Directory.CreateDirectory(s_testFolder);
 
         var dllPath = Assembly.GetExecutingAssembly().Location;
+        // Climb up to the c-sharp folder, then down to the assets folder in order to get the usfm
+        // stylesheet needed by certain parts of ParatextData.
         var srcDir = Path.Combine(dllPath, "..", "..", "..", "..", "..", "c-sharp", "assets");
         var sourcePath = Path.Combine(srcDir, "usfm.sty");
         var destPath = Path.Combine(s_testFolder, "usfm.sty");
