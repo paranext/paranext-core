@@ -102,6 +102,24 @@ export function WebView({
   const [iframeHasLoadedTimes, setIframeHasLoadedTimes] = useState(0);
 
   /**
+   * Tracks whether the current iframe content has loaded (onLoad has fired). This is distinct from
+   * checking if iframeRef.current.contentWindow exists, which is true as soon as the iframe element
+   * is added to the DOM, before the content has loaded.
+   */
+  const iframeHasLoadedRef = useRef(false);
+
+  /**
+   * Track previous content to reset iframeHasLoadedRef when content changes. This must happen
+   * during render (not in an effect) to prevent race conditions where a message arrives between the
+   * content change and the effect running.
+   */
+  const previousContentRef = useRef(content);
+  if (previousContentRef.current !== content) {
+    iframeHasLoadedRef.current = false;
+    previousContentRef.current = content;
+  }
+
+  /**
    * Buffer for messages that arrive before the iframe is ready to receive them. Messages are queued
    * here when `iframeRef.current` or `iframeRef.current.contentWindow` is not available, then
    * flushed in order once the iframe loads.
@@ -157,6 +175,8 @@ export function WebView({
     const messagesToSend = messageBufferRef.current;
     messageBufferRef.current = [];
 
+    if (messagesToSend.length <= 0) return;
+
     messagesToSend.forEach(([, message, targetOrigin]) => {
       try {
         iframeRef.current?.contentWindow?.postMessage(message, { targetOrigin });
@@ -167,11 +187,9 @@ export function WebView({
       }
     });
 
-    if (messagesToSend.length > 0) {
-      logger.debug(
-        `Web View Component ${id} (type ${webViewType}) flushed ${messagesToSend.length} buffered message(s)`,
-      );
-    }
+    logger.debug(
+      `Web View Component ${id} (type ${webViewType}) flushed ${messagesToSend.length} buffered message(s)`,
+    );
   }, [id, webViewType]);
 
   const postMessageCallback = useCallback(
@@ -182,7 +200,7 @@ export function WebView({
         );
 
       // If the iframe is not ready, buffer the message to send later
-      if (!iframeRef.current || !iframeRef.current.contentWindow) {
+      if (!iframeRef.current || !iframeRef.current.contentWindow || !iframeHasLoadedRef.current) {
         messageBufferRef.current.push([webViewNonce, message, targetOrigin]);
         logger.debug(
           `Web View Component ${id} (type ${webViewType}) buffered message because iframe is not ready. Buffer size: ${messageBufferRef.current.length}`,
@@ -263,6 +281,8 @@ export function WebView({
   }, [id, postMessageCallback]);
 
   const handleLoadIframe = useCallback(() => {
+    // Mark that the iframe content has loaded so messages can be sent
+    iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
   }, []);
