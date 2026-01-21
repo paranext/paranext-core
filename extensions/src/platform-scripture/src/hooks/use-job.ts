@@ -94,14 +94,11 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
       let jobId: TJobId | undefined;
 
       try {
-        // Start the background job
         jobId = await startJob(params);
         const jobIdString = String(jobId);
 
-        // Track job for cleanup in case of component unmount
         activeJobsRef.current.add(jobIdString);
 
-        // Recursive polling function to retrieve results incrementally
         const pollForResults = async (
           currentJobId: TJobId,
           allResults: TResult[] = [],
@@ -112,7 +109,6 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
 
           const statusReport = await pollJob(currentJobId, batchSize);
 
-          // Collect any new results from this batch
           if (statusReport.nextResults?.length) {
             allResults.push(...statusReport.nextResults);
           }
