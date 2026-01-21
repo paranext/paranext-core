@@ -2,7 +2,7 @@ import papi, { LayeringProjectDataProviderEngineFactory } from '@papi/backend';
 import { IProjectDataProviderEngine, IProjectDataProviderEngineFactory } from '@papi/core';
 import { escapeStringRegexp } from 'platform-bible-utils';
 import {
-  LegacyCommentUsjOverlayPDPs as LegacyCommentsUsjOverlayPDPs,
+  LegacyCommentUsjOverlayPDPs,
   LEGACY_COMMENT_USJ_PROJECT_INTERFACES,
   LEGACY_COMMENT_USJ_OVERLAY_PROJECT_INTERFACES,
   LegacyCommentUsjProjectDataProviderEngine,
@@ -46,7 +46,7 @@ export class LegacyCommentManagerUsjProjectDataProviderEngineFactory
           return [projectInterface, pdp] as const;
         }),
       ),
-    ) as LegacyCommentsUsjOverlayPDPs;
+    ) as LegacyCommentUsjOverlayPDPs;
 
     return new LegacyCommentUsjProjectDataProviderEngine(projectId, pdpsToOverlay);
   }

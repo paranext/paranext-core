@@ -1,16 +1,10 @@
-import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { ProjectDataProviderEngine, logger } from '@papi/backend';
 import { IProjectDataProviderEngine } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { NewLegacyCommentUsj } from 'legacy-comment-manager';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
-import {
-  formatScrRef,
-  getErrorMessage,
-  UsjReaderWriter,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjDocumentLocation,
-} from 'platform-bible-utils';
+import { formatScrRef, getErrorMessage, UsjDocumentLocation } from 'platform-bible-utils';
+import { extractCommentScriptureText } from './legacy-comment-manager-usj.utils';
 
 /** The `projectInterface`s the Comment USJ PDPF serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -30,69 +24,6 @@ export const LEGACY_COMMENT_USJ_OVERLAY_PROJECT_INTERFACES = [
 export type LegacyCommentUsjOverlayPDPs = {
   [ProjectInterface in (typeof LEGACY_COMMENT_USJ_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
 };
-
-// #region Comment Scripture Text Extraction from USJ to USFM
-
-/** Result of extracting scripture text snippets from a range */
-interface ExtractedCommentScriptureText {
-  /** Text within the selection range (no limit) */
-  selectedText: string;
-  /**
-   * Index in USFM of the start of the selected text relative to the beginning of the specified
-   * verse (the backslash on the `\v` verse marker)
-   */
-  startPosition: number;
-}
-
-/**
- * Get the USFM text snippets for a comment and its context based on the selected text range in a
- * USJ chapter
- *
- * @param selectedTextStart The start location of the selected text in the USJ document
- * @param selectedTextEnd The end location of the selected text in the USJ document
- * @param usjChapter The USJ chapter containing the selected text
- * @param bookId The book ID for the USJ chapter
- * @returns Information about the selection and its context that are used to create a comment
- */
-async function extractCommentScriptureText(
-  selectedTextStart: UsjDocumentLocation,
-  selectedTextEnd: UsjDocumentLocation,
-  usjChapter: Usj,
-  bookId: string,
-): Promise<ExtractedCommentScriptureText | undefined> {
-  try {
-    const usjRW = new UsjReaderWriter(usjChapter, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
-
-    // Get the verse ref and offset for the start and end of the selected text
-    const selectedTextStartUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-      selectedTextStart,
-      bookId,
-    );
-    const selectedTextEndUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-      selectedTextEnd,
-      bookId,
-    );
-
-    // Get the USFM indices for the verse and selection so we can extract the USFM text for them
-    const selectionStartIndex = usjRW.usfmVerseLocationToIndexInUsfm(selectedTextStartUsfmLocation);
-    const selectionEndIndex = usjRW.usfmVerseLocationToIndexInUsfm(selectedTextEndUsfmLocation);
-
-    const usfmText = usjRW.toUsfm();
-
-    // Pull the selected text out from the USFM
-    const selectedText = usfmText.substring(selectionStartIndex, selectionEndIndex);
-
-    return {
-      selectedText,
-      startPosition: selectedTextStartUsfmLocation.offset ?? 0,
-    };
-  } catch (error) {
-    logger.error(`Error extracting scripture text range: ${getErrorMessage(error)}`);
-    throw error;
-  }
-}
-
-// #endregion Comment Scripture Text Extraction from USJ to USFM
 
 export class LegacyCommentUsjProjectDataProviderEngine
   extends ProjectDataProviderEngine<['legacyCommentManager.commentsUsj']>
@@ -120,11 +51,15 @@ export class LegacyCommentUsjProjectDataProviderEngine
         ? await this.pdps['platformScripture.USJ_Chapter'].getChapterUSJ(verseRef)
         : undefined;
 
+      // Proceed with comment creation even if scripture context extraction fails. Comments
+      // without scripture context won't have the selected text highlighting and positioning
+      // information. This follows how `ParatextProjectDataProvider.createComment` works, though TJ
+      // is not sure if this is how ParatextData.dll wants it to work
       if (!usjChapter || !selectedTextStart || !selectedTextEnd || !verseRef) {
         logger.warn(
           `Cannot extract scripture text in Legacy Comment USJ PDP ${this.projectId} for comment ${JSON.stringify(comment)}${
             verseRef ? ` at ${formatScrRef(verseRef)}` : ''
-          }: USJ not available`,
+          }: USJ not available. Comment will be created without scripture context.`,
         );
       } else {
         const extraction = await extractCommentScriptureText(
@@ -138,7 +73,7 @@ export class LegacyCommentUsjProjectDataProviderEngine
           logger.warn(
             `Cannot extract scripture text in Legacy Comment USJ PDP ${this.projectId} for comment ${JSON.stringify(comment)} at ${formatScrRef(
               verseRef,
-            )}: Extraction failed`,
+            )}: Extraction failed. Comment will be created without scripture context.`,
           );
         } else {
           selectedText = extraction.selectedText;

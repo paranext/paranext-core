@@ -22,9 +22,6 @@ import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/l
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
 
-/** Time in ms to wait for the comment list web view to load before scrolling to a thread */
-const COMMENT_LIST_LOAD_DELAY_MS = 500;
-
 // #region Comment List WebView
 
 interface CommentListWebViewOptions extends OpenWebViewOptions {
@@ -173,12 +170,6 @@ async function openCommentList(
 
   // Scroll to the specified thread in the comment list
   if (commentListWebViewId && options.threadIdToSelect) {
-    // Wait for the comment list to load before scrolling. This can be removed if we properly buffer
-    // messages to WebView controllers and WebViews that aren't loaded yet.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, COMMENT_LIST_LOAD_DELAY_MS);
-    });
-
     // Get the comment list controller and select the thread
     const commentListController = await papi.webViews.getWebViewController(
       commentListWebViewType,
@@ -186,10 +177,11 @@ async function openCommentList(
     );
     if (commentListController) {
       await commentListController.selectThread(options.threadIdToSelect);
-    } else
+    } else {
       throw new Error(
         `Could not get WebView Controller for comment list WebView ${commentListWebViewId} to scroll to thread ${options.threadIdToSelect}`,
       );
+    }
   }
 
   return commentListWebViewId;

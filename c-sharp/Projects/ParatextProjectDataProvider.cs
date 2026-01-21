@@ -337,7 +337,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (comment.SelectedText.Contains('\\'))
         {
             throw new InvalidOperationException(
-                "Invalid selection. Selected text must be a simple word or phrase with no markers."
+                "Invalid selection. Selected text must be a simple word or phrase. "
+                    + "Selected text cannot contain USFM markers (backslash characters)."
             );
         }
 

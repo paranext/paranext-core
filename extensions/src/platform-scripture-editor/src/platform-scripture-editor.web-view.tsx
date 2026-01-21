@@ -45,6 +45,7 @@ import {
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
+  ContentJsonPath,
   formatReplacementString,
   getErrorMessage,
   isPlatformError,
@@ -115,16 +116,12 @@ function usjLocationToUsjDocumentLocation(
   location: SelectionRange['start'] | SelectionRange['end'],
 ): UsjDocumentLocation | undefined {
   if (!location) return undefined;
-  if ('jsonPath' in location || 'documentLocation' in location) {
-    const chapterLocation = UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      location as Parameters<
-        typeof UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation
-      >[0],
-    );
-    return chapterLocation.documentLocation;
-  }
-  return undefined;
+  return {
+    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    jsonPath: location.jsonPath as ContentJsonPath,
+    offset: location.offset,
+  };
 }
 
 /**
