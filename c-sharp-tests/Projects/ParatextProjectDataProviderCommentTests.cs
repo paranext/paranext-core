@@ -7,6 +7,7 @@ using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
 using PtxUtils;
 using SIL.Scripture;
+using TestParanextDataProvider;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -102,7 +103,6 @@ namespace TestParanextDataProvider.Projects
 
             // Add the comment text to Contents
             comment.SetContentsFromHtml(commentText);
-            //comment.AddTextToContent(commentText, false);
 
             return comment;
         }
@@ -727,51 +727,14 @@ namespace TestParanextDataProvider.Projects
             Assert.That(result, Is.False, "Update with null comment ID should fail");
         }
 
+        // Note: The following test is a just a POC to make sure roundtripping works with an update.
+        // This is now how updates will likely be done in user facing code.
         [Test]
         public void UpdateComment_TimBasicXml_UpdatesContentsSuccessfully()
         {
-            var xmlDoc = new XmlDocument();
-            xmlDoc.LoadXml($"<CommentList>{CommentsTestData.Tim_Basic_Xml}</CommentList>");
-            var commentNode = xmlDoc.SelectSingleNode("//Comment");
-            Assert.That(commentNode, Is.Not.Null);
-
-            // Extract fields from XML
-            var user = commentNode.Attributes?["User"]?.Value ?? string.Empty;
-            var verseRef = commentNode.Attributes?["VerseRef"]?.Value ?? string.Empty;
-            var date = commentNode.Attributes?["Date"]?.Value ?? string.Empty;
-            var selectedText =
-                commentNode.SelectSingleNode("SelectedText")?.InnerText ?? string.Empty;
-            var startPos = int.TryParse(
-                commentNode.SelectSingleNode("StartPosition")?.InnerText,
-                out var sp
-            )
-                ? sp
-                : 0;
-            var contextBefore =
-                commentNode.SelectSingleNode("ContextBefore")?.InnerText ?? string.Empty;
-            var contextAfter =
-                commentNode.SelectSingleNode("ContextAfter")?.InnerText ?? string.Empty;
-            var status = commentNode.SelectSingleNode("Status")?.InnerText ?? string.Empty;
-            var contentsXml = commentNode.SelectSingleNode("Contents")?.InnerXml ?? string.Empty;
-
-            // Create Comment object
-            var comment = new Comment(new ParatextUser(user, null))
-            {
-                VerseRefStr = verseRef,
-                Date = date,
-                SelectedText = selectedText,
-                StartPosition = startPos,
-                ContextBefore = contextBefore,
-                ContextAfter = contextAfter,
-                Status = new Enum<NoteStatus>(status),
-                Contents = new XmlDocument().CreateElement("Contents")
-            };
+            // Create a basic comment using the helper method
+            var comment = CommentTestHelper.CreateBasicComment();
             comment.Thread = null; // Will be set in _provider.CreateComment
-
-            // Properly set Contents to ensure InnerText is populated
-            var contentsDoc = new XmlDocument();
-            contentsDoc.LoadXml($"<Contents>{contentsXml}</Contents>");
-            comment.Contents = contentsDoc.DocumentElement;
 
             // Add to provider using CreateComment
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
@@ -799,6 +762,8 @@ namespace TestParanextDataProvider.Projects
             Assert.That(string.Equals(updatedComment.Thread, threadId), Is.True);
         }
 
+        // Note: The following test is a just a POC to make sure roundtripping works with an update.
+        // This is now how updates will likely be done in user facing code.
         [Test]
         public void UpdateComment_TimConflictXml_UpdatesContentsSuccessfully()
         {
@@ -1474,7 +1439,6 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            // assignComment.AddTextToContent("Assigning to team for review", false);
             string commentText = "Assigning to team for review";
             assignComment.SetContentsFromHtml(commentText);
             _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
