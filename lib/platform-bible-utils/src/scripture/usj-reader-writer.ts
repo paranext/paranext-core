@@ -759,6 +759,41 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return result;
   }
 
+  findNextMatchingNode(
+    nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>,
+    searchFunction: (
+      potentiallyMatchingNodeAndLocation: UsjNodeAndDocumentLocation<
+        UsjMarkerLocation | UsjTextContentLocation
+      >,
+    ) => boolean,
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> | undefined {
+    const startingWorkingStack = this.convertJsonPathToWorkingStack(
+      nodeAndLocation.documentLocation.jsonPath,
+    );
+    let matchingWorkingStack: WorkingStack = startingWorkingStack;
+    const matchingNode = UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
+      nodeAndLocation.node,
+      startingWorkingStack,
+      [],
+      (node, stack) => {
+        matchingWorkingStack = stack;
+        return searchFunction({
+          node,
+          documentLocation: UsjReaderWriter.convertNodeToUsjDocumentLocation(node, stack),
+        });
+      },
+    );
+
+    if (matchingNode === undefined) return undefined;
+    return {
+      node: matchingNode,
+      documentLocation: UsjReaderWriter.convertNodeToUsjDocumentLocation(
+        matchingNode,
+        matchingWorkingStack,
+      ),
+    };
+  }
+
   // #endregion Walk the node tree
 
   // #region Node -> JSONPath
@@ -792,7 +827,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   nodeToUsjNodeAndDocumentLocation(
     node: MarkerContent | Usj,
     nodeParent?: MarkerObject | MarkerContent[] | Usj,
-  ): UsjNodeAndDocumentLocation {
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> {
     // Get working stack to the node
     let workingStack: WorkingStack;
 
@@ -864,7 +899,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation {
+  jsonPathToUsjNodeAndDocumentLocation(
+    jsonPathQuery: string,
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> {
     const { node, parent } = this.jsonPathToNodeAndParentIfString(jsonPathQuery);
 
     const usjNodeAndDocumentLocation = this.nodeToUsjNodeAndDocumentLocation(node, parent);

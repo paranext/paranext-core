@@ -3,10 +3,13 @@ declare module 'legacy-comment-manager' {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
+    NetworkableObject,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { ScriptureRange } from 'platform-scripture';
+  import type { SerializedVerseRef } from '@sillsdev/scripture';
+  import type { UsjDocumentLocation } from 'platform-bible-utils';
   import {
     CommentStatus,
     CommentType,
@@ -159,6 +162,22 @@ declare module 'legacy-comment-manager' {
   >;
 
   /**
+   * Represents a new comment to be created in a USJ context. It is a subtype of
+   * {@link NewLegacyComment} with `verseRef` and properties related to USFM omitted (`verse`,
+   * `selectedText`, `contextBefore`, `contextAfter`, `startPosition`). These properties will be
+   * filled in automatically based on the USJ document and the selected text range.
+   *
+   * This is used when creating a new comment via the
+   * {@link ILegacyCommentUsjProjectDataProvider.createComment} method in a USJ context.
+   */
+  export type NewLegacyCommentUsj = Prettify<
+    Omit<
+      NewLegacyComment,
+      'verse' | 'verseRef' | 'selectedText' | 'contextBefore' | 'contextAfter' | 'startPosition'
+    >
+  >;
+
+  /**
    * Represents a comment to add to an existing thread. It is a subtype of {@link LegacyComment} with
    * some properties omitted (`id`, `user`, `date`). The `thread` property is required.
    *
@@ -222,7 +241,10 @@ declare module 'legacy-comment-manager' {
        *
        * @param comment Comment data to create a new comment through ParatextData. Besides
        *   `contents`, all properties are optional, and the 'thread', 'id', 'user', and 'date'
-       *   properties are omitted as they will be auto-generated and should not be provided.
+       *   properties are omitted as they will be auto-generated and should not be provided. It is
+       *   recommended that you provide `verseRef`, `selectedText`, and `startPosition` but NOT
+       *   `verse`, `contextBefore`, or `contextAfter` as they will be generated to the correct
+       *   value based on the previous three properties.
        * @returns Promise that resolves to the auto-generated comment ID (format:
        *   "threadId/userName/date")
        */
@@ -330,19 +352,87 @@ declare module 'legacy-comment-manager' {
       // #endregion
     };
 
+  /** Provides comment creation via USJ locations */
+  export type LegacyCommentUsjProjectInterfaceDataTypes = {};
+
+  /**
+   * Provides comments from project team members in a way that is compatible with Paratext 9.
+   * Locations are specified using USJ rather than USFM.
+   */
+  export type ILegacyCommentUsjProjectDataProvider =
+    IProjectDataProvider<LegacyCommentUsjProjectInterfaceDataTypes> & {
+      /**
+       * Creates a new comment for the specified project at the selected USJ range. Transforms to
+       * USFM internally
+       *
+       * @param comment The information for the new comment excluding the USFM-specific fields that
+       *   will be filled in internally
+       * @param verseRef The verse reference for the selected text
+       * @param start The start location of the selected text in the USJ
+       * @param end The end location of the selected text in the USJ
+       * @returns The ID of the new comment thread
+       */
+      createComment(
+        comment: NewLegacyCommentUsj,
+        verseRef?: SerializedVerseRef,
+        start?: UsjDocumentLocation,
+        end?: UsjDocumentLocation,
+      ): Promise<string>;
+    };
+
   // #endregion
+
+  // #region Comment list WebView types
+
+  /** Web view controller for the Comment List web view */
+  export type CommentListWebViewController = NetworkableObject<{
+    /**
+     * Scroll the comment list to show a specific thread and select it.
+     *
+     * @param threadId The ID of the thread to scroll to and select
+     */
+    selectThread(threadId: string): Promise<void>;
+  }>;
+
+  export type OpenCommentListWebViewOptions = {
+    /** ID of the thread to select and scroll to in the comment list */
+    threadIdToSelect?: string | undefined;
+  };
+
+  // #endregion Comment list WebView types
 }
 
 declare module 'papi-shared-types' {
-  import type { ILegacyCommentProjectDataProvider } from 'legacy-comment-manager';
+  import type {
+    CommentListWebViewController,
+    ILegacyCommentProjectDataProvider,
+    ILegacyCommentUsjProjectDataProvider,
+    OpenCommentListWebViewOptions,
+  } from 'legacy-comment-manager';
 
   export interface ProjectDataProviderInterfaces {
     'legacyCommentManager.comments': ILegacyCommentProjectDataProvider;
+    'legacyCommentManager.commentsUsj': ILegacyCommentUsjProjectDataProvider;
   }
 
   export interface CommandHandlers {
+    /**
+     * Open or focus the Comment List WebView for the project ID associated with the specified
+     * WebView ID
+     *
+     * @param webViewId The ID of the WebView whose project comments to display
+     * @param options Additional options for opening the comment list WebView
+     * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
+     *   project ID could be determined
+     * @throws If something goes wrong with selecting the provided thread ID
+     */
     'legacyCommentManager.openCommentList': (
-      projectId?: string | undefined,
+      webViewId?: string | undefined,
+      options?: OpenCommentListWebViewOptions,
     ) => Promise<string | undefined>;
+  }
+
+  export interface WebViewControllers {
+    'legacyCommentManager.commentList': CommentListWebViewController;
   }
 }
