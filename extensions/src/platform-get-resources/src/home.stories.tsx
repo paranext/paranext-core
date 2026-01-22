@@ -168,9 +168,13 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
           </>
         ),
         onOpenProject: () => {
+          // Show an alert for demonstration purposes
+          // eslint-disable-next-line no-alert
           alert('Open project');
         },
         onSendReceiveProject: () => {
+          // Show an alert for demonstration purposes
+          // eslint-disable-next-line no-alert
           alert('Send/Receive project');
         },
       }}
