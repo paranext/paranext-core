@@ -1,4 +1,4 @@
-﻿import papi, { logger, WebViewFactory } from '@papi/backend';
+import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
   IWebViewProvider,
@@ -6,10 +6,15 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { getErrorMessage, PlatformEventEmitter, serialize } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  getErrorMessage,
+  PlatformEventEmitter,
+  serialize,
+} from 'platform-bible-utils';
 import {
   EditorDecorations,
-  EditorSelectionData,
+  SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
@@ -37,14 +42,8 @@ logger.debug('Scripture Editor is importing!');
  */
 const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange';
 
-/** Map of WebView IDs to their current selection. Used to track selections for all open editors. */
-const editorSelectionsByWebViewId = new Map<
-  string,
-  ScriptureRangeUsjVerseRefChapterLocation | undefined
->();
-
 /** Event emitter for selection change events. Created in activate() */
-let selectionChangedEventEmitter: PlatformEventEmitter<EditorSelectionData> | undefined;
+let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
 
 /**
  * Gets the current selection for an editor.
@@ -52,20 +51,7 @@ let selectionChangedEventEmitter: PlatformEventEmitter<EditorSelectionData> | un
  * @param webViewId The WebView ID of the editor
  * @returns The current selection, or undefined if there is no selection or the editor is not found
  */
-function getEditorSelection(
-  webViewId: string,
-): ScriptureRangeUsjVerseRefChapterLocation | undefined {
-  return editorSelectionsByWebViewId.get(webViewId);
-}
-
-/**
- * Cleans up stored selection data for a closed editor.
- *
- * @param webViewId The WebView ID of the editor that was closed
- */
-function cleanupEditorSelection(webViewId: string): void {
-  editorSelectionsByWebViewId.delete(webViewId);
-}
+// Selection is stored per-WebViewController instance in createWebViewController.
 
 // #endregion Editor Selection Tracking
 
@@ -397,6 +383,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     const unsubFromWebViewUpdates = papi.webViews.onDidUpdateWebView(({ webView }) => {
       if (webView.id === currentWebViewDefinition.id) currentWebViewDefinition = webView;
     });
+    /**
+     * Variable that holds the current selection in the editor. Will be `undefined` if could not
+     * determine selection. Will also be `undefined` initially until the editor reports its first
+     * selection.
+     */
+    let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
+    /** Variable we will use to wait to get the first selection reported from the editor */
+    const firstSelectionAsync: AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined> =
+      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`);
     return {
       async selectRange(range) {
         try {
@@ -649,15 +644,21 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         }
       },
       async getSelection() {
-        return getEditorSelection(currentWebViewDefinition.id);
+        // If we haven't yet received the first selection, wait for it
+        if (!firstSelectionAsync.hasSettled) {
+          return firstSelectionAsync.promise;
+        }
+        return currentSelection;
       },
       async updateSelectionInternal(selection) {
         const webViewId = currentWebViewDefinition.id;
-        editorSelectionsByWebViewId.set(webViewId, selection);
+        currentSelection = selection;
+        // Resolve the first selection async variable with the first selection we get
+        if (!firstSelectionAsync.hasSettled) firstSelectionAsync.resolveToValue(selection);
         selectionChangedEventEmitter?.emit({ webViewId, selection });
       },
       async dispose() {
-        cleanupEditorSelection(currentWebViewDefinition.id);
+        currentSelection = undefined;
         return unsubFromWebViewUpdates();
       },
     };
@@ -871,7 +872,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   // Create the selection changed event emitter
-  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<EditorSelectionData>(
+  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
     EDITOR_SELECTION_CHANGED_EVENT,
   );
 

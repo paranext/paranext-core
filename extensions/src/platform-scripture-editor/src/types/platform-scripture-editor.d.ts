@@ -162,12 +162,12 @@ declare module 'platform-scripture-editor' {
    * ```typescript
    * const unsubscribe = papi.network
    *   .getNetworkEvent('platformScriptureEditor.onDidSelectionChange')
-   *   .event((data: EditorSelectionData) => {
+   *   .event((data: SelectionChangeEvent) => {
    *     console.log(`Editor ${data.webViewId} selection changed:`, data.selection);
    *   });
    * ```
    */
-  export type EditorSelectionData = {
+  export type SelectionChangeEvent = {
     /** The WebView ID of the editor whose selection changed */
     webViewId: string;
     /** The current selection in the editor, or undefined if there is no selection */
