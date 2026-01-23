@@ -50,8 +50,7 @@ yalc.lock
 
 #claude
 .claude
-.claude.backup/
+.claude.backup
 .context
-c-sharp/CLAUDE.md
 CLAUDE.md
 CLAUDE.md.backup
