@@ -7,6 +7,9 @@
  *
  * This dramatically speeds up the build because Tailwind's content scanning only happens once
  * instead of once per extension.
+ *
+ * Currently, all extensions use the same Tailwind config for UI consistency. However, if extensions
+ * ever use different Tailwind configs, this solution will break.
  */
 
 import fs from 'fs';
@@ -35,7 +38,6 @@ async function prebuildTailwind() {
 
     // Process with PostCSS + Tailwind
     const result = await postcss([
-      // @ts-expect-error - tailwindcss types don't match exactly
       tailwindcss({
         config: path.resolve(rootDir, 'tailwind.config.ts'),
       }),

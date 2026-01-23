@@ -5,10 +5,9 @@
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
-    "prebuild:tailwind": "tsx ./lib/prebuild-tailwind.ts",
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
-    "build": "npm run prebuild:tailwind && cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" webpack",
+    "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" webpack",
     "watch": "npm run prebuild:tailwind && npm run build -- --watch",
     "build:production": "npm run prebuild:tailwind && cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=false webpack",
     "watch:production": "npm run prebuild:tailwind && npm run build:production -- --watch",
@@ -28,6 +27,7 @@
     "lint-fix:styles": "npm run lint:styles -- --fix",
     "lint:staged": "lint-staged -q",
     "postinstall": "tsx ./lib/add-remotes.ts",
+    "prebuild:tailwind": "tsx ./lib/prebuild-tailwind.ts",
     "create-extension": "tsx ./lib/create-extension.ts",
     "update-from-templates": "tsx ./lib/update-from-templates.ts",
     "bump-versions": "tsx ./lib/bump-versions.ts"
