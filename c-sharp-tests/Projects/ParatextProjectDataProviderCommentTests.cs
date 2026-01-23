@@ -1421,6 +1421,88 @@ namespace TestParanextDataProvider.Projects
 
         [TestCase(true)]
         [TestCase(false)]
+        public void SetComments_CommentsAdded_ThreadsAndNewCommentsAreMarkedAsRead(
+            bool addCommentToExistingThread
+        )
+        {
+            Assert.Fail(
+                "Either finish writing this test using the parameter, or assert that SetComments always throws NotSupportedException."
+            );
+            // Arrange - Create some comments to add via SetComments
+            var existingThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .FirstOrDefault()
+                ?.Id;
+            var comment1 = CreateTestComment("GEN", 1, 1, "Comment 1 via SetComments");
+            comment1.Thread = existingThreadId ?? "New thread for comment 1";
+            var comment2 = CreateTestComment("GEN", 1, 2, "Comment 2 via SetComments");
+            var comment3 = CreateTestComment("GEN", 1, 3, "Comment 3 via SetComments");
+            var wrappers = new[]
+            {
+                new PlatformCommentWrapper(comment1),
+                new PlatformCommentWrapper(comment2),
+                new PlatformCommentWrapper(comment3)
+            };
+
+            // Act - Add the comments via SetComments
+            bool result = _provider.SetComments(new CommentSelector(), wrappers);
+
+            // Assert - SetComments should succeed
+            Assert.That(result, Is.True, "SetComments should return true when comments are added");
+
+            // Retrieve all comments and verify they are marked as read
+            var allComments = _provider.GetComments(new CommentSelector { BookId = "GEN" });
+            Assert.That(
+                allComments.Count,
+                Is.GreaterThanOrEqualTo(3),
+                "Should have at least the added comments"
+            );
+
+            // Check that the added comments are marked as read
+            var addedComments = allComments
+                .Where(c => c.Contents?.InnerText.Contains("via SetComments") == true)
+                .ToList();
+            Assert.That(addedComments.Count, Is.EqualTo(3), "Should find all added comments");
+            foreach (var comment in addedComments)
+            {
+                Assert.That(
+                    comment.IsRead,
+                    Is.True,
+                    "Newly added comment should be marked as read"
+                );
+            }
+
+            // Retrieve all threads and verify they are marked as read
+            var allThreads = _provider.GetCommentThreads(new CommentThreadSelector());
+            Assert.That(
+                allThreads.Count,
+                Is.GreaterThanOrEqualTo(2),
+                "Should have at least two threads"
+            );
+
+            // Check that the threads containing the added comments are marked as read
+            var addedThreads = allThreads
+                .Where(t =>
+                    t.Comments.Any(c => c.Contents?.InnerText.Contains("via SetComments") == true)
+                )
+                .ToList();
+            Assert.That(
+                addedThreads.Count,
+                Is.EqualTo(2),
+                "Should find threads for both added comments"
+            );
+            foreach (var thread in addedThreads)
+            {
+                Assert.That(
+                    thread.IsRead,
+                    Is.True,
+                    "Thread with newly added comment should be marked as read"
+                );
+            }
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
         public void SetIsCommentThreadRead_True_UpdatesReadStatus(bool firstSetToUnread)
         {
             // Arrange - Create a comment to get a valid threadId

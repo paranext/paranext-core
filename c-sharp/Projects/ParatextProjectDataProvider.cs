@@ -214,30 +214,36 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return result;
     }
 
-    // For now, only allow adding comments, not changing or removing existing PT 9 comments
-    // Too much risk of data loss while there are other bugs related to comments floating around
-    public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
+    /// <summary>
+    /// Adds the given comments to the thread(s) indicated by each comment's Thread ID.
+    /// </summary>
+    /// <param name="_ignore">
+    /// Unused selector parameter. See
+    /// <see href="https://github.com/paranext/paranext-core/blob/main/c-sharp/Readme.md#data-provider-methods">
+    /// </param>
+    /// <param name="incomingComments">Comments to add. The
+    /// <see cref="PlatformCommentWrapper.Thread"/> property must be set, or the comment will be
+    /// ignored.</param>
+    /// <remarks>
+    /// For now, only allow adding comments, not changing or removing existing PT 9 comments
+    /// Too much risk of data loss while there are other bugs related to comments floating around
+    /// </remarks>
+    public bool SetComments(CommentSelector _ignore, PlatformCommentWrapper[] incomingComments)
     {
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         bool madeChange = false;
         foreach (var ic in incomingComments)
         {
             if (string.IsNullOrWhiteSpace(ic.Thread))
                 continue;
-            var thread =
-                _commentManager.FindThread(ic.Thread)
-                ?? _commentManager.CreateThread(
-                    _commentManager.ScrText,
-                    new ScriptureSelection(ic.VerseRef, ic.SelectedText, ic.StartPosition),
-                    NoteStatus.Todo
-                );
-            if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
-                continue;
-            // Override the user name with the value from ParatextData
-            ic.User = scrText.User.Name;
-            _commentManager.AddComment(ic);
+
+            var thread = _commentManager.FindThread(ic.Thread);
+            if (thread != null && thread.Comments.Find((tc) => tc.Id == ic.Id) != null)
+                continue; // Already exists in the thread!
+
+            ic.Add(_commentManager, _commentManager.ScrText.User.Name);
             _commentManager.SaveUser(ic.User, false);
             madeChange = true;
+            ThreadStatus.MarkThreadRead(thread ?? _commentManager.FindThread(ic.Thread));
         }
 
         if (madeChange)

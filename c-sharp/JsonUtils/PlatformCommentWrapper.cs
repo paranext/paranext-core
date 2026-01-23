@@ -80,4 +80,24 @@ public class PlatformCommentWrapper
     /// it will automatically be marked as read for the current user.
     /// </remarks>
     public bool IsRead => _thread?.IsCommentRead(_comment) ?? true;
+
+    /// <summary>
+    /// Requests the comment manager to add the comment. This will either add it to an existing
+    /// thread or result in the creation of a new thread.
+    /// </summary>
+    /// <param name="commentManager">The manager used to identify the ScrText user and thread for
+    /// this comment</param>
+    /// <param name="userName">Optional user name to override the comment's user</param>
+    /// <exception cref="InvalidOperationException">Thread (ID) not set</exception>
+    public void Add(ICommentManager commentManager, string? userName = null)
+    {
+        // REVIEW: Technically, a valid thread id is a hashed GUID, so we could validate that here,
+        // but that is logic that probably belongs in Paratext itself.
+        if (string.IsNullOrEmpty(Thread))
+            throw new InvalidOperationException("Cannot add a comment unless thread has been set.");
+
+        // Override the user name with the given/current user.
+        _comment.User = userName ?? RegistrationInfo.DefaultUser.Name;
+        commentManager.AddComment(_comment);
+    }
 }
