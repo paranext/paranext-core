@@ -197,8 +197,8 @@ export default function SearchResult({
     return {
       startRef: searchResult.start.verseRef,
       endRef: searchResult.end.verseRef,
-      textParts: collapseMiddleWords(searchResult.text, 7),
-      scrRefFormattingProps: {
+      scriptureTextPart: collapseMiddleWords(searchResult.text, 7),
+      scrRefFormattingOptions: {
         optionOrLocalizedBookName: getLocalizedBookName(
           searchResult.start.verseRef,
           localizedBookData,
