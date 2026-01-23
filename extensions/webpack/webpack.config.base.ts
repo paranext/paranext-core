@@ -2,7 +2,7 @@ import path from 'path';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import webpack from 'webpack';
 import { getExtensionFolderNamesSync, LIBRARY_TYPE } from './webpack.util';
-import TailwindPrebuildWebpackPlugin from './tailwind-prebuild-webpack-plugin';
+import TailwindPrebuildWebpackCodePlugin from './tailwind-prebuild-webpack-code-plugin';
 
 // Exit if there are no extensions yet
 const areExtensionsPresent = getExtensionFolderNamesSync().length > 0;
@@ -135,9 +135,10 @@ const configBase: webpack.Configuration = {
           'postcss-loader',
           // Compiles Sass to CSS
           'sass-loader',
-          // Recursively inlines local @use/@import and replaces tailwind.css with prebuilt content
-          // This runs BEFORE sass-loader (loaders execute bottom-to-top)
-          path.resolve(__dirname, 'tailwind-import-rewriter-loader.ts'),
+          // Redirect tailwind.css imports to the pre-built version (only works in CSS, not in code)
+          // by recursively inlining local @use/@import and replacing tailwind.css with prebuilt
+          // tailwind styles. This runs BEFORE sass-loader (loaders execute bottom-to-top)
+          path.resolve(__dirname, 'tailwind-prebuild-webpack-style-loader.ts'),
         ],
       },
       /**
@@ -179,7 +180,7 @@ const configBase: webpack.Configuration = {
       // use tsconfig.json paths https://www.npmjs.com/package/tsconfig-paths-webpack-plugin
       new TsconfigPathsPlugin(),
       // Redirect tailwind.css imports to the pre-built version (only works in code, not in CSS)
-      new TailwindPrebuildWebpackPlugin(),
+      new TailwindPrebuildWebpackCodePlugin(),
     ],
   },
 };

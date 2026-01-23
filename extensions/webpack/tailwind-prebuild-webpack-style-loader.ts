@@ -2,7 +2,8 @@
  * Webpack loader that replaces imports of any file named `tailwind.css` with the pre-built Tailwind
  * CSS content created by `npm run build-tailwind`. This loader selectively inlines `@use`
  * statements only when necessary in order to preserve sass functionality for files that do not
- * import tailwind.
+ * import tailwind. This only works in CSS imports, not in code imports. See
+ * tailwind-prebuild-webpack-plugin.ts for the code import adjuster
  *
  * This loader must run BEFORE sass-loader (loaders execute right-to-left/bottom-to-top) and only
  * inlines imports when tailwind.css is found in the import tree. This preserves Sass functionality
@@ -475,7 +476,7 @@ function processScssContent(
 }
 
 /** Webpack loader that selectively inlines SCSS imports only when tailwind is in the import tree. */
-export default function tailwindImportRewriterLoader(
+export default function tailwindPrebuildWebpackStyleLoader(
   this: LoaderContext<Record<string, never>>,
   source: string,
 ): string {
