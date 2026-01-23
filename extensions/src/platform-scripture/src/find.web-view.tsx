@@ -851,9 +851,9 @@ global.webViewComponent = function FindWebView({
           {(searchStatus === 'completed' ||
             searchStatus === 'stopped' ||
             searchStatus === 'exceeded') &&
-            results && <p className="tw-font-light">{resultsMessage}</p>}
+            results && <p className="tw-font-light tw-text-center">{resultsMessage}</p>}
           {searchStatus === 'errored' && searchError && (
-            <p className="tw-font-light">
+            <p className="tw-font-light tw-text-center">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
                 error: searchError,
               })}
