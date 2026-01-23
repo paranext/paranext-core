@@ -155,7 +155,9 @@ declare module 'legacy-comment-manager' {
    * {@link ILegacyCommentProjectDataProvider.createComment} method.
    */
   export type NewLegacyComment = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread'>> & { contents: string }
+    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread' | 'isRead'>> & {
+      contents: string;
+    }
   >;
 
   /**
@@ -272,29 +274,13 @@ declare module 'legacy-comment-manager' {
       ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
 
       /**
-       * Gets whether a specific comment has been read
-       *
-       * @param commentId The unique ID of the comment to check
-       * @returns Promise that resolves to true if the comment is read, false otherwise
-       */
-      getIsCommentRead(commentId: string): Promise<boolean>;
-
-      /**
-       * Gets whether a comment thread has been read
-       *
-       * @param threadId The unique ID of the thread to check
-       * @returns Promise that resolves to true if the thread is read, false otherwise
-       */
-      getIsCommentThreadRead(threadId: string): Promise<boolean>;
-
-      /**
        * Sets the read status of a comment thread
        *
        * @param threadId The unique ID of the thread to update
        * @param markRead Whether to mark the thread as read (true) or unread (false)
-       * @returns Promise that resolves to true if the thread was found and updated, false otherwise
+       * @throws If the thread ID is invalid or not found
        */
-      setIsCommentThreadRead(threadId: string, markRead: boolean): Promise<boolean>;
+      setIsCommentThreadRead(threadId: string, markRead: boolean): Promise<void>;
 
       /**
        * Finds the list of users that can be assigned to comment threads in this project
