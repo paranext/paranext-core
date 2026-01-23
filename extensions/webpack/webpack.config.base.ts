@@ -135,6 +135,9 @@ const configBase: webpack.Configuration = {
           'postcss-loader',
           // Compiles Sass to CSS
           'sass-loader',
+          // Recursively inlines local @use/@import and replaces tailwind.css with prebuilt content
+          // This runs BEFORE sass-loader (loaders execute bottom-to-top)
+          path.resolve(__dirname, 'tailwind-import-rewriter-loader.ts'),
         ],
       },
       /**
