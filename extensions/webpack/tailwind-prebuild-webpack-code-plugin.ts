@@ -1,8 +1,7 @@
-// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/tailwind-prebuild-webpack-plugin.ts
-
 import { Resolver } from 'webpack';
-import { getWebViewTempPath, webViewTempDir, webViewTsxRegex } from './webpack.util';
+import { webViewTempDir } from './webpack.util';
 import path from 'path';
+import fs from 'fs';
 
 /** The original filename of the Tailwind CSS file before pointing to the pre-built version */
 const tailwindOriginalFileName = 'tailwind.css';
@@ -108,6 +107,17 @@ export default class TailwindPrebuildWebpackCodePlugin {
           // If it isn't calling for a tailwind CSS file, continue resolving without changing anything here
           if (!requestPath.endsWith(tailwindOriginalFileName)) return callback();
 
+          // Check that the prebuilt file exists before redirecting to it
+          if (!fs.existsSync(tailwindPrebuiltFilePath)) {
+            return callback(
+              new Error(
+                `Tailwind prebuilt CSS file not found at: ${tailwindPrebuiltFilePath}\n` +
+                  `This file imports tailwind.css, but the prebuild file is missing.\n` +
+                  `Run 'npm run prebuild:tailwind' to generate it, or ensure the 'build' script includes prebuild:tailwind.`,
+              ),
+            );
+          }
+
           // Provide the absolute path to the pre-built tailwind CSS file. Webpack will automatically
           // adjust the path so it is relative to the webpack root directory so it doesn't have a
           // username in the path
@@ -131,5 +141,3 @@ export default class TailwindPrebuildWebpackCodePlugin {
       );
   }
 }
-
-// #endregion

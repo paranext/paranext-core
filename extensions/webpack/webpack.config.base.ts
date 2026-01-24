@@ -44,7 +44,7 @@ const configBase: webpack.Configuration = {
     buildDependencies: {
       config: [__filename],
       postcss: [path.resolve(rootDir, 'postcss.config.ts')],
-      // tailwind: [path.resolve(rootDir, 'tailwind.config.ts')],
+      tailwind: [path.resolve(rootDir, 'tailwind.config.ts')],
       tsconfig: [path.resolve(rootDir, 'tsconfig.json')],
       webpack: [path.resolve(rootDir, 'webpack.config.ts')],
     },

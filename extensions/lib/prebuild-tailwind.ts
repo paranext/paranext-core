@@ -19,9 +19,39 @@ import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 
 const rootDir = path.resolve(__dirname, '..');
-const inputFile = path.resolve(rootDir, 'src', 'hello-rock3', 'src', 'tailwind.css');
+const srcDir = path.resolve(rootDir, 'src');
 const outputDir = path.resolve(rootDir, 'temp-build');
 const outputFile = path.resolve(outputDir, 'tailwind.prebuild.css');
+
+/**
+ * Recursively searches for a tailwind.css file in a directory.
+ *
+ * @param dir - The directory to search in
+ * @returns The path to the first tailwind.css file found, or null if not found
+ */
+function findTailwindCss(dir: string): string | null {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        // Skip node_modules and temp-build directories
+        if (entry.name === 'node_modules' || entry.name === 'temp-build') {
+          continue;
+        }
+        const found = findTailwindCss(fullPath);
+        if (found) return found;
+      } else if (entry.isFile() && entry.name === 'tailwind.css') {
+        return fullPath;
+      }
+    }
+  } catch {
+    // Ignore errors (e.g., permission denied)
+  }
+  return null;
+}
 
 async function prebuildTailwind() {
   // Ensure output directory exists
@@ -29,6 +59,16 @@ async function prebuildTailwind() {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  // Find a tailwind.css file in the src directory
+  // Any extension's tailwind.css would work since they all have identical @tailwind directives.
+  const inputFile = findTailwindCss(srcDir);
+  if (!inputFile) {
+    console.log('No tailwind.css file found in extensions. Skipping Tailwind prebuild.');
+    console.log('(This is fine if no extensions use Tailwind CSS.)');
+    return;
+  }
+
+  console.log(`Found tailwind.css: ${inputFile}`);
   console.log('Pre-building Tailwind CSS...');
   const startTime = Date.now();
 

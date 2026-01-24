@@ -37,6 +37,13 @@ const fileCache = new Map<string, string>();
 let tailwindPrebuiltContent: string | null = null;
 function getTailwindPrebuiltContent(): string {
   if (tailwindPrebuiltContent === null) {
+    if (!fs.existsSync(PREBUILT_PATH)) {
+      throw new Error(
+        `Tailwind prebuilt CSS file not found at: ${PREBUILT_PATH}\n` +
+          `This file uses tailwind.css, but the prebuild file is missing.\n` +
+          `Run 'npm run prebuild:tailwind' to generate it, or ensure the 'build' script includes prebuild:tailwind.`,
+      );
+    }
     tailwindPrebuiltContent = fs.readFileSync(PREBUILT_PATH, 'utf-8');
   }
   return tailwindPrebuiltContent;
@@ -144,6 +151,8 @@ function scanImportTree(
   const pathsToTailwind: string[] = [];
 
   // Find all @use statements
+  // Note: We recreate the regex each time because RegExp with 'g' flag maintains state (lastIndex)
+  // and reusing it across different content strings would cause incorrect matches.
   const useRegex = new RegExp(USE_PATTERN.source, 'g');
   let match: RegExpExecArray | null;
   while ((match = useRegex.exec(content)) !== null) {
@@ -388,8 +397,11 @@ function processScssContent(
 
   let result = content;
 
-  // Process @use statements - only inline if needed
-  result = result.replace(USE_PATTERN, (match, _quote, importPath) => {
+  /**
+   * Creates a replacement function for @use or @import statements. Shared logic for both statement
+   * types to avoid code duplication.
+   */
+  function createImportReplacer(match: string, importPath: string): string {
     if (!isRelativeImport(importPath)) {
       return match;
     }
@@ -430,47 +442,17 @@ function processScssContent(
     );
 
     return `/* inlined from ${path.basename(resolvedPath)} */\n${processedContent}\n/* end ${path.basename(resolvedPath)} */`;
-  });
+  }
 
-  // Process @import statements similarly
-  result = result.replace(IMPORT_PATTERN, (match, _quote, importPath) => {
-    if (!isRelativeImport(importPath)) {
-      return match;
-    }
+  // Process @use statements - only inline if needed
+  result = result.replace(USE_PATTERN, (match, _quote, importPath) =>
+    createImportReplacer(match, importPath),
+  );
 
-    if (isTailwindImport(importPath)) {
-      return getTailwindPrebuiltContent();
-    }
-
-    const resolvedPath = resolveImportPath(importPath, fileDir);
-    if (!resolvedPath) {
-      return match;
-    }
-
-    // Only inline if this file is in the path to tailwind
-    if (!filesToInline.has(resolvedPath)) {
-      return match;
-    }
-
-    if (addDependency) {
-      addDependency(resolvedPath);
-    }
-
-    const importedContent = readFileCached(resolvedPath);
-    const importedDir = path.dirname(resolvedPath);
-    const processedContent = processScssContent(
-      importedContent,
-      importedDir,
-      resolvedPath,
-      filesToInline,
-      importsMap,
-      processedFiles,
-      addDependency,
-      emitWarning,
-    );
-
-    return `/* inlined from ${path.basename(resolvedPath)} */\n${processedContent}\n/* end ${path.basename(resolvedPath)} */`;
-  });
+  // Process @import statements - same logic as @use
+  result = result.replace(IMPORT_PATTERN, (match, _quote, importPath) =>
+    createImportReplacer(match, importPath),
+  );
 
   return result;
 }
@@ -480,6 +462,11 @@ export default function tailwindPrebuildWebpackStyleLoader(
   this: LoaderContext<Record<string, never>>,
   source: string,
 ): string {
+  // Clear caches at the start of each top-level loader invocation to handle watch mode.
+  // Files may have changed since the last build, so we need fresh content.
+  fileCache.clear();
+  tailwindPrebuiltContent = null;
+
   const fileDir = path.dirname(this.resourcePath);
   const currentPath = this.resourcePath;
 

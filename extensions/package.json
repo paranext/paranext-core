@@ -7,7 +7,7 @@
   "scripts": {
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
-    "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" webpack",
+    "build": "npm run prebuild:tailwind && cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" webpack",
     "watch": "npm run prebuild:tailwind && npm run build -- --watch",
     "build:production": "npm run prebuild:tailwind && cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=false webpack",
     "watch:production": "npm run prebuild:tailwind && npm run build:production -- --watch",
