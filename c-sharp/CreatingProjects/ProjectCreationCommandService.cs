@@ -50,154 +50,224 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
     /// <returns>Task that completes when all commands are registered.</returns>
     public async Task InitializeAsync()
     {
-        // NOTE: This is a STUB implementation for TDD RED phase.
-        // All command handlers throw NotImplementedException to ensure tests FAIL.
-        // The TDD Implementer will replace these with real implementations.
-
         // CAP-CMD-001: getTypeConfiguration
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "getTypeConfiguration",
-            GetTypeConfiguration_Stub
+            GetTypeConfiguration
         );
 
         // CAP-CMD-002: canBeBasedOnType
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "canBeBasedOnType",
-            CanBeBasedOnType_Stub
+            CanBeBasedOnType
         );
 
         // CAP-CMD-003: getValidBaseProjects
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "getValidBaseProjects",
-            GetValidBaseProjects_Stub
+            GetValidBaseProjects
         );
 
         // CAP-CMD-004: validateShortName
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "validateShortName",
-            ValidateShortName_Stub
+            ValidateShortName
         );
 
         // CAP-CMD-005: generateShortName
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "generateShortName",
-            GenerateShortName_Stub
+            GenerateShortName
         );
 
         // CAP-CMD-006: generateUniqueName
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "generateUniqueName",
-            GenerateUniqueName_Stub
+            GenerateUniqueName
         );
 
         // CAP-CMD-007: getRegistrationState
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "getRegistrationState",
-            GetRegistrationState_Stub
+            GetRegistrationState
         );
 
         // CAP-CMD-008: validateLanguage
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "validateLanguage",
-            ValidateLanguage_Stub
+            ValidateLanguage
         );
 
         // CAP-CMD-009: createProject
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "createProject",
-            CreateProject_Stub
+            CreateProject
         );
 
         // CAP-CMD-011: cleanupProject
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "cleanupProject",
-            CleanupProject_Stub
+            CleanupProject
         );
 
         // CAP-CMD-012: updateProject
         await _papiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "updateProject",
-            UpdateProject_Stub
+            UpdateProject
         );
     }
 
     #endregion
 
-    #region Stub Methods (to be implemented in GREEN phase)
+    #region Command Handlers
 
-    // These stub methods throw NotImplementedException to ensure RED state.
-    // The TDD Implementer will replace them with real implementations.
-
-    private ProjectTypeConfiguration GetTypeConfiguration_Stub(int projectType)
+    /// <summary>
+    /// Gets the configuration for a project type.
+    /// </summary>
+    /// <param name="projectType">Integer representation of ProjectCreationType.</param>
+    /// <returns>Configuration for the specified project type.</returns>
+    private ProjectTypeConfiguration GetTypeConfiguration(int projectType)
     {
-        throw new NotImplementedException("CAP-CMD-001: GetTypeConfiguration not implemented");
+        return ProjectTypeService.GetTypeConfiguration((ProjectCreationType)projectType);
     }
 
-    private IReadOnlyList<ProjectCreationType> CanBeBasedOnType_Stub(int projectType)
+    /// <summary>
+    /// Gets the list of project types that can be used as a base for the given type.
+    /// </summary>
+    /// <param name="projectType">Integer representation of ProjectCreationType.</param>
+    /// <returns>List of allowed base project types.</returns>
+    private IReadOnlyList<ProjectCreationType> CanBeBasedOnType(int projectType)
     {
-        throw new NotImplementedException("CAP-CMD-002: CanBeBasedOnType not implemented");
+        return ProjectTypeService.GetAllowedBaseTypes((ProjectCreationType)projectType);
     }
 
-    private IReadOnlyList<ProjectReference> GetValidBaseProjects_Stub(int projectType)
+    /// <summary>
+    /// Gets all projects that can be used as a base for the specified project type.
+    /// </summary>
+    /// <param name="projectType">Integer representation of ProjectCreationType.</param>
+    /// <returns>List of valid base projects.</returns>
+    private IReadOnlyList<ProjectReference> GetValidBaseProjects(int projectType)
     {
-        throw new NotImplementedException("CAP-CMD-003: GetValidBaseProjects not implemented");
+        return ProjectTypeService.GetValidBaseProjects((ProjectCreationType)projectType);
     }
 
-    private ValidationResult ValidateShortName_Stub(
+    /// <summary>
+    /// Validates a project short name.
+    /// </summary>
+    /// <param name="shortName">The short name to validate.</param>
+    /// <param name="isNewProject">True if creating a new project.</param>
+    /// <param name="originalName">Original name if editing existing project.</param>
+    /// <returns>Validation result.</returns>
+    private ValidationResult ValidateShortName(
         string shortName,
         bool isNewProject,
         string? originalName
     )
     {
-        throw new NotImplementedException("CAP-CMD-004: ValidateShortName not implemented");
+        return ProjectNameService.ValidateShortName(shortName, isNewProject, originalName);
     }
 
-    private string GenerateShortName_Stub(string fullName)
+    /// <summary>
+    /// Generates a short name from a full name.
+    /// </summary>
+    /// <param name="fullName">The full project name.</param>
+    /// <returns>Generated short name.</returns>
+    private string GenerateShortName(string fullName)
     {
-        throw new NotImplementedException("CAP-CMD-005: GenerateShortName not implemented");
+        return ProjectNameService.GenerateShortName(fullName);
     }
 
-    private GenerateUniqueNameResponse GenerateUniqueName_Stub(
+    /// <summary>
+    /// Generates a unique project name.
+    /// </summary>
+    /// <param name="baseShortName">Base short name to make unique.</param>
+    /// <param name="baseLongName">Base long name to make unique.</param>
+    /// <param name="forceNumbered">If true, always append number.</param>
+    /// <returns>Response containing unique short and long names.</returns>
+    private GenerateUniqueNameResponse GenerateUniqueName(
         string baseShortName,
         string baseLongName,
         bool forceNumbered
     )
     {
-        throw new NotImplementedException("CAP-CMD-006: GenerateUniqueName not implemented");
+        var (shortName, longName) = ProjectNameService.GenerateUniqueName(
+            baseShortName,
+            baseLongName,
+            forceNumbered
+        );
+        return new GenerateUniqueNameResponse { ShortName = shortName, LongName = longName };
     }
 
-    private RegistrationState GetRegistrationState_Stub(
+    /// <summary>
+    /// Gets the registration state for a project.
+    /// </summary>
+    /// <param name="projectType">Integer representation of ProjectCreationType.</param>
+    /// <param name="baseProjectGuid">Base project GUID (if derived type).</param>
+    /// <param name="isBaseProjectRegistered">True if base project is registered.</param>
+    /// <returns>Registration state.</returns>
+    private RegistrationState GetRegistrationState(
         int projectType,
         string? baseProjectGuid,
         bool isBaseProjectRegistered
     )
     {
-        throw new NotImplementedException("CAP-CMD-007: GetRegistrationState not implemented");
+        return RegistrationService.GetRegistrationState(
+            (ProjectCreationType)projectType,
+            baseProjectGuid,
+            isBaseProjectRegistered
+        );
     }
 
-    private ValidationResult ValidateLanguage_Stub(
+    /// <summary>
+    /// Validates a language selection.
+    /// </summary>
+    /// <param name="languageId">Selected language ID.</param>
+    /// <param name="languageName">User-specified language name.</param>
+    /// <param name="existingNames">List of existing language names.</param>
+    /// <param name="initialName">Original name (for edit mode).</param>
+    /// <returns>Validation result.</returns>
+    private ValidationResult ValidateLanguage(
         string languageId,
         string languageName,
         IReadOnlyList<string> existingNames,
         string? initialName
     )
     {
-        throw new NotImplementedException("CAP-CMD-008: ValidateLanguage not implemented");
+        return LanguageService.ValidateLanguageSelection(
+            languageId,
+            languageName,
+            existingNames,
+            initialName
+        );
     }
 
-    private CreateProjectResult CreateProject_Stub(CreateProjectRequest request)
+    /// <summary>
+    /// Creates a new project.
+    /// </summary>
+    /// <param name="request">Project creation request.</param>
+    /// <returns>Result of the creation operation.</returns>
+    private CreateProjectResult CreateProject(CreateProjectRequest request)
     {
-        throw new NotImplementedException("CAP-CMD-009: CreateProject not implemented");
+        return ProjectDefaultsService.CreateProjectAsync(request).Result;
     }
 
-    private void CleanupProject_Stub(CleanupProjectRequest request)
+    /// <summary>
+    /// Cleans up a partial or cancelled project.
+    /// </summary>
+    /// <param name="request">Cleanup request.</param>
+    private void CleanupProject(CleanupProjectRequest request)
     {
-        throw new NotImplementedException("CAP-CMD-011: CleanupProject not implemented");
+        ProjectCleanupService.CleanupProjectAsync(request).Wait();
     }
 
-    private UpdateProjectResult UpdateProject_Stub(UpdateProjectRequest request)
+    /// <summary>
+    /// Updates an existing project.
+    /// </summary>
+    /// <param name="request">Update request.</param>
+    /// <returns>Result of the update operation.</returns>
+    private UpdateProjectResult UpdateProject(UpdateProjectRequest request)
     {
-        throw new NotImplementedException("CAP-CMD-012: UpdateProject not implemented");
+        return ProjectUpdateService.UpdateProjectAsync(request).Result;
     }
 
     #endregion
