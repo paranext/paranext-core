@@ -225,23 +225,35 @@ internal static class ProjectTypeService
     }
 
     /// <summary>
-    /// Gets all projects that can be used as base for a given type.
-    /// Filters ScrTextCollection by type compatibility.
+    /// Gets all projects that can be used as a base for the specified project type.
+    /// Filters the project collection by type compatibility rules.
     /// </summary>
-    /// <param name="creatingType">Type of project being created.</param>
-    /// <returns>List of valid base projects.</returns>
+    /// <param name="creatingType">The type of project being created.</param>
+    /// <returns>
+    /// A list of <see cref="ProjectReference"/> objects representing projects that can serve
+    /// as the base for the specified type. Returns an empty list if the type does not require
+    /// a base project or if no compatible projects exist.
+    /// </returns>
     /// <remarks>
     /// <para>Implements CAP-003: GetValidBaseProjects.</para>
     /// <para>
-    /// Rules:
+    /// Filtering rules by project type:
     /// <list type="bullet">
-    /// <item>Auxiliary: base must be Standard</item>
-    /// <item>StudyBibleAdditions: base cannot be StudyBible/StudyBibleAdditions</item>
-    /// <item>BackTranslation/Daughter/Transliteration: base must be Scripture type</item>
-    /// <item>Standard/ConsultantNotes: Returns empty (no base project needed)</item>
+    /// <item><term>Auxiliary</term><description>Base must be Standard type only.</description></item>
+    /// <item><term>StudyBibleAdditions/StudyBible</term><description>Base cannot be StudyBible or StudyBibleAdditions.</description></item>
+    /// <item><term>BackTranslation/Daughter/Transliteration</term><description>Base must be a Scripture type.</description></item>
+    /// <item><term>Standard/ConsultantNotes</term><description>Returns empty list (no base project needed).</description></item>
     /// </list>
     /// </para>
+    /// <para>
+    /// <b>Current Implementation:</b> Returns an empty list as a stub. A full implementation
+    /// would query <c>ScrTextCollection</c> and filter by the allowed base types from
+    /// <see cref="GetTypeConfiguration"/>. Integration with <c>LocalParatextProjects</c>
+    /// is required for production use.
+    /// </para>
     /// </remarks>
+    /// <seealso cref="GetAllowedBaseTypes"/>
+    /// <seealso cref="GetTypeConfiguration"/>
     public static IReadOnlyList<ProjectReference> GetValidBaseProjects(
         ProjectCreationType creatingType
     )
@@ -256,12 +268,15 @@ internal static class ProjectTypeService
         }
 
         // Get allowed base types for filtering
+        // NOTE: allowedTypes variable retained for future implementation reference
         IReadOnlyList<ProjectCreationType> allowedTypes = config.AllowedBaseTypes;
+        _ = allowedTypes; // Suppress unused variable warning until full implementation
 
-        // In a real implementation, we would query ScrTextCollection here
-        // and filter by allowed types. For now, return empty list since
-        // there are no projects in the test environment.
-        // The tests use Has.All.Matches which passes for empty collections.
+        // TODO: Integrate with ScrTextCollection to query and filter projects.
+        // Full implementation would:
+        // 1. Query LocalParatextProjects.GetAllProjectDetails()
+        // 2. Filter by allowedTypes using project.ProjectType
+        // 3. Map to ProjectReference records
         return [];
     }
 

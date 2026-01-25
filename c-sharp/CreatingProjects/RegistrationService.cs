@@ -8,6 +8,20 @@ namespace Paranext.DataProvider.CreatingProjects;
 /// </summary>
 internal static class RegistrationService
 {
+    #region Constants
+
+    /// <summary>
+    /// Base URL for the Paratext registry server.
+    /// </summary>
+    private const string RegistryServerBaseUrl = "https://registry.paratext.org";
+
+    /// <summary>
+    /// URL path for project registration endpoint.
+    /// </summary>
+    private const string RegistrationEndpointPath = "/register";
+
+    #endregion
+
     #region Public Methods
 
     /// <summary>
@@ -60,31 +74,54 @@ internal static class RegistrationService
     }
 
     /// <summary>
-    /// Checks if the registry server is available.
+    /// Checks if the Paratext registry server is available for online registration.
     /// </summary>
-    /// <returns>True if registry server can be reached.</returns>
+    /// <returns>
+    /// <c>true</c> if the registry server at <see cref="RegistryServerBaseUrl"/> can be reached;
+    /// otherwise, <c>false</c>.
+    /// </returns>
     /// <remarks>
     /// <para>Implements CAP-008: IsRegistryServerAvailable.</para>
-    /// <para>Used to determine if online registration is possible.</para>
+    /// <para>Used to determine if online registration is possible before showing the registration option.</para>
+    /// <para>
+    /// <b>Current Implementation:</b> Returns <c>true</c> as a stub. A full implementation would perform
+    /// an HTTP HEAD request to the registry server to verify connectivity.
+    /// </para>
     /// </remarks>
     public static bool IsRegistryServerAvailable()
     {
-        // In a real implementation, this would check network connectivity to the registry server.
+        // TODO: Implement actual network connectivity check to RegistryServerBaseUrl.
+        // This would typically involve an HTTP HEAD request with a short timeout.
         // For now, return true as a stub. Actual network checks would be integration tests.
         return true;
     }
 
     /// <summary>
-    /// Initiates online registration for a project.
+    /// Initiates online registration for a project by generating a registration URL.
     /// </summary>
-    /// <param name="projectGuid">Project GUID to register.</param>
-    /// <returns>URL to open in browser for registration.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when registry server is unavailable.
+    /// <param name="projectGuid">
+    /// The GUID of the project to register. Must be a valid, non-empty project identifier.
+    /// </param>
+    /// <returns>
+    /// A fully-formed URL pointing to the Paratext registry portal with the project GUID
+    /// as a query parameter. The caller should open this URL in the user's default browser.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="projectGuid"/> is <c>null</c>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="projectGuid"/> is empty or whitespace.
     /// </exception>
     /// <remarks>
     /// <para>Implements CAP-009: InitiateOnlineRegistration.</para>
-    /// <para>Returns a URL that opens the registration portal for the project.</para>
+    /// <para>
+    /// The generated URL follows the format:
+    /// <c>{RegistryServerBaseUrl}{RegistrationEndpointPath}?guid={projectGuid}</c>
+    /// </para>
+    /// <para>
+    /// Callers should verify server availability with <see cref="IsRegistryServerAvailable"/>
+    /// before calling this method to provide a better user experience.
+    /// </para>
     /// </remarks>
     public static string InitiateOnlineRegistration(string projectGuid)
     {
@@ -95,8 +132,8 @@ internal static class RegistrationService
             throw new ArgumentException("Project GUID cannot be empty", nameof(projectGuid));
         }
 
-        // Return a placeholder registration URL containing the project GUID
-        return $"https://registry.paratext.org/register?guid={projectGuid}";
+        // Build registration URL with project GUID as query parameter
+        return $"{RegistryServerBaseUrl}{RegistrationEndpointPath}?guid={projectGuid}";
     }
 
     #endregion
