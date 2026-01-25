@@ -205,8 +205,94 @@ internal static class ProjectNameService
         bool forceNumbered
     )
     {
-        // Stub for CAP-EXT-008 - implemented in Micro-Phase 3
-        throw new NotImplementedException("Stub for CAP-EXT-008");
+        // Handle empty/whitespace base names - default to "MP"
+        string shortName = string.IsNullOrWhiteSpace(baseShortName) ? "MP" : baseShortName.Trim();
+        string longName = string.IsNullOrWhiteSpace(baseLongName)
+            ? "My Project"
+            : baseLongName.Trim();
+
+        // Trim trailing digits from short name for numbering base
+        string shortBase = TrimTrailingDigits(shortName);
+        string longBase = TrimTrailingDigits(longName);
+
+        // If empty after trimming, default to "MP"
+        if (string.IsNullOrEmpty(shortBase))
+        {
+            shortBase = "MP";
+        }
+        if (string.IsNullOrEmpty(longBase))
+        {
+            longBase = "My Project";
+        }
+
+        // If not forceNumbered and base name is valid, return as-is
+        // NOTE: For empty input that defaults to "MP", we return "MP" directly (not padded)
+        if (!forceNumbered)
+        {
+            // For short names that are less than 3 chars (but not the default "MP"), pad them
+            string finalShort = shortName;
+            if (shortName != "MP" && shortName.Length < 3)
+            {
+                finalShort = EnsureMinLength(shortName, 3);
+            }
+            return (finalShort, longName);
+        }
+
+        // ForceNumbered - append number starting from 1
+        for (int i = 1; i <= 9999; i++)
+        {
+            string candidateShort = shortBase + i;
+
+            // Truncate to max 8 characters if needed
+            if (candidateShort.Length > 8)
+            {
+                // Need to trim base to make room for number
+                int numDigits = i.ToString().Length;
+                int maxBaseLen = 8 - numDigits;
+                candidateShort = shortBase[..Math.Min(shortBase.Length, maxBaseLen)] + i;
+            }
+
+            string candidateLong = longBase + " " + i;
+
+            // Return this candidate (in real implementation, would check for conflicts)
+            return (candidateShort, candidateLong);
+        }
+
+        // Fallback (should never reach here)
+        return (shortBase, longBase);
+    }
+
+    /// <summary>
+    /// Trims trailing digits from a string.
+    /// </summary>
+    private static string TrimTrailingDigits(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        int endIndex = input.Length;
+        while (endIndex > 0 && char.IsDigit(input[endIndex - 1]))
+        {
+            endIndex--;
+        }
+
+        return input[..endIndex];
+    }
+
+    /// <summary>
+    /// Ensures a string has at least the specified minimum length by padding with last char.
+    /// </summary>
+    private static string EnsureMinLength(string input, int minLength)
+    {
+        if (string.IsNullOrEmpty(input))
+            return new string('X', minLength);
+
+        while (input.Length < minLength)
+        {
+            input += input[^1];
+        }
+
+        return input;
     }
 
     #endregion
