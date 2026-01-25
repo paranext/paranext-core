@@ -281,4 +281,144 @@ internal class LanguageServiceTests
     }
 
     #endregion
+
+    #region CAP-011: GetAvailableLanguages Tests
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("BehaviorId", "BHV-009")]
+    [Property("ScenarioId", "TS-011-001")]
+    [Description("GetAvailableLanguages returns list of languages")]
+    public void GetAvailableLanguages_NoSearchQuery_ReturnsLanguageList()
+    {
+        // Act
+        var languages = LanguageService.GetAvailableLanguages();
+
+        // Assert - Should return a non-null list
+        Assert.That(languages, Is.Not.Null);
+        Assert.That(languages, Is.InstanceOf<IReadOnlyList<LanguageSelection>>());
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("BehaviorId", "BHV-009")]
+    [Property("ScenarioId", "TS-011-002")]
+    [Description("GetAvailableLanguages includes common languages like English")]
+    public void GetAvailableLanguages_ContainsCommonLanguages()
+    {
+        // Act
+        var languages = LanguageService.GetAvailableLanguages();
+
+        // Assert - Should include common languages
+        // Note: The actual implementation should return languages from ParatextData
+        Assert.That(languages, Is.Not.Null);
+        Assert.That(
+            languages,
+            Has.Some.Matches<LanguageSelection>(lang =>
+                lang.LanguageId.StartsWith("eng", StringComparison.OrdinalIgnoreCase)
+                || lang.LanguageName.Contains("English", StringComparison.OrdinalIgnoreCase)
+            ),
+            "Should include English language"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("BehaviorId", "BHV-009")]
+    [Property("ScenarioId", "TS-011-003")]
+    [Description("GetAvailableLanguages filters by search query")]
+    public void GetAvailableLanguages_WithSearchQuery_ReturnsFilteredList()
+    {
+        // Arrange
+        var searchQuery = "eng";
+
+        // Act
+        var filteredLanguages = LanguageService.GetAvailableLanguages(searchQuery);
+        var allLanguages = LanguageService.GetAvailableLanguages();
+
+        // Assert - Filtered list should be subset or equal to full list
+        Assert.That(filteredLanguages, Is.Not.Null);
+        Assert.That(filteredLanguages.Count, Is.LessThanOrEqualTo(allLanguages.Count));
+
+        // All returned languages should match the search query
+        Assert.That(
+            filteredLanguages,
+            Has.All.Matches<LanguageSelection>(lang =>
+                lang.LanguageId.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                || lang.LanguageName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+                || lang.BaseCode.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+            ),
+            "All returned languages should match the search query"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("BehaviorId", "BHV-009")]
+    [Property("ScenarioId", "TS-011-004")]
+    [Description("GetAvailableLanguages returns empty list for non-matching query")]
+    public void GetAvailableLanguages_WithNonMatchingQuery_ReturnsEmptyOrFilteredList()
+    {
+        // Arrange - Use a very unlikely search term
+        var searchQuery = "xyznonexistentlanguage123";
+
+        // Act
+        var languages = LanguageService.GetAvailableLanguages(searchQuery);
+
+        // Assert - Should return empty list for non-matching query
+        Assert.That(languages, Is.Not.Null);
+        Assert.That(languages, Is.Empty, "Non-matching query should return empty list");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("BehaviorId", "BHV-009")]
+    [Property("ScenarioId", "TS-011-005")]
+    [Description("LanguageSelection contains required BCP-47 components")]
+    public void GetAvailableLanguages_ReturnsLanguageSelectionWithRequiredFields()
+    {
+        // Act
+        var languages = LanguageService.GetAvailableLanguages();
+
+        // Assert - Each language should have required fields
+        Assert.That(languages, Is.Not.Null);
+        foreach (var language in languages)
+        {
+            Assert.That(
+                language.LanguageId,
+                Is.Not.Null.And.Not.Empty,
+                "LanguageId is required"
+            );
+            Assert.That(
+                language.LanguageName,
+                Is.Not.Null.And.Not.Empty,
+                "LanguageName is required"
+            );
+            Assert.That(language.BaseCode, Is.Not.Null.And.Not.Empty, "BaseCode is required");
+        }
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("BehaviorId", "BHV-009")]
+    [Property("ScenarioId", "TS-011-006")]
+    [Description("GetAvailableLanguages with null query returns all languages")]
+    public void GetAvailableLanguages_WithNullQuery_ReturnsAllLanguages()
+    {
+        // Act
+        var languagesWithNull = LanguageService.GetAvailableLanguages(null);
+        var languagesWithNoArg = LanguageService.GetAvailableLanguages();
+
+        // Assert - Both calls should return equivalent results
+        Assert.That(languagesWithNull, Is.Not.Null);
+        Assert.That(languagesWithNull.Count, Is.EqualTo(languagesWithNoArg.Count));
+    }
+
+    #endregion
 }

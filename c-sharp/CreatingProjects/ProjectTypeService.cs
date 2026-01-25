@@ -224,5 +224,31 @@ internal static class ProjectTypeService
         return config.AllowedBaseTypes;
     }
 
+    /// <summary>
+    /// Gets all projects that can be used as base for a given type.
+    /// Filters ScrTextCollection by type compatibility.
+    /// </summary>
+    /// <param name="creatingType">Type of project being created.</param>
+    /// <returns>List of valid base projects.</returns>
+    /// <remarks>
+    /// <para>Implements CAP-003: GetValidBaseProjects.</para>
+    /// <para>
+    /// Rules:
+    /// <list type="bullet">
+    /// <item>Auxiliary: base must be Standard</item>
+    /// <item>StudyBibleAdditions: base cannot be StudyBible/StudyBibleAdditions</item>
+    /// <item>BackTranslation/Daughter/Transliteration: base must be Scripture type</item>
+    /// <item>Standard/ConsultantNotes: Returns empty (no base project needed)</item>
+    /// </list>
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<ProjectReference> GetValidBaseProjects(
+        ProjectCreationType creatingType
+    )
+    {
+        // TODO: Implement - filter ScrTextCollection by type compatibility
+        throw new NotImplementedException("CAP-003: GetValidBaseProjects - to be implemented");
+    }
+
     #endregion
 }

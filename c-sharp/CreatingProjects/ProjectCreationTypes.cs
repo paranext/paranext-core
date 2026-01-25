@@ -176,6 +176,37 @@ public record LanguageSelection
     public string? Variant { get; init; }
 }
 
+/// <summary>
+/// Project reference for dropdowns and selection.
+/// Used by GetValidBaseProjects to return filterable project list.
+/// </summary>
+public record ProjectReference
+{
+    /// <summary>Project GUID (40-char hex).</summary>
+    public required string Guid { get; init; }
+
+    /// <summary>Short name (3-8 chars).</summary>
+    public required string ShortName { get; init; }
+
+    /// <summary>Full project name.</summary>
+    public required string FullName { get; init; }
+
+    /// <summary>Versification type.</summary>
+    public required VersificationType Versification { get; init; }
+
+    /// <summary>Project type.</summary>
+    public required ProjectCreationType ProjectType { get; init; }
+
+    /// <summary>True if project contains Scripture content.</summary>
+    public required bool IsScripture { get; init; }
+
+    /// <summary>True if project is a resource (non-editable).</summary>
+    public required bool IsResource { get; init; }
+
+    /// <summary>True if project is registered.</summary>
+    public required bool IsRegistered { get; init; }
+}
+
 // =====================================================
 // PROJECT DEFAULTS TYPES (CAP-EXT-007)
 // =====================================================

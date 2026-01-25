@@ -611,4 +611,135 @@ internal class ProjectTypeServiceTests
     }
 
     #endregion
+
+    #region CAP-003: GetValidBaseProjects Tests
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("BehaviorId", "BHV-017")]
+    [Property("ScenarioId", "TS-003-001")]
+    [Description("Standard project returns empty list (no base project needed)")]
+    public void GetValidBaseProjects_Standard_ReturnsEmptyList()
+    {
+        // Act
+        var validProjects = ProjectTypeService.GetValidBaseProjects(ProjectCreationType.Standard);
+
+        // Assert - Standard doesn't need a base project
+        Assert.That(validProjects, Is.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("BehaviorId", "BHV-017")]
+    [Property("ScenarioId", "TS-003-002")]
+    [Description("ConsultantNotes project returns empty list (no base project needed)")]
+    public void GetValidBaseProjects_ConsultantNotes_ReturnsEmptyList()
+    {
+        // Act
+        var validProjects = ProjectTypeService.GetValidBaseProjects(
+            ProjectCreationType.ConsultantNotes
+        );
+
+        // Assert - ConsultantNotes doesn't need a base project
+        Assert.That(validProjects, Is.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("BehaviorId", "BHV-017")]
+    [Property("ScenarioId", "TS-003-003")]
+    [Description("BackTranslation returns list of scripture-type projects only")]
+    public void GetValidBaseProjects_BackTranslation_ReturnsScriptureProjects()
+    {
+        // Act
+        var validProjects = ProjectTypeService.GetValidBaseProjects(
+            ProjectCreationType.BackTranslation
+        );
+
+        // Assert - All returned projects should be scripture types
+        Assert.That(validProjects, Is.Not.Null);
+        // When there are projects, all should have IsScripture = true
+        Assert.That(
+            validProjects,
+            Has.All.Matches<ProjectReference>(p => p.IsScripture),
+            "All valid base projects for BackTranslation must be scripture types"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("BehaviorId", "BHV-017")]
+    [Property("ScenarioId", "TS-003-004")]
+    [Description("Auxiliary returns list of Standard-type projects only")]
+    public void GetValidBaseProjects_Auxiliary_ReturnsStandardProjectsOnly()
+    {
+        // Act
+        var validProjects = ProjectTypeService.GetValidBaseProjects(ProjectCreationType.Auxiliary);
+
+        // Assert - All returned projects should be Standard type
+        Assert.That(validProjects, Is.Not.Null);
+        // When there are projects, all should be Standard type
+        Assert.That(
+            validProjects,
+            Has.All.Matches<ProjectReference>(p =>
+                p.ProjectType == ProjectCreationType.Standard
+            ),
+            "All valid base projects for Auxiliary must be Standard type"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("BehaviorId", "BHV-017")]
+    [Property("ScenarioId", "TS-003-005")]
+    [Description("StudyBibleAdditions excludes StudyBible and StudyBibleAdditions types")]
+    public void GetValidBaseProjects_StudyBibleAdditions_ExcludesStudyBibleTypes()
+    {
+        // Act
+        var validProjects = ProjectTypeService.GetValidBaseProjects(
+            ProjectCreationType.StudyBibleAdditions
+        );
+
+        // Assert - No StudyBible or StudyBibleAdditions types should be returned
+        Assert.That(validProjects, Is.Not.Null);
+        // When there are projects, none should be StudyBible types
+        Assert.That(
+            validProjects,
+            Has.None.Matches<ProjectReference>(p =>
+                p.ProjectType == ProjectCreationType.StudyBible
+                || p.ProjectType == ProjectCreationType.StudyBibleAdditions
+            ),
+            "StudyBible and StudyBibleAdditions must be excluded"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("BehaviorId", "BHV-027")]
+    [Property("ScenarioId", "TS-003-006")]
+    [Description("ProjectReference contains required fields")]
+    public void GetValidBaseProjects_ReturnsProjectReferenceWithRequiredFields()
+    {
+        // Act
+        var validProjects = ProjectTypeService.GetValidBaseProjects(
+            ProjectCreationType.BackTranslation
+        );
+
+        // Assert - Each project reference has required fields
+        Assert.That(validProjects, Is.Not.Null);
+        foreach (var project in validProjects)
+        {
+            Assert.That(project.Guid, Is.Not.Null.And.Not.Empty, "GUID is required");
+            Assert.That(project.ShortName, Is.Not.Null.And.Not.Empty, "ShortName is required");
+            Assert.That(project.FullName, Is.Not.Null.And.Not.Empty, "FullName is required");
+        }
+    }
+
+    #endregion
 }

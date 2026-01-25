@@ -66,6 +66,21 @@ internal static class LanguageService
         return new ValidationResult(true);
     }
 
+    /// <summary>
+    /// Gets all available languages from the language database.
+    /// </summary>
+    /// <param name="searchQuery">Optional search filter for language name or code.</param>
+    /// <returns>List of available languages.</returns>
+    /// <remarks>
+    /// <para>Implements CAP-011: GetAvailableLanguages.</para>
+    /// <para>Uses ParatextData language database for language selection dropdown.</para>
+    /// </remarks>
+    public static IReadOnlyList<LanguageSelection> GetAvailableLanguages(string? searchQuery = null)
+    {
+        // TODO: Implement - query ParatextData language database
+        throw new NotImplementedException("CAP-011: GetAvailableLanguages - to be implemented");
+    }
+
     #endregion
 
     #region Private Methods

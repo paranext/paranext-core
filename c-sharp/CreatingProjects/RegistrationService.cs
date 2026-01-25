@@ -59,6 +59,40 @@ internal static class RegistrationService
         };
     }
 
+    /// <summary>
+    /// Checks if the registry server is available.
+    /// </summary>
+    /// <returns>True if registry server can be reached.</returns>
+    /// <remarks>
+    /// <para>Implements CAP-008: IsRegistryServerAvailable.</para>
+    /// <para>Used to determine if online registration is possible.</para>
+    /// </remarks>
+    public static bool IsRegistryServerAvailable()
+    {
+        // TODO: Implement - check network connectivity to registry server
+        throw new NotImplementedException("CAP-008: IsRegistryServerAvailable - to be implemented");
+    }
+
+    /// <summary>
+    /// Initiates online registration for a project.
+    /// </summary>
+    /// <param name="projectGuid">Project GUID to register.</param>
+    /// <returns>URL to open in browser for registration.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when registry server is unavailable.
+    /// </exception>
+    /// <remarks>
+    /// <para>Implements CAP-009: InitiateOnlineRegistration.</para>
+    /// <para>Returns a URL that opens the registration portal for the project.</para>
+    /// </remarks>
+    public static string InitiateOnlineRegistration(string projectGuid)
+    {
+        // TODO: Implement - construct registration URL
+        throw new NotImplementedException(
+            "CAP-009: InitiateOnlineRegistration - to be implemented"
+        );
+    }
+
     #endregion
 
     #region Private Methods
