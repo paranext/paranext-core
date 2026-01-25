@@ -175,3 +175,215 @@ public record LanguageSelection
     public string? Region { get; init; }
     public string? Variant { get; init; }
 }
+
+// =====================================================
+// PROJECT DEFAULTS TYPES (CAP-EXT-007)
+// =====================================================
+
+/// <summary>
+/// Versification type for new projects.
+/// </summary>
+public enum VersificationType
+{
+    English,
+    Original,
+    Septuagint,
+    Vulgate,
+    RussianOrthodox,
+    RussianProtestant,
+}
+
+/// <summary>
+/// Default values for a project type.
+/// </summary>
+public record ProjectDefaults
+{
+    /// <summary>Default versification type.</summary>
+    public required VersificationType Versification { get; init; }
+
+    /// <summary>Default normalization form.</summary>
+    public required ProjectNormalization Normalization { get; init; }
+
+    /// <summary>Default editable state.</summary>
+    public required bool Editable { get; init; }
+
+    /// <summary>Default USFM version.</summary>
+    public required int UsfmVersion { get; init; }
+
+    /// <summary>Base project GUID for derived types.</summary>
+    public string? BaseProjectGuid { get; init; }
+}
+
+/// <summary>
+/// Request to create a new project.
+/// </summary>
+public record CreateProjectRequest
+{
+    /// <summary>Short name (3-8 chars).</summary>
+    public required string ShortName { get; init; }
+
+    /// <summary>Full project name.</summary>
+    public required string FullName { get; init; }
+
+    /// <summary>BCP-47 language ID.</summary>
+    public required string LanguageId { get; init; }
+
+    /// <summary>Versification to use.</summary>
+    public required VersificationType Versification { get; init; }
+
+    /// <summary>Type of project.</summary>
+    public required ProjectCreationType ProjectType { get; init; }
+
+    /// <summary>Base project GUID for derived types.</summary>
+    public string? BaseProjectGuid { get; init; }
+}
+
+/// <summary>
+/// Result of project creation.
+/// </summary>
+public record CreateProjectResult
+{
+    /// <summary>True if creation succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>GUID of created project.</summary>
+    public string? ProjectGuid { get; init; }
+
+    /// <summary>Error code if failed.</summary>
+    public string? ErrorCode { get; init; }
+
+    /// <summary>Error message for display.</summary>
+    public string? ErrorMessage { get; init; }
+}
+
+// =====================================================
+// PROJECT CLEANUP TYPES (CAP-EXT-010)
+// =====================================================
+
+/// <summary>
+/// Request to clean up a project.
+/// </summary>
+public record CleanupProjectRequest
+{
+    /// <summary>GUID of project to clean up.</summary>
+    public required string ProjectGuid { get; init; }
+
+    /// <summary>True if project was registered online.</summary>
+    public required bool WasRegistered { get; init; }
+
+    /// <summary>Registration metadata if was registered.</summary>
+    public ProjectMetadata? Registration { get; init; }
+}
+
+/// <summary>
+/// Project metadata for registration operations.
+/// </summary>
+public record ProjectMetadata
+{
+    /// <summary>Registry ID from server.</summary>
+    public string? RegistryId { get; init; }
+
+    /// <summary>Full project name.</summary>
+    public string? FullName { get; init; }
+
+    /// <summary>Project visibility (Public, Private, etc.).</summary>
+    public string? Visibility { get; init; }
+}
+
+// =====================================================
+// PROJECT UPDATE TYPES (CAP-EXT-011)
+// =====================================================
+
+/// <summary>
+/// Request to update an existing project.
+/// </summary>
+/// <remarks>
+/// Fields that are null will not be updated.
+/// </remarks>
+public record UpdateProjectRequest
+{
+    /// <summary>GUID of project to update.</summary>
+    public required string ProjectGuid { get; init; }
+
+    /// <summary>New short name (if changing).</summary>
+    public string? ShortName { get; init; }
+
+    /// <summary>New full name (if changing).</summary>
+    public string? FullName { get; init; }
+
+    /// <summary>New language ID (if changing).</summary>
+    public string? LanguageId { get; init; }
+
+    /// <summary>New versification (if changing).</summary>
+    public VersificationType? Versification { get; init; }
+
+    /// <summary>Project type for validation.</summary>
+    public ProjectCreationType? ProjectType { get; init; }
+
+    /// <summary>New normalization form (if changing).</summary>
+    public ProjectNormalization? Normalization { get; init; }
+
+    /// <summary>New editable flag (if changing).</summary>
+    public bool? Editable { get; init; }
+
+    /// <summary>New USFM version (if changing).</summary>
+    public int? UsfmVersion { get; init; }
+
+    /// <summary>New copyright (if changing).</summary>
+    public string? Copyright { get; init; }
+
+    /// <summary>New planned books list (if changing).</summary>
+    public List<int>? PlannedBooks { get; init; }
+
+    /// <summary>New encoding converter (if changing).</summary>
+    public string? EncodingConverter { get; init; }
+}
+
+/// <summary>
+/// Result of project update.
+/// </summary>
+public record UpdateProjectResult
+{
+    /// <summary>True if update succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error code if failed.</summary>
+    public string? ErrorCode { get; init; }
+
+    /// <summary>Error message for display.</summary>
+    public string? ErrorMessage { get; init; }
+}
+
+// =====================================================
+// DERIVED PROJECT TYPES (CAP-EXT-012)
+// =====================================================
+
+/// <summary>
+/// Request to copy books from base to derived project.
+/// </summary>
+public record CopyBaseBooksRequest
+{
+    /// <summary>GUID of derived project.</summary>
+    public required string DerivedProjectGuid { get; init; }
+
+    /// <summary>GUID of base project to copy from.</summary>
+    public required string BaseProjectGuid { get; init; }
+}
+
+/// <summary>
+/// Result of copying books.
+/// </summary>
+public record CopyBaseBooksResult
+{
+    /// <summary>True if copy succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>List of book numbers that were copied.</summary>
+    public IReadOnlyList<int>? CopiedBooks { get; init; }
+
+    /// <summary>Error code if failed.</summary>
+    public string? ErrorCode { get; init; }
+
+    /// <summary>Error message for display.</summary>
+    public string? ErrorMessage { get; init; }
+}

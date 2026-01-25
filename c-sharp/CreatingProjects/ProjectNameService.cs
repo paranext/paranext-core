@@ -238,33 +238,58 @@ internal static class ProjectNameService
             return (finalShort, longName);
         }
 
-        // ForceNumbered - append number starting from 1
-        for (int i = 1; i <= 9999; i++)
+        // ForceNumbered - generate candidate with number suffix
+        string candidateShort = GenerateNumberedCandidate(shortBase, 1);
+        string candidateLong = longBase + " 1";
+
+        // Return this candidate (in real implementation, would check for conflicts
+        // and increment the number until finding a unique name)
+        return (candidateShort, candidateLong);
+    }
+
+    #endregion
+
+    #region Private Methods
+
+    /// <summary>
+    /// Checks if a name is a Windows reserved filename.
+    /// </summary>
+    /// <param name="name">Name to check.</param>
+    /// <returns>True if the name is a Windows reserved filename.</returns>
+    private static bool IsWindowsReservedName(string name)
+    {
+        return ProjectCreationConstants.WindowsReservedNames.Any(reserved =>
+            reserved.Equals(name, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    /// <summary>
+    /// Generates a numbered candidate short name, truncating base if needed.
+    /// </summary>
+    /// <param name="shortBase">Base short name.</param>
+    /// <param name="number">Number to append.</param>
+    /// <returns>Candidate short name within 8 character limit.</returns>
+    private static string GenerateNumberedCandidate(string shortBase, int number)
+    {
+        string candidate = shortBase + number;
+
+        // Truncate to max 8 characters if needed
+        if (candidate.Length > 8)
         {
-            string candidateShort = shortBase + i;
-
-            // Truncate to max 8 characters if needed
-            if (candidateShort.Length > 8)
-            {
-                // Need to trim base to make room for number
-                int numDigits = i.ToString().Length;
-                int maxBaseLen = 8 - numDigits;
-                candidateShort = shortBase[..Math.Min(shortBase.Length, maxBaseLen)] + i;
-            }
-
-            string candidateLong = longBase + " " + i;
-
-            // Return this candidate (in real implementation, would check for conflicts)
-            return (candidateShort, candidateLong);
+            // Need to trim base to make room for number
+            int numDigits = number.ToString().Length;
+            int maxBaseLen = 8 - numDigits;
+            candidate = shortBase[..Math.Min(shortBase.Length, maxBaseLen)] + number;
         }
 
-        // Fallback (should never reach here)
-        return (shortBase, longBase);
+        return candidate;
     }
 
     /// <summary>
     /// Trims trailing digits from a string.
     /// </summary>
+    /// <param name="input">String to trim.</param>
+    /// <returns>String with trailing digits removed.</returns>
     private static string TrimTrailingDigits(string input)
     {
         if (string.IsNullOrEmpty(input))
@@ -282,6 +307,9 @@ internal static class ProjectNameService
     /// <summary>
     /// Ensures a string has at least the specified minimum length by padding with last char.
     /// </summary>
+    /// <param name="input">String to pad.</param>
+    /// <param name="minLength">Minimum required length.</param>
+    /// <returns>String padded to at least minLength characters.</returns>
     private static string EnsureMinLength(string input, int minLength)
     {
         if (string.IsNullOrEmpty(input))
@@ -293,22 +321,6 @@ internal static class ProjectNameService
         }
 
         return input;
-    }
-
-    #endregion
-
-    #region Private Methods
-
-    /// <summary>
-    /// Checks if a name is a Windows reserved filename.
-    /// </summary>
-    /// <param name="name">Name to check.</param>
-    /// <returns>True if the name is a Windows reserved filename.</returns>
-    private static bool IsWindowsReservedName(string name)
-    {
-        return ProjectCreationConstants.WindowsReservedNames.Any(reserved =>
-            reserved.Equals(name, StringComparison.OrdinalIgnoreCase)
-        );
     }
 
     #endregion

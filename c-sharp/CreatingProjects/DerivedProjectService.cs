@@ -7,25 +7,31 @@ namespace Paranext.DataProvider.CreatingProjects;
 /// Implements CAP-EXT-012 (DerivedProjectCopy).
 /// </summary>
 /// <remarks>
-/// Golden master: gm-012-derived-copy
-///
+/// <para>Golden master: gm-012-derived-copy</para>
+/// <para>
 /// For derived project types (BackTranslation, Daughter, etc.):
-/// 1. Copies all books from base project
-/// 2. Initializes DerivedTranslationStatus for each verse
-/// 3. Commits changes to version control
-///
-/// Handles versification differences between base and derived.
+/// <list type="number">
+/// <item>Copies all books from base project</item>
+/// <item>Initializes DerivedTranslationStatus for each verse</item>
+/// <item>Commits changes to version control</item>
+/// </list>
+/// </para>
+/// <para>Handles versification differences between base and derived.</para>
 /// </remarks>
-public static class DerivedProjectService
+internal static class DerivedProjectService
 {
     #region Public Methods
 
     /// <summary>
     /// Copies books from base project to derived project.
     /// </summary>
-    /// <param name="request">Copy request with project GUIDs</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Result with list of copied books</returns>
+    /// <param name="request">Copy request with project GUIDs.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result with list of copied books.</returns>
+    /// <remarks>
+    /// <para>Implements CAP-EXT-012: Derived Project Copy.</para>
+    /// <para>Initializes DerivedTranslationStatus baseline for each copied verse.</para>
+    /// </remarks>
     public static Task<CopyBaseBooksResult> CopyBaseBooksAsync(
         CopyBaseBooksRequest request,
         CancellationToken cancellationToken = default
@@ -75,34 +81,4 @@ public static class DerivedProjectService
     }
 
     #endregion
-}
-
-/// <summary>
-/// Request to copy books from base to derived project.
-/// </summary>
-public record CopyBaseBooksRequest
-{
-    /// <summary>GUID of derived project.</summary>
-    public required string DerivedProjectGuid { get; init; }
-
-    /// <summary>GUID of base project to copy from.</summary>
-    public required string BaseProjectGuid { get; init; }
-}
-
-/// <summary>
-/// Result of copying books.
-/// </summary>
-public record CopyBaseBooksResult
-{
-    /// <summary>True if copy succeeded.</summary>
-    public required bool Success { get; init; }
-
-    /// <summary>List of book numbers that were copied.</summary>
-    public IReadOnlyList<int>? CopiedBooks { get; init; }
-
-    /// <summary>Error code if failed.</summary>
-    public string? ErrorCode { get; init; }
-
-    /// <summary>Error message for display.</summary>
-    public string? ErrorMessage { get; init; }
 }

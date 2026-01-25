@@ -7,26 +7,32 @@ namespace Paranext.DataProvider.CreatingProjects;
 /// Implements CAP-EXT-010 (ProjectCleanupLogic).
 /// </summary>
 /// <remarks>
-/// Golden master: gm-010-project-cleanup
-///
+/// <para>Golden master: gm-010-project-cleanup</para>
+/// <para>
 /// Cleanup steps:
-/// 1. If registered, delete registration from server
-/// 2. Delete project directory
-/// 3. Remove from VersioningManager cache
-/// 4. Remove from ScrTextCollection
-///
-/// This operation is idempotent - safe to call multiple times.
+/// <list type="number">
+/// <item>If registered, delete registration from server</item>
+/// <item>Delete project directory</item>
+/// <item>Remove from VersioningManager cache</item>
+/// <item>Remove from ScrTextCollection</item>
+/// </list>
+/// </para>
+/// <para>This operation is idempotent - safe to call multiple times.</para>
 /// </remarks>
-public static class ProjectCleanupService
+internal static class ProjectCleanupService
 {
     #region Public Methods
 
     /// <summary>
     /// Cleans up a project after creation failure or user cancellation.
     /// </summary>
-    /// <param name="request">Cleanup request with project details</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task that completes when cleanup is done</returns>
+    /// <param name="request">Cleanup request with project details.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Task that completes when cleanup is done.</returns>
+    /// <remarks>
+    /// <para>Implements CAP-EXT-010: Project Cleanup Logic.</para>
+    /// <para>Idempotent - handles "not found" cases gracefully.</para>
+    /// </remarks>
     public static Task CleanupProjectAsync(
         CleanupProjectRequest request,
         CancellationToken cancellationToken = default
@@ -66,7 +72,7 @@ public static class ProjectCleanupService
     /// <summary>
     /// Attempts to delete a registration from the server.
     /// </summary>
-    /// <param name="metadata">Registration metadata</param>
+    /// <param name="metadata">Registration metadata.</param>
     private static void TryDeleteRegistration(ProjectMetadata metadata)
     {
         // In real implementation, this would call the registry server
@@ -76,34 +82,4 @@ public static class ProjectCleanupService
     }
 
     #endregion
-}
-
-/// <summary>
-/// Request to clean up a project.
-/// </summary>
-public record CleanupProjectRequest
-{
-    /// <summary>GUID of project to clean up.</summary>
-    public required string ProjectGuid { get; init; }
-
-    /// <summary>True if project was registered online.</summary>
-    public required bool WasRegistered { get; init; }
-
-    /// <summary>Registration metadata if was registered.</summary>
-    public ProjectMetadata? Registration { get; init; }
-}
-
-/// <summary>
-/// Project metadata for registration operations.
-/// </summary>
-public record ProjectMetadata
-{
-    /// <summary>Registry ID from server.</summary>
-    public string? RegistryId { get; init; }
-
-    /// <summary>Full project name.</summary>
-    public string? FullName { get; init; }
-
-    /// <summary>Project visibility (Public, Private, etc.).</summary>
-    public string? Visibility { get; init; }
 }
