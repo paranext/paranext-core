@@ -1,3 +1,5 @@
+#nullable enable
+
 namespace Paranext.DataProvider.CreatingProjects;
 
 // =====================================================
@@ -42,6 +44,46 @@ public enum RegistrationStatus
     Unregistered,
     InheritsFromBase,
     NotApplicable,
+}
+
+// =====================================================
+// SHARED CONSTANTS
+// =====================================================
+
+/// <summary>
+/// Shared constants used across project creation services.
+/// </summary>
+public static class ProjectCreationConstants
+{
+    /// <summary>
+    /// Windows reserved filenames that cannot be used as project names or language IDs.
+    /// These names are reserved by Windows for device drivers and system functions.
+    /// </summary>
+    public static readonly IReadOnlyList<string> WindowsReservedNames =
+    [
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        "COM1",
+        "COM2",
+        "COM3",
+        "COM4",
+        "COM5",
+        "COM6",
+        "COM7",
+        "COM8",
+        "COM9",
+        "LPT1",
+        "LPT2",
+        "LPT3",
+        "LPT4",
+        "LPT5",
+        "LPT6",
+        "LPT7",
+        "LPT8",
+        "LPT9",
+    ];
 }
 
 // =====================================================

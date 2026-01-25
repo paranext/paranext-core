@@ -1,47 +1,55 @@
+#nullable enable
+
 namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
 /// Service for project type configuration and base project filtering.
-/// Implements EXT-001 (ProjectTypeStateMachine) and EXT-002 (BaseProjectTypeFiltering).
+/// Implements CAP-EXT-001 (ProjectTypeStateMachine) and CAP-EXT-002 (BaseProjectTypeFiltering).
 /// </summary>
-public static class ProjectTypeService
+internal static class ProjectTypeService
 {
+    #region Private Constants
+
     /// <summary>
     /// Scripture types that can be used as base projects for derived scripture types.
     /// </summary>
-    private static readonly IReadOnlyList<ProjectCreationType> ScriptureTypes = new[]
-    {
+    private static readonly IReadOnlyList<ProjectCreationType> ScriptureTypes =
+    [
         ProjectCreationType.Standard,
         ProjectCreationType.BackTranslation,
         ProjectCreationType.Daughter,
         ProjectCreationType.StudyBibleAdditions,
         ProjectCreationType.TransliterationManual,
         ProjectCreationType.TransliterationWithEncoder,
-    };
+    ];
 
     /// <summary>
     /// Types allowed as base for StudyBibleAdditions (all except StudyBible types and ConsultantNotes).
     /// </summary>
-    private static readonly IReadOnlyList<ProjectCreationType> NotStudyBibleTypes = new[]
-    {
+    private static readonly IReadOnlyList<ProjectCreationType> NotStudyBibleTypes =
+    [
         ProjectCreationType.Standard,
         ProjectCreationType.BackTranslation,
         ProjectCreationType.Daughter,
         ProjectCreationType.Auxiliary,
         ProjectCreationType.TransliterationManual,
         ProjectCreationType.TransliterationWithEncoder,
-    };
+    ];
+
+    #endregion
+
+    #region Public Methods
 
     /// <summary>
     /// Gets the configuration for a project type.
     /// Returns type-specific settings for UI behavior and validation.
     /// </summary>
-    /// <param name="projectType">The project type to configure</param>
-    /// <returns>Configuration with all type-specific settings</returns>
+    /// <param name="projectType">The project type to configure.</param>
+    /// <returns>Configuration with all type-specific settings.</returns>
     /// <remarks>
-    /// Pure function - no side effects.
-    /// Implements EXT-001: Project Type State Machine
-    /// Golden master: gm-001-type-state-machine
+    /// <para>Pure function - no side effects.</para>
+    /// <para>Implements CAP-EXT-001: Project Type State Machine.</para>
+    /// <para>Golden master: gm-001-type-state-machine.</para>
     /// </remarks>
     public static ProjectTypeConfiguration GetTypeConfiguration(ProjectCreationType projectType)
     {
@@ -59,7 +67,7 @@ public static class ProjectTypeService
                 StudyBibleTabVisible = false,
                 EncodingConverterRequired = false,
                 BaseProjectFilter = null,
-                AllowedBaseTypes = Array.Empty<ProjectCreationType>(),
+                AllowedBaseTypes = [],
             },
             ProjectCreationType.BackTranslation => new ProjectTypeConfiguration
             {
@@ -101,7 +109,7 @@ public static class ProjectTypeService
                 StudyBibleTabVisible = false,
                 EncodingConverterRequired = false,
                 BaseProjectFilter = "standardOnly",
-                AllowedBaseTypes = new[] { ProjectCreationType.Standard },
+                AllowedBaseTypes = [ProjectCreationType.Standard],
             },
             ProjectCreationType.StudyBibleAdditions => new ProjectTypeConfiguration
             {
@@ -129,7 +137,7 @@ public static class ProjectTypeService
                 StudyBibleTabVisible = false,
                 EncodingConverterRequired = false,
                 BaseProjectFilter = null,
-                AllowedBaseTypes = Array.Empty<ProjectCreationType>(),
+                AllowedBaseTypes = [],
             },
             ProjectCreationType.TransliterationManual => new ProjectTypeConfiguration
             {
@@ -185,7 +193,7 @@ public static class ProjectTypeService
                 StudyBibleTabVisible = false,
                 EncodingConverterRequired = false,
                 BaseProjectFilter = null,
-                AllowedBaseTypes = Array.Empty<ProjectCreationType>(),
+                AllowedBaseTypes = [],
             },
         };
     }
@@ -193,23 +201,28 @@ public static class ProjectTypeService
     /// <summary>
     /// Gets the list of project types that can be used as a base for the given type.
     /// </summary>
-    /// <param name="creatingType">Type of project being created</param>
-    /// <returns>List of allowed base project types</returns>
+    /// <param name="creatingType">Type of project being created.</param>
+    /// <returns>List of allowed base project types.</returns>
     /// <remarks>
-    /// Implements EXT-002: Base Project Type Filtering
-    /// Golden master: gm-002-base-project-filter
-    ///
+    /// <para>Implements CAP-EXT-002: Base Project Type Filtering.</para>
+    /// <para>Golden master: gm-002-base-project-filter.</para>
+    /// <para>
     /// Rules:
-    /// - BackTranslation/Daughter/Transliteration: Scripture types only
-    /// - Auxiliary: Standard only
-    /// - StudyBibleAdditions: Anything except StudyBible/StudyBibleAdditions
-    /// - Standard/ConsultantNotes: Empty (no base project needed)
+    /// <list type="bullet">
+    /// <item>BackTranslation/Daughter/Transliteration: Scripture types only</item>
+    /// <item>Auxiliary: Standard only</item>
+    /// <item>StudyBibleAdditions: Anything except StudyBible/StudyBibleAdditions</item>
+    /// <item>Standard/ConsultantNotes: Empty (no base project needed)</item>
+    /// </list>
+    /// </para>
     /// </remarks>
     public static IReadOnlyList<ProjectCreationType> GetAllowedBaseTypes(
         ProjectCreationType creatingType
     )
     {
-        var config = GetTypeConfiguration(creatingType);
+        ProjectTypeConfiguration config = GetTypeConfiguration(creatingType);
         return config.AllowedBaseTypes;
     }
+
+    #endregion
 }
