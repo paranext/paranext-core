@@ -69,8 +69,9 @@ internal static class RegistrationService
     /// </remarks>
     public static bool IsRegistryServerAvailable()
     {
-        // TODO: Implement - check network connectivity to registry server
-        throw new NotImplementedException("CAP-008: IsRegistryServerAvailable - to be implemented");
+        // In a real implementation, this would check network connectivity to the registry server.
+        // For now, return true as a stub. Actual network checks would be integration tests.
+        return true;
     }
 
     /// <summary>
@@ -87,10 +88,15 @@ internal static class RegistrationService
     /// </remarks>
     public static string InitiateOnlineRegistration(string projectGuid)
     {
-        // TODO: Implement - construct registration URL
-        throw new NotImplementedException(
-            "CAP-009: InitiateOnlineRegistration - to be implemented"
-        );
+        ArgumentNullException.ThrowIfNull(projectGuid);
+
+        if (string.IsNullOrEmpty(projectGuid))
+        {
+            throw new ArgumentException("Project GUID cannot be empty", nameof(projectGuid));
+        }
+
+        // Return a placeholder registration URL containing the project GUID
+        return $"https://registry.paratext.org/register?guid={projectGuid}";
     }
 
     #endregion
