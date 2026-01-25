@@ -60,9 +60,48 @@ public static class LanguageService
         string? initialLanguageName = null
     )
     {
-        throw new NotImplementedException(
-            "EXT-006: ValidateLanguageSelection not yet implemented. "
-                + "See extraction-plan.md for implementation details."
-        );
+        // VAL-010: Language name cannot be blank
+        if (string.IsNullOrWhiteSpace(languageName))
+        {
+            return new ValidationResult(false, "Language_NameBlank");
+        }
+
+        // VAL-011: Language name must be unique (case-insensitive)
+        // Skip uniqueness check if in edit mode and name hasn't changed
+        bool isEditMode = initialLanguageName != null;
+        bool nameUnchanged =
+            isEditMode
+            && languageName.Equals(initialLanguageName, StringComparison.OrdinalIgnoreCase);
+
+        if (!nameUnchanged && existingLanguageNames != null)
+        {
+            foreach (var existingName in existingLanguageNames)
+            {
+                if (existingName.Equals(languageName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new ValidationResult(false, "Language_NameExists");
+                }
+            }
+        }
+
+        // VAL-012: Check for private use extension with invalid variant format
+        // The pattern "-x-" indicates a private use extension which is not allowed
+        if (languageId.Contains("-x-", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ValidationResult(false, "Language_InvalidVariant");
+        }
+
+        // VAL-013: Final language ID cannot be Windows reserved filename
+        if (
+            WindowsReservedNames.Any(reserved =>
+                reserved.Equals(languageId, StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            return new ValidationResult(false, "Language_ReservedName");
+        }
+
+        // All validations passed
+        return new ValidationResult(true);
     }
 }

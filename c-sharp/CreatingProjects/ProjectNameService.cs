@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
@@ -36,6 +38,13 @@ public static class ProjectNameService
     };
 
     /// <summary>
+    /// Valid characters for project short names.
+    /// </summary>
+    private static readonly HashSet<char> ValidChars = new HashSet<char>(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
+    );
+
+    /// <summary>
     /// Validates a project short name against all naming rules.
     /// </summary>
     /// <param name="shortName">Proposed short name</param>
@@ -59,10 +68,63 @@ public static class ProjectNameService
         string? originalName = null
     )
     {
-        throw new NotImplementedException(
-            "EXT-003: ValidateShortName not yet implemented. "
-                + "See extraction-plan.md for implementation details."
-        );
+        // VAL-001: Check for empty first
+        if (string.IsNullOrEmpty(shortName))
+        {
+            return new ValidationResult(false, "ShortName_TooShort");
+        }
+
+        // VAL-003: Check for whitespace (check before length and invalid char)
+        foreach (char c in shortName)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                return new ValidationResult(false, "ShortName_HasSpace");
+            }
+        }
+
+        // VAL-002: Check for invalid characters (before length check)
+        foreach (char c in shortName)
+        {
+            if (!ValidChars.Contains(c))
+            {
+                return new ValidationResult(false, "ShortName_InvalidChar");
+            }
+        }
+
+        // VAL-001: Length validation (min 3, max 8)
+        if (shortName.Length < 3)
+        {
+            return new ValidationResult(false, "ShortName_TooShort");
+        }
+
+        if (shortName.Length > 8)
+        {
+            return new ValidationResult(false, "ShortName_TooLong");
+        }
+
+        // VAL-004: Check for Windows reserved names (case-insensitive)
+        if (
+            WindowsReservedNames.Any(reserved =>
+                reserved.Equals(shortName, StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            return new ValidationResult(false, "ShortName_Reserved");
+        }
+
+        // For editing, if the name is unchanged, it's valid
+        if (
+            !isNewProject
+            && originalName != null
+            && originalName.Equals(shortName, StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return new ValidationResult(true);
+        }
+
+        // All validations passed
+        return new ValidationResult(true);
     }
 
     /// <summary>
@@ -83,9 +145,61 @@ public static class ProjectNameService
     /// </remarks>
     public static string GenerateShortName(string fullName)
     {
-        throw new NotImplementedException(
-            "EXT-004: GenerateShortName not yet implemented. "
-                + "See extraction-plan.md for implementation details."
-        );
+        ArgumentNullException.ThrowIfNull(fullName);
+
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return "";
+        }
+
+        var letters = new StringBuilder();
+        var digits = new StringBuilder();
+        bool inWord = false;
+
+        foreach (char c in fullName)
+        {
+            if (ValidChars.Contains(c))
+            {
+                if (!inWord)
+                {
+                    // Only add non-digit characters to letters
+                    if (!char.IsDigit(c))
+                    {
+                        letters.Append(c);
+                    }
+                    inWord = true;
+                }
+                // Collect all digits separately
+                if (char.IsDigit(c))
+                {
+                    digits.Append(c);
+                }
+            }
+            else
+            {
+                inWord = false;
+            }
+        }
+
+        // Keep only last 2 digits
+        string digitStr =
+            digits.Length > 2 ? digits.ToString().Substring(digits.Length - 2) : digits.ToString();
+
+        // Combine letters and digits
+        string abbrev = letters.ToString() + digitStr;
+
+        // Truncate to max 8 characters
+        if (abbrev.Length > 8)
+        {
+            abbrev = abbrev.Substring(0, 8);
+        }
+
+        // Pad to min 3 characters using last valid char
+        while (abbrev.Length < 3 && abbrev.Length > 0)
+        {
+            abbrev += abbrev[abbrev.Length - 1];
+        }
+
+        return abbrev;
     }
 }
