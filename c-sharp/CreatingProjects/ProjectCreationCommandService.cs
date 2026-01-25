@@ -27,22 +27,18 @@ namespace Paranext.DataProvider.CreatingProjects;
 /// </remarks>
 internal class ProjectCreationCommandService(PapiClient papiClient)
 {
-    #region Constants
+    #region Constructors, consts, and fields
 
     /// <summary>
     /// Command prefix for all project creation commands.
     /// </summary>
     private const string CommandPrefix = "command:paratextProjectCreation.";
 
-    #endregion
-
-    #region Fields
-
-    private readonly PapiClient _papiClient = papiClient;
+    private PapiClient PapiClient { get; } = papiClient;
 
     #endregion
 
-    #region Public Methods
+    #region Public properties and methods
 
     /// <summary>
     /// Initializes the command service by registering all PAPI commands.
@@ -51,67 +47,67 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
     public async Task InitializeAsync()
     {
         // CAP-CMD-001: getTypeConfiguration
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "getTypeConfiguration",
             GetTypeConfiguration
         );
 
         // CAP-CMD-002: canBeBasedOnType
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "canBeBasedOnType",
             CanBeBasedOnType
         );
 
         // CAP-CMD-003: getValidBaseProjects
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "getValidBaseProjects",
             GetValidBaseProjects
         );
 
         // CAP-CMD-004: validateShortName
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "validateShortName",
             ValidateShortName
         );
 
         // CAP-CMD-005: generateShortName
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "generateShortName",
             GenerateShortName
         );
 
         // CAP-CMD-006: generateUniqueName
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "generateUniqueName",
             GenerateUniqueName
         );
 
         // CAP-CMD-007: getRegistrationState
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "getRegistrationState",
             GetRegistrationState
         );
 
         // CAP-CMD-008: validateLanguage
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "validateLanguage",
             ValidateLanguage
         );
 
         // CAP-CMD-009: createProject
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "createProject",
             CreateProject
         );
 
         // CAP-CMD-011: cleanupProject
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "cleanupProject",
             CleanupProject
         );
 
         // CAP-CMD-012: updateProject
-        await _papiClient.RegisterRequestHandlerAsync(
+        await PapiClient.RegisterRequestHandlerAsync(
             CommandPrefix + "updateProject",
             UpdateProject
         );
@@ -119,7 +115,7 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
 
     #endregion
 
-    #region Command Handlers
+    #region Private properties and methods
 
     /// <summary>
     /// Gets the configuration for a project type.
