@@ -5,18 +5,44 @@ namespace Paranext.DataProvider.ProjectCreation;
 
 /// <summary>
 /// Service for project name validation and generation.
-/// Implements CAP-004, CAP-005, CAP-006.
+/// Implements CAP-004: ValidateShortName, CAP-005: GenerateShortName, CAP-006: GenerateUniqueName.
 /// </summary>
 internal static partial class ProjectNameService
 {
-    private const int MinNameLength = 3;
-    private const int MaxNameLength = 8;
+    /// <summary>
+    /// Minimum allowed length for a project short name.
+    /// </summary>
+    private const int ShortNameMinLength = 3;
 
-    // Valid characters for short name: A-Z, a-z, 0-9, underscore
+    /// <summary>
+    /// Maximum allowed length for a project short name.
+    /// </summary>
+    private const int ShortNameMaxLength = 8;
+
+    /// <summary>
+    /// Characters reserved for numeric suffix when generating unique names (allows 1-99).
+    /// </summary>
+    private const int SuffixReservedLength = 2;
+
+    /// <summary>
+    /// Default short name used when generating from empty input.
+    /// </summary>
+    private const string DefaultShortName = "MPP";
+
+    /// <summary>
+    /// Default long name used when generating from empty input.
+    /// </summary>
+    private const string DefaultLongName = "My Project";
+
+    /// <summary>
+    /// Regex to validate short name contains only allowed characters (A-Z, a-z, 0-9, underscore).
+    /// </summary>
     [GeneratedRegex(@"^[A-Za-z0-9_]+$")]
-    private static partial Regex ValidCharsRegex();
+    private static partial Regex ValidShortNameCharsRegex();
 
-    // Windows reserved filenames
+    /// <summary>
+    /// Windows reserved filenames that cannot be used as project names.
+    /// </summary>
     private static readonly HashSet<string> WindowsReservedNames =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -45,8 +71,15 @@ internal static partial class ProjectNameService
         };
 
     /// <summary>
-    /// CAP-004: Validates a short name according to project naming rules.
+    /// Validates a short name according to project naming rules (CAP-004).
     /// </summary>
+    /// <param name="shortName">The short name to validate.</param>
+    /// <param name="isNewProject">True if creating a new project, false if editing existing.</param>
+    /// <param name="originalName">The original name when editing (allows same name).</param>
+    /// <returns>Validation result with IsValid flag and error code if invalid.</returns>
+    /// <remarks>
+    /// Validation order: min length, whitespace, invalid chars, max length, reserved names, uniqueness.
+    /// </remarks>
     public static ValidationResult ValidateShortName(
         string shortName,
         bool isNewProject,
@@ -54,12 +87,15 @@ internal static partial class ProjectNameService
     )
     {
         // VAL-001: Check minimum length first
-        if (shortName.Length < MinNameLength)
+        if (shortName.Length < ShortNameMinLength)
         {
             return new ValidationResult(
                 IsValid: false,
                 ErrorCode: "SHORTNAME_TOO_SHORT",
-                ErrorParams: new Dictionary<string, string> { ["min"] = MinNameLength.ToString() }
+                ErrorParams: new Dictionary<string, string>
+                {
+                    ["min"] = ShortNameMinLength.ToString(),
+                }
             );
         }
 
@@ -70,18 +106,21 @@ internal static partial class ProjectNameService
         }
 
         // VAL-002: Check for invalid characters (before max length)
-        if (!ValidCharsRegex().IsMatch(shortName))
+        if (!ValidShortNameCharsRegex().IsMatch(shortName))
         {
             return new ValidationResult(IsValid: false, ErrorCode: "SHORTNAME_INVALID_CHARS");
         }
 
         // VAL-001: Check maximum length
-        if (shortName.Length > MaxNameLength)
+        if (shortName.Length > ShortNameMaxLength)
         {
             return new ValidationResult(
                 IsValid: false,
                 ErrorCode: "SHORTNAME_TOO_LONG",
-                ErrorParams: new Dictionary<string, string> { ["max"] = MaxNameLength.ToString() }
+                ErrorParams: new Dictionary<string, string>
+                {
+                    ["max"] = ShortNameMaxLength.ToString(),
+                }
             );
         }
 
@@ -122,14 +161,18 @@ internal static partial class ProjectNameService
     }
 
     /// <summary>
-    /// CAP-005: Generates a short name from a full name.
+    /// Generates a short name from a full name (CAP-005).
+    /// </summary>
+    /// <param name="fullName">The full project name to abbreviate.</param>
+    /// <returns>A 3-8 character abbreviation, or empty string if input is empty.</returns>
+    /// <remarks>
     /// Algorithm:
     /// 1. Extract first letter of each word (only valid chars)
     /// 2. Extract digits separately (keep last 2 only)
     /// 3. Combine: letters + digits
     /// 4. Truncate to max 8 chars
     /// 5. Pad to min 3 chars using last valid char
-    /// </summary>
+    /// </remarks>
     public static string GenerateShortName(string fullName)
     {
         if (string.IsNullOrEmpty(fullName))
@@ -173,16 +216,16 @@ internal static partial class ProjectNameService
         var result = letters.ToString() + digits;
 
         // Truncate to max length
-        if (result.Length > MaxNameLength)
+        if (result.Length > ShortNameMaxLength)
         {
-            result = result[..MaxNameLength];
+            result = result[..ShortNameMaxLength];
         }
 
         // Pad to min length using last character
-        if (result.Length > 0 && result.Length < MinNameLength)
+        if (result.Length > 0 && result.Length < ShortNameMinLength)
         {
             var lastChar = result[^1];
-            while (result.Length < MinNameLength)
+            while (result.Length < ShortNameMinLength)
             {
                 result += lastChar;
             }
@@ -192,23 +235,28 @@ internal static partial class ProjectNameService
     }
 
     /// <summary>
-    /// CAP-006: Generates a unique name pair that doesn't conflict with existing projects.
+    /// Generates a unique name pair that doesn't conflict with existing projects (CAP-006).
     /// </summary>
+    /// <param name="baseShortName">Base short name to make unique (uses default if empty).</param>
+    /// <param name="baseLongName">Base long name to make unique (uses default if empty).</param>
+    /// <param name="forceNumbered">If true, always appends a number suffix.</param>
+    /// <returns>Tuple of (ShortName, LongName) that passes validation.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no unique name found after 9999 attempts.</exception>
     public static (string ShortName, string LongName) GenerateUniqueName(
         string baseShortName,
         string baseLongName,
         bool forceNumbered = false
     )
     {
-        // Use default if empty (must be at least 3 chars to pass validation)
+        // Use defaults if empty
         if (string.IsNullOrEmpty(baseShortName))
         {
-            baseShortName = "MPP";
+            baseShortName = DefaultShortName;
         }
 
         if (string.IsNullOrEmpty(baseLongName))
         {
-            baseLongName = "My Project";
+            baseLongName = DefaultLongName;
         }
 
         // Trim trailing digits from base
@@ -226,8 +274,7 @@ internal static partial class ProjectNameService
         }
 
         // Find a unique numbered variant
-        // Reserve 2 chars for suffix to allow growth (1, 2, ..., 99)
-        var maxBaseLength = MaxNameLength - 2;
+        var maxBaseLength = ShortNameMaxLength - SuffixReservedLength;
         var truncatedBase = shortBase[..Math.Min(shortBase.Length, maxBaseLength)];
 
         for (int i = 1; i <= 9999; i++)
@@ -248,8 +295,10 @@ internal static partial class ProjectNameService
     }
 
     /// <summary>
-    /// Removes trailing digits from a string.
+    /// Removes trailing digits and whitespace from a string.
     /// </summary>
+    /// <param name="input">The string to trim.</param>
+    /// <returns>The input with trailing digits and whitespace removed.</returns>
     private static string TrimTrailingDigits(string input)
     {
         if (string.IsNullOrEmpty(input))
