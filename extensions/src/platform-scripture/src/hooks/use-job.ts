@@ -74,11 +74,9 @@ interface JobHandlers<TParams, TJobId, TResult, TStatus> {
  * @param terminalStatuses Array of status values that indicate the job has completed (terminal
  *   states). The hook will stop polling when any of these statuses are received and we have
  *   retrieved all results. Example: ['completed', 'stopped', 'errored', 'exceeded']
- *
- *   WARNING: If you do not provide terminal statuses, the hook will infinitely poll until an error
- *   occurs.
  * @param config - Configuration options for polling behavior and status handling
  * @returns Function to execute a job with the given parameters
+ * @throws If terminalStatuses is not provided or empty
  */
 export function useJob<TParams, TJobId, TResult, TStatus = string>(
   handlers: JobHandlers<TParams, TJobId, TResult, TStatus>,
@@ -90,6 +88,13 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
   const { batchSize = 100, pollInterval = 10, errorStatus } = config;
   const { startJob, pollJob, cleanupJob } = handlers;
 
+  // Fail fast: require terminal statuses to avoid infinite polling loops
+  if (!terminalStatuses || terminalStatuses.length === 0) {
+    throw new Error(
+      'useJob requires a non-empty `terminalStatuses` array to avoid infinite polling',
+    );
+  }
+
   const executeJob = useCallback(
     async (params: TParams): Promise<TResult[]> => {
       let jobId: TJobId | undefined;
@@ -100,6 +105,8 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
 
         activeJobsRef.current.add(jobIdString);
 
+        let lastSeenTotalCount: number | undefined;
+
         const pollForResults = async (
           currentJobId: TJobId,
           allResults: TResult[] = [],
@@ -109,6 +116,24 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
           }
 
           const statusReport = await pollJob(currentJobId, batchSize);
+
+          // Warn if totalResultsCount is smaller than already retrieved
+          if (typeof statusReport.totalResultsCount === 'number') {
+            if (
+              typeof lastSeenTotalCount === 'number' &&
+              statusReport.totalResultsCount < lastSeenTotalCount
+            ) {
+              logger.warn(
+                `Job ${jobIdString} totalResultsCount decreased from ${lastSeenTotalCount} to ${statusReport.totalResultsCount}`,
+              );
+            }
+            if (statusReport.totalResultsCount < allResults.length) {
+              logger.warn(
+                `Job ${jobIdString} reported totalResultsCount ${statusReport.totalResultsCount} but we've already retrieved ${allResults.length} results`,
+              );
+            }
+            lastSeenTotalCount = statusReport.totalResultsCount;
+          }
 
           if (statusReport.nextResults?.length) {
             allResults.push(...statusReport.nextResults);
