@@ -1,4 +1,5 @@
 using Paratext.Data;
+using PtxUtils;
 
 namespace Paranext.DataProvider.ProjectCreation;
 
@@ -19,30 +20,16 @@ internal static class ProjectUpdateService
         CancellationToken cancellationToken = default
     )
     {
-        // 1. Find project by GUID
-        ScrText? project = null;
+        // 1. Find project by GUID using ScrTextCollection.GetById pattern
+        ScrText project;
         try
         {
-            foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-            {
-                if (
-                    scrText
-                        .Guid.ToString()
-                        .Equals(request.ProjectGuid, StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    project = scrText;
-                    break;
-                }
-            }
+            var hexId = HexId.FromStr(request.ProjectGuid);
+            project = ScrTextCollection.GetById(hexId);
         }
         catch
         {
-            // Ignore enumeration errors
-        }
-
-        if (project == null)
-        {
+            // Project not found or invalid GUID format
             return Task.FromResult(
                 new UpdateProjectResult
                 {
@@ -53,37 +40,17 @@ internal static class ProjectUpdateService
             );
         }
 
-        // 2. Check for forbidden type change
+        // 2. Check for forbidden type change - any attempt to set ProjectType is rejected
         if (!string.IsNullOrEmpty(request.ProjectType))
         {
-            // Get current project type from Settings
-            var currentType = project.Settings.TranslationInfo?.Type.ToString() ?? "Standard";
-            if (
-                !request.ProjectType.Equals(currentType, StringComparison.OrdinalIgnoreCase)
-                && !request.ProjectType.Equals("Standard", StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                return Task.FromResult(
-                    new UpdateProjectResult
-                    {
-                        Success = false,
-                        ErrorCode = "TYPE_CHANGE_FORBIDDEN",
-                        ErrorMessage = "Cannot change project type",
-                    }
-                );
-            }
-            // Even if it seems the same, changing type is forbidden
-            if (!string.IsNullOrEmpty(request.ProjectType))
-            {
-                return Task.FromResult(
-                    new UpdateProjectResult
-                    {
-                        Success = false,
-                        ErrorCode = "TYPE_CHANGE_FORBIDDEN",
-                        ErrorMessage = "Cannot change project type",
-                    }
-                );
-            }
+            return Task.FromResult(
+                new UpdateProjectResult
+                {
+                    Success = false,
+                    ErrorCode = "TYPE_CHANGE_FORBIDDEN",
+                    ErrorMessage = "Cannot change project type",
+                }
+            );
         }
 
         // 3. Check for INV-005: Versification for derived projects comes from base

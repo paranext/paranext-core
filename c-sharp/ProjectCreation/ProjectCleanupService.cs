@@ -29,7 +29,7 @@ internal static class ProjectCleanupService
     )
     {
         // Idempotent: handle invalid GUID formats gracefully
-        HexId? projectGuid;
+        HexId projectGuid;
         try
         {
             projectGuid = HexId.FromStr(request.ProjectGuid);
@@ -48,38 +48,15 @@ internal static class ProjectCleanupService
             // This is best-effort - we continue even if it fails
         }
 
-        // 2-4. Find and remove project from collection
-        ScrText? projectToRemove = null;
+        // 2-4. Find and remove project from collection using GetById pattern
         try
         {
-            foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-            {
-                if (
-                    scrText
-                        .Guid.ToString()
-                        .Equals(request.ProjectGuid, StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    projectToRemove = scrText;
-                    break;
-                }
-            }
+            var projectToRemove = ScrTextCollection.GetById(projectGuid);
+            ScrTextCollection.Remove(projectToRemove, false);
         }
         catch
         {
-            // Idempotent: if we can't enumerate, continue
-        }
-
-        if (projectToRemove != null)
-        {
-            try
-            {
-                ScrTextCollection.Remove(projectToRemove, false);
-            }
-            catch
-            {
-                // Idempotent: if removal fails, continue
-            }
+            // Idempotent: project may not exist or removal may fail - continue silently
         }
 
         return Task.CompletedTask;
