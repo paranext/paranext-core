@@ -52,7 +52,9 @@ public class PlatformCommentWrapper
     public string Language => _comment.Language;
     public string Date => _comment.Date;
     public bool Deleted => _comment.Deleted;
-    public string? SelectedText => _comment.SelectedText;
+
+    // In practice, I think ParatextData always sets SelectedText to a non-null value.
+    public string SelectedText => _comment.SelectedText ?? string.Empty;
     public int StartPosition => _comment.StartPosition;
     public string? ContextBefore => _comment.ContextBefore;
     public string? ContextAfter => _comment.ContextAfter;

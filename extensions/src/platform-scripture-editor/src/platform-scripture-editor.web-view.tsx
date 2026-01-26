@@ -1,38 +1,38 @@
 import {
-  EditorOptions,
-  Editorial,
-  EditorRef,
-  SelectionRange,
-  getDefaultViewOptions,
-  UsjNodeOptions,
+  AnnotationRange,
   DeltaOp,
-  ViewOptions,
-  DeltaSource,
-  isInsertEmbedOpOfType,
   DeltaOpInsertNoteEmbed,
+  DeltaSource,
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getDefaultViewOptions,
+  isInsertEmbedOpOfType,
+  SelectionRange,
+  TypedMarkOnClick,
+  TypedMarkOnRemove,
+  TypedMarkRemovalCause,
+  UsjNodeOptions,
+  ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { USJ_TYPE, USJ_VERSION, Usj } from '@eten-tech-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import {
-  areUsjContentsEqualExceptWhitespace,
-  compareScrRefs,
-  formatReplacementString,
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-  serialize,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjReaderWriter,
-} from 'platform-bible-utils';
+  useLocalizedStrings,
+  useProjectData,
+  useProjectDataProvider,
+  useProjectSetting,
+} from '@papi/frontend/react';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import type { CommandHandlers, CommandNames } from 'papi-shared-types';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
   Button,
+  COMMENT_EDITOR_STRING_KEYS,
+  CommentEditor,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
@@ -43,20 +43,41 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import {
+  areUsjContentsEqualExceptWhitespace,
+  compareScrRefs,
+  ContentJsonPath,
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+  isString,
+  LocalizeKey,
+  serialize,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
+  UsjDocumentLocation,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
+import {
+  AnnotationActionHandler,
   EditorDecorations,
+  EditorMessageSetAnnotation,
   EditorWebViewMessage,
   ScriptureEditorViewType,
 } from 'platform-scripture-editor';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
-import { deepEqualAcrossIframes, formatEditorTitle } from './platform-scripture-editor.utils';
+import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
 } from './decorations.util';
-import { runOnFirstLoad, scrollToVerse } from './editor-dom.util';
-import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
+import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
+import {
+  deepEqualAcrossIframes,
+  formatEditorTitle,
+  openCommentListAndSelectThreadSafe,
+} from './platform-scripture-editor.utils';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -68,11 +89,50 @@ import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet
 const EDITOR_LOAD_DELAY_TIME = 200;
 
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
+  ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_permissions_format%',
+  '%webView_platformScriptureEditor_error_noTextSelected%',
+  '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
 ];
+
+/** Annotation type used for translator comments (kebab-case to match CSS class naming) */
+const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
+
+/** Annotation ID used for a pending comment that hasn't been saved yet */
+const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
+
+/** Prefix the editor puts on annotation type when calling the annotation's callbacks */
+const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
+
+/**
+ * Converts a selection location to UsjDocumentLocation format. This is needed because the editor
+ * returns UsjLocation which may have jsonPath, but we need UsjDocumentLocation for the
+ * extractCommentScriptureText command.
+ */
+function usjLocationToUsjDocumentLocation(
+  location: SelectionRange['start'] | SelectionRange['end'],
+): UsjDocumentLocation | undefined {
+  if (!location) return undefined;
+  return {
+    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    jsonPath: location.jsonPath as ContentJsonPath,
+    offset: location.offset,
+  };
+}
+
+/**
+ * Extracts scripture text snippets from a selection range.
+ *
+ * @param selection The selection range from the editor
+ * @param editorUsj The USJ document from the editor
+ * @param bookId The book ID (e.g., "GEN")
+ * @returns The extracted scripture text or undefined if extraction failed
+ */
+// scripture text extraction now handled by legacyCommentManager.createCommentUsj
 
 const defaultUsj: Usj = correctEditorUsjVersion({
   type: USJ_TYPE,
@@ -93,6 +153,7 @@ const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 const defaultTextDirection = 'ltr';
 
 const defaultView: ViewOptions = getDefaultViewOptions();
+
 // Return the appropriate ViewOptions for the given webview `viewType`.
 // Centralizes the logic so initialization and effects can call the same helper
 // instead of duplicating the shallow-copy code.
@@ -133,14 +194,51 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
 
-  // These two control the placement of the note editor popover by setting the location of the anchor
+  // These control the placement of the footnote editor popover by setting the location of the anchor
+  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
   const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
-  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>();
   const editingNoteKey = useRef<string>();
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+
+  // These control the placement of the comment editor popover by setting the location of the anchor
+  const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
+  const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
+  const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
+  const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
+
+  /**
+   * Stores the annotation range for the pending comment being created. This is captured when the
+   * user initiates comment creation and used to create the annotation highlight and to extract
+   * selection info when saving the comment.
+   */
+  const pendingCommentAnnotationRange = useRef<
+    { range: AnnotationRange; verseRef: SerializedVerseRef } | undefined
+  >(undefined);
+
+  /** Map from annotationId -> info about the annotation that we need to keep to perform some actions */
+  const annotationInfoByIdRef = useRef<
+    Map<
+      string,
+      Pick<EditorMessageSetAnnotation, 'annotationType' | 'interactionCommand' | 'annotationRange'>
+    >
+  >(new Map());
+
+  /** Function to run to clear all annotation info when the editor clears all annotation info */
+  const clearAnnotationInfo = useRef(() => {
+    annotationInfoByIdRef.current.clear();
+  });
+
+  /**
+   * Set of annotation IDs that are currently being set - used to prevent removing annotations while
+   * they are being updated
+   */
+  const annotationIdsBeingSet = useRef<Set<string>>(new Set());
+
+  /** Stores the current editor selection, updated on every selection change. */
+  const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
@@ -195,6 +293,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     return textDirection;
   }, [projectName, scrRef, textDirection]);
+
+  const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
+
+  const fetchAssignableUsers = useCallback(async () => {
+    if (!commentsPdp) {
+      logger.debug('Comments PDP is not yet available for fetchAssignableUsers');
+      return [];
+    }
+    return commentsPdp.findAssignableUsers();
+  }, [commentsPdp]);
+  const [commentEditorAssignableUsers] = usePromise(fetchAssignableUsers, []);
 
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
@@ -290,6 +399,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  /**
+   * Function to run to set the editor's USJ content. Also clears annotation info because setting
+   * the editor's USJ silently removes all annotations
+   *
+   * @param usj The USJ to set in the editor
+   */
+  const setEditorUsj = useRef((usj: Usj) => {
+    editorRef.current?.setUsj(usj);
+    clearAnnotationInfo.current();
+  });
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -315,7 +435,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // listen to messages from the web view controller
   useEffect(() => {
-    const webViewMessageListener = ({
+    const webViewMessageListener = async ({
       data: editorMessage,
     }: MessageEvent<EditorWebViewMessage>) => {
       switch (editorMessage.method) {
@@ -360,6 +480,239 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'insertCrossReferenceAtSelection': {
           editorRef.current?.insertNote('x');
+          break;
+        }
+        case 'insertCommentAtSelection': {
+          const selection = currentSelectionRef.current;
+
+          // Validate that a text range is selected
+          if (!selection || !selection.start || !selection.end) {
+            papi.notifications.send({
+              message: '%webView_platformScriptureEditor_error_noTextSelected%',
+              severity: 'warning',
+            });
+            return;
+          }
+
+          // Validate that the selection doesn't contain markers
+          const editorUsj = editorRef.current?.getUsj();
+          const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+          if (editorUsjCorrected) {
+            const usjRW = new UsjReaderWriter(editorUsjCorrected, {
+              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+            });
+
+            const startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+              selection.start.jsonPath,
+            );
+            const endNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+              selection.end.jsonPath,
+            );
+
+            // Make sure the selection is in a string and doesn't span multiple USJ nodes
+            const selectionHasMarker =
+              !isString(startNodeAndDocumentLocation?.node) ||
+              startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
+
+            if (selectionHasMarker) {
+              papi.notifications.send({
+                message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+                severity: 'warning',
+              });
+              return;
+            }
+          }
+
+          // Store the selection as annotation range for later use
+          const annotationRange: AnnotationRange = {
+            start: { ...selection.start },
+            end: { ...selection.end },
+          };
+          pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
+
+          // Create a temporary annotation to highlight the selected text
+          editorRef.current?.setAnnotation(
+            annotationRange,
+            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+            PENDING_COMMENT_ANNOTATION_ID,
+          );
+
+          // Position the popover near the annotation
+          // Try to find the selected text element for positioning
+          const editorContainer = document.querySelector<HTMLElement>('.usfm');
+          if (editorContainer) {
+            // Use the browser's selection to get the bounding rect of the selected text
+            const domSelection = window.getSelection();
+            if (domSelection && domSelection.rangeCount > 0) {
+              const range = domSelection.getRangeAt(0);
+              const rect = range.getBoundingClientRect();
+              setCommentPopoverAnchorX(rect.left);
+              setCommentPopoverAnchorY(rect.bottom);
+              setCommentPopoverAnchorHeight(0);
+            } else {
+              // Fallback to center of editor viewport
+              const rect = editorContainer.getBoundingClientRect();
+              setCommentPopoverAnchorX(rect.left + rect.width / 2);
+              setCommentPopoverAnchorY(rect.top + rect.height / 2);
+              setCommentPopoverAnchorHeight(0);
+            }
+          }
+
+          setShowCommentEditor(true);
+          break;
+        }
+        case 'setAnnotation': {
+          const {
+            verseRef: targetVerseRef,
+            annotationRange,
+            annotationType,
+            annotationId,
+            interactionCommand,
+          } = editorMessage;
+          logger.debug(
+            `setAnnotation targetScrRef ${serialize(targetVerseRef)} ${serialize(annotationRange)} type=${annotationType} id=${annotationId} interactionCommand=${String(interactionCommand)}`,
+          );
+
+          // If we're on a different book or chapter, don't set the annotation
+          if (
+            scrRef.book !== targetVerseRef.book ||
+            scrRef.chapterNum !== targetVerseRef.chapterNum
+          ) {
+            break;
+          }
+
+          // This type helps us enforce that the arguments match the parameters of interactionCommand
+          let argumentsForCommand: Parameters<AnnotationActionHandler>;
+
+          const onClickAnnotation: TypedMarkOnClick | undefined = interactionCommand
+            ? async (_event: MouseEvent, typeEditorInternal: string, id: string) => {
+                const type = typeEditorInternal.startsWith(EDITOR_ANNOTATION_TYPE_PREFIX)
+                  ? typeEditorInternal.slice(EDITOR_ANNOTATION_TYPE_PREFIX.length)
+                  : typeEditorInternal;
+
+                argumentsForCommand = [type, id, 'clicked'];
+                try {
+                  await papi.commands.sendCommand(
+                    interactionCommand,
+                    // We are dictating the parameters and the command is responsible for implementing
+                    // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    ...(argumentsForCommand as unknown as Parameters<
+                      CommandHandlers[CommandNames]
+                    >),
+                  );
+                } catch (e) {
+                  logger.warn(`Error sending annotation click command: ${getErrorMessage(e)}`);
+                }
+              }
+            : undefined;
+
+          const onRemoveAnnotation: TypedMarkOnRemove | undefined = async (
+            typeEditorInternal: string,
+            id: string,
+            cause: TypedMarkRemovalCause,
+          ) => {
+            const type = typeEditorInternal.startsWith(EDITOR_ANNOTATION_TYPE_PREFIX)
+              ? typeEditorInternal.slice(EDITOR_ANNOTATION_TYPE_PREFIX.length)
+              : typeEditorInternal;
+
+            // If this annotation is currently being set (when it is being updated), don't remove it
+            if (annotationIdsBeingSet.current.has(id)) {
+              return;
+            }
+
+            // When the annotation is removed, remove it from our map
+            annotationInfoByIdRef.current.delete(id);
+
+            if (interactionCommand) {
+              argumentsForCommand = [type, id, cause];
+              try {
+                await papi.commands.sendCommand(
+                  interactionCommand,
+                  // We are dictating the parameters and the command is responsible for implementing
+                  // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  ...(argumentsForCommand as unknown as Parameters<CommandHandlers[CommandNames]>),
+                );
+              } catch (e) {
+                logger.warn(`Error sending annotation removal command: ${getErrorMessage(e)}`);
+              }
+            }
+          };
+
+          // Keep track of this annotation so messages from the controller can act on it later
+          annotationInfoByIdRef.current.set(annotationId, {
+            annotationType,
+            interactionCommand,
+            annotationRange: {
+              start: { ...annotationRange.start },
+              end: { ...annotationRange.end },
+            },
+          });
+
+          // Keeping track of annotations being set because setAnnotation on an existing annotation
+          // removes it (including calling `onRemoveAnnotation`) and adds it again
+          annotationIdsBeingSet.current.add(annotationId);
+
+          try {
+            editorRef.current?.setAnnotation(
+              annotationRange,
+              annotationType,
+              annotationId,
+              onClickAnnotation,
+              onRemoveAnnotation,
+            );
+          } finally {
+            annotationIdsBeingSet.current.delete(annotationId);
+          }
+
+          break;
+        }
+        case 'runAnnotationAction': {
+          const { annotationId, action } = editorMessage;
+
+          try {
+            const info = annotationInfoByIdRef.current.get(annotationId);
+            if (!info) throw new Error(`No annotation info found for id ${annotationId}`);
+
+            const { annotationType, interactionCommand, annotationRange } = info;
+
+            if (action === 'removed' || action === 'destroyed') {
+              // The onRemoveAnnotation callback will handle removing the annotation from the editor
+              // and calling the command
+              editorRef.current?.removeAnnotation(annotationType, annotationId);
+              break;
+            }
+
+            if (!interactionCommand)
+              throw new Error(`No interactionCommand for annotation ${annotationId}`);
+
+            // If this is a click action, set the editor selection to the annotation's range so the
+            // user sees it when the command runs.
+            if (action === 'clicked') {
+              scrollToAnnotation(annotationId);
+              editorRef.current?.setSelection(annotationRange);
+            }
+
+            // This type helps us enforce that the arguments match the parameters of interactionCommand
+            const argumentsForCommand: Parameters<AnnotationActionHandler> = [
+              annotationType,
+              annotationId,
+              action,
+            ];
+
+            await papi.commands.sendCommand(
+              interactionCommand,
+              // We are dictating the parameters and the command is responsible for implementing
+              // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              ...(argumentsForCommand as unknown as Parameters<CommandHandlers[CommandNames]>),
+            );
+          } catch (e) {
+            logger.warn(
+              `Error running annotation action ${action} on annotation ${annotationId}: ${getErrorMessage(e)}`,
+            );
+          }
           break;
         }
         case 'changeFootnotesPaneLocation': {
@@ -488,6 +841,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
+  /**
+   * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
+   * specified thread.
+   *
+   * @param threadId The ID of the thread to scroll to when the annotation is clicked
+   * @returns A click handler function that can be passed to setAnnotation
+   */
+  const createCommentAnnotationClickHandler = useCallback(
+    (threadId: string) => async () => {
+      await openCommentListAndSelectThreadSafe(papi, webViewId, threadId);
+    },
+    [webViewId],
+  );
+
   const handleFootnoteSelected = useCallback((index: number) => {
     // Mark that we want the next scrRef change (even if it matches our internalVerseLocationRef)
     // to trigger scrolling/highlighting. This volatile flag is cleared the first time the
@@ -544,7 +911,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         try {
           if (usjFromPdp && editorRef.current) {
             usjSentToPdp.current = usjFromPdp;
-            editorRef.current.setUsj(usjFromPdp);
+            setEditorUsj.current(usjFromPdp);
           }
           await papi.notifications.send({
             severity: 'error',
@@ -617,7 +984,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // the editor wrote to the PDP.
     if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
       usjSentToPdp.current = usjFromPdp;
-      editorRef.current.setUsj(usjFromPdp);
+      setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
@@ -631,8 +998,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     if (!usjSentToPdp.current || !editorRef.current) return;
 
-    editorRef.current.setUsj(usjSentToPdp.current);
-  }, [options]);
+    setEditorUsj.current(usjSentToPdp.current);
+  }, [viewOptions]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -735,6 +1102,103 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     onFootnoteEditorClose();
   };
 
+  const onCommentEditorCancel = useCallback(() => {
+    // Remove the pending annotation if one was created
+    if (pendingCommentAnnotationRange.current) {
+      editorRef.current?.removeAnnotation(
+        ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+        PENDING_COMMENT_ANNOTATION_ID,
+      );
+      pendingCommentAnnotationRange.current = undefined;
+    }
+    setShowCommentEditor(false);
+  }, []);
+
+  /** Flag to indicate if a comment submission is in progress so we don't submit multiple times */
+  const isSubmittingComment = useRef(false);
+
+  const onCommentEditorSave = useCallback(
+    async (contents: string, assignedUser?: string) => {
+      if (isSubmittingComment.current) {
+        logger.info('Comment submission already in progress');
+        return;
+      }
+      if (!projectId) {
+        logger.warn('Cannot create comment: no projectId');
+        return;
+      }
+
+      const capturedSelection = pendingCommentAnnotationRange.current;
+
+      try {
+        isSubmittingComment.current = true;
+
+        // Transform the captured selection from editor locations to USJ document locations
+        const startDocLocation = capturedSelection
+          ? usjLocationToUsjDocumentLocation(capturedSelection.range.start)
+          : undefined;
+        const endDocLocation = capturedSelection
+          ? usjLocationToUsjDocumentLocation(capturedSelection.range.end)
+          : undefined;
+
+        const commentsUsjPdp = await papi.projectDataProviders.get(
+          'legacyCommentManager.commentsUsj',
+          projectId,
+        );
+
+        const newCommentId = await commentsUsjPdp.createComment(
+          {
+            contents,
+            assignedUser,
+            replyToUser: assignedUser,
+          },
+          // We should have the verseRef from the captured selection, but just use the current
+          // scrRef as a fallback
+          capturedSelection?.verseRef ?? scrRef,
+          startDocLocation,
+          endDocLocation,
+        );
+
+        const newThreadId = newCommentId ? newCommentId.split('/')[0] : undefined;
+
+        // Successfully created comment - update the annotation ID from pending to the actual thread ID
+        if (newThreadId && pendingCommentAnnotationRange.current) {
+          // Remove the pending annotation
+          editorRef.current?.removeAnnotation(
+            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+            PENDING_COMMENT_ANNOTATION_ID,
+          );
+          // Create a new annotation with the actual thread ID and click handler
+          editorRef.current?.setAnnotation(
+            pendingCommentAnnotationRange.current.range,
+            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+            newThreadId,
+            createCommentAnnotationClickHandler(newThreadId),
+          );
+
+          // Open the comment list and select the new thread
+          await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
+        }
+
+        pendingCommentAnnotationRange.current = undefined;
+        setShowCommentEditor(false);
+      } catch (error) {
+        logger.error(`Error creating comment: ${getErrorMessage(error)}`);
+      } finally {
+        isSubmittingComment.current = false;
+      }
+    },
+    [projectId, scrRef, createCommentAnnotationClickHandler, webViewId],
+  );
+
+  // Clear annotation info when the editor clears annotations internally
+  // Note: the editor does not have any notification to tell us when its annotation clear, so we
+  // are doing our best here and other places clearAnnotationInfo is run
+  useEffect(() => {
+    // Annotations are cleared when viewOptions change
+    clearAnnotationInfo.current();
+  }, [viewOptions]);
+
   // On loading the editor, add the scripture-font class to the editor. Can't just put this on a div
   // around the editor because the editor currently renders a toolbar that should have normal UI font
   useEffect(() => {
@@ -755,14 +1219,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [bookExists, usjFromPdp]);
 
   function renderEditor() {
-    const commonProps = {
-      ref: editorRef,
-      scrRef,
-      onScrRefChange: setScrRefNoScroll,
-      options,
-      logger,
-    };
-
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
 
@@ -786,12 +1242,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         </div>
       );
     }
+
     return (
       <>
         {workaround}
         <Editorial
-          {...commonProps}
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRefNoScroll}
+          options={options}
+          logger={logger}
           onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+          onSelectionChange={(change) => {
+            currentSelectionRef.current = change;
+          }}
         />
       </>
     );
@@ -894,6 +1358,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
+            localizedStrings={localizedStrings}
+          />
+        </PopoverContent>
+      </Popover>
+      {/** Comment editor for creating new comment threads */}
+      <Popover open={showCommentEditor}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: commentPopoverAnchorY,
+            left: commentPopoverAnchorX,
+            height: commentPopoverAnchorHeight,
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent className="tw-w-[400px] tw-p-[10px]">
+          <CommentEditor
+            assignableUsers={commentEditorAssignableUsers}
+            onSave={onCommentEditorSave}
+            onClose={onCommentEditorCancel}
             localizedStrings={localizedStrings}
           />
         </PopoverContent>

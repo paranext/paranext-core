@@ -1,6 +1,6 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui.util';
-import React, { RefObject, useCallback, useState } from 'react';
+import React, { RefObject, useCallback, useEffect, useState } from 'react';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
@@ -24,8 +24,22 @@ export default function CommentList({
   canUserAssignThreadCallback,
   canUserResolveThreadCallback,
   canUserEditOrDeleteCommentCallback,
+  selectedThreadId: externalSelectedThreadId,
+  onSelectedThreadChange,
 }: CommentListProps) {
-  const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
+  const [internalSelectedThreadId, setInternalSelectedThreadId] = useState<string | undefined>(
+    undefined,
+  );
+
+  // Use external selection if provided, otherwise use internal state
+  const selectedThreadId = externalSelectedThreadId ?? internalSelectedThreadId;
+
+  // Sync internal state with external selection when it changes
+  useEffect(() => {
+    if (externalSelectedThreadId !== undefined) {
+      setInternalSelectedThreadId(externalSelectedThreadId);
+    }
+  }, [externalSelectedThreadId]);
 
   const activeThreads = threads.filter((thread) =>
     thread.comments.some((comment) => !comment.deleted),
@@ -35,13 +49,21 @@ export default function CommentList({
     id: thread.id,
   }));
 
-  const handleKeyboardSelectThread = useCallback((option: ListboxOption) => {
-    setSelectedThreadId(option.id);
-  }, []);
+  const handleKeyboardSelectThread = useCallback(
+    (option: ListboxOption) => {
+      setInternalSelectedThreadId(option.id);
+      onSelectedThreadChange?.(option.id);
+    },
+    [onSelectedThreadChange],
+  );
 
-  const handleSelectThread = useCallback((threadId: string) => {
-    setSelectedThreadId(threadId);
-  }, []);
+  const handleSelectThread = useCallback(
+    (threadId: string) => {
+      setInternalSelectedThreadId(threadId);
+      onSelectedThreadChange?.(threadId);
+    },
+    [onSelectedThreadChange],
+  );
 
   const { listboxRef, activeId, handleKeyDown } = useListbox({
     options,
@@ -52,14 +74,15 @@ export default function CommentList({
   const handleKeyDownWithEscape = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Escape') {
-        setSelectedThreadId(undefined);
+        setInternalSelectedThreadId(undefined);
+        onSelectedThreadChange?.(undefined);
         event.preventDefault();
         event.stopPropagation();
       } else {
         handleKeyDown(event);
       }
     },
-    [handleKeyDown],
+    [handleKeyDown, onSelectedThreadChange],
   );
 
   return (
@@ -82,6 +105,7 @@ export default function CommentList({
       {activeThreads.map((thread) => (
         <div
           key={thread.id}
+          id={thread.id}
           className={cn({
             'tw-opacity-60': thread.status === 'Resolved',
           })}

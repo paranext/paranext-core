@@ -47,3 +47,10 @@ c-sharp/**/*.BAK
 # yalc
 .yalc
 yalc.lock
+
+#claude
+.claude
+.claude.backup
+.context
+CLAUDE.md
+CLAUDE.md.backup
