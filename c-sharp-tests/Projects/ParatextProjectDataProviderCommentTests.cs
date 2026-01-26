@@ -132,19 +132,18 @@ namespace TestParanextDataProvider.Projects
             );
 
             // Verify that its thread is read.
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = parts[0] })
+                .Single();
+
             Assert.That(
-                _provider
-                    .GetCommentThreads(new CommentThreadSelector { ThreadId = parts[0] })
-                    .Single()
-                    .IsRead,
+                thread.IsRead,
                 Is.True,
                 "The thread containing the new comment should be marked as read by the current user."
             );
 
             // Verify that the new comment is read.
-            var createdComment = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .Single();
+            var createdComment = thread.Comments.Single();
             Assert.That(
                 createdComment.IsRead,
                 Is.True,
@@ -163,10 +162,7 @@ namespace TestParanextDataProvider.Projects
             ;
 
             // Retrieve the thread ID from the created comment
-            string firstCommentThreadId = _provider
-                .GetComments(new CommentSelector { CommentId = firstCommentId })
-                .First()
-                .Thread;
+            var firstCommentThreadId = firstCommentId.Split('/')[0];
 
             // Create another comment for the same thread
             var secondComment = CreateTestComment(
@@ -178,19 +174,18 @@ namespace TestParanextDataProvider.Projects
             );
 
             // Act
-            string secondCommentId = _provider.AddCommentToThread(
+            var secondCommentId = _provider.AddCommentToThread(
                 new PlatformCommentWrapper(secondComment)
             );
 
             // Assert
             Assert.That(secondCommentId, Is.Not.Null);
-            string secondCommentThreadId = _provider
-                .GetComments(new CommentSelector { CommentId = secondCommentId })
-                .First()
-                .Thread;
+            var secondCommentThread = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == secondCommentId));
             Assert.That(
-                firstCommentThreadId,
-                Is.EqualTo(secondCommentThreadId),
+                secondCommentThread.Id,
+                Is.EqualTo(firstCommentThreadId),
                 "Both comments should be in the same thread"
             );
         }
@@ -251,19 +246,17 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             var selector = new CommentThreadSelector { ThreadId = threadId };
 
             // Act
-            var threads = _provider.GetCommentThreads(selector);
+            var thread = _provider.GetCommentThreads(selector).Single();
 
             // Assert
-            Assert.That(threads, Is.Not.Null);
-            Assert.That(threads.Count, Is.EqualTo(1), "Should return exactly one thread");
-            Assert.That(threads[0].Id, Is.EqualTo(threadId), "Thread ID should match the selector");
+            Assert.That(thread.Id, Is.EqualTo(threadId), "Thread ID should match the selector");
         }
 
         [Test]
@@ -402,21 +395,19 @@ namespace TestParanextDataProvider.Projects
             // Act - Create a comment
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Retrieve the comment thread
-            threads = _provider.GetCommentThreads(new CommentThreadSelector());
+            var thread = _provider.GetCommentThreads(new CommentThreadSelector()).Single();
 
             // Assert
-            Assert.That(threads, Is.Not.Null);
-            Assert.That(threads.Count, Is.EqualTo(1));
-            Assert.That(threads[0].Id, Is.EqualTo(threadId));
-            Assert.That(threads[0].Comments, Is.Not.Null);
-            Assert.That(threads[0].Comments.Count, Is.GreaterThan(0));
+            Assert.That(thread.Id, Is.EqualTo(threadId));
+            Assert.That(thread.Comments, Is.Not.Null);
+            Assert.That(thread.Comments.Count, Is.GreaterThan(0));
 
-            var foundComment = threads[0].Comments.FirstOrDefault(c => c.Id == commentId);
+            var foundComment = thread.Comments.Single(c => c.Id == commentId);
             Assert.That(foundComment, Is.Not.Null, "Should find the created comment in the thread");
             Assert.That(
                 foundComment!.Contents?.InnerText,
@@ -562,10 +553,11 @@ namespace TestParanextDataProvider.Projects
             );
             ;
 
-            // Get the thread ID from the first comment
-            var threads = _provider.GetCommentThreads(new CommentThreadSelector());
-            var thread = threads.FirstOrDefault(t => t.Comments.Any(c => c.Id == firstCommentId));
-            var threadId = thread?.Comments.First(c => c.Id == firstCommentId).Thread;
+            // Get the thread from the first comment
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == firstCommentId));
+            var threadId = thread.Id;
 
             // Add a second comment (reply) to the thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
@@ -591,10 +583,11 @@ namespace TestParanextDataProvider.Projects
             );
             ;
 
-            // Get the thread ID from the first comment
-            var threads = _provider.GetCommentThreads(new CommentThreadSelector());
-            var thread = threads.FirstOrDefault(t => t.Comments.Any(c => c.Id == firstCommentId));
-            var threadId = thread?.Comments.First(c => c.Id == firstCommentId).Thread;
+            // Get the thread from the first comment
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == firstCommentId));
+            var threadId = thread.Id;
 
             // Add a second comment (reply) to the thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
@@ -610,7 +603,7 @@ namespace TestParanextDataProvider.Projects
             Assert.That(result, Is.True, "Update should succeed for the last comment");
 
             // Verify the content was updated
-            var updatedComment = thread?.Comments.FirstOrDefault(c => c.Id == secondCommentId);
+            var updatedComment = thread.Comments.Single(c => c.Id == secondCommentId);
 
             Assert.That(updatedComment, Is.Not.Null, "Comment should still exist");
             Assert.That(
@@ -631,15 +624,15 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolving");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Get initial comment count
-            var threadsBefore = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            int initialCommentCount = threadsBefore[0].Comments.Count();
+            var threadBefore = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
+            int initialCommentCount = threadBefore.Comments.Count();
 
             // Act - Resolve the thread via AddCommentToThread with Status
             var resolveComment = new Comment(_scrText.User)
@@ -650,32 +643,31 @@ namespace TestParanextDataProvider.Projects
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
             // Verify thread status is Resolved (displayed as 'deleted' internally by ParatextData)
-            var threadsAfter = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(threadsAfter, Has.Count.EqualTo(1));
+            var threadAfter = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threadsAfter[0].Status.ToString().ToLowerInvariant(),
+                threadAfter.Status.ToString().ToLowerInvariant(),
                 Is.EqualTo("deleted"),
                 "Thread status should be Resolved (labeled 'deleted' by ParatextData)"
             );
 
             // Verify thread is marked as read
             Assert.That(
-                threadsAfter[0].IsRead,
+                threadAfter.IsRead,
                 Is.True,
                 "Thread should be marked as read after resolving"
             );
 
             // Verify a new comment was created to record the status change
             Assert.That(
-                threadsAfter[0].Comments.Count,
+                threadAfter.Comments.Count,
                 Is.EqualTo(initialCommentCount + 1),
                 "A new comment should be created to record the status change"
             );
 
             // Verify the new comment has the correct status
-            var lastComment = threadsAfter[0].Comments.Last();
+            var lastComment = threadAfter.Comments.Last();
             Assert.That(
                 lastComment.Status.ToString().ToLowerInvariant(),
                 Is.EqualTo("deleted"),
@@ -693,9 +685,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unresolving");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Resolve it first via AddCommentToThread
             var resolveComment = new Comment(_scrText.User)
@@ -706,10 +698,10 @@ namespace TestParanextDataProvider.Projects
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
             // Get comment count after resolving
-            var threadsAfterResolve = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            int commentCountAfterResolve = threadsAfterResolve[0].Comments.Count();
+            var threadAfterResolve = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
+            int commentCountAfterResolve = threadAfterResolve.Comments.Count();
 
             // Act - Unresolve the thread via AddCommentToThread with Todo status
             var unresolveComment = new Comment(_scrText.User)
@@ -721,32 +713,31 @@ namespace TestParanextDataProvider.Projects
             ;
 
             // Verify thread status is Todo
-            var threadsAfterUnresolve = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(threadsAfterUnresolve, Has.Count.EqualTo(1));
+            var threadAfterUnresolve = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threadsAfterUnresolve[0].Status.ToString().ToLowerInvariant(),
+                threadAfterUnresolve.Status.ToString().ToLowerInvariant(),
                 Is.EqualTo("todo"),
                 "Thread status should be Todo after unresolving"
             );
 
             // Verify thread is marked as read
             Assert.That(
-                threadsAfterUnresolve[0].IsRead,
+                threadAfterUnresolve.IsRead,
                 Is.True,
                 "Thread should be marked as read after unresolving"
             );
 
             // Verify a new comment was created
             Assert.That(
-                threadsAfterUnresolve[0].Comments.Count,
+                threadAfterUnresolve.Comments.Count,
                 Is.EqualTo(commentCountAfterResolve + 1),
                 "A new comment should be created when unresolving"
             );
 
             // Verify the new comment has Todo status
-            var lastComment = threadsAfterUnresolve[0].Comments.Last();
+            var lastComment = threadAfterUnresolve.Comments.Last();
             Assert.That(
                 lastComment.Status.ToString().ToLowerInvariant(),
                 Is.EqualTo("todo"),
@@ -764,9 +755,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for filter");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act - Resolve the thread via AddCommentToThread
             var resolveComment = new Comment(_scrText.User)
@@ -795,9 +786,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Resolve first via AddCommentToThread
             var resolveComment = new Comment(_scrText.User)
@@ -852,13 +843,13 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple changes");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             int initialCount = _provider
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
-                .First()
+                .Single()
                 .Comments.Count();
 
             // Act - Make multiple status changes via AddCommentToThread
@@ -881,7 +872,7 @@ namespace TestParanextDataProvider.Projects
             // Assert - Verify each status change created a new comment
             var thread = _provider
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
-                .First();
+                .Single();
 
             // Verify that the thread is marked as read
             Assert.That(
@@ -958,9 +949,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for team assignment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act - Assign to Team via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
@@ -971,12 +962,11 @@ namespace TestParanextDataProvider.Projects
             _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
 
             // Assert - Verify the thread is assigned to Team
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(threads, Has.Count.EqualTo(1));
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threads[0].AssignedUser,
+                thread.AssignedUser,
                 Is.EqualTo("Team"),
                 "Thread should be assigned to Team"
             );
@@ -989,9 +979,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unassignment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Assign first via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
@@ -1010,12 +1000,11 @@ namespace TestParanextDataProvider.Projects
             _provider.AddCommentToThread(new PlatformCommentWrapper(unassignComment));
 
             // Assert
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(threads, Has.Count.EqualTo(1));
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threads[0].AssignedUser,
+                thread.AssignedUser,
                 Is.EqualTo(""),
                 "Thread should be unassigned (empty string)"
             );
@@ -1045,9 +1034,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for invalid user");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act & Assert - Try to assign an invalid user via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
@@ -1068,9 +1057,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple assignments");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act - Make multiple assignments via AddCommentToThread
             _provider.AddCommentToThread(
@@ -1090,12 +1079,11 @@ namespace TestParanextDataProvider.Projects
             ); // Assign again
 
             // Assert - Last assignment should be the current state
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(threads, Has.Count.EqualTo(1));
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threads[0].AssignedUser,
+                thread.AssignedUser,
                 Is.EqualTo("Team"),
                 "Thread should have the last assigned user"
             );
@@ -1108,14 +1096,14 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Original comment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
-            var threadsBefore = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            int commentCountBefore = threadsBefore[0].Comments.Count();
+            var threadBefore = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
+            int commentCountBefore = threadBefore.Comments.Count();
 
             // Act - Assign to Team via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
@@ -1127,11 +1115,11 @@ namespace TestParanextDataProvider.Projects
             ;
 
             // Assert - A new comment should have been created
-            var threadsAfter = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
+            var threadAfter = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threadsAfter[0].Comments.Count,
+                threadAfter.Comments.Count,
                 Is.EqualTo(commentCountBefore + 1),
                 "Assignment should create a new comment record"
             );
@@ -1144,9 +1132,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Original comment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act - Assign with contents via AddCommentToThread
             var assignComment = new Comment(_scrText.User)
@@ -1159,16 +1147,13 @@ namespace TestParanextDataProvider.Projects
             ;
 
             // Assert - Verify the thread is assigned and has the new comment
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(threads, Has.Count.EqualTo(1));
-            Assert.That(threads[0].AssignedUser, Is.EqualTo("Team"));
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
+            Assert.That(thread.AssignedUser, Is.EqualTo("Team"));
 
             // Get the comments and check the last one has the contents
-            var comments = _provider.GetComments(new CommentSelector { BookId = "GEN" });
-            var threadComments = comments.Where(c => c.Thread == threadId).ToList();
-            var lastComment = threadComments.OrderByDescending(c => c.Date).First();
+            var lastComment = thread.Comments.OrderByDescending(c => c.Date).First();
             Assert.That(
                 lastComment.Contents?.InnerXml,
                 Does.Contain("Assigning to team for review"),
@@ -1227,9 +1212,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for assignment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act
             bool canAssign = _provider.CanUserAssignThread(threadId);
@@ -1255,9 +1240,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolve");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act
             bool canResolve = _provider.CanUserResolveThread(threadId);
@@ -1314,9 +1299,9 @@ namespace TestParanextDataProvider.Projects
             );
             ;
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = firstCommentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == firstCommentId))
+                .Id;
 
             // Add a second comment to the same thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment", threadId);
@@ -1343,9 +1328,9 @@ namespace TestParanextDataProvider.Projects
             );
             ;
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = firstCommentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == firstCommentId))
+                .Id;
 
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment", threadId);
             string secondCommentId = _provider.AddCommentToThread(
@@ -1383,12 +1368,14 @@ namespace TestParanextDataProvider.Projects
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
 
             // Act
-            var comments = _provider.GetComments(new CommentSelector { CommentId = commentId });
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId));
+            var commentWrapper = thread.Comments.Single(c => c.Id == commentId);
 
             // Assert - Newly added comment should have isRead property set to true
-            Assert.That(comments, Has.Count.EqualTo(1));
             Assert.That(
-                comments[0].IsRead,
+                commentWrapper.IsRead,
                 Is.True,
                 "Since this comment was just added by the current user, the isRead property should be true."
             );
@@ -1401,19 +1388,18 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
 
             // Assert - Newly created thread should have isRead property set to true
-            Assert.That(threads, Has.Count.EqualTo(1));
             Assert.That(
-                threads[0].IsRead,
+                thread.IsRead,
                 Is.True,
                 "Since this thread's only comment was just added by the current user, the isRead property should be true."
             );
@@ -1427,9 +1413,9 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             if (firstSetToUnread)
             {
@@ -1441,18 +1427,14 @@ namespace TestParanextDataProvider.Projects
             _provider.SetIsCommentThreadRead(threadId, true);
 
             // Assert - Now the thread and comment should be read
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
-            Assert.That(
-                threads[0].IsRead,
-                Is.True,
-                "Thread should be read after setting it to read"
-            );
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
+            Assert.That(thread.IsRead, Is.True, "Thread should be read after setting it to read");
 
-            var comments = _provider.GetComments(new CommentSelector { CommentId = commentId });
+            var commentWrapper = thread.Comments.Single(c => c.Id == commentId);
             Assert.That(
-                comments[0].IsRead,
+                commentWrapper.IsRead,
                 Is.True,
                 "Comment should be read after setting its thread to read"
             );
@@ -1465,26 +1447,26 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
             string threadId = _provider
-                .GetComments(new CommentSelector { CommentId = commentId })
-                .First()
-                .Thread;
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
 
             // Act - Set the thread as unread
             _provider.SetIsCommentThreadRead(threadId, false);
 
             // Assert - Now the thread and comment should be unread
-            var threads = _provider.GetCommentThreads(
-                new CommentThreadSelector { ThreadId = threadId }
-            );
+            var thread = _provider
+                .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
+                .Single();
             Assert.That(
-                threads[0].IsRead,
+                thread.IsRead,
                 Is.False,
                 "Thread should be unread after setting it to unread"
             );
 
-            var comments = _provider.GetComments(new CommentSelector { CommentId = commentId });
+            var commentWrapper = thread.Comments.Single(c => c.Id == commentId);
             Assert.That(
-                comments[0].IsRead,
+                commentWrapper.IsRead,
                 Is.False,
                 "Comment should be unread after setting its thread to unread"
             );

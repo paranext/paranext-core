@@ -80,8 +80,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         retVal.Add(("getVersePlainText", GetVersePlainText));
 
-        retVal.Add(("getComments", GetComments));
-        retVal.Add(("setComments", SetComments));
         retVal.Add(("getCommentThreads", GetCommentThreads));
         retVal.Add(("createComment", CreateComment));
         retVal.Add(("addCommentToThread", AddCommentToThread));
@@ -182,70 +180,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Comments
-
-    public List<PlatformCommentWrapper> GetComments(CommentSelector selector)
-    {
-        List<Comment> comments = _commentManager.AllComments.ToList();
-        if (comments.Count == 0)
-            return new List<PlatformCommentWrapper>();
-
-        string matchingVerseRef;
-        if (selector.ChapterNum > 0 && selector.VerseNum > 0)
-            matchingVerseRef = $"{selector.BookId} {selector.ChapterNum}:{selector.VerseNum}";
-        else if (selector.ChapterNum > 0)
-            matchingVerseRef = $"{selector.BookId} {selector.ChapterNum}:";
-        else
-            matchingVerseRef = selector.BookId;
-
-        comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
-        if (!string.IsNullOrEmpty(selector.CommentId))
-            comments = comments.FindAll((c) => selector.CommentId == c.Id);
-
-        var result = new List<PlatformCommentWrapper>();
-        foreach (var comment in comments)
-        {
-            // Wrap comments so read/unread status is available
-            var thread = _commentManager.FindThread(comment.Thread);
-            if (thread != null)
-                result.Add(
-                    new PlatformCommentWrapper(comment, new PlatformCommentThreadWrapper(thread))
-                );
-        }
-        return result;
-    }
-
-    // For now, only allow adding comments, not changing or removing existing PT 9 comments
-    // Too much risk of data loss while there are other bugs related to comments floating around
-    public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
-    {
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        bool madeChange = false;
-        foreach (var ic in incomingComments)
-        {
-            if (string.IsNullOrWhiteSpace(ic.Thread))
-                continue;
-            var thread =
-                _commentManager.FindThread(ic.Thread)
-                ?? _commentManager.CreateThread(
-                    _commentManager.ScrText,
-                    new ScriptureSelection(ic.VerseRef, ic.SelectedText, ic.StartPosition),
-                    NoteStatus.Todo
-                );
-            if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
-                continue;
-            // Override the user name with the value from ParatextData
-            ic.User = scrText.User.Name;
-            _commentManager.AddComment(ic);
-            _commentManager.SaveUser(ic.User, false);
-            madeChange = true;
-        }
-
-        if (madeChange)
-            SendDataUpdateEvent(AllCommentDataTypes, "comments data update event");
-
-        return madeChange;
-    }
-
     public List<PlatformCommentThreadWrapper> GetCommentThreads(CommentThreadSelector selector)
     {
         // Get all threads (activeOnly=false to include threads with deleted comments)
