@@ -1089,9 +1089,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           },
         };
         editorRef.current?.setSelection(initialSelection);
-        // Explicitly report the initial selection to the backend in case the editor's
-        // onSelectionChange doesn't fire for programmatic selection changes
-        handleSelectionChange(initialSelection);
       });
 
       return cancelRunOnLoad;
@@ -1099,7 +1096,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     // Do nothing in destructor since we didn't do anything. TypeScript requires a returned function
     return () => {};
-  }, [handleSelectionChange, usjFromPdp, scrRef]);
+  }, [usjFromPdp, scrRef]);
 
   // Scroll the selected verse and selection range into view
   useEffect(() => {

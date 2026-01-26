@@ -8,6 +8,7 @@ import type {
 } from '@papi/core';
 import {
   AsyncVariable,
+  deepEqual,
   getErrorMessage,
   PlatformEventEmitter,
   serialize,
@@ -652,6 +653,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       },
       async updateSelectionInternal(selection) {
         const webViewId = currentWebViewDefinition.id;
+
+        // If the selection changed, we don't need to do anything
+        if (deepEqual(currentSelection, selection)) return;
+
         currentSelection = selection;
         // Resolve the first selection async variable with the first selection we get
         if (!firstSelectionAsync.hasSettled) firstSelectionAsync.resolveToValue(selection);
@@ -659,6 +664,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       },
       async dispose() {
         currentSelection = undefined;
+        // If we never got a selection, reject the first selection promise
+        firstSelectionAsync.rejectWithReason('Disposed before first selection received');
         return unsubFromWebViewUpdates();
       },
     };
