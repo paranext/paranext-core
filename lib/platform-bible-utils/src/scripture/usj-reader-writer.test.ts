@@ -22,8 +22,10 @@ import {
   UsjFlatBookLocation,
   UsjFlatChapterLocation,
   UsjFlatTextChapterLocation,
+  UsjMarkerLocation,
   UsjNodeAndDocumentLocation,
   UsjReaderWriterOptions,
+  UsjTextContentLocation,
   UsjVerseRefBookLocation,
   UsjVerseRefChapterLocation,
 } from './usj-reader-writer.model';
@@ -1068,6 +1070,117 @@ describe('usfmVerseLocationToIndexInUsfm translates USFM locations to indices in
       offset: 187,
     });
     expect(result5).toBe(4685);
+  });
+});
+
+describe('findNextMatchingNode finds next occurrence of a node matching a predicate', () => {
+  test('3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // Start from a verse node
+    const startingPoint1 = usjDoc.usfmVerseLocationToUsjNodeAndDocumentLocation({
+      verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 },
+      offset: 0,
+    });
+    if (typeof startingPoint1.node !== 'object')
+      throw new Error('Expected startingPoint1 to be an object');
+    expect(startingPoint1.documentLocation.jsonPath).toBe('$.content[10].content[0]');
+    expect(startingPoint1.documentLocation).not.toHaveProperty('offset');
+    // We just checked this with all these throws and expects
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const startingPoint1Narrowed = startingPoint1 as UsjNodeAndDocumentLocation<
+      UsjMarkerLocation | UsjTextContentLocation
+    >;
+
+    // Look for another verse node
+    const result1 = usjDoc.findNextMatchingNode(startingPoint1Narrowed, ({ node }) => {
+      return typeof node === 'object' && node.type === 'verse' && node.number === '6';
+    });
+    expect(typeof result1?.node).toBe('object');
+    if (typeof result1?.node !== 'object') throw new Error('Expected result1 node to be an object');
+    expect(result1.node.type).toBe('verse');
+    if (result1.node.type !== 'verse') return;
+    expect(result1.node.number).toBe('6');
+    expect(result1.documentLocation.jsonPath).toBe('$.content[10].content[8]');
+    expect(result1.documentLocation).not.toHaveProperty('offset');
+
+    // Immediate match: searching for the same verse should return the same node/location
+    const immediateResult = usjDoc.findNextMatchingNode(
+      startingPoint1Narrowed,
+      ({ node }) => typeof node === 'object' && node.type === 'verse' && node.number === '2',
+    );
+    expect(immediateResult).toBeTruthy();
+    if (!immediateResult) return;
+    expect(typeof immediateResult.node).toBe('object');
+    if (typeof immediateResult.node !== 'object') return;
+    expect(immediateResult.node.type).toBe('verse');
+    if (immediateResult.node.type !== 'verse') return;
+    expect(immediateResult.node.number).toBe('2');
+    expect(immediateResult.documentLocation.jsonPath).toBe(
+      startingPoint1Narrowed.documentLocation.jsonPath,
+    );
+
+    // Find the next chapter marker starting from the same point
+    const chapterResult = usjDoc.findNextMatchingNode(
+      startingPoint1Narrowed,
+      ({ node }) => typeof node === 'object' && node.type === 'chapter',
+    );
+    expect(chapterResult).toBeTruthy();
+    if (!chapterResult) return;
+    expect(typeof chapterResult.node).toBe('object');
+    if (typeof chapterResult.node !== 'object') return;
+    expect(chapterResult.node.type).toBe('chapter');
+    if (chapterResult.node.type !== 'chapter') return;
+    expect(chapterResult.node.number).toBe('2');
+
+    // Find the next verse marker starting from the same point
+    const verseResult = usjDoc.findNextMatchingNode(
+      startingPoint1Narrowed,
+      ({ node }) =>
+        typeof node === 'object' && node.type === 'verse' && node !== startingPoint1Narrowed.node,
+    );
+    expect(verseResult).toBeTruthy();
+    if (!verseResult) return;
+    expect(typeof verseResult.node).toBe('object');
+    if (typeof verseResult.node !== 'object') return;
+    expect(verseResult.node.type).toBe('verse');
+    if (verseResult.node.type !== 'verse') return;
+    expect(verseResult.node.number).toBe('3');
+
+    // Searching for a marker type that doesn't exist should return undefined
+    const notFound = usjDoc.findNextMatchingNode(
+      startingPoint1Narrowed,
+      ({ node }) => typeof node === 'object' && node.type === 'nonexistent_marker_type_xyz',
+    );
+    expect(notFound).toBeUndefined();
+
+    // Start from a string
+    const startingPoint2 = usjDoc.usfmVerseLocationToUsjNodeAndDocumentLocation({
+      verseRef: { book: 'MAT', chapterNum: 1, verseNum: 6 },
+      offset: 8,
+    });
+    expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(startingPoint2)).toBe(true);
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(startingPoint2)) return;
+    expect(startingPoint2.documentLocation.jsonPath).toBe('$.content[10].content[9]');
+    expect(startingPoint2.documentLocation.offset).toBe(3);
+
+    // Find some text
+    const result2 = usjDoc.findNextMatchingNode(startingPoint2, (nodeAndLocation) => {
+      return (
+        UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation) &&
+        typeof nodeAndLocation.node === 'string' &&
+        nodeAndLocation.node.includes('Hezekiah became the father of Manasseh')
+      );
+    });
+    expect(result2).toBeTruthy();
+    if (!result2) return;
+    expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(result2)).toBe(true);
+    if (!UsjReaderWriter.isUsjDocumentLocationForTextContent(result2)) return;
+    expect(result2.node).toBe(
+      'Hezekiah became the father of Manasseh. Manasseh became the father of Amon. Amon became the father of Josiah. ',
+    );
+    expect(result2.documentLocation.jsonPath).toBe('$.content[10].content[19]');
+    expect(result2.documentLocation.offset).toBe(0);
   });
 });
 

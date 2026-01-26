@@ -101,6 +101,31 @@ export function WebView({
   // Tracks how many times the iframe has loaded
   const [iframeHasLoadedTimes, setIframeHasLoadedTimes] = useState(0);
 
+  /**
+   * Tracks whether the current iframe content has loaded (onLoad has fired). This is distinct from
+   * checking if iframeRef.current.contentWindow exists, which is true as soon as the iframe element
+   * is added to the DOM, before the content has loaded.
+   */
+  const iframeHasLoadedRef = useRef(false);
+
+  /**
+   * Track previous content to reset iframeHasLoadedRef when content changes. This must happen
+   * during render (not in an effect) to prevent race conditions where a message arrives between the
+   * content change and the effect running.
+   */
+  const previousContentRef = useRef(content);
+  if (previousContentRef.current !== content) {
+    iframeHasLoadedRef.current = false;
+    previousContentRef.current = content;
+  }
+
+  /**
+   * Buffer for messages that arrive before the iframe is ready to receive them. Messages are queued
+   * here when `iframeRef.current` or `iframeRef.current.contentWindow` is not available, then
+   * flushed in order once the iframe loads.
+   */
+  const messageBufferRef = useRef<Parameters<WebViewMessageRequestHandler>[]>([]);
+
   // Store reference to iframe's cleanup function so we can call it before iframe loses contentWindow
   const unmountRootFunctionRef = useRef<(() => void) | undefined>(undefined);
 
@@ -140,20 +165,48 @@ export function WebView({
     };
   }, [id, content]); // Re-run when content changes
 
+  /**
+   * Flush all buffered messages to the iframe. Called when the iframe becomes ready to receive
+   * messages.
+   */
+  const flushMessageBuffer = useCallback(() => {
+    if (!iframeRef.current?.contentWindow) return;
+
+    const messagesToSend = messageBufferRef.current;
+    messageBufferRef.current = [];
+
+    if (messagesToSend.length <= 0) return;
+
+    messagesToSend.forEach(([, message, targetOrigin]) => {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(message, { targetOrigin });
+      } catch (e) {
+        logger.warn(
+          `Web View Component ${id} (type ${webViewType}) failed to send buffered message: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
+    logger.debug(
+      `Web View Component ${id} (type ${webViewType}) flushed ${messagesToSend.length} buffered message(s)`,
+    );
+  }, [id, webViewType]);
+
   const postMessageCallback = useCallback(
     ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
       if (!isWebViewNonceCorrect(id, webViewNonce))
         throw new Error(
           `Web View Component ${id} (type ${webViewType}) received a message with an invalid nonce!`,
         );
-      if (!iframeRef.current)
-        throw new Error(
-          `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its ref was not set!`,
+
+      // If the iframe is not ready, buffer the message to send later
+      if (!iframeRef.current || !iframeRef.current.contentWindow || !iframeHasLoadedRef.current) {
+        messageBufferRef.current.push([webViewNonce, message, targetOrigin]);
+        logger.debug(
+          `Web View Component ${id} (type ${webViewType}) buffered message because iframe is not ready. Buffer size: ${messageBufferRef.current.length}`,
         );
-      if (!iframeRef.current.contentWindow)
-        throw new Error(
-          `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its contentWindow was falsy!`,
-        );
+        return;
+      }
 
       iframeRef.current.contentWindow.postMessage(message, { targetOrigin });
     },
@@ -228,6 +281,8 @@ export function WebView({
   }, [id, postMessageCallback]);
 
   const handleLoadIframe = useCallback(() => {
+    // Mark that the iframe content has loaded so messages can be sent
+    iframeHasLoadedRef.current = true;
     // Increment the tracker for the number of times the iframe has loaded
     setIframeHasLoadedTimes((prev) => prev + 1);
   }, []);
@@ -240,6 +295,9 @@ export function WebView({
 
     const iframe = iframeRef.current;
     if (!iframe || !iframe.contentWindow) return;
+
+    // Flush any buffered messages now that the iframe is ready
+    flushMessageBuffer();
 
     // Focus this WebView when it is loaded - focusing tab on mount in `platform-panel.component.tsx`
     // doesn't always work perfectly with WebViews, so we also focus them here
@@ -291,7 +349,7 @@ export function WebView({
         );
       }
     };
-  }, [iframeHasLoadedTimes, id]);
+  }, [iframeHasLoadedTimes, id, flushMessageBuffer]);
 
   useEvent(
     getNetworkEvent('platform.onDidReloadExtensions'),

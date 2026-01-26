@@ -57,24 +57,30 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
   };
 }
 
-export function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefined {
+/**
+ * Scrolls to the verse marker at the specified verse ref within the editor container.
+ *
+ * @param verseRef The verse ref whose matching verse marker to scroll to
+ * @returns The verse marker's DOM element if found; otherwise undefined
+ */
+export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undefined {
   const verseElement =
-    verseLocation.verseNum < 1
+    verseRef.verseNum < 1
       ? undefined
       : (document.querySelector<HTMLElement>(
-          `.editor-container span[data-marker="v"][data-number*="${verseLocation.verseNum}"]`,
+          `.editor-container span[data-marker="v"][data-number*="${verseRef.verseNum}"]`,
         ) ?? undefined);
 
   const scrollContainerElement =
     document.querySelector<HTMLElement>('.editor-container') ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
-  if (scrollContainerElement && (verseElement || verseLocation.verseNum <= 1)) {
+  if (scrollContainerElement && (verseElement || verseRef.verseNum <= 1)) {
     // Get the scroll position all the way up to the scroll container
     let offsetElement = verseElement;
     // If we're at the first verse, scroll to the top so we can see intro material
     let verseOffsetTop = 0;
-    if (verseLocation.verseNum > 1) {
+    if (verseRef.verseNum > 1) {
       // Find the y offset from the scrolling container
       while (offsetElement && offsetElement !== scrollContainerElement) {
         verseOffsetTop += offsetElement.offsetTop;
@@ -94,4 +100,70 @@ export function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | 
   }
 
   return verseElement;
+}
+
+/**
+ * Scrolls to the annotation with the given ID within the editor container.
+ *
+ * @param id The ID of the annotation to scroll to
+ * @returns The DOM element of the annotation if found; otherwise undefined
+ */
+export function scrollToAnnotation(id: string): HTMLElement | undefined {
+  const annotationElement =
+    document.querySelector<HTMLElement>(`.editor-container .annotationId-${id}`) ?? undefined;
+
+  const scrollContainerElement =
+    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+
+  // Scroll if we find the annotation
+  if (scrollContainerElement && annotationElement) {
+    // Compute the annotation's offset relative to the scrolling container
+    let offsetElement: HTMLElement | undefined = annotationElement;
+    let annotationOffsetTop = 0;
+    while (offsetElement && offsetElement !== scrollContainerElement) {
+      annotationOffsetTop += offsetElement.offsetTop;
+      offsetElement =
+        offsetElement.offsetParent instanceof HTMLElement ? offsetElement.offsetParent : undefined;
+    }
+
+    const containerScrollTop = scrollContainerElement.scrollTop;
+    const containerHeight = scrollContainerElement.clientHeight;
+    const annotationHeight = annotationElement.offsetHeight;
+
+    const annotationTop = annotationOffsetTop;
+    const annotationBottom = annotationTop + annotationHeight;
+
+    // If the annotation is fully visible, don't scroll
+    if (
+      annotationTop >= containerScrollTop &&
+      annotationBottom <= containerScrollTop + containerHeight
+    ) {
+      return annotationElement;
+    }
+
+    // Decide whether to align to top or bottom based on which edge is closer
+    const distanceToTop = Math.abs(annotationTop - containerScrollTop);
+    const distanceToBottom = Math.abs(containerScrollTop + containerHeight - annotationBottom);
+
+    let targetTop: number;
+    if (distanceToTop <= distanceToBottom) {
+      // Align the annotation at the top with the specified offset
+      targetTop = annotationTop - VERSE_NUMBER_SCROLL_OFFSET;
+    } else {
+      // Align the annotation at the bottom with the specified offset
+      targetTop = annotationBottom - containerHeight + VERSE_NUMBER_SCROLL_OFFSET;
+    }
+
+    // Clamp to valid scroll range
+    const maxScrollTop = Math.max(0, scrollContainerElement.scrollHeight - containerHeight);
+    if (targetTop < 0) targetTop = 0;
+    if (targetTop > maxScrollTop) targetTop = maxScrollTop;
+
+    scrollContainerElement.scrollTo({
+      behavior: 'smooth',
+      top: targetTop,
+    });
+  }
+
+  return annotationElement;
 }

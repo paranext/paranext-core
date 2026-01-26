@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
 import {
