@@ -86,3 +86,73 @@ public record ProjectReference
     /// <summary>True if this project is registered.</summary>
     public required bool IsRegistered { get; init; }
 }
+
+/// <summary>
+/// Registration state for a project.
+/// Describes the current registration status and available actions.
+/// </summary>
+public record RegistrationState
+{
+    /// <summary>
+    /// Current registration status.
+    /// Values: "NotSelected", "Registered", "Unregistered", "InheritsFromBase", "NotApplicable"
+    /// </summary>
+    public required string Status { get; init; }
+
+    /// <summary>Localization key for status message.</summary>
+    public string? MessageKey { get; init; }
+
+    /// <summary>True if online registration is available.</summary>
+    public required bool CanRegisterOnline { get; init; }
+
+    /// <summary>True if user can opt out of inherited registration (BackTranslation only).</summary>
+    public required bool CanOptOutOfInheritance { get; init; }
+
+    /// <summary>Project metadata if registered.</summary>
+    public ProjectMetadata? Metadata { get; init; }
+
+    /// <summary>True if registry server is available.</summary>
+    public required bool RegistryServerAvailable { get; init; }
+}
+
+/// <summary>
+/// Project metadata from registry server.
+/// </summary>
+public record ProjectMetadata
+{
+    /// <summary>Registry ID for this project.</summary>
+    public required string RegistryId { get; init; }
+
+    /// <summary>Full name from registry.</summary>
+    public required string FullName { get; init; }
+
+    /// <summary>Visibility setting (e.g., "public", "private").</summary>
+    public required string Visibility { get; init; }
+
+    /// <summary>License information if available.</summary>
+    public string? License { get; init; }
+}
+
+/// <summary>
+/// Language selection with BCP-47 components.
+/// </summary>
+public record LanguageSelection
+{
+    /// <summary>Full BCP-47 tag (e.g., "eng-US", "zh-Hans").</summary>
+    public required string LanguageId { get; init; }
+
+    /// <summary>Display name for the language.</summary>
+    public required string LanguageName { get; init; }
+
+    /// <summary>ISO 639-3 base code (e.g., "eng", "spa").</summary>
+    public required string BaseCode { get; init; }
+
+    /// <summary>Script subtag if present (e.g., "Hans", "Latn").</summary>
+    public string? Script { get; init; }
+
+    /// <summary>Region subtag if present (e.g., "US", "GB").</summary>
+    public string? Region { get; init; }
+
+    /// <summary>Variant subtag if present.</summary>
+    public string? Variant { get; init; }
+}
