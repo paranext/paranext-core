@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paratext.Data;
+using Paranext.DataProvider.ProjectCreation;
 
 namespace TestParanextDataProvider.ProjectCreation;
 
@@ -829,49 +830,3 @@ internal class ProjectNameServiceTests : PapiTestBase
 
     #endregion
 }
-
-#region Stub Types for Compilation (will be replaced by actual implementation)
-
-/// <summary>
-/// Generic validation result returned by all validation methods.
-/// </summary>
-public record ValidationResult(
-    bool IsValid,
-    string? ErrorCode = null,
-    IReadOnlyDictionary<string, string>? ErrorParams = null
-);
-
-/// <summary>
-/// Stub service - tests will fail until real implementation exists.
-/// </summary>
-internal static class ProjectNameService
-{
-    public static ValidationResult ValidateShortName(
-        string shortName,
-        bool isNewProject,
-        string? originalName = null)
-    {
-        // Stub implementation - will throw to demonstrate RED state
-        throw new NotImplementedException(
-            $"ProjectNameService.ValidateShortName not yet implemented");
-    }
-
-    public static string GenerateShortName(string fullName)
-    {
-        // Stub implementation - will throw to demonstrate RED state
-        throw new NotImplementedException(
-            $"ProjectNameService.GenerateShortName not yet implemented");
-    }
-
-    public static (string ShortName, string LongName) GenerateUniqueName(
-        string baseShortName,
-        string baseLongName,
-        bool forceNumbered = false)
-    {
-        // Stub implementation - will throw to demonstrate RED state
-        throw new NotImplementedException(
-            $"ProjectNameService.GenerateUniqueName not yet implemented");
-    }
-}
-
-#endregion
