@@ -409,6 +409,8 @@ export interface CommentListProps {
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
 	handleDeleteComment: (commentId: string) => Promise<boolean>;
+	/** Handler for updating a thread's read status */
+	handleReadStatusChange: (threadId: string, markRead: boolean) => Promise<boolean>;
 	/**
 	 * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
 	 * (empty string) for unassigned.
@@ -440,7 +442,7 @@ export interface CommentListProps {
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;

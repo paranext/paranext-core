@@ -161,6 +161,14 @@ function CommentListStory({
     };
   }, [threads]);
 
+  // Default callback for read status change
+  const threadReadStatusChangeCallback = useMemo(() => {
+    return async (threadId: string, markRead: boolean): Promise<boolean> => {
+      console.log(`Marking thread ${threadId} as ${markRead ? 'read' : 'unread'}`);
+      return true;
+    };
+  }, []);
+
   return (
     <CommentList
       threads={threads}
@@ -169,6 +177,7 @@ function CommentListStory({
       handleAddCommentToThread={handleAddCommentToThread}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
+      handleReadStatusChange={threadReadStatusChangeCallback}
       assignableUsers={mockAssignableUsers}
       canUserAddCommentToThread={canUserAddCommentToThread}
       canUserAssignThreadCallback={canUserAssignThreadCallback}
