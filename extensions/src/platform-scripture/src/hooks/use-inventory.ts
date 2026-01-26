@@ -186,10 +186,10 @@ export function useInventory(
     },
     isMountedRef,
     activeJobsRef,
+    ['completed', 'stopped', 'errored'],
     {
       batchSize: 100,
       pollInterval: 10,
-      terminalStatuses: ['completed', 'stopped', 'errored'],
       errorStatus: 'errored',
     },
   );

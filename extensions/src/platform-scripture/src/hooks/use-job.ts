@@ -10,12 +10,6 @@ interface JobConfig<TStatus> {
   /** Delay between polls in milliseconds (default: 10) */
   pollInterval?: number;
   /**
-   * Array of status values that indicate the job has completed (terminal states). The hook will
-   * stop polling when any of these statuses are received. Example: ['completed', 'stopped',
-   * 'errored', 'exceeded']
-   */
-  terminalStatuses?: TStatus[];
-  /**
    * Status value that indicates an error occurred. When this status is received, the hook will
    * throw an error. If not provided, no status will be treated as an error.
    */
@@ -77,6 +71,12 @@ interface JobHandlers<TParams, TJobId, TResult, TStatus> {
  * @param handlers - Job execution functions (start, poll, cleanup)
  * @param isMountedRef - Ref to track if component is still mounted
  * @param activeJobsRef - Ref to track active jobs for cleanup
+ * @param terminalStatuses Array of status values that indicate the job has completed (terminal
+ *   states). The hook will stop polling when any of these statuses are received and we have
+ *   retrieved all results. Example: ['completed', 'stopped', 'errored', 'exceeded']
+ *
+ *   WARNING: If you do not provide terminal statuses, the hook will infinitely poll until an error
+ *   occurs.
  * @param config - Configuration options for polling behavior and status handling
  * @returns Function to execute a job with the given parameters
  */
@@ -84,9 +84,10 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
   handlers: JobHandlers<TParams, TJobId, TResult, TStatus>,
   isMountedRef: MutableRefObject<boolean>,
   activeJobsRef: MutableRefObject<Set<string>>,
+  terminalStatuses: TStatus[],
   config: JobConfig<TStatus> = {},
 ): (params: TParams) => Promise<TResult[]> {
-  const { batchSize = 100, pollInterval = 10, terminalStatuses = [], errorStatus } = config;
+  const { batchSize = 100, pollInterval = 10, errorStatus } = config;
   const { startJob, pollJob, cleanupJob } = handlers;
 
   const executeJob = useCallback(
@@ -113,14 +114,21 @@ export function useJob<TParams, TJobId, TResult, TStatus = string>(
             allResults.push(...statusReport.nextResults);
           }
 
-          // Check if job has completed - use configurable terminal states
-          const isComplete =
-            terminalStatuses.length > 0 ? terminalStatuses.includes(statusReport.status) : false;
-
           // Handle error status if configured
           if (errorStatus && statusReport.status === errorStatus) {
             throw new Error(`Job failed: ${statusReport.error || 'Unknown error'}`);
           }
+
+          // Check if job has completed - use configurable terminal states
+          const hasReachedTerminalStatus =
+            terminalStatuses.length > 0 ? terminalStatuses.includes(statusReport.status) : false;
+          // If the poller reports a totalResultsCount, stop once we've retrieved that many
+          const hasRetrievedAllResults =
+            typeof statusReport.totalResultsCount === 'number'
+              ? allResults.length >= statusReport.totalResultsCount
+              : true;
+
+          const isComplete = hasReachedTerminalStatus && hasRetrievedAllResults;
 
           if (isComplete) {
             return allResults;
