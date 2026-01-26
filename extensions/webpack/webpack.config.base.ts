@@ -2,7 +2,8 @@ import path from 'path';
 import TsconfigPathsPlugin from 'tsconfig-paths-webpack-plugin';
 import webpack from 'webpack';
 import { getExtensionFolderNamesSync, LIBRARY_TYPE } from './webpack.util';
-import TailwindPrebuildWebpackCodePlugin from './tailwind-prebuild-webpack-code-plugin';
+import TailwindPrebuildWebpackCodePathsPlugin from './tailwind-prebuild-webpack-code-paths-plugin';
+import { tailwindPrebuildWebpackCompilerPluginSingleton } from './tailwind-prebuild-webpack-compiler-plugin';
 
 // Exit if there are no extensions yet
 const areExtensionsPresent = getExtensionFolderNamesSync().length > 0;
@@ -34,8 +35,15 @@ const configBase: webpack.Configuration = {
   mode: isDev ? 'development' : 'production',
   // Bundle the sourcemap into the file since WebViews are injected as strings into the main file
   devtool: shouldGenerateSourceMaps ? 'inline-source-map' : false,
+  // Run Tailwind CSS prebuild at the start of each build cycle (including watch rebuilds)
+  // Use the singleton so it only runs once when building multiple configs (WebViews and main)
+  plugins: [tailwindPrebuildWebpackCompilerPluginSingleton],
   watchOptions: {
-    ignored: ['**/node_modules'],
+    // Ignore node_modules and temp-build (where tailwind.prebuild.css and WebViews are generated).
+    // We must ignore temp-build to prevent an infinite loop: prebuild writes tailwind.prebuild.css,
+    // which would trigger webpack watch, which would run prebuild again, etc.
+    // The source files should already be watched, so the tailwind and WebView rebuild should happen
+    ignored: ['**/node_modules', '**/temp-build'],
   },
   // Enable persistent caching for faster rebuilds
   cache: {
@@ -180,7 +188,7 @@ const configBase: webpack.Configuration = {
       // use tsconfig.json paths https://www.npmjs.com/package/tsconfig-paths-webpack-plugin
       new TsconfigPathsPlugin(),
       // Redirect tailwind.css imports to the pre-built version (only works in code, not in CSS)
-      new TailwindPrebuildWebpackCodePlugin(),
+      new TailwindPrebuildWebpackCodePathsPlugin(),
     ],
   },
 };

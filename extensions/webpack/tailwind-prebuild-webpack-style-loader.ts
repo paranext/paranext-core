@@ -27,8 +27,7 @@
 import path from 'path';
 import fs from 'fs';
 import type { LoaderContext } from 'webpack';
-
-const PREBUILT_PATH = path.resolve(__dirname, '..', 'temp-build', 'tailwind.prebuild.css');
+import { tailwindPrebuiltPath } from '../lib/prebuild-tailwind';
 
 // Cache for file contents to avoid reading the same file multiple times
 const fileCache = new Map<string, string>();
@@ -37,14 +36,14 @@ const fileCache = new Map<string, string>();
 let tailwindPrebuiltContent: string | null = null;
 function getTailwindPrebuiltContent(): string {
   if (tailwindPrebuiltContent === null) {
-    if (!fs.existsSync(PREBUILT_PATH)) {
+    if (!fs.existsSync(tailwindPrebuiltPath)) {
       throw new Error(
-        `Tailwind prebuilt CSS file not found at: ${PREBUILT_PATH}\n` +
+        `Tailwind prebuilt CSS file not found at: ${tailwindPrebuiltPath}\n` +
           `This file uses tailwind.css, but the prebuild file is missing.\n` +
           `Run 'npm run prebuild:tailwind' to generate it, or ensure the 'build' script includes prebuild:tailwind.`,
       );
     }
-    tailwindPrebuiltContent = fs.readFileSync(PREBUILT_PATH, 'utf-8');
+    tailwindPrebuiltContent = fs.readFileSync(tailwindPrebuiltPath, 'utf-8');
   }
   return tailwindPrebuiltContent;
 }

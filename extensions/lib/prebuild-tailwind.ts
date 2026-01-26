@@ -10,6 +10,12 @@
  *
  * Currently, all extensions use the same Tailwind config for UI consistency. However, if extensions
  * ever use different Tailwind configs, this solution will break.
+ *
+ * This module can be used in two ways:
+ *
+ * 1. As a CLI script: `tsx ./lib/prebuild-tailwind.ts` or `npm run prebuild:tailwind`
+ * 2. Programmatically: `import { prebuildTailwind } from './lib/prebuild-tailwind'; await
+ *    prebuildTailwind();`
  */
 
 import fs from 'fs';
@@ -21,7 +27,9 @@ import autoprefixer from 'autoprefixer';
 const rootDir = path.resolve(__dirname, '..');
 const srcDir = path.resolve(rootDir, 'src');
 const outputDir = path.resolve(rootDir, 'temp-build');
-const outputFile = path.resolve(outputDir, 'tailwind.prebuild.css');
+
+/** The path to the pre-built Tailwind CSS file */
+export const tailwindPrebuiltPath = path.resolve(outputDir, 'tailwind.prebuild.css');
 
 /**
  * Recursively searches for a tailwind.css file in a directory.
@@ -53,7 +61,15 @@ function findTailwindCss(dir: string): string | null {
   return null;
 }
 
-async function prebuildTailwind() {
+/**
+ * Pre-builds Tailwind CSS once before the webpack build.
+ *
+ * This function can be called programmatically from webpack or other build tools.
+ *
+ * @returns A promise that resolves when the prebuild is complete
+ * @throws Error if the prebuild fails (only when called programmatically)
+ */
+export async function prebuildTailwind(): Promise<void> {
   // Ensure output directory exists
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -72,31 +88,33 @@ async function prebuildTailwind() {
   console.log('Pre-building Tailwind CSS...');
   const startTime = Date.now();
 
-  try {
-    // Read the input CSS file
-    const inputCss = fs.readFileSync(inputFile, 'utf8');
+  // Read the input CSS file
+  const inputCss = fs.readFileSync(inputFile, 'utf8');
 
-    // Process with PostCSS + Tailwind
-    const result = await postcss([
-      tailwindcss({
-        config: path.resolve(rootDir, 'tailwind.config.ts'),
-      }),
-      autoprefixer,
-    ]).process(inputCss, {
-      from: inputFile,
-      to: outputFile,
-    });
+  // Process with PostCSS + Tailwind
+  const result = await postcss([
+    tailwindcss({
+      config: path.resolve(rootDir, 'tailwind.config.ts'),
+    }),
+    autoprefixer,
+  ]).process(inputCss, {
+    from: inputFile,
+    to: tailwindPrebuiltPath,
+  });
 
-    // Write the output
-    fs.writeFileSync(outputFile, result.css);
+  // Write the output
+  fs.writeFileSync(tailwindPrebuiltPath, result.css);
 
-    const endTime = Date.now();
-    console.log(`Tailwind CSS pre-built successfully in ${endTime - startTime}ms`);
-    console.log(`Output: ${outputFile}`);
-  } catch (error) {
-    console.error('Failed to pre-build Tailwind CSS:', error);
-    process.exit(1);
-  }
+  const endTime = Date.now();
+  console.log(`Tailwind CSS pre-built successfully in ${endTime - startTime}ms`);
+  console.log(`Output: ${tailwindPrebuiltPath}`);
 }
 
-prebuildTailwind();
+// Run as CLI script if this file is executed directly (not imported)
+// Check if this module is the entry point by comparing require.main to module
+if (require.main === module) {
+  prebuildTailwind().catch((error) => {
+    console.error('Failed to pre-build Tailwind CSS:', error);
+    process.exit(1);
+  });
+}
