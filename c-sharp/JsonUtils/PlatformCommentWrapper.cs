@@ -1,8 +1,4 @@
-using System.Diagnostics;
-using Paratext.Data;
-using Paratext.Data.Plugins;
 using Paratext.Data.ProjectComments;
-using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.JsonUtils;
 
