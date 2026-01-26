@@ -34,9 +34,9 @@ import { isTailwindPrebuildDisabled } from './tailwind-prebuild-webpack-compiler
 const fileCache = new Map<string, string>();
 
 // Pre-read the tailwind prebuild content
-let tailwindPrebuiltContent: string | null = null;
+let tailwindPrebuiltContent: string | undefined;
 function getTailwindPrebuiltContent(): string {
-  if (tailwindPrebuiltContent === null) {
+  if (tailwindPrebuiltContent === undefined) {
     if (!fs.existsSync(tailwindPrebuiltPath)) {
       throw new Error(
         `Tailwind prebuilt CSS file not found at: ${tailwindPrebuiltPath}\n` +
@@ -79,14 +79,15 @@ function isTailwindImport(importPath: string): boolean {
 }
 
 /** Resolve the full path for an import, trying various extensions */
-function resolveImportPath(importPath: string, fromDir: string): string | null {
+function resolveImportPath(importPath: string, fromDir: string): string | undefined {
   // Extensions to try (in order of preference)
   const extensions = ['', '.scss', '.sass', '.css'];
   // Also try with _ prefix for Sass partials
   const baseName = path.basename(importPath);
   const dirName = path.dirname(importPath);
 
-  for (const ext of extensions) {
+  for (let i = 0; i < extensions.length; i++) {
+    const ext = extensions[i];
     // Try normal path
     const normalPath = path.resolve(fromDir, importPath + ext);
     if (fs.existsSync(normalPath) && fs.statSync(normalPath).isFile()) {
@@ -102,15 +103,16 @@ function resolveImportPath(importPath: string, fromDir: string): string | null {
     }
   }
 
-  return null;
+  return undefined;
 }
 
 /** Read a file with caching */
 function readFileCached(filePath: string): string {
-  if (!fileCache.has(filePath)) {
-    fileCache.set(filePath, fs.readFileSync(filePath, 'utf-8'));
-  }
-  return fileCache.get(filePath)!;
+  const cached = fileCache.get(filePath);
+  if (cached !== undefined) return cached;
+  const content = fs.readFileSync(filePath, 'utf-8');
+  fileCache.set(filePath, content);
+  return content;
 }
 
 /** Get the default namespace from an import path (last component without extension) */
@@ -123,8 +125,8 @@ function getDefaultNamespace(importPath: string): string {
 /** Represents an import found in a file */
 interface ImportInfo {
   importPath: string;
-  resolvedPath: string | null;
-  namespace: string | null; // null for @import, string or '*' for @use
+  resolvedPath: string | undefined;
+  namespace: string | undefined; // undefined for @import, string or '*' for @use
   hasRenamedNamespace: boolean; // true if @use ... as <name> is used (not default)
   hasConfiguration: boolean; // true if @use ... with (...) is used
   isTailwind: boolean;
@@ -154,84 +156,87 @@ function scanImportTree(
   // Note: We recreate the regex each time because RegExp with 'g' flag maintains state (lastIndex)
   // and reusing it across different content strings would cause incorrect matches.
   const useRegex = new RegExp(USE_PATTERN.source, 'g');
-  let match: RegExpExecArray | null;
-  while ((match = useRegex.exec(content)) !== null) {
+  for (;;) {
+    const match = useRegex.exec(content);
+    if (!match) break;
     const [, , importPath, asClause, withClause] = match;
 
-    if (!isRelativeImport(importPath)) continue;
+    if (isRelativeImport(importPath)) {
+      const isTailwind = isTailwindImport(importPath);
+      const resolvedPath = isTailwind ? undefined : resolveImportPath(importPath, fileDir);
+      const defaultNamespace = getDefaultNamespace(importPath);
+      const namespace = asClause || defaultNamespace;
+      // Check if namespace was explicitly renamed (not default and not '*')
+      const hasRenamedNamespace = !!asClause && asClause !== '*' && asClause !== defaultNamespace;
 
-    const isTailwind = isTailwindImport(importPath);
-    const resolvedPath = isTailwind ? null : resolveImportPath(importPath, fileDir);
-    const defaultNamespace = getDefaultNamespace(importPath);
-    const namespace = asClause || defaultNamespace;
-    // Check if namespace was explicitly renamed (not default and not '*')
-    const hasRenamedNamespace = !!asClause && asClause !== '*' && asClause !== defaultNamespace;
-
-    imports.push({
-      importPath,
-      resolvedPath,
-      namespace,
-      hasRenamedNamespace,
-      hasConfiguration: !!withClause,
-      isTailwind,
-    });
-
-    if (isTailwind) {
-      containsTailwind = true;
-      pathsToTailwind.push(currentPath);
-    } else if (resolvedPath && !visitedFiles.has(resolvedPath)) {
-      // Recursively scan the imported file
-      const importedContent = readFileCached(resolvedPath);
-      const importedDir = path.dirname(resolvedPath);
-      const result = scanImportTree(
-        importedContent,
-        importedDir,
+      imports.push({
+        importPath,
         resolvedPath,
-        visitedFiles,
-        importsMap,
-      );
-      if (result.containsTailwind) {
+        namespace,
+        hasRenamedNamespace,
+        hasConfiguration: !!withClause,
+        isTailwind,
+      });
+
+      if (isTailwind) {
         containsTailwind = true;
-        pathsToTailwind.push(currentPath, ...result.pathToTailwind);
+        pathsToTailwind.push(currentPath);
+      } else if (resolvedPath && !visitedFiles.has(resolvedPath)) {
+        // Recursively scan the imported file
+        const importedContent = readFileCached(resolvedPath);
+        const importedDir = path.dirname(resolvedPath);
+        const result = scanImportTree(
+          importedContent,
+          importedDir,
+          resolvedPath,
+          visitedFiles,
+          importsMap,
+        );
+        if (result.containsTailwind) {
+          containsTailwind = true;
+          pathsToTailwind.push(currentPath, ...result.pathToTailwind);
+        }
       }
     }
   }
 
   // Find all @import statements
   const importRegex = new RegExp(IMPORT_PATTERN.source, 'g');
-  while ((match = importRegex.exec(content)) !== null) {
+  for (;;) {
+    const match = importRegex.exec(content);
+    if (!match) break;
     const [, , importPath] = match;
 
-    if (!isRelativeImport(importPath)) continue;
+    if (isRelativeImport(importPath)) {
+      const isTailwind = isTailwindImport(importPath);
+      const resolvedPath = isTailwind ? undefined : resolveImportPath(importPath, fileDir);
 
-    const isTailwind = isTailwindImport(importPath);
-    const resolvedPath = isTailwind ? null : resolveImportPath(importPath, fileDir);
-
-    imports.push({
-      importPath,
-      resolvedPath,
-      namespace: null, // @import doesn't have namespaces
-      hasRenamedNamespace: false,
-      hasConfiguration: false,
-      isTailwind,
-    });
-
-    if (isTailwind) {
-      containsTailwind = true;
-      pathsToTailwind.push(currentPath);
-    } else if (resolvedPath && !visitedFiles.has(resolvedPath)) {
-      const importedContent = readFileCached(resolvedPath);
-      const importedDir = path.dirname(resolvedPath);
-      const result = scanImportTree(
-        importedContent,
-        importedDir,
+      imports.push({
+        importPath,
         resolvedPath,
-        visitedFiles,
-        importsMap,
-      );
-      if (result.containsTailwind) {
+        namespace: undefined, // @import doesn't have namespaces
+        hasRenamedNamespace: false,
+        hasConfiguration: false,
+        isTailwind,
+      });
+
+      if (isTailwind) {
         containsTailwind = true;
-        pathsToTailwind.push(currentPath, ...result.pathToTailwind);
+        pathsToTailwind.push(currentPath);
+      } else if (resolvedPath && !visitedFiles.has(resolvedPath)) {
+        const importedContent = readFileCached(resolvedPath);
+        const importedDir = path.dirname(resolvedPath);
+        const result = scanImportTree(
+          importedContent,
+          importedDir,
+          resolvedPath,
+          visitedFiles,
+          importsMap,
+        );
+        if (result.containsTailwind) {
+          containsTailwind = true;
+          pathsToTailwind.push(currentPath, ...result.pathToTailwind);
+        }
       }
     }
   }
@@ -259,31 +264,27 @@ function checkForBrokenFeatures(
 
   // Check for @use ... as <renamed-namespace> (renamed namespaces won't work after inlining)
   // Only warn if this import will actually be inlined
-  for (const imp of imports) {
+  imports.forEach((imp) => {
     const willBeInlined =
       imp.isTailwind || (imp.resolvedPath && filesToInline.has(imp.resolvedPath));
     if (imp.hasRenamedNamespace && willBeInlined) {
       warnings.push(
-        `[tailwind-loader] WARNING: ${fileName} uses "@use '${imp.importPath}' as ${imp.namespace}". ` +
-          `The renamed namespace '${imp.namespace}' will not work correctly when inlined for tailwind optimization. ` +
-          fixSuggestion,
+        `[tailwind-loader] WARNING: ${fileName} uses "@use '${imp.importPath}' as ${imp.namespace}'. The renamed namespace '${imp.namespace}' will not work correctly when inlined for tailwind optimization. ${fixSuggestion}`,
       );
     }
-  }
+  });
 
   // Check for @use ... with (...) configuration
   // Only warn if this import will actually be inlined
-  for (const imp of imports) {
+  imports.forEach((imp) => {
     const willBeInlined =
       imp.isTailwind || (imp.resolvedPath && filesToInline.has(imp.resolvedPath));
     if (imp.hasConfiguration && willBeInlined) {
       warnings.push(
-        `[tailwind-loader] WARNING: ${fileName} uses "@use '${imp.importPath}' with (...)" configuration. ` +
-          `This will not work correctly when inlined for tailwind optimization. ` +
-          fixSuggestion,
+        `[tailwind-loader] WARNING: ${fileName} uses "@use '${imp.importPath}' with (... )" configuration. This will not work correctly when inlined for tailwind optimization. ${fixSuggestion}`,
       );
     }
-  }
+  });
 
   // Check for namespace usage patterns if this file is being inlined into another
   if (isBeingInlined) {
@@ -298,9 +299,11 @@ function checkForBrokenFeatures(
       const publicVars = variableMatches.filter((v) => !v.match(/^\$[-_]/));
       if (publicVars.length > 0) {
         warnings.push(
-          `[tailwind-loader] WARNING: ${fileName} defines public variables (${publicVars.slice(0, 3).join(', ')}${publicVars.length > 3 ? '...' : ''}). ` +
-            `These won't be accessible via namespace after inlining. ` +
-            fixSuggestion,
+          `[tailwind-loader] WARNING: ${fileName} defines public variables (${publicVars
+            .slice(0, 3)
+            .join(
+              ', ',
+            )}${publicVars.length > 3 ? '...' : ''}). These won't be accessible via namespace after inlining. ${fixSuggestion}`,
         );
       }
     }
@@ -312,9 +315,11 @@ function checkForBrokenFeatures(
       const publicMixins = mixinMatches.filter((m) => !m.match(/@mixin\s+[-_]/));
       if (publicMixins.length > 0) {
         warnings.push(
-          `[tailwind-loader] WARNING: ${fileName} defines public mixins (${publicMixins.slice(0, 3).join(', ')}${publicMixins.length > 3 ? '...' : ''}). ` +
-            `These won't be accessible via namespace after inlining. ` +
-            fixSuggestion,
+          `[tailwind-loader] WARNING: ${fileName} defines public mixins (${publicMixins
+            .slice(0, 3)
+            .join(
+              ', ',
+            )}${publicMixins.length > 3 ? '...' : ''}). These won't be accessible via namespace after inlining. ${fixSuggestion}`,
         );
       }
     }
@@ -326,16 +331,18 @@ function checkForBrokenFeatures(
       const publicFunctions = functionMatches.filter((f) => !f.match(/@function\s+[-_]/));
       if (publicFunctions.length > 0) {
         warnings.push(
-          `[tailwind-loader] WARNING: ${fileName} defines public functions (${publicFunctions.slice(0, 3).join(', ')}${publicFunctions.length > 3 ? '...' : ''}). ` +
-            `These won't be accessible via namespace after inlining. ` +
-            fixSuggestion,
+          `[tailwind-loader] WARNING: ${fileName} defines public functions (${publicFunctions
+            .slice(0, 3)
+            .join(
+              ', ',
+            )}${publicFunctions.length > 3 ? '...' : ''}). These won't be accessible via namespace after inlining. ${fixSuggestion}`,
         );
       }
     }
   }
 
   // Check if the content uses namespaced member access from imports that will be inlined
-  for (const imp of imports) {
+  imports.forEach((imp) => {
     const willBeInlined =
       imp.isTailwind || (imp.resolvedPath && filesToInline.has(imp.resolvedPath));
     if (imp.namespace && imp.namespace !== '*' && willBeInlined) {
@@ -348,14 +355,15 @@ function checkForBrokenFeatures(
       const usageMatches = content.match(namespaceUsagePattern);
       if (usageMatches) {
         warnings.push(
-          `[tailwind-loader] WARNING: ${fileName} uses namespaced members from '${imp.importPath}' ` +
-            `(${usageMatches.slice(0, 3).join(', ')}${usageMatches.length > 3 ? '...' : ''}). ` +
-            `These references will break after inlining. ` +
-            fixSuggestion,
+          `[tailwind-loader] WARNING: ${fileName} uses namespaced members from '${imp.importPath}' (${usageMatches
+            .slice(0, 3)
+            .join(
+              ', ',
+            )}${usageMatches.length > 3 ? '...' : ''}). These references will break after inlining. ${fixSuggestion}`,
         );
       }
     }
-  }
+  });
 
   return warnings;
 }
@@ -396,13 +404,13 @@ function processScssContent(
     isBeingInlined,
     filesToInline,
   );
-  for (const warning of warnings) {
+  warnings.forEach((warning) => {
     if (emitWarning) {
       emitWarning(warning);
     } else {
       console.warn(warning);
     }
-  }
+  });
 
   let result = content;
 
@@ -476,7 +484,7 @@ export default function tailwindPrebuildWebpackStyleLoader(
   // Clear caches at the start of each top-level loader invocation to handle watch mode.
   // Files may have changed since the last build, so we need fresh content.
   fileCache.clear();
-  tailwindPrebuiltContent = null;
+  tailwindPrebuiltContent = undefined;
 
   const fileDir = path.dirname(this.resourcePath);
   const currentPath = this.resourcePath;
@@ -498,11 +506,11 @@ export default function tailwindPrebuildWebpackStyleLoader(
   const processedFiles = new Set<string>();
 
   // Add all files in the import tree as dependencies for watch mode
-  for (const filePath of visitedFiles) {
+  Array.from(visitedFiles).forEach((filePath) => {
     if (filePath !== currentPath) {
       this.addDependency(filePath);
     }
-  }
+  });
 
   const result = processScssContent(
     source,

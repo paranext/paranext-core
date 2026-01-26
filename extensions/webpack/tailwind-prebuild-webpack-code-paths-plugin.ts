@@ -1,6 +1,6 @@
+import fs from 'fs';
 import { Resolver } from 'webpack';
 import { webViewTempDir } from './webpack.util';
-import fs from 'fs';
 import { tailwindPrebuiltPath } from '../lib/prebuild-tailwind';
 import { isTailwindPrebuildDisabled } from './tailwind-prebuild-webpack-compiler-plugin';
 

@@ -23,7 +23,7 @@ export const isTailwindPrebuildDisabled = process.env.PB_DISABLE_TAILWIND_PREBUI
  * is important because Tailwind scans content files to determine which classes to include.
  */
 export default class TailwindPrebuildWebpackCompilerPlugin {
-  private tailwindPrebuiltPromise: Promise<void> | null = null;
+  private tailwindPrebuiltPromise: Promise<void> | undefined;
 
   apply(compiler: Compiler): void {
     // Skip if tailwind prebuild is disabled via environment variable
@@ -41,7 +41,7 @@ export default class TailwindPrebuildWebpackCompilerPlugin {
     // This hook is called when a file change is detected in watch mode, before a rebuild starts.
     compiler.hooks.invalid.tap(PLUGIN_NAME, () => {
       // Clear the promise so the prebuild runs again on the next compilation
-      this.tailwindPrebuiltPromise = null;
+      this.tailwindPrebuiltPromise = undefined;
     });
   }
 }

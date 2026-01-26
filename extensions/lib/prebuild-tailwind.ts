@@ -42,19 +42,19 @@ function findAllTailwindCss(dir: string, results: string[] = []): string[] {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
-    for (const entry of entries) {
+    entries.forEach((entry) => {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
         // Skip node_modules and temp-build directories
         if (entry.name === 'node_modules' || entry.name === 'temp-build') {
-          continue;
+          return;
         }
         findAllTailwindCss(fullPath, results);
       } else if (entry.isFile() && entry.name === 'tailwind.css') {
         results.push(fullPath);
       }
-    }
+    });
   } catch {
     // Ignore errors (e.g., permission denied)
   }

@@ -11,6 +11,7 @@
     "watch": "npm run build -- --watch",
     "build:production": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=false webpack",
     "watch:production": "npm run build:production -- --watch",
+    "build:tailwind": "tsx ./lib/prebuild-tailwind.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "zip": "tsx ./lib/zip-extensions.ts",
@@ -27,7 +28,6 @@
     "lint-fix:styles": "npm run lint:styles -- --fix",
     "lint:staged": "lint-staged -q",
     "postinstall": "tsx ./lib/add-remotes.ts",
-    "prebuild:tailwind": "tsx ./lib/prebuild-tailwind.ts",
     "create-extension": "tsx ./lib/create-extension.ts",
     "update-from-templates": "tsx ./lib/update-from-templates.ts",
     "bump-versions": "tsx ./lib/bump-versions.ts"
