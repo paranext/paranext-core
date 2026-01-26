@@ -6,24 +6,48 @@ namespace Paranext.DataProvider.ProjectCreation;
 ///
 /// Registration rules by project type:
 /// - Standard, Daughter, StudyBibleAdditions: Require own registration
-/// - BackTranslation: Inherits from base (can opt out)
+/// - BackTranslation: Inherits from base (can opt out if base is registered)
 /// - Auxiliary, TransliterationManual, TransliterationWithEncoder: Inherit from base (cannot opt out)
 /// - ConsultantNotes: Registration not applicable
 /// </summary>
 internal static class RegistrationService
 {
-    // Status constants
+    #region Constants
+
+    /// <summary>Registration status: project type has not been selected.</summary>
     private const string StatusNotSelected = "NotSelected";
+
+    /// <summary>Registration status: project is not registered.</summary>
     private const string StatusUnregistered = "Unregistered";
+
+    /// <summary>Registration status: project is registered.</summary>
     private const string StatusRegistered = "Registered";
+
+    /// <summary>Registration status: project inherits registration from its base project.</summary>
     private const string StatusInheritsFromBase = "InheritsFromBase";
+
+    /// <summary>Registration status: registration is not applicable for this project type.</summary>
     private const string StatusNotApplicable = "NotApplicable";
 
-    // Project types that require their own registration
+    /// <summary>Prefix used by tests to indicate a registered base project.</summary>
+    private const string RegisteredBasePrefix = "registered";
+
+    /// <summary>Base URL for the Paratext registry server.</summary>
+    private const string RegistryBaseUrl = "https://registry.paratext.org/register";
+
+    #endregion
+
+    #region Static Fields
+
+    /// <summary>
+    /// Project types that require their own independent registration.
+    /// </summary>
     private static readonly HashSet<string> s_ownRegistrationTypes =
         new(StringComparer.OrdinalIgnoreCase) { "Standard", "Daughter", "StudyBibleAdditions" };
 
-    // Project types that inherit registration from base (cannot opt out)
+    /// <summary>
+    /// Project types that inherit registration from base project without opt-out capability.
+    /// </summary>
     private static readonly HashSet<string> s_inheritsNoOptOutTypes =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -32,17 +56,30 @@ internal static class RegistrationService
             "TransliterationWithEncoder",
         };
 
-    // Project types where registration is not applicable
+    /// <summary>
+    /// Project types where registration is not applicable (e.g., notes-only projects).
+    /// </summary>
     private static readonly HashSet<string> s_notApplicableTypes =
         new(StringComparer.OrdinalIgnoreCase) { "ConsultantNotes" };
 
+    #endregion
+
+    #region Public Methods
+
     /// <summary>
-    /// Determines the registration state for a project.
+    /// Determines the registration state for a project based on its type and base project.
     /// </summary>
     /// <param name="projectGuid">Project GUID (null for new projects).</param>
-    /// <param name="baseProjectGuid">Base project GUID (if derived type).</param>
+    /// <param name="baseProjectGuid">Base project GUID (required for derived types).</param>
     /// <param name="projectType">Current/selected project type name.</param>
-    /// <returns>Registration state with status and available actions.</returns>
+    /// <returns>
+    /// Registration state containing:
+    /// - Status: The current registration status
+    /// - MessageKey: Localization key for UI message
+    /// - CanRegisterOnline: Whether online registration is available
+    /// - CanOptOutOfInheritance: Whether the user can opt out of inherited registration
+    /// - RegistryServerAvailable: Whether the registry server can be reached
+    /// </returns>
     public static RegistrationState GetRegistrationState(
         string? projectGuid,
         string? baseProjectGuid,
@@ -154,24 +191,33 @@ internal static class RegistrationService
     /// <summary>
     /// Initiates online registration for a project.
     /// </summary>
-    /// <param name="projectGuid">Project to register.</param>
-    /// <returns>URL to open in browser for registration.</returns>
+    /// <param name="projectGuid">The GUID of the project to register.</param>
+    /// <returns>URL to open in browser for registration workflow.</returns>
+    /// <remarks>
+    /// In a full implementation, this would encode project information (name, type, language)
+    /// into the URL. Currently encodes only the project GUID for testing purposes.
+    /// </remarks>
     public static string InitiateOnlineRegistration(string projectGuid)
     {
-        // In a real implementation, this would:
-        // 1. Encode project information to Base64
-        // 2. Return URL to registry.paratext.org with encoded data
-
-        // For now, return a URL with the project GUID encoded
         var encodedData = Convert.ToBase64String(
             System.Text.Encoding.UTF8.GetBytes($"guid={projectGuid}")
         );
-        return $"https://registry.paratext.org/register?data={encodedData}";
+        return $"{RegistryBaseUrl}?data={encodedData}";
     }
 
+    #endregion
+
+    #region Private Methods
+
     /// <summary>
-    /// Checks if a project is registered.
+    /// Checks if a project is registered with the registry server.
     /// </summary>
+    /// <param name="projectGuid">The project GUID to check.</param>
+    /// <returns>True if the project is registered; false otherwise.</returns>
+    /// <remarks>
+    /// In a full implementation, this would query the registry server or local cache.
+    /// Currently returns false for all projects (new projects are always unregistered).
+    /// </remarks>
     private static bool IsProjectRegistered(string? projectGuid)
     {
         // In a real implementation, this would check the registry
@@ -181,17 +227,22 @@ internal static class RegistrationService
     }
 
     /// <summary>
-    /// Checks if a base project is registered.
+    /// Checks if a base project is registered with the registry server.
     /// </summary>
+    /// <param name="baseProjectGuid">The base project GUID to check.</param>
+    /// <returns>True if the base project is registered; false otherwise.</returns>
+    /// <remarks>
+    /// In a full implementation, this would look up the base project and check its registration
+    /// status. For unit tests, uses a naming convention where GUIDs starting with "registered"
+    /// are considered registered.
+    /// </remarks>
     private static bool IsBaseProjectRegistered(string? baseProjectGuid)
     {
-        // In a real implementation, this would look up the base project and check its registration
-        // For unit tests, we use naming convention: "registeredBase" prefix = registered
-
         if (string.IsNullOrEmpty(baseProjectGuid))
             return false;
 
-        // Simple heuristic for tests: if GUID starts with "registered", it's registered
-        return baseProjectGuid.StartsWith("registered", StringComparison.OrdinalIgnoreCase);
+        return baseProjectGuid.StartsWith(RegisteredBasePrefix, StringComparison.OrdinalIgnoreCase);
     }
+
+    #endregion
 }

@@ -15,8 +15,31 @@ namespace Paranext.DataProvider.ProjectCreation;
 /// </summary>
 internal static class LanguageService
 {
+    #region Constants and Static Fields
+
+    /// <summary>
+    /// Regex pattern for valid BCP-47 variant characters (alphanumeric and hyphens).
+    /// Pre-compiled for performance.
+    /// </summary>
+    private static readonly Regex s_validVariantPattern =
+        new(@"^[a-zA-Z0-9\-]+$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Regex pattern to detect invalid characters in language IDs.
+    /// Language IDs should only contain alphanumeric characters and hyphens.
+    /// Pre-compiled for performance.
+    /// </summary>
+    private static readonly Regex s_invalidCharactersPattern =
+        new(@"[^a-zA-Z0-9\-]", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Private extension marker in BCP-47 tags (e.g., "en-x-variant").
+    /// </summary>
+    private const string PrivateUseExtensionMarker = "-x-";
+
     /// <summary>
     /// Windows reserved filenames that cannot be used as language IDs.
+    /// These names are reserved by the Windows operating system and cannot be used for files or folders.
     /// </summary>
     private static readonly HashSet<string> s_windowsReservedNames =
         new(StringComparer.OrdinalIgnoreCase)
@@ -98,6 +121,10 @@ internal static class LanguageService
             },
         };
 
+    #endregion
+
+    #region Public Methods
+
     /// <summary>
     /// Validates language selection including name uniqueness.
     /// </summary>
@@ -124,10 +151,14 @@ internal static class LanguageService
         }
 
         // VAL-012: Check variant characters are valid (a-z, 0-9, hyphens only)
-        // The variant is the part after "-x-" in the language tag
-        if (languageId.Contains("-x-"))
+        // The variant is the part after "-x-" (private use extension) in the language tag
+        if (languageId.Contains(PrivateUseExtensionMarker))
         {
-            var variantPart = languageId.Substring(languageId.IndexOf("-x-") + 3);
+            var markerIndex = languageId.IndexOf(
+                PrivateUseExtensionMarker,
+                StringComparison.Ordinal
+            );
+            var variantPart = languageId.Substring(markerIndex + PrivateUseExtensionMarker.Length);
             if (!IsValidVariant(variantPart))
             {
                 return new ValidationResult(false, "LANGUAGE_VARIANT_INVALID");
@@ -175,29 +206,41 @@ internal static class LanguageService
             .ToList();
     }
 
+    #endregion
+
+    #region Private Methods
+
     /// <summary>
-    /// Checks if a variant string contains only valid characters (a-z, 0-9).
+    /// Checks if a variant string contains only valid BCP-47 variant characters.
+    /// Valid characters are: a-z, A-Z, 0-9, and hyphens for subtag separation.
     /// </summary>
+    /// <param name="variant">The variant portion of a BCP-47 tag to validate.</param>
+    /// <returns>True if the variant contains only valid characters; false otherwise.</returns>
     private static bool IsValidVariant(string variant)
     {
-        // Variant must only contain a-z (case insensitive), 0-9, and hyphens for subtags
-        return Regex.IsMatch(variant, @"^[a-zA-Z0-9\-]+$");
+        return s_validVariantPattern.IsMatch(variant);
     }
 
     /// <summary>
-    /// Checks if the language ID contains invalid characters like spaces or special characters.
+    /// Checks if the language ID contains invalid characters.
+    /// Language IDs should only contain alphanumeric characters and hyphens.
     /// </summary>
+    /// <param name="languageId">The language ID to check.</param>
+    /// <returns>True if the language ID contains invalid characters; false if valid.</returns>
     private static bool ContainsInvalidCharacters(string languageId)
     {
-        // Language IDs should only contain alphanumeric chars and hyphens
-        return languageId.Contains(' ') || Regex.IsMatch(languageId, @"[^a-zA-Z0-9\-]");
+        return languageId.Contains(' ') || s_invalidCharactersPattern.IsMatch(languageId);
     }
 
     /// <summary>
     /// Checks if a language name is already in use by another project.
     /// </summary>
+    /// <param name="languageName">The language name to check.</param>
+    /// <returns>True if the name is already in use; false otherwise.</returns>
     private static bool IsLanguageNameInUse(string languageName)
     {
         return s_existingLanguageNames.Contains(languageName);
     }
+
+    #endregion
 }
