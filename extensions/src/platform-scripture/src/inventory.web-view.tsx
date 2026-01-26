@@ -203,13 +203,18 @@ global.webViewComponent = function InventoryWebView({
   const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
   const [scope, setScope] = useState<Scope>('chapter');
 
-  // Validate and get inventory configuration
-  if (!webViewType || !isValidInventoryWebViewType(webViewType)) {
-    throw new Error(`"${webViewType}" is not a valid inventory type`);
-  }
-
-  const config = INVENTORY_TYPE_CONFIG[webViewType];
-  const { component: InventoryComponent, checkId, validItemsSetting, invalidItemsSetting } = config;
+  const {
+    component: InventoryComponent,
+    checkId,
+    validItemsSetting,
+    invalidItemsSetting,
+  } = useMemo(() => {
+    // Validate and get inventory configuration
+    if (!webViewType || !isValidInventoryWebViewType(webViewType)) {
+      throw new Error(`"${webViewType}" is not a valid inventory type`);
+    }
+    return INVENTORY_TYPE_CONFIG[webViewType];
+  }, [webViewType]);
 
   const { inventoryInputRange, stableVerseRefForScope } = useInventoryInputRange(
     verseRef,
@@ -268,14 +273,8 @@ global.webViewComponent = function InventoryWebView({
     return invalidItemsPossiblyError;
   }, [invalidItemsPossiblyError]);
 
-  const approvedItems = useMemo(
-    () => validItems.split(' ').filter((item) => item.length > 0),
-    [validItems],
-  );
-  const unapprovedItems = useMemo(
-    () => invalidItems.split(' ').filter((item) => item.length > 0),
-    [invalidItems],
-  );
+  const approvedItems = useMemo(() => validItems.split(' '), [validItems]);
+  const unapprovedItems = useMemo(() => invalidItems.split(' '), [invalidItems]);
 
   /**
    * Handles item selection by loading detailed occurrences for the selected item. Uses caching to
