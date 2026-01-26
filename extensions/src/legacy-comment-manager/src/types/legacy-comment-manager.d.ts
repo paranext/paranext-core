@@ -1,7 +1,6 @@
 declare module 'legacy-comment-manager' {
   import {
     DataProviderDataType,
-    DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
     NetworkableObject,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -15,9 +14,7 @@ declare module 'legacy-comment-manager' {
     CommentType,
     LegacyComment,
     LegacyCommentThread,
-    PlatformError,
     Prettify,
-    UnsubscriberAsync,
   } from 'platform-bible-utils';
 
   // #region Scripture Range Types
