@@ -156,3 +156,155 @@ public record LanguageSelection
     /// <summary>Variant subtag if present.</summary>
     public string? Variant { get; init; }
 }
+
+// =====================================================
+// CAP-009: Project Creation Types
+// =====================================================
+
+/// <summary>
+/// Request to create a new project.
+/// Uses string-based type identifiers for compatibility.
+/// </summary>
+public record CreateProjectRequest
+{
+    /// <summary>Short name for the project (3-8 chars, A-Za-z0-9_).</summary>
+    public required string ShortName { get; init; }
+
+    /// <summary>Full descriptive name for the project.</summary>
+    public required string FullName { get; init; }
+
+    /// <summary>Language ID (BCP-47 tag, e.g., "eng", "spa").</summary>
+    public required string LanguageId { get; init; }
+
+    /// <summary>Versification system (e.g., "English", "Original").</summary>
+    public required string Versification { get; init; }
+
+    /// <summary>Project type (e.g., "Standard", "BackTranslation").</summary>
+    public required string ProjectType { get; init; }
+
+    /// <summary>GUID of base project (required for derived types).</summary>
+    public string? BaseProjectGuid { get; init; }
+
+    /// <summary>Copyright statement.</summary>
+    public string? Copyright { get; init; }
+
+    /// <summary>Unicode normalization form ("NFC" or "NFD").</summary>
+    public string? Normalization { get; init; }
+
+    /// <summary>USFM version (typically 2 or 3).</summary>
+    public int? UsfmVersion { get; init; }
+
+    /// <summary>Whether the project is editable.</summary>
+    public bool? Editable { get; init; }
+
+    /// <summary>Encoding converter name for TransliterationWithEncoder.</summary>
+    public string? EncodingConverter { get; init; }
+
+    /// <summary>Whether the encoder runs in reverse direction.</summary>
+    public bool? EncoderReverseDirection { get; init; }
+}
+
+/// <summary>
+/// Result of project creation.
+/// </summary>
+public record CreateProjectResult
+{
+    /// <summary>True if project was created successfully.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>GUID of created project (40-char hex).</summary>
+    public string? ProjectGuid { get; init; }
+
+    /// <summary>Error code if creation failed.</summary>
+    public string? ErrorCode { get; init; }
+
+    /// <summary>Human-readable error message if creation failed.</summary>
+    public string? ErrorMessage { get; init; }
+}
+
+// =====================================================
+// CAP-010: Project Cleanup Types
+// =====================================================
+
+/// <summary>
+/// Request to clean up a partially created or cancelled project.
+/// </summary>
+public record CleanupProjectRequest
+{
+    /// <summary>GUID of project to clean up.</summary>
+    public required string ProjectGuid { get; init; }
+
+    /// <summary>True if the project had been registered with the server.</summary>
+    public required bool WasRegistered { get; init; }
+
+    /// <summary>Registration metadata if the project was registered.</summary>
+    public ProjectMetadata? Registration { get; init; }
+}
+
+// =====================================================
+// CAP-011: Project Update Types
+// =====================================================
+
+/// <summary>
+/// Request to update project settings.
+/// All fields except ProjectGuid are optional - only specified fields are updated.
+/// </summary>
+public record UpdateProjectRequest
+{
+    /// <summary>GUID of project to update.</summary>
+    public required string ProjectGuid { get; init; }
+
+    /// <summary>New short name (if changing).</summary>
+    public string? ShortName { get; init; }
+
+    /// <summary>New full name (if changing).</summary>
+    public string? FullName { get; init; }
+
+    /// <summary>New copyright statement (if changing).</summary>
+    public string? Copyright { get; init; }
+
+    /// <summary>New language ID (if changing).</summary>
+    public string? LanguageId { get; init; }
+
+    /// <summary>New versification system (if changing). Only allowed for non-derived types.</summary>
+    public string? Versification { get; init; }
+
+    /// <summary>New project type. FORBIDDEN - cannot change project type.</summary>
+    public string? ProjectType { get; init; }
+
+    /// <summary>New base project GUID (if changing).</summary>
+    public string? BaseProjectGuid { get; init; }
+
+    /// <summary>New encoding converter (if changing).</summary>
+    public string? EncodingConverter { get; init; }
+
+    /// <summary>New encoder direction flag (if changing).</summary>
+    public bool? EncoderReverseDirection { get; init; }
+
+    /// <summary>New normalization form (if changing).</summary>
+    public string? Normalization { get; init; }
+
+    /// <summary>New USFM version (if changing).</summary>
+    public int? UsfmVersion { get; init; }
+
+    /// <summary>New editable flag (if changing).</summary>
+    public bool? Editable { get; init; }
+
+    /// <summary>New planned books list (if changing).</summary>
+    public IReadOnlyList<int>? PlannedBooks { get; init; }
+}
+
+/// <summary>
+/// Result of project update.
+/// </summary>
+public record UpdateProjectResult
+{
+    /// <summary>True if update was successful.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error code if update failed.</summary>
+    public string? ErrorCode { get; init; }
+
+    /// <summary>Human-readable error message if update failed.</summary>
+    public string? ErrorMessage { get; init; }
+}
