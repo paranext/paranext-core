@@ -2,6 +2,7 @@ import { Resolver } from 'webpack';
 import { webViewTempDir } from './webpack.util';
 import fs from 'fs';
 import { tailwindPrebuiltPath } from '../lib/prebuild-tailwind';
+import { isTailwindPrebuildDisabled } from './tailwind-prebuild-webpack-compiler-plugin';
 
 /** The original filename of the Tailwind CSS file before pointing to the pre-built version */
 const tailwindOriginalFileName = 'tailwind.css';
@@ -40,6 +41,9 @@ export default class TailwindPrebuildWebpackCodePathsPlugin {
    * @param resolver
    */
   apply(resolver: Resolver) {
+    // Skip if tailwind prebuild is disabled via environment variable
+    if (isTailwindPrebuildDisabled) return;
+
     // Get the resolve hook for performing a new resolve for some reason.
     // Just following what is in examples - not sure why do this instead of using the same hook
     // in both places and why use `ensureHook` here and `getHook` below.

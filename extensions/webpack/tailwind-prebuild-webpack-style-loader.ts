@@ -28,6 +28,7 @@ import path from 'path';
 import fs from 'fs';
 import type { LoaderContext } from 'webpack';
 import { tailwindPrebuiltPath } from '../lib/prebuild-tailwind';
+import { isTailwindPrebuildDisabled } from './tailwind-prebuild-webpack-compiler-plugin';
 
 // Cache for file contents to avoid reading the same file multiple times
 const fileCache = new Map<string, string>();
@@ -252,6 +253,9 @@ function checkForBrokenFeatures(
 ): string[] {
   const warnings: string[] = [];
   const fileName = path.basename(filePath);
+  const fixSuggestion =
+    `To fix, refactor so tailwind.css is not in the import tree for files using these features, ` +
+    `or set PB_DISABLE_TAILWIND_PREBUILD=true to disable this optimization.`;
 
   // Check for @use ... as <renamed-namespace> (renamed namespaces won't work after inlining)
   // Only warn if this import will actually be inlined
@@ -261,7 +265,8 @@ function checkForBrokenFeatures(
     if (imp.hasRenamedNamespace && willBeInlined) {
       warnings.push(
         `[tailwind-loader] WARNING: ${fileName} uses "@use '${imp.importPath}' as ${imp.namespace}". ` +
-          `The renamed namespace '${imp.namespace}' will not work correctly when inlined for tailwind optimization.`,
+          `The renamed namespace '${imp.namespace}' will not work correctly when inlined for tailwind optimization. ` +
+          fixSuggestion,
       );
     }
   }
@@ -274,7 +279,8 @@ function checkForBrokenFeatures(
     if (imp.hasConfiguration && willBeInlined) {
       warnings.push(
         `[tailwind-loader] WARNING: ${fileName} uses "@use '${imp.importPath}' with (...)" configuration. ` +
-          `This will not work correctly when inlined for tailwind optimization.`,
+          `This will not work correctly when inlined for tailwind optimization. ` +
+          fixSuggestion,
       );
     }
   }
@@ -293,7 +299,8 @@ function checkForBrokenFeatures(
       if (publicVars.length > 0) {
         warnings.push(
           `[tailwind-loader] WARNING: ${fileName} defines public variables (${publicVars.slice(0, 3).join(', ')}${publicVars.length > 3 ? '...' : ''}). ` +
-            `These won't be accessible via namespace after inlining.`,
+            `These won't be accessible via namespace after inlining. ` +
+            fixSuggestion,
         );
       }
     }
@@ -306,7 +313,8 @@ function checkForBrokenFeatures(
       if (publicMixins.length > 0) {
         warnings.push(
           `[tailwind-loader] WARNING: ${fileName} defines public mixins (${publicMixins.slice(0, 3).join(', ')}${publicMixins.length > 3 ? '...' : ''}). ` +
-            `These won't be accessible via namespace after inlining.`,
+            `These won't be accessible via namespace after inlining. ` +
+            fixSuggestion,
         );
       }
     }
@@ -319,7 +327,8 @@ function checkForBrokenFeatures(
       if (publicFunctions.length > 0) {
         warnings.push(
           `[tailwind-loader] WARNING: ${fileName} defines public functions (${publicFunctions.slice(0, 3).join(', ')}${publicFunctions.length > 3 ? '...' : ''}). ` +
-            `These won't be accessible via namespace after inlining.`,
+            `These won't be accessible via namespace after inlining. ` +
+            fixSuggestion,
         );
       }
     }
@@ -341,7 +350,8 @@ function checkForBrokenFeatures(
         warnings.push(
           `[tailwind-loader] WARNING: ${fileName} uses namespaced members from '${imp.importPath}' ` +
             `(${usageMatches.slice(0, 3).join(', ')}${usageMatches.length > 3 ? '...' : ''}). ` +
-            `These references will break after inlining.`,
+            `These references will break after inlining. ` +
+            fixSuggestion,
         );
       }
     }
@@ -461,6 +471,8 @@ export default function tailwindPrebuildWebpackStyleLoader(
   this: LoaderContext<Record<string, never>>,
   source: string,
 ): string {
+  // Skip tailwind prebuild optimization if disabled - let normal webpack/sass processing handle it
+  if (isTailwindPrebuildDisabled) return source;
   // Clear caches at the start of each top-level loader invocation to handle watch mode.
   // Files may have changed since the last build, so we need fresh content.
   fileCache.clear();

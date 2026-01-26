@@ -32,12 +32,13 @@ const outputDir = path.resolve(rootDir, 'temp-build');
 export const tailwindPrebuiltPath = path.resolve(outputDir, 'tailwind.prebuild.css');
 
 /**
- * Recursively searches for a tailwind.css file in a directory.
+ * Recursively searches for all tailwind.css files in a directory.
  *
  * @param dir - The directory to search in
- * @returns The path to the first tailwind.css file found, or null if not found
+ * @param results - Array to accumulate results (used for recursion)
+ * @returns Array of paths to all tailwind.css files found
  */
-function findTailwindCss(dir: string): string | null {
+function findAllTailwindCss(dir: string, results: string[] = []): string[] {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
@@ -49,16 +50,15 @@ function findTailwindCss(dir: string): string | null {
         if (entry.name === 'node_modules' || entry.name === 'temp-build') {
           continue;
         }
-        const found = findTailwindCss(fullPath);
-        if (found) return found;
+        findAllTailwindCss(fullPath, results);
       } else if (entry.isFile() && entry.name === 'tailwind.css') {
-        return fullPath;
+        results.push(fullPath);
       }
     }
   } catch {
     // Ignore errors (e.g., permission denied)
   }
-  return null;
+  return results;
 }
 
 /**
@@ -75,30 +75,46 @@ export async function prebuildTailwind(): Promise<void> {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Find a tailwind.css file in the src directory
-  // Any extension's tailwind.css would work since they all have identical @tailwind directives.
-  const inputFile = findTailwindCss(srcDir);
-  if (!inputFile) {
+  console.log('Pre-building Tailwind CSS...');
+  const startTime = Date.now();
+
+  // Find all tailwind.css files in the src directory
+  const tailwindFiles = findAllTailwindCss(srcDir);
+  if (tailwindFiles.length === 0) {
     console.log('No tailwind.css file found in extensions. Skipping Tailwind prebuild.');
     console.log('(This is fine if no extensions use Tailwind CSS.)');
     return;
   }
 
-  console.log(`Found tailwind.css: ${inputFile}`);
-  console.log('Pre-building Tailwind CSS...');
-  const startTime = Date.now();
+  // Verify all tailwind.css files have identical content
+  // This is required because we only prebuild once and share the result across all extensions
+  const firstFile = tailwindFiles[0];
+  const firstContent = fs.readFileSync(firstFile, 'utf8');
+  for (let i = 1; i < tailwindFiles.length; i++) {
+    const otherFile = tailwindFiles[i];
+    const otherContent = fs.readFileSync(otherFile, 'utf8');
+    if (otherContent !== firstContent) {
+      throw new Error(
+        `All tailwind.css files must have identical content for the prebuild optimization to work.\n` +
+          `First file: ${firstFile}\n` +
+          `Differing file: ${otherFile}\n` +
+          `If extensions need different Tailwind configurations, set PB_DISABLE_TAILWIND_PREBUILD=true to disable this optimization.`,
+      );
+    }
+  }
 
-  // Read the input CSS file
-  const inputCss = fs.readFileSync(inputFile, 'utf8');
+  console.log(
+    `Found ${tailwindFiles.length} tailwind.css file(s), all identical. Using: ${firstFile}`,
+  );
 
-  // Process with PostCSS + Tailwind
+  // Process with PostCSS + Tailwind (firstContent was already read above for comparison)
   const result = await postcss([
     tailwindcss({
       config: path.resolve(rootDir, 'tailwind.config.ts'),
     }),
     autoprefixer,
-  ]).process(inputCss, {
-    from: inputFile,
+  ]).process(firstContent, {
+    from: firstFile,
     to: tailwindPrebuiltPath,
   });
 
