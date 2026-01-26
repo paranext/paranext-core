@@ -1100,22 +1100,6 @@ declare module 'platform-scripture' {
 
   /** Functions that provide configuration data for a specific check */
   export type CheckConfigurationProvider = {
-    /**
-     * @deprecated 2025-11-10 Use IInventoryDataProvider instead of this method to retrieve
-     *   inventory data
-     *
-     *   Represents the ability to retrieve inventory data for one particular check on a project
-     * @param checkId ID of the check whose inventory data is being requested
-     * @param projectId ID of the project whose inventory data is being requested
-     * @param checkInputRange Range of project text to evaluate for inventory data
-     * @returns List of all inventory items for the check in the specified project and range
-     */
-    retrieveInventoryData: (
-      checkId: string,
-      projectId: string,
-      checkInputRange: CheckInputRange,
-    ) => Promise<InventoryItem[]>;
-
     /** Returns if setup/configuration for the check has been completed */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
   };
