@@ -1,0 +1,18 @@
+{
+  "name": "paratextProjectCreation",
+  "version": "0.6.0-alpha.0",
+  "publisher": "platform",
+  "displayData": "assets/displayData.json",
+  "author": "Paranext",
+  "license": "MIT",
+  "main": "src/main.ts",
+  "extensionDependencies": {},
+  "elevatedPrivileges": [],
+  "types": "src/types/paratext-project-creation.d.ts",
+  "menus": "contributions/menus.json",
+  "settings": "contributions/settings.json",
+  "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
+  "themes": "contributions/themes.json",
+  "activationEvents": []
+}
