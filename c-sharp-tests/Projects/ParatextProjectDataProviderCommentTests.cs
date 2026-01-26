@@ -211,6 +211,141 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
+        [Test]
+        public void CreateComment_SelectedTextContainsBackslash_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, @"Did Jesus really say this?");
+            comment.SelectedText = @"He replied, \wj ""Do not say";
+
+            // Act + Assert
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+            );
+
+            Assert.That(ex!.Message, Does.Contain("Selected text cannot contain USFM markers"));
+        }
+
+        [Test]
+        public void CreateComment_AssignedUserNotAssignable_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+
+            comment.AssignedUser = "nonexistent-user";
+
+            // Act + Assert
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+            );
+
+            Assert.That(ex!.Message, Does.Contain("cannot be assigned to threads in this project"));
+        }
+
+        [Test]
+        public void CreateComment_VerseLookupFails_WritesToConsoleError()
+        {
+            // Arrange - Use reference that doesn't exist in the test scrText
+            var comment = CreateTestComment("GEN", 60, 3, "Test comment");
+
+            // Ensure fallback path is used
+            comment.Verse = null;
+            comment.ContextBefore = null;
+            comment.ContextAfter = null;
+
+            comment.VerseRefStr = "GEN 60:3";
+            comment.StartPosition = 0;
+            comment.SelectedText = "nonexistent verse text";
+
+            using var errorWriter = new StringWriter();
+            var originalError = Console.Error;
+            Console.SetError(errorWriter);
+
+            try
+            {
+                // Act
+                _provider.CreateComment(new PlatformCommentWrapper(comment));
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            // Assert
+            var errorOutput = errorWriter.ToString();
+            Assert.That(
+                errorOutput,
+                Does.Contain("Unable to retrieve verse text"),
+                "Expected verse lookup failure to be logged"
+            );
+        }
+
+        [Test]
+        public void CreateComment_MissingVerseContextAndFallbackFields_WritesRequiredFieldsError()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+
+            // Force the Verse / Context fallback path
+            comment.Verse = null;
+            comment.ContextBefore = null;
+            comment.ContextAfter = null;
+
+            // Break required fallback fields
+            comment.VerseRefStr = "GEN 1:1";
+            comment.StartPosition = -1;
+            comment.SelectedText = null;
+
+            using var errorWriter = new StringWriter();
+            var originalError = Console.Error;
+            Console.SetError(errorWriter);
+
+            try
+            {
+                // Act
+                _provider.CreateComment(new PlatformCommentWrapper(comment));
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            // Assert
+            var errorOutput = errorWriter.ToString();
+
+            Assert.That(
+                errorOutput,
+                Does.Contain(
+                    "VerseRef, StartPosition, and SelectedText are required when Verse, ContextBefore, and ContextAfter are not provided"
+                ),
+                "Expected missing-required-fields error to be written to Console.Error"
+            );
+        }
+
+        [Test]
+        public void CreateComment_InvalidSelection_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+
+            // Force the Verse / Context fallback path
+            comment.Verse = null;
+            comment.ContextBefore = null;
+            comment.ContextAfter = null;
+
+            // Break required fallback fields
+            comment.VerseRefStr = null;
+            comment.StartPosition = -1;
+            comment.SelectedText = null;
+
+            // Act + Assert
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+            );
+
+            Assert.That(ex!.Message, Does.Contain("Invalid Scripture selection:"));
+        }
+
         #endregion
 
         #region GetCommentThreads Tests

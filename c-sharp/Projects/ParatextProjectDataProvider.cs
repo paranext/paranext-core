@@ -319,8 +319,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             if (
                 string.IsNullOrEmpty(newComment.VerseRefStr)
-                || newComment.StartPosition < 0
-                || newComment.SelectedText == null
+                || comment.StartPosition < 0 // Check incoming comment b/c negative value does not get copied to newComment
+                || string.IsNullOrEmpty(newComment.SelectedText)
             )
             {
                 Console.Error.WriteLine(
@@ -352,13 +352,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Create a ScriptureSelection to put the USFM snippets through the same processing as they
         // go through in P9
-        var selection = new ScriptureSelection(
-            newComment.VerseRef,
-            newComment.SelectedText,
-            newComment.StartPosition,
-            newComment.ContextBefore,
-            newComment.ContextAfter
-        );
+        ScriptureSelection selection;
+        try
+        {
+            selection = new ScriptureSelection(
+                newComment.VerseRef,
+                newComment.SelectedText,
+                newComment.StartPosition,
+                newComment.ContextBefore,
+                newComment.ContextAfter
+            );
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Invalid Scripture selection: {ex.Message}", ex);
+        }
 
         // From CommentManager.CreateThread
         CommentUtils.AdjustNoteSelection(scrText, selection);
@@ -476,7 +484,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.ContextBefore = source.ContextBefore;
         if (source.SelectedText != string.Empty)
             target.SelectedText = source.SelectedText;
-        if (source.StartPosition != -1)
+        if (source.StartPosition >= 0)
             target.StartPosition = source.StartPosition;
         // AssignedUser allows empty string (means "unassigned"), so only check for null
         if (source.AssignedUser != null)
