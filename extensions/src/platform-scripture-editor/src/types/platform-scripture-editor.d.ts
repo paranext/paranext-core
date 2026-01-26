@@ -11,7 +11,6 @@ declare module 'platform-scripture-editor' {
   import type {
     KebabCase,
     LocalizeKey,
-    PlatformEvent,
     UsfmScrRefVerseLocation,
     UsfmVerseLocation,
     UsjChapterLocation,
