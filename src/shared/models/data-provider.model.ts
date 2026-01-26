@@ -65,6 +65,12 @@ export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTy
  * Note: if a data provider engine does not provide `set` (possibly indicating it is read-only),
  * this will throw an exception.
  *
+ * Note: a data provider's `set<data_type>` must follow this function signature because it is called
+ * programmatically by {@link DataProviderSubscriber | `subscribe<data_type>`}. You cannot omit the
+ * first parameter `selector` and include only the second in place of the first. However, if your
+ * data provider's data type does not need a `selector`, you can use `undefined` and effectively
+ * ignore the parameter.
+ *
  * @param selector Tells the provider what subset of data is being set
  * @param data The data that determines what to set at the selector
  * @returns Information that papi uses to interpret whether to send out updates. Defaults to `true`
@@ -86,6 +92,12 @@ export type DataProviderSetter<
  * up-to-date, use `subscribe` instead, which can immediately give you the data and keep it
  * up-to-date.
  *
+ * Note: a data provider's `get<data_type>` must follow this function signature because it is called
+ * programmatically by {@link DataProviderSubscriber | `subscribe<data_type>`}. You cannot omit the
+ * first parameter `selector` and include some other parameter in place of the first. However, if
+ * your data provider's data type does not need a `selector`, you can use `undefined` and
+ * effectively ignore the parameter.
+ *
  * @param selector Tells the provider what subset of data to get
  * @returns The subset of data represented by the selector
  */
@@ -101,6 +113,10 @@ export type DataProviderGetter<TDataType extends DataProviderDataType> = (
  * of the data and runs the provided callback as soon as possible. That way, if you want to keep
  * your data up-to-date, you do not also have to run `get<data_type>`. You can turn this
  * functionality off in the `options` parameter.
+ *
+ * Note: a data provider's `subscribe<data_type>` method is a TypeScript feature that is
+ * automatically created by the PAPI and internally calls
+ * {@link DataProviderGetter | `get<data_type>`} and {@link DataProviderSetter | `set<data_type>`}
  *
  * @param selector Tells the provider what data this listener is listening for
  * @param callback Function to run with the updated data for this selector. If there is an error
