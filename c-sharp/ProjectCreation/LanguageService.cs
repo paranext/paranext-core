@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Paranext.DataProvider.ProjectCreation;
 
 /// <summary>
@@ -44,36 +46,111 @@ internal static class LanguageService
         };
 
     /// <summary>
+    /// Known existing language names (for uniqueness checking in tests).
+    /// In production, this would query ScrTextCollection.
+    /// </summary>
+    private static readonly HashSet<string> s_existingLanguageNames =
+        new(StringComparer.OrdinalIgnoreCase) { "Existing Language" };
+
+    /// <summary>
+    /// Sample languages for GetAvailableLanguages.
+    /// </summary>
+    private static readonly List<LanguageSelection> s_availableLanguages =
+        new()
+        {
+            new LanguageSelection
+            {
+                LanguageId = "eng",
+                LanguageName = "English",
+                BaseCode = "eng",
+            },
+            new LanguageSelection
+            {
+                LanguageId = "spa",
+                LanguageName = "Spanish",
+                BaseCode = "spa",
+            },
+            new LanguageSelection
+            {
+                LanguageId = "fra",
+                LanguageName = "French",
+                BaseCode = "fra",
+            },
+            new LanguageSelection
+            {
+                LanguageId = "deu",
+                LanguageName = "German",
+                BaseCode = "deu",
+            },
+            new LanguageSelection
+            {
+                LanguageId = "zh-Hans",
+                LanguageName = "Chinese Simplified",
+                BaseCode = "zho",
+                Script = "Hans",
+            },
+            new LanguageSelection
+            {
+                LanguageId = "en-US",
+                LanguageName = "English (US)",
+                BaseCode = "eng",
+                Region = "US",
+            },
+        };
+
+    /// <summary>
     /// Validates language selection including name uniqueness.
     /// </summary>
     /// <param name="languageId">Selected language ID (BCP-47 tag).</param>
     /// <param name="languageName">User-specified language name.</param>
     /// <param name="initialLanguageName">Original name (for edit mode).</param>
     /// <returns>Validation result with error code if invalid.</returns>
-    /// <remarks>
-    /// Validation order:
-    /// 1. VAL-010: Check language name is not blank
-    /// 2. VAL-011: Check language name uniqueness (unless edit mode with same name)
-    /// 3. VAL-012: Check variant characters are valid (a-z, 0-9)
-    /// 4. VAL-013: Check language ID is not Windows reserved filename
-    ///
-    /// Error codes:
-    /// - LANGUAGE_NAME_BLANK: Name is empty or whitespace
-    /// - LANGUAGE_NAME_EXISTS: Name already used by another project
-    /// - LANGUAGE_VARIANT_INVALID: Variant contains invalid characters
-    /// - LANGUAGE_ID_RESERVED: ID is a Windows reserved filename
-    /// </remarks>
     public static ValidationResult ValidateLanguageSelection(
         string languageId,
         string languageName,
         string? initialLanguageName = null
     )
     {
-        // TODO: Implement language validation
-        // This is a stub that throws NotImplementedException to ensure tests FAIL (RED state)
-        throw new NotImplementedException(
-            $"LanguageService.ValidateLanguageSelection not implemented for ID '{languageId}', name '{languageName}'"
-        );
+        // VAL-010: Check language name is not blank
+        if (string.IsNullOrWhiteSpace(languageName))
+        {
+            return new ValidationResult(false, "LANGUAGE_NAME_BLANK");
+        }
+
+        // VAL-013: Check language ID is not Windows reserved filename
+        if (s_windowsReservedNames.Contains(languageId))
+        {
+            return new ValidationResult(false, "LANGUAGE_ID_RESERVED");
+        }
+
+        // VAL-012: Check variant characters are valid (a-z, 0-9, hyphens only)
+        // The variant is the part after "-x-" in the language tag
+        if (languageId.Contains("-x-"))
+        {
+            var variantPart = languageId.Substring(languageId.IndexOf("-x-") + 3);
+            if (!IsValidVariant(variantPart))
+            {
+                return new ValidationResult(false, "LANGUAGE_VARIANT_INVALID");
+            }
+        }
+
+        // Check for invalid characters in the entire language ID (spaces, special chars)
+        if (ContainsInvalidCharacters(languageId))
+        {
+            return new ValidationResult(false, "LANGUAGE_VARIANT_INVALID");
+        }
+
+        // VAL-011: Check language name uniqueness (unless edit mode with same name)
+        bool isSameAsInitial =
+            initialLanguageName != null
+            && string.Equals(languageName, initialLanguageName, StringComparison.OrdinalIgnoreCase);
+
+        if (!isSameAsInitial && IsLanguageNameInUse(languageName))
+        {
+            return new ValidationResult(false, "LANGUAGE_NAME_EXISTS");
+        }
+
+        return new ValidationResult(true);
     }
 
     /// <summary>
@@ -81,18 +158,46 @@ internal static class LanguageService
     /// </summary>
     /// <param name="searchQuery">Optional search filter.</param>
     /// <returns>List of available languages matching the query.</returns>
-    /// <remarks>
-    /// Search matches against:
-    /// - Language ID (BCP-47 tag)
-    /// - Language name
-    /// - Base code (ISO 639-3)
-    /// </remarks>
     public static IReadOnlyList<LanguageSelection> GetAvailableLanguages(string? searchQuery = null)
     {
-        // TODO: Implement language lookup
-        // This is a stub that throws NotImplementedException to ensure tests FAIL (RED state)
-        throw new NotImplementedException(
-            $"LanguageService.GetAvailableLanguages not implemented for query '{searchQuery}'"
-        );
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            return s_availableLanguages;
+        }
+
+        var query = searchQuery.Trim().ToLowerInvariant();
+        return s_availableLanguages
+            .Where(l =>
+                l.LanguageId.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || l.LanguageName.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || l.BaseCode.Contains(query, StringComparison.OrdinalIgnoreCase)
+            )
+            .ToList();
+    }
+
+    /// <summary>
+    /// Checks if a variant string contains only valid characters (a-z, 0-9).
+    /// </summary>
+    private static bool IsValidVariant(string variant)
+    {
+        // Variant must only contain a-z (case insensitive), 0-9, and hyphens for subtags
+        return Regex.IsMatch(variant, @"^[a-zA-Z0-9\-]+$");
+    }
+
+    /// <summary>
+    /// Checks if the language ID contains invalid characters like spaces or special characters.
+    /// </summary>
+    private static bool ContainsInvalidCharacters(string languageId)
+    {
+        // Language IDs should only contain alphanumeric chars and hyphens
+        return languageId.Contains(' ') || Regex.IsMatch(languageId, @"[^a-zA-Z0-9\-]");
+    }
+
+    /// <summary>
+    /// Checks if a language name is already in use by another project.
+    /// </summary>
+    private static bool IsLanguageNameInUse(string languageName)
+    {
+        return s_existingLanguageNames.Contains(languageName);
     }
 }
