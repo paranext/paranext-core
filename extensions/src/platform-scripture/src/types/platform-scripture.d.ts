@@ -1641,6 +1641,18 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    /**
+     * Opens the Project Properties dialog for creating or editing a project.
+     *
+     * @param mode - 'new' for creating a project, 'edit' for modifying existing. Defaults to 'new'.
+     * @param projectId - Project ID (required for edit mode)
+     * @returns The web view ID of the opened dialog
+     */
+    'platformScripture.openProjectProperties': (
+      mode?: 'new' | 'edit',
+      projectId?: string,
+    ) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {
