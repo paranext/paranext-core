@@ -1,10 +1,8 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDisposableDataProvider } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { InventoryItem } from 'platform-bible-react';
 import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
-  CheckInputRange,
   CheckJobRunner,
   CheckJobScope,
   CheckJobStatus,
