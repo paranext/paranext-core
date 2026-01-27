@@ -81,7 +81,8 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         // 9. getAvailableLanguages
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.getAvailableLanguages",
-            (string? searchQuery) => LanguageService.GetAvailableLanguages(searchQuery)
+            (string? searchQuery, int? maxResults) =>
+                LanguageService.GetAvailableLanguages(searchQuery, maxResults ?? 50)
         );
 
         // 10. createProject

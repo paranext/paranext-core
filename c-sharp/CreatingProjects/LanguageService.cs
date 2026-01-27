@@ -64,10 +64,14 @@ internal static class LanguageService
     /// <summary>
     /// Gets all available languages from the ParatextData language database.
     /// </summary>
-    public static IReadOnlyList<LanguageSelection> GetAvailableLanguages(string? searchQuery = null)
+    public static LanguageSearchResult GetAvailableLanguages(
+        string? searchQuery = null,
+        int maxResults = 50
+    )
     {
         var languages = new List<LanguageSelection>();
         string search = searchQuery ?? "";
+        int totalCount = 0;
 
         foreach (LanguageHelperInfo info in LanguageIdHelper.FindAllLanguageMatches(search))
         {
@@ -77,19 +81,29 @@ internal static class LanguageService
             if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(name))
                 continue;
 
-            languages.Add(
-                new LanguageSelection
-                {
-                    LanguageId = code,
-                    LanguageName = string.IsNullOrEmpty(name) ? code : name,
-                    BaseCode = string.IsNullOrEmpty(info.Iso6393Code) ? code : info.Iso6393Code,
-                    Script = info.Script,
-                    Region = info.Region,
-                    Variant = info.Variant,
-                }
-            );
+            totalCount++;
+
+            if (languages.Count < maxResults)
+            {
+                languages.Add(
+                    new LanguageSelection
+                    {
+                        LanguageId = code,
+                        LanguageName = string.IsNullOrEmpty(name) ? code : name,
+                        BaseCode = string.IsNullOrEmpty(info.Iso6393Code) ? code : info.Iso6393Code,
+                        Script = info.Script,
+                        Region = info.Region,
+                        Variant = info.Variant,
+                    }
+                );
+            }
         }
 
-        return languages;
+        return new LanguageSearchResult
+        {
+            Languages = languages,
+            HasMore = totalCount > maxResults,
+            TotalCount = totalCount,
+        };
     }
 }

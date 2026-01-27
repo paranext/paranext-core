@@ -133,6 +133,13 @@ public record LanguageSelection
     public string? Variant { get; init; }
 }
 
+public record LanguageSearchResult
+{
+    public required IReadOnlyList<LanguageSelection> Languages { get; init; }
+    public required bool HasMore { get; init; }
+    public required int TotalCount { get; init; }
+}
+
 public record ProjectTypeConfiguration
 {
     public required ProjectType ProjectType { get; init; }

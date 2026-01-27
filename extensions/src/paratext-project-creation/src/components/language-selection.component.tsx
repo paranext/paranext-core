@@ -159,6 +159,8 @@ export function LanguageSelectionForm({
   // --- State ---
   const [isLoading, setIsLoading] = useState(true);
   const [languages, setLanguages] = useState<LanguageInfo[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
@@ -201,10 +203,11 @@ export function LanguageSelectionForm({
         const result = await papi.commands.sendCommand(
           'paratextProjectCreation.getAvailableLanguages',
           debouncedQuery || undefined,
+          50,
         );
         if (!cancelled && isMountedRef.current) {
           // Map LanguageSelection[] to LanguageInfo[] for display
-          const languageInfos: LanguageInfo[] = result.map((lang) => ({
+          const languageInfos: LanguageInfo[] = result.languages.map((lang) => ({
             code: lang.baseCode,
             name: lang.languageName,
             altNames: [],
@@ -212,6 +215,8 @@ export function LanguageSelectionForm({
             regions: lang.region ? [lang.region] : [],
           }));
           setLanguages(languageInfos);
+          setHasMore(result.hasMore);
+          setTotalCount(result.totalCount);
         }
       } catch (err: unknown) {
         logger.warn(`Failed to fetch languages: ${getErrorMessage(err)}`);
@@ -361,7 +366,7 @@ export function LanguageSelectionForm({
         'paratextProjectCreation.validateLanguage',
         fullLanguageCode,
         chosenLanguageName,
-        undefined,
+        chosenLanguageName,
       );
       if (!isMountedRef.current) return;
 
@@ -483,28 +488,35 @@ export function LanguageSelectionForm({
           ) : languages.length === 0 ? (
             <div className="tw-p-3 tw-text-sm tw-text-muted-foreground">No languages found</div>
           ) : (
-            languages.map((lang, index) => (
-              <div
-                key={`${lang.code}-${index}`}
-                role="row"
-                tabIndex={0}
-                className={cn(
-                  'tw-flex tw-px-3 tw-py-1.5 tw-text-sm tw-cursor-pointer hover:tw-bg-accent',
-                  selectedLanguageCode === lang.code && 'tw-bg-accent tw-font-medium',
-                )}
-                onClick={() => handleLanguageSelect(lang.code)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleLanguageSelect(lang.code);
-                  }
-                }}
-                aria-selected={selectedLanguageCode === lang.code}
-              >
-                <div className="tw-w-24 tw-font-mono">{lang.code}</div>
-                <div className="tw-flex-1">{lang.name}</div>
-              </div>
-            ))
+            <>
+              {languages.map((lang, index) => (
+                <div
+                  key={`${lang.code}-${index}`}
+                  role="row"
+                  tabIndex={0}
+                  className={cn(
+                    'tw-flex tw-px-3 tw-py-1.5 tw-text-sm tw-cursor-pointer hover:tw-bg-accent',
+                    selectedLanguageCode === lang.code && 'tw-bg-accent tw-font-medium',
+                  )}
+                  onClick={() => handleLanguageSelect(lang.code)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleLanguageSelect(lang.code);
+                    }
+                  }}
+                  aria-selected={selectedLanguageCode === lang.code}
+                >
+                  <div className="tw-w-24 tw-font-mono">{lang.code}</div>
+                  <div className="tw-flex-1">{lang.name}</div>
+                </div>
+              ))}
+              {hasMore && (
+                <div className="tw-px-3 tw-py-1.5 tw-text-xs tw-text-muted-foreground tw-italic">
+                  Showing {languages.length} of {totalCount} — type to narrow results
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

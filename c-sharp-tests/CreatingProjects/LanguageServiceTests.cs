@@ -197,8 +197,9 @@ public class LanguageServiceTests
         var result = LanguageService.GetAvailableLanguages();
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.InstanceOf<IReadOnlyList<LanguageSelection>>());
-        Assert.That(result, Is.Not.Empty);
+        Assert.That(result, Is.InstanceOf<LanguageSearchResult>());
+        Assert.That(result.Languages, Is.Not.Empty);
+        Assert.That(result.TotalCount, Is.GreaterThan(0));
     }
 
     // =========================================================================
@@ -214,8 +215,8 @@ public class LanguageServiceTests
     {
         var result = LanguageService.GetAvailableLanguages();
 
-        Assert.That(result, Is.Not.Empty);
-        var first = result[0];
+        Assert.That(result.Languages, Is.Not.Empty);
+        var first = result.Languages[0];
         Assert.That(first.LanguageId, Is.Not.Null.And.Not.Empty);
         Assert.That(first.LanguageName, Is.Not.Null.And.Not.Empty);
         Assert.That(first.BaseCode, Is.Not.Null.And.Not.Empty);
@@ -233,7 +234,7 @@ public class LanguageServiceTests
 
         Assert.That(filtered, Is.Not.Null);
         // Filtered should be a subset (or equal if all match)
-        Assert.That(filtered.Count, Is.LessThanOrEqualTo(all.Count));
+        Assert.That(filtered.TotalCount, Is.LessThanOrEqualTo(all.TotalCount));
     }
 
     [Test]
@@ -246,6 +247,23 @@ public class LanguageServiceTests
         var noFilter = LanguageService.GetAvailableLanguages();
         var nullFilter = LanguageService.GetAvailableLanguages(null);
 
-        Assert.That(nullFilter.Count, Is.EqualTo(noFilter.Count));
+        Assert.That(nullFilter.TotalCount, Is.EqualTo(noFilter.TotalCount));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-011-04")]
+    [Property("BehaviorId", "BHV-009")]
+    [Description("MaxResults limits returned languages and sets HasMore")]
+    public void GetAvailableLanguages_WithMaxResults_LimitsResults()
+    {
+        var limited = LanguageService.GetAvailableLanguages(null, 5);
+
+        Assert.That(limited.Languages.Count, Is.LessThanOrEqualTo(5));
+        if (limited.TotalCount > 5)
+        {
+            Assert.That(limited.HasMore, Is.True);
+            Assert.That(limited.Languages.Count, Is.EqualTo(5));
+        }
     }
 }

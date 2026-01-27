@@ -89,6 +89,13 @@ declare module 'paratext-project-creation' {
     variant?: string;
   }
 
+  /** Paginated language search result. */
+  export interface LanguageSearchResult {
+    languages: LanguageSelection[];
+    hasMore: boolean;
+    totalCount: number;
+  }
+
   /** Configuration for a project type. */
   export interface ProjectTypeConfiguration {
     projectType: ProjectType;
@@ -270,7 +277,7 @@ declare module 'papi-shared-types' {
     ValidationResult,
     ProjectReference,
     RegistrationState,
-    LanguageSelection,
+    LanguageSearchResult,
     CreateProjectRequest,
     CreateProjectResult,
     EncodingInfo,
@@ -381,7 +388,8 @@ declare module 'papi-shared-types' {
      */
     'paratextProjectCreation.getAvailableLanguages': (
       searchQuery?: string,
-    ) => Promise<LanguageSelection[]>;
+      maxResults?: number,
+    ) => Promise<LanguageSearchResult>;
 
     /**
      * Gets all available encodings.
