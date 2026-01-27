@@ -194,12 +194,12 @@ internal static class ProjectTypeService
             if (guid == null)
                 continue;
 
-            if (!CanBeBasedOnType(creatingType, guid))
+            // Inline the type check from CanBeBasedOnType to avoid re-querying ScrTextCollection
+            var candidateType = MapParatextDataProjectType(scrText.Settings!.TranslationInfo.Type);
+            if (!config.AllowedBaseTypes.Contains(candidateType))
                 continue;
 
-            var candidateType = MapParatextDataProjectType(scrText.Settings.TranslationInfo.Type);
             var candidateConfig = GetTypeConfiguration(candidateType);
-
             results.Add(
                 new ProjectReference
                 {
@@ -221,8 +221,6 @@ internal static class ProjectTypeService
         PtxUtils.Enum<Paratext.Data.ProjectType> paratextType
     )
     {
-        if (paratextType == Paratext.Data.ProjectType.Standard)
-            return ProjectType.Standard;
         if (paratextType == Paratext.Data.ProjectType.BackTranslation)
             return ProjectType.BackTranslation;
         if (paratextType == Paratext.Data.ProjectType.Daughter)
