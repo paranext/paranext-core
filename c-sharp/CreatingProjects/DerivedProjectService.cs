@@ -13,7 +13,7 @@ internal static class DerivedProjectService
     )
     {
         // Find derived project
-        ScrText? derivedProject = FindProjectByGuid(request.DerivedProjectGuid);
+        ScrText? derivedProject = ProjectLookupHelper.FindProjectByGuid(request.DerivedProjectGuid);
         if (derivedProject == null)
         {
             return Task.FromResult(
@@ -27,7 +27,7 @@ internal static class DerivedProjectService
         }
 
         // Find base project
-        ScrText? baseProject = FindProjectByGuid(request.BaseProjectGuid);
+        ScrText? baseProject = ProjectLookupHelper.FindProjectByGuid(request.BaseProjectGuid);
         if (baseProject == null)
         {
             return Task.FromResult(
@@ -59,16 +59,5 @@ internal static class DerivedProjectService
         return Task.FromResult(
             new CopyBaseBooksResult { Success = true, CopiedBooks = copiedBooks }
         );
-    }
-
-    private static ScrText? FindProjectByGuid(string projectGuid)
-    {
-        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-        {
-            string? guid = scrText.Settings?.Guid?.ToString();
-            if (guid == projectGuid)
-                return scrText;
-        }
-        return null;
     }
 }

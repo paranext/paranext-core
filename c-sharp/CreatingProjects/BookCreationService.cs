@@ -14,7 +14,7 @@ internal static class BookCreationService
     )
     {
         // Find project by GUID
-        ScrText? project = FindProjectByGuid(request.ProjectGuid);
+        ScrText? project = ProjectLookupHelper.FindProjectByGuid(request.ProjectGuid);
         if (project == null)
         {
             return Task.FromResult(
@@ -50,7 +50,7 @@ internal static class BookCreationService
                 );
             }
 
-            ScrText? modelProject = FindProjectByGuid(request.ModelProjectGuid);
+            ScrText? modelProject = ProjectLookupHelper.FindProjectByGuid(request.ModelProjectGuid);
             if (modelProject == null)
             {
                 return Task.FromResult(
@@ -82,17 +82,6 @@ internal static class BookCreationService
                 CreatedBooks = createdBooks,
             }
         );
-    }
-
-    private static ScrText? FindProjectByGuid(string projectGuid)
-    {
-        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-        {
-            string? guid = scrText.Settings?.Guid?.ToString();
-            if (guid == projectGuid)
-                return scrText;
-        }
-        return null;
     }
 
     public static IReadOnlyList<ProjectReference> GetValidModelProjects(string projectGuid)
