@@ -242,7 +242,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
                 $"WARNING: Actual comment ID ({comment.Id}) doesn't match the provided ID ({id})"
             );
 
-        var wrappedComment = new PlatformComment(comment, null!);
+        var wrappedComment = new PlatformComment(comment, null);
 
         return wrappedComment;
     }
