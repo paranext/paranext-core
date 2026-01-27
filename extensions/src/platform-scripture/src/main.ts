@@ -547,6 +547,7 @@ export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is finished activating!');
 }
 
+
 export async function deactivate() {
   logger.debug('platformScripture is deactivating!');
   return true;
