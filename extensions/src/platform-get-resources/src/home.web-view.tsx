@@ -1,5 +1,5 @@
 import papi, { logger } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { CardTitle, useEvent } from 'platform-bible-react';
 import { Home as HomeIcon } from 'lucide-react';
 
@@ -31,36 +31,6 @@ globalThis.webViewComponent = function HomeWebView() {
       return [...Array.from(HOME_STRING_KEYS), '%home_dialog_title%'];
     }, []),
   );
-
-  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-
-  const [showGetResourcesButton, setShowGetResourcesButton] = useState<boolean | undefined>(
-    undefined,
-  );
-
-  useEffect(() => {
-    const fetchAvailability = async () => {
-      if (dblResourcesProvider) {
-        const isGetDblResourcesAvailable = await dblResourcesProvider.isGetDblResourcesAvailable();
-        if (isMounted.current) {
-          setShowGetResourcesButton(isGetDblResourcesAvailable);
-        }
-      } else {
-        setShowGetResourcesButton(undefined);
-      }
-    };
-
-    fetchAvailability();
-  }, [dblResourcesProvider]);
-
-  const [resourcesList] = useData('platformGetResources.dblResourcesProvider').DblResources(
-    undefined,
-    [],
-  );
-
-  const openGetResources = useCallback(() => {
-    papi.commands.sendCommand('platformGetResources.openGetResources');
-  }, []);
 
   const openProject = (projectId: string, isEditable: boolean) =>
     papi.commands.sendCommand(
@@ -245,7 +215,7 @@ globalThis.webViewComponent = function HomeWebView() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIds]);
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 
@@ -264,11 +234,9 @@ globalThis.webViewComponent = function HomeWebView() {
     <Home
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       uiLocales={uiLocales}
-      onOpenGetResources={openGetResources}
       onOpenProject={openProject}
       onSendReceiveProject={sendReceiveProject}
       onGetStarted={getStarted}
-      showGetResourcesButton={showGetResourcesButton}
       isSendReceiveInProgress={isSendReceiveInProgress}
       isLoadingLocalProjects={isLoadingLocalProjects}
       isLoadingRemoteProjects={isLoadingRemoteProjects}
