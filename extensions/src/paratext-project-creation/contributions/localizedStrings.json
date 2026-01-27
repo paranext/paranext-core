@@ -1,6 +1,8 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%mainMenu_newProject%": "New Project..."
+    }
   }
 }
