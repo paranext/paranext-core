@@ -21,7 +21,6 @@ declare module 'platform-scripture' {
     UsjTextContentLocation,
   } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
-  import { InventoryItem } from 'platform-bible-react';
 
   // #region Project Interface Data Types
 
