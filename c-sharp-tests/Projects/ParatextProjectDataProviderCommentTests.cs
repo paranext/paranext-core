@@ -541,54 +541,14 @@ namespace TestParanextDataProvider.Projects
         }
 
         // Note: The following test is a just a POC to make sure roundtripping works with an update.
-        // This is now how updates will likely be done in user facing code.
+        // You are not necessarily supposed to edit conflict comment contents like this in real
+        // usage. It is possible; we just didn't look into getting the answer to this question.
         [Test]
         public void UpdateComment_TimConflictXml_UpdatesContentsSuccessfully()
         {
-            var xmlDoc = new XmlDocument();
-            xmlDoc.LoadXml($"<CommentList>{CommentsTestData.Tim_Conflict_Xml}</CommentList>");
-            var commentNode = xmlDoc.SelectSingleNode("//Comment");
-            Assert.That(commentNode, Is.Not.Null);
-
-            // Extract fields from XML
-            var user = commentNode.Attributes?["User"]?.Value ?? string.Empty;
-            var verseRef = commentNode.Attributes?["VerseRef"]?.Value ?? string.Empty;
-            var date = commentNode.Attributes?["Date"]?.Value ?? string.Empty;
-            var selectedText =
-                commentNode.SelectSingleNode("SelectedText")?.InnerText ?? string.Empty;
-            var startPos = int.TryParse(
-                commentNode.SelectSingleNode("StartPosition")?.InnerText,
-                out var sp
-            )
-                ? sp
-                : 0;
-            var contextBefore =
-                commentNode.SelectSingleNode("ContextBefore")?.InnerText ?? string.Empty;
-            var contextAfter =
-                commentNode.SelectSingleNode("ContextAfter")?.InnerText ?? string.Empty;
-            var status = commentNode.SelectSingleNode("Status")?.InnerText ?? string.Empty;
-            var type = commentNode.SelectSingleNode("Type")?.InnerText ?? string.Empty;
-            var contentsXml = commentNode.SelectSingleNode("Contents")?.InnerXml ?? string.Empty;
-
-            // Create Comment object
-            var comment = new Comment(new ParatextUser(user, null))
-            {
-                VerseRefStr = verseRef,
-                Date = date,
-                SelectedText = selectedText,
-                StartPosition = startPos,
-                ContextBefore = contextBefore,
-                ContextAfter = contextAfter,
-                Status = new Enum<NoteStatus>(status),
-                Type = new Enum<NoteType>(type),
-                Contents = new XmlDocument().CreateElement("Contents")
-            };
+            // Create a conflict comment using the helper method
+            var comment = CommentTestHelper.CreateConflictComment();
             comment.Thread = null; // Will be set in _provider.CreateComment
-
-            // Properly set Contents to ensure InnerText is populated
-            var contentsDoc = new XmlDocument();
-            contentsDoc.LoadXml($"<Contents>{contentsXml}</Contents>");
-            comment.Contents = contentsDoc.DocumentElement;
 
             // Add to provider using CreateComment
             string commentId = _provider.CreateComment(comment);
