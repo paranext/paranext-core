@@ -4,20 +4,21 @@ using SIL.Scripture;
 namespace Paranext.DataProvider.JsonUtils;
 
 /// <summary>
-/// Wrapper class for CommentThread that includes read status for JSON serialization
+/// Represents a series of related comments. This class adapts <see cref="CommentThread"/> by adding
+/// read-status information and making it suitable for JSON serialization.
 /// </summary>
-public class PlatformCommentThreadWrapper
+public class PlatformCommentThread
 {
     private readonly CommentThread _thread;
 
-    public PlatformCommentThreadWrapper(CommentThread thread)
+    public PlatformCommentThread(CommentThread thread)
     {
         _thread = thread;
     }
 
     public string Id => _thread.Id;
-    public IEnumerable<PlatformCommentWrapper> Comments =>
-        _thread.Comments.Select(c => new PlatformCommentWrapper(c, this));
+    public IEnumerable<PlatformComment> Comments =>
+        _thread.Comments.Select(c => new PlatformComment(c, this));
     public PtxUtils.Enum<NoteStatus> Status => _thread.Status;
     public PtxUtils.Enum<NoteType> Type => _thread.Type;
     public string? AssignedUser => _thread.AssignedUser;

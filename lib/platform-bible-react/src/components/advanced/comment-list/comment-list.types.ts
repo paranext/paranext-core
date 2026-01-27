@@ -155,7 +155,7 @@ export interface CommentThreadProps {
   /** Handler for deleting a comment */
   handleDeleteComment: (commentId: string) => Promise<boolean>;
   /** Handler for updating read status */
-  handleReadStatusChange?: (threadId: string, isRead: boolean) => void;
+  handleReadStatusChange?: (threadId: string, markRead: boolean) => void;
   /**
    * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
    * (empty string) for unassigned.

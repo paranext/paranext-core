@@ -3,14 +3,16 @@ using Paratext.Data.ProjectComments;
 namespace Paranext.DataProvider.JsonUtils;
 
 /// <summary>
-/// Wrapper class for Comment that includes read status for JSON serialization
+/// Represents a project comment. This class adapts <see cref="Comment"/> — generally referred to as
+/// a project note in the Paratext 9 UI — by adding read-status information and making it suitable
+/// for JSON serialization.
 /// </summary>
-public class PlatformCommentWrapper
+public class PlatformComment
 {
     private readonly Comment _comment;
-    private readonly PlatformCommentThreadWrapper? _thread;
+    private readonly PlatformCommentThread? _thread;
 
-    public PlatformCommentWrapper(Comment comment, PlatformCommentThreadWrapper? thread = null)
+    public PlatformComment(Comment comment, PlatformCommentThread? thread = null)
     {
         if (comment == null)
         {
@@ -49,8 +51,9 @@ public class PlatformCommentWrapper
     public string Date => _comment.Date;
     public bool Deleted => _comment.Deleted;
 
-    // In practice, I think ParatextData always sets SelectedText to a non-null value.
-    public string SelectedText => _comment.SelectedText ?? string.Empty;
+    // Note: SelectedText defaults to empty string, but the JSON converter will set it to null if it is
+    // not supplied in the JSON.
+    public string? SelectedText => _comment.SelectedText;
     public int StartPosition => _comment.StartPosition;
     public string? ContextBefore => _comment.ContextBefore;
     public string? ContextAfter => _comment.ContextAfter;

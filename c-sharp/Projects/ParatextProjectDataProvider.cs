@@ -180,14 +180,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Comments
-    public List<PlatformCommentThreadWrapper> GetCommentThreads(CommentThreadSelector selector)
+    public List<PlatformCommentThread> GetCommentThreads(CommentThreadSelector selector)
     {
         // Get all threads (activeOnly=false to include threads with deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
         // If no selector provided or all properties are null/default, return all thread IDs
         if (selector == null || selector.IsEmpty)
-            return allThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
+            return allThreads.Select(t => new PlatformCommentThread(t)).ToList();
 
         // Apply filters
         IEnumerable<CommentThread> filteredThreads = allThreads;
@@ -228,7 +228,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
             filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
 
-        return filteredThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
+        return filteredThreads.Select(t => new PlatformCommentThread(t)).ToList();
     }
 
     public bool DeleteComment(string commentId)
@@ -279,11 +279,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <param name="comment">Comment data. Thread, User, and Date will be ignored/auto-generated.</param>
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     /// <exception cref="InvalidOperationException">If the selected text is invalid or the comment's
-    /// assigned (<see cref="PlatformCommentWrapper.AssignedUser"/>) cannot be assigned to threads
+    /// assigned (<see cref="PlatformComment.AssignedUser"/>) cannot be assigned to threads
     /// in this project.
-    public string CreateComment(PlatformCommentWrapper comment)
+    public string CreateComment(PlatformComment comment)
     {
-        if (comment.SelectedText.Contains('\\'))
+        if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
         {
             throw new InvalidOperationException(
                 "Invalid selection. Selected text must be a simple word or phrase. "
@@ -309,7 +309,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         CopyCommentProperties(comment, newComment);
 
         // Reformat USFM text in the comment by replacing newlines with spaces
-        newComment.SelectedText = ReplaceNewlinesWithSpaces(comment.SelectedText);
+        if (comment.SelectedText != null)
+            newComment.SelectedText = ReplaceNewlinesWithSpaces(comment.SelectedText);
 
         if (
             string.IsNullOrEmpty(newComment.Verse)
@@ -317,10 +318,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             && string.IsNullOrEmpty(newComment.ContextAfter)
         )
         {
+            // Check *incoming* values that do not necessarily get copied to newComment.
             if (
-                string.IsNullOrEmpty(newComment.VerseRefStr)
-                || comment.StartPosition < 0 // Check incoming comment b/c negative value does not get copied to newComment
-                || string.IsNullOrEmpty(newComment.SelectedText)
+                string.IsNullOrEmpty(comment.VerseRefStr) // This condition will throw exception below.
+                || comment.StartPosition < 0
+                || comment.SelectedText == null
             )
             {
                 Console.Error.WriteLine(
@@ -395,7 +397,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <param name="comment">Comment data. Must have a valid Thread ID that exists.</param>
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
-    public string AddCommentToThread(PlatformCommentWrapper comment)
+    public string AddCommentToThread(PlatformComment comment)
     {
         if (string.IsNullOrEmpty(comment.Thread))
             throw new InvalidDataException("Thread ID is required for AddCommentToThread");
@@ -476,13 +478,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// Copies properties from the source comment to the target comment, excluding
     /// auto-generated fields (Thread, User, Date).
     /// </summary>
-    private static void CopyCommentProperties(PlatformCommentWrapper source, Comment target)
+    private static void CopyCommentProperties(PlatformComment source, Comment target)
     {
         if (!string.IsNullOrEmpty(source.ContextAfter))
             target.ContextAfter = source.ContextAfter;
         if (!string.IsNullOrEmpty(source.ContextBefore))
             target.ContextBefore = source.ContextBefore;
-        if (source.SelectedText != string.Empty)
+        if (!string.IsNullOrEmpty(source.SelectedText))
             target.SelectedText = source.SelectedText;
         if (source.StartPosition >= 0)
             target.StartPosition = source.StartPosition;

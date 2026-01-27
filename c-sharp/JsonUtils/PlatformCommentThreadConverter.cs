@@ -6,7 +6,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the CommentThread TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class CommentThreadConverter : JsonConverter<PlatformCommentThreadWrapper>
+public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThread>
 {
     private const string ID = "id";
     private const string COMMENTS = "comments";
@@ -23,7 +23,7 @@ public class CommentThreadConverter : JsonConverter<PlatformCommentThreadWrapper
     private const string IS_READ = "isRead";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
 
-    public override PlatformCommentThreadWrapper Read(
+    public override PlatformCommentThread Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
@@ -34,7 +34,7 @@ public class CommentThreadConverter : JsonConverter<PlatformCommentThreadWrapper
 
     public override void Write(
         Utf8JsonWriter writer,
-        PlatformCommentThreadWrapper value,
+        PlatformCommentThread value,
         JsonSerializerOptions options
     )
     {

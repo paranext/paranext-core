@@ -84,7 +84,7 @@ namespace TestParanextDataProvider.Projects
             );
             var comment = new Comment(_scrText.User);
 
-            // Clear the auto-generated properties to create a "partial" comment
+            // Clear the User property to create a "partial" comment
             comment.User = null!; // Will be set by CreateComment with current user
             // REVIEW: This is quasi-illegal. It appears as though the public setter mainly exists
             // for deserialization purposes and to allow certain special-purpose comments to have
@@ -105,16 +105,37 @@ namespace TestParanextDataProvider.Projects
 
         #region CreateComment Tests
 
-        [Test]
-        public void CreateComment_ValidComment_ReturnsCommentId()
+        [TestCase("")] // This is the default
+        [TestCase("God")]
+        public void CreateComment_ValidComment_ReturnsCommentId(string selectedText)
         {
             // Arrange
             var comment = CreateTestComment("GEN", 1, 1, "This is a test comment");
+            comment.SelectedText = selectedText;
 
-            // Act
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            using var errorWriter = new StringWriter();
+            var originalError = Console.Error;
+            Console.SetError(errorWriter);
+
+            string? commentId = null;
+            try
+            {
+                // Act
+                commentId = _provider.CreateComment(new PlatformComment(comment));
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            var errorOutput = errorWriter.ToString();
 
             // Assert
+            Assert.That(
+                errorOutput,
+                Is.Empty,
+                "No errors should be written to Console.Error for a valid comment"
+            );
             Assert.That(commentId, Is.Not.Null);
             Assert.That(commentId, Is.Not.Empty);
             Assert.That(
@@ -156,9 +177,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
-            string firstCommentId = _provider.CreateComment(
-                new PlatformCommentWrapper(firstComment)
-            );
+            string firstCommentId = _provider.CreateComment(new PlatformComment(firstComment));
             ;
 
             // Retrieve the thread ID from the created comment
@@ -174,9 +193,7 @@ namespace TestParanextDataProvider.Projects
             );
 
             // Act
-            var secondCommentId = _provider.AddCommentToThread(
-                new PlatformCommentWrapper(secondComment)
-            );
+            var secondCommentId = _provider.AddCommentToThread(new PlatformComment(secondComment));
 
             // Assert
             Assert.That(secondCommentId, Is.Not.Null);
@@ -198,9 +215,9 @@ namespace TestParanextDataProvider.Projects
             var comment2 = CreateTestComment("GEN", 1, 1, "Second comment");
 
             // Act
-            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string commentId1 = _provider.CreateComment(new PlatformComment(comment1));
             ;
-            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string commentId2 = _provider.CreateComment(new PlatformComment(comment2));
             ;
 
             // Assert
@@ -220,7 +237,7 @@ namespace TestParanextDataProvider.Projects
 
             // Act + Assert
             var ex = Assert.Throws<InvalidOperationException>(
-                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+                () => _provider.CreateComment(new PlatformComment(comment))
             );
 
             Assert.That(ex!.Message, Does.Contain("Selected text cannot contain USFM markers"));
@@ -236,7 +253,7 @@ namespace TestParanextDataProvider.Projects
 
             // Act + Assert
             var ex = Assert.Throws<InvalidOperationException>(
-                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+                () => _provider.CreateComment(new PlatformComment(comment))
             );
 
             Assert.That(ex!.Message, Does.Contain("cannot be assigned to threads in this project"));
@@ -247,11 +264,6 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Use reference that doesn't exist in the test scrText
             var comment = CreateTestComment("GEN", 60, 3, "Test comment");
-
-            // Ensure fallback path is used
-            comment.Verse = null;
-            comment.ContextBefore = null;
-            comment.ContextAfter = null;
 
             comment.VerseRefStr = "GEN 60:3";
             comment.StartPosition = 0;
@@ -264,7 +276,7 @@ namespace TestParanextDataProvider.Projects
             try
             {
                 // Act
-                _provider.CreateComment(new PlatformCommentWrapper(comment));
+                _provider.CreateComment(new PlatformComment(comment));
             }
             finally
             {
@@ -280,30 +292,81 @@ namespace TestParanextDataProvider.Projects
             );
         }
 
-        [Test]
-        public void CreateComment_MissingVerseContextAndFallbackFields_WritesRequiredFieldsError()
+        [TestCase(-1, "God", null)]
+        [TestCase(-1, "God", "Just a test comment")]
+        [TestCase(0, null, "")]
+        [TestCase(0, null, "Just a test comment")]
+        public void CreateComment_SimulateMissingRequiredJSONFields_WritesRequiredFieldsError(
+            int startPosition,
+            string? selectedText,
+            string? commentText
+        )
         {
             // Arrange
-            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-
-            // Force the Verse / Context fallback path
-            comment.Verse = null;
-            comment.ContextBefore = null;
-            comment.ContextAfter = null;
+            var comment = new Comment(_scrText.User);
+            comment.VerseRefStr = "GEN 1:1";
+            if (commentText != null)
+                comment.AddTextToContent(commentText, false);
 
             // Break required fallback fields
-            comment.VerseRefStr = "GEN 1:1";
-            comment.StartPosition = -1;
-            comment.SelectedText = null;
+            comment.StartPosition = startPosition;
+            comment.SelectedText = selectedText;
 
             using var errorWriter = new StringWriter();
             var originalError = Console.Error;
             Console.SetError(errorWriter);
 
+            string? commentId = null;
             try
             {
                 // Act
-                _provider.CreateComment(new PlatformCommentWrapper(comment));
+                commentId = _provider.CreateComment(new PlatformComment(comment));
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            // Assert
+            Assert.That(
+                commentId,
+                Is.Not.Null,
+                "Comment should be created even though we complain about the missing required fields."
+            );
+
+            var errorOutput = errorWriter.ToString();
+
+            Assert.That(
+                errorOutput,
+                Does.Contain(
+                    "VerseRef, StartPosition, and SelectedText are required when Verse, ContextBefore, and ContextAfter are not provided"
+                ),
+                "Expected missing-required-fields error to be written to Console.Error"
+            );
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CreateComment_MissingScrVerseStr_ThrowsInvalidOperationException(
+            bool useEmptyString
+        )
+        {
+            // Arrange
+            var comment = new Comment(_scrText.User);
+            if (useEmptyString)
+                comment.VerseRefStr = "";
+
+            using var errorWriter = new StringWriter();
+            var originalError = Console.Error;
+            Console.SetError(errorWriter);
+
+            Exception? ex = null;
+            try
+            {
+                // Act
+                ex = Assert.Throws<InvalidOperationException>(
+                    () => _provider.CreateComment(new PlatformComment(comment))
+                );
             }
             finally
             {
@@ -320,28 +383,6 @@ namespace TestParanextDataProvider.Projects
                 ),
                 "Expected missing-required-fields error to be written to Console.Error"
             );
-        }
-
-        [Test]
-        public void CreateComment_InvalidSelection_ThrowsInvalidOperationException()
-        {
-            // Arrange
-            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-
-            // Force the Verse / Context fallback path
-            comment.Verse = null;
-            comment.ContextBefore = null;
-            comment.ContextAfter = null;
-
-            // Break required fallback fields
-            comment.VerseRefStr = null;
-            comment.StartPosition = -1;
-            comment.SelectedText = null;
-
-            // Act + Assert
-            var ex = Assert.Throws<InvalidOperationException>(
-                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
-            );
 
             Assert.That(ex!.Message, Does.Contain("Invalid Scripture selection:"));
         }
@@ -355,10 +396,10 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create some comments first
             _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 1, "Comment 1"))
+                new PlatformComment(CreateTestComment("GEN", 1, 1, "Comment 1"))
             );
             _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 1, "Comment 2"))
+                new PlatformComment(CreateTestComment("GEN", 1, 1, "Comment 2"))
             );
 
             // Act
@@ -379,7 +420,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -399,10 +440,10 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create comments at different locations
             _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 1, "Comment at Gen 1:1"))
+                new PlatformComment(CreateTestComment("GEN", 1, 1, "Comment at Gen 1:1"))
             );
             _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 2, "Comment at Gen 1:2"))
+                new PlatformComment(CreateTestComment("GEN", 1, 2, "Comment at Gen 1:2"))
             );
 
             var selector = new CommentThreadSelector
@@ -440,15 +481,9 @@ namespace TestParanextDataProvider.Projects
         public void GetCommentThreads_EmptySelector_ReturnsAllThreads()
         {
             // Arrange
-            _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 1, "Test"))
-            );
-            _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 2, "Test"))
-            );
-            _provider.CreateComment(
-                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 3, "Test"))
-            );
+            _provider.CreateComment(new PlatformComment(CreateTestComment("GEN", 1, 1, "Test")));
+            _provider.CreateComment(new PlatformComment(CreateTestComment("GEN", 1, 2, "Test")));
+            _provider.CreateComment(new PlatformComment(CreateTestComment("GEN", 1, 3, "Test")));
 
             var emptySelector = new CommentThreadSelector();
 
@@ -469,7 +504,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment first
             var comment = CreateTestComment("GEN", 1, 1, "Comment to delete");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
 
             // Act
             bool result = _provider.DeleteComment(commentId);
@@ -528,7 +563,7 @@ namespace TestParanextDataProvider.Projects
             Assert.That(threads, Is.Empty);
 
             // Act - Create a comment
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -555,7 +590,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange & Act - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Comment to delete");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = commentId.Split('/')[0];
 
             // Verify it exists
@@ -587,11 +622,11 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange & Act
             var comment1 = CreateTestComment("GEN", 1, 1, "First comment");
-            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string commentId1 = _provider.CreateComment(new PlatformComment(comment1));
             ;
 
             var comment2 = CreateTestComment("GEN", 1, 1, "Second comment");
-            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string commentId2 = _provider.CreateComment(new PlatformComment(comment2));
             ;
 
             string threadId1 = commentId1.Split('/')[0];
@@ -623,7 +658,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange
             var comment = CreateTestComment("GEN", 1, 1, "Original content");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
 
             // Act
             bool result = _provider.UpdateComment(commentId, "Updated content");
@@ -683,9 +718,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a thread with multiple comments
             var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
-            string firstCommentId = _provider.CreateComment(
-                new PlatformCommentWrapper(firstComment)
-            );
+            string firstCommentId = _provider.CreateComment(new PlatformComment(firstComment));
             ;
 
             // Get the thread from the first comment
@@ -697,7 +730,7 @@ namespace TestParanextDataProvider.Projects
             // Add a second comment (reply) to the thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
             secondComment.Thread = threadId;
-            _provider.AddCommentToThread(new PlatformCommentWrapper(secondComment));
+            _provider.AddCommentToThread(new PlatformComment(secondComment));
 
             // Act & Assert - Try to update the first comment (not the last one)
             Assert.That(
@@ -713,9 +746,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a thread with multiple comments
             var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
-            string firstCommentId = _provider.CreateComment(
-                new PlatformCommentWrapper(firstComment)
-            );
+            string firstCommentId = _provider.CreateComment(new PlatformComment(firstComment));
             ;
 
             // Get the thread from the first comment
@@ -728,7 +759,7 @@ namespace TestParanextDataProvider.Projects
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment");
             secondComment.Thread = threadId;
             string secondCommentId = _provider.AddCommentToThread(
-                new PlatformCommentWrapper(secondComment)
+                new PlatformComment(secondComment)
             );
 
             // Act - Update the second comment (the last one in the thread)
@@ -757,7 +788,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolving");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -775,7 +806,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
+            _provider.AddCommentToThread(new PlatformComment(resolveComment));
 
             // Verify thread status is Resolved (displayed as 'deleted' internally by ParatextData)
             var threadAfter = _provider
@@ -818,7 +849,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create and resolve a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unresolving");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -830,7 +861,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
+            _provider.AddCommentToThread(new PlatformComment(resolveComment));
 
             // Get comment count after resolving
             var threadAfterResolve = _provider
@@ -844,7 +875,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 Status = NoteStatus.Todo
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
+            _provider.AddCommentToThread(new PlatformComment(unresolveComment));
             ;
 
             // Verify thread status is Todo
@@ -888,7 +919,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for filter");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -900,7 +931,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
+            _provider.AddCommentToThread(new PlatformComment(resolveComment));
 
             // Assert - Verify it appears in resolved filter (using ParatextData's 'deleted' label)
             var resolvedThreads = _provider.GetCommentThreads(
@@ -919,7 +950,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create and resolve a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -931,7 +962,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
+            _provider.AddCommentToThread(new PlatformComment(resolveComment));
 
             // Act - Unresolve it via AddCommentToThread
             var unresolveComment = new Comment(_scrText.User)
@@ -939,7 +970,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 Status = NoteStatus.Todo
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
+            _provider.AddCommentToThread(new PlatformComment(unresolveComment));
             ;
 
             // Assert - Verify it appears in Todo filter
@@ -966,7 +997,7 @@ namespace TestParanextDataProvider.Projects
 
             // Act & Assert - Should throw InvalidDataException
             Assert.That(
-                () => _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment)),
+                () => _provider.AddCommentToThread(new PlatformComment(resolveComment)),
                 Throws.InstanceOf<InvalidDataException>().With.Message.Contains("does not exist")
             );
         }
@@ -976,7 +1007,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple changes");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -989,17 +1020,17 @@ namespace TestParanextDataProvider.Projects
 
             // Act - Make multiple status changes via AddCommentToThread
             _provider.AddCommentToThread(
-                new PlatformCommentWrapper(
+                new PlatformComment(
                     new Comment(_scrText.User) { Thread = threadId, Status = NoteStatus.Resolved }
                 )
             ); // Resolve
             _provider.AddCommentToThread(
-                new PlatformCommentWrapper(
+                new PlatformComment(
                     new Comment(_scrText.User) { Thread = threadId, Status = NoteStatus.Todo }
                 )
             ); // Unresolve
             _provider.AddCommentToThread(
-                new PlatformCommentWrapper(
+                new PlatformComment(
                     new Comment(_scrText.User) { Thread = threadId, Status = NoteStatus.Resolved }
                 )
             ); // Resolve again
@@ -1025,7 +1056,7 @@ namespace TestParanextDataProvider.Projects
             // Verify comments are all marked as read
             Assert.That(
                 thread.Comments,
-                Is.All.Matches<PlatformCommentWrapper>(c => c.IsRead),
+                Is.All.Matches<PlatformComment>(c => c.IsRead),
                 "All comments should be marked as read"
             );
         }
@@ -1082,7 +1113,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for team assignment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1094,7 +1125,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
+            _provider.AddCommentToThread(new PlatformComment(assignComment));
 
             // Assert - Verify the thread is assigned to Team
             var thread = _provider
@@ -1112,7 +1143,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment and assign it first
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for unassignment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1124,7 +1155,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
+            _provider.AddCommentToThread(new PlatformComment(assignComment));
 
             // Act - Unassign (empty string) via AddCommentToThread
             var unassignComment = new Comment(_scrText.User)
@@ -1132,7 +1163,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = ""
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(unassignComment));
+            _provider.AddCommentToThread(new PlatformComment(unassignComment));
 
             // Assert
             var thread = _provider
@@ -1157,7 +1188,7 @@ namespace TestParanextDataProvider.Projects
 
             // Act & Assert - Should throw InvalidDataException
             Assert.That(
-                () => _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment)),
+                () => _provider.AddCommentToThread(new PlatformComment(assignComment)),
                 Throws.InstanceOf<InvalidDataException>().With.Message.Contains("does not exist")
             );
         }
@@ -1167,7 +1198,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for invalid user");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1180,7 +1211,7 @@ namespace TestParanextDataProvider.Projects
                 AssignedUser = "InvalidUserNotInList"
             };
             Assert.That(
-                () => _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment)),
+                () => _provider.AddCommentToThread(new PlatformComment(assignComment)),
                 Throws.InvalidOperationException.With.Message.Contains("cannot be assigned")
             );
         }
@@ -1190,7 +1221,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for multiple assignments");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1198,17 +1229,17 @@ namespace TestParanextDataProvider.Projects
 
             // Act - Make multiple assignments via AddCommentToThread
             _provider.AddCommentToThread(
-                new PlatformCommentWrapper(
+                new PlatformComment(
                     new Comment(_scrText.User) { Thread = threadId, AssignedUser = "Team" }
                 )
             );
             _provider.AddCommentToThread(
-                new PlatformCommentWrapper(
+                new PlatformComment(
                     new Comment(_scrText.User) { Thread = threadId, AssignedUser = "" }
                 )
             ); // Unassign
             _provider.AddCommentToThread(
-                new PlatformCommentWrapper(
+                new PlatformComment(
                     new Comment(_scrText.User) { Thread = threadId, AssignedUser = "Team" }
                 )
             ); // Assign again
@@ -1229,7 +1260,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Original comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1246,7 +1277,7 @@ namespace TestParanextDataProvider.Projects
                 Thread = threadId,
                 AssignedUser = "Team"
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
+            _provider.AddCommentToThread(new PlatformComment(assignComment));
             ;
 
             // Assert - A new comment should have been created
@@ -1265,7 +1296,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Original comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1278,7 +1309,7 @@ namespace TestParanextDataProvider.Projects
                 AssignedUser = "Team"
             };
             assignComment.AddTextToContent("Assigning to team for review", false);
-            _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
+            _provider.AddCommentToThread(new PlatformComment(assignComment));
             ;
 
             // Assert - Verify the thread is assigned and has the new comment
@@ -1345,7 +1376,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for assignment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1373,7 +1404,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to establish a thread
             var comment = CreateTestComment("GEN", 1, 1, "Test comment for resolve");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1405,7 +1436,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment to edit");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
 
             // Act
             bool canEdit = _provider.CanUserEditOrDeleteComment(commentId);
@@ -1429,9 +1460,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a thread with multiple comments
             var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
-            string firstCommentId = _provider.CreateComment(
-                new PlatformCommentWrapper(firstComment)
-            );
+            string firstCommentId = _provider.CreateComment(new PlatformComment(firstComment));
             ;
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
@@ -1440,7 +1469,7 @@ namespace TestParanextDataProvider.Projects
 
             // Add a second comment to the same thread
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment", threadId);
-            _provider.AddCommentToThread(new PlatformCommentWrapper(secondComment));
+            _provider.AddCommentToThread(new PlatformComment(secondComment));
 
             // Act - Try to check if we can edit the first comment (not the last one)
             bool canEditFirst = _provider.CanUserEditOrDeleteComment(firstCommentId);
@@ -1458,9 +1487,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a thread with two comments
             var firstComment = CreateTestComment("GEN", 1, 1, "First comment");
-            string firstCommentId = _provider.CreateComment(
-                new PlatformCommentWrapper(firstComment)
-            );
+            string firstCommentId = _provider.CreateComment(new PlatformComment(firstComment));
             ;
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
@@ -1469,7 +1496,7 @@ namespace TestParanextDataProvider.Projects
 
             var secondComment = CreateTestComment("GEN", 1, 1, "Second comment", threadId);
             string secondCommentId = _provider.AddCommentToThread(
-                new PlatformCommentWrapper(secondComment)
+                new PlatformComment(secondComment)
             );
 
             // Verify first comment cannot be edited before delete
@@ -1500,7 +1527,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
 
             // Act
             var thread = _provider
@@ -1521,7 +1548,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to get a valid threadId
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1546,7 +1573,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to get a valid threadId
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))
@@ -1580,7 +1607,7 @@ namespace TestParanextDataProvider.Projects
         {
             // Arrange - Create a comment to get a valid threadId
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+            string commentId = _provider.CreateComment(new PlatformComment(comment));
             string threadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
                 .Single(t => t.Comments.Any(c => c.Id == commentId))

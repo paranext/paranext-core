@@ -9,7 +9,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the LegacyComment TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class CommentConverter : JsonConverter<PlatformCommentWrapper>
+public class PlatformCommentConverter : JsonConverter<PlatformComment>
 {
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
@@ -37,7 +37,19 @@ public class CommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string VERSE = "verse";
     private const string VERSE_REF = "verseRef";
 
-    public override PlatformCommentWrapper Read(
+    /// <summary>
+    /// Deserializes a <see cref="PlatformComment"/> from JSON.
+    /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// The JSON <c>contents</c> field could not be interpreted as XML content,
+    /// or a data field contains an invalid enum value.
+    /// </exception>
+    /// <remarks>
+    /// The JSON field <c>isRead</c> is intentionally ignored because read status is not stored in the
+    /// underlying <see cref="Comment"/> and is serialized separately. When serialized, the value is
+    /// read from the file where Paratext data stores read status.
+    /// </remarks>
+    public override PlatformComment Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
@@ -230,14 +242,14 @@ public class CommentConverter : JsonConverter<PlatformCommentWrapper>
                 $"WARNING: Actual comment ID ({comment.Id}) doesn't match the provided ID ({id})"
             );
 
-        var wrappedComment = new PlatformCommentWrapper(comment, null!);
+        var wrappedComment = new PlatformComment(comment, null!);
 
         return wrappedComment;
     }
 
     public override void Write(
         Utf8JsonWriter writer,
-        PlatformCommentWrapper value,
+        PlatformComment value,
         JsonSerializerOptions options
     )
     {

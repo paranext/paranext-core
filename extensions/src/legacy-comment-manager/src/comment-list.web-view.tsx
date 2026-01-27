@@ -242,19 +242,16 @@ global.webViewComponent = function CommentListWebView({
   );
 
   const handleReadStatusChange = useCallback(
-    async (threadId: string, markAsRead: boolean): Promise<boolean> => {
-      if (!commentsPdp) {
-        logger.error('Comments PDP is not available');
-        return false;
-      }
-      try {
-        await commentsPdp.setIsCommentThreadRead(threadId, markAsRead);
-        return true;
-      } catch (error) {
-        logger.error(`Failed to set read status on thread ${threadId}:`, error);
-        return false;
-      }
-    },
+    async (threadId: string, markAsRead: boolean): Promise<boolean> =>
+      withPdp(commentsPdp, 'handleReadStatusChange', false, async (pdp) => {
+        try {
+          await pdp.setIsCommentThreadRead(threadId, markAsRead);
+          return true;
+        } catch (error) {
+          logger.error(`Failed to set read status on thread ${threadId}:`, error);
+          return false;
+        }
+      }),
     [commentsPdp],
   );
 
