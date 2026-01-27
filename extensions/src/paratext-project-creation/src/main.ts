@@ -54,6 +54,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
 }
 
+
 export async function deactivate() {
   logger.debug('Paratext Project Creation is deactivating!');
   return true;
