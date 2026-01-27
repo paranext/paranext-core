@@ -127,6 +127,45 @@ internal static class ProjectNameService
         bool forceNumbered = false
     )
     {
-        throw new NotImplementedException();
+        if (string.IsNullOrEmpty(baseShortName))
+        {
+            baseShortName = "MP";
+            baseLongName = "MP";
+        }
+
+        // Trim trailing digits from the short name base
+        string trimmedShort = Regex.Replace(baseShortName, @"\d+$", "");
+        string trimmedLong = Regex.Replace(baseLongName, @"\d+$", "").TrimEnd();
+
+        if (string.IsNullOrEmpty(trimmedShort))
+            trimmedShort = baseShortName;
+        if (string.IsNullOrEmpty(trimmedLong))
+            trimmedLong = baseLongName;
+
+        if (!forceNumbered)
+        {
+            var validation = ValidateShortName(baseShortName, true);
+            if (validation.IsValid)
+                return (baseShortName, baseLongName);
+            if (validation.ErrorCode != "SHORTNAME_EXISTS")
+                return (baseShortName, baseLongName);
+        }
+
+        // Append incrementing numbers starting at 2
+        for (int i = 2; i < 1000; i++)
+        {
+            string suffix = i.ToString();
+            int maxBase = 8 - suffix.Length;
+            string shortBase =
+                trimmedShort.Length > maxBase ? trimmedShort[..maxBase] : trimmedShort;
+            string candidateShort = shortBase + suffix;
+            string candidateLong = trimmedLong + suffix;
+
+            var validation = ValidateShortName(candidateShort, true);
+            if (validation.IsValid || validation.ErrorCode != "SHORTNAME_EXISTS")
+                return (candidateShort, candidateLong);
+        }
+
+        return (baseShortName, baseLongName);
     }
 }

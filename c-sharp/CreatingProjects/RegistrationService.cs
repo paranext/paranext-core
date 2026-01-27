@@ -82,6 +82,9 @@ internal static class RegistrationService
 
     public static string InitiateOnlineRegistration(string projectGuid)
     {
-        throw new NotImplementedException();
+        if (string.IsNullOrEmpty(projectGuid))
+            throw new ArgumentException("Project GUID cannot be empty.", nameof(projectGuid));
+
+        return $"https://registry.paratext.org/register?guid={projectGuid}";
     }
 }

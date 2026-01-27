@@ -183,7 +183,38 @@ internal static class ProjectTypeService
 
     public static IReadOnlyList<ProjectReference> GetValidBaseProjects(ProjectType creatingType)
     {
-        throw new NotImplementedException();
+        var config = GetTypeConfiguration(creatingType);
+        if (!config.BaseProjectRequired)
+            return Array.Empty<ProjectReference>();
+
+        var results = new List<ProjectReference>();
+        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
+        {
+            string? guid = scrText.Settings?.Guid?.ToString();
+            if (guid == null)
+                continue;
+
+            if (!CanBeBasedOnType(creatingType, guid))
+                continue;
+
+            var candidateType = MapParatextDataProjectType(scrText.Settings.TranslationInfo.Type);
+            var candidateConfig = GetTypeConfiguration(candidateType);
+
+            results.Add(
+                new ProjectReference
+                {
+                    Guid = guid,
+                    ShortName = scrText.Name,
+                    FullName = scrText.Settings.FullName ?? scrText.Name,
+                    Versification = VersificationType.English,
+                    ProjectType = candidateType,
+                    IsScripture = candidateConfig.IsScripture,
+                    IsResource = false,
+                    IsRegistered = false,
+                }
+            );
+        }
+        return results;
     }
 
     internal static ProjectType MapParatextDataProjectType(

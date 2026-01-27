@@ -13,6 +13,19 @@ internal static class ProjectDefaultsService
         string? baseProjectGuid = null
     )
     {
-        throw new NotImplementedException();
+        var config = ProjectTypeService.GetTypeConfiguration(projectType);
+
+        return new CreateProjectRequest
+        {
+            ShortName = "",
+            FullName = "",
+            LanguageId = "",
+            Versification = VersificationType.English,
+            ProjectType = projectType,
+            BaseProjectGuid = baseProjectGuid,
+            Normalization = config.NormalizationDefault,
+            UsfmVersion = 3,
+            Editable = config.EditableDefault,
+        };
     }
 }
