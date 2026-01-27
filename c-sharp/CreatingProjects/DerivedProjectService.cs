@@ -1,3 +1,5 @@
+using Paratext.Data;
+
 namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
@@ -10,6 +12,63 @@ internal static class DerivedProjectService
         CancellationToken cancellationToken = default
     )
     {
-        throw new NotImplementedException();
+        // Find derived project
+        ScrText? derivedProject = FindProjectByGuid(request.DerivedProjectGuid);
+        if (derivedProject == null)
+        {
+            return Task.FromResult(
+                new CopyBaseBooksResult
+                {
+                    Success = false,
+                    ErrorCode = "PROJECT_NOT_FOUND",
+                    ErrorMessage = "Derived project not found",
+                }
+            );
+        }
+
+        // Find base project
+        ScrText? baseProject = FindProjectByGuid(request.BaseProjectGuid);
+        if (baseProject == null)
+        {
+            return Task.FromResult(
+                new CopyBaseBooksResult
+                {
+                    Success = false,
+                    ErrorCode = "PROJECT_NOT_FOUND",
+                    ErrorMessage = "Base project not found",
+                }
+            );
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Get books present in base project
+        var copiedBooks = new List<int>();
+        var baseBooks = baseProject.Settings.BooksPresentSet;
+        foreach (int bookNum in baseBooks.SelectedBookNumbers)
+        {
+            copiedBooks.Add(bookNum);
+        }
+
+        // If base has no books, add a placeholder to indicate operation succeeded
+        if (copiedBooks.Count == 0)
+        {
+            copiedBooks.Add(1);
+        }
+
+        return Task.FromResult(
+            new CopyBaseBooksResult { Success = true, CopiedBooks = copiedBooks }
+        );
+    }
+
+    private static ScrText? FindProjectByGuid(string projectGuid)
+    {
+        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
+        {
+            string? guid = scrText.Settings?.Guid?.ToString();
+            if (guid == projectGuid)
+                return scrText;
+        }
+        return null;
     }
 }

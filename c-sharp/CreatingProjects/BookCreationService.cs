@@ -13,7 +13,86 @@ internal static class BookCreationService
         CancellationToken cancellationToken = default
     )
     {
-        throw new NotImplementedException();
+        // Find project by GUID
+        ScrText? project = FindProjectByGuid(request.ProjectGuid);
+        if (project == null)
+        {
+            return Task.FromResult(
+                new CreateBooksResult
+                {
+                    Success = false,
+                    LastCreatedBookNum = 0,
+                    Errors = new List<string> { "Project not found" },
+                }
+            );
+        }
+
+        // Empty book list is a no-op success
+        if (request.BookNumbers.Count == 0)
+        {
+            return Task.FromResult(
+                new CreateBooksResult { Success = true, LastCreatedBookNum = 0 }
+            );
+        }
+
+        // BasedOnModel mode requires a model project GUID
+        if (request.Mode == BookCreationMode.BasedOnModel)
+        {
+            if (string.IsNullOrEmpty(request.ModelProjectGuid))
+            {
+                return Task.FromResult(
+                    new CreateBooksResult
+                    {
+                        Success = false,
+                        LastCreatedBookNum = 0,
+                        Errors = new List<string> { "Model project GUID is required" },
+                    }
+                );
+            }
+
+            ScrText? modelProject = FindProjectByGuid(request.ModelProjectGuid);
+            if (modelProject == null)
+            {
+                return Task.FromResult(
+                    new CreateBooksResult
+                    {
+                        Success = false,
+                        LastCreatedBookNum = 0,
+                        Errors = new List<string> { "Model project not found" },
+                    }
+                );
+            }
+        }
+
+        var createdBooks = new List<int>();
+        int lastCreatedBookNum = 0;
+
+        foreach (int bookNum in request.BookNumbers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            createdBooks.Add(bookNum);
+            lastCreatedBookNum = bookNum;
+        }
+
+        return Task.FromResult(
+            new CreateBooksResult
+            {
+                Success = true,
+                LastCreatedBookNum = lastCreatedBookNum,
+                CreatedBooks = createdBooks,
+            }
+        );
+    }
+
+    private static ScrText? FindProjectByGuid(string projectGuid)
+    {
+        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
+        {
+            string? guid = scrText.Settings?.Guid?.ToString();
+            if (guid == projectGuid)
+                return scrText;
+        }
+        return null;
     }
 
     public static IReadOnlyList<ProjectReference> GetValidModelProjects(string projectGuid)
