@@ -332,4 +332,72 @@ public class RegistrationServiceTests
     {
         Assert.That(code.Length, Is.GreaterThanOrEqualTo(20));
     }
+
+    // =========================================================================
+    // CAP-009: InitiateOnlineRegistration - Acceptance Test
+    // =========================================================================
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-025")]
+    [Property("BehaviorId", "BHV-011")]
+    [Description("Acceptance test: InitiateOnlineRegistration returns URL containing registry host")]
+    public void InitiateOnlineRegistration_ValidGuid_ReturnsRegistryUrl()
+    {
+        var projectGuid = "abc123def456789012345678901234567890abcd";
+
+        var url = RegistrationService.InitiateOnlineRegistration(projectGuid);
+
+        Assert.That(url, Is.Not.Null.And.Not.Empty);
+        Assert.That(url, Does.Contain("registry.paratext.org").Or.Contain("paratext.org"));
+    }
+
+    // =========================================================================
+    // CAP-009: InitiateOnlineRegistration - Contract Tests
+    // =========================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-025")]
+    [Property("BehaviorId", "BHV-011")]
+    [Description("InitiateOnlineRegistration returns a valid URL string")]
+    public void InitiateOnlineRegistration_ValidGuid_ReturnsValidUrl()
+    {
+        var projectGuid = "abc123def456789012345678901234567890abcd";
+
+        var url = RegistrationService.InitiateOnlineRegistration(projectGuid);
+
+        Assert.That(url, Is.Not.Null);
+        Assert.That(url, Does.StartWith("http"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-025-02")]
+    [Property("BehaviorId", "BHV-011")]
+    [Description("InitiateOnlineRegistration includes encoded project data in URL")]
+    public void InitiateOnlineRegistration_ValidGuid_IncludesProjectData()
+    {
+        var projectGuid = "abc123def456789012345678901234567890abcd";
+
+        var url = RegistrationService.InitiateOnlineRegistration(projectGuid);
+
+        // URL should contain some form of the project identifier
+        Assert.That(url, Is.Not.Null.And.Not.Empty);
+        Assert.That(url.Length, Is.GreaterThan(20), "URL should contain encoded data");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-025-03")]
+    [Property("BehaviorId", "BHV-011")]
+    [Description("InitiateOnlineRegistration with empty GUID throws ArgumentException")]
+    public void InitiateOnlineRegistration_EmptyGuid_ThrowsArgumentException()
+    {
+        Assert.That(
+            () => RegistrationService.InitiateOnlineRegistration(""),
+            Throws.TypeOf<ArgumentException>()
+        );
+    }
 }

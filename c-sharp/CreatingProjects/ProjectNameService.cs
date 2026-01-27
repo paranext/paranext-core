@@ -117,4 +117,16 @@ internal static class ProjectNameService
 
         return result;
     }
+
+    /// <summary>
+    /// Generates a unique project name by appending numbers if needed.
+    /// </summary>
+    public static (string ShortName, string LongName) GenerateUniqueName(
+        string baseShortName,
+        string baseLongName,
+        bool forceNumbered = false
+    )
+    {
+        throw new NotImplementedException();
+    }
 }

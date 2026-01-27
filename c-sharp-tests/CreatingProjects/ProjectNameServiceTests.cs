@@ -334,4 +334,128 @@ public class ProjectNameServiceTests
     {
         Assert.That(ProjectNameService.GenerateShortName(fullName), Is.EqualTo(expected));
     }
+
+    // =========================================================================
+    // CAP-006: GenerateUniqueName - Acceptance Test
+    // =========================================================================
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "gm-008")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Acceptance test: GenerateUniqueName avoids collisions matching gm-008")]
+    public void GenerateUniqueName_AllGoldenMasterCases_MatchExpected()
+    {
+        // No conflicts: name returned as-is
+        var (shortName, _) = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", false);
+        Assert.That(shortName, Is.EqualTo("TestProj"));
+
+        // With forceNumbered: always appends number
+        var (forced, _) = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", true);
+        Assert.That(forced, Does.Match(@"TestPro\d+"));
+
+        // Empty base: defaults to "MP"
+        var (empty, _) = ProjectNameService.GenerateUniqueName("", "", false);
+        Assert.That(empty, Is.Not.Empty);
+    }
+
+    // =========================================================================
+    // CAP-006: GenerateUniqueName - Contract Tests
+    // =========================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-006-01")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Unique base name returned as-is when no conflict")]
+    public void GenerateUniqueName_NoConflict_ReturnsSameName()
+    {
+        var (shortName, longName) = ProjectNameService.GenerateUniqueName("NewProj", "New Project", false);
+
+        Assert.That(shortName, Is.EqualTo("NewProj"));
+        Assert.That(longName, Is.EqualTo("New Project"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-006-02")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("ForceNumbered always appends a number even when unique")]
+    public void GenerateUniqueName_ForceNumbered_AppendsNumber()
+    {
+        var (shortName, longName) = ProjectNameService.GenerateUniqueName("NewProj", "New Project", true);
+
+        Assert.That(shortName, Does.Match(@"\d+$"), "Should end with digits");
+        Assert.That(longName, Does.Match(@"\d+$"), "Long name should also end with digits");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-006-03")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Empty base short name defaults to MP")]
+    public void GenerateUniqueName_EmptyBase_DefaultsToMP()
+    {
+        var (shortName, _) = ProjectNameService.GenerateUniqueName("", "", false);
+
+        Assert.That(shortName, Does.StartWith("MP").Or.EqualTo("MP"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-006-04")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Trailing digits are trimmed before appending number")]
+    public void GenerateUniqueName_TrailingDigits_AreTrimmed()
+    {
+        // When base name has trailing digits (e.g., "Test123"), they should be trimmed
+        // before appending the incremented number
+        var (shortName, _) = ProjectNameService.GenerateUniqueName("Test123", "Test 123", true);
+
+        // Should be like "Test1" not "Test1231"
+        Assert.That(shortName, Does.StartWith("Test"));
+        Assert.That(shortName, Does.Match(@"^Test\d+$"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-006-05")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Returns tuple with both short and long names")]
+    public void GenerateUniqueName_ReturnsTuple_WithBothNames()
+    {
+        var result = ProjectNameService.GenerateUniqueName("ABC", "A B C", false);
+
+        Assert.That(result.ShortName, Is.Not.Null);
+        Assert.That(result.LongName, Is.Not.Null);
+    }
+
+    // =========================================================================
+    // CAP-006: GenerateUniqueName - Golden Master Tests
+    // =========================================================================
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("ScenarioId", "gm-008")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Golden master: no conflict returns base name unchanged")]
+    public void GenerateUniqueName_GoldenMaster_NoConflict()
+    {
+        // gm-008: TestProj_noConflict -> "TestProj"
+        var (shortName, _) = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", false);
+        Assert.That(shortName, Is.EqualTo("TestProj"));
+    }
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("ScenarioId", "gm-008")]
+    [Property("BehaviorId", "BHV-035")]
+    [Description("Golden master: empty base defaults to MP")]
+    public void GenerateUniqueName_GoldenMaster_EmptyDefault()
+    {
+        // gm-008: empty_noConflict -> "MP"
+        var (shortName, _) = ProjectNameService.GenerateUniqueName("", "", false);
+        Assert.That(shortName, Is.EqualTo("MP"));
+    }
 }

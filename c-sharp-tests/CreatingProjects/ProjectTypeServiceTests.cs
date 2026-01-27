@@ -438,6 +438,148 @@ public class ProjectTypeServiceTests
     }
 
     // =========================================================================
+    // CAP-003: GetValidBaseProjects - Acceptance Test
+    // =========================================================================
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-003")]
+    [Property("ScenarioId", "gm-002")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("Acceptance test: GetValidBaseProjects returns filtered list matching gm-002")]
+    public void GetValidBaseProjects_AllDerivedTypes_ReturnCorrectlyFilteredProjects()
+    {
+        // Set up projects of different types in the collection
+        var standardGuid = AddDummyProject("StdBase", ProjectType.Standard);
+        var btGuid = AddDummyProject("BTProj", ProjectType.BackTranslation);
+        var auxGuid = AddDummyProject("AuxProj", ProjectType.Auxiliary);
+
+        // Auxiliary: should only include Standard base
+        var auxBases = ProjectTypeService.GetValidBaseProjects(ProjectType.Auxiliary);
+        Assert.That(auxBases.Any(p => p.Guid == standardGuid), Is.True, "Auxiliary should include Standard");
+        Assert.That(auxBases.Any(p => p.Guid == auxGuid), Is.False, "Auxiliary should exclude Auxiliary");
+
+        // BackTranslation: should include scripture types (Standard, BT) but not Auxiliary
+        var btBases = ProjectTypeService.GetValidBaseProjects(ProjectType.BackTranslation);
+        Assert.That(btBases.Any(p => p.Guid == standardGuid), Is.True, "BT should include Standard");
+        Assert.That(btBases.Any(p => p.Guid == auxGuid), Is.False, "BT should exclude Auxiliary");
+    }
+
+    // =========================================================================
+    // CAP-003: GetValidBaseProjects - Contract Tests
+    // =========================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-003-01")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("GetValidBaseProjects returns ProjectReference list with correct properties")]
+    public void GetValidBaseProjects_StandardBase_ReturnsProjectReferences()
+    {
+        var guid = AddDummyProject("BaseProj", ProjectType.Standard);
+
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.BackTranslation);
+
+        Assert.That(result, Is.Not.Empty);
+        var proj = result.FirstOrDefault(p => p.Guid == guid);
+        Assert.That(proj, Is.Not.Null);
+        Assert.That(proj!.ShortName, Is.Not.Empty);
+        Assert.That(proj.ProjectType, Is.EqualTo(ProjectType.Standard));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-003-02")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("GetValidBaseProjects for Standard returns empty (not a derived type)")]
+    public void GetValidBaseProjects_Standard_ReturnsEmpty()
+    {
+        AddDummyProject("SomeProj", ProjectType.Standard);
+
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.Standard);
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-003-03")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("GetValidBaseProjects for Auxiliary returns only Standard projects")]
+    public void GetValidBaseProjects_Auxiliary_ReturnsOnlyStandard()
+    {
+        var stdGuid = AddDummyProject("StdProj", ProjectType.Standard);
+        AddDummyProject("BTProj2", ProjectType.BackTranslation);
+
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.Auxiliary);
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Guid, Is.EqualTo(stdGuid));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-003-04")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("GetValidBaseProjects for ConsultantNotes returns empty (not derived)")]
+    public void GetValidBaseProjects_ConsultantNotes_ReturnsEmpty()
+    {
+        AddDummyProject("SomeProj2", ProjectType.Standard);
+
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.ConsultantNotes);
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-003-05")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("GetValidBaseProjects with empty collection returns empty list")]
+    public void GetValidBaseProjects_NoProjects_ReturnsEmpty()
+    {
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.BackTranslation);
+
+        Assert.That(result, Is.Empty);
+    }
+
+    // =========================================================================
+    // CAP-003: GetValidBaseProjects - Golden Master Tests
+    // =========================================================================
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("ScenarioId", "gm-002")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("Golden master: StudyBibleAdditions excludes StudyBible and SBA projects")]
+    public void GetValidBaseProjects_SBA_ExcludesStudyBibleTypes()
+    {
+        var stdGuid = AddDummyProject("StdForSBA", ProjectType.Standard);
+        var sbGuid = AddDummyProject("SBProj2", ProjectType.StudyBible);
+
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.StudyBibleAdditions);
+
+        Assert.That(result.Any(p => p.Guid == stdGuid), Is.True, "SBA should include Standard");
+        Assert.That(result.Any(p => p.Guid == sbGuid), Is.False, "SBA should exclude StudyBible");
+    }
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("ScenarioId", "gm-002")]
+    [Property("BehaviorId", "BHV-027")]
+    [Description("Golden master: Transliteration types use scriptureOnly filter")]
+    public void GetValidBaseProjects_Transliteration_UsesScriptureFilter()
+    {
+        var stdGuid = AddDummyProject("StdForTM", ProjectType.Standard);
+        var auxGuid2 = AddDummyProject("AuxForTM", ProjectType.Auxiliary);
+
+        var result = ProjectTypeService.GetValidBaseProjects(ProjectType.TransliterationManual);
+
+        Assert.That(result.Any(p => p.Guid == stdGuid), Is.True, "TM should include Standard");
+        Assert.That(result.Any(p => p.Guid == auxGuid2), Is.False, "TM should exclude Auxiliary");
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
