@@ -8,6 +8,11 @@ import {
 } from './checks-side-panel.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
+  ProjectPropertiesWebViewOptions,
+  ProjectPropertiesWebViewProvider,
+  PROJECT_PROPERTIES_WEB_VIEW_TYPE,
+} from './project-properties.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -152,6 +157,31 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
+/**
+ * Opens the Project Properties dialog for creating a new project or editing an existing one.
+ *
+ * @param mode - 'new' for creating a project, 'edit' for modifying existing
+ * @param projectId - Project ID (required for edit mode)
+ * @returns The web view ID of the opened dialog, or undefined if failed
+ */
+async function openProjectProperties(
+  mode: 'new' | 'edit' = 'new',
+  projectId?: string,
+): Promise<string | undefined> {
+  logger.debug(`Opening project properties dialog in ${mode} mode`);
+
+  const options: ProjectPropertiesWebViewOptions = {
+    mode,
+    projectId,
+  };
+
+  return papi.webViews.openWebView(
+    PROJECT_PROPERTIES_WEB_VIEW_TYPE,
+    { type: 'float', floatSize: { width: 800, height: 600 } },
+    options,
+  );
+}
+
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
@@ -240,6 +270,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
+  const projectPropertiesWebViewProvider = new ProjectPropertiesWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -418,6 +449,39 @@ export async function activate(context: ExecutionActivationContext) {
     findWebViewProvider,
   );
 
+  const openProjectPropertiesPromise = papi.commands.registerCommand(
+    'platformScripture.openProjectProperties',
+    openProjectProperties,
+    {
+      method: {
+        summary: 'Open the Project Properties dialog for creating or editing a project',
+        params: [
+          {
+            name: 'mode',
+            required: false,
+            summary: 'Mode: "new" for creating a project, "edit" for modifying existing',
+            schema: { type: 'string', enum: ['new', 'edit'] },
+          },
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'Project ID (required for edit mode)',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The web view ID of the opened Project Properties dialog',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const projectPropertiesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    PROJECT_PROPERTIES_WEB_VIEW_TYPE,
+    projectPropertiesWebViewProvider,
+  );
+
   const invalidateResultsPromise = papi.commands.registerCommand(
     'platformScripture.invalidateCheckResults',
     async (details: CheckResultsInvalidated) => {
@@ -473,6 +537,8 @@ export async function activate(context: ExecutionActivationContext) {
     await showChecksSidePanelWebViewProviderPromise,
     await openFindPromise,
     await openFindWebViewProviderPromise,
+    await openProjectPropertiesPromise,
+    await projectPropertiesWebViewProviderPromise,
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,

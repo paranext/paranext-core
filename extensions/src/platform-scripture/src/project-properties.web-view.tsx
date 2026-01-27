@@ -711,7 +711,7 @@ interface GeneralTabProps {
   onOpenProjectNameDialog: () => void;
   onOpenLanguageDialog: (isNew: boolean) => void;
   filteredBaseProjects: ProjectReference[];
-  registerFieldRef: (fieldId: string, element: HTMLElement | undefined) => void;
+  registerFieldRef: (fieldId: string, element: HTMLElement | null) => void;
   getFieldError: (
     fieldId: string,
     errors: FormValidationError[],
@@ -781,7 +781,7 @@ function GeneralTab({
               </Label>
               <div
                 className="tw-flex-1"
-                ref={(el) => registerFieldRef('fullName', el?.querySelector('input') || undefined)}
+                ref={(el) => registerFieldRef('fullName', el?.querySelector('input') ?? null)}
               >
                 <Input
                   id="full-name"
@@ -805,7 +805,7 @@ function GeneralTab({
               </Label>
               <div
                 className="tw-flex-1"
-                ref={(el) => registerFieldRef('shortName', el?.querySelector('input') || undefined)}
+                ref={(el) => registerFieldRef('shortName', el?.querySelector('input') ?? null)}
               >
                 <Input
                   id="short-name"
@@ -845,7 +845,7 @@ function GeneralTab({
             </Label>
             <div
               className="tw-flex-1"
-              ref={(el) => registerFieldRef('languageId', el?.querySelector('input') || undefined)}
+              ref={(el) => registerFieldRef('languageId', el?.querySelector('input') ?? null)}
             >
               <Input
                 id="language"
@@ -896,7 +896,7 @@ function GeneralTab({
       {/* Project Type */}
       <div
         className="tw-flex tw-items-center tw-gap-2"
-        ref={(el) => registerFieldRef('projectType', el?.querySelector('button') || undefined)}
+        ref={(el) => registerFieldRef('projectType', el?.querySelector('button') ?? null)}
       >
         <Label htmlFor="project-type" className="tw-w-24 tw-shrink-0">
           Type of Project:
@@ -927,9 +927,7 @@ function GeneralTab({
       {showBasedOn && (
         <div
           className="tw-flex tw-items-center tw-gap-2"
-          ref={(el) =>
-            registerFieldRef('baseProjectGuid', el?.querySelector('button') || undefined)
-          }
+          ref={(el) => registerFieldRef('baseProjectGuid', el?.querySelector('button') ?? null)}
         >
           <Label htmlFor="based-on" className="tw-w-24 tw-shrink-0">
             Based on:
@@ -1407,8 +1405,7 @@ function StudyBibleTab({ state, dispatch }: StudyBibleTabProps) {
  */
 globalThis.webViewComponent = function ProjectPropertiesWebView(
   // Props will be used for web view state management in the future
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  props: WebViewProps,
+  _props: WebViewProps,
 ) {
   // Initialize form state
   const [state, dispatch] = useReducer(formReducer, getInitialState('new'));
