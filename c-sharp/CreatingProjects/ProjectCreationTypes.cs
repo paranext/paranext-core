@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
@@ -34,6 +36,7 @@ internal static class ReservedNames
         };
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProjectType
 {
     NotSelected = 0,
@@ -56,6 +59,7 @@ public enum ProjectType
     EnhancedResource = 17,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProjectNormalization
 {
     Undefined = 0,
@@ -63,6 +67,7 @@ public enum ProjectNormalization
     NFD = 2,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RegistrationStatus
 {
     NotSelected,
@@ -72,6 +77,7 @@ public enum RegistrationStatus
     NotApplicable,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum BookCreationMode
 {
     Empty = 0,
@@ -79,6 +85,7 @@ public enum BookCreationMode
     BasedOnModel = 2,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum VersificationType
 {
     Unknown = 0,

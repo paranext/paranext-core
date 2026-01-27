@@ -91,6 +91,7 @@ interface FormState {
   // UI state
   loading: boolean;
   error: string | null;
+  success: boolean;
   validationMessages: ValidationMessage[];
 
   // Derived
@@ -114,6 +115,7 @@ type FormAction =
   | { type: 'SET_REGISTRATION_STATE'; payload: RegistrationState }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_SUCCESS'; payload: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string };
 
 function createInitialState(mode: 'new' | 'edit', projectId: string | null): FormState {
@@ -142,6 +144,7 @@ function createInitialState(mode: 'new' | 'edit', projectId: string | null): For
     typeConfig: null,
     loading: false,
     error: null,
+    success: false,
     validationMessages: [],
     minParatextVersion: '',
   };
@@ -203,6 +206,8 @@ function formReducer(state: FormState, action: FormAction): FormState {
       return { ...state, loading: action.payload };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
+    case 'SET_SUCCESS':
+      return { ...state, success: action.payload };
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload };
     default:
@@ -414,6 +419,7 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
         shortName: state.shortName,
         fullName: state.fullName,
         languageId: state.languageId,
+        languageName: state.languageName || undefined,
         versification: state.versification,
         projectType: state.projectType,
         baseProjectGuid: state.baseProjectGuid ?? undefined,
@@ -436,7 +442,10 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
         });
       }
 
-      if (!result.success) {
+      if (result.success) {
+        logger.info(`Project created successfully: ${result.projectGuid}`);
+        dispatch({ type: 'SET_SUCCESS', payload: true });
+      } else {
         dispatch({ type: 'SET_ERROR', payload: result.errorMessage ?? 'Project creation failed' });
       }
     } catch (e) {
@@ -604,6 +613,17 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
           )}
         </Tabs>
       </div>
+
+      {/* Success banner */}
+      {state.success && (
+        <div className="tw-px-4 tw-py-2">
+          <Alert className="tw-py-1 tw-px-3">
+            <AlertDescription className="tw-text-sm tw-text-green-700">
+              Project created successfully. You may close this window.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
 
       {/* Validation ribbon (GAP-007) */}
       {validationMessages.length > 0 && (

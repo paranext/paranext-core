@@ -26,7 +26,8 @@
     "lint:styles": "stylelint **/*.{css,scss} --allow-empty-input",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
-    "bump-versions": "ts-node ./lib/bump-versions.ts"
+    "bump-versions": "ts-node ./lib/bump-versions.ts",
+    "test": "vitest"
   },
   "browserslist": [],
   "peerDependencies": {

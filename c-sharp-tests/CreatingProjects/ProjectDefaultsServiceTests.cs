@@ -433,10 +433,16 @@ public class ProjectDefaultsServiceTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.ProjectGuid, Is.Not.Null.And.Not.Empty);
+        // ParatextData uses HexId (40-char hex string), not standard GUIDs
         Assert.That(
-            Guid.TryParse(result.ProjectGuid, out _),
+            result.ProjectGuid!.Length,
+            Is.EqualTo(40),
+            "ProjectGuid must be a 40-character HexId"
+        );
+        Assert.That(
+            result.ProjectGuid.All(c => "0123456789abcdef".Contains(c)),
             Is.True,
-            "ProjectGuid must be a valid GUID format"
+            "ProjectGuid must contain only hex characters"
         );
     }
 

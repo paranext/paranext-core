@@ -155,6 +155,7 @@ declare module 'paratext-project-creation' {
     shortName: string;
     fullName: string;
     languageId: string;
+    languageName?: string;
     versification: VersificationType;
     projectType: ProjectType;
     baseProjectGuid?: string;

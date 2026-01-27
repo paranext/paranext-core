@@ -5,6 +5,7 @@ public record CreateProjectRequest
     public required string ShortName { get; init; }
     public required string FullName { get; init; }
     public required string LanguageId { get; init; }
+    public string? LanguageName { get; init; }
     public required VersificationType Versification { get; init; }
     public required ProjectType ProjectType { get; init; }
     public string? BaseProjectGuid { get; init; }

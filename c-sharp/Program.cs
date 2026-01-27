@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.CreatingProjects;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
@@ -62,12 +63,14 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var projectCreationCommandService = new ProjectCreationCommandService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                paratextRegistrationService.InitializeAsync()
+                paratextRegistrationService.InitializeAsync(),
+                projectCreationCommandService.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

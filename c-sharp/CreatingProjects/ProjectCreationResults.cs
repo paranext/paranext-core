@@ -23,6 +23,12 @@ public record CreateBooksResult
     public IReadOnlyList<int> CreatedBooks { get; init; } = Array.Empty<int>();
 }
 
+public record UniqueNameResult
+{
+    public required string ShortName { get; init; }
+    public required string LongName { get; init; }
+}
+
 public record CopyBaseBooksResult
 {
     public required bool Success { get; init; }

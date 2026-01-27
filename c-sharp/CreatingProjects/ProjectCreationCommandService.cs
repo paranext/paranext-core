@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Paranext.DataProvider.Services;
 
 namespace Paranext.DataProvider.CreatingProjects;
@@ -10,9 +9,6 @@ namespace Paranext.DataProvider.CreatingProjects;
 internal class ProjectCreationCommandService(PapiClient papiClient)
 {
     private PapiClient PapiClient { get; } = papiClient;
-
-    private static readonly JsonSerializerOptions s_jsonOptions =
-        new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>
     /// Registers all project creation commands on the PAPI.
@@ -43,8 +39,8 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         // 4. validateShortName
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.validateShortName",
-            (string shortName, bool isNewProject) =>
-                ProjectNameService.ValidateShortName(shortName, isNewProject)
+            (string shortName, bool isNewProject, string? originalName) =>
+                ProjectNameService.ValidateShortName(shortName, isNewProject, originalName)
         );
 
         // 5. generateShortName
@@ -91,100 +87,41 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         // 10. createProject
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.createProject",
-            (string requestJson) =>
-                DeserializeAndExecute<CreateProjectRequest, CreateProjectResult>(
-                    requestJson,
-                    request =>
-                        ProjectDefaultsService.CreateProjectAsync(request).GetAwaiter().GetResult(),
-                    () =>
-                        new CreateProjectResult
-                        {
-                            Success = false,
-                            ErrorCode = "INVALID_REQUEST",
-                            ErrorMessage = "Invalid request JSON",
-                        }
-                )
+            (CreateProjectRequest request) =>
+                ProjectDefaultsService.CreateProjectAsync(request).GetAwaiter().GetResult()
         );
 
-        // 10. createBooks
+        // 11. createBooks
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.createBooks",
-            (string requestJson) =>
-                DeserializeAndExecute<CreateBooksRequest, CreateBooksResult>(
-                    requestJson,
-                    request =>
-                        BookCreationService.CreateBooksAsync(request).GetAwaiter().GetResult(),
-                    () =>
-                        new CreateBooksResult
-                        {
-                            Success = false,
-                            LastCreatedBookNum = 0,
-                            Errors = new List<string> { "Invalid request JSON" },
-                        }
-                )
+            (CreateBooksRequest request) =>
+                BookCreationService.CreateBooksAsync(request).GetAwaiter().GetResult()
         );
 
-        // 11. cleanupProject
+        // 12. cleanupProject
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.cleanupProject",
-            (string requestJson) =>
-            {
-                var request = DeserializeRequest<CleanupProjectRequest>(requestJson);
-                if (request != null)
-                    ProjectCleanupService.CleanupProjectAsync(request).GetAwaiter().GetResult();
-            }
+            (string projectGuid, bool wasRegistered) =>
+                ProjectCleanupService
+                    .CleanupProjectAsync(
+                        new CleanupProjectRequest
+                        {
+                            ProjectGuid = projectGuid,
+                            WasRegistered = wasRegistered,
+                        }
+                    )
+                    .GetAwaiter()
+                    .GetResult()
         );
 
-        // 12. updateProject
+        // 13. updateProject
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.updateProject",
-            (string requestJson) =>
-                DeserializeAndExecute<UpdateProjectRequest, UpdateProjectResult>(
-                    requestJson,
-                    request =>
-                        ProjectUpdateService.UpdateProjectAsync(request).GetAwaiter().GetResult(),
-                    () =>
-                        new UpdateProjectResult
-                        {
-                            Success = false,
-                            ErrorCode = "INVALID_REQUEST",
-                            ErrorMessage = "Invalid request JSON",
-                        }
-                )
+            (UpdateProjectRequest request) =>
+                ProjectUpdateService.UpdateProjectAsync(request).GetAwaiter().GetResult()
         );
     }
 
     private static ProjectType ParseProjectType(string projectTypeStr) =>
         Enum.Parse<ProjectType>(projectTypeStr, ignoreCase: true);
-
-    /// <summary>
-    /// Deserializes a JSON string to a request object, returning null on failure.
-    /// </summary>
-    private static TRequest? DeserializeRequest<TRequest>(string json)
-        where TRequest : class
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<TRequest>(json, s_jsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Deserializes a JSON request and executes the handler, returning an error result on
-    /// deserialization failure.
-    /// </summary>
-    private static TResult DeserializeAndExecute<TRequest, TResult>(
-        string json,
-        Func<TRequest, TResult> handler,
-        Func<TResult> createErrorResult
-    )
-        where TRequest : class
-    {
-        var request = DeserializeRequest<TRequest>(json);
-        return request != null ? handler(request) : createErrorResult();
-    }
 }

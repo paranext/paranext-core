@@ -361,6 +361,7 @@ export function LanguageSelectionForm({
         'paratextProjectCreation.validateLanguage',
         fullLanguageCode,
         chosenLanguageName,
+        undefined,
       );
       if (!isMountedRef.current) return;
 
@@ -482,9 +483,9 @@ export function LanguageSelectionForm({
           ) : languages.length === 0 ? (
             <div className="tw-p-3 tw-text-sm tw-text-muted-foreground">No languages found</div>
           ) : (
-            languages.map((lang) => (
+            languages.map((lang, index) => (
               <div
-                key={lang.code}
+                key={`${lang.code}-${index}`}
                 role="row"
                 tabIndex={0}
                 className={cn(

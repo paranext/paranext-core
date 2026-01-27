@@ -348,16 +348,16 @@ public class ProjectNameServiceTests
     public void GenerateUniqueName_AllGoldenMasterCases_MatchExpected()
     {
         // No conflicts: name returned as-is
-        var (shortName, _) = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", false);
-        Assert.That(shortName, Is.EqualTo("TestProj"));
+        var result1 = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", false);
+        Assert.That(result1.ShortName, Is.EqualTo("TestProj"));
 
         // With forceNumbered: always appends number
-        var (forced, _) = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", true);
-        Assert.That(forced, Does.Match(@"TestPro\d+"));
+        var result2 = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", true);
+        Assert.That(result2.ShortName, Does.Match(@"TestPro\d+"));
 
         // Empty base: defaults to "MP"
-        var (empty, _) = ProjectNameService.GenerateUniqueName("", "", false);
-        Assert.That(empty, Is.Not.Empty);
+        var result3 = ProjectNameService.GenerateUniqueName("", "", false);
+        Assert.That(result3.ShortName, Is.Not.Empty);
     }
 
     // =========================================================================
@@ -371,10 +371,10 @@ public class ProjectNameServiceTests
     [Description("Unique base name returned as-is when no conflict")]
     public void GenerateUniqueName_NoConflict_ReturnsSameName()
     {
-        var (shortName, longName) = ProjectNameService.GenerateUniqueName("NewProj", "New Project", false);
+        var result = ProjectNameService.GenerateUniqueName("NewProj", "New Project", false);
 
-        Assert.That(shortName, Is.EqualTo("NewProj"));
-        Assert.That(longName, Is.EqualTo("New Project"));
+        Assert.That(result.ShortName, Is.EqualTo("NewProj"));
+        Assert.That(result.LongName, Is.EqualTo("New Project"));
     }
 
     [Test]
@@ -384,10 +384,10 @@ public class ProjectNameServiceTests
     [Description("ForceNumbered always appends a number even when unique")]
     public void GenerateUniqueName_ForceNumbered_AppendsNumber()
     {
-        var (shortName, longName) = ProjectNameService.GenerateUniqueName("NewProj", "New Project", true);
+        var result = ProjectNameService.GenerateUniqueName("NewProj", "New Project", true);
 
-        Assert.That(shortName, Does.Match(@"\d+$"), "Should end with digits");
-        Assert.That(longName, Does.Match(@"\d+$"), "Long name should also end with digits");
+        Assert.That(result.ShortName, Does.Match(@"\d+$"), "Should end with digits");
+        Assert.That(result.LongName, Does.Match(@"\d+$"), "Long name should also end with digits");
     }
 
     [Test]
@@ -397,9 +397,9 @@ public class ProjectNameServiceTests
     [Description("Empty base short name defaults to MP")]
     public void GenerateUniqueName_EmptyBase_DefaultsToMP()
     {
-        var (shortName, _) = ProjectNameService.GenerateUniqueName("", "", false);
+        var result = ProjectNameService.GenerateUniqueName("", "", false);
 
-        Assert.That(shortName, Does.StartWith("MP").Or.EqualTo("MP"));
+        Assert.That(result.ShortName, Does.StartWith("MP").Or.EqualTo("MP"));
     }
 
     [Test]
@@ -411,19 +411,19 @@ public class ProjectNameServiceTests
     {
         // When base name has trailing digits (e.g., "Test123"), they should be trimmed
         // before appending the incremented number
-        var (shortName, _) = ProjectNameService.GenerateUniqueName("Test123", "Test 123", true);
+        var result = ProjectNameService.GenerateUniqueName("Test123", "Test 123", true);
 
         // Should be like "Test1" not "Test1231"
-        Assert.That(shortName, Does.StartWith("Test"));
-        Assert.That(shortName, Does.Match(@"^Test\d+$"));
+        Assert.That(result.ShortName, Does.StartWith("Test"));
+        Assert.That(result.ShortName, Does.Match(@"^Test\d+$"));
     }
 
     [Test]
     [Category("Contract")]
     [Property("ScenarioId", "TS-006-05")]
     [Property("BehaviorId", "BHV-035")]
-    [Description("Returns tuple with both short and long names")]
-    public void GenerateUniqueName_ReturnsTuple_WithBothNames()
+    [Description("Returns result with both short and long names")]
+    public void GenerateUniqueName_ReturnsResult_WithBothNames()
     {
         var result = ProjectNameService.GenerateUniqueName("ABC", "A B C", false);
 
@@ -443,8 +443,8 @@ public class ProjectNameServiceTests
     public void GenerateUniqueName_GoldenMaster_NoConflict()
     {
         // gm-008: TestProj_noConflict -> "TestProj"
-        var (shortName, _) = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", false);
-        Assert.That(shortName, Is.EqualTo("TestProj"));
+        var result = ProjectNameService.GenerateUniqueName("TestProj", "Test Project", false);
+        Assert.That(result.ShortName, Is.EqualTo("TestProj"));
     }
 
     [Test]
@@ -455,7 +455,7 @@ public class ProjectNameServiceTests
     public void GenerateUniqueName_GoldenMaster_EmptyDefault()
     {
         // gm-008: empty_noConflict -> "MP"
-        var (shortName, _) = ProjectNameService.GenerateUniqueName("", "", false);
-        Assert.That(shortName, Is.EqualTo("MP"));
+        var result = ProjectNameService.GenerateUniqueName("", "", false);
+        Assert.That(result.ShortName, Is.EqualTo("MP"));
     }
 }

@@ -121,7 +121,7 @@ internal static class ProjectNameService
     /// <summary>
     /// Generates a unique project name by appending numbers if needed.
     /// </summary>
-    public static (string ShortName, string LongName) GenerateUniqueName(
+    public static UniqueNameResult GenerateUniqueName(
         string baseShortName,
         string baseLongName,
         bool forceNumbered = false
@@ -146,9 +146,9 @@ internal static class ProjectNameService
         {
             var validation = ValidateShortName(baseShortName, true);
             if (validation.IsValid)
-                return (baseShortName, baseLongName);
+                return new UniqueNameResult { ShortName = baseShortName, LongName = baseLongName };
             if (validation.ErrorCode != "SHORTNAME_EXISTS")
-                return (baseShortName, baseLongName);
+                return new UniqueNameResult { ShortName = baseShortName, LongName = baseLongName };
         }
 
         // Append incrementing numbers starting at 2
@@ -163,9 +163,13 @@ internal static class ProjectNameService
 
             var validation = ValidateShortName(candidateShort, true);
             if (validation.IsValid || validation.ErrorCode != "SHORTNAME_EXISTS")
-                return (candidateShort, candidateLong);
+                return new UniqueNameResult
+                {
+                    ShortName = candidateShort,
+                    LongName = candidateLong,
+                };
         }
 
-        return (baseShortName, baseLongName);
+        return new UniqueNameResult { ShortName = baseShortName, LongName = baseLongName };
     }
 }

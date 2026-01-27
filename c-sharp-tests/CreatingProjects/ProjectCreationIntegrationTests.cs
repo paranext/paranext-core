@@ -60,10 +60,10 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
             new object[] { "BackTranslation" }.ToList().AsReadOnly()
         );
 
-        // 4. validateShortName
+        // 4. validateShortName (3 args: shortName, isNewProject, originalName)
         var validateResult = await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.validateShortName",
-            new object[] { "TST", true }.ToList().AsReadOnly()
+            new object[] { "TST", true, null! }.ToList().AsReadOnly()
         );
 
         // 5. generateShortName
@@ -87,31 +87,31 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
         // 8. validateLanguage
         var langResult = await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.validateLanguage",
-            new object[] { "eng", "English", true }.ToList().AsReadOnly()
+            new object[] { "eng", "English", null }.ToList().AsReadOnly()
         );
 
         // 9. createProject
         var createResult = await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.createProject",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { new CreateProjectRequest { ShortName = "TST", FullName = "Test", LanguageId = "eng", Versification = VersificationType.English, ProjectType = ProjectType.Standard } }.ToList().AsReadOnly()
         );
 
         // 10. createBooks
         var booksResult = await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.createBooks",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { new CreateBooksRequest { ProjectGuid = "test-guid", BookNumbers = new List<int> { 1 }, Mode = BookCreationMode.Empty } }.ToList().AsReadOnly()
         );
 
-        // 11. cleanupProject
+        // 11. cleanupProject (positional args: projectGuid, wasRegistered)
         var cleanupResult = await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.cleanupProject",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { "test-guid", false }.ToList().AsReadOnly()
         );
 
         // 12. updateProject
         var updateResult = await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.updateProject",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { new UpdateProjectRequest { ProjectGuid = "test-guid" } }.ToList().AsReadOnly()
         );
 
         // If we reach here without exceptions, all 12 commands were registered
@@ -178,7 +178,7 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
     {
         var result = await Client.SendRequestAsync<ValidationResult>(
             "command:paratextProjectCreation.validateShortName",
-            new object[] { "TST", true }.ToList().AsReadOnly()
+            new object[] { "TST", true, null! }.ToList().AsReadOnly()
         );
 
         Assert.That(result, Is.Not.Null);
@@ -238,7 +238,7 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
     {
         var result = await Client.SendRequestAsync<ValidationResult>(
             "command:paratextProjectCreation.validateLanguage",
-            new object[] { "eng", "English", true }.ToList().AsReadOnly()
+            new object[] { "eng", "English", null }.ToList().AsReadOnly()
         );
 
         Assert.That(result, Is.Not.Null);
@@ -253,7 +253,7 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
     {
         var result = await Client.SendRequestAsync<CreateProjectResult>(
             "command:paratextProjectCreation.createProject",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { new CreateProjectRequest { ShortName = "TST", FullName = "Test", LanguageId = "eng", Versification = VersificationType.English, ProjectType = ProjectType.Standard } }.ToList().AsReadOnly()
         );
 
         Assert.That(result, Is.Not.Null);
@@ -268,7 +268,7 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
     {
         var result = await Client.SendRequestAsync<CreateBooksResult>(
             "command:paratextProjectCreation.createBooks",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { new CreateBooksRequest { ProjectGuid = "test-guid", BookNumbers = new List<int> { 1 }, Mode = BookCreationMode.Empty } }.ToList().AsReadOnly()
         );
 
         Assert.That(result, Is.Not.Null);
@@ -284,7 +284,7 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
         // cleanupProject returns void, so we just verify no exception
         await Client.SendRequestAsync<object>(
             "command:paratextProjectCreation.cleanupProject",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { "test-guid", false }.ToList().AsReadOnly()
         );
 
         Assert.Pass("cleanupProject command registered and callable");
@@ -299,7 +299,7 @@ internal class ProjectCreationIntegrationTests : PapiTestBase
     {
         var result = await Client.SendRequestAsync<UpdateProjectResult>(
             "command:paratextProjectCreation.updateProject",
-            new object[] { "{}" }.ToList().AsReadOnly()
+            new object[] { new UpdateProjectRequest { ProjectGuid = "test-guid" } }.ToList().AsReadOnly()
         );
 
         Assert.That(result, Is.Not.Null);
