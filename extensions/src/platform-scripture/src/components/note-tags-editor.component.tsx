@@ -409,12 +409,7 @@ function TagRow({ tag, tags, onUpdate, onDelete, disabled, localizedStrings }: T
     <TableRow>
       {/* Icon column */}
       <TableCell className="tw-w-24 tw-py-2">
-        <IconSelect
-          value={tag.icon}
-          onChange={handleIconChange}
-          disabled={disabled}
-          localizedStrings={localizedStrings}
-        />
+        <IconSelect value={tag.icon} onChange={handleIconChange} disabled={disabled} />
       </TableCell>
 
       {/* Name column */}

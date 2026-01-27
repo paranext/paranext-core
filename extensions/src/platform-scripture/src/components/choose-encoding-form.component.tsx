@@ -281,7 +281,7 @@ export function ChooseEncodingForm({
   const [isTesting, setIsTesting] = useState(false);
 
   // Ref to focus encoding dropdown on mount
-  const encodingSelectRef = useRef<HTMLButtonElement>(undefined);
+  const encodingSelectRef = useRef<HTMLButtonElement>(null);
 
   // Sample text to use (provided or default)
   const displaySampleText = useMemo(() => sampleText ?? DEFAULT_SAMPLE_TEXT, [sampleText]);
