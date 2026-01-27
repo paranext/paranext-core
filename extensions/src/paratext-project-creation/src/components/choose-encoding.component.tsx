@@ -4,7 +4,6 @@ import {
   Alert,
   AlertDescription,
   Button,
-  cn,
   Label,
   Select,
   SelectContent,
@@ -64,10 +63,12 @@ export function ChooseEncodingForm({
 
   // Test state
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | undefined>(
+    undefined,
+  );
 
   const isMountedRef = useRef(true);
-  const selectTriggerRef = useRef<HTMLButtonElement>(null);
+  const selectTriggerRef = useRef<HTMLButtonElement | undefined>(undefined);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -120,7 +121,7 @@ export function ChooseEncodingForm({
       if (encoding) {
         setSelectedEncoding(encoding);
         // Clear previous test result when encoding changes
-        setTestResult(null);
+        setTestResult(undefined);
       }
     },
     [availableEncodings],
@@ -129,7 +130,7 @@ export function ChooseEncodingForm({
   // Handle test button click
   const handleTest = useCallback(async () => {
     setIsTesting(true);
-    setTestResult(null);
+    setTestResult(undefined);
     try {
       const result = await papi.commands.sendCommand(
         'paratextProjectCreation.testEncodingRoundTrip',
@@ -167,6 +168,7 @@ export function ChooseEncodingForm({
         onCancel();
       } else if (e.key === 'Enter' && !e.shiftKey) {
         // Don't submit when focus is inside the select dropdown
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         const target = e.target as HTMLElement;
         if (target.getAttribute('role') !== 'option') {
           e.preventDefault();

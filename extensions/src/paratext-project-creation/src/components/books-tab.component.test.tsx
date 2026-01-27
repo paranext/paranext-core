@@ -98,6 +98,7 @@ describe('BooksTab', () => {
     const selectAllButtons = screen.getAllByText('Select All');
     fireEvent.click(selectAllButtons[0]);
 
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const result = onChange.mock.calls[0][0] as number[];
     // Should contain all OT (1-39) plus existing NT (40)
     expect(result).toHaveLength(40);
@@ -115,6 +116,7 @@ describe('BooksTab', () => {
     const deselectButtons = screen.getAllByText('Deselect All');
     fireEvent.click(deselectButtons[1]);
 
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     const result = onChange.mock.calls[0][0] as number[];
     // Should contain only OT (1-39)
     expect(result).toHaveLength(39);

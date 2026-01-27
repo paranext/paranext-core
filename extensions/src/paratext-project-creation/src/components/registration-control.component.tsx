@@ -135,8 +135,8 @@ export function RegistrationControl({
   );
 
   const visibilityLabel = useMemo(() => {
-    if (!currentRegistration) return null;
-    if (currentRegistration.visibility === 'Public') return null;
+    if (!currentRegistration) return undefined;
+    if (currentRegistration.visibility === 'Public') return undefined;
     return `(${currentRegistration.visibility})`;
   }, [currentRegistration]);
 

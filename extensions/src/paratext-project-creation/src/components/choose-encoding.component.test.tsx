@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ChooseEncodingForm } from './choose-encoding.component';
 import type { ChooseEncodingFormProps, EncodingInfo } from 'paratext-project-creation';
+import { ChooseEncodingForm } from './choose-encoding.component';
 
 // Mock @papi/frontend
 vi.mock('@papi/frontend', () => ({
@@ -33,6 +33,7 @@ vi.mock('lucide-react', async (importOriginal) => {
 
 // Import the mocked papi to control responses
 const { default: papi } = await import('@papi/frontend');
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 const mockSendCommand = papi.commands.sendCommand as ReturnType<typeof vi.fn>;
 
 const mockEncodings: EncodingInfo[] = [
@@ -93,6 +94,7 @@ describe('ChooseEncodingForm', () => {
   it('uses default sample text when none provided', async () => {
     await renderAndWaitForLoad({ sampleText: undefined });
     const textarea = screen.getByLabelText(/sample text/i);
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     expect((textarea as HTMLTextAreaElement).value).toContain('\\id MAT');
   });
 

@@ -1,12 +1,12 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RegistrationControl } from './registration-control.component';
 import type {
   RegistrationControlProps,
   ProjectReference,
   RegistrationInfo,
   RegistrationState,
 } from 'paratext-project-creation';
+import { RegistrationControl } from './registration-control.component';
 
 // Mock @papi/frontend
 vi.mock('@papi/frontend', () => ({
@@ -39,6 +39,7 @@ vi.mock('lucide-react', async (importOriginal) => {
 });
 
 const { default: papi } = await import('@papi/frontend');
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 const mockSendCommand = papi.commands.sendCommand as ReturnType<typeof vi.fn>;
 
 const defaultServerState: RegistrationState = {
@@ -71,11 +72,11 @@ const mockRegistration: RegistrationInfo = {
 };
 
 const defaultProps: RegistrationControlProps = {
-  projectType: null,
-  baseProject: null,
+  projectType: undefined,
+  baseProject: undefined,
   isNewProject: true,
-  projectGuid: null,
-  currentRegistration: null,
+  projectGuid: undefined,
+  currentRegistration: undefined,
 };
 
 function renderControl(overrides: Partial<RegistrationControlProps> = {}) {
@@ -90,7 +91,7 @@ describe('RegistrationControl', () => {
 
   describe('NotSelected state', () => {
     it('shows message when projectType is null', () => {
-      renderControl({ projectType: null });
+      renderControl({ projectType: undefined });
       expect(screen.getByTestId('registration-not-selected')).toBeInTheDocument();
       expect(
         screen.getByText('Project type must be selected before registration.'),
@@ -226,7 +227,7 @@ describe('RegistrationControl', () => {
     });
 
     it('does not fetch when projectType is null', () => {
-      renderControl({ projectType: null });
+      renderControl({ projectType: undefined });
       expect(mockSendCommand).not.toHaveBeenCalled();
     });
 

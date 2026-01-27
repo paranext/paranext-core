@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ProjectNameForm } from './project-name-form.component';
 import type { ProjectNameFormProps } from 'paratext-project-creation';
+import { ProjectNameForm } from './project-name-form.component';
 
 // Mock @papi/frontend
 vi.mock('@papi/frontend', () => ({
@@ -27,6 +27,7 @@ vi.mock('lucide-react', () => ({
 
 // Import the mocked papi to control responses
 const { default: papi } = await import('@papi/frontend');
+// eslint-disable-next-line no-type-assertion/no-type-assertion
 const mockSendCommand = papi.commands.sendCommand as ReturnType<typeof vi.fn>;
 
 const defaultProps: ProjectNameFormProps = {
