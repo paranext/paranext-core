@@ -1,0 +1,276 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`LanguageSelectionForm > renders loaded state 1`] = `
+<div>
+  <div
+    aria-label="Choose Language Identifier"
+    aria-modal="true"
+    class="pr-twp tw-flex tw-flex-col tw-gap-4 tw-p-4"
+    role="dialog"
+  >
+    <h2
+      class="tw-text-lg tw-font-semibold"
+    >
+      Choose Language Identifier
+    </h2>
+    <div
+      class="tw-flex tw-flex-col tw-gap-1"
+    >
+      <label
+        class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+        for="language-search"
+      >
+        Search
+      </label>
+      <input
+        class="pr-twp tw-flex tw-h-10 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium file:tw-text-foreground placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
+        id="language-search"
+        placeholder="Search by code or name..."
+        type="text"
+        value=""
+      />
+    </div>
+    <div
+      aria-label="Languages"
+      class="tw-border tw-rounded-md tw-overflow-hidden"
+      role="table"
+    >
+      <div
+        class="tw-flex tw-border-b tw-bg-muted tw-px-3 tw-py-2 tw-text-sm tw-font-medium"
+      >
+        <div
+          class="tw-w-24"
+        >
+          Code
+        </div>
+        <div
+          class="tw-flex-1"
+        >
+          Language Name
+        </div>
+      </div>
+      <div
+        class="tw-max-h-48 tw-overflow-y-auto"
+        role="rowgroup"
+      >
+        <div
+          aria-selected="false"
+          class="tw-flex tw-px-3 tw-py-1.5 tw-text-sm tw-cursor-pointer hover:tw-bg-accent"
+          role="row"
+          tabindex="0"
+        >
+          <div
+            class="tw-w-24 tw-font-mono"
+          >
+            eng
+          </div>
+          <div
+            class="tw-flex-1"
+          >
+            English
+          </div>
+        </div>
+        <div
+          aria-selected="false"
+          class="tw-flex tw-px-3 tw-py-1.5 tw-text-sm tw-cursor-pointer hover:tw-bg-accent"
+          role="row"
+          tabindex="0"
+        >
+          <div
+            class="tw-w-24 tw-font-mono"
+          >
+            fra
+          </div>
+          <div
+            class="tw-flex-1"
+          >
+            French
+          </div>
+        </div>
+        <div
+          aria-selected="false"
+          class="tw-flex tw-px-3 tw-py-1.5 tw-text-sm tw-cursor-pointer hover:tw-bg-accent"
+          role="row"
+          tabindex="0"
+        >
+          <div
+            class="tw-w-24 tw-font-mono"
+          >
+            spa
+          </div>
+          <div
+            class="tw-flex-1"
+          >
+            Spanish
+          </div>
+        </div>
+        <div
+          aria-selected="false"
+          class="tw-flex tw-px-3 tw-py-1.5 tw-text-sm tw-cursor-pointer hover:tw-bg-accent"
+          role="row"
+          tabindex="0"
+        >
+          <div
+            class="tw-w-24 tw-font-mono"
+          >
+            deu
+          </div>
+          <div
+            class="tw-flex-1"
+          >
+            German
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="tw-flex tw-flex-col tw-gap-1"
+    >
+      <label
+        class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+        for="language-name"
+      >
+        Language name
+      </label>
+      <input
+        aria-invalid="false"
+        class="pr-twp tw-flex tw-h-10 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium file:tw-text-foreground placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
+        disabled=""
+        id="language-name"
+        type="text"
+        value=""
+      />
+    </div>
+    <div
+      class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-3 tw-gap-3"
+    >
+      <div
+        class="tw-flex tw-flex-col tw-gap-1"
+      >
+        <label
+          class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+          for="script-select"
+        >
+          Script
+        </label>
+        <button
+          aria-autocomplete="none"
+          aria-controls="radix-:rg:"
+          aria-expanded="false"
+          class="tw-flex tw-w-full tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-input tw-bg-background tw-text-sm tw-ring-offset-background placeholder:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1 tw-h-10 tw-px-4 tw-py-2"
+          data-disabled=""
+          data-state="closed"
+          dir="ltr"
+          disabled=""
+          id="script-select"
+          role="combobox"
+          type="button"
+        >
+          <span
+            style="pointer-events: none;"
+          >
+            (None)
+          </span>
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-chevron-down tw-h-4 tw-w-4 tw-opacity-50"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m6 9 6 6 6-6"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="tw-flex tw-flex-col tw-gap-1"
+      >
+        <label
+          class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+          for="region-select"
+        >
+          Region
+        </label>
+        <button
+          aria-autocomplete="none"
+          aria-controls="radix-:rh:"
+          aria-expanded="false"
+          class="tw-flex tw-w-full tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-input tw-bg-background tw-text-sm tw-ring-offset-background placeholder:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1 tw-h-10 tw-px-4 tw-py-2"
+          data-disabled=""
+          data-state="closed"
+          dir="ltr"
+          disabled=""
+          id="region-select"
+          role="combobox"
+          type="button"
+        >
+          <span
+            style="pointer-events: none;"
+          >
+            (None)
+          </span>
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-chevron-down tw-h-4 tw-w-4 tw-opacity-50"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m6 9 6 6 6-6"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="tw-flex tw-flex-col tw-gap-1"
+      >
+        <label
+          class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+          for="variant-input"
+        >
+          Variant
+        </label>
+        <input
+          aria-invalid="false"
+          class="pr-twp tw-flex tw-h-10 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium file:tw-text-foreground placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
+          disabled=""
+          id="variant-input"
+          placeholder="e.g. fonipa"
+          type="text"
+          value=""
+        />
+      </div>
+    </div>
+    <div
+      class="tw-flex tw-items-center tw-justify-end tw-gap-2"
+    >
+      <button
+        class="pr-twp tw-inline-flex tw-items-center tw-justify-center tw-gap-2 tw-whitespace-nowrap tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0 tw-border tw-border-input tw-bg-background hover:tw-bg-accent hover:tw-text-accent-foreground tw-h-10 tw-px-4 tw-py-2"
+      >
+        Cancel
+      </button>
+      <button
+        class="pr-twp tw-inline-flex tw-items-center tw-justify-center tw-gap-2 tw-whitespace-nowrap tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0 tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 tw-h-10 tw-px-4 tw-py-2"
+        disabled=""
+      >
+        OK
+      </button>
+    </div>
+  </div>
+</div>
+`;
