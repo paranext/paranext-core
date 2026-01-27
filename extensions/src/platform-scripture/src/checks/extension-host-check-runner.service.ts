@@ -6,7 +6,6 @@ import {
 } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
-import { InventoryItem } from 'platform-bible-react';
 import {
   AsyncVariable,
   getErrorMessage,
@@ -21,7 +20,6 @@ import {
   CheckCreatorFunction,
   CheckDetails,
   CheckDetailsWithCheckId,
-  CheckInputRange,
   CheckJobRunner,
   CheckJobScope,
   CheckJobStatusReport,
