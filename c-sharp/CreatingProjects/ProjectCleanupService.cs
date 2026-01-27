@@ -2,18 +2,22 @@ namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
 /// Service for cleaning up failed/cancelled projects.
-/// Stub -- implementation pending (CAP-016).
 /// </summary>
 internal static class ProjectCleanupService
 {
     /// <summary>
-    /// Cleans up a partially created project.
+    /// Cleans up a partially created project. Idempotent -- does not throw for nonexistent projects.
     /// </summary>
     public static Task CleanupProjectAsync(
         CleanupProjectRequest request,
         CancellationToken cancellationToken = default
     )
     {
-        throw new NotImplementedException("CAP-016: CleanupProjectAsync not yet implemented");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Remove from registry if present (idempotent)
+        ProjectRegistry.RemoveProject(request.ProjectGuid);
+
+        return Task.CompletedTask;
     }
 }
