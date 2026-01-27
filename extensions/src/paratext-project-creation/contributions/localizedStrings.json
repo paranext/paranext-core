@@ -2,7 +2,44 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
-      "%mainMenu_newProject%": "New Project..."
+      "%mainMenu_newProject%": "New Project...",
+
+      "%paratextProjectCreation_projectNameForm_title%": "Edit project name",
+      "%paratextProjectCreation_projectNameForm_fullName%": "Full Name",
+      "%paratextProjectCreation_projectNameForm_shortName%": "Short Name",
+      "%paratextProjectCreation_projectNameForm_shortNameHint%": "3-8 characters, auto-generated from full name",
+      "%paratextProjectCreation_projectNameForm_copyright%": "Copyright",
+      "%paratextProjectCreation_projectNameForm_registryWarning%": "This project is registered. Changing the name may affect registry records.",
+      "%paratextProjectCreation_projectNameForm_ok%": "OK",
+      "%paratextProjectCreation_projectNameForm_cancel%": "Cancel",
+      "%paratextProjectCreation_projectNameForm_fullNameRequired%": "Full name is required",
+
+      "%paratextProjectCreation_chooseEncodingForm_title%": "Choose Encoding",
+      "%paratextProjectCreation_chooseEncodingForm_encoding%": "Encoding",
+      "%paratextProjectCreation_chooseEncodingForm_sampleText%": "Sample Text",
+      "%paratextProjectCreation_chooseEncodingForm_test%": "Test",
+      "%paratextProjectCreation_chooseEncodingForm_ok%": "OK",
+      "%paratextProjectCreation_chooseEncodingForm_cancel%": "Cancel",
+      "%paratextProjectCreation_chooseEncodingForm_loading%": "Loading encodings...",
+      "%paratextProjectCreation_chooseEncodingForm_testPassed%": "Round-trip test passed",
+      "%paratextProjectCreation_chooseEncodingForm_testFailed%": "Round-trip test failed",
+
+      "%paratextProjectCreation_languageSelection_title%": "Choose Language Identifier",
+      "%paratextProjectCreation_languageSelection_search%": "Search by code or name...",
+      "%paratextProjectCreation_languageSelection_code%": "Code",
+      "%paratextProjectCreation_languageSelection_languageName%": "Language",
+      "%paratextProjectCreation_languageSelection_nameLabel%": "Language name",
+      "%paratextProjectCreation_languageSelection_script%": "Script",
+      "%paratextProjectCreation_languageSelection_region%": "Region",
+      "%paratextProjectCreation_languageSelection_variant%": "Variant",
+      "%paratextProjectCreation_languageSelection_selected%": "Selected",
+      "%paratextProjectCreation_languageSelection_ok%": "OK",
+      "%paratextProjectCreation_languageSelection_cancel%": "Cancel",
+      "%paratextProjectCreation_languageSelection_loading%": "Loading languages...",
+      "%paratextProjectCreation_languageSelection_registryWarning%": "This project is registered. Changing the language may affect registry records.",
+      "%paratextProjectCreation_languageSelection_nameRequired%": "Language name is required",
+      "%paratextProjectCreation_languageSelection_variantInvalidChars%": "Variant contains invalid characters",
+      "%paratextProjectCreation_languageSelection_none%": "(None)"
     }
   }
 }

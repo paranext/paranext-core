@@ -4,7 +4,7 @@ using Paranext.DataProvider.Services;
 namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
-/// Registers all 12 PAPI commands for project creation and routes them to the appropriate services.
+/// Registers all 13 PAPI commands for project creation and routes them to the appropriate services.
 /// Follows the pattern established by ParatextRegistrationService.
 /// </summary>
 internal class ProjectCreationCommandService(PapiClient papiClient)
@@ -74,11 +74,21 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         // 8. validateLanguage
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.validateLanguage",
-            (string languageId, string languageName, bool isNewProject) =>
-                LanguageService.ValidateLanguageSelection(languageId, languageName)
+            (string languageId, string languageName, string? initialLanguageName) =>
+                LanguageService.ValidateLanguageSelection(
+                    languageId,
+                    languageName,
+                    initialLanguageName
+                )
         );
 
-        // 9. createProject
+        // 9. getAvailableLanguages
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextProjectCreation.getAvailableLanguages",
+            (string? searchQuery) => LanguageService.GetAvailableLanguages(searchQuery)
+        );
+
+        // 10. createProject
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.createProject",
             (string requestJson) =>
