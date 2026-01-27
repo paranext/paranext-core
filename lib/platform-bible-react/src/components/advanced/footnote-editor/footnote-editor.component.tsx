@@ -98,6 +98,16 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
   }
 }
 
+const PARAGRAPH_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    {
+      type: 'para',
+    },
+  ],
+};
+
 /**
  * Component to edit footnotes from within the editor component
  *
@@ -160,16 +170,6 @@ export default function FootnoteEditor({
       setCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
-      // Applies timeout for the apply update operation to avoid flush sync warning
-      editorRef.current?.setUsj({
-        type: 'USJ',
-        version: '3.1',
-        content: [
-          {
-            type: 'para',
-          },
-        ],
-      });
       timeout = setTimeout(() => {
         editorRef.current?.applyUpdate([noteOp]);
       }, 0);
@@ -323,6 +323,7 @@ export default function FootnoteEditor({
           <Editorial
             options={options}
             onUsjChange={handleUsjChange}
+            defaultUsj={PARAGRAPH_USJ}
             onScrRefChange={() => {}}
             scrRef={scrRef}
             ref={editorRef}
