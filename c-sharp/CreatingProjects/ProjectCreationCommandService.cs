@@ -23,30 +23,21 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.getTypeConfiguration",
             (string projectTypeStr) =>
-            {
-                var projectType = Enum.Parse<ProjectType>(projectTypeStr, ignoreCase: true);
-                return ProjectTypeService.GetTypeConfiguration(projectType);
-            }
+                ProjectTypeService.GetTypeConfiguration(ParseProjectType(projectTypeStr))
         );
 
         // 2. canBeBasedOnType
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.canBeBasedOnType",
             (string projectTypeStr, string candidateGuid) =>
-            {
-                var projectType = Enum.Parse<ProjectType>(projectTypeStr, ignoreCase: true);
-                return ProjectTypeService.CanBeBasedOnType(projectType, candidateGuid);
-            }
+                ProjectTypeService.CanBeBasedOnType(ParseProjectType(projectTypeStr), candidateGuid)
         );
 
         // 3. getValidBaseProjects
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.getValidBaseProjects",
             (string projectTypeStr) =>
-            {
-                var projectType = Enum.Parse<ProjectType>(projectTypeStr, ignoreCase: true);
-                return ProjectTypeService.GetValidBaseProjects(projectType);
-            }
+                ProjectTypeService.GetValidBaseProjects(ParseProjectType(projectTypeStr))
         );
 
         // 4. validateShortName
@@ -73,14 +64,11 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.getRegistrationState",
             (string projectGuid, string baseProjectGuid, string projectTypeStr) =>
-            {
-                var projectType = Enum.Parse<ProjectType>(projectTypeStr, ignoreCase: true);
-                return RegistrationService.GetRegistrationState(
+                RegistrationService.GetRegistrationState(
                     projectGuid,
                     baseProjectGuid,
-                    projectType
-                );
-            }
+                    ParseProjectType(projectTypeStr)
+                )
         );
 
         // 8. validateLanguage
@@ -94,66 +82,36 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.createProject",
             (string requestJson) =>
-            {
-                CreateProjectRequest? request;
-                try
-                {
-                    request = JsonSerializer.Deserialize<CreateProjectRequest>(
-                        requestJson,
-                        s_jsonOptions
-                    );
-                }
-                catch (JsonException)
-                {
-                    return new CreateProjectResult
-                    {
-                        Success = false,
-                        ErrorCode = "INVALID_REQUEST",
-                        ErrorMessage = "Invalid request JSON",
-                    };
-                }
-                if (request == null)
-                    return new CreateProjectResult
-                    {
-                        Success = false,
-                        ErrorCode = "INVALID_REQUEST",
-                        ErrorMessage = "Invalid request JSON",
-                    };
-                return ProjectDefaultsService.CreateProjectAsync(request).GetAwaiter().GetResult();
-            }
+                DeserializeAndExecute<CreateProjectRequest, CreateProjectResult>(
+                    requestJson,
+                    request =>
+                        ProjectDefaultsService.CreateProjectAsync(request).GetAwaiter().GetResult(),
+                    () =>
+                        new CreateProjectResult
+                        {
+                            Success = false,
+                            ErrorCode = "INVALID_REQUEST",
+                            ErrorMessage = "Invalid request JSON",
+                        }
+                )
         );
 
         // 10. createBooks
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.createBooks",
             (string requestJson) =>
-            {
-                CreateBooksRequest? request;
-                try
-                {
-                    request = JsonSerializer.Deserialize<CreateBooksRequest>(
-                        requestJson,
-                        s_jsonOptions
-                    );
-                }
-                catch (JsonException)
-                {
-                    return new CreateBooksResult
-                    {
-                        Success = false,
-                        LastCreatedBookNum = 0,
-                        Errors = new List<string> { "Invalid request JSON" },
-                    };
-                }
-                if (request == null)
-                    return new CreateBooksResult
-                    {
-                        Success = false,
-                        LastCreatedBookNum = 0,
-                        Errors = new List<string> { "Invalid request JSON" },
-                    };
-                return BookCreationService.CreateBooksAsync(request).GetAwaiter().GetResult();
-            }
+                DeserializeAndExecute<CreateBooksRequest, CreateBooksResult>(
+                    requestJson,
+                    request =>
+                        BookCreationService.CreateBooksAsync(request).GetAwaiter().GetResult(),
+                    () =>
+                        new CreateBooksResult
+                        {
+                            Success = false,
+                            LastCreatedBookNum = 0,
+                            Errors = new List<string> { "Invalid request JSON" },
+                        }
+                )
         );
 
         // 11. cleanupProject
@@ -161,21 +119,9 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
             "command:paratextProjectCreation.cleanupProject",
             (string requestJson) =>
             {
-                CleanupProjectRequest? request;
-                try
-                {
-                    request = JsonSerializer.Deserialize<CleanupProjectRequest>(
-                        requestJson,
-                        s_jsonOptions
-                    );
-                }
-                catch (JsonException)
-                {
-                    return;
-                }
-                if (request == null)
-                    return;
-                ProjectCleanupService.CleanupProjectAsync(request).GetAwaiter().GetResult();
+                var request = DeserializeRequest<CleanupProjectRequest>(requestJson);
+                if (request != null)
+                    ProjectCleanupService.CleanupProjectAsync(request).GetAwaiter().GetResult();
             }
         );
 
@@ -183,33 +129,52 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
         await PapiClient.RegisterRequestHandlerAsync(
             "command:paratextProjectCreation.updateProject",
             (string requestJson) =>
-            {
-                UpdateProjectRequest? request;
-                try
-                {
-                    request = JsonSerializer.Deserialize<UpdateProjectRequest>(
-                        requestJson,
-                        s_jsonOptions
-                    );
-                }
-                catch (JsonException)
-                {
-                    return new UpdateProjectResult
-                    {
-                        Success = false,
-                        ErrorCode = "INVALID_REQUEST",
-                        ErrorMessage = "Invalid request JSON",
-                    };
-                }
-                if (request == null)
-                    return new UpdateProjectResult
-                    {
-                        Success = false,
-                        ErrorCode = "INVALID_REQUEST",
-                        ErrorMessage = "Invalid request JSON",
-                    };
-                return ProjectUpdateService.UpdateProjectAsync(request).GetAwaiter().GetResult();
-            }
+                DeserializeAndExecute<UpdateProjectRequest, UpdateProjectResult>(
+                    requestJson,
+                    request =>
+                        ProjectUpdateService.UpdateProjectAsync(request).GetAwaiter().GetResult(),
+                    () =>
+                        new UpdateProjectResult
+                        {
+                            Success = false,
+                            ErrorCode = "INVALID_REQUEST",
+                            ErrorMessage = "Invalid request JSON",
+                        }
+                )
         );
+    }
+
+    private static ProjectType ParseProjectType(string projectTypeStr) =>
+        Enum.Parse<ProjectType>(projectTypeStr, ignoreCase: true);
+
+    /// <summary>
+    /// Deserializes a JSON string to a request object, returning null on failure.
+    /// </summary>
+    private static TRequest? DeserializeRequest<TRequest>(string json)
+        where TRequest : class
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<TRequest>(json, s_jsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Deserializes a JSON request and executes the handler, returning an error result on
+    /// deserialization failure.
+    /// </summary>
+    private static TResult DeserializeAndExecute<TRequest, TResult>(
+        string json,
+        Func<TRequest, TResult> handler,
+        Func<TResult> createErrorResult
+    )
+        where TRequest : class
+    {
+        var request = DeserializeRequest<TRequest>(json);
+        return request != null ? handler(request) : createErrorResult();
     }
 }
