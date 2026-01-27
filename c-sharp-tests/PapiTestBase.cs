@@ -3,13 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
-using System.Xml;
 using System.Xml.Linq;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
-using Paratext.Data.ProjectComments;
-using Paratext.Data.Users;
 
 namespace TestParanextDataProvider
 {

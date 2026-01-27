@@ -1,15 +1,10 @@
 using System.Text.Json;
-using System.Xml;
 using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.ParatextUtils;
-using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
-using TestParanextDataProvider;
 
 namespace TestParanextDataProvider.JsonUtils;
 
-[TestFixture]
 internal class PlatformCommentConverterTests : PapiTestBase
 {
     private JsonSerializerOptions _serializationOptions = null!;
@@ -75,7 +70,7 @@ internal class PlatformCommentConverterTests : PapiTestBase
     [Ignore("This test needs to be fixed when I am done rebasing")]
     public void Serialize_CommentWithConflictFields_CorrectJsonProduced()
     {
-        Comment testComment = CreateConflictComment();
+        Comment testComment = CommentTestHelper.CreateConflictComment();
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
             new PlatformCommentWrapper(testComment),
@@ -89,19 +84,16 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""status"":""Todo"""));
         Assert.That(json, Does.Contain(@"""type"":""conflict"""));
         Assert.That(json, Does.Contain(@"""hideInTextWindow"":false"));
-        Assert.That(
-            json,
-            Does.Contain(
-                @"""contents"":""\n    Two different people edited this verse. The change from Tim Steenwyk(Tuesday, August 16, 2011 3:49 PM) was accepted in the text. The change from Michael Lothers(Tuesday, August 16, 2011 3:48 PM) is shown in this note (in red) and is not in the current copy of the text. In some cases you will need to right click in the verse and click 'View History for Verse(s)' to see exactly when and where the change was made.\n    <p><language name=""es-015-vaidika""><p>\n            \\v 1 When Jesus was born in the\n            <bold><color name=""red"">small </color></bold>\n            village of Bethlehem in Judea, Herod was king. During this time some wise men\\f + \\fr 2:1 \\fq wise men: \\ft People famous for studying the stars.\\f* from the east came to Jerusalem\n        </p></language></p>"""
-            )
-        );
+        using var doc = JsonDocument.Parse(json);
+        var contents = doc.RootElement.GetProperty("contents").GetString() ?? string.Empty;
+        Assert.That(contents, Is.EqualTo(testComment.Contents.InnerXml));
     }
 
     [Test]
     [Ignore("This test needs to be fixed when I am done rebasing")]
     public void RoundTrip_CommentWithConflictFields_CorrectJsonProduced()
     {
-        Comment testComment = CreateConflictComment();
+        Comment testComment = CommentTestHelper.CreateConflictComment();
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
             new PlatformCommentWrapper(testComment),
@@ -179,43 +171,6 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Contents, Is.Not.Null);
         Assert.That(result.Contents!.InnerXml, Is.EqualTo("<p>content</p>"));
-    }
-
-    private Comment CreateConflictComment()
-    {
-        XmlDocument contentsDoc = new XmlDocument();
-        contentsDoc.LoadXml(
-            """
-            <Contents>
-                Two different people edited this verse. The change from Tim Steenwyk(Tuesday, August 16, 2011 3:49 PM) was accepted in the text. The change from Michael Lothers(Tuesday, August 16, 2011 3:48 PM) is shown in this note (in red) and is not in the current copy of the text. In some cases you will need to right click in the verse and click 'View History for Verse(s)' to see exactly when and where the change was made.
-                <p>
-                    <language name="es-015-vaidika">
-                    <p>
-                        \v 1 When Jesus was born in the
-                        <bold>
-                        <color name="red">small </color>
-                        </bold>
-                        village of Bethlehem in Judea, Herod was king. During this time some wise men\f + \fr 2:1 \fq wise men: \ft People famous for studying the stars.\f* from the east came to Jerusalem
-                    </p>
-                    </language>
-                </p>
-                </Contents>
-            """
-        );
-
-        DummyUser user_Tim = new DummyUser("Tim Steenwyk");
-        Comment testComment = new Comment(user_Tim);
-
-        testComment.Thread = "5f5ea40f";
-        testComment.VerseRefStr = "MAT 2:1";
-        testComment.Date = "2011-08-16T15:49:18.4019847-04:00";
-        testComment.StartPosition = 0;
-        testComment.Status = NoteStatus.Todo;
-        testComment.Type = NoteType.Conflict;
-        testComment.HideInTextWindow = false;
-        testComment.Contents = contentsDoc.DocumentElement;
-
-        return testComment;
     }
 
     private class DummyUser : ParatextUser
