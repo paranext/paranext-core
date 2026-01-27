@@ -28,4 +28,16 @@ internal static class ProjectDefaultsService
             Editable = config.EditableDefault,
         };
     }
+
+    /// <summary>
+    /// Creates a new project with the specified settings.
+    /// Stub -- implementation pending (CAP-012).
+    /// </summary>
+    public static Task<CreateProjectResult> CreateProjectAsync(
+        CreateProjectRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        throw new NotImplementedException("CAP-012: CreateProjectAsync not yet implemented");
+    }
 }

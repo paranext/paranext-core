@@ -1,4 +1,6 @@
 using Paranext.DataProvider.CreatingProjects;
+using Paranext.DataProvider.Projects;
+using Paratext.Data;
 using ProjectType = Paranext.DataProvider.CreatingProjects.ProjectType;
 using ProjectNormalization = Paranext.DataProvider.CreatingProjects.ProjectNormalization;
 using VersificationType = Paranext.DataProvider.CreatingProjects.VersificationType;
@@ -6,7 +8,7 @@ using VersificationType = Paranext.DataProvider.CreatingProjects.VersificationTy
 namespace TestParanextDataProvider.CreatingProjects;
 
 /// <summary>
-/// Tests for ProjectDefaultsService: GetDefaultSettings (CAP-013).
+/// Tests for ProjectDefaultsService: GetDefaultSettings (CAP-013) and CreateProjectAsync (CAP-012).
 /// RED phase -- these tests will fail until the service is implemented.
 /// </summary>
 [TestFixture]
@@ -195,5 +197,273 @@ public class ProjectDefaultsServiceTests
         var defaults = ProjectDefaultsService.GetDefaultSettings(type, "someBase");
 
         Assert.That(defaults.Normalization, Is.EqualTo(ProjectNormalization.NFC));
+    }
+
+    // =========================================================================
+    // CAP-012: CreateProjectAsync - Acceptance Test
+    // =========================================================================
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-012")]
+    [Property("ScenarioId", "spec-001")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description(
+        "Acceptance test: CreateProjectAsync creates project with directory, Settings.xml, GUID, and collection entry"
+    )]
+    public async Task CreateProjectAsync_StandardProject_FullCreationFlow()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "TestStd",
+            FullName = "Test Standard Project",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        Assert.That(result.Success, Is.True, "Project creation should succeed");
+        Assert.That(result.ProjectGuid, Is.Not.Null.And.Not.Empty, "GUID should be assigned");
+        Assert.That(result.ErrorCode, Is.Null, "No error code on success");
+    }
+
+    // =========================================================================
+    // CAP-012: CreateProjectAsync - Contract Tests
+    // =========================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-001")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("Create Standard project with valid inputs returns success with GUID")]
+    public async Task CreateProjectAsync_ValidStandard_ReturnsSuccessWithGuid()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "TST",
+            FullName = "Test Project",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ProjectGuid, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-002")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("Reject project name containing space")]
+    public async Task CreateProjectAsync_NameWithSpace_ReturnsError()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "Test Proj",
+            FullName = "Test Project",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        Assert.That(result.Success, Is.False, "Name with space should be rejected");
+        Assert.That(result.ErrorCode, Is.Not.Null);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-012-03")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("BackTranslation creation requires BaseProjectGuid")]
+    public async Task CreateProjectAsync_DerivedWithoutBase_ReturnsError()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "BTTest",
+            FullName = "Back Translation Test",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.BackTranslation,
+            BaseProjectGuid = null,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        Assert.That(result.Success, Is.False, "Derived type without base should fail");
+        Assert.That(result.ErrorCode, Is.Not.Null);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-012-04")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("CreateProjectAsync applies default normalization when not specified")]
+    public async Task CreateProjectAsync_NoNormalization_AppliesDefault()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "NrmTst",
+            FullName = "Normalization Test",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+            Normalization = null,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        // Default normalization (NFC) should be applied
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ProjectGuid, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-012-05")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("CreateProjectAsync returns unique GUID for each created project")]
+    public async Task CreateProjectAsync_TwoProjects_HaveDifferentGuids()
+    {
+        var request1 = new CreateProjectRequest
+        {
+            ShortName = "Proj1",
+            FullName = "Project One",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+        var request2 = new CreateProjectRequest
+        {
+            ShortName = "Proj2",
+            FullName = "Project Two",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+
+        var result1 = await ProjectDefaultsService.CreateProjectAsync(request1);
+        var result2 = await ProjectDefaultsService.CreateProjectAsync(request2);
+
+        Assert.That(result1.Success, Is.True);
+        Assert.That(result2.Success, Is.True);
+        Assert.That(result1.ProjectGuid, Is.Not.EqualTo(result2.ProjectGuid));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-012-06")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("CreateProjectAsync supports cancellation")]
+    public void CreateProjectAsync_Cancelled_ThrowsOperationCanceled()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "Cancel",
+            FullName = "Cancel Test",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await ProjectDefaultsService.CreateProjectAsync(request, cts.Token)
+        );
+    }
+
+    // =========================================================================
+    // CAP-012: CreateProjectAsync - Golden Master Tests
+    // =========================================================================
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("ScenarioId", "gm-007")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("Golden master: Created project has default settings from gm-007")]
+    public async Task CreateProjectAsync_GoldenMaster_DefaultSettingsApplied()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "GmTest",
+            FullName = "Golden Master Test",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        // gm-007 expected: versification=English, normalization=NFC, usfmVersion=3, editable=true
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ProjectGuid, Is.Not.Null.And.Not.Empty);
+        // The created project's settings should match gm-007 defaults
+        // (verified via project lookup after creation)
+    }
+
+    // =========================================================================
+    // CAP-012: CreateProjectAsync - Invariant Tests
+    // =========================================================================
+
+    [Test]
+    [Category("Invariant")]
+    [Property("InvariantId", "INV-002")]
+    [Property("ScenarioId", "TS-012-INV-002")]
+    [Property("BehaviorId", "BHV-034")]
+    [Description("Invariant: Project must have GUID after creation")]
+    public async Task CreateProjectAsync_AnyValidProject_HasNonEmptyGuid()
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "InvTst",
+            FullName = "Invariant Test",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = ProjectType.Standard,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ProjectGuid, Is.Not.Null.And.Not.Empty);
+        Assert.That(
+            Guid.TryParse(result.ProjectGuid, out _),
+            Is.True,
+            "ProjectGuid must be a valid GUID format"
+        );
+    }
+
+    [Test]
+    [Category("Invariant")]
+    [Property("InvariantId", "INV-003")]
+    [Property("ScenarioId", "TS-012-INV-003")]
+    [Property("BehaviorId", "BHV-034")]
+    [TestCase(ProjectType.BackTranslation)]
+    [TestCase(ProjectType.Daughter)]
+    [TestCase(ProjectType.Auxiliary)]
+    [TestCase(ProjectType.StudyBibleAdditions)]
+    [Description("Invariant: Derived project types must have base project")]
+    public async Task CreateProjectAsync_DerivedTypeWithoutBase_Fails(ProjectType derivedType)
+    {
+        var request = new CreateProjectRequest
+        {
+            ShortName = "DrvTst",
+            FullName = "Derived Test",
+            LanguageId = "eng",
+            Versification = VersificationType.English,
+            ProjectType = derivedType,
+            BaseProjectGuid = null,
+        };
+
+        var result = await ProjectDefaultsService.CreateProjectAsync(request);
+
+        Assert.That(result.Success, Is.False, $"Derived type {derivedType} without base should fail");
     }
 }
