@@ -1,10 +1,8 @@
 import papi, { DataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDisposableDataProvider } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { InventoryItem } from 'platform-bible-react';
 import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
-  CheckInputRange,
   CheckJobRunner,
   CheckJobScope,
   CheckJobStatus,
@@ -256,17 +254,6 @@ class CheckAggregatorDataProviderEngine
   // #endregion
 
   // #region Check Configuration Provider
-
-  async retrieveInventoryData(
-    checkId: string,
-    projectId: string,
-    checkInputRange: CheckInputRange,
-  ): Promise<InventoryItem[]> {
-    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
-    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
-    return checkRunner.retrieveInventoryData(checkId, projectId, checkInputRange);
-  }
-
   async isCheckSetupForProject(checkId: string, projectId: string): Promise<boolean> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);

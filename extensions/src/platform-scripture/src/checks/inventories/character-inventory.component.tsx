@@ -4,7 +4,7 @@ import {
   Button,
   ColumnDef,
   Inventory,
-  InventoryItem,
+  InventorySummaryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
@@ -64,7 +64,7 @@ const createColumns = (
 ];
 
 type CharacterInventoryProps = {
-  inventoryItems: InventoryItem[] | undefined;
+  inventoryItems: InventorySummaryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
@@ -74,6 +74,7 @@ type CharacterInventoryProps = {
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
   areInventoryItemsLoading?: boolean;
+  onItemSelected?: (itemKey: string) => void;
 };
 
 export function CharacterInventory({
@@ -87,6 +88,7 @@ export function CharacterInventory({
   scope,
   onScopeChange,
   areInventoryItemsLoading,
+  onItemSelected,
 }: CharacterInventoryProps) {
   const [characterInventoryStrings] = useLocalizedStrings(CHARACTER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -142,6 +144,7 @@ export function CharacterInventory({
       columns={columns}
       areInventoryItemsLoading={areInventoryItemsLoading}
       classNameForVerseText="scripture-font"
+      onItemSelected={onItemSelected}
     />
   );
 }

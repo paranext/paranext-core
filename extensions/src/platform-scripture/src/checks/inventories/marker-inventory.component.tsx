@@ -6,7 +6,7 @@ import {
   ColumnDef,
   Inventory,
   inventoryCountColumn,
-  InventoryItem,
+  InventorySummaryItem,
   inventoryItemColumn,
   inventoryStatusColumn,
   InventoryTableData,
@@ -85,7 +85,7 @@ const createColumns = (
 ];
 
 type MarkerInventoryProps = {
-  inventoryItems: InventoryItem[] | undefined;
+  inventoryItems: InventorySummaryItem[] | undefined;
   verseRef: SerializedVerseRef;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
@@ -97,6 +97,7 @@ type MarkerInventoryProps = {
   onScopeChange: (scope: Scope) => void;
   projectId?: string;
   areInventoryItemsLoading: boolean;
+  onItemSelected?: (itemKey: string) => void;
 };
 
 export function MarkerInventory({
@@ -112,6 +113,7 @@ export function MarkerInventory({
   onScopeChange,
   projectId,
   areInventoryItemsLoading,
+  onItemSelected,
 }: MarkerInventoryProps) {
   const [markerNamesPossiblyError] = useProjectData(
     'platformScripture.MarkerNames',
@@ -156,14 +158,11 @@ export function MarkerInventory({
     [markerInventoryStrings],
   );
 
-  const newInventoryItems: InventoryItem[] | undefined = useMemo(() => {
+  const newInventoryItems: InventorySummaryItem[] | undefined = useMemo(() => {
     if (!inventoryItems) return undefined;
     return inventoryItems.map((item, index) => ({
       ...item,
-      inventoryText: [
-        String(item.inventoryText),
-        String(inventoryItems[Math.max(index - 1, 0)].inventoryText),
-      ],
+      key: [String(item.key), String(inventoryItems[Math.max(index - 1, 0)].key)],
     }));
   }, [inventoryItems]);
 
@@ -211,6 +210,7 @@ export function MarkerInventory({
       }}
       areInventoryItemsLoading={areInventoryItemsLoading}
       classNameForVerseText="scripture-font"
+      onItemSelected={onItemSelected}
     />
   );
 }

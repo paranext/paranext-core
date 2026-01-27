@@ -4,7 +4,7 @@ import {
   Button,
   ColumnDef,
   Inventory,
-  InventoryItem,
+  InventorySummaryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
@@ -75,7 +75,7 @@ const createColumns = (
 };
 
 type PunctuationInventoryProps = {
-  inventoryItems: InventoryItem[] | undefined;
+  inventoryItems: InventorySummaryItem[] | undefined;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
@@ -85,6 +85,7 @@ type PunctuationInventoryProps = {
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
   areInventoryItemsLoading: boolean;
+  onItemSelected?: (itemKey: string) => void;
 };
 
 export function PunctuationInventory({
@@ -98,6 +99,7 @@ export function PunctuationInventory({
   scope,
   onScopeChange,
   areInventoryItemsLoading,
+  onItemSelected,
 }: PunctuationInventoryProps) {
   const [punctuationInventoryStrings] = useLocalizedStrings(PUNCTUATION_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -153,6 +155,7 @@ export function PunctuationInventory({
       columns={columns}
       areInventoryItemsLoading={areInventoryItemsLoading}
       classNameForVerseText="scripture-font"
+      onItemSelected={onItemSelected}
     />
   );
 }
