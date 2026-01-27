@@ -2,6 +2,8 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import {
+  Alert,
+  AlertDescription,
   Button,
   cn,
   Tabs,
@@ -31,6 +33,11 @@ import { AdvancedTab } from './components/advanced-tab.component';
 // =====================================================
 // State & Reducer
 // =====================================================
+
+export interface ValidationMessage {
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+}
 
 interface FormState {
   // Mode
@@ -84,6 +91,7 @@ interface FormState {
   // UI state
   loading: boolean;
   error: string | null;
+  validationMessages: ValidationMessage[];
 
   // Derived
   minParatextVersion: string;
@@ -134,6 +142,7 @@ function createInitialState(mode: 'new' | 'edit', projectId: string | null): For
     typeConfig: null,
     loading: false,
     error: null,
+    validationMessages: [],
     minParatextVersion: '',
   };
 }
@@ -206,7 +215,13 @@ function formReducer(state: FormState, action: FormAction): FormState {
 // =====================================================
 
 /** Project types for which the Books tab is hidden */
-const BOOKS_TAB_HIDDEN_TYPES: ProjectType[] = ['ConsultantNotes', 'Resource', 'XmlResource', 'MarbleResource', 'EnhancedResource'];
+const BOOKS_TAB_HIDDEN_TYPES: ProjectType[] = [
+  'ConsultantNotes',
+  'Resource',
+  'XmlResource',
+  'MarbleResource',
+  'EnhancedResource',
+];
 
 /** Check if a project type shows the Study Bible tab (edit mode only) */
 function isStudyBibleType(projectType: ProjectType): boolean {
@@ -217,9 +232,7 @@ function isStudyBibleType(projectType: ProjectType): boolean {
 // Web View Component
 // =====================================================
 
-globalThis.webViewComponent = function ProjectPropertiesWebView({
-  useWebViewState,
-}: WebViewProps) {
+globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }: WebViewProps) {
   // Read mode and projectId from web view state
   const [mode] = useWebViewState<'new' | 'edit'>('mode', 'new');
   const [projectId] = useWebViewState<string | null>('projectId', null);
@@ -372,8 +385,23 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({
     if (state.projectType === 'NotSelected') return false;
     if (!state.shortName) return false;
     if (!state.fullName) return false;
+    // GAP-004: languageId must be set
+    if (!state.languageId) return false;
+    // GAP-001: base project required for derived types
+    if (state.typeConfig?.baseProjectRequired && !state.baseProjectGuid) return false;
+    // GAP-003: encoding converter required for TransliterationWithEncoder
+    if (state.projectType === 'TransliterationWithEncoder' && !state.encodingConverter)
+      return false;
     return true;
-  }, [state.projectType, state.shortName, state.fullName]);
+  }, [
+    state.projectType,
+    state.shortName,
+    state.fullName,
+    state.languageId,
+    state.typeConfig,
+    state.baseProjectGuid,
+    state.encodingConverter,
+  ]);
 
   const handleOk = useCallback(async () => {
     if (!canSubmit) return;
@@ -399,16 +427,13 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({
 
       let result: CreateProjectResult;
       if (state.mode === 'new') {
-        result = await papi.commands.sendCommand(
-          'paratextProjectCreation.createProject',
-          request,
-        );
+        result = await papi.commands.sendCommand('paratextProjectCreation.createProject', request);
       } else {
-        // updateProject uses same shape (returns CreateProjectResult)
-        result = await papi.commands.sendCommand(
-          'paratextProjectCreation.createProject',
-          request,
-        );
+        // GAP-002: edit mode uses updateProject command
+        result = await papi.commands.sendCommand('paratextProjectCreation.updateProject', {
+          ...request,
+          projectId: state.projectId,
+        });
       }
 
       if (!result.success) {
@@ -435,6 +460,48 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({
       }
     }
   }, [state.mode, state.projectId]);
+
+  // ---- Validation messages (GAP-007) ----
+  const validationMessages = useMemo(() => {
+    const messages: ValidationMessage[] = [];
+    if (state.error) {
+      messages.push({ severity: 'error', message: state.error });
+    }
+    if (state.projectType === 'NotSelected') {
+      messages.push({ severity: 'warning', message: 'Please select a project type.' });
+    }
+    if (!state.fullName) {
+      messages.push({ severity: 'warning', message: 'Full name is required.' });
+    }
+    if (!state.shortName) {
+      messages.push({ severity: 'warning', message: 'Short name is required.' });
+    }
+    if (!state.languageId) {
+      messages.push({ severity: 'info', message: 'Language must be selected.' });
+    }
+    if (state.typeConfig?.baseProjectRequired && !state.baseProjectGuid) {
+      messages.push({
+        severity: 'warning',
+        message: 'A base project must be selected for this project type.',
+      });
+    }
+    if (state.projectType === 'TransliterationWithEncoder' && !state.encodingConverter) {
+      messages.push({
+        severity: 'warning',
+        message: 'An encoding converter must be selected for transliteration projects.',
+      });
+    }
+    return messages;
+  }, [
+    state.error,
+    state.projectType,
+    state.fullName,
+    state.shortName,
+    state.languageId,
+    state.typeConfig,
+    state.baseProjectGuid,
+    state.encodingConverter,
+  ]);
 
   // ---- Render ----
   const title = state.mode === 'new' ? 'New Project' : `Project properties: ${state.fullName}`;
@@ -538,10 +605,26 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({
         </Tabs>
       </div>
 
-      {/* Error ribbon */}
-      {state.error && (
-        <div className="tw-px-4 tw-py-2 tw-bg-destructive/10 tw-text-destructive tw-text-sm">
-          {state.error}
+      {/* Validation ribbon (GAP-007) */}
+      {validationMessages.length > 0 && (
+        <div className="tw-px-4 tw-py-2 tw-flex tw-flex-col tw-gap-1">
+          {validationMessages.map((msg) => (
+            <Alert
+              key={msg.message}
+              variant={msg.severity === 'error' ? 'destructive' : 'default'}
+              className="tw-py-1 tw-px-3"
+            >
+              <AlertDescription
+                className={cn(
+                  'tw-text-sm',
+                  msg.severity === 'warning' && 'tw-text-yellow-700',
+                  msg.severity === 'info' && 'tw-text-muted-foreground',
+                )}
+              >
+                {msg.message}
+              </AlertDescription>
+            </Alert>
+          ))}
         </div>
       )}
 

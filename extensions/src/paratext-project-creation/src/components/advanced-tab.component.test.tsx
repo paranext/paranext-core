@@ -70,4 +70,67 @@ describe('AdvancedTab', () => {
       screen.queryByText(/normalization cannot be changed for existing projects/i),
     ).not.toBeInTheDocument();
   });
+
+  // GAP-005: USFM version upgrade warning
+  it('shows upgrade warning when USFM version changes from 2 to 3 in edit mode', () => {
+    const onUsfmVersionChange = vi.fn();
+    const { rerender } = render(
+      <AdvancedTab
+        {...defaultProps}
+        isNewProject={false}
+        usfmVersion={2}
+        onUsfmVersionChange={onUsfmVersionChange}
+      />,
+    );
+
+    // Initially no warning (still on version 2)
+    expect(screen.queryByText(/upgrading to usfm 3 is a one-way change/i)).not.toBeInTheDocument();
+
+    // Simulate parent changing usfmVersion to 3
+    rerender(
+      <AdvancedTab
+        {...defaultProps}
+        isNewProject={false}
+        usfmVersion={3}
+        onUsfmVersionChange={onUsfmVersionChange}
+      />,
+    );
+
+    expect(screen.getByText(/upgrading to usfm 3 is a one-way change/i)).toBeInTheDocument();
+  });
+
+  it('does not show upgrade warning in new project mode', () => {
+    renderAdvancedTab({ isNewProject: true, usfmVersion: 3 });
+    expect(screen.queryByText(/upgrading to usfm 3 is a one-way change/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-006: Read-only display fields
+  it('shows read-only display fields in edit mode', () => {
+    renderAdvancedTab({
+      isNewProject: false,
+      typicalFileName: '41MATproject.SFM',
+      stylesheetName: 'usfm.sty',
+      textEncodingName: 'UTF-8',
+    });
+
+    expect(screen.getByText('File Name Form')).toBeInTheDocument();
+    expect(screen.getByText('41MATproject.SFM')).toBeInTheDocument();
+    expect(screen.getByText('Stylesheet Name')).toBeInTheDocument();
+    expect(screen.getByText('usfm.sty')).toBeInTheDocument();
+    expect(screen.getByText('Text Encoding')).toBeInTheDocument();
+    expect(screen.getByText('UTF-8')).toBeInTheDocument();
+  });
+
+  it('does not show display fields in new project mode', () => {
+    renderAdvancedTab({
+      isNewProject: true,
+      typicalFileName: '41MATproject.SFM',
+      stylesheetName: 'usfm.sty',
+      textEncodingName: 'UTF-8',
+    });
+
+    expect(screen.queryByText('File Name Form')).not.toBeInTheDocument();
+    expect(screen.queryByText('Stylesheet Name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Text Encoding')).not.toBeInTheDocument();
+  });
 });

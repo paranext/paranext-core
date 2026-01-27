@@ -93,4 +93,18 @@ describe('ProjectPropertiesWebView', () => {
 
     expect(screen.queryByRole('tab', { name: /study bible/i })).not.toBeInTheDocument();
   });
+
+  it('shows validation messages when fields are missing (GAP-007)', async () => {
+    await import('./project-properties.web-view');
+    const Component = globalThis.webViewComponent;
+
+    const props = createMockWebViewProps();
+    render(<Component {...(props as any)} />);
+
+    // In default new state, should show warnings for missing fields
+    expect(screen.getByText(/please select a project type/i)).toBeInTheDocument();
+    expect(screen.getByText(/full name is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/short name is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/language must be selected/i)).toBeInTheDocument();
+  });
 });
