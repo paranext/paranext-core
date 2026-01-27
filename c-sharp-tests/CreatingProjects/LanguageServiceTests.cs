@@ -1,14 +1,43 @@
 using Paranext.DataProvider.CreatingProjects;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.CreatingProjects;
 
 /// <summary>
-/// Tests for LanguageService: ValidateLanguageSelection (CAP-010).
+/// Tests for LanguageService: ValidateLanguageSelection (CAP-010) and
+/// GetAvailableLanguages (CAP-011).
 /// RED phase -- these tests will fail until the service is implemented.
 /// </summary>
 [TestFixture]
 public class LanguageServiceTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        var details = new Paranext.DataProvider.Projects.ProjectDetails(
+            "LangTestProject",
+            new Paranext.DataProvider.Projects.ProjectMetadata(
+                HexId.CreateNew().ToString(),
+                new List<string>()
+            ),
+            FixtureSetup.TestFolderPath
+        );
+        var dummyProjects = new DummyLocalParatextProjects();
+        var scrText = new DummyScrText(details);
+        scrText.Settings.LanguageName = "Existing Language";
+        ScrTextCollection.Add(scrText, true);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (
+            ScrText project in ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .ToList()
+        )
+            ScrTextCollection.Remove(project, false);
+    }
     // =========================================================================
     // CAP-010: ValidateLanguageSelection - Acceptance Test
     // =========================================================================
@@ -151,5 +180,72 @@ public class LanguageServiceTests
         var result = LanguageService.ValidateLanguageSelection(languageId, languageName);
         Assert.That(result.IsValid, Is.False);
         Assert.That(result.ErrorCode, Is.EqualTo(expectedErrorCode));
+    }
+
+    // =========================================================================
+    // CAP-011: GetAvailableLanguages - Acceptance Test
+    // =========================================================================
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("ScenarioId", "TS-011-acceptance")]
+    [Property("BehaviorId", "BHV-009")]
+    [Description("Acceptance test: GetAvailableLanguages returns BCP-47 formatted language list")]
+    public void GetAvailableLanguages_NoFilter_ReturnsLanguageList()
+    {
+        var result = LanguageService.GetAvailableLanguages();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.InstanceOf<IReadOnlyList<LanguageSelection>>());
+        Assert.That(result, Is.Not.Empty);
+    }
+
+    // =========================================================================
+    // CAP-011: GetAvailableLanguages - Contract Tests
+    // =========================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-011-01")]
+    [Property("BehaviorId", "BHV-009")]
+    [Description("Returns non-empty list with well-formed LanguageSelection records")]
+    public void GetAvailableLanguages_ReturnsWellFormedRecords()
+    {
+        var result = LanguageService.GetAvailableLanguages();
+
+        Assert.That(result, Is.Not.Empty);
+        var first = result[0];
+        Assert.That(first.LanguageId, Is.Not.Null.And.Not.Empty);
+        Assert.That(first.LanguageName, Is.Not.Null.And.Not.Empty);
+        Assert.That(first.BaseCode, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-011-02")]
+    [Property("BehaviorId", "BHV-009")]
+    [Description("Search filter narrows results")]
+    public void GetAvailableLanguages_WithSearchFilter_ReturnsFilteredResults()
+    {
+        var all = LanguageService.GetAvailableLanguages();
+        var filtered = LanguageService.GetAvailableLanguages("eng");
+
+        Assert.That(filtered, Is.Not.Null);
+        // Filtered should be a subset (or equal if all match)
+        Assert.That(filtered.Count, Is.LessThanOrEqualTo(all.Count));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-011-03")]
+    [Property("BehaviorId", "BHV-009")]
+    [Description("Null search returns same as no filter")]
+    public void GetAvailableLanguages_NullSearch_ReturnsSameAsNoFilter()
+    {
+        var noFilter = LanguageService.GetAvailableLanguages();
+        var nullFilter = LanguageService.GetAvailableLanguages(null);
+
+        Assert.That(nullFilter.Count, Is.EqualTo(noFilter.Count));
     }
 }

@@ -1,4 +1,7 @@
 using Paranext.DataProvider.CreatingProjects;
+using Paranext.DataProvider.Projects;
+using Paratext.Data;
+using Paratext.Data.Users;
 
 namespace TestParanextDataProvider.CreatingProjects;
 
@@ -9,6 +12,31 @@ namespace TestParanextDataProvider.CreatingProjects;
 [TestFixture]
 public class ProjectNameServiceTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        var details = new ProjectDetails(
+            "existingProject",
+            new Paranext.DataProvider.Projects.ProjectMetadata(
+                HexId.CreateNew().ToString(),
+                new List<string>()
+            ),
+            FixtureSetup.TestFolderPath
+        );
+        var dummyProjects = new DummyLocalParatextProjects();
+        dummyProjects.FakeAddProject(details);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (
+            ScrText project in ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .ToList()
+        )
+            ScrTextCollection.Remove(project, false);
+    }
     // =========================================================================
     // CAP-004: ValidateShortName - Acceptance Test
     // =========================================================================

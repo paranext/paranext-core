@@ -1,11 +1,17 @@
+using System.Text.RegularExpressions;
+using Paratext.Data;
+using Paratext.Data.Languages;
+
 namespace Paranext.DataProvider.CreatingProjects;
 
 /// <summary>
 /// Service for language validation.
-/// Stub: all methods throw NotImplementedException until implemented.
 /// </summary>
 internal static class LanguageService
 {
+    private static readonly HashSet<string> s_reservedNames =
+        ReservedNames.WindowsReservedFileNames;
+
     /// <summary>
     /// Validates a language selection against rules VAL-010 through VAL-013.
     /// </summary>
@@ -15,8 +21,75 @@ internal static class LanguageService
         string? initialLanguageName = null
     )
     {
-        throw new NotImplementedException(
-            "LanguageService.ValidateLanguageSelection not yet implemented"
-        );
+        // VAL-010: Blank name
+        if (string.IsNullOrEmpty(languageName))
+            return new ValidationResult(false, "LANGUAGE_NAME_BLANK");
+
+        // VAL-012: Invalid variant characters
+        if (languageId.Contains("-x-") || languageId.Contains("-X-"))
+        {
+            string variant = languageId[
+                (languageId.IndexOf("-x-", StringComparison.OrdinalIgnoreCase) + 3)..
+            ];
+            if (!Regex.IsMatch(variant, @"^[A-Za-z0-9]+$"))
+                return new ValidationResult(false, "LANGUAGE_VARIANT_INVALID");
+        }
+
+        // VAL-013: Reserved filename as language ID
+        string baseId = languageId.Contains('-')
+            ? languageId[..languageId.IndexOf('-')]
+            : languageId;
+        if (s_reservedNames.Contains(baseId))
+            return new ValidationResult(false, "LANGUAGE_ID_RESERVED");
+
+        // VAL-011: Duplicate name check
+        if (!string.Equals(languageName, initialLanguageName, StringComparison.Ordinal))
+        {
+            foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
+            {
+                if (
+                    string.Equals(
+                        scrText.Settings?.LanguageName,
+                        languageName,
+                        StringComparison.Ordinal
+                    )
+                )
+                    return new ValidationResult(false, "LANGUAGE_NAME_EXISTS");
+            }
+        }
+
+        return new ValidationResult(true);
+    }
+
+    /// <summary>
+    /// Gets all available languages from the ParatextData language database.
+    /// </summary>
+    public static IReadOnlyList<LanguageSelection> GetAvailableLanguages(string? searchQuery = null)
+    {
+        var languages = new List<LanguageSelection>();
+        string search = searchQuery ?? "";
+
+        foreach (LanguageHelperInfo info in LanguageIdHelper.FindAllLanguageMatches(search))
+        {
+            string code = info.Code ?? "";
+            string name = info.Name ?? "";
+
+            if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(name))
+                continue;
+
+            languages.Add(
+                new LanguageSelection
+                {
+                    LanguageId = code,
+                    LanguageName = string.IsNullOrEmpty(name) ? code : name,
+                    BaseCode = string.IsNullOrEmpty(info.Iso6393Code) ? code : info.Iso6393Code,
+                    Script = info.Script,
+                    Region = info.Region,
+                    Variant = info.Variant,
+                }
+            );
+        }
+
+        return languages;
     }
 }
