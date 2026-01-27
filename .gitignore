@@ -48,6 +48,11 @@ c-sharp/**/*.BAK
 .yalc
 yalc.lock
 
+# Playwright E2E tests
+e2e-tests/playwright-report/
+e2e-tests/test-results/
+e2e-tests/.dev-server.pid
+
 # Local dev packages checked out for linking during CI or local development
 dev-packages/
 
