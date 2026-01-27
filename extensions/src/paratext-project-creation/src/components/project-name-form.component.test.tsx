@@ -20,10 +20,20 @@ vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [{}],
 }));
 
-// Mock lucide-react
-vi.mock('lucide-react', () => ({
-  AlertCircle: () => <span data-testid="alert-circle-icon" />,
-}));
+// Mock lucide-react - return proxy to handle any icon import
+vi.mock(
+  'lucide-react',
+  () =>
+    new Proxy(
+      {},
+      {
+        get: (_target, name) => {
+          if (name === '__esModule') return true;
+          return () => <span data-testid={`${String(name)}-icon`} />;
+        },
+      },
+    ),
+);
 
 // Import the mocked papi to control responses
 const { default: papi } = await import('@papi/frontend');
