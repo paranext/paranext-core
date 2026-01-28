@@ -727,8 +727,6 @@ namespace TestParanextDataProvider.Projects
             Assert.That(result, Is.False, "Update with null comment ID should fail");
         }
 
-        // Note: The following test is a just a POC to make sure roundtripping works with an update.
-        // This is now how updates will likely be done in user facing code.
         [Test]
         public void UpdateComment_TimBasicXml_UpdatesContentsSuccessfully()
         {

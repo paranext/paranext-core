@@ -162,6 +162,11 @@ public class PlatformCommentWrapper
     }
 
     /// <summary>
+    /// Gets the underlying Comment object.
+    /// </summary>
+    internal Comment CommentInternal => _comment;
+
+    /// <summary>
     /// Attaches a `PlatformCommentThreadWrapper` to this comment wrapper, allowing access to
     /// properties that depend on thread context, such as `ContentsHtml` and `IsRead`.
     /// </summary>

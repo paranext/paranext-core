@@ -258,7 +258,7 @@ export function CommentItem({
             )}
             <div
               className={cn(
-                'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
+                'tw-prose tw-prose-quoteless tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
                 // tw-prose has a max width defined on it, that we choose to override
                 'tw-max-w-none',
                 {
