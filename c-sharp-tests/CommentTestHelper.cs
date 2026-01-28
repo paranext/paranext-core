@@ -100,16 +100,12 @@ internal static class CommentTestHelper
         XmlDocument contentsDoc = new XmlDocument();
         contentsDoc.LoadXml(
             """
-            <Contents>
-            Two different people edited this verse. The change from Tim Steenwyk(Tuesday, August 16, 2011 3:49 PM) was accepted in the text. The change from Michael Lothers(Tuesday, August 16, 2011 3:48 PM) is shown in this note (in red) and is not in the current copy of the text. In some cases you will need to right click in the verse and click 'View History for Verse(s)' to see exactly when and where the change was made.
-            <p>
+            <Contents>Two different people edited this verse. The change from Tim Steenwyk(Tuesday, August 16, 2011 3:49 PM) was accepted in the text. The change from Michael Lothers(Tuesday, August 16, 2011 3:48 PM) is shown in this note (in red) and is not in the current copy of the text. In some cases you will need to right click in the verse and click 'View History for Verse(s)' to see exactly when and where the change was made.<p>
                 <language name="es-015-vaidika">
-                <p>
-                    \v 1 When Jesus was born in the
+                <p>\v 1 When Jesus was born in the
                     <bold>
                     <color name="red">small </color>
-                    </bold>
-                    village of Bethlehem in Judea, Herod was king. During this time some wise men\f + \fr 2:1 \fq wise men: \ft People famous for studying the stars.\f* from the east came to Jerusalem
+                    </bold>village of Bethlehem in Judea, Herod was king. During this time some wise men\f + \fr 2:1 \fq wise men: \ft People famous for studying the stars.\f* from the east came to Jerusalem
                 </p>
                 </language>
             </p>

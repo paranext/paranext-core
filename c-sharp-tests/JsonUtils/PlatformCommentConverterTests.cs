@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
+using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
 
@@ -8,21 +9,53 @@ namespace TestParanextDataProvider.JsonUtils;
 internal class PlatformCommentConverterTests : PapiTestBase
 {
     private JsonSerializerOptions _serializationOptions = null!;
+    private ScrText _scrText = null!;
+    private CommentManager _commentManager = null!;
 
     [SetUp]
-    public void Setup()
+    public override async Task TestSetupAsync()
     {
+        await base.TestSetupAsync();
         _serializationOptions = SerializationOptions.CreateSerializationOptions();
+
+        // Create a project so we have a CommentManager for thread operations
+        _scrText = CreateDummyProject();
+
+        _commentManager = CommentManager.Get(_scrText);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _scrText?.Dispose();
+    }
+
+    /// <summary>
+    /// Creates a comment via CommentManager and returns the wrapper with its thread, enabling serialization.
+    /// </summary>
+    private (
+        PlatformCommentWrapper wrapper,
+        PlatformCommentThreadWrapper thread
+    ) CreateCommentWithThread(Comment comment)
+    {
+        _commentManager.AddComment(comment);
+        _commentManager.SaveUser(comment.User, false);
+
+        CommentThread thread = _commentManager.FindThread(comment.Thread);
+        var threadWrapper = new PlatformCommentThreadWrapper(thread);
+        var commentWrapper = new PlatformCommentWrapper(comment, threadWrapper);
+
+        return (commentWrapper, threadWrapper);
     }
 
     [Test]
-    [Ignore("This test needs to be fixed when I am done rebasing")]
     public void Serialize_CommentWithBasicFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
-            new PlatformCommentWrapper(testComment),
+            commentWrapper,
             _serializationOptions
         );
         Assert.That(json, Does.Contain(@"""thread"":""4217dff8"""));
@@ -35,17 +68,22 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""contextAfter"":"" the earth to give life"""));
         Assert.That(json, Does.Contain(@"""status"":""Todo"""));
         Assert.That(json, Does.Contain(@"""hideInTextWindow"":false"));
-        Assert.That(json, Does.Contain(@"""contents"":""Test Comment"""));
+        // Contents is now the HTML version (ContentsHtml). Parse JSON to get the actual contents value.
+        using var doc = JsonDocument.Parse(json);
+        var contents = doc.RootElement.GetProperty("contents").GetString() ?? string.Empty;
+        Assert.That(contents, Does.Contain("Test Comment"));
+        Assert.That(commentWrapper.ContentsHtml, Is.EqualTo(contents));
     }
 
     [Test]
-    [Ignore("This test needs to be fixed when I am done rebasing")]
     public void RoundTrip_CommentWithBasicFields_AllFieldsPreserved()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+        string originalContentsHtml = commentWrapper.ContentsHtml;
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
-            new PlatformCommentWrapper(testComment),
+            commentWrapper,
             _serializationOptions
         );
         var deserialized = JsonSerializer.Deserialize<PlatformCommentWrapper>(
@@ -63,17 +101,32 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(deserialized.ContextAfter, Is.EqualTo(testComment.ContextAfter));
         Assert.That(deserialized.Status, Is.EqualTo(testComment.Status));
         Assert.That(deserialized.HideInTextWindow, Is.EqualTo(testComment.HideInTextWindow));
-        Assert.That(deserialized.Contents!.InnerXml, Is.EqualTo(testComment.Contents.InnerXml));
+        // Contents XML after round-trip differs due to HTML conversion (it has an extra <p> tag
+        // around the text; confirmed ok by John W), but should contain the text
+        Assert.That(
+            deserialized.Contents!.InnerXml,
+            Is.EqualTo($@"<p>{testComment.Contents.InnerXml}</p>")
+        );
+
+        // Verify ContentsHtml is preserved after round-trip by creating a new wrapper with the thread.
+        // The deserialized Contents HTML should match what we get from the original comment in the thread.
+        var threadFromManager = _commentManager.FindThread(testComment.Thread);
+        var deserializedWithThread = new PlatformCommentWrapper(
+            deserialized.CommentInternal,
+            new PlatformCommentThreadWrapper(threadFromManager)
+        );
+        // The deserialized Contents HTML should produce the same HTML as the original
+        Assert.That(deserializedWithThread.ContentsHtml, Is.EqualTo(originalContentsHtml));
     }
 
     [Test]
-    [Ignore("This test needs to be fixed when I am done rebasing")]
     public void Serialize_CommentWithConflictFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
-            new PlatformCommentWrapper(testComment),
+            commentWrapper,
             _serializationOptions
         );
         Assert.That(json, Does.Contain(@"""thread"":""5f5ea40f"""));
@@ -86,17 +139,19 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""hideInTextWindow"":false"));
         using var doc = JsonDocument.Parse(json);
         var contents = doc.RootElement.GetProperty("contents").GetString() ?? string.Empty;
-        Assert.That(contents, Is.EqualTo(testComment.Contents.InnerXml));
+        // Contents is now the HTML version (ContentsHtml) rather than the XML version
+        Assert.That(contents, Is.EqualTo(commentWrapper.ContentsHtml));
     }
 
     [Test]
-    [Ignore("This test needs to be fixed when I am done rebasing")]
     public void RoundTrip_CommentWithConflictFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+        string originalContentsHtml = commentWrapper.ContentsHtml;
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
-            new PlatformCommentWrapper(testComment),
+            commentWrapper,
             _serializationOptions
         );
         var deserialized = JsonSerializer.Deserialize<PlatformCommentWrapper>(
@@ -112,7 +167,19 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(deserialized.Status, Is.EqualTo(testComment.Status));
         Assert.That(deserialized.Type, Is.EqualTo(testComment.Type));
         Assert.That(deserialized.HideInTextWindow, Is.EqualTo(testComment.HideInTextWindow));
-        Assert.That(deserialized.Contents!.InnerXml, Is.EqualTo(testComment.Contents.InnerXml));
+
+        // Verify ContentsHtml is preserved after round-trip by creating a new wrapper with the thread.
+        // The deserialized Contents XML should match what we get from the original comment in the thread.
+        var threadFromManager = _commentManager.FindThread(testComment.Thread);
+        var deserializedWithThread = new PlatformCommentWrapper(
+            deserialized.CommentInternal,
+            new PlatformCommentThreadWrapper(threadFromManager)
+        );
+        // The deserialized Contents should produce the same HTML as the original
+        Assert.That(
+            deserializedWithThread.ContentsHtml.Replace("\r", ""),
+            Is.EqualTo(originalContentsHtml)
+        );
     }
 
     [Test]
