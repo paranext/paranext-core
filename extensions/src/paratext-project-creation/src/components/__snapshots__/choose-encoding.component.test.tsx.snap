@@ -1,0 +1,104 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ChooseEncodingForm > renders loaded state 1`] = `
+<div>
+  <div
+    aria-label="Choose Encoding"
+    aria-modal="true"
+    class="pr-twp tw-flex tw-flex-col tw-gap-4 tw-p-4"
+    role="dialog"
+  >
+    <h2
+      class="tw-text-lg tw-font-semibold"
+    >
+      Choose Encoding
+    </h2>
+    <div
+      class="tw-flex tw-flex-col tw-gap-1"
+    >
+      <label
+        class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+        for="encoding-select"
+      >
+        Encoding
+      </label>
+      <button
+        aria-autocomplete="none"
+        aria-controls="radix-:ra:"
+        aria-expanded="false"
+        class="tw-flex tw-w-full tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-input tw-bg-background tw-text-sm tw-ring-offset-background placeholder:tw-text-muted-foreground focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 [&>span]:tw-line-clamp-1 tw-h-10 tw-px-4 tw-py-2"
+        data-state="closed"
+        dir="ltr"
+        id="encoding-select"
+        role="combobox"
+        type="button"
+      >
+        <span
+          style="pointer-events: none;"
+        >
+          Unicode (UTF-8)
+        </span>
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-chevron-down tw-h-4 tw-w-4 tw-opacity-50"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="m6 9 6 6 6-6"
+          />
+        </svg>
+      </button>
+    </div>
+    <div
+      class="tw-flex tw-flex-col tw-gap-1"
+    >
+      <label
+        class="pr-twp tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70"
+        for="sample-text-preview"
+      >
+        Sample text
+      </label>
+      <textarea
+        aria-readonly="true"
+        class="pr-twp tw-flex tw-w-full tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-ring-offset-background placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 md:tw-text-sm tw-min-h-[100px] tw-font-mono tw-text-sm"
+        id="sample-text-preview"
+        readonly=""
+      >
+        \\id MAT
+\\c 1
+\\v 1 Test text
+      </textarea>
+    </div>
+    <div
+      class="tw-flex tw-items-center tw-gap-2"
+    >
+      <button
+        class="pr-twp tw-inline-flex tw-items-center tw-justify-center tw-gap-2 tw-whitespace-nowrap tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0 tw-border tw-border-input tw-bg-background hover:tw-bg-accent hover:tw-text-accent-foreground tw-h-10 tw-px-4 tw-py-2"
+      >
+        Test
+      </button>
+      <div
+        class="tw-flex-1"
+      />
+      <button
+        class="pr-twp tw-inline-flex tw-items-center tw-justify-center tw-gap-2 tw-whitespace-nowrap tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0 tw-border tw-border-input tw-bg-background hover:tw-bg-accent hover:tw-text-accent-foreground tw-h-10 tw-px-4 tw-py-2"
+      >
+        Cancel
+      </button>
+      <button
+        class="pr-twp tw-inline-flex tw-items-center tw-justify-center tw-gap-2 tw-whitespace-nowrap tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0 tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 tw-h-10 tw-px-4 tw-py-2"
+      >
+        OK
+      </button>
+    </div>
+  </div>
+</div>
+`;
