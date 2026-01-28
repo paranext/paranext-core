@@ -41,6 +41,7 @@ dist
 !.storybook
 
 # directories that have separate eslint project
+e2e-tests
 extensions
 lib/browserslist-config-detect-electron
 lib/papi-dts
