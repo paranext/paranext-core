@@ -18,6 +18,7 @@ export default function CommentList({
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
+  handleReadStatusChange,
   assignableUsers,
   canUserAddCommentToThread,
   canUserAssignThreadCallback,
@@ -116,6 +117,7 @@ export default function CommentList({
             verseRef={thread.verseRef}
             handleSelectThread={handleSelectThread}
             threadId={thread.id}
+            isRead={thread.isRead}
             isSelected={selectedThreadId === thread.id}
             currentUser={currentUser}
             assignedUser={thread.assignedUser}
@@ -123,6 +125,7 @@ export default function CommentList({
             handleAddCommentToThread={handleAddCommentToThread}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
+            handleReadStatusChange={handleReadStatusChange}
             assignableUsers={assignableUsers}
             canUserAddCommentToThread={canUserAddCommentToThread}
             canUserAssignThreadCallback={canUserAssignThreadCallback}
