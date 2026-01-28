@@ -9,7 +9,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the LegacyComment TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class CommentConverter : JsonConverter<Comment>
+public class PlatformCommentConverter : JsonConverter<PlatformComment>
 {
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
@@ -22,6 +22,7 @@ public class CommentConverter : JsonConverter<Comment>
     private const string EXTRA_HEADING_INFO = "extraHeadingInfo";
     private const string HIDE_IN_TEXT_WINDOW = "hideInTextWindow";
     private const string ID = "id";
+    private const string IS_READ = "isRead";
     private const string LANGUAGE = "language";
     private const string REPLY_TO_USER = "replyToUser";
     private const string SELECTED_TEXT = "selectedText";
@@ -36,7 +37,19 @@ public class CommentConverter : JsonConverter<Comment>
     private const string VERSE = "verse";
     private const string VERSE_REF = "verseRef";
 
-    public override Comment Read(
+    /// <summary>
+    /// Deserializes a <see cref="PlatformComment"/> from JSON.
+    /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// The JSON <c>contents</c> field could not be interpreted as XML content,
+    /// or a data field contains an invalid enum value.
+    /// </exception>
+    /// <remarks>
+    /// The JSON field <c>isRead</c> is intentionally ignored because read status is not stored in the
+    /// underlying <see cref="Comment"/> and is serialized separately. When serialized, the value is
+    /// read from the file where Paratext data stores read status.
+    /// </remarks>
+    public override PlatformComment Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
@@ -229,14 +242,21 @@ public class CommentConverter : JsonConverter<Comment>
                 $"WARNING: Actual comment ID ({comment.Id}) doesn't match the provided ID ({id})"
             );
 
-        return comment;
+        var wrappedComment = new PlatformComment(comment, null);
+
+        return wrappedComment;
     }
 
-    public override void Write(Utf8JsonWriter writer, Comment value, JsonSerializerOptions options)
+    public override void Write(
+        Utf8JsonWriter writer,
+        PlatformComment value,
+        JsonSerializerOptions options
+    )
     {
         // Writing in the order things seem to appear in the Comment XML files from PT9
         writer.WriteStartObject();
         writer.WriteString(ID, value.Id);
+        writer.WriteBoolean(IS_READ, value.IsRead);
         writer.WriteString(THREAD, value.Thread);
         writer.WriteString(USER, value.User);
         writer.WriteString(VERSE_REF, value.VerseRefStr);
@@ -274,8 +294,10 @@ public class CommentConverter : JsonConverter<Comment>
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
         writer.WriteString(CONTENTS, value.Contents?.InnerXml ?? "");
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
-        JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
-        JsonConverterUtils.TryWriteString(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));
+        if (value.TagsAdded != null)
+            JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
+        if (value.TagsRemoved != null)
+            JsonConverterUtils.TryWriteString(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));
         writer.WriteEndObject();
     }
 

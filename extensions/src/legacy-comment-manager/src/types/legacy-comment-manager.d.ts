@@ -1,7 +1,6 @@
 declare module 'legacy-comment-manager' {
   import {
     DataProviderDataType,
-    DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
     NetworkableObject,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -15,9 +14,7 @@ declare module 'legacy-comment-manager' {
     CommentType,
     LegacyComment,
     LegacyCommentThread,
-    PlatformError,
     Prettify,
-    UnsubscriberAsync,
   } from 'platform-bible-utils';
 
   // #region Scripture Range Types
@@ -116,13 +113,6 @@ declare module 'legacy-comment-manager' {
 
   // #region Selector Types
 
-  export type LegacyCommentSelector = {
-    bookId: string;
-    chapterNum: number;
-    verseNum?: number;
-    commentId?: string;
-  };
-
   /**
    * Selector for retrieving comment threads
    *
@@ -158,7 +148,9 @@ declare module 'legacy-comment-manager' {
    * {@link ILegacyCommentProjectDataProvider.createComment} method.
    */
   export type NewLegacyComment = Prettify<
-    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread'>> & { contents: string }
+    Partial<Omit<LegacyComment, 'id' | 'user' | 'date' | 'thread' | 'isRead'>> & {
+      contents: string;
+    }
   >;
 
   /**
@@ -194,8 +186,6 @@ declare module 'legacy-comment-manager' {
 
   /** Provides comment data */
   export type LegacyCommentProjectInterfaceDataTypes = {
-    /** Called "Project Notes" in Paratext 9 */
-    Comments: DataProviderDataType<LegacyCommentSelector, LegacyComment[], LegacyComment[]>;
     /** Comment threads matching the selector criteria */
     CommentThreads: DataProviderDataType<LegacyCommentThreadSelector, LegacyCommentThread[], never>;
   };
@@ -203,29 +193,6 @@ declare module 'legacy-comment-manager' {
   /** Provides comments from project team members in a way that is compatible with Paratext 9 */
   export type ILegacyCommentProjectDataProvider =
     IProjectDataProvider<LegacyCommentProjectInterfaceDataTypes> & {
-      /** Gets the specified comments by ID or all comments in given portion of scripture */
-      getComments(selector: LegacyCommentSelector): Promise<LegacyComment[]>;
-      /** Sets all comments or just the comment with the given ID */
-      setComments(
-        selector: LegacyCommentSelector,
-        comments: LegacyComment[],
-      ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes>>;
-      /**
-       * Subscribe to run a callback function when the comments data changes
-       *
-       * @param selector Tells the provider what changes to listen for (which comments)
-       * @param callback Function to run with the updated comments for this selector. If there is an
-       *   error while retrieving the updated data, the function will run with a
-       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
-       *   value to check if it is an error.
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-       */
-      subscribeComments(
-        selector: LegacyCommentSelector,
-        callback: (comments: LegacyComment[] | PlatformError) => void,
-        options?: DataProviderSubscriberOptions,
-      ): Promise<UnsubscriberAsync>;
       /**
        * Gets comment threads matching the specified selector criteria
        *
@@ -292,6 +259,15 @@ declare module 'legacy-comment-manager' {
         commentId: string,
         updatedContent: string,
       ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes> | false>;
+
+      /**
+       * Sets the read status of a comment thread
+       *
+       * @param threadId The unique ID of the thread to update
+       * @param markRead Whether to mark the thread as read (true) or unread (false)
+       * @throws If the thread ID is invalid or not found
+       */
+      setIsCommentThreadRead(threadId: string, markRead: boolean): Promise<void>;
 
       /**
        * Finds the list of users that can be assigned to comment threads in this project

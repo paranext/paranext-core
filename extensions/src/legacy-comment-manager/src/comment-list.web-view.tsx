@@ -241,6 +241,20 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const handleReadStatusChange = useCallback(
+    async (threadId: string, markAsRead: boolean): Promise<boolean> =>
+      withPdp(commentsPdp, 'handleReadStatusChange', false, async (pdp) => {
+        try {
+          await pdp.setIsCommentThreadRead(threadId, markAsRead);
+          return true;
+        } catch (error) {
+          logger.error(`Failed to set read status on thread ${threadId}:`, error);
+          return false;
+        }
+      }),
+    [commentsPdp],
+  );
+
   if (isLoadingCommentThreads || !commentsPdp) {
     return (
       <div className="tw-bg-background tw-flex-1 tw-p-2 tw-space-y-4">
@@ -271,6 +285,7 @@ global.webViewComponent = function CommentListWebView({
           handleAddCommentToThread={handleAddCommentToThread}
           handleUpdateComment={handleUpdateComment}
           handleDeleteComment={handleDeleteComment}
+          handleReadStatusChange={handleReadStatusChange}
           assignableUsers={assignableUsers}
           canUserAddCommentToThread={canUserAddCommentToThread}
           canUserAssignThreadCallback={canUserAssignThreadCallback}

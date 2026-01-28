@@ -5456,6 +5456,8 @@ export type LegacyComment = {
 	hideInTextWindow: boolean;
 	/** Unique id of the comment, unchanged by subsequent editing */
 	id: string;
+	/** Whether the comment has been read (by the current user) */
+	isRead: boolean;
 	/** Language of note */
 	language: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
@@ -5516,6 +5518,8 @@ export type LegacyCommentThread = {
 	isBTNote: boolean;
 	/** Whether this is a consultant note */
 	isConsultantNote: boolean;
+	/** Whether the thread has been read (by the current user) */
+	isRead: boolean;
 	/** Biblical term ID if this is a biblical term note */
 	biblicalTermId?: string;
 };

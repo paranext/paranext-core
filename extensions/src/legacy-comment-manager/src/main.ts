@@ -266,14 +266,19 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     webViewUpdateUnsub,
   );
 
-  /* Potentially helpful code if you need to see comments without the UI
-  setTimeout(async () => {
+  // Potentially helpful code if you need to see comments without the UI
+  /*   setTimeout(async () => {
     logger.debug('GETTING COMMENTS');
     const commentPDP = await papi.projectDataProviders.get('legacyCommentManager.comments', '93fd8ea0de378f9d331cb798ef8039595524c161');
-    const comments = await commentPDP.getComments({ bookId: 'GEN' });
-    logger.debug(`COMMENTS! => ${JSON.stringify(comments)}`);
-  }, 20000);
-*/
+    const commentThreads = await commentPDP.getCommentThreads({ scriptureRanges: [
+          {
+            granularity: 'book',
+            start: { book: "GEN", chapterNum: 0, verseNum: 0 },
+            end: { book: "GEN", chapterNum: 50, verseNum: 26 },
+          },
+        ],});
+    logger.debug(`COMMENTS! => ${JSON.stringify(commentThreads)}`);
+  }, 20000); */
 
   logger.debug('Legacy comment manager is finished activating!');
 }

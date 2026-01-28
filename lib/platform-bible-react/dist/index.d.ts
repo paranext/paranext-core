@@ -156,6 +156,8 @@ type LegacyComment = {
 	hideInTextWindow: boolean;
 	/** Unique id of the comment, unchanged by subsequent editing */
 	id: string;
+	/** Whether the comment has been read (by the current user) */
+	isRead: boolean;
 	/** Language of note */
 	language: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
@@ -211,6 +213,8 @@ type LegacyCommentThread = {
 	isBTNote: boolean;
 	/** Whether this is a consultant note */
 	isConsultantNote: boolean;
+	/** Whether the thread has been read (by the current user) */
+	isRead: boolean;
 	/** Biblical term ID if this is a biblical term note */
 	biblicalTermId?: string;
 };
@@ -459,6 +463,8 @@ export interface CommentListProps {
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
 	handleDeleteComment: (commentId: string) => Promise<boolean>;
+	/** Handler for updating a thread's read status */
+	handleReadStatusChange: (threadId: string, markRead: boolean) => Promise<boolean>;
 	/**
 	 * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
 	 * (empty string) for unassigned.
@@ -490,7 +496,7 @@ export interface CommentListProps {
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
