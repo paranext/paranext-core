@@ -9,7 +9,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the LegacyComment TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class PlatformCommentConverter : JsonConverter<PlatformComment>
+public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
 {
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
@@ -38,7 +38,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
     private const string VERSE_REF = "verseRef";
 
     /// <summary>
-    /// Deserializes a <see cref="PlatformComment"/> from JSON.
+    /// Deserializes a <see cref="PlatformCommentWrapper"/> from JSON.
     /// </summary>
     /// <exception cref="InvalidDataException">
     /// The JSON <c>contents</c> field could not be interpreted as XML content,
@@ -49,7 +49,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
     /// underlying <see cref="Comment"/> and is serialized separately. When serialized, the value is
     /// read from the file where Paratext data stores read status.
     /// </remarks>
-    public override PlatformComment Read(
+    public override PlatformCommentWrapper Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
@@ -242,14 +242,14 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
                 $"WARNING: Actual comment ID ({comment.Id}) doesn't match the provided ID ({id})"
             );
 
-        var wrappedComment = new PlatformComment(comment, null);
+        var wrappedComment = new PlatformCommentWrapper(comment, null);
 
         return wrappedComment;
     }
 
     public override void Write(
         Utf8JsonWriter writer,
-        PlatformComment value,
+        PlatformCommentWrapper value,
         JsonSerializerOptions options
     )
     {

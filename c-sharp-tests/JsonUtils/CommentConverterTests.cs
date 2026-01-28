@@ -21,7 +21,7 @@ public class PlatformCommentConverterTests
         var json =
             "{\"contents\": null, \"user\": \"tester\", \"thread\": \"t1\", \"verseRef\": \"GEN 1:1\"}";
 
-        var result = JsonSerializer.Deserialize<PlatformComment>(json, _serializationOptions);
+        var result = JsonSerializer.Deserialize<PlatformCommentWrapper>(json, _serializationOptions);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Contents, Is.Not.Null);
@@ -34,7 +34,7 @@ public class PlatformCommentConverterTests
     {
         var json = "{\"user\": \"tester\", \"thread\": \"t2\", \"verseRef\": \"GEN 1:2\"}";
 
-        var result = JsonSerializer.Deserialize<PlatformComment>(json, _serializationOptions);
+        var result = JsonSerializer.Deserialize<PlatformCommentWrapper>(json, _serializationOptions);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Contents, Is.Not.Null);
@@ -48,7 +48,7 @@ public class PlatformCommentConverterTests
         var json = "{\"contents\": \"<p>unclosed\", \"user\": \"tester\", \"thread\": \"t3\"}";
 
         Assert.Throws<InvalidDataException>(
-            () => JsonSerializer.Deserialize<PlatformComment>(json, _serializationOptions)
+            () => JsonSerializer.Deserialize<PlatformCommentWrapper>(json, _serializationOptions)
         );
     }
 
@@ -57,7 +57,7 @@ public class PlatformCommentConverterTests
     {
         var json = "{\"contents\": \"<p>content</p>\", \"user\": \"tester\", \"thread\": \"t4\"}";
 
-        var result = JsonSerializer.Deserialize<PlatformComment>(json, _serializationOptions);
+        var result = JsonSerializer.Deserialize<PlatformCommentWrapper>(json, _serializationOptions);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Contents, Is.Not.Null);

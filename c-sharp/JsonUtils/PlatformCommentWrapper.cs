@@ -7,12 +7,12 @@ namespace Paranext.DataProvider.JsonUtils;
 /// a project note in the Paratext 9 UI — by adding read-status information and making it suitable
 /// for JSON serialization.
 /// </summary>
-public class PlatformComment
+public class PlatformCommentWrapper
 {
     private readonly Comment _comment;
-    private readonly PlatformCommentThread? _thread;
+    private readonly PlatformCommentThreadWrapper? _thread;
 
-    public PlatformComment(Comment comment, PlatformCommentThread? thread = null)
+    public PlatformCommentWrapper(Comment comment, PlatformCommentThreadWrapper? thread = null)
     {
         if (comment == null)
         {

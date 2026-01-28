@@ -7,18 +7,18 @@ namespace Paranext.DataProvider.JsonUtils;
 /// Represents a series of related comments. This class adapts <see cref="CommentThread"/> by adding
 /// read-status information and making it suitable for JSON serialization.
 /// </summary>
-public class PlatformCommentThread
+public class PlatformCommentThreadWrapper
 {
     private readonly CommentThread _thread;
 
-    public PlatformCommentThread(CommentThread thread)
+    public PlatformCommentThreadWrapper(CommentThread thread)
     {
         _thread = thread;
     }
 
     public string Id => _thread.Id;
-    public IEnumerable<PlatformComment> Comments =>
-        _thread.Comments.Select(c => new PlatformComment(c, this));
+    public IEnumerable<PlatformCommentWrapper> Comments =>
+        _thread.Comments.Select(c => new PlatformCommentWrapper(c, this));
     public PtxUtils.Enum<NoteStatus> Status => _thread.Status;
     public PtxUtils.Enum<NoteType> Type => _thread.Type;
     public string? AssignedUser => _thread.AssignedUser;
