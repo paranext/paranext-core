@@ -7,12 +7,14 @@ import {
   InventorySummaryItem,
   InventoryTableData,
   Scope,
+  getInventoryHeader,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
+import { getUnicodeValue } from './inventory-utils';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -47,10 +49,11 @@ const createColumns = (
   inventoryItemColumn(itemLabel),
   {
     accessorKey: 'unicodeValue',
-    header: () => <Button variant="ghost">{unicodeValueLabel}</Button>,
+    accessorFn: (row) => getUnicodeValue(row.items[0]),
+    header: ({ column }) => getInventoryHeader(column, unicodeValueLabel),
     cell: ({ row }) => {
       const item: string = row.getValue('item');
-      return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
+      return getUnicodeValue(item);
     },
   },
   inventoryCountColumn(countLabel),

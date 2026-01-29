@@ -7,12 +7,14 @@ import {
   InventorySummaryItem,
   InventoryTableData,
   Scope,
+  getInventoryHeader,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
+import { getUnicodeValue } from './inventory-utils';
 
 const PUNCTUATION_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
@@ -55,11 +57,12 @@ const createColumns = (
     },
     {
       accessorKey: 'unicodeValue',
-      header: () => <Button variant="ghost">{unicodeValueLabel}</Button>,
+      accessorFn: (row) => getUnicodeValue(row.items[0]),
+      header: ({ column }) => getInventoryHeader(column, unicodeValueLabel),
       //  Q: How to style the <td> and <th> directly?
       cell: ({ row }) => (
         <div className="tw-font-mono tw-flex tw-justify-center">
-          {String(row.getValue('item')).charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}
+          {getUnicodeValue(row.getValue('item'))}
         </div>
       ),
     },
