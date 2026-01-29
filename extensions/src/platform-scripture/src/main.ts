@@ -13,6 +13,18 @@ import {
 } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
+import {
+  ProjectPropertiesWebViewProvider,
+  PROJECT_PROPERTIES_WEB_VIEW_TYPE,
+} from './project-properties.web-view-provider';
+import {
+  InterlinearSetupWebViewProvider,
+  interlinearSetupWebViewType,
+} from './interlinear-setup.web-view-provider';
+import {
+  RestoreProjectWebViewProvider,
+  RESTORE_PROJECT_WEB_VIEW_TYPE,
+} from './restore-project.web-view-provider';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import {
   SCRIPTURE_EXTENDER_PDPF_ID,
@@ -240,6 +252,9 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
+  const projectPropertiesWebViewProvider = new ProjectPropertiesWebViewProvider();
+  const interlinearSetupWebViewProvider = new InterlinearSetupWebViewProvider();
+  const restoreProjectWebViewProvider = new RestoreProjectWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -418,6 +433,20 @@ export async function activate(context: ExecutionActivationContext) {
     findWebViewProvider,
   );
 
+  // Project creation web view providers
+  const projectPropertiesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    PROJECT_PROPERTIES_WEB_VIEW_TYPE,
+    projectPropertiesWebViewProvider,
+  );
+  const interlinearSetupWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    interlinearSetupWebViewType,
+    interlinearSetupWebViewProvider,
+  );
+  const restoreProjectWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    RESTORE_PROJECT_WEB_VIEW_TYPE,
+    restoreProjectWebViewProvider,
+  );
+
   const invalidateResultsPromise = papi.commands.registerCommand(
     'platformScripture.invalidateCheckResults',
     async (details: CheckResultsInvalidated) => {
@@ -474,6 +503,9 @@ export async function activate(context: ExecutionActivationContext) {
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,
+    await projectPropertiesWebViewProviderPromise,
+    await interlinearSetupWebViewProviderPromise,
+    await restoreProjectWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
