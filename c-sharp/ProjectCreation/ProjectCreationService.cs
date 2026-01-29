@@ -262,4 +262,69 @@ public static partial class ProjectCreationService
     }
 
     #endregion
+
+    #region CAP-001: CreateProject (EXT-003) - STUB
+
+    /// <summary>
+    /// Creates a new project based on the provided request.
+    /// Maps to EXT-003 from extraction-plan.md.
+    /// </summary>
+    /// <param name="request">The project creation request</param>
+    /// <returns>Result containing the created project info or error details</returns>
+    public static Task<ProjectCreationResult> CreateProjectAsync(ProjectCreationRequest request)
+    {
+        // TODO: Implement project creation - this is a RED phase stub
+        throw new NotImplementedException("CAP-001: CreateProject not yet implemented");
+    }
+
+    #endregion
+
+    #region CAP-002: GetProjectOptions (SPEC-008) - STUB
+
+    /// <summary>
+    /// Gets project creation options for populating UI dropdowns.
+    /// Maps to SPEC-008 from test-specifications.
+    /// </summary>
+    /// <returns>Options result with languages, versifications, types, and base projects</returns>
+    public static Task<ProjectOptionsResult> GetProjectOptionsAsync()
+    {
+        // TODO: Implement options retrieval - this is a RED phase stub
+        throw new NotImplementedException("CAP-002: GetProjectOptions not yet implemented");
+    }
+
+    #endregion
+
+    #region CAP-003: CalculateTranslationInfo (SPEC-002) - STUB
+
+    /// <summary>
+    /// Calculates TranslationInfo for derived project types.
+    /// Maps to SPEC-002 from test-specifications.
+    /// </summary>
+    /// <param name="projectType">The project type</param>
+    /// <param name="baseProjectName">Base project name (required for derived types)</param>
+    /// <param name="baseProjectGuid">Base project GUID (required for derived types)</param>
+    /// <returns>TranslationInfo for the project</returns>
+    public static TranslationInfo? CalculateTranslationInfo(
+        ProjectType projectType,
+        string? baseProjectName,
+        string? baseProjectGuid
+    )
+    {
+        // TODO: Implement translation info calculation - this is a RED phase stub
+        throw new NotImplementedException("CAP-003: CalculateTranslationInfo not yet implemented");
+    }
+
+    /// <summary>
+    /// Parses a serialized TranslationInfo string.
+    /// Format: "Type:BaseProjectName:BaseProjectGuid"
+    /// </summary>
+    /// <param name="serialized">The serialized TranslationInfo string</param>
+    /// <returns>Parsed TranslationInfo</returns>
+    public static TranslationInfo ParseTranslationInfo(string serialized)
+    {
+        // TODO: Implement parsing - this is a RED phase stub
+        throw new NotImplementedException("CAP-003: ParseTranslationInfo not yet implemented");
+    }
+
+    #endregion
 }
