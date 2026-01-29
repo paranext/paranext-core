@@ -10,6 +10,13 @@ import {
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
+import { Column } from '@tanstack/react-table';
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/shadcn-ui/tooltip';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**
@@ -30,6 +37,40 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
 };
 
 /**
+ * Generates a responsive column header for inventory columns with tooltip and sorting functionality
+ *
+ * @param column The column received from ColumnDef.header
+ * @param label The label field to display in the header and tooltip
+ * @returns A ReactNode representing the header
+ */
+export const getInventoryHeader = (
+  column: Column<InventoryTableData, unknown>,
+  label: string,
+): ReactNode => {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger className="tw-flex tw-w-full">
+          <div className="tw-flex tw-w-full">
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(undefined)}
+              className="tw-flex-1"
+            >
+              <span className="tw-w-4 tw-max-w-fit tw-flex-1 tw-overflow-hidden tw-text-ellipsis">
+                {label}
+              </span>
+              {getSortingIcon(column.getIsSorted())}
+            </Button>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
+/**
  * Function that creates the item column for inventories
  *
  * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
@@ -39,12 +80,7 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTable
   return {
     accessorKey: 'item',
     accessorFn: (row: InventoryTableData) => row.items[0],
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-        {itemLabel}
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
-    ),
+    header: ({ column }) => getInventoryHeader(column, itemLabel),
   };
 };
 
@@ -65,12 +101,7 @@ export const inventoryAdditionalItemColumn = (
   return {
     accessorKey: `item${additionalItemIndex}`,
     accessorFn: (row: InventoryTableData) => row.items[additionalItemIndex],
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-        {additionalItemLabel}
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
-    ),
+    header: ({ column }) => getInventoryHeader(column, additionalItemLabel),
   };
 };
 
@@ -84,15 +115,10 @@ export const inventoryAdditionalItemColumn = (
 export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'count',
-    header: ({ column }) => (
-      <div className="tw-flex tw-justify-end tw-tabular-nums">
-        <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-          {countLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      </div>
+    header: ({ column }) => getInventoryHeader(column, countLabel),
+    cell: ({ row }) => (
+      <div className="tw-flex tw-justify-end tw-tabular-nums">{row.getValue('count')}</div>
     ),
-    cell: ({ row }) => <div className="tw-flex tw-justify-end">{row.getValue('count')}</div>,
   };
 };
 
@@ -160,16 +186,7 @@ export const inventoryStatusColumn = (
 ): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
-    header: ({ column }) => {
-      return (
-        <div className="tw-flex tw-justify-center">
-          <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-            {statusLabel}
-            {getSortingIcon(column.getIsSorted())}
-          </Button>
-        </div>
-      );
-    },
+    header: ({ column }) => getInventoryHeader(column, statusLabel),
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
