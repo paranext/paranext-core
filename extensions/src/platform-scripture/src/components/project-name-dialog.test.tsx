@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProjectNameDialog, ProjectNameDialogProps } from './project-name-dialog.component';
 import {
@@ -8,6 +8,11 @@ import {
   validateShortName,
   ProjectNameFormInput,
 } from '../hooks/use-project-name-form';
+
+/** Helper to get input element value without type assertion */
+function getInputValue(element: HTMLElement): string {
+  return 'value' in element ? String(element.value) : '';
+}
 
 // =============================================================================
 // UNIT TESTS FOR VALIDATION FUNCTIONS
@@ -220,8 +225,8 @@ describe('ProjectNameDialog', () => {
     const fullNameInput = screen.getByLabelText(/full name/i);
     await user.type(fullNameInput, 'My Test Project');
 
-    const shortNameInput = screen.getByLabelText(/short name/i) as HTMLInputElement;
-    expect(shortNameInput.value).toBe('MTP');
+    const shortNameInput = screen.getByLabelText(/short name/i);
+    expect(getInputValue(shortNameInput)).toBe('MTP');
   });
 
   it('should stop auto-generation when user types in short name field (BHV-203)', async () => {
@@ -241,17 +246,17 @@ describe('ProjectNameDialog', () => {
     await user.clear(fullNameInput);
     await user.type(fullNameInput, 'New Project Name');
 
-    expect((shortNameInput as HTMLInputElement).value).toBe('ABC');
+    expect(getInputValue(shortNameInput)).toBe('ABC');
   });
 
   it('should replace backslash with forward slash in full name (BHV-202)', async () => {
     const user = userEvent.setup();
     render(<ProjectNameDialog {...defaultProps} />);
 
-    const fullNameInput = screen.getByLabelText(/full name/i) as HTMLInputElement;
+    const fullNameInput = screen.getByLabelText(/full name/i);
     await user.type(fullNameInput, 'My\\Project');
 
-    expect(fullNameInput.value).toBe('My/Project');
+    expect(getInputValue(fullNameInput)).toBe('My/Project');
   });
 
   it('should show validation error for invalid short name', async () => {

@@ -356,18 +356,55 @@ export function useRegistrationStatus(
     [displayState, offlineConfirmed],
   );
 
+  // GAP-004: Build registry URL with project parameters
+  const buildRegistryUrl = useCallback(
+    (action: 'register' | 'manage'): string => {
+      const baseUrl = 'https://registry.paratext.org';
+      const params = new URLSearchParams();
+
+      if (input.projectGuid) {
+        params.append('projectId', input.projectGuid);
+      }
+      if (input.projectType) {
+        params.append('projectType', input.projectType);
+      }
+
+      if (action === 'register') {
+        return `${baseUrl}/register?${params.toString()}`;
+      }
+      return `${baseUrl}/manage?${params.toString()}`;
+    },
+    [input.projectGuid, input.projectType],
+  );
+
   // Handle register click (BHV-111)
+  // GAP-004: Wire register online link - opens browser to registry
   const handleRegisterClick = useCallback(() => {
-    // In a real implementation, this would launch browser to registry
-    // For now, call the callback if provided
+    const url = buildRegistryUrl('register');
+
+    // Open browser to registry URL
+    // Use window.open for web environment
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    // Call the callback if provided
     callbacks?.onRegisterClicked?.();
-  }, [callbacks]);
+  }, [buildRegistryUrl, callbacks]);
 
   // Handle manage click
+  // GAP-004: Wire manage registration link - opens browser to management page
   const handleManageClick = useCallback(() => {
-    // In a real implementation, this would launch browser to management page
+    const url = buildRegistryUrl('manage');
+
+    // Open browser to management URL
+    if (typeof window !== 'undefined') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    // Call the callback if provided
     callbacks?.onManageClicked?.();
-  }, [callbacks]);
+  }, [buildRegistryUrl, callbacks]);
 
   // Handle offline confirm change (BHV-210)
   const handleOfflineConfirmChange = useCallback(

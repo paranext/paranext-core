@@ -18,14 +18,16 @@ import {
   AlertTitle,
   Badge,
   Button,
+  Card,
+  CardContent,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
   cn,
 } from 'platform-bible-react';
-import { AlertTriangle } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { AlertTriangle, HelpCircle } from 'lucide-react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 
 import { useProjectPropertiesForm } from './hooks/use-project-properties-form';
 import type {
@@ -128,6 +130,52 @@ const MOCK_INPUT: ProjectPropertiesInput = {
  * - BHV-200-210: Name and registration handling
  * - BHV-204: Tab navigation
  */
+// =============================================================================
+// HELP TEXT MAP (GAP-003: Help box context)
+// =============================================================================
+
+/** Help text for each field - displayed in help panel when field is focused */
+const HELP_TEXT: Record<string, string> = {
+  fullName:
+    'The full name of the project. This appears in project selection dialogs and reports. Use a descriptive name that identifies the translation.',
+  shortName:
+    'A short identifier (3-8 characters) for the project. Used in file names and as a compact reference. Must be unique and contain only letters and numbers.',
+  copyright:
+    'Copyright information for the translation. This text appears in published materials and exports.',
+  language:
+    'The target language for this translation project. Choose the language that best represents your target audience.',
+  versification:
+    'The versification scheme determines how chapter and verse numbers are organized. Most projects use the English versification. For derived projects, this inherits from the base project.',
+  projectType:
+    'The type of project determines its relationship to other projects and available features. Standard translations are independent. Derived types (Back Translation, Daughter, etc.) are based on another project.',
+  baseProject:
+    'The source project that this derived project is based on. The base project provides the versification and may provide other inherited settings.',
+  biblicalTerms:
+    'Select which biblical terms list to use for key term consistency checking. The default list covers major terms used in Bible translation.',
+  matchStems:
+    'When enabled, term matching considers word stems rather than exact forms. This improves matching for languages with complex morphology.',
+  encodingConverter:
+    'Select the encoding converter for transliteration projects. The converter transforms text between different writing systems.',
+  registration:
+    'Shows the registration status with the Paratext Registry. Registered projects can be shared and synchronized with team members.',
+  books:
+    'Select which books are included in this project. You can add or remove books later as needed.',
+  associations: 'Configure links to associated lexical projects for enhanced term management.',
+  flexUsage:
+    'Configure how this project interacts with FieldWorks Language Explorer (FLEx) for lexical data.',
+  commentTags:
+    'Define custom tags for organizing project notes and comments. Tags help categorize feedback and issues.',
+  usfmVersion:
+    'The USFM format version for exported files. USFM 3 is recommended for new projects and supports enhanced markup.',
+  normalization:
+    'Unicode normalization form for text storage. NFC (composed) is recommended for most projects.',
+  editable:
+    'When enabled, the project text can be modified. Disable for reference projects that should not be edited.',
+  sharing:
+    'Permission settings for sharing this project with other users and organizations via the Paratext Registry.',
+  default: 'Click on a field to see detailed help information here.',
+};
+
 globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }: WebViewProps) {
   // Get input data from web view state (with mock fallback for development)
   const [inputDataRaw] = useWebViewState<ProjectPropertiesInput | undefined>(
@@ -139,6 +187,9 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
   // Initialize form hook
   const form = useProjectPropertiesForm(inputData);
   const { state, options, mode } = form;
+
+  // GAP-003: Help text state - updates based on focused field
+  const [helpText, setHelpText] = useState<string>(HELP_TEXT.default);
 
   // Get visible tabs based on project type
   const visibleTabs = useMemo(
@@ -177,11 +228,67 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
     // TODO: Close web view
   }, [form]);
 
+  // GAP-003: Handler for updating help text based on focused field
+  // Passed to child components (GeneralTab, etc.) to update help when fields are focused
+  // TODO: Wire this to child component onFocus handlers for full help integration
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Will be used when wiring to child components
+  const updateHelpText = useCallback((fieldKey: string) => {
+    setHelpText(HELP_TEXT[fieldKey] || HELP_TEXT.default);
+  }, []);
+
+  // Track previous active tab to detect tab changes for GAP-005
+  const previousActiveTab = useRef<number>(state.activeTab);
+
+  // GAP-005: Auto-focus first error field when switching to a tab with errors
+  useEffect(() => {
+    if (previousActiveTab.current !== state.activeTab) {
+      previousActiveTab.current = state.activeTab;
+
+      // If the new tab has errors, focus the first error field
+      if (state.tabsWithErrors.includes(state.activeTab)) {
+        // Small delay to ensure the tab content has rendered
+        setTimeout(() => {
+          const errorElement = document.querySelector('[role="alert"]');
+          if (errorElement) {
+            // Find the nearest input or button before the error
+            const container = errorElement.parentElement;
+            const focusableElement = container?.querySelector(
+              'input, select, button, [tabindex="0"]',
+            );
+            if (focusableElement instanceof HTMLElement) {
+              focusableElement.focus();
+            }
+          }
+        }, 100);
+      }
+    }
+  }, [state.activeTab, state.tabsWithErrors]);
+
+  // GAP-006: Handle Enter key to submit form
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        // Don't submit if inside a textarea or multi-line input
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'TEXTAREA') return;
+        if (target.getAttribute('role') === 'combobox') return;
+
+        // Only submit if Enter is pressed on an input or button
+        if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
+          event.preventDefault();
+          handleSubmit();
+        }
+      }
+    },
+    [handleSubmit],
+  );
+
   // Title based on mode
   const title = mode === 'create' ? 'New Project' : `Project Properties - ${state.shortName}`;
 
   return (
-    <div className="pr-twp tw-flex tw-flex-col tw-h-full tw-gap-2 tw-p-4">
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div className="pr-twp tw-flex tw-flex-col tw-h-full tw-gap-2 tw-p-4" onKeyDown={handleKeyDown}>
       {/* Title */}
       <h2 className="tw-text-lg tw-font-semibold tw-text-foreground">{title}</h2>
 
@@ -340,6 +447,14 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
           )}
         </div>
       </Tabs>
+
+      {/* GAP-003: Help Panel - displays context-sensitive help based on focused field */}
+      <Card className="tw-bg-muted/30 tw-border-muted">
+        <CardContent className="tw-p-3 tw-flex tw-items-start tw-gap-2">
+          <HelpCircle className="tw-h-4 tw-w-4 tw-text-muted-foreground tw-mt-0.5 tw-flex-shrink-0" />
+          <p className="tw-text-sm tw-text-muted-foreground">{helpText}</p>
+        </CardContent>
+      </Card>
 
       {/* Action Buttons */}
       <div className="tw-flex tw-justify-end tw-gap-2 tw-pt-4 tw-border-t tw-border-border">

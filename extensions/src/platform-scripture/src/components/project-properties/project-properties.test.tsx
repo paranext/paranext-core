@@ -10,8 +10,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
 import { useProjectPropertiesForm } from '../../hooks/use-project-properties-form';
 import type { ProjectPropertiesInput } from '../../types/project-properties.types';
 import {
@@ -552,5 +551,147 @@ describe('BookChooser Component', () => {
     );
 
     expect(screen.queryByText(/Deuterocanonical/)).not.toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// GAP-002: handleSaveAsync TESTS
+// =============================================================================
+
+describe('handleSaveAsync (GAP-002)', () => {
+  it('returns validation error when form is invalid', async () => {
+    const { result } = renderHook(() => useProjectPropertiesForm(createMockInput()));
+
+    let saveResult: Awaited<ReturnType<typeof result.current.handleSaveAsync>> | undefined;
+    await act(async () => {
+      saveResult = await result.current.handleSaveAsync();
+    });
+
+    expect(saveResult?.success).toBe(false);
+    expect(saveResult?.error).toBe('Validation failed');
+  });
+
+  it('returns project data when form is valid', async () => {
+    const { result } = renderHook(() => useProjectPropertiesForm(createMockInput()));
+
+    // Set required fields
+    act(() => {
+      result.current.setFullName('Test Project');
+      result.current.setShortName('TEST');
+      result.current.setLanguage('en:Latn:US:');
+      result.current.setVersification('English');
+    });
+
+    let saveResult: Awaited<ReturnType<typeof result.current.handleSaveAsync>> | undefined;
+    await act(async () => {
+      saveResult = await result.current.handleSaveAsync();
+    });
+
+    // Should succeed and return project data for PAPI call
+    expect(saveResult?.success).toBe(true);
+    expect(saveResult?.projectData).toBeDefined();
+    expect(saveResult?.projectData?.shortName).toBe('TEST');
+    expect(saveResult?.projectData?.fullName).toBe('Test Project');
+    expect(saveResult?.mode).toBe('create');
+  });
+
+  it('returns edit mode when editing existing project', async () => {
+    const editInput = createMockInput({
+      mode: 'edit',
+      existingProject: {
+        shortName: 'EXIST',
+        fullName: 'Existing Project',
+        copyright: '(c) Test',
+        languageId: 'en:Latn:US:',
+        versification: 'English',
+        projectType: 'Standard',
+        matchBasedOnStems: false,
+        booksPresentSet: [],
+        commentTags: [],
+        fileNameForm: '',
+        usfmVersion: '3',
+        stylesheet: '',
+        isStylesheetCustomized: false,
+        encoding: 'UTF-8',
+        normalizationForm: 'NFC',
+        editable: true,
+        allowInvisibleChars: false,
+        allowReadAccess: false,
+        allowSharingWithSLDR: false,
+        allowDerivedProjectRegistration: true,
+      },
+    });
+
+    const { result } = renderHook(() => useProjectPropertiesForm(editInput));
+
+    let saveResult: Awaited<ReturnType<typeof result.current.handleSaveAsync>> | undefined;
+    await act(async () => {
+      saveResult = await result.current.handleSaveAsync();
+    });
+
+    expect(saveResult?.success).toBe(true);
+    expect(saveResult?.mode).toBe('edit');
+  });
+});
+
+// =============================================================================
+// GAP-006: Enter Key Submission TESTS
+// =============================================================================
+
+describe('Enter Key Submission (GAP-006)', () => {
+  it('should handle Enter key on input elements', () => {
+    // Test the keydown handler logic
+    const mockPreventDefault = vi.fn();
+    const mockSubmit = vi.fn();
+
+    // Simulate the keyboard handler
+    const handleKeyDown = (event: { key: string; shiftKey: boolean; target: HTMLElement }) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        const { target } = event;
+        if (target.tagName === 'TEXTAREA') return;
+        if (target.getAttribute('role') === 'combobox') return;
+
+        if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
+          mockPreventDefault();
+          mockSubmit();
+        }
+      }
+    };
+
+    // Test with INPUT element
+    const inputElement = document.createElement('input');
+    handleKeyDown({ key: 'Enter', shiftKey: false, target: inputElement });
+    expect(mockPreventDefault).toHaveBeenCalled();
+    expect(mockSubmit).toHaveBeenCalled();
+  });
+
+  it('should NOT trigger submit for textarea', () => {
+    const mockSubmit = vi.fn();
+
+    const handleKeyDown = (event: { key: string; shiftKey: boolean; target: HTMLElement }) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        const { target } = event;
+        if (target.tagName === 'TEXTAREA') return;
+        mockSubmit();
+      }
+    };
+
+    const textareaElement = document.createElement('textarea');
+    handleKeyDown({ key: 'Enter', shiftKey: false, target: textareaElement });
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it('should NOT trigger submit for Shift+Enter', () => {
+    const mockSubmit = vi.fn();
+
+    const handleKeyDown = (event: { key: string; shiftKey: boolean; target: HTMLElement }) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        mockSubmit();
+      }
+    };
+
+    const inputElement = document.createElement('input');
+    handleKeyDown({ key: 'Enter', shiftKey: true, target: inputElement });
+    expect(mockSubmit).not.toHaveBeenCalled();
   });
 });

@@ -175,10 +175,12 @@ export function GeneralTab({
 
   // Build RegistrationControlInput
   // Convert project type string to ProjectType union (validated at runtime by enum)
-  const projectTypeValue: ProjectType | undefined =
+  // Note: RegistrationControlInput.projectType expects ProjectType | null per spec
+  const projectTypeValue: ProjectType | null =
     state.selectedProjectType && isValidProjectType(state.selectedProjectType)
       ? state.selectedProjectType
-      : undefined;
+      : // eslint-disable-next-line no-null/no-null -- null is required by RegistrationControlInput spec
+        null;
 
   const registrationInput: RegistrationControlInput = {
     projectType: projectTypeValue,

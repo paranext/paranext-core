@@ -495,6 +495,15 @@ export interface UseProjectPropertiesFormReturn {
   // Form submission
   handleSubmit: () => ProjectPropertiesOutput;
   handleCancel: () => ProjectPropertiesOutput;
+
+  // Async save with PAPI (GAP-002: Wire edit mode save to PAPI commands)
+  // Returns project data for caller to handle via PAPI commands
+  handleSaveAsync: () => Promise<{
+    success: boolean;
+    projectData?: ProjectData;
+    mode?: 'create' | 'edit';
+    error?: string;
+  }>;
 }
 
 // =============================================================================
@@ -738,17 +747,8 @@ export function useProjectPropertiesForm(
   // ==========================================================================
   // Form submission
   // ==========================================================================
-  const handleSubmit = useCallback((): ProjectPropertiesOutput => {
-    if (!validate()) {
-      // Navigate to first tab with error
-      if (state.tabsWithErrors.length > 0) {
-        dispatch({ type: 'SET_ACTIVE_TAB', payload: state.tabsWithErrors[0] });
-      }
-      return { action: 'cancel' };
-    }
-
-    dispatch({ type: 'SET_SUBMITTING', payload: true });
-
+  /** Build project data from current form state Shared between create and edit mode submission */
+  const buildProjectData = useCallback((): ProjectData => {
     // Find base project name from GUID
     const baseProject = input.options.availableBaseProjects.find(
       (p) => p.guid === state.selectedBaseProject,
@@ -793,16 +793,78 @@ export function useProjectPropertiesForm(
       projectData.placeCallerToLeftOfSelection = state.placeCallersOnLeft;
     }
 
+    return projectData;
+  }, [state, input.options.availableBaseProjects]);
+
+  const handleSubmit = useCallback((): ProjectPropertiesOutput => {
+    if (!validate()) {
+      // Navigate to first tab with error
+      if (state.tabsWithErrors.length > 0) {
+        dispatch({ type: 'SET_ACTIVE_TAB', payload: state.tabsWithErrors[0] });
+      }
+      return { action: 'cancel' };
+    }
+
+    dispatch({ type: 'SET_SUBMITTING', payload: true });
+
+    const projectData = buildProjectData();
+
     return {
       action: 'submit',
       projectData,
       promptForUsfmVersion: input.mode === 'create' && state.usfmVersion === '2',
     };
-  }, [validate, state, input.options.availableBaseProjects, input.mode]);
+  }, [validate, state.tabsWithErrors, state.usfmVersion, buildProjectData, input.mode]);
 
   const handleCancel = useCallback((): ProjectPropertiesOutput => {
     return { action: 'cancel' };
   }, []);
+
+  // ==========================================================================
+  // Async Save with PAPI (GAP-002)
+  // ==========================================================================
+
+  /**
+   * Async save handler that calls PAPI commands for create/update In edit mode: calls
+   * platformScripture.updateProject In create mode: calls platformScripture.createProject
+   *
+   * Note: This function returns the project data for the caller to handle via PAPI commands. The
+   * actual PAPI call should be made by the web view component that has access to papi imports. This
+   * avoids dynamic import issues in tests.
+   *
+   * @returns Promise with success status, project data, and optional error message
+   */
+  const handleSaveAsync = useCallback(async (): Promise<{
+    success: boolean;
+    projectData?: ProjectData;
+    mode?: 'create' | 'edit';
+    error?: string;
+  }> => {
+    if (!validate()) {
+      // Navigate to first tab with error
+      if (state.tabsWithErrors.length > 0) {
+        dispatch({ type: 'SET_ACTIVE_TAB', payload: state.tabsWithErrors[0] });
+      }
+      return { success: false, error: 'Validation failed' };
+    }
+
+    dispatch({ type: 'SET_SUBMITTING', payload: true });
+
+    try {
+      const projectData = buildProjectData();
+
+      // Return the data for the caller to handle via PAPI
+      // The web view component will call:
+      // - papi.commands.sendCommand('platformScripture.updateProject', projectData) for edit
+      // - papi.commands.sendCommand('platformScripture.createProject', projectData) for create
+      dispatch({ type: 'SET_SUBMITTING', payload: false });
+      return { success: true, projectData, mode: input.mode };
+    } catch (error) {
+      dispatch({ type: 'SET_SUBMITTING', payload: false });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return { success: false, error: errorMessage };
+    }
+  }, [validate, state.tabsWithErrors, buildProjectData, input.mode]);
 
   // ==========================================================================
   // Return value
@@ -851,6 +913,7 @@ export function useProjectPropertiesForm(
       clearValidationError,
       handleSubmit,
       handleCancel,
+      handleSaveAsync,
     }),
     [
       state,
@@ -895,6 +958,7 @@ export function useProjectPropertiesForm(
       clearValidationError,
       handleSubmit,
       handleCancel,
+      handleSaveAsync,
     ],
   );
 }
