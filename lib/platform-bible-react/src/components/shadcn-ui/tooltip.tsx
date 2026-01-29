@@ -2,6 +2,7 @@ import React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
 import { cn } from '@/utils/shadcn-ui.util';
+import { ButtonProps, buttonVariants } from './button';
 
 /** @inheritdoc Tooltip */
 const TooltipProvider = TooltipPrimitive.Provider;
@@ -14,8 +15,18 @@ const TooltipProvider = TooltipPrimitive.Provider;
  */
 const Tooltip = TooltipPrimitive.Root;
 
+// CUSTOM: TooltipTrigger is a button, so allow to use the Button interface
 /** @inheritdoc Tooltip */
-const TooltipTrigger = TooltipPrimitive.Trigger;
+const TooltipTrigger = React.forwardRef<
+  React.ElementRef<typeof TooltipPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & ButtonProps
+>(({ className, variant, size, ...props }, ref) => (
+  <TooltipPrimitive.Trigger
+    ref={ref}
+    className={cn(buttonVariants({ variant, size, className }))}
+    {...props}
+  />
+));
 
 /** @inheritdoc Tooltip */
 const TooltipContent = React.forwardRef<
