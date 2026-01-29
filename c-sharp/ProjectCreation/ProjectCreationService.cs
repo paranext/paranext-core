@@ -184,4 +184,44 @@ public static partial class ProjectCreationService
             },
         };
     }
+
+    #region CAP-019: TestEncodingSave (EXT-B2-007)
+
+    /// <summary>
+    /// Tests encoding by writing sample text to encoding.tst file.
+    /// Maps to EXT-B2-007 from extraction-plan.md.
+    /// </summary>
+    /// <param name="text">The text to write for encoding test</param>
+    /// <param name="projectSettingsDir">The directory where encoding.tst will be created</param>
+    /// <param name="encodingCodePage">The encoding code page to use (e.g., 65001 for UTF-8)</param>
+    /// <returns>True if the file was written successfully, false otherwise</returns>
+    public static bool TestEncodingSave(
+        string text,
+        string projectSettingsDir,
+        int encodingCodePage
+    )
+    {
+        // TODO: Implement in GREEN phase
+        throw new NotImplementedException("CAP-019: TestEncodingSave not implemented");
+    }
+
+    #endregion
+
+    #region CAP-020: GetSampleText (EXT-B2-008)
+
+    /// <summary>
+    /// Gets sample text from the first book of a project for encoding preview.
+    /// Maps to EXT-B2-008 from extraction-plan.md.
+    /// </summary>
+    /// <param name="projectName">The name of the project to read from</param>
+    /// <param name="encodingCodePage">The encoding code page to use for reading</param>
+    /// <param name="maxLines">Maximum number of lines to return (default 50)</param>
+    /// <returns>Sample text from the first book, or empty string if not available</returns>
+    public static string GetSampleText(string projectName, int encodingCodePage, int maxLines = 50)
+    {
+        // TODO: Implement in GREEN phase
+        throw new NotImplementedException("CAP-020: GetSampleText not implemented");
+    }
+
+    #endregion
 }
