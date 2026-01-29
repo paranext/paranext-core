@@ -1,22 +1,20 @@
 import { ColumnDef, SortDirection } from '@/components/advanced/data-table/data-table.component';
-import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import { Column } from '@tanstack/react-table';
+import {
   ArrowDownIcon,
-  ArrowUpDownIcon,
   ArrowUpIcon,
   CircleCheckIcon,
   CircleHelpIcon,
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
-import { Column } from '@tanstack/react-table';
-import {
-  TooltipProvider,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from '@/components/shadcn-ui/tooltip';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**
@@ -28,12 +26,12 @@ import { InventoryTableData, Status } from './inventory-utils';
  */
 const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+    return <ArrowUpIcon className="tw-h-4 tw-w-4" />;
   }
   if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+    return <ArrowDownIcon className="tw-h-4 tw-w-4" />;
   }
-  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+  return <></>;
 };
 
 /**
@@ -50,19 +48,15 @@ export const getInventoryHeader = (
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger className="tw-flex tw-w-full">
-          <div className="tw-flex tw-w-full">
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(undefined)}
-              className="tw-flex-1"
-            >
-              <span className="tw-w-4 tw-max-w-fit tw-flex-1 tw-overflow-hidden tw-text-ellipsis">
-                {label}
-              </span>
-              {getSortingIcon(column.getIsSorted())}
-            </Button>
-          </div>
+        <TooltipTrigger
+          className="tw-flex tw-w-full"
+          variant="ghost"
+          onClick={() => column.toggleSorting(undefined)}
+        >
+          <span className="tw-w-6 tw-max-w-fit tw-flex-1 tw-overflow-hidden tw-text-ellipsis">
+            {label}
+          </span>
+          {getSortingIcon(column.getIsSorted())}
         </TooltipTrigger>
         <TooltipContent side="bottom">{label}</TooltipContent>
       </Tooltip>
