@@ -15,15 +15,15 @@ const TooltipProvider = TooltipPrimitive.Provider;
  */
 const Tooltip = TooltipPrimitive.Root;
 
-// CUSTOM: TooltipTrigger is a button, so allow to use the Button interface
+// CUSTOM: TooltipTrigger is a button, so allow to use the button variants (avoids the need for a nested button)
 /** @inheritdoc Tooltip */
 const TooltipTrigger = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & ButtonProps
->(({ className, variant, size, ...props }, ref) => (
+>(({ className, variant, ...props }, ref) => (
   <TooltipPrimitive.Trigger
     ref={ref}
-    className={cn(buttonVariants({ variant, size, className }))}
+    className={variant ? cn(buttonVariants({ variant }), className) : ''}
     {...props}
   />
 ));
