@@ -9,11 +9,32 @@ namespace Paranext.DataProvider.ProjectCreation;
 /// </summary>
 public static class InterlinearService
 {
+    #region Constants
+
+    // Error messages for validation (VAL-011)
+    private const string ErrorModelTextRequired = "Model text is required for Glossing task type";
+    private const string ErrorInvalidDestination = "Invalid destination project for task type";
+    private const string ErrorSourceProjectRequired = "Source project is required";
+    private const string ErrorValidationFailed = "Validation failed";
+
+    // Field names for error reporting
+    private const string FieldModelTextName = "ModelTextName";
+    private const string FieldDestinationProjectName = "DestinationProjectName";
+    private const string FieldSourceProjectName = "SourceProjectName";
+
+    #endregion
+
+    #region Storage
+
     // In-memory storage for setups, keyed by source project name
     private static readonly ConcurrentDictionary<
         string,
         List<InterlinearSetupInfo>
     > s_setupsByProject = new();
+
+    #endregion
+
+    #region Public API
 
     /// <summary>
     /// Validates interlinear setup configuration based on task type.
@@ -49,7 +70,7 @@ public static class InterlinearService
             && string.IsNullOrEmpty(request.ModelTextName)
         )
         {
-            modelTextError = "Model text is required for Glossing task type";
+            modelTextError = ErrorModelTextRequired;
         }
 
         // If destination is provided, validate it
@@ -64,7 +85,7 @@ public static class InterlinearService
 
             if (!isValidDest)
             {
-                destinationError = "Invalid destination project for task type";
+                destinationError = ErrorInvalidDestination;
             }
         }
 
@@ -140,24 +161,24 @@ public static class InterlinearService
             {
                 errorCode = InterlinearErrorCode.MissingModelText;
                 errorMessage = validationResult.ModelTextError;
-                field = "ModelTextName";
+                field = FieldModelTextName;
             }
             else if (!string.IsNullOrEmpty(validationResult.DestinationError))
             {
                 errorCode = InterlinearErrorCode.InvalidDestination;
                 errorMessage = validationResult.DestinationError;
-                field = "DestinationProjectName";
+                field = FieldDestinationProjectName;
             }
             else if (string.IsNullOrEmpty(request.SourceProjectName))
             {
                 errorCode = InterlinearErrorCode.MissingSourceProject;
-                errorMessage = "Source project is required";
-                field = "SourceProjectName";
+                errorMessage = ErrorSourceProjectRequired;
+                field = FieldSourceProjectName;
             }
             else
             {
                 errorCode = InterlinearErrorCode.SaveFailed;
-                errorMessage = "Validation failed";
+                errorMessage = ErrorValidationFailed;
             }
 
             return InterlinearSetupResult.Failed(errorCode, errorMessage, field);
@@ -224,11 +245,22 @@ public static class InterlinearService
         return Array.Empty<InterlinearSetupInfo>();
     }
 
+    #endregion
+
+    #region Internal API
+
     /// <summary>
     /// Clears all stored setups. For testing purposes only.
     /// </summary>
+    /// <remarks>
+    /// This method is thread-safe and can be called during test teardown.
+    /// The underlying <see cref="ConcurrentDictionary{TKey, TValue}"/> handles
+    /// concurrent access safely.
+    /// </remarks>
     internal static void ClearAllSetups()
     {
         s_setupsByProject.Clear();
     }
+
+    #endregion
 }
