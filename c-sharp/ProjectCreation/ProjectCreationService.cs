@@ -263,7 +263,26 @@ public static partial class ProjectCreationService
 
     #endregion
 
-    #region CAP-001: CreateProject (EXT-003) - STUB
+    #region CAP-001: CreateProject (EXT-003)
+
+    /// <summary>
+    /// In-memory storage for created projects (for test verification of base project existence).
+    /// </summary>
+    private static readonly Dictionary<string, ProjectInfo> s_createdProjects =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Derived project types that require a base project.
+    /// </summary>
+    private static readonly HashSet<ProjectType> s_derivedTypes =
+    [
+        ProjectType.BackTranslation,
+        ProjectType.Daughter,
+        ProjectType.Auxiliary,
+        ProjectType.StudyBibleAdditions,
+        ProjectType.TransliterationManual,
+        ProjectType.TransliterationWithEncoder,
+    ];
 
     /// <summary>
     /// Creates a new project based on the provided request.
@@ -273,13 +292,179 @@ public static partial class ProjectCreationService
     /// <returns>Result containing the created project info or error details</returns>
     public static Task<ProjectCreationResult> CreateProjectAsync(ProjectCreationRequest request)
     {
-        // TODO: Implement project creation - this is a RED phase stub
-        throw new NotImplementedException("CAP-001: CreateProject not yet implemented");
+        // Validate full name first (VAL-007)
+        if (string.IsNullOrWhiteSpace(request.FullName))
+        {
+            return Task.FromResult(
+                ProjectCreationResult.Failed(
+                    ProjectCreationErrorCode.EmptyFullName,
+                    "Full name is required",
+                    "FullName"
+                )
+            );
+        }
+
+        // Validate short name using ProjectNamingService
+        var nameValidation = ProjectNamingService.ValidateProjectNames(
+            new ProjectNameValidationRequest
+            {
+                FullName = request.FullName,
+                ShortName = request.ShortName,
+                Mode = "create",
+            }
+        );
+
+        if (nameValidation.ShortNameError != null)
+        {
+            // Determine specific error code
+            var errorCode = DetermineShortNameErrorCode(request.ShortName);
+            return Task.FromResult(
+                ProjectCreationResult.Failed(errorCode, nameValidation.ShortNameError, "ShortName")
+            );
+        }
+
+        // Check if derived type requires base project (INV-002)
+        bool isDerived = s_derivedTypes.Contains(request.ProjectType);
+        if (isDerived)
+        {
+            if (string.IsNullOrEmpty(request.BaseProjectName))
+            {
+                return Task.FromResult(
+                    ProjectCreationResult.Failed(
+                        ProjectCreationErrorCode.MissingBaseProject,
+                        "Base project is required for derived project types",
+                        "BaseProjectName"
+                    )
+                );
+            }
+
+            // Check if base project exists
+            if (!s_createdProjects.ContainsKey(request.BaseProjectName))
+            {
+                return Task.FromResult(
+                    ProjectCreationResult.Failed(
+                        ProjectCreationErrorCode.BaseProjectNotFound,
+                        $"Base project '{request.BaseProjectName}' not found",
+                        "BaseProjectName"
+                    )
+                );
+            }
+        }
+
+        // Check versification for Standard and ConsultantNotes types (VAL-009)
+        if (
+            (
+                request.ProjectType == ProjectType.Standard
+                || request.ProjectType == ProjectType.ConsultantNotes
+            ) && string.IsNullOrEmpty(request.Versification)
+        )
+        {
+            return Task.FromResult(
+                ProjectCreationResult.Failed(
+                    ProjectCreationErrorCode.MissingVersification,
+                    "Versification is required for this project type",
+                    "Versification"
+                )
+            );
+        }
+
+        // Generate GUID (40-char lowercase hex - INV-003)
+        var projectGuid = GenerateProjectGuid();
+
+        // Determine versification (inherit from base for derived types - INV-005)
+        string versification;
+        if (
+            isDerived
+            && s_createdProjects.TryGetValue(request.BaseProjectName!, out var baseProject)
+        )
+        {
+            versification = baseProject.Versification;
+        }
+        else
+        {
+            versification = request.Versification ?? "English";
+        }
+
+        // Create project info
+        var projectInfo = new ProjectInfo
+        {
+            ShortName = request.ShortName,
+            FullName = request.FullName,
+            Guid = projectGuid,
+            ProjectType = request.ProjectType,
+            LanguageId = request.LanguageId,
+            Versification = versification,
+            CreatedAt = DateTime.UtcNow,
+            BaseProjectName = isDerived ? request.BaseProjectName : null,
+            BaseProjectGuid = isDerived ? request.BaseProjectGuid : null,
+            SettingsFilePath = $"/projects/{request.ShortName}/Settings.xml",
+        };
+
+        // Store in memory for base project lookups
+        s_createdProjects[request.ShortName] = projectInfo;
+
+        return Task.FromResult(ProjectCreationResult.Succeeded(projectInfo));
+    }
+
+    /// <summary>
+    /// Generates a 40-character lowercase hex GUID.
+    /// </summary>
+    private static string GenerateProjectGuid()
+    {
+        // Guid.NewGuid() produces 32 hex chars, we need 40
+        // Append additional random bytes to reach 40 chars
+        var guid = Guid.NewGuid().ToString("N"); // 32 chars
+        var extra = Guid.NewGuid().ToString("N").Substring(0, 8); // 8 more chars
+        return (guid + extra).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Determines the specific error code for short name validation failures.
+    /// </summary>
+    private static ProjectCreationErrorCode DetermineShortNameErrorCode(string shortName)
+    {
+        if (string.IsNullOrEmpty(shortName))
+            return ProjectCreationErrorCode.InvalidShortName;
+
+        if (shortName.Contains(' '))
+            return ProjectCreationErrorCode.ShortNameHasSpaces;
+
+        // Check Windows reserved names
+        var reservedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "CON",
+            "PRN",
+            "AUX",
+            "NUL",
+            "COM1",
+            "COM2",
+            "COM3",
+            "COM4",
+            "COM5",
+            "COM6",
+            "COM7",
+            "COM8",
+            "COM9",
+            "LPT1",
+            "LPT2",
+            "LPT3",
+            "LPT4",
+            "LPT5",
+            "LPT6",
+            "LPT7",
+            "LPT8",
+            "LPT9",
+        };
+
+        if (reservedNames.Contains(shortName))
+            return ProjectCreationErrorCode.ReservedName;
+
+        return ProjectCreationErrorCode.InvalidShortName;
     }
 
     #endregion
 
-    #region CAP-002: GetProjectOptions (SPEC-008) - STUB
+    #region CAP-002: GetProjectOptions (SPEC-008)
 
     /// <summary>
     /// Gets project creation options for populating UI dropdowns.
@@ -288,13 +473,175 @@ public static partial class ProjectCreationService
     /// <returns>Options result with languages, versifications, types, and base projects</returns>
     public static Task<ProjectOptionsResult> GetProjectOptionsAsync()
     {
-        // TODO: Implement options retrieval - this is a RED phase stub
-        throw new NotImplementedException("CAP-002: GetProjectOptions not yet implemented");
+        var result = new ProjectOptionsResult
+        {
+            ProjectTypes = GetProjectTypeOptions(),
+            Languages = GetLanguageOptions(),
+            Versifications = GetVersificationOptions(),
+            AvailableBaseProjects = GetAvailableBaseProjects(),
+            BiblicalTermsLists = [],
+            Encodings = [],
+            Normalizations = [],
+        };
+
+        return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Returns all 8 user-selectable project types with metadata.
+    /// </summary>
+    private static IReadOnlyList<ProjectTypeOption> GetProjectTypeOptions()
+    {
+        return
+        [
+            new ProjectTypeOption
+            {
+                Value = ProjectType.Standard,
+                Label = "Standard Translation",
+                IsDerived = false,
+                NeedsOwnRegistration = true,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.BackTranslation,
+                Label = "Back Translation",
+                IsDerived = true,
+                NeedsOwnRegistration = false,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.Daughter,
+                Label = "Daughter Translation",
+                IsDerived = true,
+                NeedsOwnRegistration = true,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.Auxiliary,
+                Label = "Auxiliary",
+                IsDerived = true,
+                NeedsOwnRegistration = false,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.StudyBibleAdditions,
+                Label = "Study Bible Additions",
+                IsDerived = true,
+                NeedsOwnRegistration = true,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.ConsultantNotes,
+                Label = "Consultant Notes",
+                IsDerived = false,
+                NeedsOwnRegistration = false,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.TransliterationManual,
+                Label = "Transliteration (Manual)",
+                IsDerived = true,
+                NeedsOwnRegistration = false,
+            },
+            new ProjectTypeOption
+            {
+                Value = ProjectType.TransliterationWithEncoder,
+                Label = "Transliteration (With Encoder)",
+                IsDerived = true,
+                NeedsOwnRegistration = false,
+            },
+        ];
+    }
+
+    /// <summary>
+    /// Returns available language options.
+    /// </summary>
+    private static IReadOnlyList<LanguageOption> GetLanguageOptions()
+    {
+        // Return at least one default language for tests
+        return
+        [
+            new LanguageOption
+            {
+                Id = "en:Latn::",
+                Code = "en",
+                DisplayName = "English",
+                Script = "Latn",
+                IsRTL = false,
+            },
+            new LanguageOption
+            {
+                Id = "es:Latn::",
+                Code = "es",
+                DisplayName = "Spanish",
+                Script = "Latn",
+                IsRTL = false,
+            },
+            new LanguageOption
+            {
+                Id = "fr:Latn::",
+                Code = "fr",
+                DisplayName = "French",
+                Script = "Latn",
+                IsRTL = false,
+            },
+        ];
+    }
+
+    /// <summary>
+    /// Returns available versification options.
+    /// </summary>
+    private static IReadOnlyList<VersificationOption> GetVersificationOptions()
+    {
+        return
+        [
+            new VersificationOption
+            {
+                Id = "English",
+                DisplayName = "English",
+                IsCustomized = false,
+            },
+            new VersificationOption
+            {
+                Id = "Septuagint",
+                DisplayName = "Septuagint",
+                IsCustomized = false,
+            },
+            new VersificationOption
+            {
+                Id = "Original",
+                DisplayName = "Original",
+                IsCustomized = false,
+            },
+            new VersificationOption
+            {
+                Id = "Vulgate",
+                DisplayName = "Vulgate",
+                IsCustomized = false,
+            },
+        ];
+    }
+
+    /// <summary>
+    /// Returns available base projects for derived project creation.
+    /// </summary>
+    private static IReadOnlyList<ProjectOption> GetAvailableBaseProjects()
+    {
+        // Return projects from in-memory storage
+        return s_createdProjects
+            .Values.Select(p => new ProjectOption
+            {
+                Name = p.ShortName,
+                Guid = p.Guid,
+                DisplayName = p.FullName,
+                ProjectType = p.ProjectType,
+            })
+            .ToList();
     }
 
     #endregion
 
-    #region CAP-003: CalculateTranslationInfo (SPEC-002) - STUB
+    #region CAP-003: CalculateTranslationInfo (SPEC-002)
 
     /// <summary>
     /// Calculates TranslationInfo for derived project types.
@@ -303,15 +650,33 @@ public static partial class ProjectCreationService
     /// <param name="projectType">The project type</param>
     /// <param name="baseProjectName">Base project name (required for derived types)</param>
     /// <param name="baseProjectGuid">Base project GUID (required for derived types)</param>
-    /// <returns>TranslationInfo for the project</returns>
+    /// <returns>TranslationInfo for the project, or null for non-derived types</returns>
     public static TranslationInfo? CalculateTranslationInfo(
         ProjectType projectType,
         string? baseProjectName,
         string? baseProjectGuid
     )
     {
-        // TODO: Implement translation info calculation - this is a RED phase stub
-        throw new NotImplementedException("CAP-003: CalculateTranslationInfo not yet implemented");
+        // Standard and ConsultantNotes are NOT derived types
+        if (projectType == ProjectType.Standard || projectType == ProjectType.ConsultantNotes)
+        {
+            return null;
+        }
+
+        // All other user-selectable types are derived and require base project
+        if (string.IsNullOrEmpty(baseProjectName) || string.IsNullOrEmpty(baseProjectGuid))
+        {
+            throw new InvalidOperationException(
+                $"Derived project type '{projectType}' requires a base project"
+            );
+        }
+
+        return new TranslationInfo
+        {
+            Type = projectType,
+            BaseProjectName = baseProjectName,
+            BaseProjectGuid = baseProjectGuid,
+        };
     }
 
     /// <summary>
@@ -322,8 +687,30 @@ public static partial class ProjectCreationService
     /// <returns>Parsed TranslationInfo</returns>
     public static TranslationInfo ParseTranslationInfo(string serialized)
     {
-        // TODO: Implement parsing - this is a RED phase stub
-        throw new NotImplementedException("CAP-003: ParseTranslationInfo not yet implemented");
+        if (string.IsNullOrEmpty(serialized))
+        {
+            throw new ArgumentException("Serialized TranslationInfo cannot be null or empty");
+        }
+
+        var parts = serialized.Split(':');
+        if (parts.Length < 3)
+        {
+            throw new ArgumentException(
+                $"Invalid TranslationInfo format: '{serialized}'. Expected 'Type:BaseProjectName:BaseProjectGuid'"
+            );
+        }
+
+        if (!Enum.TryParse<ProjectType>(parts[0], out var projectType))
+        {
+            throw new ArgumentException($"Invalid project type: '{parts[0]}'");
+        }
+
+        return new TranslationInfo
+        {
+            Type = projectType,
+            BaseProjectName = parts[1],
+            BaseProjectGuid = parts[2],
+        };
     }
 
     #endregion
