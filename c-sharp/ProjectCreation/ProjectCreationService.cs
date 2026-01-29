@@ -9,6 +9,15 @@ namespace Paranext.DataProvider.ProjectCreation;
 /// </summary>
 public static partial class ProjectCreationService
 {
+    #region Constants
+
+    /// <summary>
+    /// Filename for encoding test file written by TestEncodingSave.
+    /// </summary>
+    private const string ENCODING_TEST_FILENAME = "encoding.tst";
+
+    #endregion
+
     /// <summary>
     /// Pattern for valid prefix/suffix: letters (A-Z), digits (0-9), underscore only.
     /// </summary>
@@ -210,8 +219,8 @@ public static partial class ProjectCreationService
             // Get the encoding from code page
             var encoding = System.Text.Encoding.GetEncoding(encodingCodePage);
 
-            // Build path to encoding.tst file
-            var filePath = Path.Combine(projectSettingsDir, "encoding.tst");
+            // Build path to encoding test file
+            var filePath = Path.Combine(projectSettingsDir, ENCODING_TEST_FILENAME);
 
             // Write the text using the specified encoding
             File.WriteAllText(filePath, text, encoding);
