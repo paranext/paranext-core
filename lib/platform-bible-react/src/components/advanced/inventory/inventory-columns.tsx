@@ -15,6 +15,7 @@ import {
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
+import { cn } from '@/utils/shadcn-ui.util';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**
@@ -31,7 +32,7 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'desc') {
     return <ArrowDownIcon className="tw-h-4 tw-w-4" />;
   }
-  return <></>;
+  return undefined;
 };
 
 /**
@@ -44,12 +45,13 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
 export const getInventoryHeader = (
   column: Column<InventoryTableData, unknown>,
   label: string,
+  buttonClassName?: string,
 ): ReactNode => {
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger
-          className="tw-flex tw-w-full"
+          className={cn('tw-flex tw-w-full tw-justify-start', buttonClassName)}
           variant="ghost"
           onClick={() => column.toggleSorting(undefined)}
         >
@@ -109,7 +111,7 @@ export const inventoryAdditionalItemColumn = (
 export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'count',
-    header: ({ column }) => getInventoryHeader(column, countLabel),
+    header: ({ column }) => getInventoryHeader(column, countLabel, 'tw-justify-end'),
     cell: ({ row }) => (
       <div className="tw-flex tw-justify-end tw-tabular-nums">{row.getValue('count')}</div>
     ),
@@ -180,7 +182,7 @@ export const inventoryStatusColumn = (
 ): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
-    header: ({ column }) => getInventoryHeader(column, statusLabel),
+    header: ({ column }) => getInventoryHeader(column, statusLabel, 'tw-justify-center'),
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
