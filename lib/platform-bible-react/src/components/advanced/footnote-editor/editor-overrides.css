@@ -14,6 +14,6 @@
 
 /* Need to be able to override the styles for the editor that happens to have an underscore */
 /* stylelint-disable selector-class-pattern */
-.footnote-editor .usfm_p {
-  text-indent: 0 !important;
+.footnote-editor .text-spacing .usfm_p {
+  text-indent: 0;
 }

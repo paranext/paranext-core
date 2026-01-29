@@ -98,6 +98,11 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
   }
 }
 
+// TODO: Remove this once the new marker menu is implemented with correct logic
+/**
+ * This is for a temporary fix to get the markers menu to work by having the default usj include a
+ * parent paragraph node
+ */
 const PARAGRAPH_USJ: Usj = {
   type: 'USJ',
   version: '3.1',
@@ -171,6 +176,7 @@ export default function FootnoteEditor({
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
       timeout = setTimeout(() => {
+        // Inserts the note node to be edited as an delta operation
         editorRef.current?.applyUpdate([noteOp]);
       }, 0);
     }
@@ -220,6 +226,7 @@ export default function FootnoteEditor({
         innerNoteOps?.forEach((op) => crossReferenceToFootnoteOp(op));
       }
 
+      // Inserts the new footnote/cross-reference and deletes the old one
       editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
     }
   };
@@ -230,6 +237,8 @@ export default function FootnoteEditor({
       // Prevents adding additional note nodes or other nodes after the main footnote node
       if (usj.content.length > 1) {
         setTimeout(() => {
+          // Retains the first two nodes which are the added paragraph node (for now) and the
+          // footnote/cross-reference and deletes the unwanted node that was just inserted
           editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
         }, 0);
       }
