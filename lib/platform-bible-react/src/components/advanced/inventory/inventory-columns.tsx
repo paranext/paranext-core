@@ -191,7 +191,7 @@ export const inventoryStatusColumn = (
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <ToggleGroup value={status} variant="outline" type="single">
+        <ToggleGroup value={status} variant="outline" type="single" className="tw-gap-0">
           <ToggleGroupItem
             onClick={(event) => {
               event.stopPropagation();
@@ -205,6 +205,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="approved"
+            className="tw-rounded-e-none tw-border-e-0"
           >
             <CircleCheckIcon />
           </ToggleGroupItem>
@@ -221,6 +222,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="unapproved"
+            className="tw-rounded-none"
           >
             <CircleXIcon />
           </ToggleGroupItem>
@@ -237,6 +239,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="unknown"
+            className="tw-rounded-s-none tw-border-s-0"
           >
             <CircleHelpIcon />
           </ToggleGroupItem>
