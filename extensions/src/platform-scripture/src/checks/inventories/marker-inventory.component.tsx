@@ -4,6 +4,7 @@ import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
   ColumnDef,
+  getInventoryHeader,
   Inventory,
   inventoryCountColumn,
   InventoryItem,
@@ -69,7 +70,8 @@ const createColumns = (
   inventoryCountColumn(countLabel),
   {
     accessorKey: 'styleName',
-    header: () => <Button variant="ghost">{styleNameLabel}</Button>,
+    accessorFn: (row) => getDescription(markerNames, row.items[0]) || unknownMarkerLabel,
+    header: ({ column }) => getInventoryHeader(column, styleNameLabel),
     cell: ({ row }) => {
       const marker: string = row.getValue('item');
       return getDescription(markerNames, marker) || unknownMarkerLabel;

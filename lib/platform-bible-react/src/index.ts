@@ -91,6 +91,7 @@ export {
   inventoryItemColumn,
   inventoryCountColumn,
   inventoryStatusColumn,
+  getInventoryHeader,
 } from './components/advanced/inventory/inventory-columns';
 export { MarkerMenu, MARKER_MENU_STRING_KEYS } from './components/advanced/marker-menu.component';
 export type {

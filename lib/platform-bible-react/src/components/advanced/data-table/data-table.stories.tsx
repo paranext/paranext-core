@@ -250,6 +250,7 @@ const advancedUserColumns: ColumnDef<User>[] = [
   },
   {
     accessorKey: 'name',
+    // header: ({ column }) => getInventoryHeader(column, "Name"),
     header: ({ column }) => {
       return (
         <Button
