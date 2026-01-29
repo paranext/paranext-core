@@ -40,12 +40,6 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
 
     private PapiClient PapiClient { get; } = papiClient;
 
-    // Note: Services are static classes, no instances needed
-    // - ProjectCreationService (static)
-    // - ProjectNamingService (static)
-    // - InterlinearService (static)
-    // - RegistrationStatusService (static)
-
     #endregion
 
     #region Public methods
@@ -55,52 +49,201 @@ internal class ProjectCreationCommandService(PapiClient papiClient)
     /// </summary>
     public async Task InitializeAsync()
     {
-        // Register all command handlers
-        // TODO: Implement command handlers - tests will FAIL (RED state)
-        throw new NotImplementedException("Command registration not yet implemented");
+        // Register all 9 command handlers
+        // Note: Handlers must be synchronous (not return Task) because PapiClient.SendRequestAsync
+        // uses DynamicInvoke which does not await Task results.
+        await PapiClient.RegisterRequestHandlerAsync(CMD_CREATE_PROJECT, HandleCreateProject);
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_GET_PROJECT_OPTIONS,
+            HandleGetProjectOptions
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_VALIDATE_PROJECT_NAMES,
+            HandleValidateProjectNames
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_GENERATE_SHORT_NAME,
+            HandleGenerateShortName
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_VALIDATE_FILE_PATTERN,
+            HandleValidateFilePattern
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_SAVE_INTERLINEAR_SETUP,
+            HandleSaveInterlinearSetup
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_VALIDATE_INTERLINEAR_SETUP,
+            HandleValidateInterlinearSetup
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_GET_REGISTRATION_STATUS,
+            HandleGetRegistrationStatus
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            CMD_GET_INTERLINEAR_SETUPS,
+            HandleGetInterlinearSetups
+        );
     }
 
     #endregion
 
-    #region Command handlers (to be implemented)
+    #region Command handlers
 
-    // TODO: Add command handler methods
+    /// <summary>
+    /// Handles createProject command.
+    /// </summary>
+    private ProjectCreationResult HandleCreateProject(ProjectCreationRequest request)
+    {
+        // ProjectCreationService.CreateProjectAsync returns Task but is synchronous in implementation
+        var result = ProjectCreationService.CreateProjectAsync(request).GetAwaiter().GetResult();
+
+        // Publish event on success (CAP-023)
+        if (result.Success && result.Project != null)
+        {
+            PublishProjectCreatedEventAsync(result.Project).GetAwaiter().GetResult();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Handles getProjectOptions command.
+    /// </summary>
+    private ProjectOptionsResult HandleGetProjectOptions()
+    {
+        return ProjectCreationService.GetProjectOptionsAsync().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Handles validateProjectNames command.
+    /// </summary>
+    private ProjectNameValidationResult HandleValidateProjectNames(
+        ProjectNameValidationRequest request
+    )
+    {
+        return ProjectNamingService.ValidateProjectNames(request);
+    }
+
+    /// <summary>
+    /// Handles generateShortName command.
+    /// </summary>
+    private ShortNameGenerationResult HandleGenerateShortName(ShortNameGenerationRequest request)
+    {
+        return ProjectNamingService.GenerateShortName(request);
+    }
+
+    /// <summary>
+    /// Handles validateFilePattern command.
+    /// </summary>
+    private FileNamingPatternResult HandleValidateFilePattern(FileNamingPatternRequest request)
+    {
+        return ProjectCreationService.ValidateFileNamingPattern(request);
+    }
+
+    /// <summary>
+    /// Handles saveInterlinearSetup command.
+    /// </summary>
+    private InterlinearSetupResult HandleSaveInterlinearSetup(InterlinearSetupRequest request)
+    {
+        var result = InterlinearService.SaveSetup(request);
+
+        // Publish event on success (CAP-023)
+        if (result.Success && result.Setup != null)
+        {
+            // Determine action: Created vs Updated
+            var action = string.IsNullOrEmpty(request.ExistingSetupId)
+                ? InterlinearSetupAction.Created
+                : InterlinearSetupAction.Updated;
+
+            PublishInterlinearSetupChangedEventAsync(result.Setup, action).GetAwaiter().GetResult();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Handles validateInterlinearSetup command.
+    /// </summary>
+    private InterlinearValidationResult HandleValidateInterlinearSetup(
+        InterlinearSetupRequest request
+    )
+    {
+        return InterlinearService.ValidateSetup(request);
+    }
+
+    /// <summary>
+    /// Handles getRegistrationStatus command.
+    /// </summary>
+    private RegistrationStatusResult HandleGetRegistrationStatus(RegistrationStatusRequest request)
+    {
+        return RegistrationStatusService
+            .GetRegistrationStatusAsync(request)
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    /// <summary>
+    /// Handles getInterlinearSetups command.
+    /// </summary>
+    private IReadOnlyList<InterlinearSetupInfo> HandleGetInterlinearSetups(string projectName)
+    {
+        return InterlinearService.GetSetups(projectName);
+    }
 
     #endregion
 
-    #region Event publishing (to be implemented)
+    #region Event publishing
 
     /// <summary>
     /// Publishes a ProjectCreatedEvent when a project is successfully created.
     /// </summary>
-    internal Task PublishProjectCreatedEventAsync(ProjectInfo project)
+    internal async Task PublishProjectCreatedEventAsync(ProjectInfo project)
     {
-        // TODO: Implement event publishing
-        throw new NotImplementedException("Event publishing not yet implemented");
+        var eventPayload = new ProjectCreatedEvent
+        {
+            Project = project,
+            Timestamp = DateTime.UtcNow,
+        };
+
+        await PapiClient.SendEventAsync(EVENT_PROJECT_CREATED, eventPayload);
     }
 
     /// <summary>
     /// Publishes an InterlinearSetupChangedEvent when a setup is created, updated, or deleted.
     /// </summary>
-    internal Task PublishInterlinearSetupChangedEventAsync(
+    internal async Task PublishInterlinearSetupChangedEventAsync(
         InterlinearSetupInfo setup,
         InterlinearSetupAction action
     )
     {
-        // TODO: Implement event publishing
-        throw new NotImplementedException("Event publishing not yet implemented");
+        var eventPayload = new InterlinearSetupChangedEvent
+        {
+            Setup = setup,
+            Action = action,
+            Timestamp = DateTime.UtcNow,
+        };
+
+        await PapiClient.SendEventAsync(EVENT_INTERLINEAR_SETUP_CHANGED, eventPayload);
     }
 
     /// <summary>
     /// Publishes a RegistrationStatusChangedEvent when registration status changes.
     /// </summary>
-    internal Task PublishRegistrationStatusChangedEventAsync(
+    internal async Task PublishRegistrationStatusChangedEventAsync(
         string projectGuid,
         RegistrationMessageType newStatus
     )
     {
-        // TODO: Implement event publishing
-        throw new NotImplementedException("Event publishing not yet implemented");
+        var eventPayload = new RegistrationStatusChangedEvent
+        {
+            ProjectGuid = projectGuid,
+            NewStatus = newStatus,
+            Timestamp = DateTime.UtcNow,
+        };
+
+        await PapiClient.SendEventAsync(EVENT_REGISTRATION_STATUS_CHANGED, eventPayload);
     }
 
     #endregion
