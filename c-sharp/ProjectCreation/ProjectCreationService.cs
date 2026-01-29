@@ -16,6 +16,21 @@ public static partial class ProjectCreationService
     /// </summary>
     private const string ENCODING_TEST_FILENAME = "encoding.tst";
 
+    /// <summary>
+    /// Required length for project GUIDs (40 lowercase hex characters).
+    /// </summary>
+    private const int PROJECT_GUID_LENGTH = 40;
+
+    /// <summary>
+    /// Length of a standard .NET GUID in hex format (without hyphens).
+    /// </summary>
+    private const int STANDARD_GUID_HEX_LENGTH = 32;
+
+    /// <summary>
+    /// Format template for project Settings.xml file path.
+    /// </summary>
+    private const string SETTINGS_PATH_FORMAT = "/projects/{0}/Settings.xml";
+
     #endregion
 
     /// <summary>
@@ -397,7 +412,7 @@ public static partial class ProjectCreationService
             CreatedAt = DateTime.UtcNow,
             BaseProjectName = isDerived ? request.BaseProjectName : null,
             BaseProjectGuid = isDerived ? request.BaseProjectGuid : null,
-            SettingsFilePath = $"/projects/{request.ShortName}/Settings.xml",
+            SettingsFilePath = string.Format(SETTINGS_PATH_FORMAT, request.ShortName),
         };
 
         // Store in memory for base project lookups
@@ -407,14 +422,19 @@ public static partial class ProjectCreationService
     }
 
     /// <summary>
-    /// Generates a 40-character lowercase hex GUID.
+    /// Generates a 40-character lowercase hex GUID for project identification.
     /// </summary>
+    /// <remarks>
+    /// Paratext project GUIDs are 40 hex characters (compared to standard 32-char GUIDs).
+    /// This method generates a standard GUID and appends extra random bytes to reach 40 chars.
+    /// </remarks>
     private static string GenerateProjectGuid()
     {
-        // Guid.NewGuid() produces 32 hex chars, we need 40
-        // Append additional random bytes to reach 40 chars
-        var guid = Guid.NewGuid().ToString("N"); // 32 chars
-        var extra = Guid.NewGuid().ToString("N").Substring(0, 8); // 8 more chars
+        int extraCharsNeeded = PROJECT_GUID_LENGTH - STANDARD_GUID_HEX_LENGTH;
+
+        var guid = Guid.NewGuid().ToString("N");
+        var extra = Guid.NewGuid().ToString("N")[..extraCharsNeeded];
+
         return (guid + extra).ToLowerInvariant();
     }
 
@@ -429,34 +449,8 @@ public static partial class ProjectCreationService
         if (shortName.Contains(' '))
             return ProjectCreationErrorCode.ShortNameHasSpaces;
 
-        // Check Windows reserved names
-        var reservedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "CON",
-            "PRN",
-            "AUX",
-            "NUL",
-            "COM1",
-            "COM2",
-            "COM3",
-            "COM4",
-            "COM5",
-            "COM6",
-            "COM7",
-            "COM8",
-            "COM9",
-            "LPT1",
-            "LPT2",
-            "LPT3",
-            "LPT4",
-            "LPT5",
-            "LPT6",
-            "LPT7",
-            "LPT8",
-            "LPT9",
-        };
-
-        if (reservedNames.Contains(shortName))
+        // Check Windows reserved names (reuse set from ProjectNamingService)
+        if (ProjectNamingService.WindowsReservedNames.Contains(shortName))
             return ProjectCreationErrorCode.ReservedName;
 
         return ProjectCreationErrorCode.InvalidShortName;

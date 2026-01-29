@@ -25,8 +25,11 @@ public static partial class ProjectNamingService
     [GeneratedRegex(@"^[a-zA-Z0-9]+$")]
     private static partial Regex AlphanumericPattern();
 
-    // Windows reserved names (VAL-003)
-    private static readonly HashSet<string> ReservedNames =
+    /// <summary>
+    /// Windows reserved names that cannot be used as project short names.
+    /// These names are reserved by Windows for device handles (VAL-003).
+    /// </summary>
+    internal static readonly HashSet<string> WindowsReservedNames =
         new(StringComparer.OrdinalIgnoreCase)
         {
             "CON",
@@ -181,7 +184,7 @@ public static partial class ProjectNamingService
             suggestions = GenerateSuggestions(request.FullName);
         }
         // Check for reserved names (VAL-003)
-        else if (ReservedNames.Contains(shortName))
+        else if (WindowsReservedNames.Contains(shortName))
         {
             shortNameError = "Short name cannot be a Windows reserved name";
             suggestions = GenerateSuggestions(request.FullName);
