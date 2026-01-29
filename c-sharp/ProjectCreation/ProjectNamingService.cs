@@ -8,11 +8,22 @@ namespace Paranext.DataProvider.ProjectCreation;
 /// validation, and sanitization.
 /// This is a static service for stateless validation and generation operations.
 /// </summary>
-public static class ProjectNamingService
+public static partial class ProjectNamingService
 {
     // Short name constraints (VAL-001)
     private const int MinShortNameLength = 3;
     private const int MaxShortNameLength = 8;
+
+    // Padding threshold: only pad results shorter than this to avoid padding 2-letter abbreviations
+    // Per golden master GM-UI-001: "X" -> "X__" but "TP" stays "TP"
+    private const int PaddingThreshold = 2;
+
+    // Compiled regex patterns for performance
+    [GeneratedRegex(@"[\s/\\]+")]
+    private static partial Regex WordSeparatorPattern();
+
+    [GeneratedRegex(@"^[a-zA-Z0-9]+$")]
+    private static partial Regex AlphanumericPattern();
 
     // Windows reserved names (VAL-003)
     private static readonly HashSet<string> ReservedNames =
@@ -80,7 +91,7 @@ public static class ProjectNamingService
                 : allDigits.ToString();
 
         // Split by whitespace and slashes (/ and \) to get words
-        string[] words = Regex.Split(fullName, @"[\s/\\]+");
+        string[] words = WordSeparatorPattern().Split(fullName);
 
         // Extract first letter of each word (uppercase)
         var abbreviation = new StringBuilder();
@@ -124,10 +135,8 @@ public static class ProjectNamingService
             result = result.Substring(0, MaxShortNameLength);
         }
 
-        // Pad to min length with underscores only if result is 1 char or less
-        // Per golden master GM-UI-001: "X" -> "X__" but "Test Project" -> "TP" (not padded)
-        // This means padding only applies to very short results (single letter)
-        if (result.Length < 2)
+        // Pad to min length with underscores only if result is below padding threshold
+        if (result.Length < PaddingThreshold)
         {
             while (result.Length < MinShortNameLength)
             {
@@ -177,9 +186,8 @@ public static class ProjectNamingService
             shortNameError = "Short name cannot be a Windows reserved name";
             suggestions = GenerateSuggestions(request.FullName);
         }
-        // Check for valid characters (alphanumeric only) - before length
-        // so we report character issues first
-        else if (!Regex.IsMatch(shortName, @"^[a-zA-Z0-9]+$"))
+        // Check for valid characters (alphanumeric only)
+        else if (!AlphanumericPattern().IsMatch(shortName))
         {
             shortNameError = "Short name can only contain letters and digits";
             suggestions = GenerateSuggestions(request.FullName);
@@ -267,15 +275,10 @@ public static class ProjectNamingService
     /// Per FB 15254 bug fix.
     /// </summary>
     /// <param name="fullName">The full name to sanitize.</param>
-    /// <returns>The sanitized full name.</returns>
-    public static string SanitizeFullName(string fullName)
+    /// <returns>The sanitized full name, or null if input is null.</returns>
+    public static string? SanitizeFullName(string? fullName)
     {
-        if (fullName == null)
-        {
-            return null!;
-        }
-
-        return fullName.Replace('\\', '/');
+        return fullName?.Replace('\\', '/');
     }
 
     /// <summary>
