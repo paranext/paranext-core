@@ -5,10 +5,6 @@ namespace Paranext.DataProvider.ProjectCreation;
 /// email validation, and guest status change detection.
 /// This is a static service for stateless validation operations.
 /// </summary>
-/// <remarks>
-/// STUB: Created for TDD RED phase. All methods throw NotImplementedException.
-/// Implementation will be completed by TDD Implementer agent.
-/// </remarks>
 public static class RegistrationStatusService
 {
     /// <summary>
@@ -19,8 +15,20 @@ public static class RegistrationStatusService
     /// <returns>The normalized registration code.</returns>
     public static string NormalizeRegistrationCode(string rawCode)
     {
-        // TDD RED: This will cause tests to fail
-        throw new NotImplementedException("CAP-013: NormalizeRegistrationCode not yet implemented");
+        if (string.IsNullOrEmpty(rawCode))
+            return rawCode;
+
+        // Per FB 48040: Convert confusable characters
+        // S->5, I->1, L->1, O->0 (case-insensitive)
+        return rawCode
+            .Replace('S', '5')
+            .Replace('s', '5')
+            .Replace('I', '1')
+            .Replace('i', '1')
+            .Replace('L', '1')
+            .Replace('l', '1')
+            .Replace('O', '0')
+            .Replace('o', '0');
     }
 
     /// <summary>
@@ -31,8 +39,32 @@ public static class RegistrationStatusService
     /// <returns>The validation result.</returns>
     public static EmailValidationResult ValidateEmail(string email, bool serverMode)
     {
-        // TDD RED: This will cause tests to fail
-        throw new NotImplementedException("CAP-014: ValidateEmail not yet implemented");
+        // Check for empty/null/whitespace
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return serverMode
+                ? EmailValidationResult.EmptyRequireConfirmation
+                : EmailValidationResult.Empty;
+        }
+
+        // Basic format validation: must contain @ and . after @
+        // Also check for invalid patterns
+        var atIndex = email.IndexOf('@');
+        if (atIndex <= 0) // No @ or @ at start
+            return EmailValidationResult.InvalidFormat;
+
+        if (atIndex >= email.Length - 1) // @ at end
+            return EmailValidationResult.InvalidFormat;
+
+        var domainPart = email.Substring(atIndex + 1);
+        if (!domainPart.Contains('.'))
+            return EmailValidationResult.InvalidFormat;
+
+        // Check for spaces (invalid)
+        if (email.Contains(' '))
+            return EmailValidationResult.InvalidFormat;
+
+        return EmailValidationResult.Valid;
     }
 
     /// <summary>
@@ -43,8 +75,12 @@ public static class RegistrationStatusService
     /// <returns>The type of user change detected.</returns>
     public static UserChangeType EvaluateGuestStatusChange(bool wasGuest, bool isGuest)
     {
-        // TDD RED: This will cause tests to fail
-        throw new NotImplementedException("CAP-015: EvaluateGuestStatusChange not yet implemented");
+        // If guest status changed (either direction), it's a GuestStatusChange
+        if (wasGuest != isGuest)
+            return UserChangeType.GuestStatusChange;
+
+        // No change in guest status
+        return UserChangeType.NoChange;
     }
 }
 
