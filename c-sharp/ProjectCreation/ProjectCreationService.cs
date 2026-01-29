@@ -7,11 +7,13 @@ namespace Paranext.DataProvider.ProjectCreation;
 /// and restore eligibility determination.
 /// This is a static service for stateless validation operations.
 /// </summary>
-public static class ProjectCreationService
+public static partial class ProjectCreationService
 {
-    // Pattern for valid prefix/suffix: A-Z, 0-9, underscore only
-    private static readonly Regex s_validPrefixSuffixPattern =
-        new(@"^[A-Za-z0-9_]*$", RegexOptions.Compiled);
+    /// <summary>
+    /// Pattern for valid prefix/suffix: letters (A-Z), digits (0-9), underscore only.
+    /// </summary>
+    [GeneratedRegex(@"^[A-Za-z0-9_]*$")]
+    private static partial Regex ValidPrefixSuffixPattern();
 
     /// <summary>
     /// Validates a file naming pattern (prefix/suffix combination).
@@ -30,7 +32,7 @@ public static class ProjectCreationService
         // Validate prefix
         if (!string.IsNullOrEmpty(request.Prefix))
         {
-            if (!s_validPrefixSuffixPattern.IsMatch(request.Prefix))
+            if (!ValidPrefixSuffixPattern().IsMatch(request.Prefix))
             {
                 prefixError = "Prefix may only contain letters (A-Z), digits (0-9), and underscore";
             }
@@ -43,7 +45,7 @@ public static class ProjectCreationService
         // Validate suffix
         if (!string.IsNullOrEmpty(request.Suffix))
         {
-            if (!s_validPrefixSuffixPattern.IsMatch(request.Suffix))
+            if (!ValidPrefixSuffixPattern().IsMatch(request.Suffix))
             {
                 suffixError = "Suffix may only contain letters (A-Z), digits (0-9), and underscore";
             }
