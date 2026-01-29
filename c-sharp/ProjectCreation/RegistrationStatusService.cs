@@ -2,17 +2,34 @@ namespace Paranext.DataProvider.ProjectCreation;
 
 /// <summary>
 /// Service for registration status operations including registration code normalization,
-/// email validation, and guest status change detection.
+/// email validation, guest status change detection, and user change evaluation.
 /// This is a static service for stateless validation operations.
 /// </summary>
 public static class RegistrationStatusService
 {
+    // Registration status message constants (for localization readiness)
+    private const string MessageNoTypeSelected =
+        "Select a project type to see registration status.";
+    private const string MessageInheritsFromBase =
+        "This project will share the registration of its base project.";
+    private const string MessageNotRegisteredType =
+        "This project type does not require registration.";
+    private const string MessageRegistered = "This project is registered.";
+    private const string MessageCanRegister = "This project is not registered. Click to register.";
+    private const string MessageUnregistered = "This project is not registered.";
+
+    /// <summary>
+    /// Threshold for showing confirmation dialog when changing user.
+    /// Per EXT-B2-003: 5+ affected projects triggers confirmation.
+    /// </summary>
+    private const int ConfirmationThreshold = 5;
+
     /// <summary>
     /// Normalizes a registration code by converting confusable characters.
     /// Per FB 48040: S->5, I->1, L->1, O->0.
     /// </summary>
     /// <param name="rawCode">The raw registration code to normalize.</param>
-    /// <returns>The normalized registration code.</returns>
+    /// <returns>The normalized registration code, or the original value if null/empty.</returns>
     public static string NormalizeRegistrationCode(string rawCode)
     {
         if (string.IsNullOrEmpty(rawCode))
@@ -36,10 +53,13 @@ public static class RegistrationStatusService
     /// </summary>
     /// <param name="email">The email address to validate.</param>
     /// <param name="serverMode">Whether running in server mode (email required).</param>
-    /// <returns>The validation result.</returns>
+    /// <returns>
+    /// <see cref="EmailValidationResult.Valid"/> if valid,
+    /// <see cref="EmailValidationResult.Empty"/> or <see cref="EmailValidationResult.EmptyRequireConfirmation"/> if empty,
+    /// <see cref="EmailValidationResult.InvalidFormat"/> if malformed.
+    /// </returns>
     public static EmailValidationResult ValidateEmail(string email, bool serverMode)
     {
-        // Check for empty/null/whitespace
         if (string.IsNullOrWhiteSpace(email))
         {
             return serverMode
@@ -47,20 +67,17 @@ public static class RegistrationStatusService
                 : EmailValidationResult.Empty;
         }
 
-        // Basic format validation: must contain @ and . after @
-        // Also check for invalid patterns
+        // Basic format validation: must contain @ with content before and after
         var atIndex = email.IndexOf('@');
-        if (atIndex <= 0) // No @ or @ at start
+        if (atIndex <= 0 || atIndex >= email.Length - 1)
             return EmailValidationResult.InvalidFormat;
 
-        if (atIndex >= email.Length - 1) // @ at end
-            return EmailValidationResult.InvalidFormat;
-
+        // Domain must contain a dot
         var domainPart = email.Substring(atIndex + 1);
         if (!domainPart.Contains('.'))
             return EmailValidationResult.InvalidFormat;
 
-        // Check for spaces (invalid)
+        // No spaces allowed
         if (email.Contains(' '))
             return EmailValidationResult.InvalidFormat;
 
@@ -72,18 +89,14 @@ public static class RegistrationStatusService
     /// </summary>
     /// <param name="wasGuest">Whether the user was previously a guest.</param>
     /// <param name="isGuest">Whether the user is currently a guest.</param>
-    /// <returns>The type of user change detected.</returns>
+    /// <returns>
+    /// <see cref="UserChangeType.GuestStatusChange"/> if guest status changed,
+    /// <see cref="UserChangeType.NoChange"/> otherwise.
+    /// </returns>
     public static UserChangeType EvaluateGuestStatusChange(bool wasGuest, bool isGuest)
     {
-        // If guest status changed (either direction), it's a GuestStatusChange
-        if (wasGuest != isGuest)
-            return UserChangeType.GuestStatusChange;
-
-        // No change in guest status
-        return UserChangeType.NoChange;
+        return wasGuest != isGuest ? UserChangeType.GuestStatusChange : UserChangeType.NoChange;
     }
-
-    #region CAP-012: GetRegistrationStatus
 
     /// <summary>
     /// Gets the registration status for a project based on its type and registration state.
@@ -101,7 +114,39 @@ public static class RegistrationStatusService
     }
 
     /// <summary>
+    /// Evaluates a user change to determine if commits are required and if confirmation is needed.
+    /// Per EXT-B2-003, 5+ affected projects triggers a confirmation dialog.
+    /// </summary>
+    /// <param name="currentUser">The current user name (unused, reserved for future user comparison).</param>
+    /// <param name="newUser">The new user name (unused, reserved for future user comparison).</param>
+    /// <param name="commitChanges">Whether to commit changes to projects.</param>
+    /// <param name="affectedProjectCount">The number of projects affected by this change.</param>
+    /// <returns>The user change evaluation result with commit and confirmation flags.</returns>
+    public static UserChangeResult EvaluateUserChange(
+        string currentUser,
+        string newUser,
+        bool commitChanges,
+        int affectedProjectCount
+    )
+    {
+        bool showConfirmation = affectedProjectCount >= ConfirmationThreshold;
+
+        string? confirmationMessage = showConfirmation
+            ? $"This will affect {affectedProjectCount} projects"
+            : null;
+
+        return new UserChangeResult
+        {
+            RequiresCommit = commitChanges,
+            ShowConfirmation = showConfirmation,
+            AffectedProjectCount = affectedProjectCount,
+            ConfirmationMessage = confirmationMessage,
+        };
+    }
+
+    /// <summary>
     /// Synchronously determines the registration status based on the request.
+    /// Implements the state machine described in EXT-009.
     /// </summary>
     private static RegistrationStatusResult DetermineRegistrationStatus(
         RegistrationStatusRequest request
@@ -113,7 +158,7 @@ public static class RegistrationStatusService
             return new RegistrationStatusResult
             {
                 MessageType = RegistrationMessageType.NoTypeSelected,
-                MessageText = "Select a project type to see registration status.",
+                MessageText = MessageNoTypeSelected,
                 ShowRegisterButton = false,
                 ShowManageLink = false,
                 ShowOfflineCheckbox = false,
@@ -121,14 +166,13 @@ public static class RegistrationStatusService
             };
         }
 
-        // State 2: Derived types inherit from base project
-        // DC-002: BackTranslation, Auxiliary, Transliteration share base project license
+        // State 2: Derived types inherit from base project (DC-002)
         if (InheritsFromBaseProject(request.ProjectType.Value))
         {
             return new RegistrationStatusResult
             {
                 MessageType = RegistrationMessageType.InheritsFromBase,
-                MessageText = "This project will share the registration of its base project.",
+                MessageText = MessageInheritsFromBase,
                 ShowRegisterButton = false,
                 ShowManageLink = false,
                 ShowOfflineCheckbox = false,
@@ -142,7 +186,7 @@ public static class RegistrationStatusService
             return new RegistrationStatusResult
             {
                 MessageType = RegistrationMessageType.NotRegisteredType,
-                MessageText = "This project type does not require registration.",
+                MessageText = MessageNotRegisteredType,
                 ShowRegisterButton = false,
                 ShowManageLink = false,
                 ShowOfflineCheckbox = false,
@@ -150,14 +194,13 @@ public static class RegistrationStatusService
             };
         }
 
-        // State 4: Project has a GUID - it's registered
-        // DC-001: Standard, Daughter, StudyBibleAdditions require own registration
+        // State 4: Project has a GUID - it's registered (DC-001)
         if (!string.IsNullOrEmpty(request.ProjectGuid))
         {
             return new RegistrationStatusResult
             {
                 MessageType = RegistrationMessageType.Registered,
-                MessageText = "This project is registered.",
+                MessageText = MessageRegistered,
                 ShowRegisterButton = false,
                 ShowManageLink = true,
                 ShowOfflineCheckbox = false,
@@ -165,14 +208,13 @@ public static class RegistrationStatusService
             };
         }
 
-        // State 5: Unregistered but can register
-        // DC-001: Standard, Daughter, StudyBibleAdditions require own registration
+        // State 5: Unregistered but can register (DC-001)
         if (RequiresOwnRegistration(request.ProjectType.Value))
         {
             return new RegistrationStatusResult
             {
                 MessageType = RegistrationMessageType.CanRegister,
-                MessageText = "This project is not registered. Click to register.",
+                MessageText = MessageCanRegister,
                 ShowRegisterButton = true,
                 ShowManageLink = false,
                 ShowOfflineCheckbox = false,
@@ -184,7 +226,7 @@ public static class RegistrationStatusService
         return new RegistrationStatusResult
         {
             MessageType = RegistrationMessageType.Unregistered,
-            MessageText = "This project is not registered.",
+            MessageText = MessageUnregistered,
             ShowRegisterButton = false,
             ShowManageLink = false,
             ShowOfflineCheckbox = false,
@@ -222,49 +264,4 @@ public static class RegistrationStatusService
             _ => false,
         };
     }
-
-    #endregion
-
-    #region CAP-016: EvaluateUserChange
-
-    /// <summary>
-    /// Threshold for showing confirmation dialog when changing user.
-    /// Per EXT-B2-003: 5+ affected projects triggers confirmation.
-    /// </summary>
-    private const int ConfirmationThreshold = 5;
-
-    /// <summary>
-    /// Evaluates a user change to determine if commits are required and if confirmation is needed.
-    /// Per EXT-B2-003, 5+ affected projects triggers a confirmation dialog.
-    /// </summary>
-    /// <param name="currentUser">The current user name.</param>
-    /// <param name="newUser">The new user name.</param>
-    /// <param name="commitChanges">Whether to commit changes to projects.</param>
-    /// <param name="affectedProjectCount">The number of projects affected by this change.</param>
-    /// <returns>The user change evaluation result.</returns>
-    public static UserChangeResult EvaluateUserChange(
-        string currentUser,
-        string newUser,
-        bool commitChanges,
-        int affectedProjectCount
-    )
-    {
-        // Determine if confirmation is needed (5+ projects threshold)
-        bool showConfirmation = affectedProjectCount >= ConfirmationThreshold;
-
-        // Generate confirmation message if needed
-        string? confirmationMessage = showConfirmation
-            ? $"This will affect {affectedProjectCount} projects"
-            : null;
-
-        return new UserChangeResult
-        {
-            RequiresCommit = commitChanges,
-            ShowConfirmation = showConfirmation,
-            AffectedProjectCount = affectedProjectCount,
-            ConfirmationMessage = confirmationMessage,
-        };
-    }
-
-    #endregion
 }
