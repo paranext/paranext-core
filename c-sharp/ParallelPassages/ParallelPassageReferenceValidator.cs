@@ -12,6 +12,11 @@ public record ReferenceValidationResult
 {
     public bool HasError { get; init; }
     public string? ErrorMessage { get; init; }
+
+    public static ReferenceValidationResult Success { get; } = new() { HasError = false };
+
+    public static ReferenceValidationResult Error(string message) =>
+        new() { HasError = true, ErrorMessage = message };
 }
 
 /// <summary>
@@ -40,50 +45,29 @@ public class ParallelPassageReferenceValidator
     public ReferenceValidationResult ValidateRef(string parallelRef, string marker, bool inSidebar)
     {
         if (string.IsNullOrEmpty(parallelRef))
-        {
-            return new ReferenceValidationResult
-            {
-                HasError = true,
-                ErrorMessage = "Missing reference",
-            };
-        }
+            return ReferenceValidationResult.Error("Missing reference");
 
         // Check parenthesis convention
-        if (_parenthesisConventions.TryGetValue(marker, out var convention) && convention != null)
-        {
-            bool hasParens = parallelRef.StartsWith("(") && parallelRef.EndsWith(")");
-            if (hasParens && convention == false)
-            {
-                return new ReferenceValidationResult
-                {
-                    HasError = true,
-                    ErrorMessage = $"Parentheses usually do not surround references in {marker}",
-                };
-            }
-        }
+        if (
+            _parenthesisConventions.TryGetValue(marker, out var convention)
+            && convention == false
+            && parallelRef.StartsWith("(")
+            && parallelRef.EndsWith(")")
+        )
+            return ReferenceValidationResult.Error(
+                $"Parentheses usually do not surround references in {marker}"
+            );
 
         // Check missing final parenthesis
         if (parallelRef.StartsWith("(") && !parallelRef.EndsWith(")"))
-        {
-            return new ReferenceValidationResult
-            {
-                HasError = true,
-                ErrorMessage = "Missing final parenthesis",
-            };
-        }
+            return ReferenceValidationResult.Error("Missing final parenthesis");
 
         // Delegate to ParatextData scanner
         ReferenceError? error = _scanner.ValidateRef(parallelRef, marker, inSidebar);
         if (error != null)
-        {
-            return new ReferenceValidationResult
-            {
-                HasError = true,
-                ErrorMessage = error.ErrorMessage,
-            };
-        }
+            return ReferenceValidationResult.Error(error.ErrorMessage);
 
-        return new ReferenceValidationResult { HasError = false };
+        return ReferenceValidationResult.Success;
     }
 
     /// <summary>
@@ -105,44 +89,7 @@ public class ParallelPassageReferenceValidator
         }
 
         // Fallback: parse references manually
-        var results = new List<string>();
-        var parts = xref.Split(';');
-        foreach (var part in parts)
-        {
-            var trimmed = part.Trim();
-            if (string.IsNullOrEmpty(trimmed))
-                continue;
-
-            // Check for chapter range (e.g., "Matthew 5-7")
-            var spaceIdx = trimmed.LastIndexOf(' ');
-            if (spaceIdx > 0)
-            {
-                var afterSpace = trimmed.Substring(spaceIdx + 1);
-                // Chapter range: no colon/dot, has dash, both sides are numbers
-                if (
-                    !afterSpace.Contains(':')
-                    && !afterSpace.Contains('.')
-                    && afterSpace.Contains('-')
-                )
-                {
-                    var rangeParts = afterSpace.Split('-');
-                    if (
-                        rangeParts.Length == 2
-                        && int.TryParse(rangeParts[0], out _)
-                        && int.TryParse(rangeParts[1], out _)
-                    )
-                    {
-                        var bookPart = trimmed.Substring(0, spaceIdx);
-                        results.Add($"{bookPart} {rangeParts[0]}");
-                        results.Add($"{bookPart} {rangeParts[1]}");
-                        continue;
-                    }
-                }
-            }
-
-            results.Add(trimmed);
-        }
-        return results;
+        return ParseReferencesFallback(xref);
     }
 
     /// <summary>
@@ -190,6 +137,55 @@ public class ParallelPassageReferenceValidator
             null!,
             false
         );
+    }
+
+    /// <summary>
+    /// Parses semicolon-delimited references, expanding chapter ranges (e.g., "Matthew 5-7")
+    /// into individual references. Used as a fallback when the scanner is unavailable.
+    /// </summary>
+    private static List<string> ParseReferencesFallback(string xref)
+    {
+        var results = new List<string>();
+        foreach (var part in xref.Split(';'))
+        {
+            var trimmed = part.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+                continue;
+
+            if (TryExpandChapterRange(trimmed, results))
+                continue;
+
+            results.Add(trimmed);
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Attempts to expand a chapter range like "Matthew 5-7" into separate references.
+    /// Returns true if the reference was a chapter range and was expanded.
+    /// </summary>
+    private static bool TryExpandChapterRange(string reference, List<string> results)
+    {
+        var spaceIdx = reference.LastIndexOf(' ');
+        if (spaceIdx <= 0)
+            return false;
+
+        var afterSpace = reference.Substring(spaceIdx + 1);
+        if (afterSpace.Contains(':') || afterSpace.Contains('.') || !afterSpace.Contains('-'))
+            return false;
+
+        var rangeParts = afterSpace.Split('-');
+        if (
+            rangeParts.Length != 2
+            || !int.TryParse(rangeParts[0], out _)
+            || !int.TryParse(rangeParts[1], out _)
+        )
+            return false;
+
+        var bookPart = reference.Substring(0, spaceIdx);
+        results.Add($"{bookPart} {rangeParts[0]}");
+        results.Add($"{bookPart} {rangeParts[1]}");
+        return true;
     }
 
     /// <summary>

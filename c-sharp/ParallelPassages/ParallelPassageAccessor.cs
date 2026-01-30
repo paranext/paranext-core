@@ -38,6 +38,9 @@ public record ParallelPassageEntry
 /// </summary>
 public class ParallelPassageAccessor
 {
+    /// <summary>First book number in the New Testament (Matthew = 40).</summary>
+    private const int FirstNewTestamentBook = 40;
+
     private readonly Lazy<List<ParallelPassageEntry>> _cachedPassages;
 
     public ParallelPassageAccessor()
@@ -96,74 +99,53 @@ public class ParallelPassageAccessor
         return entries;
     }
 
+    private const string XmlRelativePath = "ParallelPassages/ParallelPassages.xml";
+
     private static string FindXmlPath()
     {
-        // Standard location: sibling of SettingsDirectory
         string settingsDir = ScrTextCollection.SettingsDirectory;
-        if (!string.IsNullOrEmpty(settingsDir))
+
+        var candidateDirs = BuildCandidateDirectories(settingsDir);
+
+        foreach (var dir in candidateDirs)
         {
-            string path = Path.Combine(settingsDir, "ParallelPassages", "ParallelPassages.xml");
+            string path = Path.Combine(dir, XmlRelativePath);
             if (File.Exists(path))
                 return path;
+        }
 
-            // Try parent directory
+        // Default path even if file does not exist
+        return Path.Combine(settingsDir ?? "", XmlRelativePath);
+    }
+
+    private static IEnumerable<string> BuildCandidateDirectories(string settingsDir)
+    {
+        if (!string.IsNullOrEmpty(settingsDir))
+        {
+            yield return settingsDir;
             string? parentDir = Path.GetDirectoryName(settingsDir);
             if (parentDir != null)
-            {
-                path = Path.Combine(parentDir, "ParallelPassages", "ParallelPassages.xml");
-                if (File.Exists(path))
-                    return path;
-            }
+                yield return parentDir;
         }
 
-        // Fallback: well-known Paratext paths
-        string[] fallbacks =
-        {
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Paratext9Projects",
-                "ParallelPassages",
-                "ParallelPassages.xml"
-            ),
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Paratext",
-                "Paratext",
-                "ParallelPassages",
-                "ParallelPassages.xml"
-            ),
-        };
-
-        foreach (var fallback in fallbacks)
-        {
-            if (File.Exists(fallback))
-                return fallback;
-        }
-
-        return Path.Combine(settingsDir ?? "", "ParallelPassages", "ParallelPassages.xml");
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        yield return Path.Combine(home, "Paratext9Projects");
+        yield return Path.Combine(home, "Paratext", "Paratext");
     }
 
     private static ParallelPassageType DeterminePassageType(List<XElement> verseElements)
     {
-        bool hasNT = false;
-        bool hasOT = false;
+        bool IsNewTestament(XElement verse) =>
+            Canon.BookIdToNumber(verse.Value.Trim().Split(' ')[0]) >= FirstNewTestamentBook;
 
-        foreach (var verse in verseElements)
+        bool hasNT = verseElements.Any(IsNewTestament);
+        bool hasOT = verseElements.Any(v => !IsNewTestament(v));
+
+        return (hasNT, hasOT) switch
         {
-            string refText = verse.Value.Trim();
-            string bookCode = refText.Split(' ')[0];
-            int bookNum = Canon.BookIdToNumber(bookCode);
-
-            if (bookNum >= 40)
-                hasNT = true;
-            else
-                hasOT = true;
-        }
-
-        if (hasNT && hasOT)
-            return ParallelPassageType.NTtoOT;
-        if (hasNT)
-            return ParallelPassageType.NTtoNT;
-        return ParallelPassageType.OTtoOT;
+            (true, true) => ParallelPassageType.NTtoOT,
+            (true, false) => ParallelPassageType.NTtoNT,
+            _ => ParallelPassageType.OTtoOT,
+        };
     }
 }
