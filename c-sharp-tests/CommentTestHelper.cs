@@ -91,7 +91,7 @@ internal static class CommentTestHelper
         """;
 
     /// <summary>
-    /// Creates a basic Comment object with standard test data for use in serialization/deserialization tests.
+    /// Creates a conflict Comment object with standard test data for use in serialization/deserialization tests.
     /// This method creates a fully populated comment with specific test values that match the Tim_Conflict_Xml
     /// test data defined above.
     /// </summary>

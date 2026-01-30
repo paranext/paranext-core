@@ -508,7 +508,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.Shared = source.Shared;
         if (source.Status != NoteStatus.Unspecified)
             target.Status = source.Status;
-        if (source.Type != NoteType.Normal)
+        if (source.Type != NoteType.Unspecified)
             target.Type = source.Type;
         if (!string.IsNullOrEmpty(source.Verse))
             target.Verse = source.Verse;

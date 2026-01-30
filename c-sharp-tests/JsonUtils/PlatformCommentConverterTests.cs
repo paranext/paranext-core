@@ -239,10 +239,4 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(result!.Contents, Is.Not.Null);
         Assert.That(result.Contents!.InnerXml, Is.EqualTo("<p>content</p>"));
     }
-
-    private class DummyUser : ParatextUser
-    {
-        public DummyUser(string name)
-            : base(name) { }
-    }
 }

@@ -3,6 +3,8 @@ using System.Reflection;
 using Paranext.DataProvider.ParatextUtils;
 using SIL.WritingSystems;
 
+namespace TestParanextDataProvider;
+
 [SetUpFixture]
 [ExcludeFromCodeCoverage]
 public class FixtureSetup
