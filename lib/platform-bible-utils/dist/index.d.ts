@@ -3044,20 +3044,6 @@ export interface IUsjReaderWriter {
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
 /**
- * Check if an HTML string contains custom Paratext-specific tags
- *
- * @param html - HTML string to check
- * @returns True if the HTML contains <color> or <language> tags
- */
-export declare function hasCustomParatextTags(html: string): boolean;
-/**
- * Parse Paratext specific HTML tags to standard HTML
- *
- * @param html - HTML string to parse
- * @returns Parsed HTML string
- */
-export declare function parseParatextHtml(html: string): string;
-/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -5502,10 +5488,15 @@ export type LegacyCommentThread = {
 	status: CommentStatus;
 	/** Thread type (from first comment) */
 	type: CommentType;
-	/** User to whom the thread is assigned */
-	assignedUser: string;
+	/**
+	 * User to whom the thread is assigned
+	 *
+	 * - `undefined` or not present if there is no assignment info
+	 * - Empty string means explicitly unassigned
+	 */
+	assignedUser?: string;
 	/** User to reply to */
-	replyToUser: string;
+	replyToUser?: string;
 	/** Last modified date (ISO 8601 string) */
 	modifiedDate: string;
 	/** Scripture reference for this thread */

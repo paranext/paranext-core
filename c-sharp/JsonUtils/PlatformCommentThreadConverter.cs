@@ -6,7 +6,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the CommentThread TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThread>
+public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThreadWrapper>
 {
     private const string ID = "id";
     private const string COMMENTS = "comments";
@@ -23,18 +23,20 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
     private const string IS_READ = "isRead";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
 
-    public override PlatformCommentThread Read(
+    public override PlatformCommentThreadWrapper Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
     )
     {
-        throw new NotSupportedException("Reading CommentThread from JSON is not yet supported.");
+        throw new NotSupportedException(
+            "Reading PlatformCommentThreadWrapper from JSON is not yet supported."
+        );
     }
 
     public override void Write(
         Utf8JsonWriter writer,
-        PlatformCommentThread value,
+        PlatformCommentThreadWrapper value,
         JsonSerializerOptions options
     )
     {
@@ -51,7 +53,11 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
         string noteStatusValue = value.Status.ToString();
         string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(noteStatusValue);
         writer.WriteString(STATUS, threadStatus);
-        writer.WriteString(TYPE, value.Type.ToString());
+
+        string noteTypeValue = value.Type.ToString();
+        string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(noteTypeValue);
+        writer.WriteString(TYPE, commentTypeValue);
+
         writer.WriteBoolean(IS_SPELLING_NOTE, value.IsSpellingNote);
         writer.WriteBoolean(IS_BT_NOTE, value.IsBTNote);
         writer.WriteBoolean(IS_CONSULTANT_NOTE, value.IsConsultantNote);
