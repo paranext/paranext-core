@@ -231,7 +231,7 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
   // GAP-003: Handler for updating help text based on focused field
   // Passed to child components (GeneralTab, etc.) to update help when fields are focused
   // TODO: Wire this to child component onFocus handlers for full help integration
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Will be used when wiring to child components
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const updateHelpText = useCallback((fieldKey: string) => {
     setHelpText(HELP_TEXT[fieldKey] || HELP_TEXT.default);
   }, []);
@@ -269,12 +269,13 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
     (event: React.KeyboardEvent) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         // Don't submit if inside a textarea or multi-line input
-        const target = event.target as HTMLElement;
+        const { target } = event;
+        if (!(target instanceof HTMLElement)) return;
         if (target.tagName === 'TEXTAREA') return;
         if (target.getAttribute('role') === 'combobox') return;
 
         // Only submit if Enter is pressed on an input or button
-        if (target.tagName === 'INPUT' || target.tagName === 'BUTTON') {
+        if (['INPUT', 'BUTTON'].includes(target.tagName)) {
           event.preventDefault();
           handleSubmit();
         }
