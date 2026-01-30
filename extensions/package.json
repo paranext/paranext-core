@@ -11,6 +11,7 @@
     "watch": "npm run build -- --watch",
     "build:production": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=false webpack",
     "watch:production": "npm run build:production -- --watch",
+    "build:tailwind": "tsx ./lib/prebuild-tailwind.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "zip": "tsx ./lib/zip-extensions.ts",
