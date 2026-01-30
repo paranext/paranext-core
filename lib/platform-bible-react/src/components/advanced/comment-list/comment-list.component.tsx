@@ -36,9 +36,7 @@ export default function CommentList({
 
   // Sync internal state with external selection when it changes
   useEffect(() => {
-    if (externalSelectedThreadId !== undefined) {
-      setInternalSelectedThreadId(externalSelectedThreadId);
-    }
+    setInternalSelectedThreadId(externalSelectedThreadId);
   }, [externalSelectedThreadId]);
 
   const activeThreads = threads.filter((thread) =>
@@ -59,10 +57,12 @@ export default function CommentList({
 
   const handleSelectThread = useCallback(
     (threadId: string) => {
-      setInternalSelectedThreadId(threadId);
-      onSelectedThreadChange?.(threadId);
+      // Toggle: if clicking the already-selected thread, deselect it
+      const newSelectedId = selectedThreadId === threadId ? undefined : threadId;
+      setInternalSelectedThreadId(newSelectedId);
+      onSelectedThreadChange?.(newSelectedId);
     },
-    [onSelectedThreadChange],
+    [selectedThreadId, onSelectedThreadChange],
   );
 
   const { listboxRef, activeId, handleKeyDown } = useListbox({
