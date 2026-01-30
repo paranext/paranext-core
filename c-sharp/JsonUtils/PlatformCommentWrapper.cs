@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Paratext.Data.ProjectComments;
 
 namespace Paranext.DataProvider.JsonUtils;
@@ -28,24 +29,6 @@ public class PlatformCommentWrapper
     private readonly Comment _comment;
     private PlatformCommentThreadWrapper? _thread;
 
-    /* public PlatformCommentWrapper(Comment comment, string contentsHtml)
-        : this(comment, contentsHtml, null)
-    {
-        ArgumentNullException.ThrowIfNull(contentsHtml);
-    }
-
-    public PlatformCommentWrapper(Comment comment, PlatformCommentThreadWrapper thread)
-        : this(comment, null, thread)
-    {
-        if (thread == null)
-        {
-            throw new ArgumentNullException(
-                nameof(thread),
-                "Thread wrapper must not be null when creating a comment wrapper for a comment that belongs to a thread."
-            );
-        }
-    } */
-
     /// <summary>
     /// WARNING: If the provided comment is an existing comment, it is strongly recommended to
     /// also provide the corresponding `PlatformCommentThreadWrapper` so that properties that
@@ -55,11 +38,7 @@ public class PlatformCommentWrapper
     /// <param name="comment"></param>
     /// <param name="thread"></param>
     /// <exception cref="ArgumentException"></exception>
-    public PlatformCommentWrapper(
-        Comment comment,
-        /* string? contentsHtml, */
-        PlatformCommentThreadWrapper? thread = null
-    )
+    public PlatformCommentWrapper(Comment comment, PlatformCommentThreadWrapper? thread = null)
     {
         ArgumentNullException.ThrowIfNull(comment);
 
@@ -158,41 +137,47 @@ public class PlatformCommentWrapper
                     false,
                     false
                 );
-        set => _comment.SetContentsFromHtml(value);
+        set
+        {
+            var html = value;
+
+            // The frontend's HTML output can sometimes introduce an extra layer of
+            // paragraph tags around content (e.g. "<p><p>text</p></p>"). `SetContentsFromHtml`
+            // transforms that into an extra newline at the start of the comment, which is not ever
+            // what we want. So might as well collapse repeated opening and closing <p> tags in here
+            // any time we see them come in.
+            if (!string.IsNullOrEmpty(html))
+            {
+                var previous = string.Empty;
+                while (html != previous)
+                {
+                    previous = html;
+
+                    // Perform two Regex replaces in a loop until the string stops
+                    // changing so we handle arbitrarily deep consecutive wrappers and
+                    // variants that include attributes on the <p> tag. The first replace
+                    // collapses sequences like "<p ...><p ...>" into a single "<p>",
+                    // and the second collapses consecutive closing tags "</p></p>" into
+                    // a single "</p>". We intentionally only target <p> wrappers so other
+                    // markup (e.g. <blockquote>, <span>, etc.) is preserved.
+                    html = Regex.Replace(
+                        html,
+                        "<p\\b[^>]*>\\s*<p\\b[^>]*>",
+                        "<p>",
+                        RegexOptions.IgnoreCase
+                    );
+                    html = Regex.Replace(html, "</p>\\s*</p>", "</p>", RegexOptions.IgnoreCase);
+                }
+            }
+
+            // After normalization, delegate to the Comment helper which converts
+            // the provided HTML into the internal XML stored on the Comment.
+            _comment.SetContentsFromHtml(html);
+        }
     }
 
     /// <summary>
     /// Gets the underlying Comment object.
     /// </summary>
     internal Comment CommentInternal => _comment;
-
-    /// <summary>
-    /// Attaches a `PlatformCommentThreadWrapper` to this comment wrapper, allowing access to
-    /// properties that depend on thread context, such as `ContentsHtml` and `IsRead`.
-    /// </summary>
-    /// <param name="threadWrapper">The thread wrapper to attach.</param>
-    /* public void AttachPlatformCommentThreadWrapper(PlatformCommentThreadWrapper threadWrapper)
-    {
-        if (_thread != null)
-        {
-            throw new InvalidOperationException(
-                "A thread wrapper has already been attached to this comment wrapper."
-            );
-        }
-        ArgumentNullException.ThrowIfNull(threadWrapper);
-        if (string.IsNullOrEmpty(_comment.Thread))
-        {
-            throw new InvalidOperationException(
-                "Cannot attach a thread wrapper to a comment that does not belong to a thread."
-            );
-        }
-        if (threadWrapper.Id != _comment.Thread)
-        {
-            throw new ArgumentException(
-                "The provided thread wrapper does not match the comment's thread ID.",
-                nameof(threadWrapper)
-            );
-        }
-        _thread = threadWrapper;
-    } */
 }

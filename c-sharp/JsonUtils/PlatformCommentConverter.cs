@@ -218,6 +218,8 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
 
         if (!string.IsNullOrEmpty(status))
             status = JsonConverterUtils.ConvertCommentStatusToNoteStatus(status);
+        if (!string.IsNullOrEmpty(type))
+            type = JsonConverterUtils.ConvertCommentTypeToNoteType(type);
 
         var conflictTypeEnum = ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType);
         var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status);
@@ -293,8 +295,14 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
             );
             writer.WriteString(STATUS, commentStatusValue);
         }
-        if (value.Type != NoteType.Unspecified && value.Type != NoteType.Normal)
-            writer.WriteString(TYPE, value.Type.ToString());
+        if (value.Type != NoteType.Unspecified)
+        {
+            string noteTypeValue = value.Type.ToString();
+            string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(
+                noteTypeValue
+            );
+            writer.WriteString(TYPE, commentTypeValue);
+        }
         if (value.ConflictType != NoteConflictType.None)
             writer.WriteString(CONFLICT_TYPE, value.ConflictType.ToString());
         JsonConverterUtils.TryWriteString(writer, VERSE, value.Verse);
