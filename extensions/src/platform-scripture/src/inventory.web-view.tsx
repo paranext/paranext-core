@@ -5,7 +5,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { INVENTORY_STRING_KEYS, Scope } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import type { InventoryInputRange, ItemizedInventoryItem } from 'platform-scripture';
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
 import { MarkerInventory } from './checks/inventories/marker-inventory.component';
 import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
@@ -194,6 +194,14 @@ global.webViewComponent = function InventoryWebView({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  const isMounted = useRef(false);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
       return Array.from(INVENTORY_STRING_KEYS);
@@ -244,6 +252,11 @@ global.webViewComponent = function InventoryWebView({
     [itemKey: string]: InventoryItemOccurrence[];
   }>({});
 
+  // Clear cached occurrences whenever the inventory items change (e.g., scope/navigation changes)
+  useEffect(() => {
+    setInventoryItemsWithOccurrences({});
+  }, [inventoryItems]);
+
   // Use project settings for approved/unapproved items
   const [validItemsPossiblyError, setValidItems] = useProjectSetting(
     projectId,
@@ -290,6 +303,8 @@ global.webViewComponent = function InventoryWebView({
       try {
         const rawOccurrences = await getItemOccurrences(itemKey);
         const formattedOccurrences = formatOccurrencesForDisplay(rawOccurrences);
+
+        if (!isMounted.current) return;
 
         setInventoryItemsWithOccurrences((prev) => ({
           ...prev,

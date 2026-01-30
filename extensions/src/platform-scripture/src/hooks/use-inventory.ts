@@ -95,65 +95,86 @@ export function useInventory(
     }
   }, [inventoryDataProvider]);
 
+  const debouncedLoadOrderRef = useRef(0);
   /**
    * Debounced function to load inventory items. Prevents excessive API calls when input range
    * changes rapidly (e.g., during verse navigation). Includes automatic cleanup of previous
    * summaries to prevent resource leaks.
+   *
+   * Each scheduled invocation receives an incrementing order number; only the most-recently
+   * scheduled order will execute its load logic. This prevents stale debounced callbacks (from
+   * previous closures) from executing after newer requests have been scheduled.
    */
-  const debouncedLoadInventoryItems = useMemo(
-    () =>
-      debounce(async (range: InventoryInputRange) => {
-        if (!inventoryDataProvider || !projectId || !inventoryId) {
-          setInventoryItems([]);
-          setIsLoading(false);
-          setError(undefined);
+  const debouncedLoadInventoryItems = useMemo(() => {
+    const inner = debounce(async (range: InventoryInputRange, order: number) => {
+      // If this order is not the latest scheduled, skip doing any work
+      if (order !== debouncedLoadOrderRef.current) return;
+
+      if (!isMountedRef.current) return;
+
+      if (!inventoryDataProvider || !projectId || !inventoryId) {
+        setInventoryItems([]);
+        setIsLoading(false);
+        setError(undefined);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(undefined);
+
+        // Clean up any existing summary before creating a new one
+        if (currentSummaryRef.current) {
+          await cleanup();
+        }
+
+        // Check again if this order is still the latest after async cleanup
+        if (order !== debouncedLoadOrderRef.current) return;
+
+        const summary = await inventoryDataProvider.buildInventorySummary(inventoryId, [range]);
+
+        // Check again to ensure this is still the latest order after getting summary data
+        if (order !== debouncedLoadOrderRef.current) return;
+
+        // Handle component unmount during async operation
+        if (!isMountedRef.current) {
+          // Component was unmounted while building summary - clean up immediately
+          await inventoryDataProvider.discardInventorySummary(summary.summarizedInventoryId);
           return;
         }
 
-        try {
-          setIsLoading(true);
-          setError(undefined);
+        currentSummaryRef.current = summary;
 
-          // Clean up any existing summary before creating a new one
-          if (currentSummaryRef.current) {
-            await cleanup();
-          }
+        const allItems: SummarizedInventoryItem[] = [];
+        summary.inventoryCountLists.forEach((itemList) => {
+          allItems.push(...itemList.items);
+        });
 
-          const summary = await inventoryDataProvider.buildInventorySummary(inventoryId, [range]);
-
-          // Handle component unmount during async operation
-          if (!isMountedRef.current) {
-            // Component was unmounted while building summary - clean up immediately
-            await inventoryDataProvider.discardInventorySummary(summary.summarizedInventoryId);
-            return;
-          }
-
-          currentSummaryRef.current = summary;
-
-          const allItems: SummarizedInventoryItem[] = [];
-          summary.inventoryCountLists.forEach((itemList) => {
-            allItems.push(...itemList.items);
-          });
-
-          setInventoryItems(allItems);
-          setError(undefined);
-        } catch (loadError) {
-          // Only update state if component is still mounted
-          if (isMountedRef.current) {
-            const errorMessage = getErrorMessage(loadError);
-            logger.error(`Failed to load inventory items: ${errorMessage}`);
-            setError(errorMessage);
-            setInventoryItems([]);
-          }
-        } finally {
-          // Always clear loading state if component is still mounted
-          if (isMountedRef.current) {
-            setIsLoading(false);
-          }
+        setInventoryItems(allItems);
+        setError(undefined);
+      } catch (loadError) {
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          const errorMessage = getErrorMessage(loadError);
+          logger.error(`Failed to load inventory items: ${errorMessage}`);
+          setError(errorMessage);
+          setInventoryItems([]);
         }
-      }, 500), // 500ms debounce delay
-    [inventoryDataProvider, projectId, inventoryId, cleanup],
-  );
+      } finally {
+        // Always clear loading state if component is still mounted
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      }
+    }, 500);
+
+    return (range: InventoryInputRange) => {
+      const order = debouncedLoadOrderRef.current;
+      debouncedLoadOrderRef.current += 1;
+      inner(range, order);
+    };
+    // Note: include dependencies so inner closure captures current providers/ids
+  }, [inventoryDataProvider, projectId, inventoryId, cleanup]);
 
   useEffect(() => {
     debouncedLoadInventoryItems(inputRange);
