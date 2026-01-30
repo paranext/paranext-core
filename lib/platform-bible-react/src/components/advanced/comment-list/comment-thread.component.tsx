@@ -15,7 +15,7 @@ import {
   SerializedParagraphNode,
   SerializedTextNode,
 } from 'lexical';
-import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
+import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -87,8 +87,7 @@ export function CommentThread({
   autoReadDelay = 5,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
-  const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
-  const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
+  const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
@@ -102,13 +101,31 @@ export function CommentThread({
     Map<string, boolean>
   >(new Map());
 
-  // Check async permissions when thread is selected
+  // Check resolve permission on mount so the button can appear on hover
+  useEffect(() => {
+    let isPromiseCurrent = true;
+
+    const checkResolvePermission = async () => {
+      const resolveResult = canUserResolveThreadCallback
+        ? await canUserResolveThreadCallback(threadId)
+        : false;
+
+      if (!isPromiseCurrent) return;
+      setCanResolve(resolveResult);
+    };
+
+    checkResolvePermission();
+    return () => {
+      isPromiseCurrent = false;
+    };
+  }, [threadId, canUserResolveThreadCallback]);
+
+  // Check remaining async permissions when thread is selected
   useEffect(() => {
     let isPromiseCurrent = true;
 
     if (!isSelected) {
       setCanAssign(false);
-      setCanResolve(false);
       setCommentEditDeletePermissions(new Map());
       return undefined;
     }
@@ -119,22 +136,14 @@ export function CommentThread({
         : false;
 
       if (!isPromiseCurrent) return;
-
-      const resolveResult = canUserResolveThreadCallback
-        ? await canUserResolveThreadCallback(threadId)
-        : false;
-
-      if (!isPromiseCurrent) return;
-
       setCanAssign(assignResult);
-      setCanResolve(resolveResult);
     };
 
     checkPermissions();
     return () => {
       isPromiseCurrent = false;
     };
-  }, [isSelected, threadId, canUserAssignThreadCallback, canUserResolveThreadCallback]);
+  }, [isSelected, threadId, canUserAssignThreadCallback]);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
 
@@ -192,21 +201,6 @@ export function CommentThread({
     }
     handleReadStatusChange?.(threadId, newIsRead);
   }, [isRead, handleReadStatusChange, threadId]);
-
-  useEffect(() => {
-    const verseTextElement = verseTextRef.current;
-    if (!verseTextElement) {
-      return undefined;
-    }
-
-    const checkOverflow = () => {
-      setIsVerseOverflowing(verseTextElement.scrollWidth > verseTextElement.clientWidth);
-    };
-
-    checkOverflow();
-    window.addEventListener('resize', checkOverflow);
-    return () => window.removeEventListener('resize', checkOverflow);
-  }, [firstComment?.verse]);
 
   useEffect(() => {
     setShowAllReplies(false);
@@ -336,7 +330,7 @@ export function CommentThread({
       aria-selected={isSelected}
       id={threadId}
       className={cn(
-        'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        'tw-group tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         { 'tw-cursor-pointer hover:tw-shadow-md': !isSelected },
         {
           'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
@@ -370,6 +364,27 @@ export function CommentThread({
                 {localizedAssignedToText}
               </Badge>
             )}
+            {canResolve && threadStatus !== 'Resolved' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'tw-ms-auto',
+                  'tw-text-primary tw-transition-opacity tw-duration-200 hover:tw-bg-primary/10',
+                  'tw-opacity-0 group-hover:tw-opacity-100',
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddCommentToThreadWithContents({
+                    threadId,
+                    status: 'Resolved',
+                  });
+                }}
+                aria-label="Resolve thread"
+              >
+                <Check className="tw-h-4 tw-w-4" />
+              </Button>
+            )}
           </div>
           <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-baseline tw-gap-2">
             {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
@@ -392,20 +407,6 @@ export function CommentThread({
                 {firstComment.contextAfter}
               </span>
             </p>
-            {isVerseOverflowing && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent triggering the expand/collapse of the thread
-                  setIsVerseExpanded(!isVerseExpanded);
-                }}
-                className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
-                aria-label={isVerseExpanded ? 'Collapse text' : 'Expand text'}
-              >
-                {isVerseExpanded ? <ChevronUp /> : <ChevronDown />}
-              </Button>
-            )}
           </div>
           <CommentItem
             comment={firstComment}
