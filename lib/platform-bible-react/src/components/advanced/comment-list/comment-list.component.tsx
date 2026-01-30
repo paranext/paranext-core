@@ -27,17 +27,12 @@ export default function CommentList({
   selectedThreadId: externalSelectedThreadId,
   onSelectedThreadChange,
 }: CommentListProps) {
-  const [internalSelectedThreadId, setInternalSelectedThreadId] = useState<string | undefined>(
-    undefined,
-  );
+  const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
 
-  // Use external selection if provided, otherwise use internal state
-  const selectedThreadId = externalSelectedThreadId ?? internalSelectedThreadId;
-
-  // Sync internal state with external selection when it changes
+  // When external selection changes, add it to expanded set
   useEffect(() => {
-    if (externalSelectedThreadId !== undefined) {
-      setInternalSelectedThreadId(externalSelectedThreadId);
+    if (externalSelectedThreadId) {
+      setExpandedThreadIds((prev) => new Set(prev).add(externalSelectedThreadId));
     }
   }, [externalSelectedThreadId]);
 
@@ -51,7 +46,7 @@ export default function CommentList({
 
   const handleKeyboardSelectThread = useCallback(
     (option: ListboxOption) => {
-      setInternalSelectedThreadId(option.id);
+      setExpandedThreadIds((prev) => new Set(prev).add(option.id));
       onSelectedThreadChange?.(option.id);
     },
     [onSelectedThreadChange],
@@ -59,10 +54,19 @@ export default function CommentList({
 
   const handleSelectThread = useCallback(
     (threadId: string) => {
-      setInternalSelectedThreadId(threadId);
-      onSelectedThreadChange?.(threadId);
+      const isCollapsing = expandedThreadIds.has(threadId);
+      setExpandedThreadIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(threadId)) {
+          next.delete(threadId);
+        } else {
+          next.add(threadId);
+        }
+        return next;
+      });
+      onSelectedThreadChange?.(isCollapsing ? undefined : threadId);
     },
-    [onSelectedThreadChange],
+    [expandedThreadIds, onSelectedThreadChange],
   );
 
   const { listboxRef, activeId, handleKeyDown } = useListbox({
@@ -70,11 +74,11 @@ export default function CommentList({
     onOptionSelect: handleKeyboardSelectThread,
   });
 
-  // Set selected thread id to undefined when Escape is pressed
+  // Collapse all expanded threads when Escape is pressed
   const handleKeyDownWithEscape = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Escape') {
-        setInternalSelectedThreadId(undefined);
+        setExpandedThreadIds(new Set());
         onSelectedThreadChange?.(undefined);
         event.preventDefault();
         event.stopPropagation();
@@ -118,7 +122,7 @@ export default function CommentList({
             handleSelectThread={handleSelectThread}
             threadId={thread.id}
             isRead={thread.isRead}
-            isSelected={selectedThreadId === thread.id}
+            isSelected={expandedThreadIds.has(thread.id)}
             currentUser={currentUser}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
