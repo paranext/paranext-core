@@ -197,10 +197,15 @@ type LegacyCommentThread = {
 	status: CommentStatus;
 	/** Thread type (from first comment) */
 	type: CommentType;
-	/** User to whom the thread is assigned */
-	assignedUser: string;
+	/**
+	 * User to whom the thread is assigned
+	 *
+	 * - `undefined` or not present if there is no assignment info
+	 * - Empty string means explicitly unassigned
+	 */
+	assignedUser?: string;
 	/** User to reply to */
-	replyToUser: string;
+	replyToUser?: string;
 	/** Last modified date (ISO 8601 string) */
 	modifiedDate: string;
 	/** Scripture reference for this thread */

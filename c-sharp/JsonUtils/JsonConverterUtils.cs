@@ -45,6 +45,41 @@ public static class JsonConverterUtils
     }
 
     /// <summary>
+    /// Maps TypeScript CommentType values to C# NoteType internal string representations.
+    /// TypeScript: 'Unspecified' | 'Normal' | 'Conflict'
+    /// C# NoteType: "" | "normal" | "conflict"
+    /// </summary>
+    public static string ConvertCommentTypeToNoteType(string commentType)
+    {
+        return commentType switch
+        {
+            "Unspecified" => "",
+            "Normal" => "normal",
+            "Conflict" => "conflict",
+            "" => "",
+            _ => commentType.ToLowerInvariant(),
+        };
+    }
+
+    /// <summary>
+    /// Maps C# NoteType internal string representations to TypeScript CommentType values.
+    /// C# NoteType: "" | "normal" | "conflict"
+    /// TypeScript: 'Unspecified' | 'Normal' | 'Conflict'
+    /// </summary>
+    public static string ConvertNoteTypeToCommentType(string noteType)
+    {
+        return noteType switch
+        {
+            "" => "Unspecified",
+            "normal" => "Normal",
+            "conflict" => "Conflict",
+            _ => noteType.Length > 0
+                ? char.ToUpperInvariant(noteType[0]) + noteType.Substring(1)
+                : "Unspecified",
+        };
+    }
+
+    /// <summary>
     /// Write a string property to JSON only if the value is not null or empty.
     /// </summary>
     /// <param name="writer">The JSON writer</param>

@@ -135,7 +135,7 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""date"":""2011-08-16T15:49:18.4019847-04:00"""));
         Assert.That(json, Does.Contain(@"""startPosition"":0"));
         Assert.That(json, Does.Contain(@"""status"":""Todo"""));
-        Assert.That(json, Does.Contain(@"""type"":""conflict"""));
+        Assert.That(json, Does.Contain(@"""type"":""Conflict"""));
         Assert.That(json, Does.Contain(@"""hideInTextWindow"":false"));
         using var doc = JsonDocument.Parse(json);
         var contents = doc.RootElement.GetProperty("contents").GetString() ?? string.Empty;
