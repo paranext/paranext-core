@@ -1,6 +1,7 @@
 import {
   DeltaOp,
   DeltaOpInsertNoteEmbed,
+  DeltaSource,
   Editorial,
   EditorOptions,
   EditorRef,
@@ -10,10 +11,10 @@ import {
   isInsertEmbedOpOfType,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
-import { USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { renderEditorialWithToolbar } from '@/components/demo/scripture-editor/editorial-with-toolbar.renderer';
 import {
   annotationRangeWeb1,
@@ -387,6 +388,34 @@ export const FootnoteEditorView: Story = {
       };
     }, [args.options, viewOptions, noteKey]);
 
+    const openFootnoteEditorOnNewNote = useCallback(
+      (ops?: DeltaOp[], insertedNodeKey?: string) => {
+        if (insertedNodeKey && ops) {
+          // If we are already editing a note, then returns
+          if (noteKey.current) return;
+
+          // Makes sure the node is a note
+          console.log(ops);
+          const noteOp = ops[1];
+          if (!isInsertEmbedOpOfType('note', noteOp)) return;
+
+          const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+          // Note element must be defined
+          if (!noteElement) return;
+
+          console.log(noteOp);
+          const targetRect = noteElement.getBoundingClientRect();
+          setPopoverX(targetRect.left);
+          setPopoverY(targetRect.top);
+          setPopoverHeight(targetRect.height);
+          noteKey.current = insertedNodeKey;
+          noteOps.current = [noteOp];
+          setShowFootnoteEditor(true);
+        }
+      },
+      [noteKey],
+    );
+
     const onEditorClose = () => {
       noteKey.current = undefined;
       noteOps.current = undefined;
@@ -405,6 +434,14 @@ export const FootnoteEditorView: Story = {
         <Editorial
           {...args}
           options={mergedOptions}
+          onUsjChange={(
+            _usj: Usj,
+            ops?: DeltaOp[],
+            _source?: DeltaSource,
+            insertedNodeKey?: string,
+          ) => {
+            openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+          }}
           ref={editorRef}
           onScrRefChange={() => undefined}
         />
