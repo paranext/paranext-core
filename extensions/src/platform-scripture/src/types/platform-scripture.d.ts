@@ -1547,6 +1547,121 @@ declare module 'platform-scripture' {
     selectedChecks: string[];
   };
   // #endregion
+
+  // ==========================================================================
+  // Project Creation Types (maps to C# ProjectCreation/*.cs)
+  // ==========================================================================
+
+  /** Project type enum matching C# ProjectType */
+  export type ProjectType =
+    | 'Standard'
+    | 'BackTranslation'
+    | 'Daughter'
+    | 'Auxiliary'
+    | 'StudyBibleAdditions'
+    | 'TransliterationManual'
+    | 'TransliterationWithEncoder'
+    | 'ConsultantNotes';
+
+  /** Request payload for creating a project (maps to C# ProjectCreationRequest) */
+  export interface ProjectCreationRequest {
+    shortName: string;
+    fullName: string;
+    copyright?: string;
+    languageId: string;
+    encoding?: number;
+    normalizationForm?: 'NFC' | 'NFD' | 'None';
+    projectType: ProjectType;
+    baseProjectName?: string;
+    baseProjectGuid?: string;
+    versification?: string;
+    booksPresent?: string[];
+    fileNamePrePart?: string;
+    fileNameForm?: string;
+    fileNamePostPart?: string;
+    usfmVersion?: 'Version2' | 'Version3';
+    editable?: boolean;
+    existingProjectName?: string;
+  }
+
+  /** Information about a created project (maps to C# ProjectInfo) */
+  export interface ProjectInfo {
+    shortName: string;
+    fullName: string;
+    guid: string;
+    projectType: ProjectType;
+    languageId: string;
+    versification: string;
+    createdAt: string;
+    baseProjectName?: string;
+    baseProjectGuid?: string;
+    settingsFilePath: string;
+  }
+
+  /** Project creation error details (maps to C# ProjectCreationError) */
+  export interface ProjectCreationError {
+    code: string;
+    message: string;
+    field?: string;
+    details?: Record<string, unknown>;
+  }
+
+  /** Result of project creation operation (maps to C# ProjectCreationResult) */
+  export interface ProjectCreationResult {
+    success: boolean;
+    project?: ProjectInfo;
+    error?: ProjectCreationError;
+  }
+
+  /** Language option for project creation (maps to C# LanguageOption) */
+  export interface ProjectLanguageOption {
+    id: string;
+    code: string;
+    displayName: string;
+    script?: string;
+    region?: string;
+    isRTL: boolean;
+  }
+
+  /** Versification option for project creation (maps to C# VersificationOption) */
+  export interface ProjectVersificationOption {
+    id: string;
+    displayName: string;
+    isCustomized: boolean;
+  }
+
+  /** Project type option for project creation (maps to C# ProjectTypeOption) */
+  export interface ProjectTypeOption {
+    value: ProjectType;
+    label: string;
+    isDerived: boolean;
+    needsOwnRegistration: boolean;
+  }
+
+  /** Project option for base project selection (maps to C# ProjectOption) */
+  export interface ProjectOption {
+    name: string;
+    guid: string;
+    displayName: string;
+    projectType?: ProjectType;
+  }
+
+  /** Named option for dropdown selections (maps to C# NamedOption) */
+  export interface NamedOption {
+    id: string;
+    displayName: string;
+  }
+
+  /** Options for populating project creation UI (maps to C# ProjectOptionsResult) */
+  export interface ProjectOptionsResult {
+    languages: ProjectLanguageOption[];
+    versifications: ProjectVersificationOption[];
+    projectTypes: ProjectTypeOption[];
+    availableBaseProjects: ProjectOption[];
+    biblicalTermsLists: NamedOption[];
+    encodings: NamedOption[];
+    normalizations: NamedOption[];
+  }
 }
 
 declare module 'papi-shared-types' {
@@ -1571,6 +1686,10 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
+    // Project creation types
+    ProjectCreationRequest,
+    ProjectCreationResult,
+    ProjectOptionsResult,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -1641,6 +1760,38 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    /** Open the New Project dialog to create a new scripture project */
+    'platformScripture.openNewProject': () => Promise<string | undefined>;
+
+    /** Open the Restore Project dialog to restore from backup */
+    'platformScripture.openRestoreProject': () => Promise<string | undefined>;
+
+    /** Open the Interlinear Setup dialog to configure interlinear tasks */
+    'platformScripture.openInterlinearSetup': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    // ========================================================================
+    // Project Creation Commands (C# backend - ProjectCreationCommandService)
+    // ========================================================================
+
+    /**
+     * Get options for populating project creation UI (languages, versifications, etc.)
+     *
+     * @returns Project creation options for dropdowns and selections
+     */
+    'platformScripture.getProjectOptions': () => Promise<ProjectOptionsResult>;
+
+    /**
+     * Create a new scripture project
+     *
+     * @param request - Project creation parameters
+     * @returns Result with project info on success, error details on failure
+     */
+    'platformScripture.createProject': (
+      request: ProjectCreationRequest,
+    ) => Promise<ProjectCreationResult>;
   }
 
   export interface ProjectSettingTypes {

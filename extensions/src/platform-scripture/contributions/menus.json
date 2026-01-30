@@ -2,7 +2,29 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%mainMenu_newProject%",
+        "localizeNotes": "Application main menu > Platform > New Project",
+        "group": "platform.projectProjects",
+        "order": 1,
+        "command": "platformScripture.openNewProject"
+      },
+      {
+        "label": "%mainMenu_restoreProject%",
+        "localizeNotes": "Application main menu > Platform > Restore Project",
+        "group": "platform.projectProjects",
+        "order": 2,
+        "command": "platformScripture.openRestoreProject"
+      },
+      {
+        "label": "%mainMenu_interlinearSetup%",
+        "localizeNotes": "Application main menu > Platform > Interlinear Setup",
+        "group": "platform.projectProjects",
+        "order": 3,
+        "command": "platformScripture.openInterlinearSetup"
+      }
+    ]
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
