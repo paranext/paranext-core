@@ -8,6 +8,11 @@ import {
 } from './checks-side-panel.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
+  ParallelPassagesWebViewOptions,
+  ParallelPassagesWebViewProvider,
+  parallelPassagesWebViewType,
+} from './parallel-passages.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -203,6 +208,29 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
   }
 
   return findWebViewId;
+}
+
+async function openParallelPassages(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: ParallelPassagesWebViewOptions['projectId'];
+
+  logger.debug('Opening parallel passages tool');
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    logger.debug('No project for parallel passages!');
+    return undefined;
+  }
+
+  const options: ParallelPassagesWebViewOptions = { projectId };
+  return papi.webViews.openWebView(
+    parallelPassagesWebViewType,
+    { type: 'panel', direction: 'right' },
+    options,
+  );
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -418,6 +446,34 @@ export async function activate(context: ExecutionActivationContext) {
     findWebViewProvider,
   );
 
+  const parallelPassagesWebViewProvider = new ParallelPassagesWebViewProvider();
+  const openParallelPassagesPromise = papi.commands.registerCommand(
+    'platformScripture.openParallelPassages',
+    openParallelPassages,
+    {
+      method: {
+        summary: 'Open the parallel passages tool',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project for parallel passages',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened parallel passages web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const parallelPassagesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    parallelPassagesWebViewType,
+    parallelPassagesWebViewProvider,
+  );
+
   const invalidateResultsPromise = papi.commands.registerCommand(
     'platformScripture.invalidateCheckResults',
     async (details: CheckResultsInvalidated) => {
@@ -474,6 +530,8 @@ export async function activate(context: ExecutionActivationContext) {
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,
+    await openParallelPassagesPromise,
+    await parallelPassagesWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
