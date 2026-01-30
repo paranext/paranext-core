@@ -11,22 +11,20 @@
  */
 
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
   Badge,
   Button,
-  Card,
-  CardContent,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
   cn,
 } from 'platform-bible-react';
-import { AlertTriangle, HelpCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 
 import { useProjectPropertiesForm } from './hooks/use-project-properties-form';
@@ -45,70 +43,30 @@ import { AdditionsTab } from './components/project-properties/additions-tab.comp
 import { StudyBibleTab } from './components/project-properties/study-bible-tab.component';
 
 // =============================================================================
-// MOCK DATA (for development)
+// FALLBACK DEFAULTS (safety net if provider data is incomplete)
 // =============================================================================
 
-const MOCK_INPUT: ProjectPropertiesInput = {
-  mode: 'create',
-  options: {
-    languages: [
-      { id: 'en:Latn:US:', code: 'en', displayName: 'English (United States)', isRTL: false },
-      { id: 'es:Latn:ES:', code: 'es', displayName: 'Spanish (Spain)', isRTL: false },
-      { id: 'fr:Latn:FR:', code: 'fr', displayName: 'French (France)', isRTL: false },
-      { id: 'ar:Arab:SA:', code: 'ar', displayName: 'Arabic (Saudi Arabia)', isRTL: true },
-      { id: 'zh:Hans:CN:', code: 'zh', displayName: 'Chinese (Simplified)', isRTL: false },
-    ],
-    versifications: [
-      { id: 'English', displayName: 'English', isCustomized: false },
-      { id: 'Original', displayName: 'Original', isCustomized: false },
-      { id: 'Septuagint', displayName: 'Septuagint', isCustomized: false },
-      { id: 'Vulgate', displayName: 'Vulgate', isCustomized: false },
-      { id: 'RussianOrthodox', displayName: 'Russian Orthodox', isCustomized: false },
-      { id: 'RussianProtestant', displayName: 'Russian Protestant', isCustomized: false },
-    ],
-    projectTypes: [
-      { value: 'Standard', label: 'Standard Translation' },
-      { value: 'BackTranslation', label: 'Back Translation' },
-      { value: 'Daughter', label: 'Daughter Translation' },
-      { value: 'Auxiliary', label: 'Auxiliary Project' },
-      { value: 'StudyBibleAdditions', label: 'Study Bible Additions' },
-      { value: 'TransliterationManual', label: 'Transliteration (Manual)' },
-      { value: 'TransliterationWithEncoder', label: 'Transliteration (With Encoder)' },
-      { value: 'ConsultantNotes', label: 'Consultant Notes' },
-    ],
-    availableBaseProjects: [
-      { name: 'ENG', guid: 'eng-guid-123', displayName: 'English Reference (ENG)' },
-      { name: 'SPA', guid: 'spa-guid-456', displayName: 'Spanish Reference (SPA)' },
-      { name: 'FRA', guid: 'fra-guid-789', displayName: 'French Reference (FRA)' },
-    ],
-    biblicalTermsLists: [
-      { id: 'default', displayName: 'Major Biblical Terms (UBS/SIL)' },
-      { id: 'all', displayName: 'All Biblical Terms' },
-    ],
-    encodingConverters: [
-      { id: 'unicode-to-legacy', displayName: 'Unicode to Legacy' },
-      { id: 'legacy-to-unicode', displayName: 'Legacy to Unicode' },
-    ],
-    encodings: [
-      { id: 'UTF-8', displayName: 'UTF-8 (Unicode)' },
-      { id: 'UTF-16', displayName: 'UTF-16 (Unicode)' },
-    ],
-    normalizations: [
-      { id: 'NFC', displayName: 'NFC (Composed)' },
-      { id: 'NFD', displayName: 'NFD (Decomposed)' },
-      { id: 'None', displayName: 'None' },
-    ],
-    flexUsageModes: [
-      { id: 'import', displayName: 'Import from FLEx' },
-      { id: 'export', displayName: 'Export to FLEx' },
-      { id: 'bidirectional', displayName: 'Bidirectional Sync' },
-    ],
-  },
-  userContext: {
-    isRegistered: true,
-    canRegisterProjects: true,
-    isOnline: true,
-  },
+/**
+ * Minimal fallback defaults used only if the provider fails to supply data. In normal operation,
+ * the web view provider fetches real data from PAPI. These exist to prevent crashes if data is
+ * missing.
+ */
+const FALLBACK_OPTIONS: ProjectPropertiesInput['options'] = {
+  languages: [{ id: 'en:Latn::', code: 'en', displayName: 'English', isRTL: false }],
+  versifications: [{ id: 'English', displayName: 'English', isCustomized: false }],
+  projectTypes: [{ value: 'Standard', label: 'Standard Translation' }],
+  availableBaseProjects: [],
+  biblicalTermsLists: [],
+  encodingConverters: [],
+  encodings: [],
+  normalizations: [],
+  flexUsageModes: [],
+};
+
+const FALLBACK_USER_CONTEXT: ProjectPropertiesInput['userContext'] = {
+  isRegistered: false,
+  canRegisterProjects: false,
+  isOnline: false,
 };
 
 // =============================================================================
@@ -130,11 +88,13 @@ const MOCK_INPUT: ProjectPropertiesInput = {
  * - BHV-200-210: Name and registration handling
  * - BHV-204: Tab navigation
  */
-// =============================================================================
-// HELP TEXT MAP (GAP-003: Help box context)
-// =============================================================================
+/* =============================================================================
+   HELP TEXT MAP (GAP-003: Help box context) - DISABLED
+   The help panel is hidden until field focus handlers are wired.
+   To enable: uncomment this block and the help panel JSX below, then wire
+   updateHelpText to onFocus handlers in child components.
+   =============================================================================
 
-/** Help text for each field - displayed in help panel when field is focused */
 const HELP_TEXT: Record<string, string> = {
   fullName:
     'The full name of the project. This appears in project selection dialogs and reports. Use a descriptive name that identifies the translation.',
@@ -175,21 +135,54 @@ const HELP_TEXT: Record<string, string> = {
     'Permission settings for sharing this project with other users and organizations via the Paratext Registry.',
   default: 'Click on a field to see detailed help information here.',
 };
+*/
 
 globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }: WebViewProps) {
-  // Get input data from web view state (with mock fallback for development)
-  const [inputDataRaw] = useWebViewState<ProjectPropertiesInput | undefined>(
+  // Get input data from web view state
+  // The provider fetches real data from PAPI and passes it here
+  const [inputDataRaw] = useWebViewState<Partial<ProjectPropertiesInput> | undefined>(
     'inputData',
     undefined,
   );
-  const inputData = inputDataRaw ?? MOCK_INPUT;
+
+  // Build input data with fallbacks for any missing fields
+  // In normal operation, the provider supplies complete data from PAPI
+  // Fallbacks only used if provider data is incomplete (shouldn't happen)
+  const inputData: ProjectPropertiesInput = {
+    mode: inputDataRaw?.mode ?? 'create',
+    interlinearContext: inputDataRaw?.interlinearContext,
+    existingProject: inputDataRaw?.existingProject,
+    options: {
+      languages: inputDataRaw?.options?.languages ?? FALLBACK_OPTIONS.languages,
+      versifications: inputDataRaw?.options?.versifications ?? FALLBACK_OPTIONS.versifications,
+      projectTypes: inputDataRaw?.options?.projectTypes ?? FALLBACK_OPTIONS.projectTypes,
+      availableBaseProjects:
+        inputDataRaw?.options?.availableBaseProjects ?? FALLBACK_OPTIONS.availableBaseProjects,
+      biblicalTermsLists:
+        inputDataRaw?.options?.biblicalTermsLists ?? FALLBACK_OPTIONS.biblicalTermsLists,
+      encodingConverters:
+        inputDataRaw?.options?.encodingConverters ?? FALLBACK_OPTIONS.encodingConverters,
+      encodings: inputDataRaw?.options?.encodings ?? FALLBACK_OPTIONS.encodings,
+      normalizations: inputDataRaw?.options?.normalizations ?? FALLBACK_OPTIONS.normalizations,
+      flexUsageModes: inputDataRaw?.options?.flexUsageModes ?? FALLBACK_OPTIONS.flexUsageModes,
+    },
+    userContext: {
+      isRegistered: inputDataRaw?.userContext?.isRegistered ?? FALLBACK_USER_CONTEXT.isRegistered,
+      canRegisterProjects:
+        inputDataRaw?.userContext?.canRegisterProjects ?? FALLBACK_USER_CONTEXT.canRegisterProjects,
+      isOnline: inputDataRaw?.userContext?.isOnline ?? FALLBACK_USER_CONTEXT.isOnline,
+    },
+  };
 
   // Initialize form hook
   const form = useProjectPropertiesForm(inputData);
   const { state, options, mode } = form;
 
-  // GAP-003: Help text state - updates based on focused field
-  const [helpText, setHelpText] = useState<string>(HELP_TEXT.default);
+  // Submit status for user feedback
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>(
+    'idle',
+  );
+  const [submitError, setSubmitError] = useState<string | undefined>(undefined);
 
   // Get visible tabs based on project type
   const visibleTabs = useMemo(
@@ -213,11 +206,71 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
   );
 
   // Handle form submission
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const output: ProjectPropertiesOutput = form.handleSubmit();
-    if (output.action === 'submit') {
-      logger.info(`Project properties submitted: ${JSON.stringify(output.projectData)}`);
-      // TODO: Send via PAPI command
+    if (output.action !== 'submit' || !output.projectData) {
+      return;
+    }
+
+    setSubmitStatus('submitting');
+    setSubmitError(undefined);
+
+    try {
+      // Map TypeScript ProjectData to C# ProjectCreationRequest format
+      // Type assertions needed because ProjectData uses string types but
+      // ProjectCreationRequest uses stricter union types from platform-scripture
+      const request = {
+        shortName: output.projectData.shortName,
+        fullName: output.projectData.fullName,
+        copyright: output.projectData.copyright || undefined,
+        languageId: output.projectData.languageId,
+        // ProjectType in ProjectData is string, but API expects specific union
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        projectType: output.projectData.projectType as
+          | 'Standard'
+          | 'BackTranslation'
+          | 'Daughter'
+          | 'Auxiliary'
+          | 'StudyBibleAdditions'
+          | 'TransliterationManual'
+          | 'TransliterationWithEncoder'
+          | 'ConsultantNotes',
+        baseProjectName: output.projectData.baseProjectName,
+        baseProjectGuid: output.projectData.baseProjectGuid,
+        versification: output.projectData.versification,
+        booksPresent: output.projectData.booksPresentSet,
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        usfmVersion: (output.projectData.usfmVersion === '3' ? 'Version3' : 'Version2') as
+          | 'Version2'
+          | 'Version3',
+        editable: output.projectData.editable,
+        encoding: 65001, // UTF-8
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        normalizationForm: (output.projectData.normalizationForm || 'NFC') as
+          | 'NFC'
+          | 'NFD'
+          | 'None',
+      };
+
+      logger.info(`Creating project: ${JSON.stringify(request)}`);
+
+      // Call PAPI command to create the project
+      const result = await papi.commands.sendCommand('platformScripture.createProject', request);
+
+      if (result.success) {
+        logger.info(`Project created successfully: ${JSON.stringify(result)}`);
+        setSubmitStatus('success');
+      } else {
+        const errorMsg = result.error?.message || 'Project creation failed for unknown reason';
+        logger.error(`Project creation failed: ${errorMsg}`);
+        setSubmitError(errorMsg);
+        setSubmitStatus('error');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      logger.error(`Project creation error: ${errorMsg}`);
+      setSubmitError(errorMsg);
+      setSubmitStatus('error');
     }
   }, [form]);
 
@@ -228,13 +281,10 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
     // TODO: Close web view
   }, [form]);
 
-  // GAP-003: Handler for updating help text based on focused field
-  // Passed to child components (GeneralTab, etc.) to update help when fields are focused
-  // TODO: Wire this to child component onFocus handlers for full help integration
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const updateHelpText = useCallback((fieldKey: string) => {
-    setHelpText(HELP_TEXT[fieldKey] || HELP_TEXT.default);
-  }, []);
+  // GAP-003: Help text functionality is disabled until field focus handlers are wired
+  // The HELP_TEXT map and updateHelpText handler are defined but the help panel is hidden.
+  // To enable: uncomment the help panel in the JSX below and wire updateHelpText to
+  // onFocus handlers in child components (GeneralTab, etc.)
 
   // Track previous active tab to detect tab changes for GAP-005
   const previousActiveTab = useRef<number>(state.activeTab);
@@ -302,6 +352,28 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
             There are errors on the following tabs:{' '}
             {errorsOnOtherTabs.map((tab) => TAB_NAMES[tab]).join(', ')}
           </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Success message after submission */}
+      {submitStatus === 'success' && (
+        <Alert className="tw-py-2 tw-border-green-500 tw-bg-green-50 dark:tw-bg-green-950">
+          <CheckCircle2 className="tw-h-4 tw-w-4 tw-text-green-600" />
+          <AlertTitle className="tw-text-sm tw-text-green-800 dark:tw-text-green-200">
+            Project Created Successfully
+          </AlertTitle>
+          <AlertDescription className="tw-text-sm tw-text-green-700 dark:tw-text-green-300">
+            Your project has been created. You may close this dialog.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Error message if submission failed */}
+      {submitStatus === 'error' && submitError && (
+        <Alert variant="destructive" className="tw-py-2">
+          <AlertTriangle className="tw-h-4 tw-w-4" />
+          <AlertTitle className="tw-text-sm">Project Creation Failed</AlertTitle>
+          <AlertDescription className="tw-text-sm">{submitError}</AlertDescription>
         </Alert>
       )}
 
@@ -449,21 +521,32 @@ globalThis.webViewComponent = function ProjectPropertiesWebView({ useWebViewStat
         </div>
       </Tabs>
 
-      {/* GAP-003: Help Panel - displays context-sensitive help based on focused field */}
+      {/* GAP-003: Help Panel - HIDDEN until field focus handlers are wired
+          The updateHelpText function and HELP_TEXT map exist but aren't connected to field onFocus.
+          Hiding the panel avoids showing a non-functional UI element.
+          To enable: wire updateHelpText to onFocus handlers in child components (GeneralTab, etc.)
       <Card className="tw-bg-muted/30 tw-border-muted">
         <CardContent className="tw-p-3 tw-flex tw-items-start tw-gap-2">
           <HelpCircle className="tw-h-4 tw-w-4 tw-text-muted-foreground tw-mt-0.5 tw-flex-shrink-0" />
           <p className="tw-text-sm tw-text-muted-foreground">{helpText}</p>
         </CardContent>
       </Card>
+      */}
 
       {/* Action Buttons */}
       <div className="tw-flex tw-justify-end tw-gap-2 tw-pt-4 tw-border-t tw-border-border">
-        <Button variant="outline" onClick={handleCancel} disabled={state.isSubmitting}>
+        <Button
+          variant="outline"
+          onClick={handleCancel}
+          disabled={submitStatus === 'submitting' || submitStatus === 'success'}
+        >
           Cancel
         </Button>
-        <Button onClick={handleSubmit} disabled={state.isSubmitting}>
-          {state.isSubmitting ? 'Saving...' : 'OK'}
+        <Button
+          onClick={handleSubmit}
+          disabled={submitStatus === 'submitting' || submitStatus === 'success'}
+        >
+          {submitStatus === 'submitting' ? 'Creating Project...' : 'OK'}
         </Button>
       </div>
     </div>

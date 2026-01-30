@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, FormEvent, KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, KeyboardEvent } from 'react';
 import {
   Alert,
   AlertDescription,
@@ -100,17 +100,13 @@ export function ProjectNameDialog({ input, onSubmit, onCancel }: ProjectNameDial
     }
   }, [input.isRestricted]);
 
-  // Handle form submission
-  const onFormSubmit = useCallback(
-    (e: FormEvent) => {
-      e.preventDefault();
-      const output = handleSubmit();
-      if (output.action === 'submit') {
-        onSubmit(output);
-      }
-    },
-    [handleSubmit, onSubmit],
-  );
+  // Handle submit button click
+  const onSubmitClick = useCallback(() => {
+    const output = handleSubmit();
+    if (output.action === 'submit') {
+      onSubmit(output);
+    }
+  }, [handleSubmit, onSubmit]);
 
   // Handle cancel action
   const onCancelClick = useCallback(() => {
@@ -118,14 +114,25 @@ export function ProjectNameDialog({ input, onSubmit, onCancel }: ProjectNameDial
     onCancel();
   }, [handleCancel, onCancel]);
 
-  // Handle keyboard shortcuts
+  // Handle keyboard shortcuts (Enter to submit, Escape to cancel)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onCancelClick();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        // Don't submit if inside a textarea
+        const { target } = e;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.tagName === 'TEXTAREA') return;
+
+        // Submit if valid
+        if (isValid && !isSubmitting && !input.isRestricted) {
+          e.preventDefault();
+          onSubmitClick();
+        }
       }
     },
-    [onCancelClick],
+    [onCancelClick, onSubmitClick, isValid, isSubmitting, input.isRestricted],
   );
 
   return (
@@ -142,8 +149,8 @@ export function ProjectNameDialog({ input, onSubmit, onCancel }: ProjectNameDial
         </Alert>
       )}
 
-      {/* Form Fields */}
-      <form onSubmit={onFormSubmit} className="tw-flex tw-flex-col tw-gap-4">
+      {/* Form Fields - using div instead of form to avoid sandbox restrictions */}
+      <div className="tw-flex tw-flex-col tw-gap-4">
         {/* Full Name Field */}
         <div className="tw-flex tw-flex-col tw-gap-1">
           <Label htmlFor="project-full-name">
@@ -238,11 +245,15 @@ export function ProjectNameDialog({ input, onSubmit, onCancel }: ProjectNameDial
           <Button type="button" variant="outline" onClick={onCancelClick}>
             Cancel
           </Button>
-          <Button type="submit" disabled={!isValid || isSubmitting || input.isRestricted}>
+          <Button
+            type="button"
+            onClick={onSubmitClick}
+            disabled={!isValid || isSubmitting || input.isRestricted}
+          >
             {isSubmitting ? 'Saving...' : 'OK'}
           </Button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }

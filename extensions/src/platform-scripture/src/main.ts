@@ -14,14 +14,17 @@ import {
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
 import {
+  ProjectPropertiesWebViewOptions,
   ProjectPropertiesWebViewProvider,
   PROJECT_PROPERTIES_WEB_VIEW_TYPE,
 } from './project-properties.web-view-provider';
 import {
+  InterlinearSetupWebViewOptions,
   InterlinearSetupWebViewProvider,
   interlinearSetupWebViewType,
 } from './interlinear-setup.web-view-provider';
 import {
+  RestoreProjectWebViewOptions,
   RestoreProjectWebViewProvider,
   RESTORE_PROJECT_WEB_VIEW_TYPE,
 } from './restore-project.web-view-provider';
@@ -215,6 +218,38 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
   }
 
   return findWebViewId;
+}
+
+async function openNewProject(): Promise<string | undefined> {
+  const options: ProjectPropertiesWebViewOptions = { mode: 'create' };
+  return papi.webViews.openWebView(
+    PROJECT_PROPERTIES_WEB_VIEW_TYPE,
+    { type: 'float', floatSize: { width: 700, height: 800 } },
+    options,
+  );
+}
+
+async function openRestoreProject(): Promise<string | undefined> {
+  const options: RestoreProjectWebViewOptions = {};
+  return papi.webViews.openWebView(
+    RESTORE_PROJECT_WEB_VIEW_TYPE,
+    { type: 'float', floatSize: { width: 900, height: 700 } },
+    options,
+  );
+}
+
+async function openInterlinearSetup(projectId?: string): Promise<string | undefined> {
+  if (!projectId) {
+    logger.debug('No project ID provided for interlinear setup');
+    return undefined;
+  }
+
+  const options: InterlinearSetupWebViewOptions = { projectId };
+  return papi.webViews.openWebView(
+    interlinearSetupWebViewType,
+    { type: 'float', floatSize: { width: 700, height: 600 } },
+    options,
+  );
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -474,6 +509,62 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  // Project creation commands
+  const openNewProjectPromise = papi.commands.registerCommand(
+    'platformScripture.openNewProject',
+    openNewProject,
+    {
+      method: {
+        summary: 'Open the New Project dialog to create a new scripture project',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Project Properties web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const openRestoreProjectPromise = papi.commands.registerCommand(
+    'platformScripture.openRestoreProject',
+    openRestoreProject,
+    {
+      method: {
+        summary: 'Open the Restore Project dialog to restore from backup',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Restore Project web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const openInterlinearSetupPromise = papi.commands.registerCommand(
+    'platformScripture.openInterlinearSetup',
+    openInterlinearSetup,
+    {
+      method: {
+        summary: 'Open the Interlinear Setup dialog to configure interlinear tasks',
+        params: [
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project ID to configure interlinear tasks for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Interlinear Setup web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
@@ -506,6 +597,9 @@ export async function activate(context: ExecutionActivationContext) {
     await projectPropertiesWebViewProviderPromise,
     await interlinearSetupWebViewProviderPromise,
     await restoreProjectWebViewProviderPromise,
+    await openNewProjectPromise,
+    await openRestoreProjectPromise,
+    await openInterlinearSetupPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

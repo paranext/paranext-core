@@ -134,7 +134,8 @@ export function GeneralTab({
   onVersificationChange,
   onProjectTypeChange,
   onBaseProjectChange,
-  onBiblicalTermsListChange,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onBiblicalTermsListChange: _onBiblicalTermsListChange,
   onMatchBasedOnStemsChange,
   onEncodingConverterChange,
   onEncoderReverseDirectionChange,
@@ -436,7 +437,12 @@ export function GeneralTab({
             className="tw-flex-1 tw-bg-muted"
             placeholder="(default)"
           />
-          <Button variant="outline" size="sm" onClick={() => onBiblicalTermsListChange('')}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            title="Biblical terms list selection is not yet available"
+          >
             Choose...
           </Button>
         </div>

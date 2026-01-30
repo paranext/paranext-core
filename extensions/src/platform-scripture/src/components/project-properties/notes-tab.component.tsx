@@ -168,19 +168,18 @@ export function NotesTab({
             No custom tags defined. Click &quot;Add New Tag...&quot; to create one.
           </div>
         ) : (
-          commentTags.map((tag, index) => {
-            // Using name + icon as key since tags don't have unique IDs
-            const tagKey = `tag-${tag.name}-${tag.icon}`;
-            return (
-              <TagRow
-                key={tagKey}
-                tag={tag}
-                index={index}
-                onUpdate={onUpdateTag}
-                onRemove={onRemoveTag}
-              />
-            );
-          })
+          // Using index as key is intentional - using tag.name causes focus loss when typing
+          // because key changes trigger React to remount the component
+          commentTags.map((tag, index) => (
+            <TagRow
+              // eslint-disable-next-line react/no-array-index-key -- See comment above
+              key={index}
+              tag={tag}
+              index={index}
+              onUpdate={onUpdateTag}
+              onRemove={onRemoveTag}
+            />
+          ))
         )}
       </div>
     </div>

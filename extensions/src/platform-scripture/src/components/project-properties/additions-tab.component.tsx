@@ -3,7 +3,17 @@
  * project type
  */
 
-import { Button, ComboBox, Input, Label, cn } from 'platform-bible-react';
+import {
+  Button,
+  ComboBox,
+  Input,
+  Label,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  cn,
+} from 'platform-bible-react';
 import type { ProjectOption } from '../../types/project-properties.types';
 
 /** ComboBox option type */
@@ -56,10 +66,14 @@ export function AdditionsTab({
   additionsProjectsList,
   availableBaseProjects,
   onBaseTextChange,
-  onSelectAdditionsProjects,
-  onCheckConnections,
-  onMerge,
-  connectionsValid = false,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onSelectAdditionsProjects: _onSelectAdditionsProjects,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onCheckConnections: _onCheckConnections,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onMerge: _onMerge,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  connectionsValid: _connectionsValid = false,
   className,
 }: AdditionsTabProps) {
   // Convert project options to ComboBox format
@@ -108,9 +122,18 @@ export function AdditionsTab({
             className="tw-flex-1 tw-bg-muted"
             placeholder="(none selected)"
           />
-          <Button variant="outline" size="sm" onClick={onSelectAdditionsProjects}>
-            Select Additions Projects
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button variant="outline" size="sm" disabled>
+                    Select Additions Projects
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Additions project selection is not yet available</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <p className="tw-text-sm tw-text-muted-foreground">
           Projects containing study notes, introductions, and other supplementary content.
@@ -122,12 +145,28 @@ export function AdditionsTab({
         <Label className="tw-font-medium">Merge Operations</Label>
 
         <div className="tw-flex tw-gap-2">
-          <Button variant="outline" onClick={onCheckConnections}>
-            Check Connections
-          </Button>
-          <Button onClick={onMerge} disabled={!connectionsValid}>
-            Merge
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button variant="outline" disabled>
+                    Check Connections
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Connection checking is not yet available</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button disabled>Merge</Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Study Bible merging is not yet available</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <p className="tw-text-sm tw-text-muted-foreground">

@@ -10,6 +10,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   cn,
 } from 'platform-bible-react';
 import { HelpCircle } from 'lucide-react';
@@ -97,9 +101,12 @@ export function AdvancedTab({
   onSharingPermissionChange,
   onShareWithSldrChange,
   onAllowDerivedRegistrationChange,
-  onEditFilingPattern,
-  onChooseEncoding,
-  onWhyShareClick,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onEditFilingPattern: _onEditFilingPattern,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onChooseEncoding: _onChooseEncoding,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onWhyShareClick: _onWhyShareClick,
   className,
 }: AdvancedTabProps) {
   return (
@@ -115,9 +122,18 @@ export function AdvancedTab({
             className="tw-flex-1 tw-bg-muted"
             placeholder="(default)"
           />
-          <Button variant="outline" size="sm" onClick={onEditFilingPattern}>
-            Edit...
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button variant="outline" size="sm" disabled>
+                    Edit...
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>File naming pattern editing is not yet available</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {typicalFileName && (
@@ -164,9 +180,18 @@ export function AdvancedTab({
             <Label className="tw-text-sm tw-text-muted-foreground">Text Encoding</Label>
             <div className="tw-flex tw-items-center tw-gap-2">
               <Input value={textEncoding} readOnly className="tw-flex-1 tw-bg-muted" />
-              <Button variant="outline" size="sm" onClick={onChooseEncoding}>
-                Choose...
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button variant="outline" size="sm" disabled>
+                        Choose...
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Encoding selection is not yet available</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
 
@@ -190,14 +215,15 @@ export function AdvancedTab({
         <div className="tw-flex tw-flex-col tw-gap-1">
           <Label htmlFor="sil-encoding-select">SIL Encoding</Label>
           <Select
-            value={silEncoding || ''}
-            onValueChange={(value) => onSilEncodingChange(value || undefined)}
+            value={silEncoding || '__none__'}
+            onValueChange={(value) => onSilEncodingChange(value === '__none__' ? undefined : value)}
           >
             <SelectTrigger id="sil-encoding-select" className="tw-w-[300px]">
               <SelectValue placeholder="(none)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">(none)</SelectItem>
+              {/* Use special value instead of empty string - empty strings crash Select */}
+              <SelectItem value="__none__">(none)</SelectItem>
               {encodingOptions.map((opt) => (
                 <SelectItem key={opt.id} value={opt.id}>
                   {opt.displayName}
@@ -239,17 +265,24 @@ export function AdvancedTab({
       <div className="tw-flex tw-flex-col tw-gap-2 tw-border-t tw-border-border tw-pt-4">
         <div className="tw-flex tw-items-center tw-gap-2">
           <Label className="tw-font-medium">Sharing</Label>
-          {onWhyShareClick && (
-            <Button
-              variant="link"
-              size="sm"
-              onClick={onWhyShareClick}
-              className="tw-h-auto tw-p-0 tw-text-primary"
-            >
-              <HelpCircle className="tw-h-3 tw-w-3 tw-mr-1" />
-              Why?
-            </Button>
-          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    disabled
+                    className="tw-h-auto tw-p-0 tw-text-muted-foreground"
+                  >
+                    <HelpCircle className="tw-h-3 tw-w-3 tw-mr-1" />
+                    Why?
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Sharing information is not yet available</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="tw-flex tw-items-center tw-gap-2">

@@ -6,6 +6,10 @@ import {
   Button,
   Checkbox,
   Label,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   cn,
 } from 'platform-bible-react';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, ExternalLink } from 'lucide-react';
@@ -122,12 +126,13 @@ export function RegistrationStatusControl({
   onStateChange,
   className,
 }: RegistrationStatusControlProps) {
-  const { state, output, handleRegisterClick, handleManageClick, handleOfflineConfirmChange } =
-    useRegistrationStatus(input, {
-      onRegisterClicked: onRegisterClick,
-      onManageClicked: onManageClick,
-      onOfflineConfirmChanged: onOfflineConfirmChange,
-    });
+  // Handlers are disabled with tooltips until features are implemented
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Buttons disabled until feature is implemented
+  const { state, output, handleOfflineConfirmChange } = useRegistrationStatus(input, {
+    onRegisterClicked: onRegisterClick,
+    onManageClicked: onManageClick,
+    onOfflineConfirmChanged: onOfflineConfirmChange,
+  });
 
   // Track previous output to detect changes
   const previousOutputRef = useRef<RegistrationControlOutput | undefined>();
@@ -177,28 +182,46 @@ export function RegistrationStatusControl({
           <div className="tw-flex tw-flex-wrap tw-gap-2">
             {/* Register online link (BHV-111) */}
             {state.showRegisterLink && (
-              <Button
-                variant="link"
-                size="sm"
-                className="tw-h-auto tw-p-0 tw-text-primary"
-                onClick={handleRegisterClick}
-              >
-                <ExternalLink className="tw-mr-1 tw-h-3 tw-w-3" />
-                Register online...
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        disabled
+                        className="tw-h-auto tw-p-0 tw-text-muted-foreground"
+                      >
+                        <ExternalLink className="tw-mr-1 tw-h-3 tw-w-3" />
+                        Register online...
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Online registration is not yet available</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
 
             {/* Manage registration link */}
             {state.showManageLink && (
-              <Button
-                variant="link"
-                size="sm"
-                className="tw-h-auto tw-p-0 tw-text-primary"
-                onClick={handleManageClick}
-              >
-                <ExternalLink className="tw-mr-1 tw-h-3 tw-w-3" />
-                Manage registration...
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        disabled
+                        className="tw-h-auto tw-p-0 tw-text-muted-foreground"
+                      >
+                        <ExternalLink className="tw-mr-1 tw-h-3 tw-w-3" />
+                        Manage registration...
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Registration management is not yet available</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
 

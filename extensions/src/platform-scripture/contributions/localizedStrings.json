@@ -244,7 +244,10 @@
       "%webView_scope_selector_selected_text%": "Selected text",
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Deselect all",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Select all",
-      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up"
+      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up",
+      "%mainMenu_newProject%": "New Project...",
+      "%mainMenu_restoreProject%": "Restore Project...",
+      "%mainMenu_interlinearSetup%": "Interlinear Setup..."
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
@@ -395,7 +398,10 @@
       "%webView_repeatedWordsInventory_title%": "Inventario de palabras repetidas: {projectName}",
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Anular la selección de todos",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Seleccionar todos",
-      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración"
+      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
+      "%mainMenu_newProject%": "Nuevo proyecto...",
+      "%mainMenu_restoreProject%": "Restaurar proyecto...",
+      "%mainMenu_interlinearSetup%": "Configurar interlineal..."
     }
   }
 }

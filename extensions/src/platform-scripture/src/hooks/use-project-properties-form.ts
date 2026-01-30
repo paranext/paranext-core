@@ -805,7 +805,10 @@ export function useProjectPropertiesForm(
       return { action: 'cancel' };
     }
 
-    dispatch({ type: 'SET_SUBMITTING', payload: true });
+    // Note: This is a synchronous validation + data collection function.
+    // The caller should use handleSaveAsync for actual submission with PAPI,
+    // which properly manages the isSubmitting state.
+    // We don't set isSubmitting here because this function returns immediately.
 
     const projectData = buildProjectData();
 

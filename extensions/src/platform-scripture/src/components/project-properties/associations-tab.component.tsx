@@ -9,6 +9,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   cn,
 } from 'platform-bible-react';
 import type { FlexUsageOption } from '../../types/project-properties.types';
@@ -51,7 +55,8 @@ export function AssociationsTab({
   flexUsage,
   flexUsageOptions,
   onFlexUsageChange,
-  onAssociateClick,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Button disabled until feature is implemented
+  onAssociateClick: _onAssociateClick,
   className,
 }: AssociationsTabProps) {
   return (
@@ -66,9 +71,18 @@ export function AssociationsTab({
             className="tw-flex-1 tw-bg-muted"
             placeholder="(none)"
           />
-          <Button variant="outline" size="sm" onClick={onAssociateClick}>
-            Associate...
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button variant="outline" size="sm" disabled>
+                    Associate...
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Lexical project association is not yet available</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <p className="tw-text-sm tw-text-muted-foreground">
           Link this project to a lexical database for word-level analysis and concordance features.
@@ -79,14 +93,15 @@ export function AssociationsTab({
       <div className="tw-flex tw-flex-col tw-gap-1">
         <Label htmlFor="flex-usage-select">FLEx Usage</Label>
         <Select
-          value={flexUsage || ''}
-          onValueChange={(value) => onFlexUsageChange(value || undefined)}
+          value={flexUsage || '__none__'}
+          onValueChange={(value) => onFlexUsageChange(value === '__none__' ? undefined : value)}
         >
           <SelectTrigger id="flex-usage-select" className="tw-w-full">
             <SelectValue placeholder="Select FLEx usage mode..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">(None)</SelectItem>
+            {/* Use special value instead of empty string - empty strings crash Select */}
+            <SelectItem value="__none__">(None)</SelectItem>
             {flexUsageOptions.map((option) => (
               <SelectItem key={option.id} value={option.id}>
                 {option.displayName}
