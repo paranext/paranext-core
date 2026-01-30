@@ -347,6 +347,11 @@ export function CommentThread({
       <CardContent className="tw-flex tw-flex-col tw-gap-2 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
           <div className="tw-flex tw-items-center tw-gap-2">
+            {localizedAssignedToText && (
+              <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
+                {localizedAssignedToText}
+              </Badge>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -359,11 +364,6 @@ export function CommentThread({
             >
               {isRead ? <MailOpen /> : <Mail />}
             </Button>
-            {localizedAssignedToText && (
-              <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
-                {localizedAssignedToText}
-              </Badge>
-            )}
             {canResolve && threadStatus !== 'Resolved' && (
               <Button
                 variant="ghost"
