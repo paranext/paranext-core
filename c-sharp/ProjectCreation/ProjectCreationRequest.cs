@@ -39,37 +39,3 @@ public record ProjectCreationRequest
     // Existing project (for updates)
     public string? ExistingProjectName { get; init; }
 }
-
-/// <summary>
-/// Request to validate project names.
-/// Maps to EXT-002.
-/// </summary>
-public record ProjectNameValidationRequest
-{
-    public required string FullName { get; init; }
-    public required string ShortName { get; init; }
-    public required string Mode { get; init; } // "create" or "edit"
-    public string? OriginalShortName { get; init; }
-}
-
-/// <summary>
-/// Request to generate short name abbreviation.
-/// Maps to EXT-001.
-/// </summary>
-public record ShortNameGenerationRequest
-{
-    public required string FullName { get; init; }
-    public string? ValidChars { get; init; }
-}
-
-/// <summary>
-/// Request to validate file naming pattern.
-/// Maps to EXT-B2-006.
-/// </summary>
-public record FileNamingPatternRequest
-{
-    public required string Prefix { get; init; }
-    public required FileNameForm Scheme { get; init; }
-    public required string Suffix { get; init; }
-    public string Extension { get; init; } = ".SFM";
-}
