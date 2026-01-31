@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Paranext.DataProvider;
 using Paranext.DataProvider.ParallelPassages;
 using Paratext.Data;
 using SIL.Scripture;
@@ -944,11 +945,11 @@ internal class ParallelPassageTests : PapiTestBase
         var scrText = CreateDummyProject();
         ScrTextCollection.Add(scrText, true);
 
-        var dataProvider = new ParallelPassageDataProvider(Client);
+        // Use a subclass that simulates non-admin permissions
+        // (DummyScrText always returns AmAdministrator=true)
+        var dataProvider = new NonAdminDataProvider(Client);
         var projectId = scrText.Guid.ToString();
 
-        // Non-admin users should be denied
-        // The implementation should check admin permission before updating
         Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
         {
             await dataProvider.UpdateBooksInScopeAsync(
@@ -956,6 +957,15 @@ internal class ParallelPassageTests : PapiTestBase
                 new List<int> { 40, 41, 42 }
             );
         });
+    }
+
+    /// <summary>
+    /// Test helper: DataProvider that always reports non-admin permissions.
+    /// </summary>
+    private sealed class NonAdminDataProvider(PapiClient papiClient)
+        : ParallelPassageDataProvider(papiClient)
+    {
+        protected override bool IsAdministrator(ScrText scrText) => false;
     }
 
     [Test]

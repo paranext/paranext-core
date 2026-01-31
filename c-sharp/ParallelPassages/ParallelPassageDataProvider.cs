@@ -20,8 +20,6 @@ internal class ParallelPassageDataProvider
         _papiClient = papiClient;
     }
 
-    #region CAP-008: DetermineSourceTexts
-
     /// <summary>
     /// Determines source texts to display for a passage based on type.
     /// Returns empty list when display is disabled or resources are unavailable.
@@ -33,11 +31,10 @@ internal class ParallelPassageDataProvider
     )
     {
         if (!showSourceLanguageTexts)
-            return new List<ScrText>();
+            return [];
 
         var result = new List<ScrText>();
 
-        // Try to find source language resources based on passage type
         switch (passageType)
         {
             case ParallelPassageType.NTtoOT:
@@ -57,71 +54,23 @@ internal class ParallelPassageDataProvider
         return result;
     }
 
-    private static void TryAddResource(string shortName, List<ScrText> result)
-    {
-        try
-        {
-            var resource = ScrTextCollection.Find(shortName);
-            if (resource != null)
-                result.Add(resource);
-        }
-        catch
-        {
-            // Resource not available - silently skip
-        }
-    }
-
-    #endregion
-
-    #region CAP-012: DetermineEditability
-
     /// <summary>
     /// Determines whether a verse cell is editable.
     /// Returns (editable, tooltip) tuple.
     /// </summary>
     public (bool Editable, string Tooltip) DetermineEditability(ScrText scrText, VerseRef vref)
     {
-        // Check if book is present in the project
-        try
-        {
-            var bookList = scrText.Settings.BooksPresentSet;
-            if (bookList != null && !bookList.IsSelected(vref.BookNum))
-                return (false, "Book not present in project");
-        }
-        catch
-        {
-            // If we can't check book presence, assume not present
-        }
+        if (!IsBookPresent(scrText, vref.BookNum))
+            return (false, "Book not present in project");
 
-        // Check if verse has content
-        try
-        {
-            var text = scrText.GetText(vref, false, false);
-            if (string.IsNullOrWhiteSpace(text))
-                return (false, "Verse has no content");
-        }
-        catch
-        {
+        if (!HasVerseContent(scrText, vref))
             return (false, "Verse has no content");
-        }
 
-        // Check CanEdit permission
-        try
-        {
-            if (!scrText.Settings.Editable)
-                return (false, "Project is not editable");
-        }
-        catch
-        {
-            return (false, "Cannot determine editability");
-        }
+        if (!IsProjectEditable(scrText))
+            return (false, "Project is not editable");
 
         return (true, "");
     }
-
-    #endregion
-
-    #region CAP-014: GetPreviousPassageVersion
 
     /// <summary>
     /// Gets the previous passage version text stored from last Finished approval.
@@ -133,27 +82,11 @@ internal class ParallelPassageDataProvider
         string[] verses
     )
     {
-        try
-        {
-            var scrText = FindProjectById(projectId);
-            if (scrText == null)
-                return Task.FromResult<string?>(null);
-
-            // ParallelPassageStatuses tracks approved passage versions.
-            // For a project with no approved passages, returns null.
-            // The ParallelPassageStatuses constructor is internal to ParatextData,
-            // so we access it through the project's status file if it exists.
-            return Task.FromResult<string?>(null);
-        }
-        catch
-        {
-            return Task.FromResult<string?>(null);
-        }
+        // ParallelPassageStatuses tracks approved passage versions.
+        // The ParallelPassageStatuses constructor is internal to ParatextData,
+        // so this currently always returns null (no approved passages accessible).
+        return Task.FromResult<string?>(null);
     }
-
-    #endregion
-
-    #region CAP-015: UpdateBooksInScope
 
     /// <summary>
     /// Updates the ParallelPassagesBooks setting for a project.
@@ -161,24 +94,17 @@ internal class ParallelPassageDataProvider
     /// </summary>
     public Task UpdateBooksInScopeAsync(string projectId, List<int> bookNumbers)
     {
-        var scrText = FindProjectById(projectId);
-        if (scrText == null)
-            throw new Exception($"Project not found: {projectId}");
+        var scrText =
+            FindProjectById(projectId) ?? throw new Exception($"Project not found: {projectId}");
 
-        // Check admin permission
-        if (!scrText.Permissions.AmAdministrator)
+        if (!IsAdministrator(scrText))
             throw new UnauthorizedAccessException("Administrator permission required");
 
-        // Update setting
         var booksString = string.Join(",", bookNumbers);
         scrText.Settings.SetSetting("ParallelPassagesBooks", booksString);
 
         return Task.CompletedTask;
     }
-
-    #endregion
-
-    #region CAP-017: ProjectDataChangedEvent simulation
 
     /// <summary>Simulate a text change event for testing.</summary>
     public void SimulateTextChanged(string projectId)
@@ -204,9 +130,66 @@ internal class ParallelPassageDataProvider
         );
     }
 
-    #endregion
+    /// <summary>
+    /// Checks whether the current user is an administrator for the given project.
+    /// Virtual to allow testing with non-admin scenarios.
+    /// </summary>
+    protected virtual bool IsAdministrator(ScrText scrText)
+    {
+        return scrText.Permissions.AmAdministrator;
+    }
 
-    #region Private helpers
+    private static bool IsBookPresent(ScrText scrText, int bookNum)
+    {
+        try
+        {
+            var bookList = scrText.Settings.BooksPresentSet;
+            return bookList == null || bookList.IsSelected(bookNum);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static bool HasVerseContent(ScrText scrText, VerseRef vref)
+    {
+        try
+        {
+            var text = scrText.GetText(vref, false, false);
+            return !string.IsNullOrWhiteSpace(text);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsProjectEditable(ScrText scrText)
+    {
+        try
+        {
+            return scrText.Settings.Editable;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static void TryAddResource(string shortName, List<ScrText> result)
+    {
+        try
+        {
+            var resource = ScrTextCollection.Find(shortName);
+            if (resource != null)
+                result.Add(resource);
+        }
+        catch (Exception)
+        {
+            // Resource not available - silently skip
+        }
+    }
 
     private static ScrText? FindProjectById(string projectId)
     {
@@ -218,12 +201,10 @@ internal class ParallelPassageDataProvider
                     return scrText;
             }
         }
-        catch
+        catch (Exception)
         {
             // Collection not available
         }
         return null;
     }
-
-    #endregion
 }
