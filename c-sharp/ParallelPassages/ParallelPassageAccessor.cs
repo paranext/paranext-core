@@ -99,6 +99,23 @@ public class ParallelPassageAccessor
         return entries;
     }
 
+    /// <summary>
+    /// Finds a related passage of a different type that shares verses with the given passage.
+    /// Lazily builds bidirectional dictionaries for NTtoOT &lt;-&gt; OTtoOT and NTtoOT &lt;-&gt; NTtoNT.
+    /// </summary>
+    /// <param name="passage">The source passage to find a related passage for.</param>
+    /// <param name="targetType">The target passage type to look for.</param>
+    /// <returns>The related passage, or null if none exists.</returns>
+    public ParallelPassageEntry? FindRelatedPassage(
+        ParallelPassageEntry passage,
+        ParallelPassageType targetType
+    )
+    {
+        // TODO: MP-3 implementation (CAP-011)
+        // Build 4 bidirectional dictionaries lazily using ConcurrentDictionary.
+        throw new NotImplementedException("CAP-011: FindRelatedPassage not yet implemented");
+    }
+
     private const string XmlRelativePath = "ParallelPassages/ParallelPassages.xml";
 
     private static string FindXmlPath()
