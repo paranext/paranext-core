@@ -32,6 +32,10 @@ const defaultProps: ParallelPassagesToolbarProps = {
   viewType: 'RowView',
   onViewTypeChange: vi.fn(),
   onComparativeTextsClick: vi.fn(),
+  locationFilter: { type: 'current-book' },
+  onLocationFilterChange: vi.fn(),
+  guideActive: false,
+  onGuideToggle: vi.fn(),
 };
 
 function renderToolbar(overrides: Partial<ParallelPassagesToolbarProps> = {}) {

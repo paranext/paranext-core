@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { Spinner } from 'platform-bible-react';
-import { useCallback, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { ParallelPassagesAction } from './types/parallel-passages';
 import {
   INITIAL_STATE,
@@ -79,6 +79,41 @@ global.webViewComponent = function ParallelPassagesWebView({
     [dispatch],
   );
 
+  // --- Guide toggle ---
+  const [guideActive, setGuideActive] = useState(false);
+
+  // --- Zoom keyboard handler (Ctrl+Plus/Minus/Zero) ---
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      // Determine which pane has focus
+      const active = document.activeElement;
+      const upperPane = el.querySelector('[data-pane="upper"]');
+      const lowerPane = el.querySelector('[data-pane="lower"]');
+      const pane: 'upper' | 'lower' = lowerPane?.contains(active) ? 'lower' : 'upper';
+
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault();
+        const current =
+          pane === 'upper' ? state.memento.zoomUpperPane : state.memento.zoomLowerPane;
+        handleAction({ type: 'SET_ZOOM', pane, level: Math.min(current + 10, 200) });
+      } else if (e.key === '-') {
+        e.preventDefault();
+        const current =
+          pane === 'upper' ? state.memento.zoomUpperPane : state.memento.zoomLowerPane;
+        handleAction({ type: 'SET_ZOOM', pane, level: Math.max(current - 10, 50) });
+      } else if (e.key === '0') {
+        e.preventDefault();
+        handleAction({ type: 'SET_ZOOM', pane, level: 100 });
+      }
+    };
+    el.addEventListener('keydown', handleKeyDown);
+    return () => el.removeEventListener('keydown', handleKeyDown);
+  }, [state.memento.zoomUpperPane, state.memento.zoomLowerPane, handleAction]);
+
   // --- Effect stubs ---
   // TODO: useEffect to load passage list when filters change (SET_PASSAGE_FILTER, SET_TYPE_FILTER)
   // TODO: useEffect to load passage detail when selectedIndex changes
@@ -88,7 +123,7 @@ global.webViewComponent = function ParallelPassagesWebView({
   // TODO: useEffect to save memento on unmount / state change
 
   return (
-    <div className="pr-twp tw-flex tw-flex-col tw-h-full">
+    <div ref={containerRef} className="pr-twp tw-flex tw-flex-col tw-h-full">
       {/* Ribbon warning */}
       <RibbonWarningDisplay
         warning={state.activeWarning}
@@ -118,13 +153,21 @@ global.webViewComponent = function ParallelPassagesWebView({
           viewType={state.memento.viewType}
           onViewTypeChange={(viewType) => handleAction({ type: 'SET_VIEW_TYPE', viewType })}
           onComparativeTextsClick={() => handleAction({ type: 'OPEN_TEXT_SELECTION' })}
+          locationFilter={state.memento.locationFilter ?? { type: 'current-book' }}
+          onLocationFilterChange={(filter) => handleAction({ type: 'SET_LOCATION_FILTER', filter })}
+          guideActive={guideActive}
+          onGuideToggle={() => setGuideActive((prev) => !prev)}
         />
       </div>
 
       {/* Split pane: upper (passage list) + lower (passage detail) */}
       <div className="tw-flex tw-flex-col tw-flex-1 tw-overflow-hidden">
         {/* Upper pane */}
-        <div className="tw-overflow-auto tw-min-h-0" style={{ flex: state.memento.splitterRatio }}>
+        <div
+          data-pane="upper"
+          className="tw-overflow-auto tw-min-h-0"
+          style={{ flex: state.memento.splitterRatio, zoom: `${state.memento.zoomUpperPane}%` }}
+        >
           {state.isLoadingList ? (
             <div className="tw-flex tw-items-center tw-justify-center tw-h-full">
               <Spinner />
@@ -148,9 +191,11 @@ global.webViewComponent = function ParallelPassagesWebView({
         <div className="tw-border-t tw-border-border tw-h-1 tw-cursor-row-resize tw-shrink-0" />
 
         {/* Lower pane */}
+        {/* Lower pane */}
         <div
+          data-pane="lower"
           className="tw-overflow-auto tw-min-h-0"
-          style={{ flex: 1 - state.memento.splitterRatio }}
+          style={{ flex: 1 - state.memento.splitterRatio, zoom: `${state.memento.zoomLowerPane}%` }}
         >
           {state.isLoadingDetail ? (
             <div className="tw-flex tw-items-center tw-justify-center tw-h-full">

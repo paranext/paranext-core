@@ -168,6 +168,7 @@ export interface ParallelPassagesMemento {
   sourceDisplayMode: SourceDisplayMode;
   passageFilter: PassageFilterType;
   typeFilter: ParallelPassageFilter;
+  locationFilter?: LocationFilter;
   viewType: ParallelPassageViewType;
   collapsedResources: string[];
   zoomUpperPane: number;

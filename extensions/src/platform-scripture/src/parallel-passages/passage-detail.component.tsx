@@ -21,9 +21,9 @@ import type {
 
 const DEGREE_STYLES: Record<DegreeOfParallelism, string> = {
   None: '',
-  CalculatedMatch: 'tw-text-blue-600 tw-underline',
-  ExpertClose: 'tw-text-green-600 tw-underline',
-  ExpertExact: 'tw-text-red-600 tw-font-bold tw-underline',
+  CalculatedMatch: 'tw-text-lime-700 tw-underline', // Mossy green per PT9
+  ExpertClose: 'tw-text-yellow-600 tw-underline', // Yellow per PT9
+  ExpertExact: 'tw-text-green-400 tw-font-bold tw-underline', // Neon green per PT9
 };
 
 // --- Sub-components ---

@@ -210,7 +210,7 @@ describe('PassageDetailPane', () => {
       rows: [makeRow({ columns: [makeColumn({ words: [makeWord('match', 'CalculatedMatch')] })] })],
     });
     const { container } = render(<PassageDetailPane {...defaultProps({ detail })} />);
-    const span = container.querySelector('.tw-text-blue-600');
+    const span = container.querySelector('.tw-text-lime-700');
     expect(span).toBeTruthy();
     expect(span?.classList.contains('tw-underline')).toBe(true);
   });
@@ -220,7 +220,7 @@ describe('PassageDetailPane', () => {
       rows: [makeRow({ columns: [makeColumn({ words: [makeWord('exact', 'ExpertExact')] })] })],
     });
     const { container } = render(<PassageDetailPane {...defaultProps({ detail })} />);
-    const span = container.querySelector('.tw-text-red-600');
+    const span = container.querySelector('.tw-text-green-400');
     expect(span).toBeTruthy();
     expect(span?.classList.contains('tw-font-bold')).toBe(true);
     expect(span?.classList.contains('tw-underline')).toBe(true);

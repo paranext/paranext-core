@@ -1,3 +1,4 @@
+import { BookOpen } from 'lucide-react';
 import {
   Button,
   Select,
@@ -7,6 +8,7 @@ import {
   SelectValue,
 } from 'platform-bible-react';
 import type {
+  LocationFilter,
   ParallelPassageFilter,
   ParallelPassageViewType,
   PassageFilterType,
@@ -24,6 +26,10 @@ export interface ParallelPassagesToolbarProps {
   viewType: ParallelPassageViewType;
   onViewTypeChange: (viewType: ParallelPassageViewType) => void;
   onComparativeTextsClick: () => void;
+  locationFilter: LocationFilter;
+  onLocationFilterChange: (filter: LocationFilter) => void;
+  guideActive: boolean;
+  onGuideToggle: () => void;
 }
 
 const SOURCE_DISPLAY_OPTIONS: { value: string; label: string }[] = [
@@ -64,10 +70,14 @@ export default function ParallelPassagesToolbar({
   viewType,
   onViewTypeChange,
   onComparativeTextsClick,
+  locationFilter,
+  onLocationFilterChange,
+  guideActive,
+  onGuideToggle,
 }: ParallelPassagesToolbarProps) {
   return (
     <div className="tw-flex tw-flex-col tw-gap-1">
-      {/* Toolbar Row 1: Source text + Comparative texts */}
+      {/* Toolbar Row 1: Source text + Comparative texts + Guide toggle */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center">
         <Select
           value={String(sourceDisplayMode)}
@@ -91,6 +101,18 @@ export default function ParallelPassagesToolbar({
         <Button variant="outline" onClick={onComparativeTextsClick}>
           Comparative Texts...
         </Button>
+
+        <div className="tw-flex-1" />
+
+        <Button
+          variant={guideActive ? 'default' : 'outline'}
+          size="sm"
+          onClick={onGuideToggle}
+          aria-label="Show guide"
+          aria-pressed={guideActive}
+        >
+          <BookOpen className="tw-h-4 tw-w-4" />
+        </Button>
       </div>
 
       {/* Toolbar Row 2: Filters + View type */}
@@ -108,6 +130,21 @@ export default function ParallelPassagesToolbar({
                 {opt.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={locationFilter.type}
+          onValueChange={(val: string) =>
+            onLocationFilterChange({ ...locationFilter, type: val as LocationFilter['type'] })
+          }
+        >
+          <SelectTrigger className="tw-min-w-40" aria-label="Verses filter">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="current-book">Current book</SelectItem>
+            <SelectItem value="custom-range">Custom range</SelectItem>
           </SelectContent>
         </Select>
 
