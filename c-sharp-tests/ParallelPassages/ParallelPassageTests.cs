@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.ParallelPassages;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.ParallelPassages;
 
