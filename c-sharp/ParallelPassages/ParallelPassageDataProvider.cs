@@ -15,6 +15,9 @@ internal class ParallelPassageDataProvider
     /// <summary>Event fired when project data changes.</summary>
     public event EventHandler<ProjectDataChangedEvent>? OnProjectDataChanged;
 
+    /// <summary>Event fired when passage statuses change (after approval toggles or external text changes).</summary>
+    public event EventHandler<PassageStatusChangedEvent>? OnPassageStatusChanged;
+
     public ParallelPassageDataProvider(PapiClient papiClient)
     {
         _papiClient = papiClient;
@@ -140,6 +143,51 @@ internal class ParallelPassageDataProvider
 
         return Task.FromResult(counts);
     }
+
+    /// <summary>
+    /// Returns complete detail data for a selected passage. CAP-002: Central orchestration.
+    /// </summary>
+    public Task<ParallelPassageDetail> GetPassageDetailAsync(
+        PassageDetailRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // TODO: CAP-002 implementation - orchestrate EXT-001, EXT-006, EXT-007, EXT-008, EXT-012
+        throw new NotImplementedException("CAP-002: GetPassageDetailAsync not yet implemented");
+    }
+
+    /// <summary>
+    /// Toggles all verses in a passage set. CAP-016 integration: fires PassageStatusChangedEvent.
+    /// </summary>
+    public Task<ApprovalResult> ToggleSetApprovalAsync(
+        ToggleSetApprovalRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // TODO: CAP-016 integration - delegate to approval service then fire event
+        throw new NotImplementedException("CAP-016: ToggleSetApprovalAsync not yet implemented");
+    }
+
+    /// <summary>
+    /// Toggles a single verse approval. CAP-016 integration: fires PassageStatusChangedEvent.
+    /// </summary>
+    public Task<ApprovalResult> ToggleIndividualApprovalAsync(
+        ToggleIndividualApprovalRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // TODO: CAP-016 integration - delegate to approval service then fire event
+        throw new NotImplementedException(
+            "CAP-016: ToggleIndividualApprovalAsync not yet implemented"
+        );
+    }
+
+    /// <summary>Simulate an external text change for testing (triggers PassageStatusChanged).</summary>
+    public void SimulateExternalTextChange(string projectId) =>
+        OnPassageStatusChanged?.Invoke(
+            this,
+            new PassageStatusChangedEvent(projectId, new List<int>())
+        );
 
     /// <summary>Simulate a text change event for testing.</summary>
     public void SimulateTextChanged(string projectId) =>
