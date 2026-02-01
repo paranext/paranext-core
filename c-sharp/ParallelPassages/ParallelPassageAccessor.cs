@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Xml.Linq;
 using Paratext.Data;
 using SIL.Scripture;
@@ -42,6 +43,22 @@ public class ParallelPassageAccessor
     private const int FirstNewTestamentBook = 40;
 
     private readonly Lazy<List<ParallelPassageEntry>> _cachedPassages;
+
+    // CAP-011: 4 bidirectional dictionaries for related passage lookup
+    // NTtoOT -> OTtoOT (keyed by shared OT verses)
+    private readonly ConcurrentDictionary<string, ParallelPassageEntry?> _ntToOtToOtToOt = new();
+
+    // NTtoOT -> NTtoNT (keyed by shared NT verses)
+    private readonly ConcurrentDictionary<string, ParallelPassageEntry?> _ntToOtToNtToNt = new();
+
+    // OTtoOT -> NTtoOT (reverse of first)
+    private readonly ConcurrentDictionary<string, ParallelPassageEntry?> _otToOtToNtToOt = new();
+
+    // NTtoNT -> NTtoOT (reverse of second)
+    private readonly ConcurrentDictionary<string, ParallelPassageEntry?> _ntToNtToNtToOt = new();
+
+    private volatile bool _mappingsBuilt;
+    private readonly object _mappingsLock = new();
 
     public ParallelPassageAccessor()
     {
@@ -111,9 +128,83 @@ public class ParallelPassageAccessor
         ParallelPassageType targetType
     )
     {
-        // TODO: MP-3 implementation (CAP-011)
-        // Build 4 bidirectional dictionaries lazily using ConcurrentDictionary.
-        throw new NotImplementedException("CAP-011: FindRelatedPassage not yet implemented");
+        EnsureMappingsBuilt();
+
+        var key = passage.Key;
+
+        return (passage.PassageType, targetType) switch
+        {
+            (ParallelPassageType.NTtoOT, ParallelPassageType.OTtoOT) =>
+                _ntToOtToOtToOt.GetValueOrDefault(key),
+            (ParallelPassageType.NTtoOT, ParallelPassageType.NTtoNT) =>
+                _ntToOtToNtToNt.GetValueOrDefault(key),
+            (ParallelPassageType.OTtoOT, ParallelPassageType.NTtoOT) =>
+                _otToOtToNtToOt.GetValueOrDefault(key),
+            (ParallelPassageType.NTtoNT, ParallelPassageType.NTtoOT) =>
+                _ntToNtToNtToOt.GetValueOrDefault(key),
+            _ => null,
+        };
+    }
+
+    private void EnsureMappingsBuilt()
+    {
+        if (_mappingsBuilt)
+            return;
+
+        lock (_mappingsLock)
+        {
+            if (_mappingsBuilt)
+                return;
+
+            var passages = GetAllPassages();
+            var byType = passages.ToLookup(p => p.PassageType);
+
+            var ntToOtList = byType[ParallelPassageType.NTtoOT].ToList();
+            var otToOtList = byType[ParallelPassageType.OTtoOT].ToList();
+            var ntToNtList = byType[ParallelPassageType.NTtoNT].ToList();
+
+            // Build NTtoOT <-> OTtoOT mappings (shared OT verses)
+            foreach (var ntToOt in ntToOtList)
+            {
+                var otVerses = ntToOt
+                    .Verses.Where(v =>
+                        Canon.BookIdToNumber(v.Split(' ')[0]) < FirstNewTestamentBook
+                    )
+                    .ToHashSet();
+
+                foreach (var otToOt in otToOtList)
+                {
+                    if (otToOt.Verses.Any(v => otVerses.Contains(v)))
+                    {
+                        _ntToOtToOtToOt.TryAdd(ntToOt.Key, otToOt);
+                        _otToOtToNtToOt.TryAdd(otToOt.Key, ntToOt);
+                        break;
+                    }
+                }
+            }
+
+            // Build NTtoOT <-> NTtoNT mappings (shared NT verses)
+            foreach (var ntToOt in ntToOtList)
+            {
+                var ntVerses = ntToOt
+                    .Verses.Where(v =>
+                        Canon.BookIdToNumber(v.Split(' ')[0]) >= FirstNewTestamentBook
+                    )
+                    .ToHashSet();
+
+                foreach (var ntToNt in ntToNtList)
+                {
+                    if (ntToNt.Verses.Any(v => ntVerses.Contains(v)))
+                    {
+                        _ntToOtToNtToNt.TryAdd(ntToOt.Key, ntToNt);
+                        _ntToNtToNtToOt.TryAdd(ntToNt.Key, ntToOt);
+                        break;
+                    }
+                }
+            }
+
+            _mappingsBuilt = true;
+        }
     }
 
     private const string XmlRelativePath = "ParallelPassages/ParallelPassages.xml";

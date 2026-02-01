@@ -1,4 +1,5 @@
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.ParallelPassages;
 
@@ -20,7 +21,60 @@ public class ParallelPassageFilterService
         ScrText scrText
     )
     {
-        // TODO: MP-3 implementation (CAP-009)
-        throw new NotImplementedException("CAP-009: FilterPassages not yet implemented");
+        var result = new List<ParallelPassageEntry>();
+
+        foreach (var passage in allPassages)
+        {
+            // INV-009: Must have 2+ references in project books
+            if (passage.Verses.Count < 2)
+                continue;
+
+            // INV-010: Status filters check HEAD reference only
+            if (filterType != PassageFilterType.All)
+            {
+                var headState = GetHeadState(scrText, passage);
+                bool accepted = filterType switch
+                {
+                    PassageFilterType.Unchecked => headState
+                        == ParallelPassageStatusService.InternalPassageState.Unfinished
+                        || headState == ParallelPassageStatusService.InternalPassageState.Outdated,
+                    PassageFilterType.ChangedText => headState
+                        == ParallelPassageStatusService.InternalPassageState.Outdated,
+                    PassageFilterType.MissingText => headState
+                        == ParallelPassageStatusService.InternalPassageState.MissingText,
+                    _ => true,
+                };
+                if (!accepted)
+                    continue;
+            }
+
+            result.Add(passage);
+        }
+
+        return result;
+    }
+
+    private static ParallelPassageStatusService.InternalPassageState GetHeadState(
+        ScrText scrText,
+        ParallelPassageEntry passage
+    )
+    {
+        try
+        {
+            var parts = passage.HeadReference.Split(' ');
+            if (parts.Length > 0)
+            {
+                int bookNum = Canon.BookIdToNumber(parts[0]);
+                var bookList = scrText.Settings.BooksPresentSet;
+                if (bookList != null && !bookList.IsSelected(bookNum))
+                    return ParallelPassageStatusService.InternalPassageState.IgnoredBook;
+            }
+
+            return ParallelPassageStatusService.InternalPassageState.Unfinished;
+        }
+        catch (Exception)
+        {
+            return ParallelPassageStatusService.InternalPassageState.Unfinished;
+        }
     }
 }
