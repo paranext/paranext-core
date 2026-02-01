@@ -142,28 +142,19 @@ internal class ParallelPassageDataProvider
     }
 
     /// <summary>Simulate a text change event for testing.</summary>
-    public void SimulateTextChanged(string projectId)
-    {
-        OnProjectDataChanged?.Invoke(this, new ProjectDataChangedEvent(projectId, "text-changed"));
-    }
+    public void SimulateTextChanged(string projectId) =>
+        RaiseProjectDataChanged(projectId, "text-changed");
 
     /// <summary>Simulate a settings change event for testing.</summary>
-    public void SimulateSettingsChanged(string projectId)
-    {
-        OnProjectDataChanged?.Invoke(
-            this,
-            new ProjectDataChangedEvent(projectId, "settings-changed")
-        );
-    }
+    public void SimulateSettingsChanged(string projectId) =>
+        RaiseProjectDataChanged(projectId, "settings-changed");
 
     /// <summary>Simulate a project removed event for testing.</summary>
-    public void SimulateProjectRemoved(string projectId)
-    {
-        OnProjectDataChanged?.Invoke(
-            this,
-            new ProjectDataChangedEvent(projectId, "project-removed")
-        );
-    }
+    public void SimulateProjectRemoved(string projectId) =>
+        RaiseProjectDataChanged(projectId, "project-removed");
+
+    private void RaiseProjectDataChanged(string projectId, string changeType) =>
+        OnProjectDataChanged?.Invoke(this, new ProjectDataChangedEvent(projectId, changeType));
 
     /// <summary>
     /// Checks whether the current user is an administrator for the given project.
@@ -222,7 +213,7 @@ internal class ParallelPassageDataProvider
         }
         catch (Exception)
         {
-            // Resource not available - silently skip
+            // Resource not available
         }
     }
 

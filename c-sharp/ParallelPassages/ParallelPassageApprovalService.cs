@@ -1,16 +1,7 @@
 using Paratext.Data;
+using static Paranext.DataProvider.ParallelPassages.ParallelPassageStatusService;
 
 namespace Paranext.DataProvider.ParallelPassages;
-
-/// <summary>
-/// Result of an approval toggle command.
-/// </summary>
-public record ApprovalResult(
-    bool Success,
-    StatusAggregation? UpdatedStatuses = null,
-    string? ErrorCode = null,
-    string? Message = null
-);
 
 /// <summary>
 /// Handles approval toggle commands with cross-type propagation.
@@ -56,19 +47,8 @@ public class ParallelPassageApprovalService
             // Propagate for NTtoOT only
             if (passage.PassageType == ParallelPassageType.NTtoOT)
             {
-                var relatedOtToOt = _accessor.FindRelatedPassage(
-                    passage,
-                    ParallelPassageType.OTtoOT
-                );
-                if (relatedOtToOt != null)
-                    ToggleAllVerses(scrText, relatedOtToOt, setToFinished);
-
-                var relatedNtToNt = _accessor.FindRelatedPassage(
-                    passage,
-                    ParallelPassageType.NTtoNT
-                );
-                if (relatedNtToNt != null)
-                    ToggleAllVerses(scrText, relatedNtToNt, setToFinished);
+                PropagateToRelated(scrText, passage, ParallelPassageType.OTtoOT, setToFinished);
+                PropagateToRelated(scrText, passage, ParallelPassageType.NTtoNT, setToFinished);
             }
 
             var updatedStatus = _statusService.GetAggregatedStatus(scrText, passage);
@@ -106,9 +86,8 @@ public class ParallelPassageApprovalService
         try
         {
             // Get current state and toggle
-            var currentState = ParallelPassageStatusService.GetPassageState(scrText, headVerse);
-            bool setToFinished =
-                currentState != ParallelPassageStatusService.InternalPassageState.Finished;
+            var currentState = GetPassageState(scrText, headVerse);
+            bool setToFinished = currentState != InternalPassageState.Finished;
 
             SetVerseState(scrText, headVerse, setToFinished);
 
@@ -181,12 +160,10 @@ public class ParallelPassageApprovalService
 
     private static void SetVerseState(ScrText scrText, string verseRef, bool setToFinished)
     {
-        ParallelPassageStatusService.SetPassageState(
+        SetPassageState(
             scrText,
             verseRef,
-            setToFinished
-                ? ParallelPassageStatusService.InternalPassageState.Finished
-                : ParallelPassageStatusService.InternalPassageState.Unfinished
+            setToFinished ? InternalPassageState.Finished : InternalPassageState.Unfinished
         );
     }
 }
