@@ -152,26 +152,7 @@ internal class ParallelPassageDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        var scrText =
-            FindProjectById(request.ProjectId)
-            ?? throw new Exception($"Project not found: {request.ProjectId}");
-
-        var accessor = new ParallelPassageAccessor();
-        var allPassages = accessor.GetAllPassages();
-
-        // If no XML passages loaded, create a synthetic passage from the project
-        if (allPassages.Count == 0)
-        {
-            allPassages = CreateSyntheticPassages(scrText);
-        }
-
-        if (request.PassageIndex < 0 || request.PassageIndex >= allPassages.Count)
-            throw new ArgumentOutOfRangeException(
-                nameof(request.PassageIndex),
-                $"Passage index {request.PassageIndex} out of range (0-{allPassages.Count - 1})"
-            );
-
-        var passage = allPassages[request.PassageIndex];
+        var (scrText, _, _, passage) = LoadPassageAtIndex(request.ProjectId, request.PassageIndex);
         var statusService = new ParallelPassageStatusService();
         var statusFlags = statusService.GetAggregatedStatus(scrText, passage);
 
@@ -180,61 +161,23 @@ internal class ParallelPassageDataProvider
         if (effectiveViewType == "Dynamic")
             effectiveViewType = statusFlags.AllUnfinished ? "RowView" : "ColumnView";
 
-        // Build rows for the project
-        var matchingService = new ParallelPassageMatchingService();
-        var rows = new List<PassageDetailRow>();
-
-        var columns = new List<PassageDetailColumn>();
-        foreach (var verseRef in passage.Verses)
-        {
-            var vref = ParseVerseRef(verseRef);
-            var (editable, editTooltip) = DetermineEditability(scrText, vref);
-            var state = ParallelPassageStatusService.GetPassageState(scrText, verseRef);
-            string stateStr = state.ToString();
-
-            // Get words for this verse
-            string verseText = GetVerseText(scrText, vref);
-            var words = new List<HighlightedWord>();
-            if (!string.IsNullOrWhiteSpace(verseText))
-            {
-                var verseWords = verseText
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .ToList();
-                words = verseWords
-                    .Select(w => new HighlightedWord(w, DegreeOfParallelism.None))
-                    .ToList();
-            }
-
-            bool columnChecked =
-                state == ParallelPassageStatusService.InternalPassageState.Finished;
-
-            columns.Add(
-                new PassageDetailColumn(
-                    VerseRef: verseRef,
-                    State: stateStr,
-                    ColumnChecked: columnChecked,
-                    Editable: editable,
-                    EditTooltip: editTooltip,
-                    Words: words,
-                    StatusTooltip: stateStr
-                )
-            );
-        }
+        // Build columns for each verse in the passage
+        var columns = passage
+            .Verses.Select(verseRef => BuildColumnForVerse(scrText, verseRef))
+            .ToList();
 
         bool projectApprovable = IsProjectEditable(scrText);
         bool rowChecked = statusFlags.AllTicked;
 
-        rows.Add(
-            new PassageDetailRow(
-                ProjectId: scrText.Guid.ToString(),
-                ProjectName: scrText.Name,
-                IsSourceLanguage: false,
-                IsCollapsible: false,
-                IsCollapsed: false,
-                IsApprovable: projectApprovable,
-                RowChecked: rowChecked,
-                Columns: columns
-            )
+        var row = new PassageDetailRow(
+            ProjectId: scrText.Guid.ToString(),
+            ProjectName: scrText.Name,
+            IsSourceLanguage: false,
+            IsCollapsible: false,
+            IsCollapsed: false,
+            IsApprovable: projectApprovable,
+            RowChecked: rowChecked,
+            Columns: columns
         );
 
         var detail = new ParallelPassageDetail(
@@ -244,7 +187,7 @@ internal class ParallelPassageDataProvider
             StatusFlags: statusFlags,
             ProjectApprovable: projectApprovable,
             CanApproveRow: projectApprovable,
-            Rows: rows
+            Rows: [row]
         );
 
         return Task.FromResult(detail);
@@ -258,27 +201,17 @@ internal class ParallelPassageDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        var scrText =
-            FindProjectById(request.ProjectId)
-            ?? throw new Exception($"Project not found: {request.ProjectId}");
+        var (scrText, accessor, allPassages, passage) = LoadPassageAtIndex(
+            request.ProjectId,
+            request.PassageIndex
+        );
 
-        var accessor = new ParallelPassageAccessor();
-        var allPassages = accessor.GetAllPassages();
-        if (allPassages.Count == 0)
-            allPassages = CreateSyntheticPassages(scrText);
-
-        if (request.PassageIndex < 0 || request.PassageIndex >= allPassages.Count)
-            throw new ArgumentOutOfRangeException(nameof(request.PassageIndex));
-
-        var passage = allPassages[request.PassageIndex];
         var statusService = new ParallelPassageStatusService();
         var approvalService = new ParallelPassageApprovalService(accessor, statusService);
-
         var result = approvalService.ToggleSetApproval(scrText, passage);
 
         // Fire PassageStatusChangedEvent with affected indices
         var affectedIndices = new List<int> { request.PassageIndex };
-        // Include related passage indices if propagation occurred
         if (passage.PassageType == ParallelPassageType.NTtoOT)
         {
             AddRelatedPassageIndex(
@@ -313,22 +246,13 @@ internal class ParallelPassageDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        var scrText =
-            FindProjectById(request.ProjectId)
-            ?? throw new Exception($"Project not found: {request.ProjectId}");
+        var (scrText, accessor, _, passage) = LoadPassageAtIndex(
+            request.ProjectId,
+            request.PassageIndex
+        );
 
-        var accessor = new ParallelPassageAccessor();
-        var allPassages = accessor.GetAllPassages();
-        if (allPassages.Count == 0)
-            allPassages = CreateSyntheticPassages(scrText);
-
-        if (request.PassageIndex < 0 || request.PassageIndex >= allPassages.Count)
-            throw new ArgumentOutOfRangeException(nameof(request.PassageIndex));
-
-        var passage = allPassages[request.PassageIndex];
         var statusService = new ParallelPassageStatusService();
         var approvalService = new ParallelPassageApprovalService(accessor, statusService);
-
         var result = approvalService.ToggleIndividualApproval(scrText, passage, request.HeadVerse);
 
         var affectedIndices = new List<int> { request.PassageIndex };
@@ -362,6 +286,73 @@ internal class ParallelPassageDataProvider
     private void RaiseProjectDataChanged(string projectId, string changeType) =>
         OnProjectDataChanged?.Invoke(this, new ProjectDataChangedEvent(projectId, changeType));
 
+    /// <summary>
+    /// Builds a detail column for a single verse reference, including editability, state, and words.
+    /// </summary>
+    private PassageDetailColumn BuildColumnForVerse(ScrText scrText, string verseRef)
+    {
+        var vref = ParseVerseRef(verseRef);
+        var (editable, editTooltip) = DetermineEditability(scrText, vref);
+        var state = ParallelPassageStatusService.GetPassageState(scrText, verseRef);
+        string stateStr = state.ToString();
+
+        var words = ExtractVerseWords(scrText, vref);
+        bool columnChecked = state == ParallelPassageStatusService.InternalPassageState.Finished;
+
+        return new PassageDetailColumn(
+            VerseRef: verseRef,
+            State: stateStr,
+            ColumnChecked: columnChecked,
+            Editable: editable,
+            EditTooltip: editTooltip,
+            Words: words,
+            StatusTooltip: stateStr
+        );
+    }
+
+    /// <summary>
+    /// Extracts words from a verse as highlighted words with no parallelism marking.
+    /// </summary>
+    private static List<HighlightedWord> ExtractVerseWords(ScrText scrText, VerseRef vref)
+    {
+        string verseText = GetVerseText(scrText, vref);
+        if (string.IsNullOrWhiteSpace(verseText))
+            return [];
+
+        return verseText
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => new HighlightedWord(w, DegreeOfParallelism.None))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Loads passages and resolves the passage at the given index.
+    /// Handles project lookup, synthetic fallback, and index validation.
+    /// </summary>
+    private static (
+        ScrText ScrText,
+        ParallelPassageAccessor Accessor,
+        List<ParallelPassageEntry> AllPassages,
+        ParallelPassageEntry Passage
+    ) LoadPassageAtIndex(string projectId, int passageIndex)
+    {
+        var scrText =
+            FindProjectById(projectId) ?? throw new Exception($"Project not found: {projectId}");
+
+        var accessor = new ParallelPassageAccessor();
+        var allPassages = accessor.GetAllPassages();
+        if (allPassages.Count == 0)
+            allPassages = CreateSyntheticPassages(scrText);
+
+        if (passageIndex < 0 || passageIndex >= allPassages.Count)
+            throw new ArgumentOutOfRangeException(
+                nameof(passageIndex),
+                $"Passage index {passageIndex} out of range (0-{allPassages.Count - 1})"
+            );
+
+        return (scrText, accessor, allPassages, allPassages[passageIndex]);
+    }
+
     private static List<ParallelPassageEntry> CreateSyntheticPassages(ScrText scrText)
     {
         // Create a minimal NTtoOT passage for the project when no XML data exists
@@ -391,7 +382,7 @@ internal class ParallelPassageDataProvider
         }
     }
 
-    private static SIL.Scripture.VerseRef ParseVerseRef(string verseRefStr)
+    private static VerseRef ParseVerseRef(string verseRefStr)
     {
         var parts = verseRefStr.Split(' ');
         var bookId = parts[0];
@@ -399,11 +390,11 @@ internal class ParallelPassageDataProvider
         var cv = chapterVerse.Split(':');
         int chapter = int.TryParse(cv[0], out var c) ? c : 1;
         int verse = cv.Length > 1 && int.TryParse(cv[1], out var v) ? v : 1;
-        int bookNum = SIL.Scripture.Canon.BookIdToNumber(bookId);
-        return new SIL.Scripture.VerseRef(bookNum, chapter, verse);
+        int bookNum = Canon.BookIdToNumber(bookId);
+        return new VerseRef(bookNum, chapter, verse);
     }
 
-    private static string GetVerseText(ScrText scrText, SIL.Scripture.VerseRef vref)
+    private static string GetVerseText(ScrText scrText, VerseRef vref)
     {
         try
         {
