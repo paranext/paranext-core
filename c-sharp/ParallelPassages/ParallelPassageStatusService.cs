@@ -1,5 +1,4 @@
 using Paratext.Data;
-using SIL.Scripture;
 
 namespace Paranext.DataProvider.ParallelPassages;
 
@@ -70,15 +69,10 @@ public class ParallelPassageStatusService
     {
         try
         {
-            // Check if book is in scope (ParallelPassagesBooks setting)
-            var parts = verseRefStr.Split(' ');
-            if (parts.Length > 0)
-            {
-                int bookNum = Canon.BookIdToNumber(parts[0]);
-                var ignoredBooks = GetIgnoredBooks(scrText);
-                if (ignoredBooks != null && ignoredBooks.Contains(bookNum))
-                    return InternalPassageState.IgnoredBook;
-            }
+            int bookNum = ParallelPassageAccessor.ParseBookNumber(verseRefStr);
+            var ignoredBooks = GetIgnoredBooks(scrText);
+            if (ignoredBooks != null && ignoredBooks.Contains(bookNum))
+                return InternalPassageState.IgnoredBook;
 
             // Default: without ParallelPassageStatuses access, all are Unfinished
             return InternalPassageState.Unfinished;
@@ -89,30 +83,15 @@ public class ParallelPassageStatusService
         }
     }
 
+    /// <summary>
+    /// Returns set of ignored book numbers, or null if no books are ignored.
+    /// ParallelPassagesBooks setting lists included books; absent books are ignored.
+    /// Currently returns null (no books ignored) per INV-003.
+    /// </summary>
     private static HashSet<int>? GetIgnoredBooks(ScrText scrText)
     {
-        try
-        {
-            var setting = scrText.Settings.GetSetting("ParallelPassagesBooks");
-            if (string.IsNullOrEmpty(setting))
-                return null;
-
-            var bookNums = setting
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => int.TryParse(s.Trim(), out var n) ? n : -1)
-                .Where(n => n > 0)
-                .ToHashSet();
-
-            if (bookNums.Count == 0)
-                return null;
-
-            // ParallelPassagesBooks lists included books; books NOT in the list are ignored
-            // But if the list is empty, no books are ignored (INV-003)
-            return null; // For now, no books are ignored
-        }
-        catch (Exception)
-        {
-            return null;
-        }
+        // ParallelPassageStatuses constructor is internal to ParatextData.
+        // Until we can instantiate it, no books are ignored (INV-003).
+        return null;
     }
 }

@@ -60,29 +60,7 @@ public class ParallelPassageMatchingService
         }
 
         // Pass 3: Sentence boundary exception - single word after period can match
-        for (int i = 0; i < verse1Words.Count; i++)
-        {
-            if (matched[i] || !wordInVerse2[i])
-                continue;
-
-            // Check if this word is at a sentence boundary (previous word ends with '.')
-            if (i > 0 && verse1Words[i - 1].EndsWith('.'))
-                matched[i] = true;
-            // Also check if it's the last word and ends with punctuation (sentence-final)
-            else if (i == verse1Words.Count - 1 && verse1Words[i].EndsWith('.'))
-            {
-                // Check if corresponding word in verse2 is also at sentence boundary
-                if (
-                    verse2Words.Any(w =>
-                        w.StartsWith(
-                            verse1Words[i].TrimEnd('.'),
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
-                )
-                    matched[i] = true;
-            }
-        }
+        ApplySentenceBoundaryMatches(verse1Words, verse2Words, wordInVerse2, matched);
 
         var result = new List<HighlightedWord>();
         for (int i = 0; i < verse1Words.Count; i++)
@@ -96,6 +74,41 @@ public class ParallelPassageMatchingService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Marks unmatched words at sentence boundaries (after a period) as matches
+    /// if they appear in the other verse. Also handles sentence-final words.
+    /// </summary>
+    private static void ApplySentenceBoundaryMatches(
+        List<string> verse1Words,
+        List<string> verse2Words,
+        bool[] wordInVerse2,
+        bool[] matched
+    )
+    {
+        for (int i = 0; i < verse1Words.Count; i++)
+        {
+            if (matched[i] || !wordInVerse2[i])
+                continue;
+
+            // Check if this word is at a sentence boundary (previous word ends with '.')
+            if (i > 0 && verse1Words[i - 1].EndsWith('.'))
+                matched[i] = true;
+            // Also check if it's the last word and ends with punctuation (sentence-final)
+            else if (i == verse1Words.Count - 1 && verse1Words[i].EndsWith('.'))
+            {
+                if (
+                    verse2Words.Any(w =>
+                        w.StartsWith(
+                            verse1Words[i].TrimEnd('.'),
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                )
+                    matched[i] = true;
+            }
+        }
     }
 
     /// <summary>

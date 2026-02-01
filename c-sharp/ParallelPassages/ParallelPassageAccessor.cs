@@ -164,46 +164,52 @@ public class ParallelPassageAccessor
             var ntToNtList = byType[ParallelPassageType.NTtoNT].ToList();
 
             // Build NTtoOT <-> OTtoOT mappings (shared OT verses)
-            foreach (var ntToOt in ntToOtList)
-            {
-                var otVerses = ntToOt
-                    .Verses.Where(v =>
-                        Canon.BookIdToNumber(v.Split(' ')[0]) < FirstNewTestamentBook
-                    )
-                    .ToHashSet();
-
-                foreach (var otToOt in otToOtList)
-                {
-                    if (otToOt.Verses.Any(v => otVerses.Contains(v)))
-                    {
-                        _ntToOtToOtToOt.TryAdd(ntToOt.Key, otToOt);
-                        _otToOtToNtToOt.TryAdd(otToOt.Key, ntToOt);
-                        break;
-                    }
-                }
-            }
+            BuildBidirectionalMappings(
+                ntToOtList,
+                otToOtList,
+                v => !IsNewTestament(v),
+                _ntToOtToOtToOt,
+                _otToOtToNtToOt
+            );
 
             // Build NTtoOT <-> NTtoNT mappings (shared NT verses)
-            foreach (var ntToOt in ntToOtList)
-            {
-                var ntVerses = ntToOt
-                    .Verses.Where(v =>
-                        Canon.BookIdToNumber(v.Split(' ')[0]) >= FirstNewTestamentBook
-                    )
-                    .ToHashSet();
-
-                foreach (var ntToNt in ntToNtList)
-                {
-                    if (ntToNt.Verses.Any(v => ntVerses.Contains(v)))
-                    {
-                        _ntToOtToNtToNt.TryAdd(ntToOt.Key, ntToNt);
-                        _ntToNtToNtToOt.TryAdd(ntToNt.Key, ntToOt);
-                        break;
-                    }
-                }
-            }
+            BuildBidirectionalMappings(
+                ntToOtList,
+                ntToNtList,
+                IsNewTestament,
+                _ntToOtToNtToNt,
+                _ntToNtToNtToOt
+            );
 
             _mappingsBuilt = true;
+        }
+    }
+
+    /// <summary>
+    /// Builds bidirectional mappings between NTtoOT passages and target passages
+    /// by finding shared verses that match the given filter predicate.
+    /// </summary>
+    private static void BuildBidirectionalMappings(
+        List<ParallelPassageEntry> sourceList,
+        List<ParallelPassageEntry> targetList,
+        Func<string, bool> verseFilter,
+        ConcurrentDictionary<string, ParallelPassageEntry?> forwardMap,
+        ConcurrentDictionary<string, ParallelPassageEntry?> reverseMap
+    )
+    {
+        foreach (var source in sourceList)
+        {
+            var filteredVerses = source.Verses.Where(verseFilter).ToHashSet();
+
+            foreach (var target in targetList)
+            {
+                if (target.Verses.Any(v => filteredVerses.Contains(v)))
+                {
+                    forwardMap.TryAdd(source.Key, target);
+                    reverseMap.TryAdd(target.Key, source);
+                    break;
+                }
+            }
         }
     }
 
@@ -241,13 +247,21 @@ public class ParallelPassageAccessor
         yield return Path.Combine(home, "Paratext", "Paratext");
     }
 
+    /// <summary>
+    /// Extracts the book number from a verse reference string (e.g., "MAT 4:1" -> 40).
+    /// </summary>
+    internal static int ParseBookNumber(string verseRef)
+    {
+        return Canon.BookIdToNumber(verseRef.Split(' ')[0]);
+    }
+
+    private static bool IsNewTestament(string verseRef) =>
+        ParseBookNumber(verseRef) >= FirstNewTestamentBook;
+
     private static ParallelPassageType DeterminePassageType(List<XElement> verseElements)
     {
-        bool IsNewTestament(XElement verse) =>
-            Canon.BookIdToNumber(verse.Value.Trim().Split(' ')[0]) >= FirstNewTestamentBook;
-
-        bool hasNT = verseElements.Any(IsNewTestament);
-        bool hasOT = verseElements.Any(v => !IsNewTestament(v));
+        bool hasNT = verseElements.Any(v => IsNewTestament(v.Value.Trim()));
+        bool hasOT = verseElements.Any(v => !IsNewTestament(v.Value.Trim()));
 
         return (hasNT, hasOT) switch
         {

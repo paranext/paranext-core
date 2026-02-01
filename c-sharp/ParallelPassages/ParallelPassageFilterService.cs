@@ -1,5 +1,5 @@
 using Paratext.Data;
-using SIL.Scripture;
+using static Paranext.DataProvider.ParallelPassages.ParallelPassageStatusService;
 
 namespace Paranext.DataProvider.ParallelPassages;
 
@@ -35,13 +35,10 @@ public class ParallelPassageFilterService
                 var headState = GetHeadState(scrText, passage);
                 bool accepted = filterType switch
                 {
-                    PassageFilterType.Unchecked => headState
-                        == ParallelPassageStatusService.InternalPassageState.Unfinished
-                        || headState == ParallelPassageStatusService.InternalPassageState.Outdated,
-                    PassageFilterType.ChangedText => headState
-                        == ParallelPassageStatusService.InternalPassageState.Outdated,
-                    PassageFilterType.MissingText => headState
-                        == ParallelPassageStatusService.InternalPassageState.MissingText,
+                    PassageFilterType.Unchecked => headState == InternalPassageState.Unfinished
+                        || headState == InternalPassageState.Outdated,
+                    PassageFilterType.ChangedText => headState == InternalPassageState.Outdated,
+                    PassageFilterType.MissingText => headState == InternalPassageState.MissingText,
                     _ => true,
                 };
                 if (!accepted)
@@ -54,27 +51,20 @@ public class ParallelPassageFilterService
         return result;
     }
 
-    private static ParallelPassageStatusService.InternalPassageState GetHeadState(
-        ScrText scrText,
-        ParallelPassageEntry passage
-    )
+    private static InternalPassageState GetHeadState(ScrText scrText, ParallelPassageEntry passage)
     {
         try
         {
-            var parts = passage.HeadReference.Split(' ');
-            if (parts.Length > 0)
-            {
-                int bookNum = Canon.BookIdToNumber(parts[0]);
-                var bookList = scrText.Settings.BooksPresentSet;
-                if (bookList != null && !bookList.IsSelected(bookNum))
-                    return ParallelPassageStatusService.InternalPassageState.IgnoredBook;
-            }
+            int bookNum = ParallelPassageAccessor.ParseBookNumber(passage.HeadReference);
+            var bookList = scrText.Settings.BooksPresentSet;
+            if (bookList != null && !bookList.IsSelected(bookNum))
+                return InternalPassageState.IgnoredBook;
 
-            return ParallelPassageStatusService.InternalPassageState.Unfinished;
+            return InternalPassageState.Unfinished;
         }
         catch (Exception)
         {
-            return ParallelPassageStatusService.InternalPassageState.Unfinished;
+            return InternalPassageState.Unfinished;
         }
     }
 }
