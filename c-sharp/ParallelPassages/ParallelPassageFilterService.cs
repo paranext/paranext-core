@@ -51,6 +51,23 @@ public class ParallelPassageFilterService
         return result;
     }
 
+    /// <summary>
+    /// Filters a single passage by type. For "All": NTtoOT always accepted;
+    /// OTtoOT/NTtoNT only if no related NTtoOT exists (dedup).
+    /// For "Gospels": NTtoNT AND all verses in Matt(40)/Mark(41)/Luke(42).
+    /// Other filters match by PassageType directly.
+    /// EXT-005: Passage Type Filtering.
+    /// </summary>
+    public bool AcceptPassage(
+        ParallelPassageEntry passage,
+        ParallelPassageFilter filter,
+        ParallelPassageAccessor accessor
+    )
+    {
+        // TODO: Implement in GREEN phase
+        throw new NotImplementedException("CAP-005: AcceptPassage not yet implemented");
+    }
+
     private static InternalPassageState GetHeadState(ScrText scrText, ParallelPassageEntry passage)
     {
         try

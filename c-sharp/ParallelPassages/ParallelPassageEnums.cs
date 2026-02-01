@@ -12,6 +12,18 @@ public enum PassageFilterType
 }
 
 /// <summary>
+/// Passage type filter for upper pane display.
+/// </summary>
+public enum ParallelPassageFilter
+{
+    All,
+    NTtoNT,
+    NTtoOT,
+    OTtoOT,
+    Gospels,
+}
+
+/// <summary>
 /// Degree of word-level parallelism between verses.
 /// </summary>
 public enum DegreeOfParallelism

@@ -106,6 +106,19 @@ internal class ParallelPassageDataProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Returns unfinished parallel passage counts per book for the check/progress system.
+    /// CAP-013: GetCompletionCounts.
+    /// </summary>
+    public Task<Dictionary<int, int>> GetCompletionCountsAsync(
+        string projectId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // TODO: Implement in GREEN phase
+        throw new NotImplementedException("CAP-013: GetCompletionCounts not yet implemented");
+    }
+
     /// <summary>Simulate a text change event for testing.</summary>
     public void SimulateTextChanged(string projectId)
     {

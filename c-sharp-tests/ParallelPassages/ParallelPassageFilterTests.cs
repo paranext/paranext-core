@@ -298,4 +298,297 @@ internal class ParallelPassageFilterTests : PapiTestBase
     }
 
     #endregion
+
+    // =========================================================================
+    // CAP-005: PassageTypeFiltering (EXT-005)
+    // =========================================================================
+
+    #region CAP-005: PassageTypeFiltering - Acceptance Test
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description(
+        "Acceptance test: AcceptPassage with All filter deduplicates OTtoOT/NTtoNT that have related NTtoOT"
+    )]
+    public void AcceptPassage_AcceptanceTest_AllFilter_DeduplicatesRelatedPassages()
+    {
+        // Arrange
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        // Find an OTtoOT passage that has a related NTtoOT
+        var otToOt = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.OTtoOT
+            && accessor.FindRelatedPassage(p, ParallelPassageType.NTtoOT) != null
+        );
+
+        if (otToOt == null)
+            Assert.Inconclusive("No OTtoOT with related NTtoOT found in test data");
+
+        // Act - gm-006: All filter, OTtoOT with related NTtoOT
+        var accepted = filterService.AcceptPassage(otToOt, ParallelPassageFilter.All, accessor);
+
+        // Assert - gm-006 expected: accepted=false (deduplicated)
+        Assert.That(
+            accepted,
+            Is.False,
+            "gm-006: OTtoOT with related NTtoOT should be excluded by All filter (dedup)"
+        );
+    }
+
+    #endregion
+
+    #region CAP-005: Contract Tests - Type Filtering
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("All filter always accepts NTtoOT passages")]
+    public void AcceptPassage_All_AlwaysAcceptsNTtoOT()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        var ntToOt = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.NTtoOT
+        );
+        if (ntToOt == null)
+            Assert.Inconclusive("No NTtoOT passages");
+
+        var accepted = filterService.AcceptPassage(ntToOt, ParallelPassageFilter.All, accessor);
+
+        Assert.That(accepted, Is.True, "All filter always accepts NTtoOT");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("All filter accepts OTtoOT when no related NTtoOT exists")]
+    public void AcceptPassage_All_AcceptsOTtoOT_WhenNoRelatedNTtoOT()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        var otToOt = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.OTtoOT
+            && accessor.FindRelatedPassage(p, ParallelPassageType.NTtoOT) == null
+        );
+
+        if (otToOt == null)
+            Assert.Inconclusive("No standalone OTtoOT passages in test data");
+
+        var accepted = filterService.AcceptPassage(otToOt, ParallelPassageFilter.All, accessor);
+
+        Assert.That(accepted, Is.True,
+            "OTtoOT without related NTtoOT should be accepted by All filter");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("NTtoNT filter accepts only NTtoNT passages")]
+    public void AcceptPassage_NTtoNT_AcceptsOnlyNTtoNT()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        foreach (var passage in passages.Take(20))
+        {
+            var accepted = filterService.AcceptPassage(
+                passage,
+                ParallelPassageFilter.NTtoNT,
+                accessor
+            );
+
+            if (passage.PassageType == ParallelPassageType.NTtoNT)
+                Assert.That(accepted, Is.True, $"NTtoNT filter should accept NTtoNT: {passage.HeadReference}");
+            else
+                Assert.That(accepted, Is.False, $"NTtoNT filter should reject {passage.PassageType}: {passage.HeadReference}");
+        }
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("NTtoOT filter accepts only NTtoOT passages")]
+    public void AcceptPassage_NTtoOT_AcceptsOnlyNTtoOT()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        foreach (var passage in passages.Take(20))
+        {
+            var accepted = filterService.AcceptPassage(
+                passage,
+                ParallelPassageFilter.NTtoOT,
+                accessor
+            );
+
+            if (passage.PassageType == ParallelPassageType.NTtoOT)
+                Assert.That(accepted, Is.True);
+            else
+                Assert.That(accepted, Is.False);
+        }
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("OTtoOT filter accepts only OTtoOT passages")]
+    public void AcceptPassage_OTtoOT_AcceptsOnlyOTtoOT()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        foreach (var passage in passages.Take(20))
+        {
+            var accepted = filterService.AcceptPassage(
+                passage,
+                ParallelPassageFilter.OTtoOT,
+                accessor
+            );
+
+            if (passage.PassageType == ParallelPassageType.OTtoOT)
+                Assert.That(accepted, Is.True);
+            else
+                Assert.That(accepted, Is.False);
+        }
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-039")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("Gospels filter accepts NTtoNT with all verses in Matt/Mark/Luke (books 40-42)")]
+    public void AcceptPassage_Gospels_AcceptsNTtoNTInSynopticGospels()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        // Find an NTtoNT passage where all verses are in books 40-42
+        var gospelPassage = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.NTtoNT
+            && p.Verses.All(v =>
+            {
+                int bookNum = ParallelPassageAccessor.ParseBookNumber(v);
+                return bookNum >= 40 && bookNum <= 42;
+            })
+        );
+
+        if (gospelPassage == null)
+            Assert.Inconclusive("No synoptic gospel NTtoNT passage in test data");
+
+        var accepted = filterService.AcceptPassage(
+            gospelPassage,
+            ParallelPassageFilter.Gospels,
+            accessor
+        );
+
+        Assert.That(accepted, Is.True,
+            "Gospels filter should accept NTtoNT with all verses in Matt/Mark/Luke");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-040")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("Gospels filter rejects NTtoNT containing John (book 43)")]
+    public void AcceptPassage_Gospels_RejectsNTtoNTWithJohn()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        // Find NTtoNT passage containing a verse in John (book 43)
+        var johnPassage = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.NTtoNT
+            && p.Verses.Any(v => ParallelPassageAccessor.ParseBookNumber(v) == 43)
+        );
+
+        if (johnPassage == null)
+            Assert.Inconclusive("No NTtoNT passage with John in test data");
+
+        var accepted = filterService.AcceptPassage(
+            johnPassage,
+            ParallelPassageFilter.Gospels,
+            accessor
+        );
+
+        Assert.That(accepted, Is.False,
+            "Gospels filter should reject NTtoNT containing John");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-040")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("Gospels filter rejects non-NTtoNT passages")]
+    public void AcceptPassage_Gospels_RejectsNonNTtoNT()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        var ntToOt = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.NTtoOT
+        );
+        if (ntToOt == null)
+            Assert.Inconclusive("No NTtoOT passages");
+
+        var accepted = filterService.AcceptPassage(
+            ntToOt,
+            ParallelPassageFilter.Gospels,
+            accessor
+        );
+
+        Assert.That(accepted, Is.False,
+            "Gospels filter should reject NTtoOT passages");
+    }
+
+    #endregion
+
+    #region CAP-005: Golden Master Tests
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Description("gm-006: All filter deduplicates OTtoOT that has related NTtoOT")]
+    public void AcceptPassage_GoldenMaster006_AllFilterDeduplication()
+    {
+        var accessor = new ParallelPassageAccessor();
+        var filterService = new ParallelPassageFilterService();
+        var passages = accessor.GetAllPassages();
+
+        // gm-006 input: filter=All, passageType=OTtoOT, hasRelatedNTtoOT=true
+        var otToOt = passages.FirstOrDefault(p =>
+            p.PassageType == ParallelPassageType.OTtoOT
+            && accessor.FindRelatedPassage(p, ParallelPassageType.NTtoOT) != null
+        );
+
+        if (otToOt == null)
+            Assert.Inconclusive("No OTtoOT with related NTtoOT for gm-006");
+
+        var accepted = filterService.AcceptPassage(otToOt, ParallelPassageFilter.All, accessor);
+
+        // gm-006 expected: accepted=false
+        Assert.That(accepted, Is.False, "gm-006: OTtoOT with related NTtoOT should be rejected");
+    }
+
+    #endregion
 }

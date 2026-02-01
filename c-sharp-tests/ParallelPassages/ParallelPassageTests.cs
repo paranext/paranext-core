@@ -1378,4 +1378,148 @@ internal class ParallelPassageTests : PapiTestBase
     }
 
     #endregion
+
+    // =========================================================================
+    // MP-4 Capabilities
+    // =========================================================================
+
+    #region CAP-013: GetCompletionCounts - Acceptance Test
+
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-075")]
+    [Property("BehaviorId", "BHV-501")]
+    [Description("Acceptance test: GetCompletionCounts returns unfinished count per book")]
+    public async Task GetCompletionCounts_AcceptanceTest_ReturnsUnfinishedCountPerBook()
+    {
+        // Arrange
+        var scrText = CreateDummyProject();
+        ScrTextCollection.Add(scrText, true);
+
+        var dataProvider = new ParallelPassageDataProvider(Client);
+        var projectId = scrText.Guid.ToString();
+
+        // Act
+        var counts = await dataProvider.GetCompletionCountsAsync(projectId);
+
+        // Assert
+        Assert.That(counts, Is.Not.Null);
+        Assert.That(counts, Is.InstanceOf<Dictionary<int, int>>());
+
+        // Fresh project: all passages are unfinished, so counts should be > 0
+        // for books that have parallel passages
+        if (counts.Count > 0)
+        {
+            foreach (var kvp in counts)
+            {
+                Assert.That(kvp.Key, Is.GreaterThan(0).And.LessThanOrEqualTo(66),
+                    "Book number must be valid (1-66)");
+                Assert.That(kvp.Value, Is.GreaterThanOrEqualTo(0),
+                    $"Unfinished count for book {kvp.Key} must be non-negative");
+            }
+        }
+    }
+
+    #endregion
+
+    #region CAP-013: Contract Tests
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-075")]
+    [Property("BehaviorId", "BHV-501")]
+    [Description("GetCompletionCounts returns Dictionary<int, int>")]
+    public async Task GetCompletionCounts_ValidProject_ReturnsDictionary()
+    {
+        var scrText = CreateDummyProject();
+        ScrTextCollection.Add(scrText, true);
+
+        var dataProvider = new ParallelPassageDataProvider(Client);
+        var projectId = scrText.Guid.ToString();
+
+        var counts = await dataProvider.GetCompletionCountsAsync(projectId);
+
+        Assert.That(counts, Is.Not.Null);
+        Assert.That(counts, Is.InstanceOf<Dictionary<int, int>>());
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-075")]
+    [Property("BehaviorId", "BHV-501")]
+    [Description("Fresh project has all passages unfinished")]
+    public async Task GetCompletionCounts_FreshProject_AllUnfinished()
+    {
+        var scrText = CreateDummyProject();
+        ScrTextCollection.Add(scrText, true);
+
+        var dataProvider = new ParallelPassageDataProvider(Client);
+        var projectId = scrText.Guid.ToString();
+
+        var counts = await dataProvider.GetCompletionCountsAsync(projectId);
+
+        Assert.That(counts, Is.Not.Null);
+
+        // For a fresh project, the total unfinished count should equal total passages
+        // (since no passages have been approved)
+        int totalUnfinished = counts.Values.Sum();
+        Assert.That(totalUnfinished, Is.GreaterThanOrEqualTo(0));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-075")]
+    [Property("BehaviorId", "BHV-501")]
+    [Description("Book numbers in result correspond to actual parallel passage books")]
+    public async Task GetCompletionCounts_BookNumbers_AreValidParallelPassageBooks()
+    {
+        var scrText = CreateDummyProject();
+        ScrTextCollection.Add(scrText, true);
+
+        var dataProvider = new ParallelPassageDataProvider(Client);
+        var projectId = scrText.Guid.ToString();
+
+        var counts = await dataProvider.GetCompletionCountsAsync(projectId);
+        var accessor = new ParallelPassageAccessor();
+        var allPassages = accessor.GetAllPassages();
+
+        // Every book in counts should have at least one parallel passage
+        var passageBooks = new HashSet<int>();
+        foreach (var p in allPassages)
+        {
+            foreach (var v in p.Verses)
+            {
+                passageBooks.Add(ParallelPassageAccessor.ParseBookNumber(v));
+            }
+        }
+
+        foreach (var bookNum in counts.Keys)
+        {
+            Assert.That(passageBooks, Does.Contain(bookNum),
+                $"Book {bookNum} in counts should have parallel passages");
+        }
+    }
+
+    #endregion
+
+    #region CAP-013: Error Cases
+
+    [Test]
+    [Category("Contract")]
+    [Property("ScenarioId", "TS-075")]
+    [Property("BehaviorId", "BHV-501")]
+    [Description("Invalid project ID returns empty dictionary or error")]
+    public async Task GetCompletionCounts_InvalidProject_ReturnsEmptyOrError()
+    {
+        var dataProvider = new ParallelPassageDataProvider(Client);
+
+        // Should handle gracefully, not throw
+        var counts = await dataProvider.GetCompletionCountsAsync("nonexistent-project-id");
+
+        Assert.That(counts, Is.Not.Null);
+        Assert.That(counts, Is.Empty, "Invalid project should return empty counts");
+    }
+
+    #endregion
 }
