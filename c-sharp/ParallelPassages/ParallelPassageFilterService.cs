@@ -64,8 +64,51 @@ public class ParallelPassageFilterService
         ParallelPassageAccessor accessor
     )
     {
-        // TODO: Implement in GREEN phase
-        throw new NotImplementedException("CAP-005: AcceptPassage not yet implemented");
+        return filter switch
+        {
+            ParallelPassageFilter.All => AcceptPassageAll(passage, accessor),
+            ParallelPassageFilter.NTtoNT => passage.PassageType == ParallelPassageType.NTtoNT,
+            ParallelPassageFilter.NTtoOT => passage.PassageType == ParallelPassageType.NTtoOT,
+            ParallelPassageFilter.OTtoOT => passage.PassageType == ParallelPassageType.OTtoOT,
+            ParallelPassageFilter.Gospels => AcceptPassageGospels(passage),
+            _ => true,
+        };
+    }
+
+    private static bool AcceptPassageAll(
+        ParallelPassageEntry passage,
+        ParallelPassageAccessor accessor
+    )
+    {
+        // NTtoOT always accepted
+        if (passage.PassageType == ParallelPassageType.NTtoOT)
+            return true;
+
+        // OTtoOT/NTtoNT: reject if a related NTtoOT exists (dedup)
+        if (
+            passage.PassageType == ParallelPassageType.OTtoOT
+            || passage.PassageType == ParallelPassageType.NTtoNT
+        )
+        {
+            var relatedNtToOt = accessor.FindRelatedPassage(passage, ParallelPassageType.NTtoOT);
+            return relatedNtToOt == null;
+        }
+
+        return true;
+    }
+
+    private static bool AcceptPassageGospels(ParallelPassageEntry passage)
+    {
+        // Must be NTtoNT
+        if (passage.PassageType != ParallelPassageType.NTtoNT)
+            return false;
+
+        // All verses must be in Matt(40), Mark(41), Luke(42)
+        return passage.Verses.All(v =>
+        {
+            int bookNum = ParallelPassageAccessor.ParseBookNumber(v);
+            return bookNum >= 40 && bookNum <= 42;
+        });
     }
 
     private static InternalPassageState GetHeadState(ScrText scrText, ParallelPassageEntry passage)

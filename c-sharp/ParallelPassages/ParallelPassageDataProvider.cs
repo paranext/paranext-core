@@ -115,8 +115,30 @@ internal class ParallelPassageDataProvider
         CancellationToken cancellationToken = default
     )
     {
-        // TODO: Implement in GREEN phase
-        throw new NotImplementedException("CAP-013: GetCompletionCounts not yet implemented");
+        var counts = new Dictionary<int, int>();
+
+        var scrText = FindProjectById(projectId);
+        if (scrText == null)
+            return Task.FromResult(counts);
+
+        var accessor = new ParallelPassageAccessor();
+        var statusService = new ParallelPassageStatusService();
+        var allPassages = accessor.GetAllPassages();
+
+        foreach (var passage in allPassages)
+        {
+            var status = statusService.GetAggregatedStatus(scrText, passage);
+
+            // Count as unfinished if not all ticked (Finished)
+            if (!status.AllTicked)
+            {
+                int bookNum = ParallelPassageAccessor.ParseBookNumber(passage.HeadReference);
+                counts.TryGetValue(bookNum, out int current);
+                counts[bookNum] = current + 1;
+            }
+        }
+
+        return Task.FromResult(counts);
     }
 
     /// <summary>Simulate a text change event for testing.</summary>

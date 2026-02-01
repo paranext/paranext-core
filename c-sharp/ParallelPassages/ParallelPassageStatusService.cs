@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.ParallelPassages;
@@ -65,6 +66,11 @@ public class ParallelPassageStatusService
         IgnoredBook,
     }
 
+    // In-memory state overrides until ParallelPassageStatuses is accessible.
+    // Key: "{projectGuid}|{verseRef}"
+    private static readonly ConcurrentDictionary<string, InternalPassageState> s_stateOverrides =
+        new();
+
     internal static InternalPassageState GetPassageState(ScrText scrText, string verseRefStr)
     {
         try
@@ -74,6 +80,11 @@ public class ParallelPassageStatusService
             if (ignoredBooks != null && ignoredBooks.Contains(bookNum))
                 return InternalPassageState.IgnoredBook;
 
+            // Check in-memory overrides
+            string key = $"{scrText.Guid}|{verseRefStr}";
+            if (s_stateOverrides.TryGetValue(key, out var overrideState))
+                return overrideState;
+
             // Default: without ParallelPassageStatuses access, all are Unfinished
             return InternalPassageState.Unfinished;
         }
@@ -81,6 +92,16 @@ public class ParallelPassageStatusService
         {
             return InternalPassageState.Unfinished;
         }
+    }
+
+    internal static void SetPassageState(
+        ScrText scrText,
+        string verseRefStr,
+        InternalPassageState state
+    )
+    {
+        string key = $"{scrText.Guid}|{verseRefStr}";
+        s_stateOverrides[key] = state;
     }
 
     /// <summary>
