@@ -20,6 +20,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@/components/shadcn-ui/tooltip';
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -97,6 +98,21 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
   }
 }
 
+// TODO: Remove this once the new marker menu is implemented with correct logic
+/**
+ * This is for a temporary fix to get the markers menu to work by having the default usj include a
+ * parent paragraph node
+ */
+const PARAGRAPH_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    {
+      type: 'para',
+    },
+  ],
+};
+
 /**
  * Component to edit footnotes from within the editor component
  *
@@ -159,9 +175,9 @@ export default function FootnoteEditor({
       setCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
-      // Applies timeout for the apply update operation to avoid flush sync warning
       timeout = setTimeout(() => {
-        editorRef.current?.applyUpdate([{ delete: 1 }, noteOp]);
+        // Inserts the note node to be edited as an delta operation
+        editorRef.current?.applyUpdate([noteOp]);
       }, 0);
     }
 
@@ -210,13 +226,22 @@ export default function FootnoteEditor({
         innerNoteOps?.forEach((op) => crossReferenceToFootnoteOp(op));
       }
 
-      editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOp]);
+      // Inserts the new footnote/cross-reference and deletes the old one
+      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
     }
   };
 
-  const handleUsjChange = () => {
+  const handleUsjChange = (usj: Usj) => {
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+      // Prevents adding additional note nodes or other nodes after the main footnote node
+      if (usj.content.length > 1) {
+        setTimeout(() => {
+          // Retains the first two nodes which are the added paragraph node (for now) and the
+          // footnote/cross-reference and deletes the unwanted node that was just inserted
+          editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
+        }, 0);
+      }
       const currentNoteType = noteOp.insert.note?.style;
       const innerNoteOps = noteOp.insert.note?.contents?.ops;
       if (!currentNoteType) setIsTypeSwitchable(false);
@@ -306,7 +331,8 @@ export default function FootnoteEditor({
         <div className={classNameForEditor}>
           <Editorial
             options={options}
-            onUsjChange={() => handleUsjChange()}
+            onUsjChange={handleUsjChange}
+            defaultUsj={PARAGRAPH_USJ}
             onScrRefChange={() => {}}
             scrRef={scrRef}
             ref={editorRef}
