@@ -169,8 +169,8 @@ export function useInventory(
     }, 500);
 
     return (range: InventoryInputRange) => {
-      const order = debouncedLoadOrderRef.current;
       debouncedLoadOrderRef.current += 1;
+      const order = debouncedLoadOrderRef.current;
       inner(range, order);
     };
     // Note: include dependencies so inner closure captures current providers/ids
