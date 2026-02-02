@@ -6653,6 +6653,12 @@ span.read img {
 .footnote-editor .immutable-note-caller {
   display: none;
 }
+
+/* Need to be able to override the styles for the editor that happens to have an underscore */
+/* stylelint-disable selector-class-pattern */
+.footnote-editor .text-spacing .usfm_p {
+  text-indent: 0;
+}
 /**
  * This file was automatically generated on installation of the Shadcn/Lexical editor. The default
  * location of this file has been changed to integrate better with our project structure.
