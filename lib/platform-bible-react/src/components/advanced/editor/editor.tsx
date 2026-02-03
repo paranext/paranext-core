@@ -14,6 +14,7 @@ import { EditorState, SerializedEditorState } from 'lexical';
 
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
+import { cn } from '@/utils/shadcn-ui.util';
 
 import { nodes } from './nodes';
 import { Plugins } from './plugins';
@@ -40,6 +41,7 @@ export function Editor({
   placeholder = 'Start typing…',
   autoFocus = false,
   onClear,
+  className,
 }: {
   editorState?: EditorState;
   editorSerializedState?: SerializedEditorState;
@@ -48,9 +50,16 @@ export function Editor({
   placeholder?: string;
   autoFocus?: boolean;
   onClear?: (clearFn: () => void) => void;
+  className?: string;
 }) {
   return (
-    <div className="pr-twp tw-overflow-hidden tw-rounded-lg tw-border tw-bg-background tw-shadow">
+    // CUSTOM: Added `className` prop
+    <div
+      className={cn(
+        'pr-twp tw-overflow-hidden tw-rounded-lg tw-border tw-bg-background tw-shadow',
+        className,
+      )}
+    >
       <LexicalComposer
         initialConfig={{
           ...editorConfig,

@@ -9,7 +9,7 @@ namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the LegacyComment TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class PlatformCommentConverter : JsonConverter<PlatformComment>
+public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
 {
     private const string ASSIGNED_USER = "assignedUser";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
@@ -38,18 +38,29 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
     private const string VERSE_REF = "verseRef";
 
     /// <summary>
-    /// Deserializes a <see cref="PlatformComment"/> from JSON.
+    /// Deserializes a <see cref="PlatformCommentWrapper"/> from JSON.
     /// </summary>
     /// <exception cref="InvalidDataException">
     /// The JSON <c>contents</c> field could not be interpreted as XML content,
     /// or a data field contains an invalid enum value.
     /// </exception>
     /// <remarks>
+    /// <para>
     /// The JSON field <c>isRead</c> is intentionally ignored because read status is not stored in the
     /// underlying <see cref="Comment"/> and is serialized separately. When serialized, the value is
     /// read from the file where Paratext data stores read status.
+    /// </para>
+    /// <para>
+    /// Note: A `PlatformCommentWrapper` created in this way does not have a
+    /// `PlatformCommentThreadWrapper`, so it cannot read `CommentsHtml`. To read `CommentsHtml`, you
+    /// must create a new `PlatformCommentWrapper` wrapping the `Comment` from the comment manager
+    /// matching this object's `Id`, copy this comment's properties to that `Comment`, then create
+    /// a new `PlatformCommentWrapper` with the thread corresponding to the comment from the comment
+    /// manager. You can't just add the right `thread` to the comment because, in many cases, comment
+    /// object references are important.
+    /// </para>
     /// </remarks>
-    public override PlatformComment Read(
+    public override PlatformCommentWrapper Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
@@ -58,7 +69,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
         string? assignedUser = null;
         string? biblicalTermId = null;
         string? conflictType = null;
-        string? contents = null;
+        string contentsHtml = "";
         string? contextAfter = null;
         string? contextBefore = null;
         string? date = null;
@@ -132,7 +143,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
                             conflictType = reader.GetString();
                             break;
                         case CONTENTS:
-                            contents = reader.GetString();
+                            contentsHtml = reader.GetString() ?? "";
                             break;
                         case CONTEXT_AFTER:
                             contextAfter = reader.GetString();
@@ -191,20 +202,24 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
             }
         }
 
-        XmlElement? contentsXml;
+        // Verify that the contents that come in are valid XML (really, we could validate that they
+        // are valid HTML, but XML is close enough for our purposes here)
         try
         {
             XmlDocument xmlDocument = new() { PreserveWhitespace = true };
-            xmlDocument.LoadXml($"<Contents>{contents}</Contents>");
-            contentsXml = xmlDocument.DocumentElement;
+            xmlDocument.LoadXml($"<Contents>{contentsHtml}</Contents>");
         }
         catch (Exception)
         {
-            throw new InvalidDataException($"Contents are not valid XML: {contents}");
+            throw new InvalidDataException(
+                $"Contents are not valid XML, so they must not be valid HTML: {contentsHtml}"
+            );
         }
 
         if (!string.IsNullOrEmpty(status))
             status = JsonConverterUtils.ConvertCommentStatusToNoteStatus(status);
+        if (!string.IsNullOrEmpty(type))
+            type = JsonConverterUtils.ConvertCommentTypeToNoteType(type);
 
         var conflictTypeEnum = ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType);
         var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status);
@@ -216,7 +231,6 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
                 AssignedUser = assignedUser,
                 BiblicalTermId = biblicalTermId,
                 ConflictType = conflictTypeEnum ?? NoteConflictType.None,
-                Contents = contentsXml,
                 ContextAfter = contextAfter,
                 ContextBefore = contextBefore,
                 Date = date ?? string.Empty,
@@ -242,14 +256,20 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
                 $"WARNING: Actual comment ID ({comment.Id}) doesn't match the provided ID ({id})"
             );
 
-        var wrappedComment = new PlatformComment(comment, null);
+        var wrappedComment = new PlatformCommentWrapper(comment, null);
+        wrappedComment.ContentsHtml = contentsHtml;
 
         return wrappedComment;
     }
 
+    /// <summary>
+    /// Note: To serialize a `PlatformCommentWrapper`, it *must* have a `PlatformCommentThreadWrapper`
+    /// associated with it; otherwise, an exception will be thrown when trying to get the
+    /// `ContentsHtml` property.
+    /// </summary>
     public override void Write(
         Utf8JsonWriter writer,
-        PlatformComment value,
+        PlatformCommentWrapper value,
         JsonSerializerOptions options
     )
     {
@@ -275,8 +295,14 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
             );
             writer.WriteString(STATUS, commentStatusValue);
         }
-        if (value.Type != NoteType.Unspecified && value.Type != NoteType.Normal)
-            writer.WriteString(TYPE, value.Type.ToString());
+        if (value.Type != NoteType.Unspecified)
+        {
+            string noteTypeValue = value.Type.ToString();
+            string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(
+                noteTypeValue
+            );
+            writer.WriteString(TYPE, commentTypeValue);
+        }
         if (value.ConflictType != NoteConflictType.None)
             writer.WriteString(CONFLICT_TYPE, value.ConflictType.ToString());
         JsonConverterUtils.TryWriteString(writer, VERSE, value.Verse);
@@ -292,7 +318,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformComment>
             value.ExtraHeadingInfo.ToString()
         );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
-        writer.WriteString(CONTENTS, value.Contents?.InnerXml ?? "");
+        writer.WriteString(CONTENTS, value.ContentsHtml);
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));

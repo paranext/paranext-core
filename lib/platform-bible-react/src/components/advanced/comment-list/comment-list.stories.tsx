@@ -227,6 +227,10 @@ export const Default: Story = {
         console.log(`Checking if user can resolve thread ${threadId}`);
         return true;
       }}
+      canUserEditOrDeleteCommentCallback={async () => {
+        console.log(`Checking if user can edit/delete comment`);
+        return true;
+      }}
     />
   ),
 };
