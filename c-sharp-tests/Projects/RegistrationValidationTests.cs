@@ -316,20 +316,18 @@ public class RegistrationValidationTests
     }
 
     /// <summary>
-    /// Test null name validation
+    /// Test null name validation - ParatextData throws ArgumentNullException for null name
     /// </summary>
     [Test]
     [Category("Contract")]
     [Property("ScenarioId", "TS-REG-007")]
     [Property("BehaviorId", "BHV-153")]
-    public void RegistrationInfo_IsValidRegistration_NullNameIsInvalid()
+    public void RegistrationInfo_IsValidRegistration_NullNameThrows()
     {
-        var result = RegistrationInfo.IsValidRegistration(
-            "ABCDEFGHIJ1234567890",
-            null!
+        // ParatextData throws ArgumentNullException for null userName parameter
+        Assert.Throws<ArgumentNullException>(() =>
+            RegistrationInfo.IsValidRegistration("ABCDEFGHIJ1234567890", null!)
         );
-
-        Assert.That(result, Is.False, "Null name should be invalid");
     }
 
     #endregion
