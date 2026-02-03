@@ -86,6 +86,22 @@ namespace TestParanextDataProvider
         }
 
         /// <summary>
+        /// Creates a new dummy project with a specific name for testing purposes
+        /// </summary>
+        /// <param name="name">The short name for the project</param>
+        /// <param name="fullName">Optional full name (defaults to short name if not provided)</param>
+        protected static DummyScrText CreateDummyProject(string name, string? fullName = null)
+        {
+            var details = new ProjectDetails(
+                name,
+                new ProjectMetadata(HexId.CreateNew().ToString(), []),
+                ""
+            );
+            DummyScrText scrText = new(details);
+            return scrText;
+        }
+
+        /// <summary>
         /// Creates project details from the specified project
         /// </summary>
         protected static ProjectDetails CreateProjectDetails(ScrText scrText)
