@@ -5,6 +5,28 @@
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
+/// Constants used across project creation services.
+/// </summary>
+internal static class ProjectCreationConstants
+{
+    /// <summary>
+    /// Valid characters for project short names: A-Za-z0-9_
+    /// </summary>
+    public const string ProjectNameValidChars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
+
+    /// <summary>
+    /// Minimum length for project short names.
+    /// </summary>
+    public const int MinShortNameLength = 3;
+
+    /// <summary>
+    /// Maximum length for project short names.
+    /// </summary>
+    public const int MaxShortNameLength = 8;
+}
+
+/// <summary>
 /// Request to validate a project short name.
 /// Maps to: EXT-002, VAL-001
 /// </summary>
