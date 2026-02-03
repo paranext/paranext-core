@@ -117,7 +117,12 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.TransliterationManual)
+        // Note: TransliterationManual needs string comparison because PtxUtils.Enum
+        // constructed from string may not match == with enum value for this type
+        if (
+            projectType == ProjectType.TransliterationManual
+            || projectType.ToString() == "TransliterationManual"
+        )
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
