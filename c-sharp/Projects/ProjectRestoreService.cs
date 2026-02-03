@@ -23,6 +23,44 @@ internal static class ProjectRestoreService
     private const string UniqueIdFileName = "unique.id";
 
     /// <summary>
+    /// Known project type names for case-insensitive lookup.
+    /// Keys are lowercase for O(1) lookup.
+    /// </summary>
+    private static readonly Dictionary<string, string> s_projectTypeNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Standard"] = "Standard",
+            ["BackTranslation"] = "BackTranslation",
+            ["Daughter"] = "Daughter",
+            ["Auxiliary"] = "Auxiliary",
+            ["StudyBible"] = "StudyBible",
+            ["StudyBibleAdditions"] = "StudyBibleAdditions",
+            ["TransliterationManual"] = "TransliterationManual",
+            ["TransliterationWithEncoder"] = "TransliterationWithEncoder",
+            ["Transliteration"] = "Transliteration",
+            ["ConsultantNotes"] = "ConsultantNotes",
+            ["Resource"] = "Resource",
+            ["XmlResource"] = "XmlResource",
+        };
+
+    /// <summary>
+    /// Mapping from numeric enum ordinals to project type names.
+    /// </summary>
+    private static readonly Dictionary<int, string> s_projectTypeOrdinals =
+        new()
+        {
+            [0] = "Standard",
+            [1] = "BackTranslation",
+            [2] = "Daughter",
+            [3] = "Auxiliary",
+            [4] = "StudyBible",
+            [5] = "StudyBibleAdditions",
+            [6] = "TransliterationManual",
+            [7] = "TransliterationWithEncoder",
+            [8] = "ConsultantNotes",
+        };
+
+    /// <summary>
     /// Analyzes a backup file.
     /// PT9 Provenance: RestoreForm logic
     /// Maps to: CAP-013, EXT-301
@@ -142,83 +180,47 @@ internal static class ProjectRestoreService
     {
         // Handle string names like "Standard", "BackTranslation", etc.
         // PtxUtils.Enum<T> constructor accepts the string name directly
-        var knownTypes = new[]
+        if (s_projectTypeNames.TryGetValue(typeStr, out var typeName))
         {
-            "Standard",
-            "BackTranslation",
-            "Daughter",
-            "Auxiliary",
-            "StudyBible",
-            "StudyBibleAdditions",
-            "TransliterationManual",
-            "TransliterationWithEncoder",
-            "Transliteration",
-            "ConsultantNotes",
-            "Resource",
-            "XmlResource",
-        };
-
-        foreach (var known in knownTypes)
-        {
-            if (typeStr.Equals(known, StringComparison.OrdinalIgnoreCase))
-            {
-                return new PtxUtils.Enum<ProjectType>(known);
-            }
-        }
-
-        // Handle numeric values (project type enum ordinals)
-        if (int.TryParse(typeStr, out var numericValue))
-        {
-            // Try to get the name for this numeric value
-            var typeName = numericValue switch
-            {
-                0 => "Standard",
-                1 => "BackTranslation",
-                2 => "Daughter",
-                3 => "Auxiliary",
-                4 => "StudyBible",
-                5 => "StudyBibleAdditions",
-                6 => "TransliterationManual",
-                7 => "TransliterationWithEncoder",
-                8 => "ConsultantNotes",
-                _ => "Standard",
-            };
             return new PtxUtils.Enum<ProjectType>(typeName);
         }
 
-        // Default to Standard
+        // Handle numeric values (project type enum ordinals)
+        if (
+            int.TryParse(typeStr, out var numericValue)
+            && s_projectTypeOrdinals.TryGetValue(numericValue, out var ordinalTypeName)
+        )
+        {
+            return new PtxUtils.Enum<ProjectType>(ordinalTypeName);
+        }
+
+        // Default to Standard for unknown types
         return new PtxUtils.Enum<ProjectType>("Standard");
     }
 
     private static string? ExtractBookIdFromFileName(string fileName)
     {
         // Extract book ID from USFM file names like "01GEN.SFM" or "GEN.usfm"
-        if (
+        bool isUsfmFile =
             fileName.EndsWith(".sfm", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".usfm", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+            || fileName.EndsWith(".usfm", StringComparison.OrdinalIgnoreCase);
 
-            // Try to extract 3-letter book code
-            // Format: "##BBB" (e.g., "01GEN") or "BBB" (e.g., "GEN")
-            if (nameWithoutExtension.Length >= 3)
-            {
-                // Check if starts with 2 digits
-                if (
-                    nameWithoutExtension.Length >= 5
-                    && char.IsDigit(nameWithoutExtension[0])
-                    && char.IsDigit(nameWithoutExtension[1])
-                )
-                {
-                    return nameWithoutExtension.Substring(2, 3).ToUpperInvariant();
-                }
+        if (!isUsfmFile)
+            return null;
 
-                // Otherwise take first 3 characters
-                return nameWithoutExtension.Substring(0, 3).ToUpperInvariant();
-            }
-        }
+        var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
 
-        return null;
+        // Need at least 3 characters for a book code
+        if (nameWithoutExtension.Length < 3)
+            return null;
+
+        // Format: "##BBB" (e.g., "01GEN") - extract after 2-digit prefix
+        bool hasNumericPrefix =
+            nameWithoutExtension.Length >= 5
+            && char.IsDigit(nameWithoutExtension[0])
+            && char.IsDigit(nameWithoutExtension[1]);
+
+        int startIndex = hasNumericPrefix ? 2 : 0;
+        return nameWithoutExtension.Substring(startIndex, 3).ToUpperInvariant();
     }
 }
