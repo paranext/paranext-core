@@ -1,0 +1,15 @@
+# Gitleaks configuration for paranext-core
+# See: https://github.com/gitleaks/gitleaks#configuration
+
+title = "paranext-core gitleaks config"
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''node_modules''',
+    '''package-lock\.json''',
+    '''\.test\.(ts|tsx|js)$''',
+    '''\.spec\.(ts|tsx|js)$''',
+    '''\.example$''',
+    '''\.template$''',
+  ]
