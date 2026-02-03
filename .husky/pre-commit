@@ -48,7 +48,7 @@ if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
   # 5. AI-specific TypeScript lint (paranext plugin rules)
   run_ai_lint_ts || exit $?
 
-  # 6. AI-specific C# analyzer check (PNX001-PNX006 as errors)
+  # 6. AI-specific C# analyzer check (warnings as errors for staged files)
   run_ai_lint_csharp || exit $?
 
   echo ""
