@@ -191,6 +191,182 @@ public enum CharacterErrorType
     IcuError,
 }
 
+// === CAP-003: Project Settings Validation ===
+
+/// <summary>
+/// Request to create a new Paratext project.
+/// Maps to: BHV-510, BHV-511, BHV-512, CAP-003, CAP-014
+/// </summary>
+/// <param name="ShortName">Project short name (3-8 chars, A-Za-z0-9_)</param>
+/// <param name="FullName">Full display name</param>
+/// <param name="ProjectType">Project type - one of 8 supported types (PtxUtils.Enum wrapper)</param>
+/// <param name="LanguageId">BCP-47 language identifier (null for StudyBibleAdditions)</param>
+/// <param name="Versification">Versification system</param>
+/// <param name="BaseProjectGuid">GUID of base project for derived types</param>
+/// <param name="Editable">Whether project is editable</param>
+/// <param name="EncoderName">Encoder name for TransliterationWithEncoder projects</param>
+/// <param name="BooksPresent">Book IDs included in project scope</param>
+/// <param name="FileNameForm">File naming template (e.g., "41MAT")</param>
+/// <param name="NoteTags">Note tag configurations</param>
+/// <param name="StudyBibleCategories">Study Bible categories (only for StudyBibleAdditions)</param>
+public record ProjectCreateRequest(
+    string ShortName,
+    string FullName,
+    PtxUtils.Enum<Paratext.Data.ProjectType> ProjectType,
+    string? LanguageId,
+    SIL.Scripture.ScrVersType Versification,
+    Paratext.Data.HexId? BaseProjectGuid,
+    bool Editable,
+    string? EncoderName,
+    IReadOnlyList<string> BooksPresent,
+    string FileNameForm,
+    IReadOnlyList<NoteTagConfig>? NoteTags,
+    IReadOnlyList<StudyBibleCategoryConfig>? StudyBibleCategories
+);
+
+/// <summary>
+/// Note tag configuration for project creation.
+/// </summary>
+/// <param name="Name">Tag name</param>
+/// <param name="Icon">Tag icon</param>
+/// <param name="DefaultStatus">Default status</param>
+public record NoteTagConfig(string Name, string Icon, string DefaultStatus);
+
+/// <summary>
+/// Study Bible category configuration.
+/// </summary>
+/// <param name="Name">Category name (no spaces or backslashes)</param>
+/// <param name="Description">Category description</param>
+public record StudyBibleCategoryConfig(string Name, string Description);
+
+/// <summary>
+/// Complete project validation result.
+/// Maps to: EXT-003, CAP-003
+/// </summary>
+/// <param name="IsValid">Overall validity</param>
+/// <param name="FieldErrors">Field-level errors</param>
+/// <param name="HasMajorErrors">Whether any major (blocking) errors exist</param>
+/// <param name="HasMinorErrors">Whether any minor (warning) errors exist</param>
+public record ProjectValidationResult(
+    bool IsValid,
+    IReadOnlyDictionary<string, ValidationFieldError> FieldErrors,
+    bool HasMajorErrors,
+    bool HasMinorErrors
+)
+{
+    /// <summary>
+    /// Create a valid result with no errors.
+    /// </summary>
+    public static ProjectValidationResult Valid() =>
+        new(true, new Dictionary<string, ValidationFieldError>(), false, false);
+
+    /// <summary>
+    /// Create an invalid result with field errors.
+    /// </summary>
+    public static ProjectValidationResult Invalid(
+        params (string Field, string Message, ValidationSeverity Severity)[] errors
+    )
+    {
+        var fieldErrors = new Dictionary<string, ValidationFieldError>();
+        bool hasMajor = false;
+        bool hasMinor = false;
+        foreach (var (field, message, severity) in errors)
+        {
+            fieldErrors[field] = new ValidationFieldError(field, message, severity);
+            if (severity == ValidationSeverity.Error)
+                hasMajor = true;
+            else
+                hasMinor = true;
+        }
+        return new ProjectValidationResult(false, fieldErrors, hasMajor, hasMinor);
+    }
+}
+
+/// <summary>
+/// Field-level validation error.
+/// </summary>
+/// <param name="Field">Field name</param>
+/// <param name="Message">Error message</param>
+/// <param name="Severity">Error severity</param>
+public record ValidationFieldError(string Field, string Message, ValidationSeverity Severity);
+
+/// <summary>
+/// Validation error severity.
+/// </summary>
+public enum ValidationSeverity
+{
+    /// <summary>Blocking error that prevents save</summary>
+    Error,
+
+    /// <summary>Warning that allows save but should be reviewed</summary>
+    Warning,
+}
+
+// === CAP-007: Language Settings Save ===
+
+/// <summary>
+/// Request to save language settings.
+/// Maps to: EXT-007, BHV-163, BHV-164, CAP-007
+/// </summary>
+/// <param name="ProjectGuid">Project GUID</param>
+/// <param name="FontName">Font name</param>
+/// <param name="FontSize">Font size in points</param>
+/// <param name="FontFeatures">Font features (Graphite)</param>
+/// <param name="RightToLeft">Right-to-left script</param>
+/// <param name="CharacterRules">Character sort rules</param>
+/// <param name="Separator">Character separator</param>
+/// <param name="Diacritics">Diacritics string</param>
+/// <param name="MedialPunctuation">Medial punctuation</param>
+/// <param name="FootnoteCallers">Footnote caller sequence</param>
+/// <param name="CrossReferenceCallers">Cross-reference caller sequence</param>
+/// <param name="VerseSegments">Verse segment suffixes</param>
+/// <param name="WordBreakChars">Word break characters</param>
+public record LanguageSettingsRequest(
+    Paratext.Data.HexId ProjectGuid,
+    string FontName,
+    int FontSize,
+    string FontFeatures,
+    bool RightToLeft,
+    string CharacterRules,
+    char Separator,
+    string Diacritics,
+    string MedialPunctuation,
+    string FootnoteCallers,
+    string CrossReferenceCallers,
+    string VerseSegments,
+    string WordBreakChars
+);
+
+/// <summary>
+/// Result of language settings save operation.
+/// Maps to: CAP-007
+/// </summary>
+/// <param name="Success">Whether the save succeeded</param>
+/// <param name="ErrorMessage">Error message if failed</param>
+/// <param name="ValidationResult">Character validation result if validation failed</param>
+public record LanguageSettingsSaveResult(
+    bool Success,
+    string? ErrorMessage,
+    CharacterValidationResult? ValidationResult
+)
+{
+    /// <summary>
+    /// Create a successful result.
+    /// </summary>
+    public static LanguageSettingsSaveResult Succeeded() => new(true, null, null);
+
+    /// <summary>
+    /// Create a failed result due to validation.
+    /// </summary>
+    public static LanguageSettingsSaveResult ValidationFailed(CharacterValidationResult result) =>
+        new(false, "Character rules validation failed", result);
+
+    /// <summary>
+    /// Create a failed result due to other error.
+    /// </summary>
+    public static LanguageSettingsSaveResult Failed(string message) => new(false, message, null);
+}
+
 // === CAP-013: Backup Analysis ===
 
 /// <summary>
