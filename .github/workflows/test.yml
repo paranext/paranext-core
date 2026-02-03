@@ -118,6 +118,28 @@ jobs:
         with:
           file_path: 'package.json'
 
+      - name: Checkout scripture-editors
+        uses: actions/checkout@v4
+        with:
+          repository: eten-tech-foundation/scripture-editors
+          path: ../scripture-editors
+
+      - name: Read scripture-editors package.json
+        id: scripture_editors_package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: '../scripture-editors/package.json'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ fromJson(steps.scripture_editors_package_json.outputs.volta).pnpm }}
+
+      - name: Install scripture-editors dependencies
+        run: |
+          cd ../scripture-editors
+          pnpm install
+
       - name: Install Node.js and NPM
         uses: actions/setup-node@v4
         with:

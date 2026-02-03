@@ -172,6 +172,35 @@ To build, run the following:
 npm run build
 ```
 
+#### Linking local development packages (optional)
+
+If you have the `scripture-editors` repository cloned as a sibling folder to this repository (i.e., `../scripture-editors`), running `npm install` will automatically link `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
+
+To set this up:
+
+1. Clone scripture-editors as a sibling to this repo:
+   ```bash
+   cd ..
+   git clone https://github.com/eten-tech-foundation/scripture-editors.git scripture-editors
+   cd paranext-core
+   ```
+2. Install dependencies in scripture-editors:
+   ```bash
+   cd ../scripture-editors
+   pnpm install
+   cd ../paranext-core
+   ```
+3. Run `npm install` in this repo. The postinstall script will automatically run `devpub` in `scripture-editors` and link the packages via yalc.
+
+You can also manually link/unlink packages using:
+
+- `npm run link-dev-packages` (will also run `devpub` in `scripture-editors`)
+
+OR
+
+- `npm run editor:link` / `npm run editor:unlink`
+- `npm run utils:link` / `npm run utils:unlink`
+
 ## Starting Development
 
 Start the app in the `dev` environment:
