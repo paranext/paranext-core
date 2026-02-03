@@ -2,9 +2,6 @@
 // Reason: Service for language character rules validation - PAPI request handler
 // Maps to: CAP-006, EXT-006, VAL-013
 
-using System.Globalization;
-using System.Text;
-
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
@@ -18,6 +15,12 @@ internal static class LanguageValidationService
     // Source: PT9/Paratext/ToolsMenu/LanguageSettingsForm.cs:646-734
     // Method: ValidateCharacters()
     // Maps to: CAP-006
+
+    /// <summary>
+    /// ICU collation rule syntax characters that indicate special rules, not character definitions.
+    /// When these appear on a line, capitalization checking is skipped.
+    /// </summary>
+    private const string IcuSyntaxCharacters = "&<>=/|";
 
     /// <summary>
     /// Validates character rules for language settings.
@@ -72,9 +75,6 @@ internal static class LanguageValidationService
             StringComparer.OrdinalIgnoreCase
         );
 
-        // Track characters that have case (to verify both cases are present)
-        var charactersWithCase = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
         for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
         {
             var line = lines[lineIndex].Trim();
@@ -124,64 +124,57 @@ internal static class LanguageValidationService
                 {
                     seenCharacters[trimmedChar] = (trimmedChar, lineIndex);
                 }
-
-                // Track characters with case
-                if (HasCaseVariant(trimmedChar))
-                {
-                    var lowerKey = trimmedChar.ToLowerInvariant();
-                    if (!charactersWithCase.ContainsKey(lowerKey))
-                    {
-                        charactersWithCase[lowerKey] = lineIndex;
-                    }
-                }
             }
 
             // After processing a line, verify capitalization pairs for characters with case
             // All characters that have case must have both lowercase and uppercase on the same line
             // Skip capitalization check if line contains ICU-like syntax (special characters)
-            bool hasIcuSyntax = lineChars.Any(c => IsIcuSyntaxChar(c));
-            if (!hasIcuSyntax)
-            {
-                foreach (var ch in lineChars)
-                {
-                    if (!HasCaseVariant(ch))
-                        continue;
+            if (lineChars.Any(IsIcuSyntaxChar))
+                continue;
 
-                    var lower = ch.ToLowerInvariant();
-                    var upper = ch.ToUpperInvariant();
-
-                    // Skip if this character doesn't have distinct case variants
-                    if (lower == upper)
-                        continue;
-
-                    // Check if both case variants are on this line
-                    bool hasLower = lineChars.Any(c =>
-                        c.ToLowerInvariant() == lower && c == c.ToLowerInvariant()
-                    );
-                    bool hasUpper = lineChars.Any(c =>
-                        c.ToUpperInvariant() == upper && c == c.ToUpperInvariant()
-                    );
-
-                    // For a line like "a b" where 'a' needs 'A' but 'A' is not present
-                    if (hasLower && !hasUpper && char.IsLetter(ch[0]) && char.IsLower(ch[0]))
-                    {
-                        // Check if uppercase variant exists on this line
-                        if (!lineChars.Contains(upper))
-                        {
-                            return CharacterValidationResult.Invalid(
-                                new CharacterValidationError(
-                                    CharacterErrorType.Capitalization,
-                                    Character: ch,
-                                    Message: $"Capitalization is not defined correctly for: {ch}"
-                                )
-                            );
-                        }
-                    }
-                }
-            }
+            var error = ValidateCapitalizationPairs(lineChars);
+            if (error != null)
+                return CharacterValidationResult.Invalid(error);
         }
 
         return CharacterValidationResult.Valid();
+    }
+
+    /// <summary>
+    /// Validates that all lowercase letters on a line have their uppercase counterparts present.
+    /// </summary>
+    /// <param name="lineChars">Characters on the current line</param>
+    /// <returns>Validation error if a capitalization pair is missing, null if valid</returns>
+    private static CharacterValidationError? ValidateCapitalizationPairs(HashSet<string> lineChars)
+    {
+        foreach (var ch in lineChars)
+        {
+            // Skip characters without case variants (punctuation, numbers)
+            if (!HasCaseVariant(ch))
+                continue;
+
+            // Only check lowercase letters - they need their uppercase pair
+            if (ch.Length == 0 || !char.IsLetter(ch[0]) || !char.IsLower(ch[0]))
+                continue;
+
+            var upper = ch.ToUpperInvariant();
+
+            // Skip if character has no distinct uppercase variant
+            if (ch == upper)
+                continue;
+
+            // Verify uppercase variant exists on this line
+            if (!lineChars.Contains(upper))
+            {
+                return new CharacterValidationError(
+                    CharacterErrorType.Capitalization,
+                    Character: ch,
+                    Message: $"Capitalization is not defined correctly for: {ch}"
+                );
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -223,17 +216,6 @@ internal static class LanguageValidationService
     /// Checks if a string contains ICU collation syntax characters.
     /// Characters like '&amp;', '&lt;', '&gt;', '=' indicate ICU rules, not character definitions.
     /// </summary>
-    private static bool IsIcuSyntaxChar(string s)
-    {
-        if (string.IsNullOrEmpty(s))
-            return false;
-
-        // ICU collation rule syntax uses: & < > = / |
-        foreach (char c in s)
-        {
-            if (c == '&' || c == '<' || c == '>' || c == '=' || c == '/' || c == '|')
-                return true;
-        }
-        return false;
-    }
+    private static bool IsIcuSyntaxChar(string s) =>
+        !string.IsNullOrEmpty(s) && s.Any(c => IcuSyntaxCharacters.Contains(c));
 }
