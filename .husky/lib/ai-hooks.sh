@@ -108,7 +108,7 @@ run_ai_lint_ts() {
 }
 
 run_ai_lint_csharp() {
-  echo "Running AI-specific C# analyzers on staged files..."
+  echo "Running AI-specific C# analyzers on staged files (strict mode)..."
 
   # Check if there are staged C# files
   if ! has_csharp_changes; then
@@ -116,38 +116,40 @@ run_ai_lint_csharp() {
     return 0
   fi
 
-  # Get staged C# files
+  # Get staged C# files (exclude test files and analyzer project itself)
   local staged_cs_files
-  staged_cs_files=$(get_staged_files | grep -E '\.cs$')
+  staged_cs_files=$(get_staged_files | grep -E '\.cs$' | grep -v 'Paranext.Analyzers/' | grep -v '-tests/')
 
   if [[ -z "$staged_cs_files" ]]; then
-    echo "No C# files staged, skipping C# analyzer check"
+    echo "No C# source files staged, skipping C# analyzer check"
     return 0
   fi
 
+  echo "Checking staged C# files for analyzer warnings/errors..."
+
   # Run Roslyn analyzers on staged files only using dotnet format
-  # This checks for analyzer warnings/errors in just the changed files
-  local has_errors=false
+  # --severity warning catches both warnings (PNX rules) and errors
+  # This treats warnings as blocking for NEW code on AI branches
+  local has_issues=false
   while IFS= read -r file; do
     if [[ -f "$file" ]]; then
-      # Use dotnet format to check analyzer diagnostics on this file
-      # --verify-no-changes returns non-zero if there are issues
       local output
-      output=$(dotnet format analyzers c-sharp/ParanextDataProvider.sln --include "$file" --severity error --verify-no-changes 2>&1) || {
-        echo "Analyzer errors in: $file"
-        echo "$output"
-        has_errors=true
+      # Check for any analyzer issues (warnings or errors) in this file
+      output=$(dotnet format analyzers c-sharp/ParanextDataProvider.sln --include "$file" --severity warning --verify-no-changes 2>&1) || {
+        echo "⚠️  Analyzer issues in: $file"
+        echo "$output" | grep -E '(warning|error) (PNX|CA|IDE)' | head -10
+        has_issues=true
       }
     fi
   done <<< "$staged_cs_files"
 
-  if $has_errors; then
-    error_msg "AI-005" "C# analyzer errors found in staged files" \
-      "Run 'dotnet format analyzers c-sharp/ParanextDataProvider.sln --severity error' to see all errors"
+  if $has_issues; then
+    error_msg "AI-005" "C# analyzer warnings/errors found in staged files" \
+      "Fix the issues above. PNX rules enforce patterns from Paranext-Core-Patterns.md"
     return $AI_EXIT_LINT_CSHARP
   fi
 
-  echo "C# AI analyzer checks passed"
+  echo "C# AI analyzer checks passed (no warnings in staged files)"
 }
 
 # ============================================
