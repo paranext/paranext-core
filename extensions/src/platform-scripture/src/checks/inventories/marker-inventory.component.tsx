@@ -2,7 +2,6 @@ import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  Button,
   ColumnDef,
   getInventoryHeader,
   Inventory,

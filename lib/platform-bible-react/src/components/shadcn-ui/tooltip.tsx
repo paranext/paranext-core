@@ -23,10 +23,11 @@ const TooltipTrigger = React.forwardRef<
 >(({ className, variant, ...props }, ref) => (
   <TooltipPrimitive.Trigger
     ref={ref}
-    className={variant ? cn(buttonVariants({ variant }), className) : ''}
+    className={variant ? cn(buttonVariants({ variant }), className) : className}
     {...props}
   />
 ));
+TooltipTrigger.displayName = TooltipPrimitive.Trigger.displayName;
 
 /** @inheritdoc Tooltip */
 const TooltipContent = React.forwardRef<
