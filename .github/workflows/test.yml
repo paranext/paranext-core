@@ -305,6 +305,9 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      - name: Build ESLint plugin
+        run: npm run build --workspace=eslint-plugin-paranext
+
       - name: AI TypeScript lint (paranext plugin)
         run: npm run lint:ai-strict
 
