@@ -8,12 +8,8 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Service for validating project names and settings.
 /// </summary>
-public static class ProjectValidationService
+internal static class ProjectValidationService
 {
-    // Valid characters for project short names: A-Za-z0-9_
-    private const string ProjectNameValidChars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
-
     // Windows reserved file names (case-insensitive)
     private static readonly HashSet<string> ReservedFileNames =
         new(StringComparer.OrdinalIgnoreCase)
@@ -68,7 +64,10 @@ public static class ProjectValidationService
         }
 
         // Check length (3-8 characters)
-        if (name.Length < 3 || name.Length > 8)
+        if (
+            name.Length < ProjectCreationConstants.MinShortNameLength
+            || name.Length > ProjectCreationConstants.MaxShortNameLength
+        )
         {
             return ValidationResult.Failure(
                 "Short name must not be less than 3 or more than 8 characters in length",
@@ -88,7 +87,7 @@ public static class ProjectValidationService
         // Check for invalid characters
         foreach (char c in name)
         {
-            if (!ProjectNameValidChars.Contains(c))
+            if (!ProjectCreationConstants.ProjectNameValidChars.Contains(c))
             {
                 return ValidationResult.Failure(
                     "Short name can only contain letters A-Z, digits 0-9, and underscores.",

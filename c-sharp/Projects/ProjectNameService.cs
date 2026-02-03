@@ -10,12 +10,8 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Service for project name operations including abbreviation generation.
 /// </summary>
-public static class ProjectNameService
+internal static class ProjectNameService
 {
-    // Valid characters for project short names: A-Za-z0-9_
-    private const string ProjectNameValidChars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_";
-
     /// <summary>
     /// Generates an abbreviation from a full project name.
     /// </summary>
@@ -94,14 +90,14 @@ public static class ProjectNameService
             char lastValidChar = trailingValidChars[trailingValidChars.Count - 1];
             bool hasDigits = digits.Length > 0;
 
-            if (result.Length < 3)
+            if (result.Length < ProjectCreationConstants.MinShortNameLength)
             {
                 // Need to pad to minimum 3
                 // For single word "Monkey" -> M + k(mid) + y(last) = "Mky"
                 // For single word "My" -> M + y(last) + y(last) = "Myy"
                 // For multi-word "Monkey Soup" -> MS + p(last) = "MSp"
                 int n = trailingValidChars.Count;
-                while (result.Length < 3)
+                while (result.Length < ProjectCreationConstants.MinShortNameLength)
                 {
                     if (result.Length == 1 && n >= 3)
                     {
@@ -115,7 +111,7 @@ public static class ProjectNameService
                     }
                 }
             }
-            else if (!hasDigits && result.Length < 8)
+            else if (!hasDigits && result.Length < ProjectCreationConstants.MaxShortNameLength)
             {
                 // No digits and >= 3 first letters: add last valid char
                 // "nTP" -> "nTPt", "TPD" -> "TPDt"
@@ -125,16 +121,21 @@ public static class ProjectNameService
         }
 
         // Truncate to maximum 8 characters
-        if (result.Length > 8)
+        if (result.Length > ProjectCreationConstants.MaxShortNameLength)
         {
-            return result.ToString(0, 8);
+            return result.ToString(0, ProjectCreationConstants.MaxShortNameLength);
         }
 
         return result.ToString();
     }
 
+    /// <summary>
+    /// Checks if the character is valid for project short names.
+    /// </summary>
+    /// <param name="c">The character to check.</param>
+    /// <returns>True if the character is valid (A-Za-z0-9_), false otherwise.</returns>
     private static bool IsValidChar(char c)
     {
-        return ProjectNameValidChars.Contains(c);
+        return ProjectCreationConstants.ProjectNameValidChars.Contains(c);
     }
 }
