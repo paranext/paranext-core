@@ -14,3 +14,87 @@ trim_trailing_whitespace = false
 
 [*.cs]
 indent_size = 4
+
+# ==============================================================================
+# C# Code Style Rules
+# See: .context/standards/Paranext-Core-Patterns.md
+# Set to warnings by default. AI pre-commit hook uses -warnaserror.
+# ==============================================================================
+
+# File-scoped namespaces (warning for existing code, AI hook enforces as error)
+csharp_style_namespace_declarations = file_scoped:warning
+
+# Prefer explicit types for clarity
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Expression-bodied members
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+
+# Pattern matching preferences
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+
+# Null checking preferences
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+
+# Modifier preferences
+csharp_preferred_modifier_order = public,private,protected,internal,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,volatile,async:suggestion
+
+# ==============================================================================
+# Microsoft.CodeAnalysis.NetAnalyzers Severity Configuration
+# Set to warnings by default. AI pre-commit hook uses -warnaserror.
+# ==============================================================================
+
+# Allow non-localized strings (we use Console.WriteLine for logging)
+dotnet_diagnostic.CA1303.severity = none
+
+# Validate arguments of public methods
+dotnet_diagnostic.CA1062.severity = suggestion
+
+# Implement IDisposable correctly
+dotnet_diagnostic.CA1063.severity = warning
+
+# Dispose objects before losing scope
+dotnet_diagnostic.CA2000.severity = warning
+
+# Provide correct arguments to formatting methods
+dotnet_diagnostic.CA2241.severity = warning
+
+# Naming - allow underscores in constants (existing code uses PB_NAME, PT_NAME patterns)
+dotnet_diagnostic.CA1707.severity = none
+
+# Don't require renaming Collection suffix
+dotnet_diagnostic.CA1711.severity = none
+
+# Allow explicit default initialization (existing code style)
+dotnet_diagnostic.CA1805.severity = none
+
+# ==============================================================================
+# Custom Paranext Analyzers (PNX001-PNX006) - DEFAULT: Warnings
+# These are set to warnings by default to not break existing code.
+# On AI branches, the pre-commit hook runs with -warnaserror to enforce them.
+# ==============================================================================
+
+# PNX001: Ban System.Diagnostics.Trace - use Console.WriteLine instead
+dotnet_diagnostic.PNX001.severity = warning
+
+# PNX002: DataProvider classes must be internal sealed
+dotnet_diagnostic.PNX002.severity = warning
+
+# PNX003: Service classes must be internal static
+dotnet_diagnostic.PNX003.severity = warning
+
+# PNX004: Only one type per file (exception: exclusively-used records)
+dotnet_diagnostic.PNX004.severity = warning
+
+# PNX005: Namespace must match directory structure
+dotnet_diagnostic.PNX005.severity = warning
+
+# PNX006: Class naming conventions (*DataProvider, *Service, *Worker, *Factory)
+dotnet_diagnostic.PNX006.severity = suggestion

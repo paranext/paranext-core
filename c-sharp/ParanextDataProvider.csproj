@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Exclude the Paranext.Analyzers project folder from source compilation -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Paranext.Analyzers\**</DefaultItemExcludes>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

@@ -281,3 +281,47 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+
+  # AI-specific lint checks - only runs on ai/* branches
+  lint-ai:
+    name: AI Lint Checks
+    runs-on: ubuntu-22.04
+
+    # Only run on ai/main or ai/feature/* branches
+    if: github.ref == 'refs/heads/ai/main' || startsWith(github.head_ref || github.ref_name, 'ai/feature/')
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages
+        run: npm ci
+
+      - name: AI TypeScript lint (paranext plugin)
+        run: npm run lint:ai-strict
+
+      - name: Check C# formatting
+        run: |
+          cd c-sharp
+          dotnet tool restore
+          dotnet csharpier --check .
+
+      - name: AI C# analyzers (PNX001-PNX006 as errors)
+        run: dotnet build c-sharp/ParanextDataProvider.sln -warnaserror
