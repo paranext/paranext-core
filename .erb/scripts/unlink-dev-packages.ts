@@ -1,10 +1,10 @@
-import { execInRepo, REPO_LINK_SCRIPTS } from './dev-package-utils';
+import { DEV_PACKAGES, execInRepo } from './dev-package-utils';
 
 function unlinkDevPackages(): void {
   try {
-    REPO_LINK_SCRIPTS.forEach((s) => {
-      console.log(`Running ${s}:unlink`);
-      execInRepo(`npm run ${s}:unlink`);
+    DEV_PACKAGES.forEach((p) => {
+      console.log(`Running ${p.repoLinkScript}:unlink`);
+      execInRepo(`npm run ${p.repoLinkScript}:unlink`);
     });
 
     console.log('Unlinked dev packages');

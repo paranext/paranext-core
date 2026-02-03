@@ -11,35 +11,38 @@
  */
 
 import {
-  scriptureEditorsExists,
-  execInScriptureEditors,
+  anyDevPackagePresent,
+  devPackageExists,
+  execInDevPackage,
   execInRepo,
-  DEVPUB_TARGETS,
-  REPO_LINK_SCRIPTS,
+  DEV_PACKAGES,
 } from './dev-package-utils';
 
 function linkDevPackages(): void {
-  if (!scriptureEditorsExists()) {
-    console.log('scripture-editors folder not found - skipping yalc linking');
+  if (!anyDevPackagePresent()) {
+    console.log('dev packages not found - skipping yalc linking');
     return;
   }
 
-  console.log('scripture-editors folder found - linking via yalc');
+  console.log('dev packages found - linking via yalc');
 
   try {
-    DEVPUB_TARGETS.forEach((t) => {
-      console.log(`Running devpub for ${t} in scripture-editors...`);
-      execInScriptureEditors(`volta run pnpm nx devpub ${t}`);
+    DEV_PACKAGES.forEach((p) => {
+      if (!devPackageExists(p.folder)) {
+        console.log(`Skipping ${p.devpubTarget} — folder not found for ${p.folder}`);
+        return;
+      }
+
+      console.log(`Running devpub for ${p.devpubTarget} in ${p.folder}...`);
+      execInDevPackage(p.folder, `volta run pnpm nx devpub ${p.devpubTarget}`);
+
+      console.log(`Running ${p.repoLinkScript}:link in repo...`);
+      execInRepo(`npm run ${p.repoLinkScript}:link`);
     });
 
-    REPO_LINK_SCRIPTS.forEach((s) => {
-      console.log(`Running ${s}:link in repo...`);
-      execInRepo(`npm run ${s}:link`);
-    });
-
-    console.log('Successfully linked scripture-editors packages via yalc');
+    console.log('Successfully linked dev packages via yalc');
   } catch (error) {
-    console.warn('Warning: Failed to link scripture-editors packages via yalc.');
+    console.warn('Warning: Failed to link dev packages via yalc.');
     console.warn('Error:', error instanceof Error ? error.message : error);
   }
 }
