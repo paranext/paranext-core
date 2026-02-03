@@ -1,7 +1,6 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  Button,
   ColumnDef,
   Inventory,
   InventoryItem,
