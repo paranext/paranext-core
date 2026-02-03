@@ -388,7 +388,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
     public async Task CreateProject_BackTranslationProject_Success()
     {
         // Arrange - First create base project
-        DummyScrText baseProject = CreateDummyProject("BTBASE");
+        var baseProject = CreateDummyProject("BTBASE");
         ParatextProjects.FakeAddProject(CreateProjectDetails(baseProject), baseProject);
 
         // gm-007-02 input: BackTranslation with base project
@@ -444,7 +444,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
     public async Task CreateProject_StudyBibleAdditionsProject_Success()
     {
         // Arrange - First create base project
-        DummyScrText baseProject = CreateDummyProject("SBABASE");
+        var baseProject = CreateDummyProject("SBABASE");
         ParatextProjects.FakeAddProject(CreateProjectDetails(baseProject), baseProject);
 
         // gm-007-03 input: StudyBibleAdditions
@@ -501,7 +501,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
     public async Task CreateProject_TransliterationWithEncoderProject_Success()
     {
         // Arrange - First create base project
-        DummyScrText baseProject = CreateDummyProject("TRBASE");
+        var baseProject = CreateDummyProject("TRBASE");
         ParatextProjects.FakeAddProject(CreateProjectDetails(baseProject), baseProject);
 
         // gm-007-04 input: TransliterationWithEncoder
@@ -599,7 +599,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
     public async Task CreateProject_DuplicateName_ReturnsDuplicateNameError()
     {
         // Arrange - Create existing project
-        DummyScrText existingProject = CreateDummyProject("DUPEPRJ");
+        var existingProject = CreateDummyProject("DUPEPRJ");
         ParatextProjects.FakeAddProject(CreateProjectDetails(existingProject), existingProject);
 
         var request = new ProjectCreateRequest(
@@ -685,7 +685,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
     public async Task CreateProject_TranslitWithoutEncoder_ReturnsInvalidEncoderError()
     {
         // Arrange - First create base project
-        DummyScrText baseProject = CreateDummyProject("TRBASE2");
+        var baseProject = CreateDummyProject("TRBASE2");
         ParatextProjects.FakeAddProject(CreateProjectDetails(baseProject), baseProject);
 
         var request = new ProjectCreateRequest(
@@ -962,7 +962,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
     public async Task GetProjectOptions_ReturnsBaseProjectsFromCollection()
     {
         // Arrange - Add a project to the collection
-        DummyScrText existingProject = CreateDummyProject("OPTBASE");
+        var existingProject = CreateDummyProject("OPTBASE");
         ParatextProjects.FakeAddProject(CreateProjectDetails(existingProject), existingProject);
 
         // Act

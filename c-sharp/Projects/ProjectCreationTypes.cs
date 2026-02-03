@@ -363,7 +363,7 @@ public record ProjectOptionsResponse(
 /// <param name="IsDerived">Whether this type requires a base project</param>
 /// <param name="RequiresEncoder">Whether this type requires an encoder</param>
 public record ProjectTypeOption(
-    Paratext.Data.ProjectType Type,
+    PtxUtils.Enum<Paratext.Data.ProjectType> Type,
     string DisplayName,
     bool IsDerived,
     bool RequiresEncoder
