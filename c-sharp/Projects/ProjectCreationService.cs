@@ -13,6 +13,10 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal static class ProjectCreationService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ProjectPropertiesForm.cs - ValidateUsfmVersion()
+    // Maps to: CAP-004
+
     /// <summary>
     /// Gets USFM version warning if applicable.
     /// PT9 Provenance: ProjectPropertiesForm.ValidateUsfmVersion()
@@ -26,9 +30,25 @@ internal static class ProjectCreationService
         bool isNewProject
     )
     {
-        // TODO: Implement in TDD GREEN phase
-        throw new NotImplementedException(
-            "ProjectCreationService.GetUsfmVersionWarning - to be implemented by TDD Implementer"
-        );
+        // EXPLANATION:
+        // USFM 3 warning is only shown when:
+        // 1. USFM version 3 is selected, AND
+        // 2. This is a NEW project (not existing)
+        // The warning alerts users that USFM 3 format may have compatibility issues
+        // with older Paratext versions and third-party tools.
+
+        // Only show warning for USFM 3 on new projects
+        if (version == UsfmVersionOption.Version3 && isNewProject)
+        {
+            return new UsfmVersionWarning(
+                ShowWarning: true,
+                WarningMessageKey: "ProjectCreation.UsfmVersion3Warning",
+                ConfirmButtonKey: "Common.Continue",
+                CancelButtonKey: "Common.Cancel"
+            );
+        }
+
+        // No warning needed for USFM 2 or existing projects
+        return null;
     }
 }
