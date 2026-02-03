@@ -60,7 +60,6 @@
     "clean:build-cache": "rimraf ./node_modules/.cache",
     "csharp:tool:restore": "cd c-sharp && dotnet tool restore",
     "editor:link": "yalc link @eten-tech-foundation/platform-editor --no-pure",
-    "editor:update": "yalc update @eten-tech-foundation/platform-editor",
     "editor:unlink": "yalc remove @eten-tech-foundation/platform-editor && npm i --ignore-scripts",
     "format": "npm run format:core && npm run format --workspaces --if-present",
     "format:core": "prettier --write --ignore-path .prettierignorerun .",
