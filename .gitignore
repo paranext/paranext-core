@@ -60,3 +60,11 @@ e2e-tests/.dev-server.pid
 c-sharp/CLAUDE.md
 CLAUDE.md
 CLAUDE.md.backup
+
+# C# build artifacts (Paranext.Analyzers)
+c-sharp/Paranext.Analyzers/bin/
+c-sharp/Paranext.Analyzers/obj/
+
+# ESLint plugin build artifacts
+lib/eslint-plugin-paranext/dist/
+lib/eslint-plugin-paranext/node_modules/

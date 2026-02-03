@@ -1,0 +1,43 @@
+<Project>
+  <!--
+    Shared build properties for all C# projects in paranext-core.
+    This file configures:
+    - Microsoft.CodeAnalysis.NetAnalyzers for general code quality
+    - Paranext.Analyzers for paranext-specific pattern enforcement (PNX001-PNX006)
+
+    NOTE: Warnings are NOT treated as errors by default. On AI branches,
+    the pre-commit hook runs `dotnet build -warnaserror` to enforce rules.
+  -->
+
+  <PropertyGroup>
+    <!-- DO NOT treat warnings as errors - AI hook uses -warnaserror instead -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Use recommended analysis mode from Microsoft analyzers -->
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- Enforce code style rules during build -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Skip warning about newer SDK analyzers -->
+    <_SkipUpgradeNetAnalyzersNuGetWarning>true</_SkipUpgradeNetAnalyzersNuGetWarning>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft's official .NET code analyzers for security, reliability, and performance -->
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--
+    Reference the custom Paranext analyzers project.
+    Only include for non-analyzer projects to avoid circular reference.
+  -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Paranext.Analyzers'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)Paranext.Analyzers/Paranext.Analyzers.csproj">
+      <PrivateAssets>all</PrivateAssets>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <OutputItemType>Analyzer</OutputItemType>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>
