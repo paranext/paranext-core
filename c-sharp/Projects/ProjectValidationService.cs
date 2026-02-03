@@ -107,4 +107,27 @@ internal static class ProjectValidationService
 
         return ValidationResult.Success();
     }
+
+    // === CAP-003: ValidateProjectSettings ===
+    // Source: PT9/Paratext/ProjectMenu/ProjectPropertiesForm.cs:2070-2297
+    // Maps to: EXT-003, VAL-002 to VAL-011
+
+    /// <summary>
+    /// Validates all project settings for project creation/update.
+    /// Aggregates validation from CAP-001 (type rules) and CAP-002 (short name).
+    /// </summary>
+    /// <param name="request">The project creation request to validate</param>
+    /// <param name="isNewProject">True if creating new project, false if editing</param>
+    /// <returns>Complete validation result with all field errors</returns>
+    public static ProjectValidationResult ValidateProjectSettings(
+        ProjectCreateRequest request,
+        bool isNewProject
+    )
+    {
+        // TODO: Implement in GREEN phase
+        // This stub intentionally throws to ensure RED phase tests fail
+        throw new NotImplementedException(
+            "ValidateProjectSettings not yet implemented - TDD RED phase"
+        );
+    }
 }
