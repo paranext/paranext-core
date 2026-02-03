@@ -423,3 +423,78 @@ public enum FileComparisonState
     DestIsHigherVersion,
     VersionsConflict,
 }
+
+// === CAP-008, CAP-009: Book Operations ===
+
+/// <summary>
+/// Project reference for compatible destinations.
+/// Maps to: CAP-008, EXT-008
+/// </summary>
+/// <param name="Guid">Project GUID</param>
+/// <param name="ShortName">Project short name</param>
+/// <param name="FullName">Project full name</param>
+/// <param name="ProjectType">Project type</param>
+/// <param name="BooksPresent">Books present in project (optional)</param>
+/// <param name="Editable">Whether project is editable (optional)</param>
+public record ProjectReference(
+    Paratext.Data.HexId Guid,
+    string ShortName,
+    string FullName,
+    PtxUtils.Enum<Paratext.Data.ProjectType> ProjectType,
+    IReadOnlyList<string>? BooksPresent = null,
+    bool? Editable = null
+);
+
+/// <summary>
+/// Request to copy books between projects.
+/// Maps to: CAP-009, EXT-008
+/// </summary>
+/// <param name="FromProjectGuid">Source project GUID</param>
+/// <param name="ToProjectGuid">Destination project GUID</param>
+/// <param name="BookIds">Book IDs to copy (3-letter codes like "MAT", "GEN")</param>
+public record CopyBooksRequest(
+    Paratext.Data.HexId FromProjectGuid,
+    Paratext.Data.HexId ToProjectGuid,
+    IReadOnlyList<string> BookIds
+);
+
+/// <summary>
+/// Result of book copy operation.
+/// Maps to: CAP-009
+/// </summary>
+/// <param name="Success">Whether the copy operation succeeded</param>
+/// <param name="CopiedBooks">List of successfully copied book IDs</param>
+/// <param name="Errors">List of errors if any books failed to copy</param>
+public record CopyBooksResult(
+    bool Success,
+    IReadOnlyList<string> CopiedBooks,
+    IReadOnlyList<CopyBookError>? Errors = null
+)
+{
+    /// <summary>
+    /// Create a successful result.
+    /// </summary>
+    public static CopyBooksResult Succeeded(IReadOnlyList<string> copiedBooks) =>
+        new(true, copiedBooks, null);
+
+    /// <summary>
+    /// Create a failed result.
+    /// </summary>
+    public static CopyBooksResult Failed(IReadOnlyList<CopyBookError> errors) =>
+        new(false, Array.Empty<string>(), errors);
+
+    /// <summary>
+    /// Create a partial success result.
+    /// </summary>
+    public static CopyBooksResult PartialSuccess(
+        IReadOnlyList<string> copiedBooks,
+        IReadOnlyList<CopyBookError> errors
+    ) => new(false, copiedBooks, errors);
+}
+
+/// <summary>
+/// Error information for a failed book copy.
+/// </summary>
+/// <param name="BookId">Book ID that failed</param>
+/// <param name="Error">Error message</param>
+public record CopyBookError(string BookId, string Error);
