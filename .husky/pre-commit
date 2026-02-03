@@ -45,10 +45,14 @@ if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
     echo "No C# files staged, skipping build check"
   fi
 
-  # 5. AI-specific TypeScript lint (paranext plugin rules)
+  # 5. Format checks (Prettier for TS/JS, CSharpier for C#)
+  run_ai_format_ts || exit $?
+  run_ai_format_csharp || exit $?
+
+  # 6. AI-specific TypeScript lint (paranext plugin rules)
   run_ai_lint_ts || exit $?
 
-  # 6. AI-specific C# analyzer check (warnings as errors for staged files)
+  # 7. AI-specific C# analyzer check (warnings as errors for staged files)
   run_ai_lint_csharp || exit $?
 
   echo ""

@@ -8,6 +8,8 @@ readonly AI_EXIT_CSHARP=2
 readonly AI_EXIT_SECRETS=3
 readonly AI_EXIT_LINT_TS=4
 readonly AI_EXIT_LINT_CSHARP=5
+readonly AI_EXIT_FORMAT_TS=6
+readonly AI_EXIT_FORMAT_CSHARP=7
 
 # ============================================
 # Branch Detection
@@ -79,6 +81,49 @@ run_gitleaks() {
     return $AI_EXIT_SECRETS
   fi
   echo "No secrets detected"
+}
+
+# ============================================
+# AI-Specific Format Checks
+# ============================================
+
+run_ai_format_ts() {
+  echo "Checking TypeScript/JS formatting..."
+
+  # Get staged TS/JS files, excluding lib/ and extensions/ (they have separate configs)
+  local staged_files
+  staged_files=$(get_staged_files | grep -E '\.(ts|tsx|js|jsx)$' | grep -v '^lib/' | grep -v '^extensions/' | tr '\n' ' ')
+
+  if [[ -z "$staged_files" ]]; then
+    echo "No TS/JS files staged (in src/), skipping format check"
+    return 0
+  fi
+
+  # Check formatting with Prettier (staged files only)
+  # shellcheck disable=SC2086
+  if ! npx prettier --check $staged_files 2>&1; then
+    error_msg "AI-006" "TypeScript/JS formatting issues" \
+      "Run 'npx prettier --write <files>' to fix"
+    return $AI_EXIT_FORMAT_TS
+  fi
+  echo "TypeScript/JS formatting OK"
+}
+
+run_ai_format_csharp() {
+  echo "Checking C# formatting..."
+
+  if ! has_csharp_changes; then
+    echo "No C# files staged, skipping C# format check"
+    return 0
+  fi
+
+  # CSharpier checks all C# files (fast, simpler than per-file check)
+  if ! (cd c-sharp && dotnet csharpier --check . 2>&1); then
+    error_msg "AI-007" "C# formatting issues" \
+      "Run 'cd c-sharp && dotnet csharpier .' to fix"
+    return $AI_EXIT_FORMAT_CSHARP
+  fi
+  echo "C# formatting OK"
 }
 
 # ============================================

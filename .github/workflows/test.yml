@@ -158,6 +158,14 @@ jobs:
       - name: npm unit tests
         run: npm test
 
+      - name: E2E tests (Linux)
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: xvfb-run --auto-servernum npm run test:e2e
+
+      - name: E2E tests (Windows/macOS)
+        if: ${{ matrix.os != env.OS_LINUX }}
+        run: npm run test:e2e
+
       - name: check dotnet formatting
         if: ${{ matrix.os == env.OS_LINUX }}
         run: |
