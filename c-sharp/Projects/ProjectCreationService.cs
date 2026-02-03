@@ -1,8 +1,10 @@
 // === NEW IN PT10 ===
 // Reason: Service for project creation operations
-// Maps to: CAP-004 (GetUsfmVersionWarning), CAP-014 (CreateProject)
+// Maps to: CAP-004 (GetUsfmVersionWarning), CAP-014 (CreateProject), CAP-015 (GetProjectOptions)
 
+using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -50,5 +52,36 @@ internal static class ProjectCreationService
 
         // No warning needed for USFM 2 or existing projects
         return null;
+    }
+
+    // === CAP-014: CreateProject ===
+
+    /// <summary>
+    /// Creates a new Paratext project.
+    /// PT9 Provenance: ProjectPropertiesForm.CreateProject(), ScrText constructor
+    /// Maps to: CAP-014, BHV-510, BHV-511, BHV-512
+    /// </summary>
+    /// <param name="request">Project creation request</param>
+    /// <returns>Success with project GUID or failure with error code</returns>
+    public static Task<ProjectCreateResult> CreateProjectAsync(ProjectCreateRequest request)
+    {
+        // TODO: Implement in GREEN phase
+        // This is a stub to enable TDD RED phase - tests should FAIL
+        throw new NotImplementedException("CAP-014: CreateProjectAsync not yet implemented");
+    }
+
+    // === CAP-015: GetProjectOptions ===
+
+    /// <summary>
+    /// Gets available options for project creation form.
+    /// PT9 Provenance: ProjectPropertiesForm initialization
+    /// Maps to: CAP-015, BHV-159, BHV-161
+    /// </summary>
+    /// <returns>All available options for project creation dropdowns</returns>
+    public static Task<ProjectOptionsResponse> GetProjectOptionsAsync()
+    {
+        // TODO: Implement in GREEN phase
+        // This is a stub to enable TDD RED phase - tests should FAIL
+        throw new NotImplementedException("CAP-015: GetProjectOptionsAsync not yet implemented");
     }
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
 using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.Projects;
@@ -858,7 +859,7 @@ public class ProjectValidationServiceTests
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
             BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
-            StudyBibleCategories = new List<StudyBibleCategoryConfig>
+            StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new("Category1", "desc1"),
                 new("", "desc2"), // Empty name
@@ -886,7 +887,7 @@ public class ProjectValidationServiceTests
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
             BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
-            StudyBibleCategories = new List<StudyBibleCategoryConfig>
+            StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new("My Category", "desc") // Contains space
             }
@@ -912,7 +913,7 @@ public class ProjectValidationServiceTests
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
             BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
-            StudyBibleCategories = new List<StudyBibleCategoryConfig>
+            StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new(@"My\Category", "desc") // Contains backslash
             }
@@ -938,7 +939,7 @@ public class ProjectValidationServiceTests
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
             BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
-            StudyBibleCategories = new List<StudyBibleCategoryConfig>
+            StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new("MyCategory", "desc1"),
                 new("MyCategory", "desc2") // Duplicate name
@@ -1047,9 +1048,14 @@ public class ProjectValidationServiceTests
             BaseProjectGuid: baseGuid,
             Editable: true,
             EncoderName: encoderName,
+            EncoderReverseDirection: false,
             BooksPresent: new List<string> { "GEN", "EXO", "LEV" },
             FileNameForm: "41MAT",
-            NoteTags: null,
+            Normalization: ProjectNormalization.NFC,
+            UsfmVersion: UsfmVersionOption.Version3,
+            NoteTags: new List<NoteTagConfig>(),
+            BiblicalTermsListId: null,
+            AssociatedLexicalProjectGuid: null,
             StudyBibleCategories: null
         );
     }

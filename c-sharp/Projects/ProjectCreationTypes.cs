@@ -205,9 +205,14 @@ public enum CharacterErrorType
 /// <param name="BaseProjectGuid">GUID of base project for derived types</param>
 /// <param name="Editable">Whether project is editable</param>
 /// <param name="EncoderName">Encoder name for TransliterationWithEncoder projects</param>
+/// <param name="EncoderReverseDirection">Use encoder in reverse direction</param>
 /// <param name="BooksPresent">Book IDs included in project scope</param>
 /// <param name="FileNameForm">File naming template (e.g., "41MAT")</param>
+/// <param name="Normalization">Unicode normalization form</param>
+/// <param name="UsfmVersion">USFM version (2 or 3)</param>
 /// <param name="NoteTags">Note tag configurations</param>
+/// <param name="BiblicalTermsListId">Biblical terms list association</param>
+/// <param name="AssociatedLexicalProjectGuid">Associated lexical project GUID</param>
 /// <param name="StudyBibleCategories">Study Bible categories (only for StudyBibleAdditions)</param>
 public record ProjectCreateRequest(
     string ShortName,
@@ -218,11 +223,31 @@ public record ProjectCreateRequest(
     Paratext.Data.HexId? BaseProjectGuid,
     bool Editable,
     string? EncoderName,
+    bool EncoderReverseDirection,
     IReadOnlyList<string> BooksPresent,
     string FileNameForm,
-    IReadOnlyList<NoteTagConfig>? NoteTags,
-    IReadOnlyList<StudyBibleCategoryConfig>? StudyBibleCategories
+    ProjectNormalization Normalization,
+    Paratext.Data.ProjectSettingsAccess.UsfmVersionOption UsfmVersion,
+    IReadOnlyList<NoteTagConfig> NoteTags,
+    string? BiblicalTermsListId,
+    Paratext.Data.HexId? AssociatedLexicalProjectGuid,
+    IReadOnlyList<StudyBibleCategory>? StudyBibleCategories
 );
+
+/// <summary>
+/// Unicode normalization form.
+/// </summary>
+public enum ProjectNormalization
+{
+    /// <summary>Undefined normalization</summary>
+    Undefined,
+
+    /// <summary>Unicode Normalization Form D (Canonical Decomposition)</summary>
+    NFD,
+
+    /// <summary>Unicode Normalization Form C (Canonical Decomposition then Composition)</summary>
+    NFC,
+}
 
 /// <summary>
 /// Note tag configuration for project creation.
@@ -237,7 +262,143 @@ public record NoteTagConfig(string Name, string Icon, string DefaultStatus);
 /// </summary>
 /// <param name="Name">Category name (no spaces or backslashes)</param>
 /// <param name="Description">Category description</param>
-public record StudyBibleCategoryConfig(string Name, string Description);
+public record StudyBibleCategory(string Name, string Description);
+
+// === CAP-014: Project Create Result ===
+
+/// <summary>
+/// Result of project creation operation.
+/// Maps to: BHV-512, CAP-014
+/// </summary>
+public abstract record ProjectCreateResult;
+
+/// <summary>
+/// Successful project creation result.
+/// </summary>
+/// <param name="ProjectGuid">GUID of the created project (40-char hex)</param>
+/// <param name="ProjectPath">Path to the created project directory</param>
+public record ProjectCreateSuccess(Paratext.Data.HexId ProjectGuid, string ProjectPath)
+    : ProjectCreateResult;
+
+/// <summary>
+/// Failed project creation result.
+/// </summary>
+/// <param name="Code">Error code</param>
+/// <param name="Message">Error message</param>
+/// <param name="Field">Field that caused the error (if applicable)</param>
+public record ProjectCreateFailure(
+    ProjectCreateErrorCode Code,
+    string Message,
+    string? Field = null
+) : ProjectCreateResult;
+
+/// <summary>
+/// Error codes for project creation failures.
+/// Maps to: data-contracts.md section 2.1
+/// </summary>
+public enum ProjectCreateErrorCode
+{
+    /// <summary>Short name validation failed</summary>
+    InvalidShortName,
+
+    /// <summary>Full name validation failed</summary>
+    InvalidFullName,
+
+    /// <summary>Project type is invalid</summary>
+    InvalidProjectType,
+
+    /// <summary>Language is invalid or missing</summary>
+    InvalidLanguage,
+
+    /// <summary>Base project is invalid or missing for derived type</summary>
+    InvalidBaseProject,
+
+    /// <summary>Encoder is invalid or missing for TransliterationWithEncoder</summary>
+    InvalidEncoder,
+
+    /// <summary>A project with this name already exists</summary>
+    DuplicateName,
+
+    /// <summary>User does not have permission to create projects</summary>
+    PermissionDenied,
+
+    /// <summary>File system error during project creation</summary>
+    IoError,
+
+    /// <summary>Version control system error</summary>
+    VcsError,
+
+    /// <summary>Unknown error</summary>
+    UnknownError,
+}
+
+// === CAP-015: Project Options Response ===
+
+/// <summary>
+/// Available options for project creation form.
+/// Maps to: CAP-015, spec-010, spec-011
+/// </summary>
+/// <param name="ProjectTypes">Available project types</param>
+/// <param name="Languages">Available languages (from language search)</param>
+/// <param name="Versifications">Available versification systems</param>
+/// <param name="BaseProjects">Projects available as base projects</param>
+/// <param name="Encoders">Available encoders for transliteration</param>
+/// <param name="BiblicalTermsLists">Available biblical terms lists</param>
+/// <param name="LexicalProjects">Projects available for lexical association</param>
+public record ProjectOptionsResponse(
+    IReadOnlyList<ProjectTypeOption> ProjectTypes,
+    IReadOnlyList<LanguageOption> Languages,
+    IReadOnlyList<VersificationOption> Versifications,
+    IReadOnlyList<ProjectReference> BaseProjects,
+    IReadOnlyList<EncoderOption> Encoders,
+    IReadOnlyList<BiblicalTermsListOption> BiblicalTermsLists,
+    IReadOnlyList<ProjectReference> LexicalProjects
+);
+
+/// <summary>
+/// Project type option for dropdown.
+/// </summary>
+/// <param name="Type">Project type enum value</param>
+/// <param name="DisplayName">User-friendly display name</param>
+/// <param name="IsDerived">Whether this type requires a base project</param>
+/// <param name="RequiresEncoder">Whether this type requires an encoder</param>
+public record ProjectTypeOption(
+    Paratext.Data.ProjectType Type,
+    string DisplayName,
+    bool IsDerived,
+    bool RequiresEncoder
+);
+
+/// <summary>
+/// Language option for dropdown.
+/// </summary>
+/// <param name="Id">BCP-47 language identifier</param>
+/// <param name="Name">Display name</param>
+/// <param name="IsRightToLeft">Whether the language is right-to-left</param>
+/// <param name="Script">Script code (if known)</param>
+public record LanguageOption(string Id, string Name, bool IsRightToLeft, string? Script);
+
+/// <summary>
+/// Versification option for dropdown.
+/// </summary>
+/// <param name="Type">Versification type enum value</param>
+/// <param name="DisplayName">User-friendly display name</param>
+public record VersificationOption(SIL.Scripture.ScrVersType Type, string DisplayName);
+
+/// <summary>
+/// Encoder option for dropdown.
+/// </summary>
+/// <param name="Name">Encoder name (identifier)</param>
+/// <param name="DisplayName">User-friendly display name</param>
+/// <param name="IsBidirectional">Whether encoder supports bidirectional conversion</param>
+public record EncoderOption(string Name, string DisplayName, bool IsBidirectional);
+
+/// <summary>
+/// Biblical terms list option for dropdown.
+/// </summary>
+/// <param name="Id">List identifier</param>
+/// <param name="Name">Display name</param>
+public record BiblicalTermsListOption(string Id, string Name);
 
 /// <summary>
 /// Complete project validation result.

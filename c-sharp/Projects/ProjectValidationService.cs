@@ -280,7 +280,7 @@ internal static class ProjectValidationService
     /// Validates Study Bible category configurations.
     /// </summary>
     private static string? ValidateStudyBibleCategories(
-        IReadOnlyList<StudyBibleCategoryConfig> categories
+        IReadOnlyList<StudyBibleCategory> categories
     )
     {
         var seenNames = new HashSet<string>(StringComparer.Ordinal);
