@@ -45,6 +45,12 @@ if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
     echo "No C# files staged, skipping build check"
   fi
 
+  # 5. AI-specific TypeScript lint (paranext plugin rules)
+  run_ai_lint_ts || exit $?
+
+  # 6. AI-specific C# analyzer check (PNX001-PNX006 as errors)
+  run_ai_lint_csharp || exit $?
+
   echo ""
   echo "=========================================="
   echo "AI validations completed successfully"

@@ -1,0 +1,25 @@
+{
+  "name": "eslint-plugin-paranext",
+  "version": "0.1.0",
+  "description": "ESLint plugin for enforcing paranext-core TypeScript patterns",
+  "main": "dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["eslint", "eslintplugin", "paranext"],
+  "author": "SIL International",
+  "license": "MIT",
+  "peerDependencies": {
+    "eslint": ">=8.0.0",
+    "@typescript-eslint/parser": ">=5.0.0"
+  },
+  "dependencies": {
+    "@typescript-eslint/utils": "^5.62.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.3.3"
+  }
+}
