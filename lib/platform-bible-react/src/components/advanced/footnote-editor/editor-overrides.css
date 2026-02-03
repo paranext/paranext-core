@@ -7,3 +7,7 @@
 .footnote-editor .typeahead-popover {
   z-index: 300;
 }
+
+.footnote-editor .immutable-note-caller {
+  display: none;
+}

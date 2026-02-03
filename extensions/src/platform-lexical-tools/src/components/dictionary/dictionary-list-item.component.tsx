@@ -66,7 +66,7 @@ export function DictionaryListItem({
         tabIndex={-1}
       >
         <div className="tw-flex tw-items-baseline tw-gap-2">
-          <span className="tw-text-sm">{entry.lemma}</span>
+          <span className="tw-text-sm scripture-font">{entry.lemma}</span>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

@@ -1,6 +1,4 @@
 using System.Text.Json;
-using Paratext.Data.ProjectComments;
-using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 

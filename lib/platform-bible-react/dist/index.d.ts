@@ -156,6 +156,8 @@ type LegacyComment = {
 	hideInTextWindow: boolean;
 	/** Unique id of the comment, unchanged by subsequent editing */
 	id: string;
+	/** Whether the comment has been read (by the current user) */
+	isRead: boolean;
 	/** Language of note */
 	language: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
@@ -211,6 +213,8 @@ type LegacyCommentThread = {
 	isBTNote: boolean;
 	/** Whether this is a consultant note */
 	isConsultantNote: boolean;
+	/** Whether the thread has been read (by the current user) */
+	isRead: boolean;
 	/** Biblical term ID if this is a biblical term note */
 	biblicalTermId?: string;
 };
@@ -360,6 +364,48 @@ export interface RecentSearchesProps<T> {
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
+/**
+ * Object containing all keys used for localization in the CommentEditor component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const COMMENT_EDITOR_STRING_KEYS: readonly [
+	"%commentEditor_placeholder%",
+	"%commentEditor_saveButton_tooltip%",
+	"%commentEditor_cancelButton_tooltip%",
+	"%commentEditor_assignTo_label%",
+	"%commentEditor_unassigned%",
+	"%commentEditor_team%"
+];
+/** Localized strings needed for the comment editor component */
+export type CommentEditorLocalizedStrings = {
+	[localizedKey in (typeof COMMENT_EDITOR_STRING_KEYS)[number]]?: string;
+};
+/** Interface containing the types of the properties that are passed to the `CommentEditor` */
+export interface CommentEditorProps {
+	/** List of users that can be assigned to the new comment thread */
+	assignableUsers: string[];
+	/**
+	 * External function to handle saving the new comment
+	 *
+	 * @param contents HTML content of the comment
+	 * @param assignedUser Optional user to assign the comment to
+	 */
+	onSave: (contents: string, assignedUser?: string) => void;
+	/**
+	 * External function to handle closing the comment editor. Gets called when the editor is closed
+	 * without saving changes
+	 */
+	onClose: () => void;
+	/** Localized strings to be passed to the comment editor component */
+	localizedStrings: CommentEditorLocalizedStrings;
+}
+/**
+ * Component to create a new project comment from within the scripture editor
+ *
+ * @param CommentEditorProps - The properties for the comment editor component
+ */
+export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -390,6 +436,18 @@ export interface CommentListProps {
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
 	/**
+	 * Externally controlled selected thread ID. When provided, this will be used as the selected
+	 * thread instead of internal state. The parent component is responsible for updating this value
+	 * when the selection changes.
+	 */
+	selectedThreadId?: string;
+	/**
+	 * Callback when the selected thread changes. Called when a thread is selected via click or
+	 * keyboard navigation. Parent components can use this to sync their state with the internal
+	 * selection.
+	 */
+	onSelectedThreadChange?: (threadId: string | undefined) => void;
+	/**
 	 * Handler for adding a comment to a thread. This unified handler supports:
 	 *
 	 * - Adding a comment (provide contents)
@@ -405,6 +463,8 @@ export interface CommentListProps {
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
 	handleDeleteComment: (commentId: string) => Promise<boolean>;
+	/** Handler for updating a thread's read status */
+	handleReadStatusChange: (threadId: string, markRead: boolean) => Promise<boolean>;
 	/**
 	 * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
 	 * (empty string) for unassigned.
@@ -436,7 +496,7 @@ export interface CommentListProps {
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
