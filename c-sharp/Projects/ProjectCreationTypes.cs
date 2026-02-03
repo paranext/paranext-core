@@ -124,6 +124,73 @@ public record UsfmVersionWarning(
     string CancelButtonKey
 );
 
+// === CAP-006: Character Rules Validation ===
+
+/// <summary>
+/// Request to validate character rules.
+/// Maps to: EXT-006, VAL-013
+/// </summary>
+/// <param name="Separator">Character separator (space or tab)</param>
+/// <param name="RulesText">Character rules text (lines of lowercase/uppercase pairs)</param>
+/// <param name="LanguageId">Language ID for context</param>
+public record CharacterRulesValidationRequest(char Separator, string RulesText, string LanguageId);
+
+/// <summary>
+/// Character rules validation result.
+/// Maps to: EXT-006, VAL-013
+/// </summary>
+/// <param name="IsValid">Whether validation passed</param>
+/// <param name="Errors">List of validation errors</param>
+public record CharacterValidationResult(
+    bool IsValid,
+    IReadOnlyList<CharacterValidationError> Errors
+)
+{
+    /// <summary>
+    /// Create a valid result with no errors.
+    /// </summary>
+    public static CharacterValidationResult Valid() =>
+        new(true, Array.Empty<CharacterValidationError>());
+
+    /// <summary>
+    /// Create an invalid result with errors.
+    /// </summary>
+    public static CharacterValidationResult Invalid(params CharacterValidationError[] errors) =>
+        new(false, errors);
+}
+
+/// <summary>
+/// Character validation error details.
+/// </summary>
+/// <param name="Type">Error type</param>
+/// <param name="Character">Character that caused the error (if applicable)</param>
+/// <param name="Message">Error message</param>
+/// <param name="Position">Position in text (if applicable)</param>
+public record CharacterValidationError(
+    CharacterErrorType Type,
+    string? Character,
+    string Message,
+    int? Position = null
+);
+
+/// <summary>
+/// Types of character validation errors.
+/// </summary>
+public enum CharacterErrorType
+{
+    /// <summary>Invalid syntax (control characters, etc.)</summary>
+    InvalidSyntax,
+
+    /// <summary>Capitalization not defined correctly</summary>
+    Capitalization,
+
+    /// <summary>Duplicate character on same line or case-duplicate across lines</summary>
+    Duplicate,
+
+    /// <summary>ICU parsing error</summary>
+    IcuError,
+}
+
 // === CAP-013: Backup Analysis ===
 
 /// <summary>
