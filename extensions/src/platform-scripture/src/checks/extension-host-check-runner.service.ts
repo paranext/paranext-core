@@ -6,7 +6,6 @@ import {
 } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
-import { InventoryItem } from 'platform-bible-react';
 import {
   AsyncVariable,
   getErrorMessage,
@@ -21,7 +20,6 @@ import {
   CheckCreatorFunction,
   CheckDetails,
   CheckDetailsWithCheckId,
-  CheckInputRange,
   CheckJobRunner,
   CheckJobScope,
   CheckJobStatusReport,
@@ -161,19 +159,6 @@ class CheckRunnerEngine
   // #endregion
 
   // #region Check Configuration Provider
-
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async retrieveInventoryData(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _projectId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _checkId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _checkInputRange: CheckInputRange,
-  ): Promise<InventoryItem[]> {
-    throw new Error(`retrieveInventoryData is not implemented for the extensionHostCheckRunner.
-        Did you mean to call the checkAggregator?`);
-  }
 
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async isCheckSetupForProject(

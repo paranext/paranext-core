@@ -16,19 +16,6 @@ namespace Paranext.DataProvider.Checks;
 /// </summary>
 internal sealed class CheckRunner : NetworkObjects.DataProvider
 {
-    #region Internal classes
-
-    // This can be eliminated once RetrieveInventoryData is removed
-    private class InventoryItem(string inventoryText, string verse, VerseRef verseRef, int offset)
-    {
-        public string InventoryText { get; set; } = inventoryText;
-        public string Verse { get; set; } = verse;
-        public VerseRef VerseRef { get; set; } = verseRef;
-        public int Offset { get; set; } = offset;
-    }
-
-    #endregion
-
     #region Consts and member variables
 
     private readonly Dictionary<string, CheckRunnerCheckDetails> _checkDetailsByCheckId =
@@ -60,9 +47,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
     private readonly CheckCache _checkCache;
     private readonly object _runChecksLock = new();
 
-    // This can be eliminated once RetrieveInventoryData is removed
-    private readonly InventoryDataProvider _inventoryDataProvider;
-
     #endregion
 
     #region Constructor
@@ -73,7 +57,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
         _allCheckIds = _checkDetailsByCheckId.Keys.ToList();
         _allCheckDetails = _checkDetailsByCheckId.Values.ToList();
         _checkCache = new CheckCache(_allCheckIds, papiClient);
-        _inventoryDataProvider = inventoryDataProvider;
     }
 
     #endregion
@@ -91,7 +74,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             ("denyCheckResult", DenyCheckResult),
             ("getAvailableChecks", GetAvailableChecks),
             ("retrieveCheckJobUpdate", RetrieveCheckJobUpdate),
-            ("retrieveInventoryData", RetrieveInventoryData),
             ("isCheckSetupForProject", IsCheckSetupForProject),
             ("stopCheckJob", StopCheckJob),
         ];
@@ -156,78 +138,6 @@ internal sealed class CheckRunner : NetworkObjects.DataProvider
             (_activeCheckJobsByJobId.TryGetValue(jobId, out var x) ? x : null)
             ?? throw new Exception($"No active check job with ID {jobId} (update)");
         return job.GenerateStatusReport(maxResultsToInclude);
-    }
-
-    /// <summary>
-    /// This method is obsolete, but it has been kept temporarily for backward compatibility.
-    /// <br/>
-    /// Normally, you would want to call BuildInventorySummary first and just display that data.
-    /// Then, when a user clicks on an item to see details, you would call BeginItemizedInventoryJob
-    /// followed by RetrieveItemizedInventoryJobUpdate to get the details for that item.
-    /// <br/>
-    /// This method simulates that process for all items and returns the combined results.
-    /// </summary>
-    [Obsolete("Use BuildInventorySummary and BeginItemizedInventoryJob on InventoryDataProvider")]
-    private List<InventoryItem> RetrieveInventoryData(
-        string checkId,
-        string projectId,
-        InputRange inputRange
-    )
-    {
-        ArgumentException.ThrowIfNullOrEmpty(checkId);
-        ArgumentException.ThrowIfNullOrEmpty(projectId);
-        ArgumentNullException.ThrowIfNull(inputRange);
-
-        var summarizedInventory = _inventoryDataProvider.BuildInventorySummary(
-            checkId,
-            [inputRange]
-        );
-
-        var allKeys = summarizedInventory
-            .InventoryCountLists.SelectMany(list => list.Items)
-            .Select(item => item.Key)
-            .ToHashSet();
-
-        var retVal = new List<InventoryItem>();
-
-        foreach (var key in allKeys)
-        {
-            var itemizedJobScope = new ItemizedInventoryJobScope
-            {
-                SummarizedInventoryId = summarizedInventory.SummarizedInventoryId,
-                Key = key,
-            };
-            var jobId = _inventoryDataProvider.BeginItemizedInventoryJob(itemizedJobScope);
-
-            ItemizedInventoryJobStatusReport? jobReport = null;
-            List<ItemizedInventoryItem> results = [];
-            do
-            {
-                Thread.Sleep(10);
-                jobReport = _inventoryDataProvider.RetrieveItemizedInventoryJobUpdate(
-                    jobId,
-                    int.MaxValue
-                );
-                results.AddRange(jobReport.NextResults ?? []);
-            } while (jobReport.Status == ItemizedInventoryJobStatus.Running);
-            _inventoryDataProvider.AbandonItemizedInventoryJob(jobId);
-
-            if (results.Count == 0)
-                continue;
-
-            retVal.AddRange(
-                results.Select(result => new InventoryItem(
-                    result.InventoryText,
-                    result.SourceText,
-                    result.Location.VerseRef,
-                    result.Location.Offset ?? 0
-                ))
-            );
-        }
-
-        _inventoryDataProvider.DiscardInventorySummary(summarizedInventory.SummarizedInventoryId);
-
-        return retVal;
     }
 
     private bool IsCheckSetupForProject(string checkId, string projectId)

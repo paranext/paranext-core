@@ -982,7 +982,12 @@ export declare const getBookIdFromUSFM: (text: string) => string;
  * @returns The status for the specified item
  */
 export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
-/** Represents an item in the inventory with associated text and verse reference. */
+/**
+ * Represents an item in the inventory with associated text and verse reference.
+ *
+ * @deprecated 12 January 2026. Use InventorySummaryItem instead for better performance and
+ *   functionality.
+ */
 export type InventoryItem = {
 	/**
 	 * The label by which the item is shown in the inventory (e.g. the word that is repeated in case
@@ -1001,6 +1006,22 @@ export type InventoryItem = {
 	 * `verse` string
 	 */
 	offset: number;
+};
+/**
+ * Represents a summary item in the inventory with aggregated count and optional detailed
+ * occurrences. This type is used for displaying inventory data in a summarized format, where each
+ * item shows the total count and can optionally include detailed occurrence information that gets
+ * loaded dynamically when the user selects the item.
+ */
+export type InventorySummaryItem = {
+	/** The item key (e.g., character, word, etc.) */
+	key: string | string[];
+	/** Total count of occurrences */
+	count: number;
+	/** Status of the item */
+	status?: Status;
+	/** Detailed occurrences - optional, loaded on demand */
+	occurrences?: InventoryItemOccurrence[];
 };
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -1030,7 +1051,7 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The inventory items that the inventory should be populated with */
-	inventoryItems: InventoryItem[] | undefined;
+	inventoryItems: InventorySummaryItem[] | undefined;
 	/** Callback function that is executed when the scripture reference is changed */
 	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
@@ -1066,9 +1087,11 @@ type InventoryProps = {
 	areInventoryItemsLoading?: boolean;
 	/** Class name to apply to the provided occurrence verse text in the `OccurrencesTable` component */
 	classNameForVerseText?: string;
+	/** Optional callback that is called when an item is selected. Receives the selected item key. */
+	onItemSelected?: (itemKey: string) => void;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, onItemSelected, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

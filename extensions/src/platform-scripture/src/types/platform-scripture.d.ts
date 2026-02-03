@@ -21,7 +21,6 @@ declare module 'platform-scripture' {
     UsjTextContentLocation,
   } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
-  import { InventoryItem } from 'platform-bible-react';
 
   // #region Project Interface Data Types
 
@@ -1100,22 +1099,6 @@ declare module 'platform-scripture' {
 
   /** Functions that provide configuration data for a specific check */
   export type CheckConfigurationProvider = {
-    /**
-     * @deprecated 2025-11-10 Use IInventoryDataProvider instead of this method to retrieve
-     *   inventory data
-     *
-     *   Represents the ability to retrieve inventory data for one particular check on a project
-     * @param checkId ID of the check whose inventory data is being requested
-     * @param projectId ID of the project whose inventory data is being requested
-     * @param checkInputRange Range of project text to evaluate for inventory data
-     * @returns List of all inventory items for the check in the specified project and range
-     */
-    retrieveInventoryData: (
-      checkId: string,
-      projectId: string,
-      checkInputRange: CheckInputRange,
-    ) => Promise<InventoryItem[]>;
-
     /** Returns if setup/configuration for the check has been completed */
     isCheckSetupForProject: (checkId: string, projectId: string) => Promise<boolean>;
   };
@@ -1395,7 +1378,7 @@ declare module 'platform-scripture' {
      * @param inputRanges Ranges of project text to evaluate for inventory data
      * @returns Promise that resolves to a {@link SummarizedInventory} object
      */
-    buildSummarizedInventory: (
+    buildInventorySummary: (
       inventoryId: string,
       inputRanges: InventoryInputRange[],
     ) => Promise<SummarizedInventory>;
@@ -1407,7 +1390,7 @@ declare module 'platform-scripture' {
      *
      * @param summarizedInventoryId ID of the summarized inventory to discard
      */
-    discardSummarizedInventory: (summarizedInventoryId: string) => Promise<void>;
+    discardInventorySummary: (summarizedInventoryId: string) => Promise<void>;
     /**
      * Begin a new itemized inventory job that will run asynchronously
      *
