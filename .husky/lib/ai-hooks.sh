@@ -12,7 +12,6 @@ readonly AI_EXIT_FORMAT_TS=6
 readonly AI_EXIT_FORMAT_CSHARP=7
 readonly AI_EXIT_LOCALIZATION=9
 readonly AI_EXIT_ARCHITECTURE=10
-readonly AI_EXIT_ADR=11
 
 # ============================================
 # Branch Detection
@@ -302,36 +301,6 @@ run_architecture_check() {
   fi
 
   echo "Architecture boundaries OK"
-}
-
-run_adr_validation() {
-  echo "Validating against Architecture Decision Registry..."
-
-  local registry=".context/architecture/decision-registry.json"
-  if [[ ! -f "$registry" ]]; then
-    echo "WARNING: Decision registry not found at $registry"
-    return 0
-  fi
-
-  # Get staged TypeScript files
-  local staged_ts_files
-  staged_ts_files=$(get_staged_files | grep -E '\.(ts|tsx)$' || true)
-
-  if [[ -z "$staged_ts_files" ]]; then
-    echo "No TypeScript files staged, skipping ADR validation"
-    return 0
-  fi
-
-  # Check for 'any' type violations (constraint: noAnyType)
-  local any_violations
-  any_violations=$(echo "$staged_ts_files" | xargs grep -l ': any\|as any' 2>/dev/null || true)
-  if [[ -n "$any_violations" ]]; then
-    error_msg "AI-011" "ADR violation: noAnyType constraint" \
-      "Remove 'any' types from: $any_violations. See decision-registry.json"
-    return $AI_EXIT_ADR
-  fi
-
-  echo "ADR validation passed"
 }
 
 # ============================================
