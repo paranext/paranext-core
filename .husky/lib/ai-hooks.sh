@@ -10,6 +10,9 @@ readonly AI_EXIT_LINT_TS=4
 readonly AI_EXIT_LINT_CSHARP=5
 readonly AI_EXIT_FORMAT_TS=6
 readonly AI_EXIT_FORMAT_CSHARP=7
+readonly AI_EXIT_LOCALIZATION=9
+readonly AI_EXIT_ARCHITECTURE=10
+readonly AI_EXIT_ADR=11
 
 # ============================================
 # Branch Detection
@@ -216,6 +219,119 @@ run_ai_lint_csharp() {
   fi
 
   echo "C# AI analyzer checks passed (no warnings in staged files)"
+}
+
+# ============================================
+# Cross-File Validation Checks
+# ============================================
+
+run_localization_check() {
+  echo "Checking localization keys..."
+
+  local staged_files
+  staged_files=$(get_staged_files | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
+
+  if [[ -z "$staged_files" ]]; then
+    echo "No TS/TSX files staged, skipping localization check"
+    return 0
+  fi
+
+  # Extract all %key% patterns from staged files
+  local keys_used
+  # shellcheck disable=SC2086
+  keys_used=$(grep -hoE '%[a-zA-Z_]+%' $staged_files 2>/dev/null | sort -u)
+
+  if [[ -z "$keys_used" ]]; then
+    echo "No localization keys found in staged files"
+    return 0
+  fi
+
+  # Check each key exists in en.json
+  local missing_keys=()
+  while IFS= read -r key; do
+    if ! grep -q "\"$key\"" assets/localization/en.json 2>/dev/null; then
+      missing_keys+=("$key")
+    fi
+  done <<< "$keys_used"
+
+  if [[ ${#missing_keys[@]} -gt 0 ]]; then
+    error_msg "AI-009" "Missing localization keys" \
+      "Add these keys to assets/localization/en.json: ${missing_keys[*]}"
+    return $AI_EXIT_LOCALIZATION
+  fi
+
+  echo "All localization keys exist in en.json"
+}
+
+run_architecture_check() {
+  echo "Checking architecture boundaries..."
+
+  local violations=()
+
+  # Get staged files for each directory
+  local renderer_files shared_files main_files
+  renderer_files=$(get_staged_files | grep -E '^src/renderer/' || true)
+  shared_files=$(get_staged_files | grep -E '^src/shared/' || true)
+  main_files=$(get_staged_files | grep -E '^src/main/' || true)
+
+  # Rule 1: renderer cannot import from main, extension-host, or node
+  if [[ -n "$renderer_files" ]]; then
+    local renderer_violations
+    renderer_violations=$(echo "$renderer_files" | xargs grep -l "from '@main/\|from '@extension-host/\|from '@node/" 2>/dev/null || true)
+    [[ -n "$renderer_violations" ]] && violations+=("renderer→main/extension-host/node: $renderer_violations")
+  fi
+
+  # Rule 2: shared cannot import from process-specific directories
+  if [[ -n "$shared_files" ]]; then
+    local shared_violations
+    shared_violations=$(echo "$shared_files" | xargs grep -l "from '@main/\|from '@renderer/\|from '@extension-host/" 2>/dev/null || true)
+    [[ -n "$shared_violations" ]] && violations+=("shared→process-specific: $shared_violations")
+  fi
+
+  # Rule 3: main cannot import from renderer
+  if [[ -n "$main_files" ]]; then
+    local main_violations
+    main_violations=$(echo "$main_files" | xargs grep -l "from '@renderer/" 2>/dev/null || true)
+    [[ -n "$main_violations" ]] && violations+=("main→renderer: $main_violations")
+  fi
+
+  if [[ ${#violations[@]} -gt 0 ]]; then
+    error_msg "AI-010" "Architecture boundary violations" \
+      "Fix these imports: ${violations[*]}"
+    return $AI_EXIT_ARCHITECTURE
+  fi
+
+  echo "Architecture boundaries OK"
+}
+
+run_adr_validation() {
+  echo "Validating against Architecture Decision Registry..."
+
+  local registry=".context/architecture/decision-registry.json"
+  if [[ ! -f "$registry" ]]; then
+    echo "WARNING: Decision registry not found at $registry"
+    return 0
+  fi
+
+  # Get staged TypeScript files
+  local staged_ts_files
+  staged_ts_files=$(get_staged_files | grep -E '\.(ts|tsx)$' || true)
+
+  if [[ -z "$staged_ts_files" ]]; then
+    echo "No TypeScript files staged, skipping ADR validation"
+    return 0
+  fi
+
+  # Check for 'any' type violations (constraint: noAnyType)
+  local any_violations
+  any_violations=$(echo "$staged_ts_files" | xargs grep -l ': any\|as any' 2>/dev/null || true)
+  if [[ -n "$any_violations" ]]; then
+    error_msg "AI-011" "ADR violation: noAnyType constraint" \
+      "Remove 'any' types from: $any_violations. See decision-registry.json"
+    return $AI_EXIT_ADR
+  fi
+
+  echo "ADR validation passed"
 }
 
 # ============================================
