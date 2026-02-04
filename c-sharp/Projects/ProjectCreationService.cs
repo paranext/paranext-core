@@ -250,7 +250,7 @@ internal static class ProjectCreationService
                 projectTypes.Add(
                     new ProjectTypeOption(
                         Type: projectType, // PtxUtils.Enum<T> implicitly converts to T
-                        DisplayName: FormatProjectTypeDisplayName(typeName!),
+                        DisplayName: FormatDisplayName(typeName!),
                         IsDerived: rules.RequiresBaseProject,
                         RequiresEncoder: rules.RequiresEncoder
                     )
@@ -280,7 +280,7 @@ internal static class ProjectCreationService
             versifications.Add(
                 new VersificationOption(
                     Type: versType,
-                    DisplayName: FormatVersificationDisplayName(versType.ToString())
+                    DisplayName: FormatDisplayName(versType.ToString())
                 )
             );
         }
@@ -314,29 +314,13 @@ internal static class ProjectCreationService
     }
 
     /// <summary>
-    /// Formats project type name for display (adds spaces before capitals).
+    /// Formats a PascalCase name for display by adding spaces before capitals.
+    /// Example: "BackTranslation" becomes "Back Translation"
     /// </summary>
-    private static string FormatProjectTypeDisplayName(string typeName)
+    private static string FormatDisplayName(string pascalCaseName)
     {
-        // Convert "BackTranslation" to "Back Translation"
         var result = new System.Text.StringBuilder();
-        foreach (char c in typeName)
-        {
-            if (char.IsUpper(c) && result.Length > 0)
-                result.Append(' ');
-            result.Append(c);
-        }
-        return result.ToString();
-    }
-
-    /// <summary>
-    /// Formats versification name for display.
-    /// </summary>
-    private static string FormatVersificationDisplayName(string versName)
-    {
-        // Convert "RussianOrthodox" to "Russian Orthodox"
-        var result = new System.Text.StringBuilder();
-        foreach (char c in versName)
+        foreach (char c in pascalCaseName)
         {
             if (char.IsUpper(c) && result.Length > 0)
                 result.Append(' ');
