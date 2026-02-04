@@ -659,3 +659,48 @@ public record CopyBooksResult(
 /// <param name="BookId">Book ID that failed</param>
 /// <param name="Error">Error message</param>
 public record CopyBookError(string BookId, string Error);
+
+// === CAP-012: Project Restore ===
+
+/// <summary>
+/// Request to restore a project from backup.
+/// Maps to: CAP-012, BHV-501, BHV-502
+/// </summary>
+/// <param name="BackupFilePath">Path to the backup ZIP file</param>
+/// <param name="TargetProjectGuid">GUID of target project (null to create new)</param>
+/// <param name="BookIds">Optional list of book IDs to restore (null = all books)</param>
+public record RestoreProjectRequest(
+    string BackupFilePath,
+    Paratext.Data.HexId? TargetProjectGuid,
+    IReadOnlyList<string>? BookIds
+);
+
+/// <summary>
+/// Result of project restore operation.
+/// Maps to: CAP-012, BHV-501, BHV-502
+/// </summary>
+/// <param name="Success">Whether the restore succeeded</param>
+/// <param name="ProjectGuid">GUID of the restored project</param>
+/// <param name="RestoredBooks">List of restored book IDs</param>
+/// <param name="Errors">Error messages if restore failed</param>
+public record RestoreProjectResult(
+    bool Success,
+    Paratext.Data.HexId? ProjectGuid,
+    IReadOnlyList<string> RestoredBooks,
+    IReadOnlyList<string>? Errors
+)
+{
+    /// <summary>
+    /// Create a successful result.
+    /// </summary>
+    public static RestoreProjectResult Succeeded(
+        Paratext.Data.HexId guid,
+        IReadOnlyList<string> books
+    ) => new(true, guid, books, null);
+
+    /// <summary>
+    /// Create a failed result.
+    /// </summary>
+    public static RestoreProjectResult Failed(params string[] errors) =>
+        new(false, null, Array.Empty<string>(), errors);
+}
