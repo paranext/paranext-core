@@ -12,6 +12,8 @@ module.exports = {
   extends: ['./.eslintrc.js'],
   plugins: ['paranext'],
   rules: {
+    // === Naming conventions ===
+
     // Command naming: extensionName.commandName (camelCase)
     // See: Paranext-Core-Patterns.md "Command Naming"
     'paranext/command-naming': 'error',
@@ -35,21 +37,55 @@ module.exports = {
     // Command registration must include metadata
     // See: Paranext-Core-Patterns.md "Command Registration"
     'paranext/registration-structure': 'warn',
+
+    // === Styling (Tailwind) ===
+
+    // No hardcoded colors - use theme tokens (tw-bg-background, tw-text-foreground)
+    // See: Code-Style-Guide.md "Theming Requirements"
+    'paranext/no-hardcoded-tailwind-colors': 'error',
+
+    // No shadow classes - shadows not used in Platform.Bible
+    // See: Code-Style-Guide.md "Theming Requirements"
+    'paranext/no-tailwind-shadows': 'error',
+
+    // === Localization ===
+
+    // aria-label/aria-describedby must use localized strings
+    // See: Code-Style-Guide.md "Localization"
+    'paranext/require-localized-aria': 'warn',
+
+    // Detect hardcoded strings in JSX that should be localized
+    // See: Code-Style-Guide.md "Localization"
+    'paranext/no-hardcoded-jsx-strings': 'warn',
+
+    // No comparisons against hardcoded English strings
+    // See: Code-Style-Guide.md "Localization"
+    'paranext/no-hardcoded-string-comparison': 'error',
+
+    // === Code quality ===
+
+    // Registrations must be added to context.registrations for cleanup
+    // See: Entry-Point-Guide.md
+    'paranext/registration-cleanup': 'warn',
   },
   overrides: [
     {
-      // Extension entry points - strict command naming and registration
+      // Extension entry points - strict command naming, registration, and cleanup
       files: ['extensions/src/**/main.ts', 'src/extension-host/**/*.ts'],
       rules: {
         'paranext/command-naming': 'error',
         'paranext/registration-structure': 'error',
+        'paranext/registration-cleanup': 'error',
       },
     },
     {
-      // WebView files - strict file naming
-      files: ['**/web-views/**/*.tsx', '**/web-views/**/*.html'],
+      // WebView files - strict file naming and localization
+      files: ['**/*.web-view.tsx'],
       rules: {
         'paranext/webview-file-naming': 'error',
+        'paranext/require-localized-strings-array': 'warn',
+        'paranext/require-localized-aria': 'error',
+        'paranext/no-hardcoded-jsx-strings': 'error',
       },
     },
     {
@@ -58,6 +94,14 @@ module.exports = {
       rules: {
         'paranext/dataprovider-naming': 'error',
         'paranext/setting-naming': 'error',
+      },
+    },
+    {
+      // Extension source files - require provenance comments
+      files: ['extensions/src/**/*.ts', 'extensions/src/**/*.tsx'],
+      excludedFiles: ['**/*.test.ts', '**/*.test.tsx', '**/*.d.ts'],
+      rules: {
+        'paranext/require-provenance-comment': 'warn',
       },
     },
   ],
