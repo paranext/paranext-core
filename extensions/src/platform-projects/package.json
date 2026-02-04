@@ -7,6 +7,7 @@
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
+    "test": "vitest",
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
     "build": "webpack",
@@ -88,6 +89,7 @@
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
     "webpack-merge": "^6.0.1",
+    "vitest": "^3.2.4",
     "zip-build": "^1.8.0"
   },
   "volta": {

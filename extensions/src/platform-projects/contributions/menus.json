@@ -2,7 +2,29 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%mainMenu_platformProjects_newProject%",
+        "localizeNotes": "Application main menu > Project > New Project...",
+        "group": "platform.projectProjects",
+        "order": 1,
+        "command": "platformProjects.openCreateProject"
+      },
+      {
+        "label": "%mainMenu_platformProjects_copyBooks%",
+        "localizeNotes": "Application main menu > Project > Copy Books...",
+        "group": "platform.projectProjects",
+        "order": 50,
+        "command": "platformProjects.openCopyBooks"
+      },
+      {
+        "label": "%mainMenu_platformProjects_deleteBooks%",
+        "localizeNotes": "Application main menu > Project > Delete Books...",
+        "group": "platform.projectProjects",
+        "order": 51,
+        "command": "platformProjects.openDeleteBooks"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},
