@@ -60,7 +60,6 @@ export function execPnpmInDevPackage(folder: string, args: string): void {
     console.log(
       `pnpm invocation failed: ${err instanceof Error ? err.message : err}. This is not necessarily a problem. Retrying with 'volta run pnpm'...`,
     );
-    console.warn('');
     // Use the shared helper so the fallback uses the same execution behavior
     // as other repo commands.
     execInDevPackage(folder, `volta run pnpm ${args}`);
