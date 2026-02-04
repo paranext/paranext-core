@@ -320,18 +320,7 @@ internal static class ProjectRestoreService
         // Step 5: Create "Before restoring" VCS commit if we have a target project
         if (targetProject != null)
         {
-            try
-            {
-                var versionedText = Paratext.Data.Repository.VersioningManager.Get(targetProject);
-                if (versionedText.HasUncommittedChanges())
-                {
-                    versionedText.Commit("Before restoring books", null, false, null);
-                }
-            }
-            catch
-            {
-                // VCS may not be available (e.g., DummyScrText in tests) - continue anyway
-            }
+            TryCommitVcs(targetProject, "Before restoring books");
         }
 
         // Step 6: Extract files from backup
@@ -379,18 +368,7 @@ internal static class ProjectRestoreService
         // Step 7: Create "After restoring" VCS commit
         if (targetProject != null)
         {
-            try
-            {
-                var versionedText = Paratext.Data.Repository.VersioningManager.Get(targetProject);
-                if (versionedText.HasUncommittedChanges())
-                {
-                    versionedText.Commit("After restoring books", null, false, null);
-                }
-            }
-            catch
-            {
-                // VCS may not be available - continue anyway
-            }
+            TryCommitVcs(targetProject, "After restoring books");
         }
 
         return RestoreProjectResult.Succeeded(projectGuid, restoredBooks);
@@ -398,79 +376,32 @@ internal static class ProjectRestoreService
 
     /// <summary>
     /// Gets the book number from a 3-letter book ID.
+    /// Uses shared mapping from BookOperationsService for DRY.
     /// </summary>
     private static int GetBookNumber(string bookId)
     {
-        // Standard scripture book numbers
-        return bookId.ToUpperInvariant() switch
+        return BookOperationsService.TryGetBookNumber(bookId, out int bookNum) ? bookNum : 0;
+    }
+
+    /// <summary>
+    /// Attempts to create a VCS commit if there are uncommitted changes.
+    /// Silently ignores failures (e.g., DummyScrText in tests).
+    /// </summary>
+    /// <param name="project">The project to commit</param>
+    /// <param name="commitMessage">The commit message</param>
+    private static void TryCommitVcs(ScrText project, string commitMessage)
+    {
+        try
         {
-            "GEN" => 1,
-            "EXO" => 2,
-            "LEV" => 3,
-            "NUM" => 4,
-            "DEU" => 5,
-            "JOS" => 6,
-            "JDG" => 7,
-            "RUT" => 8,
-            "1SA" => 9,
-            "2SA" => 10,
-            "1KI" => 11,
-            "2KI" => 12,
-            "1CH" => 13,
-            "2CH" => 14,
-            "EZR" => 15,
-            "NEH" => 16,
-            "EST" => 17,
-            "JOB" => 18,
-            "PSA" => 19,
-            "PRO" => 20,
-            "ECC" => 21,
-            "SNG" => 22,
-            "ISA" => 23,
-            "JER" => 24,
-            "LAM" => 25,
-            "EZK" => 26,
-            "DAN" => 27,
-            "HOS" => 28,
-            "JOL" => 29,
-            "AMO" => 30,
-            "OBA" => 31,
-            "JON" => 32,
-            "MIC" => 33,
-            "NAM" => 34,
-            "HAB" => 35,
-            "ZEP" => 36,
-            "HAG" => 37,
-            "ZEC" => 38,
-            "MAL" => 39,
-            "MAT" => 40,
-            "MRK" => 41,
-            "LUK" => 42,
-            "JHN" => 43,
-            "ACT" => 44,
-            "ROM" => 45,
-            "1CO" => 46,
-            "2CO" => 47,
-            "GAL" => 48,
-            "EPH" => 49,
-            "PHP" => 50,
-            "COL" => 51,
-            "1TH" => 52,
-            "2TH" => 53,
-            "1TI" => 54,
-            "2TI" => 55,
-            "TIT" => 56,
-            "PHM" => 57,
-            "HEB" => 58,
-            "JAS" => 59,
-            "1PE" => 60,
-            "2PE" => 61,
-            "1JN" => 62,
-            "2JN" => 63,
-            "3JN" => 64,
-            "JUD" => 65,
-            "REV" => 66,
-            _ => 0,
-        };
+            var versionedText = Paratext.Data.Repository.VersioningManager.Get(project);
+            if (versionedText.HasUncommittedChanges())
+            {
+                versionedText.Commit(commitMessage, null, false, null);
+            }
+        }
+        catch
+        {
+            // VCS may not be available (e.g., DummyScrText in tests) - continue anyway
+        }
     }
 }
