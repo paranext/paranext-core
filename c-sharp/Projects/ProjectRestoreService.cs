@@ -223,4 +223,29 @@ internal static class ProjectRestoreService
         int startIndex = hasNumericPrefix ? 2 : 0;
         return nameWithoutExtension.Substring(startIndex, 3).ToUpperInvariant();
     }
+
+    // === CAP-012: RestoreProject ===
+
+    /// <summary>
+    /// Restores a project from a backup file.
+    /// PT9 Provenance: Restorer.PerformRestore
+    /// Maps to: CAP-012, BHV-501, BHV-502
+    /// </summary>
+    /// <param name="request">Restore request with backup path and options</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Restore result with restored books and any errors</returns>
+    public static Task<RestoreProjectResult> RestoreProjectAsync(
+        RestoreProjectRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // STUB: TDD RED phase - tests will fail until implementation is complete
+        // The implementation should:
+        // 1. Analyze the backup using AnalyzeBackupAsync
+        // 2. Create "Before restoring" VCS commit
+        // 3. Extract files from backup to project directory
+        // 4. Create "After restoring" VCS commit
+        // 5. Return list of restored books
+        throw new NotImplementedException("CAP-012: RestoreProjectAsync not yet implemented");
+    }
 }
