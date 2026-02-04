@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
-using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.Projects;
 
@@ -498,7 +498,9 @@ public class ProjectValidationServiceTests
     [Category("Acceptance")]
     [Property("CapabilityId", "CAP-003")]
     [Property("ScenarioId", "TS-005")]
-    [Description("Acceptance test: ValidateProjectSettings validates all fields from VAL-002 to VAL-011")]
+    [Description(
+        "Acceptance test: ValidateProjectSettings validates all fields from VAL-002 to VAL-011"
+    )]
     public void ValidateProjectSettings_AcceptanceTest()
     {
         // This acceptance test verifies the complete ValidateProjectSettings capability
@@ -506,24 +508,48 @@ public class ProjectValidationServiceTests
 
         // Valid Standard project should pass
         var validRequest = CreateValidProjectRequest();
-        var validResult = ProjectValidationService.ValidateProjectSettings(validRequest, isNewProject: true);
+        var validResult = ProjectValidationService.ValidateProjectSettings(
+            validRequest,
+            isNewProject: true
+        );
         Assert.That(validResult.IsValid, Is.True, "Valid project request should pass validation");
-        Assert.That(validResult.FieldErrors, Is.Empty, "No field errors expected for valid request");
+        Assert.That(
+            validResult.FieldErrors,
+            Is.Empty,
+            "No field errors expected for valid request"
+        );
 
         // Missing full name should fail with FullName error (VAL-002)
-        var noFullNameRequest = validRequest with { FullName = "" };
-        var noFullNameResult = ProjectValidationService.ValidateProjectSettings(noFullNameRequest, isNewProject: true);
+        var noFullNameRequest = validRequest with
+        {
+            FullName = ""
+        };
+        var noFullNameResult = ProjectValidationService.ValidateProjectSettings(
+            noFullNameRequest,
+            isNewProject: true
+        );
         Assert.That(noFullNameResult.IsValid, Is.False, "Missing full name should fail");
-        Assert.That(noFullNameResult.FieldErrors.ContainsKey("FullName"), Is.True, "Should have FullName error");
+        Assert.That(
+            noFullNameResult.FieldErrors.ContainsKey("FullName"),
+            Is.True,
+            "Should have FullName error"
+        );
 
         // Derived type without base project should fail (VAL-007)
         var noBaseRequest = CreateValidProjectRequestByName("BackTranslation") with
         {
             BaseProjectGuid = null
         };
-        var noBaseResult = ProjectValidationService.ValidateProjectSettings(noBaseRequest, isNewProject: true);
+        var noBaseResult = ProjectValidationService.ValidateProjectSettings(
+            noBaseRequest,
+            isNewProject: true
+        );
         Assert.That(noBaseResult.IsValid, Is.False, "Derived type without base should fail");
-        Assert.That(noBaseResult.FieldErrors.ContainsKey("BaseProject"), Is.True, "Should have BaseProject error");
+        Assert.That(
+            noBaseResult.FieldErrors.ContainsKey("BaseProject"),
+            Is.True,
+            "Should have BaseProject error"
+        );
     }
 
     #endregion
@@ -644,14 +670,19 @@ public class ProjectValidationServiceTests
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
             LanguageId = null,
-            BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890")
+            BaseProjectGuid = Paratext.Data.HexId.FromStr(
+                "1234567890123456789012345678901234567890"
+            )
         };
 
         var result = ProjectValidationService.ValidateProjectSettings(request, isNewProject: true);
 
         // StudyBibleAdditions inherits language from base, so null LanguageId is valid
-        Assert.That(result.FieldErrors.ContainsKey("Language"), Is.False,
-            "StudyBibleAdditions should not require Language (inherits from base)");
+        Assert.That(
+            result.FieldErrors.ContainsKey("Language"),
+            Is.False,
+            "StudyBibleAdditions should not require Language (inherits from base)"
+        );
     }
 
     /// <summary>
@@ -702,9 +733,13 @@ public class ProjectValidationServiceTests
     [Property("CapabilityId", "CAP-003")]
     [TestCaseSource(nameof(DerivedProjectTypes))]
     public void ValidateProjectSettings_DerivedTypeNoBaseProject_ReturnsBaseProjectError(
-        string projectTypeName)
+        string projectTypeName
+    )
     {
-        var request = CreateValidProjectRequestByName(projectTypeName) with { BaseProjectGuid = null };
+        var request = CreateValidProjectRequestByName(projectTypeName) with
+        {
+            BaseProjectGuid = null
+        };
 
         var result = ProjectValidationService.ValidateProjectSettings(request, isNewProject: true);
 
@@ -739,16 +774,16 @@ public class ProjectValidationServiceTests
     [Property("CapabilityId", "CAP-003")]
     public void ValidateProjectSettings_StandardTypeNoBaseProject_NoBaseProjectError()
     {
-        var request = CreateValidProjectRequestByName("Standard") with
-        {
-            BaseProjectGuid = null
-        };
+        var request = CreateValidProjectRequestByName("Standard") with { BaseProjectGuid = null };
 
         var result = ProjectValidationService.ValidateProjectSettings(request, isNewProject: true);
 
         // Standard type doesn't require base project
-        Assert.That(result.FieldErrors.ContainsKey("BaseProject"), Is.False,
-            "Standard project should not require base project");
+        Assert.That(
+            result.FieldErrors.ContainsKey("BaseProject"),
+            Is.False,
+            "Standard project should not require base project"
+        );
     }
 
     /// <summary>
@@ -764,7 +799,9 @@ public class ProjectValidationServiceTests
         var request = CreateValidProjectRequestByName("TransliterationWithEncoder") with
         {
             EncoderName = null,
-            BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890")
+            BaseProjectGuid = Paratext.Data.HexId.FromStr(
+                "1234567890123456789012345678901234567890"
+            )
         };
 
         var result = ProjectValidationService.ValidateProjectSettings(request, isNewProject: true);
@@ -788,8 +825,11 @@ public class ProjectValidationServiceTests
 
         var result = ProjectValidationService.ValidateProjectSettings(request, isNewProject: true);
 
-        Assert.That(result.FieldErrors.ContainsKey("Encoder"), Is.False,
-            "Standard project should not require encoder");
+        Assert.That(
+            result.FieldErrors.ContainsKey("Encoder"),
+            Is.False,
+            "Standard project should not require encoder"
+        );
     }
 
     /// <summary>
@@ -858,7 +898,9 @@ public class ProjectValidationServiceTests
     {
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
-            BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
+            BaseProjectGuid = Paratext.Data.HexId.FromStr(
+                "1234567890123456789012345678901234567890"
+            ),
             StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new("Category1", "desc1"),
@@ -871,7 +913,10 @@ public class ProjectValidationServiceTests
 
         Assert.That(result.IsValid, Is.False);
         Assert.That(result.FieldErrors.ContainsKey("StudyBibleCategories"), Is.True);
-        Assert.That(result.FieldErrors["StudyBibleCategories"].Message, Does.Contain("cannot be blank"));
+        Assert.That(
+            result.FieldErrors["StudyBibleCategories"].Message,
+            Does.Contain("cannot be blank")
+        );
     }
 
     /// <summary>
@@ -886,7 +931,9 @@ public class ProjectValidationServiceTests
     {
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
-            BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
+            BaseProjectGuid = Paratext.Data.HexId.FromStr(
+                "1234567890123456789012345678901234567890"
+            ),
             StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new("My Category", "desc") // Contains space
@@ -897,7 +944,10 @@ public class ProjectValidationServiceTests
 
         Assert.That(result.IsValid, Is.False);
         Assert.That(result.FieldErrors.ContainsKey("StudyBibleCategories"), Is.True);
-        Assert.That(result.FieldErrors["StudyBibleCategories"].Message, Does.Contain("cannot contain spaces"));
+        Assert.That(
+            result.FieldErrors["StudyBibleCategories"].Message,
+            Does.Contain("cannot contain spaces")
+        );
     }
 
     /// <summary>
@@ -912,7 +962,9 @@ public class ProjectValidationServiceTests
     {
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
-            BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
+            BaseProjectGuid = Paratext.Data.HexId.FromStr(
+                "1234567890123456789012345678901234567890"
+            ),
             StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new(@"My\Category", "desc") // Contains backslash
@@ -938,7 +990,9 @@ public class ProjectValidationServiceTests
     {
         var request = CreateValidProjectRequestByName("StudyBibleAdditions") with
         {
-            BaseProjectGuid = Paratext.Data.HexId.FromStr("1234567890123456789012345678901234567890"),
+            BaseProjectGuid = Paratext.Data.HexId.FromStr(
+                "1234567890123456789012345678901234567890"
+            ),
             StudyBibleCategories = new List<StudyBibleCategory>
             {
                 new("MyCategory", "desc1"),
@@ -967,9 +1021,13 @@ public class ProjectValidationServiceTests
     [Property("CapabilityId", "CAP-003")]
     [TestCaseSource(nameof(AllDerivedProjectTypesIncludingSBA))]
     public void ValidateProjectSettings_Invariant_DerivedTypesMustHaveBaseProject(
-        string derivedTypeName)
+        string derivedTypeName
+    )
     {
-        var request = CreateValidProjectRequestByName(derivedTypeName) with { BaseProjectGuid = null };
+        var request = CreateValidProjectRequestByName(derivedTypeName) with
+        {
+            BaseProjectGuid = null
+        };
 
         var result = ProjectValidationService.ValidateProjectSettings(request, isNewProject: true);
 
@@ -1033,9 +1091,10 @@ public class ProjectValidationServiceTests
     /// </summary>
     private static ProjectCreateRequest CreateValidProjectRequestByName(string projectTypeName)
     {
-        var baseGuid = projectTypeName != "Standard" && projectTypeName != "ConsultantNotes"
-            ? HexId.FromStr("1234567890123456789012345678901234567890")
-            : (HexId?)null;
+        var baseGuid =
+            projectTypeName != "Standard" && projectTypeName != "ConsultantNotes"
+                ? HexId.FromStr("1234567890123456789012345678901234567890")
+                : (HexId?)null;
 
         var encoderName = projectTypeName == "TransliterationWithEncoder" ? "SIL Converters" : null;
 

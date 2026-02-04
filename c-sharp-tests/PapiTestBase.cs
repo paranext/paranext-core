@@ -35,8 +35,8 @@ namespace TestParanextDataProvider
             // Set up factory for creating DummyScrTextWithoutGuidSuffix in ProjectCreationService
             // We use DummyScrTextWithoutGuidSuffix (not DummyScrText) because the standard DummyScrText
             // appends the GUID to the ShortName, which breaks ScrTextCollection.Find(shortName) lookups.
-            Paranext.DataProvider.Projects.ProjectCreationService.ScrTextFactory = details =>
-                new DummyScrTextWithoutGuidSuffix(details);
+            Paranext.DataProvider.Projects.ProjectCreationService.ScrTextFactory =
+                details => new DummyScrTextWithoutGuidSuffix(details);
 
             return Task.CompletedTask;
         }

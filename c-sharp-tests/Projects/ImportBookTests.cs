@@ -48,7 +48,11 @@ internal class ImportBookTests : PapiTestBase
         destScrText.PutText(40, 0, false, validUsfm, null);
 
         // Assert - Verify book was imported
-        Assert.That(destScrText.BookPresent(40), Is.True, "MAT (40) should be present after import");
+        Assert.That(
+            destScrText.BookPresent(40),
+            Is.True,
+            "MAT (40) should be present after import"
+        );
 
         // Verify content was imported
         var reference = new VerseRef(40, 0, 0, destScrText.Settings.Versification);
@@ -463,11 +467,7 @@ internal class ImportBookTests : PapiTestBase
         scrText.PutText(41, 0, false, "\\id MRK\n\\c 1\n\\v 1 Mark", null);
 
         // Assert - INV-018: All imported books should be editable
-        Assert.That(
-            scrText.Settings.Editable,
-            Is.True,
-            "INV-018: Project is editable for admin"
-        );
+        Assert.That(scrText.Settings.Editable, Is.True, "INV-018: Project is editable for admin");
         Assert.That(scrText.BookPresent(40), Is.True, "MAT imported with permission");
         Assert.That(scrText.BookPresent(41), Is.True, "MRK imported with permission");
 

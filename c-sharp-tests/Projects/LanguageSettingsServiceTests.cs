@@ -40,7 +40,11 @@ internal class LanguageSettingsServiceTests
             validRequest,
             canUpdateAllSettings: true
         );
-        Assert.That(validResult.Success, Is.True, "Valid language settings should save successfully");
+        Assert.That(
+            validResult.Success,
+            Is.True,
+            "Valid language settings should save successfully"
+        );
         Assert.That(validResult.ErrorMessage, Is.Null, "No error message expected for valid save");
 
         // Test 2: Invalid character rules should fail with validation errors
@@ -54,7 +58,11 @@ internal class LanguageSettingsServiceTests
         );
         Assert.That(invalidResult.Success, Is.False, "Invalid character rules should prevent save");
         Assert.That(invalidResult.ValidationResult, Is.Not.Null, "Should return validation result");
-        Assert.That(invalidResult.ValidationResult!.IsValid, Is.False, "Validation should report invalid");
+        Assert.That(
+            invalidResult.ValidationResult!.IsValid,
+            Is.False,
+            "Validation should report invalid"
+        );
     }
 
     #endregion
@@ -80,7 +88,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.False, "Save should fail when character rules are invalid");
@@ -100,10 +111,16 @@ internal class LanguageSettingsServiceTests
     public void SaveLanguageSettings_EmptyCharacterRules_Succeeds()
     {
         // Arrange - Empty character rules are valid
-        var request = CreateValidLanguageSettingsRequest() with { CharacterRules = "" };
+        var request = CreateValidLanguageSettingsRequest() with
+        {
+            CharacterRules = ""
+        };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with empty character rules");
@@ -128,7 +145,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.False, "Save should fail for capitalization error");
@@ -158,7 +178,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with valid character pairs");
@@ -186,7 +209,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with custom font");
@@ -210,7 +236,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with font features");
@@ -231,10 +260,16 @@ internal class LanguageSettingsServiceTests
     public void SaveLanguageSettings_RightToLeft_SavesSuccessfully()
     {
         // Arrange
-        var request = CreateValidLanguageSettingsRequest() with { RightToLeft = true };
+        var request = CreateValidLanguageSettingsRequest() with
+        {
+            RightToLeft = true
+        };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with RTL setting");
@@ -261,7 +296,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with diacritics");
@@ -284,7 +322,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with footnote callers");
@@ -307,7 +348,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert
         Assert.That(result.Success, Is.True, "Save should succeed with cross-reference callers");
@@ -365,7 +409,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert - A successful save should be complete (INV-011)
         Assert.That(result.Success, Is.True, "Save should succeed");
@@ -391,7 +438,10 @@ internal class LanguageSettingsServiceTests
         };
 
         // Act
-        var result = LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings: true);
+        var result = LanguageSettingsService.SaveLanguageSettings(
+            request,
+            canUpdateAllSettings: true
+        );
 
         // Assert - Validation failure means no changes made
         Assert.That(result.Success, Is.False, "Save should fail");

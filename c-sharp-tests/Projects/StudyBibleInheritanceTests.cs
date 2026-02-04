@@ -29,7 +29,9 @@ internal class StudyBibleInheritanceTests : PapiTestBase
     [Property("SpecId", "spec-013")]
     [Property("ScenarioId", "TS-093")]
     [Property("BehaviorId", "BHV-111, BHV-107")]
-    [Description("Acceptance test: StudyBibleAdditions inherits book names and unions BooksPresent")]
+    [Description(
+        "Acceptance test: StudyBibleAdditions inherits book names and unions BooksPresent"
+    )]
     public void StudyBibleInheritance_AcceptanceTest()
     {
         // Arrange - Create base project with books
@@ -134,10 +136,7 @@ internal class StudyBibleInheritanceTests : PapiTestBase
         string baseName = baseScrText.Name;
 
         // Act - Create SBA TranslationInformation
-        var translationInfo = new TranslationInformation(
-            ProjectType.StudyBibleAdditions,
-            baseName
-        );
+        var translationInfo = new TranslationInformation(ProjectType.StudyBibleAdditions, baseName);
 
         // Assert
         Assert.That(translationInfo.BaseProjectName, Is.EqualTo(baseName));
@@ -246,26 +245,16 @@ internal class StudyBibleInheritanceTests : PapiTestBase
         if (baseProject != null)
         {
             // Base project should have the books we added
-            Assert.That(
-                baseProject.BookPresent(40),
-                Is.True,
-                "Base has MAT"
-            );
-            Assert.That(
-                baseProject.BookPresent(41),
-                Is.True,
-                "Base has MRK"
-            );
-            Assert.That(
-                baseProject.BookPresent(42),
-                Is.True,
-                "Base has LUK"
-            );
+            Assert.That(baseProject.BookPresent(40), Is.True, "Base has MAT");
+            Assert.That(baseProject.BookPresent(41), Is.True, "Base has MRK");
+            Assert.That(baseProject.BookPresent(42), Is.True, "Base has LUK");
         }
         else
         {
             // Document test limitation
-            Assert.Pass("BaseScrText returns null in test environment - base project reference is stored correctly");
+            Assert.Pass(
+                "BaseScrText returns null in test environment - base project reference is stored correctly"
+            );
         }
 
         // Cleanup
@@ -344,10 +333,7 @@ internal class StudyBibleInheritanceTests : PapiTestBase
         ScrTextCollection.Add(baseScrText, false);
 
         // Create SBA TranslationInformation
-        var sbaInfo = new TranslationInformation(
-            ProjectType.StudyBibleAdditions,
-            baseScrText.Name
-        );
+        var sbaInfo = new TranslationInformation(ProjectType.StudyBibleAdditions, baseScrText.Name);
 
         // Assert - INV-019 requires book names to delegate to base
         // This is verified by confirming the relationship is established
@@ -386,10 +372,7 @@ internal class StudyBibleInheritanceTests : PapiTestBase
         baseScrText.PutText(40, 0, false, "\\id MAT\n\\c 1\n\\v 1 Text", null);
 
         // Create SBA TranslationInformation
-        var sbaInfo = new TranslationInformation(
-            ProjectType.StudyBibleAdditions,
-            baseScrText.Name
-        );
+        var sbaInfo = new TranslationInformation(ProjectType.StudyBibleAdditions, baseScrText.Name);
 
         // Assert - INV-020 requires BooksPresent to be union
         // This is verified by confirming the relationship setup
@@ -452,10 +435,7 @@ internal class StudyBibleInheritanceTests : PapiTestBase
         const string baseProjectName = "MAINBIBLE";
 
         // Act
-        var sbaInfo = new TranslationInformation(
-            ProjectType.StudyBibleAdditions,
-            baseProjectName
-        );
+        var sbaInfo = new TranslationInformation(ProjectType.StudyBibleAdditions, baseProjectName);
 
         // Assert
         Assert.That(sbaInfo.BaseProjectName, Is.EqualTo(baseProjectName));

@@ -849,11 +849,7 @@ internal class ProjectCreationServiceTests : PapiTestBase
             Is.Not.Null,
             "BiblicalTermsLists collection should exist"
         );
-        Assert.That(
-            result.LexicalProjects,
-            Is.Not.Null,
-            "LexicalProjects collection should exist"
-        );
+        Assert.That(result.LexicalProjects, Is.Not.Null, "LexicalProjects collection should exist");
     }
 
     #endregion
@@ -937,11 +933,11 @@ internal class ProjectCreationServiceTests : PapiTestBase
 
         // Assert - Check derived flags
         // Use string comparison because ProjectType equality can be tricky with Enum<T>
-        var standardOption = result.ProjectTypes.FirstOrDefault(
-            t => t.Type.ToString() == "Standard"
+        var standardOption = result.ProjectTypes.FirstOrDefault(t =>
+            t.Type.ToString() == "Standard"
         );
-        var btOption = result.ProjectTypes.FirstOrDefault(
-            t => t.Type.ToString() == "BackTranslation"
+        var btOption = result.ProjectTypes.FirstOrDefault(t =>
+            t.Type.ToString() == "BackTranslation"
         );
 
         Assert.That(standardOption, Is.Not.Null);

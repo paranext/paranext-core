@@ -21,17 +21,25 @@ public class ProjectNameServiceTests
     [Category("Acceptance")]
     [Property("CapabilityId", "CAP-005")]
     [Property("ScenarioId", "TS-002")]
-    [Description("Acceptance test: GenerateAbbreviation correctly generates short names from full names")]
+    [Description(
+        "Acceptance test: GenerateAbbreviation correctly generates short names from full names"
+    )]
     public void GenerateAbbreviation_AcceptanceTest()
     {
         // This acceptance test verifies the complete GenerateAbbreviation capability
 
         // Multiple words - first letters
         var result1 = ProjectNameService.GenerateAbbreviation("Monkey Soup");
-        Assert.That(result1, Is.EqualTo("MSp"), "Multiple words should use first letters, padded to 3");
+        Assert.That(
+            result1,
+            Is.EqualTo("MSp"),
+            "Multiple words should use first letters, padded to 3"
+        );
 
         // Many words - truncate to 8
-        var result2 = ProjectNameService.GenerateAbbreviation("Monkey Soup That Is Too Spicy When Left");
+        var result2 = ProjectNameService.GenerateAbbreviation(
+            "Monkey Soup That Is Too Spicy When Left"
+        );
         Assert.That(result2.Length, Is.LessThanOrEqualTo(8), "Result should be max 8 chars");
         Assert.That(result2, Is.EqualTo("MSTITSWL"), "Should truncate to 8 characters");
 

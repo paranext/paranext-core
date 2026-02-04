@@ -77,7 +77,11 @@ internal class LanguageSearchTests : PapiTestBase
 
         // Assert - We found results for "English" search
         // Note: LanguageHelperInfo structure depends on ParatextData.dll version
-        Assert.That(results.Count, Is.GreaterThan(0), "Results should contain matches for 'English'");
+        Assert.That(
+            results.Count,
+            Is.GreaterThan(0),
+            "Results should contain matches for 'English'"
+        );
     }
 
     #endregion
@@ -146,7 +150,11 @@ internal class LanguageSearchTests : PapiTestBase
         // Assert
         Assert.That(result, Is.Not.Null, "Should return LanguageId for 'English'");
         // Note: ParatextData uses ISO 639-1 (2-letter) where available
-        Assert.That(result.Code, Is.EqualTo("en").Or.EqualTo("eng"), "Code should be 'en' or 'eng'");
+        Assert.That(
+            result.Code,
+            Is.EqualTo("en").Or.EqualTo("eng"),
+            "Code should be 'en' or 'eng'"
+        );
     }
 
     /// <summary>

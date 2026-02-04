@@ -38,7 +38,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.True, "Valid case pairs should pass validation");
@@ -67,7 +69,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.False, "Duplicate character should fail validation");
@@ -99,7 +103,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.False, "Case duplicate across lines should fail");
@@ -134,7 +140,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.False, "Missing case pair should fail validation");
@@ -165,7 +173,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.True, "Valid multigraph should pass validation");
@@ -194,7 +204,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.True, "No-case letter (apostrophe) should pass validation");
@@ -223,7 +235,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.True, "Empty rules text should be valid");
@@ -252,7 +266,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.False, "Control character should fail validation");
@@ -283,7 +299,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.True, "Tab as separator should be valid");
@@ -314,7 +332,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert
         Assert.That(result.IsValid, Is.True, "Diacritics with proper case pairs should be valid");
@@ -339,19 +359,24 @@ internal class LanguageValidationServiceTests
         // Note: The exact format that triggers ICU error depends on SimpleRulesParser implementation
         var request = new CharacterRulesValidationRequest(
             Separator: ' ',
-            RulesText: "& < a",  // ICU collation syntax that may cause parsing issues
+            RulesText: "& < a", // ICU collation syntax that may cause parsing issues
             LanguageId: "eng"
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert - Should either be valid (if ICU handles it) or return IcuError
         // This test documents the behavior - implementer should verify actual PT9 behavior
         if (!result.IsValid)
         {
             Assert.That(
-                result.Errors.Any(e => e.Type == CharacterErrorType.IcuError || e.Type == CharacterErrorType.InvalidSyntax),
+                result.Errors.Any(e =>
+                    e.Type == CharacterErrorType.IcuError
+                    || e.Type == CharacterErrorType.InvalidSyntax
+                ),
                 Is.True,
                 "Should return ICU error or invalid syntax for malformed rules"
             );
@@ -376,7 +401,9 @@ internal class LanguageValidationServiceTests
         );
 
         // Act
-        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(request);
+        CharacterValidationResult result = LanguageValidationService.ValidateCharacterRules(
+            request
+        );
 
         // Assert - Whitespace only should be treated as empty/valid
         Assert.That(result.IsValid, Is.True, "Whitespace-only rules should be valid");
