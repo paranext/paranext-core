@@ -3,6 +3,8 @@
 // Maps to: CAP-029, data-contracts.md section 1
 
 using Paranext.DataProvider;
+using Paratext.Data;
+using Paratext.Data.ProjectSettingsAccess;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -26,6 +28,10 @@ internal class ProjectCreationCommandService
         _papiClient = papiClient;
     }
 
+    // === NEW IN PT10 ===
+    // Reason: PAPI command pattern requires registration of all 13 commands
+    // Maps to: CAP-029, data-contracts.md section 3
+
     /// <summary>
     /// Initializes the service by registering all PAPI commands.
     /// Must be called once during application startup.
@@ -36,22 +42,94 @@ internal class ProjectCreationCommandService
         if (_initialized)
             return;
 
-        // STUB: TDD RED phase - tests will fail until implementation is complete
-        // The implementation should register all 13 commands:
-        // 1. command:platformProjects.validateShortName
-        // 2. command:platformProjects.generateAbbreviation
-        // 3. command:platformProjects.getProjectTypeRules
-        // 4. command:platformProjects.validateProjectSettings
-        // 5. command:platformProjects.getUsfmVersionWarning
-        // 6. command:platformProjects.validateCharacterRules
-        // 7. command:platformProjects.saveLanguageSettings
-        // 8. command:platformProjects.getCompatibleDestinations
-        // 9. command:platformProjects.copyBooks
-        // 10. command:platformProjects.analyzeBackup
-        // 11. command:platformProjects.restoreProject
-        // 12. command:platformProjects.createProject
-        // 13. command:platformProjects.getProjectOptions
+        // Register all 13 project creation commands following ParatextRegistrationService pattern
+        // Command 1: validateShortName
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.validateShortName",
+            (ShortNameValidationRequest request) =>
+                ProjectValidationService.ValidateShortName(request)
+        );
 
-        throw new NotImplementedException("CAP-029: Command registration not yet implemented");
+        // Command 2: generateAbbreviation
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.generateAbbreviation",
+            (string fullName) => ProjectNameService.GenerateAbbreviation(fullName)
+        );
+
+        // Command 3: getProjectTypeRules
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.getProjectTypeRules",
+            (ProjectTypeRulesRequest request) => ProjectTypeRulesService.GetTypeRules(request)
+        );
+
+        // Command 4: validateProjectSettings
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.validateProjectSettings",
+            (ProjectCreateRequest settings, bool isNewProject) =>
+                ProjectValidationService.ValidateProjectSettings(settings, isNewProject)
+        );
+
+        // Command 5: getUsfmVersionWarning
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.getUsfmVersionWarning",
+            (UsfmVersionOption version, bool isNewProject) =>
+                ProjectCreationService.GetUsfmVersionWarning(version, isNewProject)
+        );
+
+        // Command 6: validateCharacterRules
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.validateCharacterRules",
+            (CharacterRulesValidationRequest request) =>
+                LanguageValidationService.ValidateCharacterRules(request)
+        );
+
+        // Command 7: saveLanguageSettings
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.saveLanguageSettings",
+            (LanguageSettingsRequest request, bool canUpdateAllSettings) =>
+                LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings)
+        );
+
+        // Command 8: getCompatibleDestinations
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.getCompatibleDestinations",
+            (HexId sourceProjectGuid) =>
+                BookOperationsService.GetCompatibleDestinations(sourceProjectGuid).ToList()
+        );
+
+        // Command 9: copyBooks
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.copyBooks",
+            async (CopyBooksRequest request) => await BookOperationsService.CopyBooksAsync(request)
+        );
+
+        // Command 10: analyzeBackup
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.analyzeBackup",
+            async (string backupFilePath) =>
+                await ProjectRestoreService.AnalyzeBackupAsync(backupFilePath)
+        );
+
+        // Command 11: restoreProject
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.restoreProject",
+            async (RestoreProjectRequest request) =>
+                await ProjectRestoreService.RestoreProjectAsync(request)
+        );
+
+        // Command 12: createProject
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.createProject",
+            async (ProjectCreateRequest request) =>
+                await ProjectCreationService.CreateProjectAsync(request)
+        );
+
+        // Command 13: getProjectOptions
+        await _papiClient.RegisterRequestHandlerAsync(
+            "command:platformProjects.getProjectOptions",
+            async () => await ProjectCreationService.GetProjectOptionsAsync()
+        );
+
+        _initialized = true;
     }
 }
