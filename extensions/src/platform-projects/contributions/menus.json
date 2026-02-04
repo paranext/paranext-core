@@ -1,0 +1,17 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewTopMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewContextMenu": {
+    "groups": {},
+    "items": []
+  },
+  "webViewMenus": {}
+}
