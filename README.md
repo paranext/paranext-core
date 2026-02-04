@@ -176,15 +176,25 @@ npm run build
 
 If you have the `scripture-editors` repository cloned as a sibling folder to this repository (i.e., `../scripture-editors`), running `npm install` will automatically link `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
 
-To set this up:
+Note: CI and build servers checkout the `scripture-editors` repository at the branch named `platform-yalc`. To have build servers use changes from `main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
 
-1. Clone scripture-editors as a sibling to this repo:
+```bash
+# from a clone of scripture-editors (or adjust path accordingly)
+git fetch origin
+git checkout platform-yalc
+git rebase origin/main
+git push --force-with-lease
+```
+
+To set up `scripture-editors` to be linked locally:
+
+1. Clone `scripture-editors` as a sibling to this repo:
    ```bash
    cd ..
    git clone https://github.com/eten-tech-foundation/scripture-editors.git scripture-editors
    cd paranext-core
    ```
-2. Install dependencies in scripture-editors:
+2. Install dependencies in `scripture-editors`:
    ```bash
    cd ../scripture-editors
    pnpm install

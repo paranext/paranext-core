@@ -122,6 +122,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: eten-tech-foundation/scripture-editors
+          ref: platform-yalc
           path: dev-packages/scripture-editors
 
       - name: Read scripture-editors package.json
