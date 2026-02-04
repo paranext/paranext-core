@@ -41,7 +41,11 @@ internal partial class VersioningManagerTests : PapiTestBase
 
         // Assert - GUID must be assigned with correct format
         Assert.That(scrText.Settings.Guid, Is.Not.Null, "GUID must be assigned");
-        Assert.That(scrText.Settings.Guid.ToString(), Has.Length.EqualTo(40), "GUID must be 40 characters");
+        Assert.That(
+            scrText.Settings.Guid.ToString(),
+            Has.Length.EqualTo(40),
+            "GUID must be 40 characters"
+        );
         Assert.That(
             GuidHexRegex().IsMatch(scrText.Settings.Guid.ToString()),
             Is.True,
@@ -232,7 +236,9 @@ internal partial class VersioningManagerTests : PapiTestBase
         catch (NullReferenceException)
         {
             // DummyScrText may not have all required properties for versioning check
-            Assert.Pass("DummyScrText does not fully support IsTextVersioned - requires real project setup");
+            Assert.Pass(
+                "DummyScrText does not fully support IsTextVersioned - requires real project setup"
+            );
         }
     }
 
@@ -262,12 +268,18 @@ internal partial class VersioningManagerTests : PapiTestBase
             VersionedText vt2 = VersioningManager.Get(scrText);
 
             // If Get succeeds, verify caching behavior
-            Assert.That(ReferenceEquals(vt1, vt2), Is.True, "Same project should return cached instance");
+            Assert.That(
+                ReferenceEquals(vt1, vt2),
+                Is.True,
+                "Same project should return cached instance"
+            );
         }
         catch (NullReferenceException)
         {
             // DummyScrText may not have all required properties for VersionedText creation
-            Assert.Pass("DummyScrText does not fully support VersioningManager.Get - requires real project setup");
+            Assert.Pass(
+                "DummyScrText does not fully support VersioningManager.Get - requires real project setup"
+            );
         }
     }
 

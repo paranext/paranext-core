@@ -154,7 +154,11 @@ internal class DerivedProjectTests : PapiTestBase
     {
         // Arrange & Act - ConsultantNotes type doesn't require base project
         // ParatextData API throws on null, so we verify the type directly
-        Assert.That(ProjectType.ConsultantNotes.IsDerivedType(), Is.False, "ConsultantNotes is not derived");
+        Assert.That(
+            ProjectType.ConsultantNotes.IsDerivedType(),
+            Is.False,
+            "ConsultantNotes is not derived"
+        );
 
         // ConsultantNotes projects can have an empty/placeholder base name
         var translationInfo = new TranslationInformation(ProjectType.ConsultantNotes, "");
@@ -183,10 +187,7 @@ internal class DerivedProjectTests : PapiTestBase
         ParatextProjects.FakeAddProject(baseDetails, baseScrText);
         ScrTextCollection.Add(baseScrText, false);
 
-        var translationInfo = new TranslationInformation(
-            ProjectType.Daughter,
-            baseScrText.Name
-        );
+        var translationInfo = new TranslationInformation(ProjectType.Daughter, baseScrText.Name);
 
         // Document actual behavior: TranslationInformation stores the base project name
         Assert.That(translationInfo.BaseProjectName, Is.EqualTo(baseScrText.Name));
@@ -205,7 +206,9 @@ internal class DerivedProjectTests : PapiTestBase
         {
             // Document: BaseScrText returns null in this test environment
             // This is acceptable as the test verifies BaseProjectName is stored correctly
-            Assert.Pass("BaseScrText returns null - this is acceptable; BaseProjectName is stored correctly");
+            Assert.Pass(
+                "BaseScrText returns null - this is acceptable; BaseProjectName is stored correctly"
+            );
         }
 
         // Cleanup
@@ -251,10 +254,7 @@ internal class DerivedProjectTests : PapiTestBase
     public void TranslationInformation_Daughter_StoresBaseProjectName()
     {
         // Arrange & Act
-        var translationInfo = new TranslationInformation(
-            ProjectType.Daughter,
-            "ParentProject"
-        );
+        var translationInfo = new TranslationInformation(ProjectType.Daughter, "ParentProject");
 
         // Assert
         Assert.That(translationInfo.Type, Is.EqualTo(ProjectType.Daughter));
@@ -273,10 +273,7 @@ internal class DerivedProjectTests : PapiTestBase
     public void TranslationInformation_Auxiliary_StoresBaseProjectName()
     {
         // Arrange & Act
-        var translationInfo = new TranslationInformation(
-            ProjectType.Auxiliary,
-            "StandardProject"
-        );
+        var translationInfo = new TranslationInformation(ProjectType.Auxiliary, "StandardProject");
 
         // Assert
         Assert.That(translationInfo.Type, Is.EqualTo(ProjectType.Auxiliary));
@@ -387,13 +384,29 @@ internal class DerivedProjectTests : PapiTestBase
     public void IsDerivedType_AllDerivedTypes_ReturnsTrue()
     {
         // Assert - All derived types should return true
-        Assert.That(ProjectType.BackTranslation.IsDerivedType(), Is.True, "BackTranslation is derived");
+        Assert.That(
+            ProjectType.BackTranslation.IsDerivedType(),
+            Is.True,
+            "BackTranslation is derived"
+        );
         Assert.That(ProjectType.Daughter.IsDerivedType(), Is.True, "Daughter is derived");
         Assert.That(ProjectType.Auxiliary.IsDerivedType(), Is.True, "Auxiliary is derived");
         Assert.That(ProjectType.StudyBible.IsDerivedType(), Is.True, "StudyBible is derived");
-        Assert.That(ProjectType.StudyBibleAdditions.IsDerivedType(), Is.True, "StudyBibleAdditions is derived");
-        Assert.That(ProjectType.TransliterationManual.IsDerivedType(), Is.True, "TransliterationManual is derived");
-        Assert.That(ProjectType.TransliterationWithEncoder.IsDerivedType(), Is.True, "TransliterationWithEncoder is derived");
+        Assert.That(
+            ProjectType.StudyBibleAdditions.IsDerivedType(),
+            Is.True,
+            "StudyBibleAdditions is derived"
+        );
+        Assert.That(
+            ProjectType.TransliterationManual.IsDerivedType(),
+            Is.True,
+            "TransliterationManual is derived"
+        );
+        Assert.That(
+            ProjectType.TransliterationWithEncoder.IsDerivedType(),
+            Is.True,
+            "TransliterationWithEncoder is derived"
+        );
     }
 
     /// <summary>
@@ -408,7 +421,11 @@ internal class DerivedProjectTests : PapiTestBase
     {
         // Assert - Non-derived types should return false
         Assert.That(ProjectType.Standard.IsDerivedType(), Is.False, "Standard is not derived");
-        Assert.That(ProjectType.ConsultantNotes.IsDerivedType(), Is.False, "ConsultantNotes is not derived");
+        Assert.That(
+            ProjectType.ConsultantNotes.IsDerivedType(),
+            Is.False,
+            "ConsultantNotes is not derived"
+        );
     }
 
     #endregion

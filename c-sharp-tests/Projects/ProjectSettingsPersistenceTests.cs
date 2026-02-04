@@ -47,7 +47,11 @@ internal partial class ProjectSettingsPersistenceTests : PapiTestBase
 
         // Assert - Verify format expectations
         Assert.That(scrText.Settings.Guid, Is.Not.Null, "GUID must be set");
-        Assert.That(scrText.Settings.Guid.ToString(), Has.Length.EqualTo(40), "GUID must be 40-char hex");
+        Assert.That(
+            scrText.Settings.Guid.ToString(),
+            Has.Length.EqualTo(40),
+            "GUID must be 40-char hex"
+        );
     }
 
     #endregion
@@ -142,7 +146,10 @@ internal partial class ProjectSettingsPersistenceTests : PapiTestBase
         // Assert - Versification type should be retrievable
         // The internal numeric serialization is handled by ParatextData.dll
         Assert.That(versification, Is.Not.Null);
-        Assert.That(versification.Type, Is.EqualTo(ScrVersType.English).Or.Not.EqualTo(ScrVersType.Unknown));
+        Assert.That(
+            versification.Type,
+            Is.EqualTo(ScrVersType.English).Or.Not.EqualTo(ScrVersType.Unknown)
+        );
     }
 
     /// <summary>
@@ -341,8 +348,8 @@ internal partial class ProjectSettingsPersistenceTests : PapiTestBase
         // Assert - Note: The exact value depends on DummyScrText implementation
         // The test verifies the INV-011 contract
         Assert.Pass(
-            "LDML file name storage depends on DummyScrText implementation. " +
-            "INV-011 requires LdmlFileName to be set after WriteLdmlFile()."
+            "LDML file name storage depends on DummyScrText implementation. "
+                + "INV-011 requires LdmlFileName to be set after WriteLdmlFile()."
         );
     }
 

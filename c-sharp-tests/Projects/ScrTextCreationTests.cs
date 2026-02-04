@@ -56,8 +56,8 @@ internal class ScrTextCreationTests : PapiTestBase
             // DummyScrText uses in-memory file manager without real paths
             // Source project tests passed; clone behavior is documented
             Assert.Pass(
-                "Source project creation verified. Clone requires file system paths - " +
-                "INV-007 (GUID regeneration) verified via ParatextData.dll documentation."
+                "Source project creation verified. Clone requires file system paths - "
+                    + "INV-007 (GUID regeneration) verified via ParatextData.dll documentation."
             );
         }
 
@@ -184,8 +184,8 @@ internal class ScrTextCreationTests : PapiTestBase
         {
             // DummyScrText uses in-memory file manager without real paths
             Assert.Inconclusive(
-                "Clone requires file system paths - DummyScrText limitation. " +
-                "INV-007 (clone GUID regeneration) verified via ParatextData.dll behavior."
+                "Clone requires file system paths - DummyScrText limitation. "
+                    + "INV-007 (clone GUID regeneration) verified via ParatextData.dll behavior."
             );
         }
 
@@ -236,8 +236,8 @@ internal class ScrTextCreationTests : PapiTestBase
         {
             // DummyScrText uses in-memory file manager without real paths
             Assert.Inconclusive(
-                "Clone requires file system paths - DummyScrText limitation. " +
-                "Settings copy behavior verified via ParatextData.dll."
+                "Clone requires file system paths - DummyScrText limitation. "
+                    + "Settings copy behavior verified via ParatextData.dll."
             );
         }
 
@@ -292,11 +292,7 @@ internal class ScrTextCreationTests : PapiTestBase
         // Assert - Project has book content (significant files)
         // INV-002: Projects with significant files cannot change name
         // (verified via ParatextData.dll internal behavior)
-        Assert.That(
-            scrText.BookPresent(1),
-            Is.True,
-            "Project has GEN - significant file exists"
-        );
+        Assert.That(scrText.BookPresent(1), Is.True, "Project has GEN - significant file exists");
 
         // Cleanup
         scrText.Dispose();
@@ -318,16 +314,8 @@ internal class ScrTextCreationTests : PapiTestBase
         ParatextProjects.FakeAddProject(CreateProjectDetails(scrText), scrText);
 
         // Assert - New projects have no books (can be renamed per INV-002)
-        Assert.That(
-            scrText.BookPresent(1),
-            Is.False,
-            "New project has no GEN book"
-        );
-        Assert.That(
-            scrText.BookPresent(40),
-            Is.False,
-            "New project has no MAT book"
-        );
+        Assert.That(scrText.BookPresent(1), Is.False, "New project has no GEN book");
+        Assert.That(scrText.BookPresent(40), Is.False, "New project has no MAT book");
 
         // Cleanup
         scrText.Dispose();
@@ -454,7 +442,10 @@ internal class ScrTextCreationTests : PapiTestBase
 
         // Arrange - Project with content
         DummyScrText scrTextWithContent = CreateDummyProject();
-        ParatextProjects.FakeAddProject(CreateProjectDetails(scrTextWithContent), scrTextWithContent);
+        ParatextProjects.FakeAddProject(
+            CreateProjectDetails(scrTextWithContent),
+            scrTextWithContent
+        );
         scrTextWithContent.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 Text", null);
 
         // Assert - Empty project has no books
@@ -501,8 +492,8 @@ internal class ScrTextCreationTests : PapiTestBase
         {
             // DummyScrText uses in-memory file manager without real paths
             Assert.Inconclusive(
-                "Clone requires file system paths - DummyScrText limitation. " +
-                "INV-007 verified via ParatextData.dll documentation."
+                "Clone requires file system paths - DummyScrText limitation. "
+                    + "INV-007 verified via ParatextData.dll documentation."
             );
         }
 

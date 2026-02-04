@@ -62,7 +62,11 @@ internal class ScrTextCollectionTests : PapiTestBase
         VersioningManager.EnsureHasGuid(scrText);
 
         // Assert
-        Assert.That(scrText.Settings.Guid, Is.Not.Null, "Project should have GUID after EnsureHasGuid");
+        Assert.That(
+            scrText.Settings.Guid,
+            Is.Not.Null,
+            "Project should have GUID after EnsureHasGuid"
+        );
         Assert.That(scrText.Settings.Guid.ToString(), Has.Length.EqualTo(40));
     }
 
@@ -145,7 +149,11 @@ internal class ScrTextCollectionTests : PapiTestBase
         bool isPresent = ScrTextCollection.IsNamePresent(nonExistentName);
 
         // Assert
-        Assert.That(isPresent, Is.False, $"Non-existent project '{nonExistentName}' should not be present");
+        Assert.That(
+            isPresent,
+            Is.False,
+            $"Non-existent project '{nonExistentName}' should not be present"
+        );
     }
 
     #endregion

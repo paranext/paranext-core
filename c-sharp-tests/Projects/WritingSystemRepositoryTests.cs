@@ -36,7 +36,9 @@ internal class WritingSystemRepositoryTests : PapiTestBase
 
         // Assert - If we got here without exception, initialization succeeded
         Assert.That(scrText.Language, Is.Not.Null, "Language should be accessible");
-        Assert.Pass("WritingSystemRepository initialized via ParatextGlobals.Initialize in FixtureSetup");
+        Assert.Pass(
+            "WritingSystemRepository initialized via ParatextGlobals.Initialize in FixtureSetup"
+        );
     }
 
     #endregion

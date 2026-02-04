@@ -50,12 +50,11 @@ public class RegistrationValidationTests
         );
 
         // Static validation method should work
-        var isValidCode = RegistrationInfo.IsValidRegistration("TESTCODE123456789012345", "TestUser");
-        Assert.That(
-            isValidCode,
-            Is.TypeOf<bool>(),
-            "IsValidRegistration should return boolean"
+        var isValidCode = RegistrationInfo.IsValidRegistration(
+            "TESTCODE123456789012345",
+            "TestUser"
         );
+        Assert.That(isValidCode, Is.TypeOf<bool>(), "IsValidRegistration should return boolean");
     }
 
     #endregion
@@ -76,10 +75,7 @@ public class RegistrationValidationTests
         // Note: A truly valid code requires proper checksum/format from Paratext
 
         // An arbitrary 20+ char string with a name should be checkable
-        var result = RegistrationInfo.IsValidRegistration(
-            "ABCDEFGHIJ1234567890",
-            "Test User Name"
-        );
+        var result = RegistrationInfo.IsValidRegistration("ABCDEFGHIJ1234567890", "Test User Name");
 
         // Result is boolean - actual validity depends on checksum algorithm
         Assert.That(result, Is.TypeOf<bool>(), "IsValidRegistration should return boolean");
@@ -163,7 +159,9 @@ public class RegistrationValidationTests
         // (actual enforcement is in UI/service layer)
         if (!isValid)
         {
-            Assert.Pass("User is not valid (no registration) - INV-017 would block project creation");
+            Assert.Pass(
+                "User is not valid (no registration) - INV-017 would block project creation"
+            );
         }
         else
         {
@@ -267,7 +265,7 @@ public class RegistrationValidationTests
     {
         // 19 characters - exactly at boundary, should be rejected
         var result = RegistrationInfo.IsValidRegistration(
-            "1234567890123456789",  // 19 chars
+            "1234567890123456789", // 19 chars
             "Test User"
         );
 
@@ -290,7 +288,7 @@ public class RegistrationValidationTests
     {
         // 20 characters - at boundary, validation should proceed to checksum check
         var result = RegistrationInfo.IsValidRegistration(
-            "12345678901234567890",  // 20 chars
+            "12345678901234567890", // 20 chars
             "Test User"
         );
 
@@ -307,10 +305,7 @@ public class RegistrationValidationTests
     [Property("BehaviorId", "BHV-153")]
     public void RegistrationInfo_IsValidRegistration_EmptyNameIsInvalid()
     {
-        var result = RegistrationInfo.IsValidRegistration(
-            "ABCDEFGHIJ1234567890",
-            ""
-        );
+        var result = RegistrationInfo.IsValidRegistration("ABCDEFGHIJ1234567890", "");
 
         Assert.That(result, Is.False, "Empty name should be invalid");
     }
@@ -325,8 +320,8 @@ public class RegistrationValidationTests
     public void RegistrationInfo_IsValidRegistration_NullNameThrows()
     {
         // ParatextData throws ArgumentNullException for null userName parameter
-        Assert.Throws<ArgumentNullException>(() =>
-            RegistrationInfo.IsValidRegistration("ABCDEFGHIJ1234567890", null!)
+        Assert.Throws<ArgumentNullException>(
+            () => RegistrationInfo.IsValidRegistration("ABCDEFGHIJ1234567890", null!)
         );
     }
 
@@ -344,8 +339,8 @@ public class RegistrationValidationTests
     [Property("ScenarioId", "TS-INV-016")]
     [TestCase("A")]
     [TestCase("1234567890")]
-    [TestCase("ABCDEFGHIJ12345678")]  // 18 chars
-    [TestCase("1234567890123456789")]  // 19 chars
+    [TestCase("ABCDEFGHIJ12345678")] // 18 chars
+    [TestCase("1234567890123456789")] // 19 chars
     public void RegistrationInfo_Invariant_ShortCodesAreInvalid(string shortCode)
     {
         var result = RegistrationInfo.IsValidRegistration(shortCode, "Test User");

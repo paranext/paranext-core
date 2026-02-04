@@ -32,16 +32,14 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange - Create source Standard project
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ProjectDetails sourceDetails = CreateProjectDetails(sourceScrText);
         ParatextProjects.FakeAddProject(sourceDetails, sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
 
         // Create potential destination projects of various types
         DummyScrText destStandard = CreateDummyProject();
-        destStandard.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destStandard.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(destStandard), destStandard);
         VersioningManager.EnsureHasGuid(destStandard);
 
@@ -50,7 +48,11 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Assert - Standard source should have compatible destinations
         Assert.That(result, Is.Not.Null, "Should return compatible destinations");
-        Assert.That(result.Count(), Is.GreaterThan(0), "Standard projects should have compatible destinations");
+        Assert.That(
+            result.Count(),
+            Is.GreaterThan(0),
+            "Standard projects should have compatible destinations"
+        );
     }
 
     #endregion
@@ -70,15 +72,13 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange - Create Standard source project
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
 
         // Create Standard destination
         DummyScrText destStandard = CreateDummyProject();
-        destStandard.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destStandard.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(destStandard), destStandard);
         VersioningManager.EnsureHasGuid(destStandard);
 
@@ -122,8 +122,7 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Create Standard destination (should NOT be compatible)
         DummyScrText destStandard = CreateDummyProject();
-        destStandard.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destStandard.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(destStandard), destStandard);
         VersioningManager.EnsureHasGuid(destStandard);
 
@@ -166,8 +165,7 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Create Standard destination (should NOT be compatible)
         DummyScrText destStandard = CreateDummyProject();
-        destStandard.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destStandard.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(destStandard), destStandard);
         VersioningManager.EnsureHasGuid(destStandard);
 
@@ -196,15 +194,15 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange - Create ConsultantNotes source project
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.ConsultantNotes);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(
+            ProjectType.ConsultantNotes
+        );
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
 
         // Create Standard destination (should NOT be compatible)
         DummyScrText destStandard = CreateDummyProject();
-        destStandard.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destStandard.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(destStandard), destStandard);
         VersioningManager.EnsureHasGuid(destStandard);
 
@@ -247,8 +245,7 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Create Standard destination
         DummyScrText destStandard = CreateDummyProject();
-        destStandard.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destStandard.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(destStandard), destStandard);
         VersioningManager.EnsureHasGuid(destStandard);
 
@@ -282,8 +279,7 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
 
@@ -338,8 +334,7 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange - Create source project with book content
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         sourceScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
@@ -349,8 +344,7 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Create destination project
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -390,16 +384,14 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         sourceScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
         sourceScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 In the beginning...", null);
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -433,8 +425,7 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         sourceScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
@@ -445,8 +436,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         sourceScrText.PutText(42, 0, false, "\\id LUK\n\\c 1\n\\v 1 Luke", null);
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -501,8 +491,7 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Standard destination (incompatible with StudyBibleAdditions)
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -537,8 +526,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         var invalidGuid = HexId.FromStr("0000000000000000000000000000000000000000");
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -563,8 +551,7 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
         sourceScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 Test", null);
@@ -595,14 +582,12 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -634,15 +619,13 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
         // Don't add REV to source
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -679,16 +662,14 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         sourceScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
         sourceScrText.PutText(40, 0, false, "\\id MAT\n\\c 1\n\\v 1 NEW SOURCE CONTENT", null);
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -709,8 +690,16 @@ internal class BookOperationsServiceTests : PapiTestBase
         // Verify content was overwritten
         var reference = new VerseRef(40, 0, 0, destScrText.Settings.Versification);
         string destContent = destScrText.GetText(reference, false, false);
-        Assert.That(destContent, Does.Contain("NEW SOURCE CONTENT"), "Content should be from source");
-        Assert.That(destContent, Does.Not.Contain("OLD DEST CONTENT"), "Old content should be replaced");
+        Assert.That(
+            destContent,
+            Does.Contain("NEW SOURCE CONTENT"),
+            "Content should be from source"
+        );
+        Assert.That(
+            destContent,
+            Does.Not.Contain("OLD DEST CONTENT"),
+            "Old content should be replaced"
+        );
     }
 
     #endregion
@@ -729,8 +718,7 @@ internal class BookOperationsServiceTests : PapiTestBase
     {
         // Arrange - Create editable projects (simulates admin access)
         DummyScrText sourceScrText = CreateDummyProject();
-        sourceScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        sourceScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         sourceScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(sourceScrText), sourceScrText);
         VersioningManager.EnsureHasGuid(sourceScrText);
@@ -738,8 +726,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         sourceScrText.PutText(41, 0, false, "\\id MRK\n\\c 1\n\\v 1 Test", null);
 
         DummyScrText destScrText = CreateDummyProject();
-        destScrText.Settings.TranslationInfo =
-            new TranslationInformation(ProjectType.Standard);
+        destScrText.Settings.TranslationInfo = new TranslationInformation(ProjectType.Standard);
         destScrText.Settings.Editable = true;
         ParatextProjects.FakeAddProject(CreateProjectDetails(destScrText), destScrText);
         VersioningManager.EnsureHasGuid(destScrText);
@@ -754,16 +741,8 @@ internal class BookOperationsServiceTests : PapiTestBase
 
         // Assert - INV-018: Books should be imported (admin has permission)
         Assert.That(result.Success, Is.True, "INV-018: Admin should be able to copy books");
-        Assert.That(
-            destScrText.BookPresent(40),
-            Is.True,
-            "INV-018: MAT imported with permission"
-        );
-        Assert.That(
-            destScrText.BookPresent(41),
-            Is.True,
-            "INV-018: MRK imported with permission"
-        );
+        Assert.That(destScrText.BookPresent(40), Is.True, "INV-018: MAT imported with permission");
+        Assert.That(destScrText.BookPresent(41), Is.True, "INV-018: MRK imported with permission");
     }
 
     #endregion
