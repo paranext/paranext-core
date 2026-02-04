@@ -130,8 +130,29 @@ run_ai_format_csharp() {
 # AI-Specific Lint Checks
 # ============================================
 
+has_eslint_plugin_changes() {
+  get_staged_files | grep -q '^lib/eslint-plugin-paranext/src/'
+}
+
+rebuild_eslint_plugin_if_needed() {
+  # Check if any plugin source files are staged
+  if has_eslint_plugin_changes; then
+    echo "ESLint plugin source changed, rebuilding..."
+    if ! npm run --prefix lib/eslint-plugin-paranext build 2>&1; then
+      error_msg "AI-008" "ESLint plugin build failed" \
+        "Run 'cd lib/eslint-plugin-paranext && npm run build' to see errors"
+      return 1
+    fi
+    echo "ESLint plugin rebuilt successfully"
+  fi
+  return 0
+}
+
 run_ai_lint_ts() {
   echo "Running AI-specific TypeScript lint checks (paranext plugin)..."
+
+  # Rebuild ESLint plugin if its source changed
+  rebuild_eslint_plugin_if_needed || return $AI_EXIT_LINT_TS
 
   # Get staged TypeScript files, excluding lib/ and extensions/ (they have separate configs)
   local staged_ts_files

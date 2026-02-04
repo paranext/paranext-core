@@ -43,6 +43,19 @@ public static class DiagnosticIds
     public const string ClassNamingConvention = "PNX006";
 
     /// <summary>
+    /// PNX007: Methods should not return tuples - use record types instead.
+    /// Tuples serialize as {} over JSON-RPC, causing data loss.
+    /// See: phase-3-implementation-backend.md "Smoke Test 3" section.
+    /// </summary>
+    public const string NoTupleReturnTypes = "PNX007";
+
+    /// <summary>
+    /// PNX008: Methods should return concrete types, not object or dynamic.
+    /// See: phase-3-implementation-backend.md "Smoke Test 3" section.
+    /// </summary>
+    public const string ConcreteReturnTypes = "PNX008";
+
+    /// <summary>
     /// Base URL for help documentation.
     /// </summary>
     public const string HelpLinkBase =
