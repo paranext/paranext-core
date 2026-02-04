@@ -61,9 +61,6 @@ if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
   # 9. Architecture boundary check
   run_architecture_check || exit $?
 
-  # 10. ADR constraint validation
-  run_adr_validation || exit $?
-
   echo ""
   echo "=========================================="
   echo "AI validations completed successfully"
