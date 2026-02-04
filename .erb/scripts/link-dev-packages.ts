@@ -13,7 +13,7 @@
 import {
   anyDevPackagePresent,
   devPackageExists,
-  execInDevPackage,
+  execPnpmInDevPackage,
   execInRepo,
   DEV_PACKAGES,
 } from './dev-package-utils';
@@ -34,7 +34,7 @@ function linkDevPackages(): void {
       }
 
       console.log(`Running devpub for ${p.devpubTarget} in ${p.folder}...`);
-      execInDevPackage(p.folder, `volta run pnpm nx devpub ${p.devpubTarget}`);
+      execPnpmInDevPackage(p.folder, `nx devpub ${p.devpubTarget}`);
 
       console.log(`Running ${p.repoLinkScript}:link in repo...`);
       execInRepo(`npm run ${p.repoLinkScript}:link`);

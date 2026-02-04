@@ -45,3 +45,24 @@ export function execInDevPackage(folder: string, cmd: string): void {
 export function execInRepo(cmd: string): void {
   execSync(cmd, { stdio: 'inherit', cwd: REPO_ROOT });
 }
+
+/**
+ * Run a pnpm command in a dev package folder. Tries `pnpm` directly first (works in CI with
+ * pnpm/action-setup or if pnpm is globally installed). Falls back to `volta run pnpm` for local
+ * development with volta-managed pnpm.
+ */
+export function execPnpmInDevPackage(folder: string, args: string): void {
+  try {
+    execInDevPackage(folder, `pnpm ${args}`);
+  } catch (err) {
+    // Log the failure and retry via volta. This fallback is expected on some
+    // developer machines where pnpm is managed by Volta.
+    console.log(
+      `pnpm invocation failed: ${err instanceof Error ? err.message : err}. This is not necessarily a problem. Retrying with 'volta run pnpm'...`,
+    );
+    console.warn('');
+    // Use the shared helper so the fallback uses the same execution behavior
+    // as other repo commands.
+    execInDevPackage(folder, `volta run pnpm ${args}`);
+  }
+}
