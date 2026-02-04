@@ -89,6 +89,17 @@ internal static class BookOperationsService
         };
 
     /// <summary>
+    /// Tries to get the book number for a 3-letter book ID.
+    /// </summary>
+    /// <param name="bookId">3-letter book ID (e.g., "GEN", "MAT")</param>
+    /// <param name="bookNumber">The book number if found, 0 otherwise</param>
+    /// <returns>True if the book ID was found, false otherwise</returns>
+    public static bool TryGetBookNumber(string bookId, out int bookNumber)
+    {
+        return s_bookIdToNumber.TryGetValue(bookId, out bookNumber);
+    }
+
+    /// <summary>
     /// Gets projects that are compatible as copy destinations for the source project.
     /// PT9 Provenance: CopyBooksForm.LoadToComboboxOptions()
     /// Maps to: CAP-008, EXT-008

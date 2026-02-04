@@ -42,92 +42,59 @@ internal class ProjectCreationCommandService
         if (_initialized)
             return;
 
-        // Register all 13 project creation commands following ParatextRegistrationService pattern
-        // Command 1: validateShortName
+        // Register all 13 project creation commands (pattern: ParatextRegistrationService)
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.validateShortName",
-            (ShortNameValidationRequest request) =>
-                ProjectValidationService.ValidateShortName(request)
+            ProjectValidationService.ValidateShortName
         );
-
-        // Command 2: generateAbbreviation
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.generateAbbreviation",
-            (string fullName) => ProjectNameService.GenerateAbbreviation(fullName)
+            ProjectNameService.GenerateAbbreviation
         );
-
-        // Command 3: getProjectTypeRules
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.getProjectTypeRules",
-            (ProjectTypeRulesRequest request) => ProjectTypeRulesService.GetTypeRules(request)
+            ProjectTypeRulesService.GetTypeRules
         );
-
-        // Command 4: validateProjectSettings
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.validateProjectSettings",
-            (ProjectCreateRequest settings, bool isNewProject) =>
-                ProjectValidationService.ValidateProjectSettings(settings, isNewProject)
+            ProjectValidationService.ValidateProjectSettings
         );
-
-        // Command 5: getUsfmVersionWarning
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.getUsfmVersionWarning",
-            (UsfmVersionOption version, bool isNewProject) =>
-                ProjectCreationService.GetUsfmVersionWarning(version, isNewProject)
+            ProjectCreationService.GetUsfmVersionWarning
         );
-
-        // Command 6: validateCharacterRules
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.validateCharacterRules",
-            (CharacterRulesValidationRequest request) =>
-                LanguageValidationService.ValidateCharacterRules(request)
+            LanguageValidationService.ValidateCharacterRules
         );
-
-        // Command 7: saveLanguageSettings
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.saveLanguageSettings",
-            (LanguageSettingsRequest request, bool canUpdateAllSettings) =>
-                LanguageSettingsService.SaveLanguageSettings(request, canUpdateAllSettings)
+            LanguageSettingsService.SaveLanguageSettings
         );
-
-        // Command 8: getCompatibleDestinations
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.getCompatibleDestinations",
             (HexId sourceProjectGuid) =>
                 BookOperationsService.GetCompatibleDestinations(sourceProjectGuid).ToList()
         );
-
-        // Command 9: copyBooks
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.copyBooks",
-            async (CopyBooksRequest request) => await BookOperationsService.CopyBooksAsync(request)
+            BookOperationsService.CopyBooksAsync
         );
-
-        // Command 10: analyzeBackup
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.analyzeBackup",
-            async (string backupFilePath) =>
-                await ProjectRestoreService.AnalyzeBackupAsync(backupFilePath)
+            ProjectRestoreService.AnalyzeBackupAsync
         );
-
-        // Command 11: restoreProject
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.restoreProject",
-            async (RestoreProjectRequest request) =>
-                await ProjectRestoreService.RestoreProjectAsync(request)
+            ProjectRestoreService.RestoreProjectAsync
         );
-
-        // Command 12: createProject
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.createProject",
-            async (ProjectCreateRequest request) =>
-                await ProjectCreationService.CreateProjectAsync(request)
+            ProjectCreationService.CreateProjectAsync
         );
-
-        // Command 13: getProjectOptions
         await _papiClient.RegisterRequestHandlerAsync(
             "command:platformProjects.getProjectOptions",
-            async () => await ProjectCreationService.GetProjectOptionsAsync()
+            ProjectCreationService.GetProjectOptionsAsync
         );
 
         _initialized = true;
