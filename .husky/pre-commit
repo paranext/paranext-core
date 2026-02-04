@@ -55,6 +55,15 @@ if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
   # 7. AI-specific C# analyzer check (warnings as errors for staged files)
   run_ai_lint_csharp || exit $?
 
+  # 8. Localization key validation
+  run_localization_check || exit $?
+
+  # 9. Architecture boundary check
+  run_architecture_check || exit $?
+
+  # 10. ADR constraint validation
+  run_adr_validation || exit $?
+
   echo ""
   echo "=========================================="
   echo "AI validations completed successfully"
