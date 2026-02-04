@@ -42,8 +42,13 @@ function linkDevPackages(): void {
 
     console.log('Successfully linked dev packages via yalc');
   } catch (error) {
-    console.warn('Warning: Failed to link dev packages via yalc.');
-    console.warn('Error:', error instanceof Error ? error.message : error);
+    console.error('Error: Failed to link dev packages via yalc.');
+    // Log the error object for richer context, then the stack if available
+    console.error('Error object:', error);
+    if (error instanceof Error) {
+      console.error('Stack:', error.stack);
+    }
+    process.exit(1);
   }
 }
 

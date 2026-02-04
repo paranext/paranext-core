@@ -9,10 +9,13 @@ function unlinkDevPackages(): void {
 
     console.log('Unlinked dev packages');
   } catch (err) {
-    console.warn(
-      'Warning: Failed to unlink dev packages.',
-      err instanceof Error ? err.message : err,
-    );
+    console.error('Error: Failed to unlink dev packages.');
+    // Log the error object for richer context, then the stack if available
+    console.error('Error object:', err);
+    if (err instanceof Error) {
+      console.error('Stack:', err.stack);
+    }
+    process.exit(1);
   }
 }
 
