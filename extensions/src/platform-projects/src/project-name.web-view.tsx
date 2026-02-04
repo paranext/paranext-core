@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Button, Input, Label, Textarea, cn } from 'platform-bible-react';
 
@@ -170,7 +170,7 @@ function generateAbbreviation(fullName: string): string {
 function validateShortName(
   shortName: string,
   existingNames: string[],
-  localizedStrings: Record<string, string>,
+  localizedStrings: LanguageStrings,
 ): string | undefined {
   // VAL-001.1: Required
   if (!shortName || shortName.trim().length === 0) {

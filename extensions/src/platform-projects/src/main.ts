@@ -8,7 +8,7 @@ import type {
   DeleteBooksWebViewOptions,
 } from 'platform-projects';
 import papi, { logger } from '@papi/backend';
-import { ExecutionActivationContext } from '@papi/core';
+import { ExecutionActivationContext, OpenWebViewOptions } from '@papi/core';
 import {
   ProjectPropertiesWebViewProvider,
   projectPropertiesWebViewType,
@@ -35,6 +35,33 @@ import {
   deleteBooksWebViewType,
 } from './delete-books.web-view-provider';
 
+// #region Internal options interfaces extending OpenWebViewOptions for openWebView calls
+// These interfaces allow passing custom options to openWebView without type assertions
+
+interface ProjectPropertiesOpenOptions
+  extends OpenWebViewOptions,
+    Partial<ProjectPropertiesWebViewOptions> {}
+
+interface ProjectNameOpenOptions extends OpenWebViewOptions, Partial<ProjectNameWebViewOptions> {}
+
+interface LanguageSettingsOpenOptions
+  extends OpenWebViewOptions,
+    Partial<LanguageSettingsWebViewOptions> {}
+
+interface ChooseEncodingOpenOptions
+  extends OpenWebViewOptions,
+    Partial<ChooseEncodingWebViewOptions> {}
+
+interface EditFilingPatternOpenOptions
+  extends OpenWebViewOptions,
+    Partial<EditFilingPatternWebViewOptions> {}
+
+interface CopyBooksOpenOptions extends OpenWebViewOptions, Partial<CopyBooksWebViewOptions> {}
+
+interface DeleteBooksOpenOptions extends OpenWebViewOptions, Partial<DeleteBooksWebViewOptions> {}
+
+// #endregion
+
 /**
  * Opens the Create Project dialog
  *
@@ -43,7 +70,7 @@ import {
 async function openCreateProject(): Promise<string | undefined> {
   logger.debug('Opening Create Project dialog');
 
-  const options: ProjectPropertiesWebViewOptions = {
+  const options: ProjectPropertiesOpenOptions = {
     mode: 'create',
   };
 
@@ -63,7 +90,7 @@ async function openCreateProject(): Promise<string | undefined> {
 async function openEditProject(projectGuid: string): Promise<string | undefined> {
   logger.debug(`Opening Edit Project dialog for project: ${projectGuid}`);
 
-  const options: ProjectPropertiesWebViewOptions = {
+  const options: ProjectPropertiesOpenOptions = {
     mode: 'edit',
     projectGuid,
   };
@@ -86,10 +113,12 @@ async function openProjectNameDialog(
 ): Promise<string | undefined> {
   logger.debug('Opening Project Name dialog');
 
+  const openOptions: ProjectNameOpenOptions = options ?? {};
+
   return papi.webViews.openWebView(
     projectNameWebViewType,
     { type: 'float', floatSize: { width: 450, height: 400 } },
-    options ?? {},
+    openOptions,
   );
 }
 
@@ -104,10 +133,12 @@ async function openLanguageSettings(
 ): Promise<string | undefined> {
   logger.debug(`Opening Language Settings dialog for project: ${options.projectGuid}`);
 
+  const openOptions: LanguageSettingsOpenOptions = options;
+
   return papi.webViews.openWebView(
     languageSettingsWebViewType,
     { type: 'float', floatSize: { width: 600, height: 550 } },
-    options,
+    openOptions,
   );
 }
 
@@ -123,10 +154,12 @@ async function openChooseEncoding(
 ): Promise<string | undefined> {
   logger.debug('Opening Choose Encoding dialog');
 
+  const openOptions: ChooseEncodingOpenOptions = options;
+
   return papi.webViews.openWebView(
     chooseEncodingWebViewType,
     { type: 'float', floatSize: { width: 400, height: 250 } },
-    options,
+    openOptions,
   );
 }
 
@@ -142,10 +175,12 @@ async function openEditFilingPattern(
 ): Promise<string | undefined> {
   logger.debug('Opening Edit Filing Pattern dialog');
 
+  const openOptions: EditFilingPatternOpenOptions = options;
+
   return papi.webViews.openWebView(
     editFilingPatternWebViewType,
     { type: 'float', floatSize: { width: 450, height: 380 } },
-    options,
+    openOptions,
   );
 }
 
@@ -159,10 +194,12 @@ async function openEditFilingPattern(
 async function openCopyBooks(options?: CopyBooksWebViewOptions): Promise<string | undefined> {
   logger.debug('Opening Copy Books dialog');
 
+  const openOptions: CopyBooksOpenOptions = options ?? {};
+
   return papi.webViews.openWebView(
     copyBooksWebViewType,
     { type: 'float', floatSize: { width: 650, height: 550 } },
-    options ?? {},
+    openOptions,
   );
 }
 
@@ -175,10 +212,12 @@ async function openCopyBooks(options?: CopyBooksWebViewOptions): Promise<string 
 async function openDeleteBooks(options: DeleteBooksWebViewOptions): Promise<string | undefined> {
   logger.debug(`Opening Delete Books dialog for project: ${options.projectGuid}`);
 
+  const openOptions: DeleteBooksOpenOptions = options;
+
   return papi.webViews.openWebView(
     deleteBooksWebViewType,
     { type: 'float', floatSize: { width: 550, height: 500 } },
-    options,
+    openOptions,
   );
 }
 

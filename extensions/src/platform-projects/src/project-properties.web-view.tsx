@@ -185,15 +185,15 @@ function formReducer(
 const commands = papi.commands as any;
 
 async function getProjectOptions(): Promise<ProjectOptionsResponse> {
-  return commands.sendCommand('paratextProjectCreation.getProjectOptions');
+  return commands.sendCommand('platformProjects.getProjectOptions');
 }
 
 async function getProjectTypeRules(projectType: ProjectType): Promise<ProjectTypeRules> {
-  return commands.sendCommand('paratextProjectCreation.getProjectTypeRules', { projectType });
+  return commands.sendCommand('platformProjects.getProjectTypeRules', { projectType });
 }
 
 async function createProject(request: ProjectCreateRequest): Promise<ProjectCreateResult> {
-  return commands.sendCommand('paratextProjectCreation.createProject', request);
+  return commands.sendCommand('platformProjects.createProject', request);
 }
 
 // #endregion

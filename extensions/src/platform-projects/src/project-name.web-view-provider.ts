@@ -1,30 +1,25 @@
-import { IWebViewProvider, SavedWebViewDefinition, WebViewDefinition } from '@papi/core';
+import {
+  IWebViewProvider,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import papi from '@papi/backend';
+import type { ProjectNameWebViewOptions } from 'platform-projects';
 import projectNameWebView from './project-name.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 
 /** === NEW IN PT10 === Reason: Web view provider pattern for Platform.Bible Maps to: UI-PKG-002 */
 
-/** Configuration options for the project name form */
-export interface ProjectNameWebViewOptions {
-  initialValues?: {
-    fullName: string;
-    shortName: string;
-    copyright: string;
-  };
-  config?: {
-    allowShortNameEdit: boolean;
-    allowFullNameEdit: boolean;
-    allowCopyrightEdit: boolean;
-    showRegistryMessage: boolean;
-  };
-  existingProjectNames?: string[];
-}
-
 export const projectNameWebViewType = 'platformProjects.projectName';
 
 const titleKey = '%webView_projectName_title%';
 const tooltipKey = '%webView_projectName_tooltip%';
+
+/** Internal options interface that extends OpenWebViewOptions */
+interface ProjectNameOpenWebViewOptions
+  extends OpenWebViewOptions,
+    Partial<ProjectNameWebViewOptions> {}
 
 /**
  * Web view provider for the Project Name dialog
@@ -46,8 +41,7 @@ export class ProjectNameWebViewProvider implements IWebViewProvider {
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    getWebViewOptions: unknown,
-    options?: ProjectNameWebViewOptions,
+    getWebViewOptions: ProjectNameOpenWebViewOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== projectNameWebViewType)
       throw new Error(
@@ -61,18 +55,18 @@ export class ProjectNameWebViewProvider implements IWebViewProvider {
 
     // Build input data from options
     const inputData = {
-      initialValues: options?.initialValues ?? {
+      initialValues: getWebViewOptions?.initialValues ?? {
         fullName: '',
         shortName: '',
         copyright: '',
       },
-      config: options?.config ?? {
+      config: getWebViewOptions?.config ?? {
         allowShortNameEdit: true,
         allowFullNameEdit: true,
         allowCopyrightEdit: true,
         showRegistryMessage: false,
       },
-      existingProjectNames: options?.existingProjectNames ?? [],
+      existingProjectNames: getWebViewOptions?.existingProjectNames ?? [],
     };
 
     return {

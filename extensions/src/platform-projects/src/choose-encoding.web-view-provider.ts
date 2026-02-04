@@ -2,12 +2,24 @@
  * === NEW IN PT10 === Reason: Platform.Bible web view provider pattern for React-based dialogs Maps
  * to: UI-PKG-004, SCR-004
  */
-import type { ChooseEncodingWebViewOptions } from 'platform-projects';
-import { IWebViewProvider, WebViewDefinition } from '@papi/core';
+import type { ChooseEncodingWebViewOptions, EncoderOption } from 'platform-projects';
+import {
+  IWebViewProvider,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import chooseEncodingWebView from './choose-encoding.web-view.tsx?inline';
 import tailwindStyles from './tailwind.css?inline';
 
 export const chooseEncodingWebViewType = 'platformProjects.chooseEncoding';
+
+/** Internal options interface that extends OpenWebViewOptions */
+interface ChooseEncodingOpenWebViewOptions
+  extends OpenWebViewOptions,
+    Partial<ChooseEncodingWebViewOptions> {
+  encoders?: EncoderOption[];
+}
 
 /**
  * Web view provider for the Choose Encoding dialog. This dialog allows users to select an encoding
@@ -18,10 +30,9 @@ export const chooseEncodingWebViewType = 'platformProjects.chooseEncoding';
 export class ChooseEncodingWebViewProvider implements IWebViewProvider {
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
-    savedWebView: WebViewDefinition,
-    _getWebViewOptions: unknown,
-    options: ChooseEncodingWebViewOptions,
-  ): Promise<WebViewDefinition> {
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: ChooseEncodingOpenWebViewOptions,
+  ): Promise<WebViewDefinition | undefined> {
     return {
       ...savedWebView,
       title: 'Select Character Encoding',
@@ -29,9 +40,9 @@ export class ChooseEncodingWebViewProvider implements IWebViewProvider {
       styles: tailwindStyles,
       state: {
         ...savedWebView.state,
-        encoders: options.encoders ?? [],
-        initialEncoderName: options.initialEncoderName,
-        initialReverseDirection: options.initialReverseDirection ?? false,
+        encoders: getWebViewOptions.encoders ?? [],
+        initialEncoderName: getWebViewOptions.initialEncoderName,
+        initialReverseDirection: getWebViewOptions.initialReverseDirection ?? false,
       },
     };
   }

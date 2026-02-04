@@ -70,8 +70,8 @@ public record ValidationResult(
 /// Request for project type rules.
 /// Maps to: EXT-001
 /// </summary>
-/// <param name="ProjectType">Project type to get rules for (PtxUtils.Enum wrapper)</param>
-public record ProjectTypeRulesRequest(PtxUtils.Enum<Paratext.Data.ProjectType> ProjectType);
+/// <param name="ProjectType">Project type name as string for JSON deserialization</param>
+public record ProjectTypeRulesRequest(string ProjectType);
 
 /// <summary>
 /// Project type rules and constraints.
@@ -358,12 +358,12 @@ public record ProjectOptionsResponse(
 /// <summary>
 /// Project type option for dropdown.
 /// </summary>
-/// <param name="Type">Project type enum value</param>
+/// <param name="Type">Project type name as string for JSON serialization</param>
 /// <param name="DisplayName">User-friendly display name</param>
 /// <param name="IsDerived">Whether this type requires a base project</param>
 /// <param name="RequiresEncoder">Whether this type requires an encoder</param>
 public record ProjectTypeOption(
-    PtxUtils.Enum<Paratext.Data.ProjectType> Type,
+    string Type,
     string DisplayName,
     bool IsDerived,
     bool RequiresEncoder
@@ -381,9 +381,9 @@ public record LanguageOption(string Id, string Name, bool IsRightToLeft, string?
 /// <summary>
 /// Versification option for dropdown.
 /// </summary>
-/// <param name="Type">Versification type enum value</param>
+/// <param name="Type">Versification type name as string for JSON serialization</param>
 /// <param name="DisplayName">User-friendly display name</param>
-public record VersificationOption(SIL.Scripture.ScrVersType Type, string DisplayName);
+public record VersificationOption(string Type, string DisplayName);
 
 /// <summary>
 /// Encoder option for dropdown.
@@ -551,12 +551,12 @@ public record RestoreAnalysisResult(
 /// <param name="ShortName">Project short name</param>
 /// <param name="FullName">Project full name</param>
 /// <param name="Guid">Project GUID</param>
-/// <param name="ProjectType">Project type (PtxUtils.Enum wrapper)</param>
+/// <param name="ProjectType">Project type as string for JSON serialization</param>
 public record BackupProjectInfo(
     string ShortName,
     string FullName,
     Paratext.Data.HexId Guid,
-    PtxUtils.Enum<Paratext.Data.ProjectType> ProjectType
+    string ProjectType
 );
 
 /// <summary>
@@ -594,14 +594,14 @@ public enum FileComparisonState
 /// <param name="Guid">Project GUID</param>
 /// <param name="ShortName">Project short name</param>
 /// <param name="FullName">Project full name</param>
-/// <param name="ProjectType">Project type</param>
+/// <param name="ProjectType">Project type as string for JSON serialization</param>
 /// <param name="BooksPresent">Books present in project (optional)</param>
 /// <param name="Editable">Whether project is editable (optional)</param>
 public record ProjectReference(
     Paratext.Data.HexId Guid,
     string ShortName,
     string FullName,
-    PtxUtils.Enum<Paratext.Data.ProjectType> ProjectType,
+    string ProjectType,
     IReadOnlyList<string>? BooksPresent = null,
     bool? Editable = null
 );

@@ -51,7 +51,7 @@ async function validateShortName(shortName: string): Promise<ValidationResult> {
   // Note: This command will be registered by the backend
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
   const commands = papi.commands as any;
-  return commands.sendCommand('paratextProjectCreation.validateShortName', {
+  return commands.sendCommand('platformProjects.validateShortName', {
     shortName,
     isNewProject: true,
   });

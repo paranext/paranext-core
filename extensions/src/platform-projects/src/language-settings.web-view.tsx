@@ -12,7 +12,7 @@ import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from 'platform-bible-react';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useState, useMemo, useCallback } from 'react';
 import type { LanguageSettings, FontOption, CharacterValidationError } from 'platform-projects';
 import { FontTab } from './components/font-tab.component';
@@ -21,7 +21,7 @@ import { CharacterRulesTab } from './components/character-rules-tab.component';
 import { OtherTab } from './components/other-tab.component';
 
 /** Localization keys for the Language Settings dialog */
-const LOCALIZED_STRING_KEYS = [
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_languageSettings_title%',
   '%webView_languageSettings_tab_font%',
   '%webView_languageSettings_tab_graphite%',
@@ -110,8 +110,9 @@ globalThis.webViewComponent = function LanguageSettingsWebView({ useWebViewState
   // Form state - initialize with defaults
   const [settings, setSettings] = useState<LanguageSettings>(DEFAULT_SETTINGS);
   const [activeTab, setActiveTab] = useState('font');
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [isDirty, setIsDirty] = useState(false);
+  // Note: isDirty state is tracked for future use when saving settings
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
+  const [_isDirty, setIsDirty] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<CharacterValidationError[]>([]);
   const [fontSizeError, setFontSizeError] = useState<string | undefined>(undefined);

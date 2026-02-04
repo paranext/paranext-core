@@ -2,12 +2,25 @@
  * === NEW IN PT10 === Reason: React web view provider pattern for Platform.Bible extensions Maps
  * to: UI-PKG-003
  */
-import { IWebViewProvider, WebViewDefinition, SavedWebViewDefinition } from '@papi/core';
+import {
+  IWebViewProvider,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import type { LanguageSettingsWebViewOptions } from 'platform-projects';
 import languageSettingsWebView from './language-settings.web-view.tsx?inline';
 import tailwindStyles from './tailwind.css?inline';
 
 export const languageSettingsWebViewType = 'platformProjects.languageSettings';
+
+/** Internal options interface that extends OpenWebViewOptions */
+interface LanguageSettingsOpenWebViewOptions
+  extends OpenWebViewOptions,
+    Partial<LanguageSettingsWebViewOptions> {
+  projectGuid?: string;
+  projectName?: string;
+}
 
 /**
  * Web view provider for the Language Settings dialog. Configures language-specific settings: font,
@@ -19,16 +32,15 @@ export class LanguageSettingsWebViewProvider implements IWebViewProvider {
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    _getWebViewOptions: unknown,
-    options: LanguageSettingsWebViewOptions,
+    getWebViewOptions: LanguageSettingsOpenWebViewOptions,
   ): Promise<WebViewDefinition | undefined> {
     // Validate required options
-    if (!options?.projectGuid) {
+    if (!getWebViewOptions?.projectGuid) {
       return undefined;
     }
 
-    const projectName = options.projectName || 'Unknown Project';
-    const canUpdateAllSettings = options.canUpdateAllSettings ?? true;
+    const projectName = getWebViewOptions.projectName || 'Unknown Project';
+    const canUpdateAllSettings = getWebViewOptions.canUpdateAllSettings ?? true;
 
     return {
       ...savedWebView,
@@ -37,7 +49,7 @@ export class LanguageSettingsWebViewProvider implements IWebViewProvider {
       styles: tailwindStyles,
       state: {
         ...savedWebView.state,
-        projectGuid: options.projectGuid,
+        projectGuid: getWebViewOptions.projectGuid,
         projectName,
         canUpdateAllSettings,
       },

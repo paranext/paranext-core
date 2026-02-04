@@ -135,7 +135,7 @@ internal static class BookOperationsService
                 scrText.Settings.Guid,
                 scrText.Name,
                 scrText.Settings.FullName ?? scrText.Name,
-                scrText.Settings.TranslationInfo.Type,
+                scrText.Settings.TranslationInfo.Type.ToString()!,
                 null,
                 scrText.Settings.Editable
             ));

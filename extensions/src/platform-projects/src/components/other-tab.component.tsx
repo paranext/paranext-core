@@ -6,6 +6,7 @@
  * in a future update.
  */
 import { Button, Input, Label } from 'platform-bible-react';
+import { LanguageStrings } from 'platform-bible-utils';
 
 /** Props for the Other Tab component */
 export interface OtherTabProps {
@@ -24,7 +25,7 @@ export interface OtherTabProps {
   /** Whether user can edit settings */
   canUpdateAllSettings: boolean;
   /** Localized strings */
-  localizedStrings: Record<string, string>;
+  localizedStrings: LanguageStrings;
   /** Callbacks for field changes */
   onMedialPunctuationChange: (value: string) => void;
   onDiacriticsChange: (value: string) => void;

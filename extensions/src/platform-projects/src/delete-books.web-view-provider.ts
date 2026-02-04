@@ -2,6 +2,7 @@
  * === NEW IN PT10 === Reason: React web view provider pattern for Platform.Bible Maps to:
  * UI-PKG-007, SCR-007
  */
+import type { DeleteBooksWebViewOptions } from 'platform-projects';
 import {
   IWebViewProvider,
   OpenWebViewOptions,
@@ -13,12 +14,12 @@ import tailwindStyles from './tailwind.css?inline';
 
 export const deleteBooksWebViewType = 'platformProjects.deleteBooks';
 
-/** Options for opening the Delete Books dialog */
-export interface DeleteBooksOpenWebViewOptions extends OpenWebViewOptions {
-  /** Project GUID */
-  projectGuid: string;
-  /** Project name for display */
-  projectName: string;
+/** Internal options interface that extends OpenWebViewOptions */
+interface DeleteBooksOpenWebViewOptions
+  extends OpenWebViewOptions,
+    Partial<DeleteBooksWebViewOptions> {
+  projectGuid?: string;
+  projectName?: string;
 }
 
 /**

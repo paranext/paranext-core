@@ -279,16 +279,10 @@ declare module 'platform-projects' {
     baseProjectRequired: boolean;
   }
 
-  /** Props for the project properties web view - extends OpenWebViewOptions */
+  /** Props for the project properties web view */
   export interface ProjectPropertiesWebViewOptions {
     mode: 'create' | 'edit';
     projectGuid?: string;
-    /** Whether to request an existing web view with a specific ID */
-    existingId?: string | '?';
-    /** Whether to create a new WebView if existingId was not found */
-    createNewIfNotFound?: boolean;
-    /** Whether to bring the WebView to the front if it already exists */
-    bringToFront?: boolean;
   }
 
   /** Options for the project name dialog Maps to: UI-PKG-002 */

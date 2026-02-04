@@ -913,9 +913,9 @@ internal class ProjectCreationServiceTests : PapiTestBase
         Assert.That(result.Versifications, Is.Not.Null);
         Assert.That(result.Versifications.Count, Is.GreaterThan(0));
 
-        // Verify English versification is present
+        // Verify English versification is present (Type is now a string)
         var versTypes = result.Versifications.Select(v => v.Type).ToList();
-        Assert.That(versTypes, Does.Contain(ScrVersType.English));
+        Assert.That(versTypes, Does.Contain("English"));
     }
 
     /// <summary>

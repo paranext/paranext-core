@@ -127,7 +127,10 @@ describe('Choose Encoding Form - Business Logic', () => {
     });
 
     it('should generate correct cancel output', () => {
-      const output = {
+      const output: {
+        action: 'cancel';
+        data?: { encoderName: string; reverseDirection: boolean };
+      } = {
         action: 'cancel' as const,
       };
 
@@ -166,7 +169,9 @@ describe('Choose Encoding Form - Business Logic', () => {
     });
 
     it('should default reverse direction to false when not provided', () => {
-      const initialReverseDirection = undefined ?? false;
+      // Simulates how the component handles a potentially undefined initial value
+      const optionalValue: boolean | undefined = undefined;
+      const initialReverseDirection = optionalValue ?? false;
       expect(initialReverseDirection).toBe(false);
     });
   });

@@ -1,7 +1,5 @@
 {
-  "metadata": {
-    "description": "Localized strings for the Platform Projects extension"
-  },
+  "metadata": {},
   "localizedStrings": {
     "en": {
       "%mainMenu_platformProjects_newProject%": "New Project...",

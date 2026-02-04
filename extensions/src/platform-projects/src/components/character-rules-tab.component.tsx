@@ -16,7 +16,7 @@
 import { Button, Input, Label, Textarea } from 'platform-bible-react';
 import { useState, useCallback, useEffect } from 'react';
 import type { CharacterValidationError } from 'platform-projects';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 
 /** Props for the Character Rules Tab component */
 export interface CharacterRulesTabProps {
@@ -27,7 +27,7 @@ export interface CharacterRulesTabProps {
   /** Whether user can edit settings */
   canUpdateAllSettings: boolean;
   /** Localized strings */
-  localizedStrings: Record<string, string>;
+  localizedStrings: LanguageStrings;
   /** Callback when separator changes */
   onSeparatorChange: (separator: string) => void;
   /** Callback when character rules change */

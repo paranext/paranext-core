@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "test": "vitest",
+    "typecheck": "tsc --noEmit",
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
     "build": "webpack",

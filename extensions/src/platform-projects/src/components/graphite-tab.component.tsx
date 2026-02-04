@@ -6,6 +6,7 @@
  * feature that may be deferred to a later release.
  */
 import { Button, Label, Textarea } from 'platform-bible-react';
+import { LanguageStrings } from 'platform-bible-utils';
 
 /** Props for the Graphite Tab component */
 export interface GraphiteTabProps {
@@ -16,7 +17,7 @@ export interface GraphiteTabProps {
   /** Whether user can edit settings */
   canUpdateAllSettings: boolean;
   /** Localized strings */
-  localizedStrings: Record<string, string>;
+  localizedStrings: LanguageStrings;
   /** Callback when font features change */
   onFontFeaturesChange: (features: string) => void;
 }
@@ -33,8 +34,9 @@ export function GraphiteTab({
   hasGraphiteFeatures,
   canUpdateAllSettings,
   localizedStrings,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onFontFeaturesChange,
+  // Note: onFontFeaturesChange is intentionally unused in this placeholder implementation
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
+  onFontFeaturesChange: _onFontFeaturesChange,
 }: GraphiteTabProps) {
   const placeholderMessage =
     localizedStrings['%webView_languageSettings_graphite_placeholder%'] ||

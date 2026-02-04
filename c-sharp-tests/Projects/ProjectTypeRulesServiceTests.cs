@@ -17,48 +17,48 @@ public class ProjectTypeRulesServiceTests
 
     /// <summary>
     /// Derived project types that require a base project.
-    /// Note: Using Enum wrapper to work with ParatextData's type system.
+    /// Returns string names for JSON serialization compatibility.
     /// </summary>
-    private static IEnumerable<Enum<ProjectType>> GetDerivedTypes()
+    private static IEnumerable<string> GetDerivedTypes()
     {
-        yield return ProjectType.Daughter;
-        yield return ProjectType.BackTranslation;
-        yield return ProjectType.TransliterationManual;
-        yield return ProjectType.TransliterationWithEncoder;
-        yield return ProjectType.Auxiliary;
-        yield return ProjectType.StudyBible;
-        yield return ProjectType.StudyBibleAdditions;
+        yield return "Daughter";
+        yield return "BackTranslation";
+        yield return "TransliterationManual";
+        yield return "TransliterationWithEncoder";
+        yield return "Auxiliary";
+        yield return "StudyBible";
+        yield return "StudyBibleAdditions";
     }
 
     /// <summary>
     /// Non-derived project types that do not require a base project.
     /// </summary>
-    private static IEnumerable<Enum<ProjectType>> GetNonDerivedTypes()
+    private static IEnumerable<string> GetNonDerivedTypes()
     {
-        yield return ProjectType.Standard;
-        yield return ProjectType.ConsultantNotes;
+        yield return "Standard";
+        yield return "ConsultantNotes";
     }
 
     /// <summary>
     /// Project types that share license with parent.
     /// </summary>
-    private static IEnumerable<Enum<ProjectType>> GetLicenseSharingTypes()
+    private static IEnumerable<string> GetLicenseSharingTypes()
     {
-        yield return ProjectType.BackTranslation;
-        yield return ProjectType.Auxiliary;
-        yield return ProjectType.TransliterationManual;
-        yield return ProjectType.TransliterationWithEncoder;
+        yield return "BackTranslation";
+        yield return "Auxiliary";
+        yield return "TransliterationManual";
+        yield return "TransliterationWithEncoder";
     }
 
     /// <summary>
     /// Project types that have their own license.
     /// </summary>
-    private static IEnumerable<Enum<ProjectType>> GetIndependentLicenseTypes()
+    private static IEnumerable<string> GetIndependentLicenseTypes()
     {
-        yield return ProjectType.Standard;
-        yield return ProjectType.Daughter;
-        yield return ProjectType.StudyBible;
-        yield return ProjectType.ConsultantNotes;
+        yield return "Standard";
+        yield return "Daughter";
+        yield return "StudyBible";
+        yield return "ConsultantNotes";
     }
 
     #endregion
@@ -81,7 +81,7 @@ public class ProjectTypeRulesServiceTests
 
         // Standard - should not require base project, can be base
         var standardRules = ProjectTypeRulesService.GetTypeRules(
-            new ProjectTypeRulesRequest(ProjectType.Standard)
+            new ProjectTypeRulesRequest("Standard")
         );
         Assert.That(
             standardRules.RequiresBaseProject,
@@ -97,7 +97,7 @@ public class ProjectTypeRulesServiceTests
 
         // BackTranslation - should require base project
         var btRules = ProjectTypeRulesService.GetTypeRules(
-            new ProjectTypeRulesRequest(ProjectType.BackTranslation)
+            new ProjectTypeRulesRequest("BackTranslation")
         );
         Assert.That(btRules.RequiresBaseProject, Is.True, "BackTranslation should require base");
         Assert.That(btRules.CanBeBaseProject, Is.True, "BackTranslation can be base project");
@@ -105,7 +105,7 @@ public class ProjectTypeRulesServiceTests
 
         // TransliterationWithEncoder - should require encoder, not editable by default
         var trEncRules = ProjectTypeRulesService.GetTypeRules(
-            new ProjectTypeRulesRequest(ProjectType.TransliterationWithEncoder)
+            new ProjectTypeRulesRequest("TransliterationWithEncoder")
         );
         Assert.That(
             trEncRules.RequiresBaseProject,
@@ -143,7 +143,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_Standard_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.Standard);
+        var request = new ProjectTypeRulesRequest("Standard");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -166,7 +166,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_BackTranslation_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.BackTranslation);
+        var request = new ProjectTypeRulesRequest("BackTranslation");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -189,7 +189,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_Daughter_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.Daughter);
+        var request = new ProjectTypeRulesRequest("Daughter");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -212,7 +212,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_Auxiliary_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.Auxiliary);
+        var request = new ProjectTypeRulesRequest("Auxiliary");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -239,7 +239,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_StudyBible_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.StudyBible);
+        var request = new ProjectTypeRulesRequest("StudyBible");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -262,7 +262,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_StudyBibleAdditions_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.StudyBibleAdditions);
+        var request = new ProjectTypeRulesRequest("StudyBibleAdditions");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -287,7 +287,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_TransliterationManual_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.TransliterationManual);
+        var request = new ProjectTypeRulesRequest("TransliterationManual");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -310,7 +310,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_TransliterationWithEncoder_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.TransliterationWithEncoder);
+        var request = new ProjectTypeRulesRequest("TransliterationWithEncoder");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -334,7 +334,7 @@ public class ProjectTypeRulesServiceTests
     [Property("BehaviorId", "BHV-100")]
     public void GetTypeRules_ConsultantNotes_ReturnsCorrectRules()
     {
-        var request = new ProjectTypeRulesRequest(ProjectType.ConsultantNotes);
+        var request = new ProjectTypeRulesRequest("ConsultantNotes");
 
         var result = ProjectTypeRulesService.GetTypeRules(request);
 
@@ -361,7 +361,7 @@ public class ProjectTypeRulesServiceTests
     [Property("ScenarioId", "TS-099")]
     [Property("BehaviorId", "BHV-100")]
     [TestCaseSource(nameof(GetDerivedTypes))]
-    public void GetTypeRules_DerivedTypes_RequiresBaseProject(Enum<ProjectType> projectType)
+    public void GetTypeRules_DerivedTypes_RequiresBaseProject(string projectType)
     {
         var request = new ProjectTypeRulesRequest(projectType);
 
@@ -388,9 +388,7 @@ public class ProjectTypeRulesServiceTests
     [Property("ScenarioId", "TS-099")]
     [Property("BehaviorId", "BHV-100")]
     [TestCaseSource(nameof(GetNonDerivedTypes))]
-    public void GetTypeRules_NonDerivedTypes_DoesNotRequireBaseProject(
-        Enum<ProjectType> projectType
-    )
+    public void GetTypeRules_NonDerivedTypes_DoesNotRequireBaseProject(string projectType)
     {
         var request = new ProjectTypeRulesRequest(projectType);
 
@@ -417,9 +415,7 @@ public class ProjectTypeRulesServiceTests
     [Property("ScenarioId", "TS-101")]
     [Property("BehaviorId", "BHV-100")]
     [TestCaseSource(nameof(GetLicenseSharingTypes))]
-    public void GetTypeRules_LicenseSharingTypes_SharesLicenseWithParent(
-        Enum<ProjectType> projectType
-    )
+    public void GetTypeRules_LicenseSharingTypes_SharesLicenseWithParent(string projectType)
     {
         var request = new ProjectTypeRulesRequest(projectType);
 
@@ -441,9 +437,7 @@ public class ProjectTypeRulesServiceTests
     [Property("ScenarioId", "TS-101")]
     [Property("BehaviorId", "BHV-100")]
     [TestCaseSource(nameof(GetIndependentLicenseTypes))]
-    public void GetTypeRules_IndependentTypes_DoesNotShareLicenseWithParent(
-        Enum<ProjectType> projectType
-    )
+    public void GetTypeRules_IndependentTypes_DoesNotShareLicenseWithParent(string projectType)
     {
         var request = new ProjectTypeRulesRequest(projectType);
 

@@ -3,6 +3,7 @@
  * BHV-304 PT9 Source Reference: LanguageSettingsForm.cs (Font tab)
  */
 import { Checkbox, ComboBox, Input, Label } from 'platform-bible-react';
+import { LanguageStrings } from 'platform-bible-utils';
 import React, { useMemo } from 'react';
 import type { FontOption } from 'platform-projects';
 
@@ -23,7 +24,7 @@ export interface FontTabProps {
   /** Whether user can edit all settings */
   canUpdateAllSettings: boolean;
   /** Localized strings */
-  localizedStrings: Record<string, string>;
+  localizedStrings: LanguageStrings;
   /** Callback when font name changes */
   onFontNameChange: (fontName: string) => void;
   /** Callback when font size changes */
@@ -110,9 +111,9 @@ export function FontTab({
         </Label>
         <ComboBox
           options={fontOptions}
-          value={fontName}
-          onChange={(value) => onFontNameChange(value || '')}
-          disabled={!canUpdateAllSettings}
+          value={fontOptions.find((opt) => opt.value === fontName)}
+          onChange={(value) => onFontNameChange(value?.value || '')}
+          isDisabled={!canUpdateAllSettings}
           buttonClassName="tw-w-full"
         />
       </div>
@@ -135,9 +136,9 @@ export function FontTab({
           />
           <ComboBox
             options={sizeOptions}
-            value={fontSize.toString()}
-            onChange={(value) => onFontSizeChange(parseInt(value || '12', 10))}
-            disabled={!canUpdateAllSettings}
+            value={sizeOptions.find((opt) => opt.value === fontSize.toString())}
+            onChange={(value) => onFontSizeChange(parseInt(value?.value || '12', 10))}
+            isDisabled={!canUpdateAllSettings}
             buttonClassName="tw-w-24"
           />
         </div>

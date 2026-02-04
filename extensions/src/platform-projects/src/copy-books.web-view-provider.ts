@@ -2,6 +2,7 @@
  * === NEW IN PT10 === Reason: React web view provider pattern for Platform.Bible Maps to:
  * UI-PKG-006, SCR-006, BHV-166, BHV-167, BHV-168, EXT-008
  */
+import type { CopyBooksWebViewOptions } from 'platform-projects';
 import {
   IWebViewProvider,
   OpenWebViewOptions,
@@ -13,13 +14,10 @@ import tailwindStyles from './tailwind.css?inline';
 
 export const copyBooksWebViewType = 'platformProjects.copyBooks';
 
-/** Options for opening the Copy Books dialog */
-export interface CopyBooksOpenWebViewOptions extends OpenWebViewOptions {
-  /** Optional pre-selected source project GUID */
-  fromProjectGuid?: string;
-  /** Optional pre-selected destination project GUID */
-  toProjectGuid?: string;
-}
+/** Internal options interface that extends OpenWebViewOptions */
+interface CopyBooksOpenWebViewOptions
+  extends OpenWebViewOptions,
+    Partial<CopyBooksWebViewOptions> {}
 
 /**
  * Web view provider for the Copy Books dialog. Allows users to copy book files from one project to

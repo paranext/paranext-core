@@ -1,5 +1,10 @@
 import type { ProjectPropertiesWebViewOptions } from 'platform-projects';
-import { IWebViewProvider, SavedWebViewDefinition, WebViewDefinition } from '@papi/core';
+import {
+  IWebViewProvider,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import papi from '@papi/backend';
 import projectPropertiesWebView from './project-properties.web-view?inline';
 import projectPropertiesStyles from './tailwind.css?inline';
@@ -11,12 +16,19 @@ const titleKeyEdit = '%webView_projectProperties_title_edit%';
 const tooltipKeyCreate = '%webView_projectProperties_tooltip_create%';
 const tooltipKeyEdit = '%webView_projectProperties_tooltip_edit%';
 
+/** Internal options interface that extends OpenWebViewOptions */
+interface ProjectPropertiesOpenWebViewOptions
+  extends OpenWebViewOptions,
+    Partial<ProjectPropertiesWebViewOptions> {
+  mode?: 'create' | 'edit';
+}
+
 export class ProjectPropertiesWebViewProvider implements IWebViewProvider {
   // needs to be a class method, not static method
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    getWebViewOptions: ProjectPropertiesWebViewOptions,
+    getWebViewOptions: ProjectPropertiesOpenWebViewOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== projectPropertiesWebViewType)
       throw new Error(

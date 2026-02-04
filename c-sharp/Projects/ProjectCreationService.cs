@@ -113,7 +113,7 @@ internal static class ProjectCreationService
         }
 
         // Step 3: Get type rules and check if base project is required
-        var typeRulesRequest = new ProjectTypeRulesRequest(request.ProjectType);
+        var typeRulesRequest = new ProjectTypeRulesRequest(request.ProjectType.ToString()!);
         ProjectTypeRules typeRules;
         try
         {
@@ -240,17 +240,16 @@ internal static class ProjectCreationService
         foreach (var projectType in projectTypeValues)
         {
             // Get type rules to determine isDerived and requiresEncoder
-            var typeRulesRequest = new ProjectTypeRulesRequest(projectType);
+            // Convert enum to string for the request
+            var typeName = projectType.ToString()!;
+            var typeRulesRequest = new ProjectTypeRulesRequest(typeName);
             try
             {
                 var rules = ProjectTypeRulesService.GetTypeRules(typeRulesRequest);
-                // PtxUtils.Enum<T> toString gives the enum name, which we can use
-                // to construct a ProjectType value via implicit conversion
-                var typeName = projectType.ToString();
                 projectTypes.Add(
                     new ProjectTypeOption(
-                        Type: projectType, // PtxUtils.Enum<T> implicitly converts to T
-                        DisplayName: FormatDisplayName(typeName!),
+                        Type: typeName, // Serialize as string for JSON
+                        DisplayName: FormatDisplayName(typeName),
                         IsDerived: rules.RequiresBaseProject,
                         RequiresEncoder: rules.RequiresEncoder
                     )
@@ -279,7 +278,7 @@ internal static class ProjectCreationService
         {
             versifications.Add(
                 new VersificationOption(
-                    Type: versType,
+                    Type: versType.ToString(), // Serialize as string for JSON
                     DisplayName: FormatDisplayName(versType.ToString())
                 )
             );
@@ -289,12 +288,14 @@ internal static class ProjectCreationService
         var baseProjects = new List<ProjectReference>();
         foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
         {
+            // Convert ProjectType to string for JSON serialization
+            var projectType = scrText.Settings.TranslationInfo?.Type ?? ProjectType.Standard;
             baseProjects.Add(
                 new ProjectReference(
                     Guid: scrText.Guid,
                     ShortName: scrText.Name,
                     FullName: scrText.Settings.FullName ?? scrText.Name,
-                    ProjectType: scrText.Settings.TranslationInfo?.Type ?? ProjectType.Standard
+                    ProjectType: projectType.ToString()!
                 )
             );
         }

@@ -38,13 +38,15 @@ const CHOOSE_ENCODING_STRING_KEYS: LocalizeKey[] = [
 
 // #region Types
 
-// Note: ChooseEncodingState is used for typing web view state (passed via useWebViewState)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface ChooseEncodingState {
+/** Note: ChooseEncodingState documents the web view state structure (passed via useWebViewState) */
+type ChooseEncodingState = {
   encoders: EncoderOption[];
   initialEncoderName?: string;
   initialReverseDirection?: boolean;
-}
+};
+
+// Export to prevent unused warning - used for documentation of state shape
+export type { ChooseEncodingState };
 
 interface ChooseEncodingFormOutput {
   action: 'submit' | 'cancel';

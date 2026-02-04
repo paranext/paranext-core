@@ -139,7 +139,7 @@ internal static class ProjectValidationService
         var errors = new List<(string Field, string Message, ValidationSeverity Severity)>();
 
         // Get type rules from CAP-001 for derived type checks
-        var typeRulesRequest = new ProjectTypeRulesRequest(request.ProjectType);
+        var typeRulesRequest = new ProjectTypeRulesRequest(request.ProjectType.ToString()!);
         ProjectTypeRules? typeRules = null;
         try
         {
