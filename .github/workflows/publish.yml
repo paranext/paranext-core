@@ -141,18 +141,12 @@ jobs:
           ref: platform-yalc
           path: dev-packages/scripture-editors
 
-      - name: Read scripture-editors package.json
-        id: scripture_editors_package_json
-        uses: zoexx/github-action-json-file-properties@1.0.6
-        with:
-          file_path: 'dev-packages/scripture-editors/package.json'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ fromJson(steps.scripture_editors_package_json.outputs.volta).pnpm }}
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
 
       - name: Install scripture-editors dependencies
+        env:
+          VOLTA_FEATURE_PNPM: '1'
         run: |
           cd dev-packages/scripture-editors
           pnpm install
