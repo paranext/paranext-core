@@ -59,5 +59,18 @@ namespace TestParanextDataProvider
         }
 
         #endregion
+
+        #region Test Helper Methods
+
+        /// <summary>
+        /// Gets the list of all registered command names.
+        /// Used by tests to verify command registration (CAP-029).
+        /// </summary>
+        public IReadOnlyList<string> GetRegisteredCommands()
+        {
+            return _localMethods.Keys.ToList();
+        }
+
+        #endregion
     }
 }
