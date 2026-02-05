@@ -134,6 +134,23 @@ jobs:
           echo "Version mismatch! Expected ${{ inputs.version }} but found ${{ steps.release_package_json.outputs.version }}"
           exit 1
 
+      - name: Checkout scripture-editors
+        uses: actions/checkout@v4
+        with:
+          repository: eten-tech-foundation/scripture-editors
+          ref: platform-yalc
+          path: dev-packages/scripture-editors
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install scripture-editors dependencies
+        env:
+          VOLTA_FEATURE_PNPM: '1'
+        run: |
+          cd dev-packages/scripture-editors
+          pnpm install
+
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:

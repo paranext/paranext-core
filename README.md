@@ -172,6 +172,45 @@ To build, run the following:
 npm run build
 ```
 
+#### Linking local development packages (optional)
+
+If you have the `scripture-editors` repository cloned as a sibling folder to this repository (i.e., `../scripture-editors`), running `npm install` will automatically link `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
+
+Note: When developing on your machine, whatever version of `scripture-editors` you have currently checked out will be used. However, CI and build servers check out the `scripture-editors` repository at the branch named `platform-yalc`. To have build servers use changes from `main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
+
+```bash
+# from a clone of scripture-editors (or adjust path accordingly)
+git fetch origin
+git checkout platform-yalc
+git rebase origin/main
+git push --force-with-lease
+```
+
+To set up `scripture-editors` to be linked locally:
+
+1. Clone `scripture-editors` as a sibling to this repo:
+   ```bash
+   cd ..
+   git clone https://github.com/eten-tech-foundation/scripture-editors.git scripture-editors
+   cd paranext-core
+   ```
+2. Install dependencies in `scripture-editors`:
+   ```bash
+   cd ../scripture-editors
+   pnpm install
+   cd ../paranext-core
+   ```
+3. Run `npm install` in this repo. The postinstall script will automatically run `devpub` in `scripture-editors` and link the packages via yalc.
+
+You can also manually link/unlink packages using:
+
+- `npm run link-dev-packages` (will also run `devpub` in `scripture-editors`)
+
+OR
+
+- `npm run editor:link` / `npm run editor:unlink`
+- `npm run utils:link` / `npm run utils:unlink`
+
 ## Starting Development
 
 Start the app in the `dev` environment:
