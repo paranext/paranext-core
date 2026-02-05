@@ -1,6 +1,6 @@
 /**
  * === NEW IN PT10 === Reason: Extension entry point for Platform.Bible. Maps to: UI-PKG-001,
- * UI-PKG-002, UI-PKG-003
+ * UI-PKG-002, UI-PKG-003, UI-PKG-004, UI-PKG-005
  */
 
 import papi, { logger } from '@papi/backend';
@@ -20,6 +20,16 @@ import {
   LanguageSettingsWebViewOptions,
   languageSettingsWebViewType,
 } from './language-settings.web-view-provider';
+import {
+  ChooseEncodingWebViewProvider,
+  ChooseEncodingWebViewOptions,
+  chooseEncodingWebViewType,
+} from './choose-encoding.web-view-provider';
+import {
+  EditFilingPatternWebViewProvider,
+  EditFilingPatternWebViewOptions,
+  editFilingPatternWebViewType,
+} from './edit-filing-pattern.web-view-provider';
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Platform Projects extension is activating!');
@@ -40,6 +50,18 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const languageSettingsProviderPromise = papi.webViewProviders.register(
     languageSettingsWebViewType,
     new LanguageSettingsWebViewProvider(),
+  );
+
+  // Register the Choose Encoding web view provider
+  const chooseEncodingProviderPromise = papi.webViewProviders.register(
+    chooseEncodingWebViewType,
+    new ChooseEncodingWebViewProvider(),
+  );
+
+  // Register the Edit Filing Pattern web view provider
+  const editFilingPatternProviderPromise = papi.webViewProviders.register(
+    editFilingPatternWebViewType,
+    new EditFilingPatternWebViewProvider(),
   );
 
   // Register command to open Create Project dialog
@@ -113,15 +135,51 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  // Register command to open Choose Encoding dialog
+  const openChooseEncodingCommandPromise = papi.commands.registerCommand(
+    'platformProjects.openChooseEncoding',
+    async (options?: ChooseEncodingWebViewOptions) => {
+      logger.info('Opening Choose Encoding dialog');
+      return papi.webViews.openWebView(
+        chooseEncodingWebViewType,
+        {
+          type: 'float',
+          floatSize: { width: 400, height: 250 },
+        },
+        options || {},
+      );
+    },
+  );
+
+  // Register command to open Edit Filing Pattern dialog
+  const openEditFilingPatternCommandPromise = papi.commands.registerCommand(
+    'platformProjects.openEditFilingPattern',
+    async (options?: EditFilingPatternWebViewOptions) => {
+      logger.info('Opening Edit Filing Pattern dialog');
+      return papi.webViews.openWebView(
+        editFilingPatternWebViewType,
+        {
+          type: 'float',
+          floatSize: { width: 450, height: 350 },
+        },
+        options || {},
+      );
+    },
+  );
+
   // Wait for all registrations
   context.registrations.add(
     await projectPropertiesProviderPromise,
     await projectNameProviderPromise,
     await languageSettingsProviderPromise,
+    await chooseEncodingProviderPromise,
+    await editFilingPatternProviderPromise,
     await openCreateProjectCommandPromise,
     await openEditProjectCommandPromise,
     await openProjectNameCommandPromise,
     await openLanguageSettingsCommandPromise,
+    await openChooseEncodingCommandPromise,
+    await openEditFilingPatternCommandPromise,
   );
 
   logger.info('Platform Projects extension activated successfully');
