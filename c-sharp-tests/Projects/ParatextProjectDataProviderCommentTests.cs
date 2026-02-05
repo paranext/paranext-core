@@ -509,6 +509,191 @@ namespace TestParanextDataProvider.Projects
             Assert.That(threads.Count, Is.EqualTo(3));
         }
 
+        [Test]
+        public void GetCommentThreads_FilterByIsReadTrue_ReturnsOnlyReadThreads()
+        {
+            // Arrange - Create multiple threads with different read statuses
+            var comment1 = CreateTestComment("GEN", 1, 1, "Read thread 1");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Unread thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+
+            var comment3 = CreateTestComment("GEN", 1, 3, "Read thread 2");
+            string commentId3 = _provider.CreateComment(new PlatformCommentWrapper(comment3));
+            string threadId3 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId3))
+                .Id;
+
+            // Mark thread 2 as unread (threads 1 and 3 are already read by default)
+            _provider.SetIsCommentThreadRead(threadId2, false);
+
+            var selector = new CommentThreadSelector { IsRead = true };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(threads, Is.Not.Null);
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId1, threadId3 }),
+                "Should return only the 2 read threads"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsReadFalse_ReturnsOnlyUnreadThreads()
+        {
+            // Arrange - Create multiple threads with different read statuses
+            var comment1 = CreateTestComment("GEN", 1, 1, "Read thread");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Unread thread 1");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+
+            var comment3 = CreateTestComment("GEN", 1, 3, "Unread thread 2");
+            string commentId3 = _provider.CreateComment(new PlatformCommentWrapper(comment3));
+            string threadId3 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId3))
+                .Id;
+
+            // Mark threads 2 and 3 as unread (thread 1 stays read)
+            _provider.SetIsCommentThreadRead(threadId2, false);
+            _provider.SetIsCommentThreadRead(threadId3, false);
+
+            var selector = new CommentThreadSelector { IsRead = false };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(threads, Is.Not.Null);
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId2, threadId3 }),
+                "Should return only the 2 unread threads"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsReadNull_ReturnsAllThreads()
+        {
+            // Arrange - Create threads with different read statuses
+            var comment1 = CreateTestComment("GEN", 1, 1, "Read thread");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Unread thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+
+            // Mark thread 2 as unread
+            _provider.SetIsCommentThreadRead(threadId2, false);
+
+            var selector = new CommentThreadSelector();
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(threads, Is.Not.Null);
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId1, threadId2 }),
+                "Should return all threads when IsRead is null"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsReadWithOtherFilters_ReturnsCombinedResults()
+        {
+            // Arrange - Create threads in different verses with different read statuses
+            var comment1 = CreateTestComment("GEN", 1, 1, "Read thread in verse 1");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 1, "Unread thread in verse 1");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+
+            var comment3 = CreateTestComment("GEN", 1, 2, "Read thread in verse 2");
+            string commentId3 = _provider.CreateComment(new PlatformCommentWrapper(comment3));
+            string threadId3 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId3))
+                .Id;
+
+            // Mark thread 2 as unread
+            _provider.SetIsCommentThreadRead(threadId2, false);
+
+            // Create selector that filters by scripture range (Gen 1:1) AND IsRead = true
+            var selector = new CommentThreadSelector
+            {
+                IsRead = true,
+                ScriptureRanges =
+                [
+                    new()
+                    {
+                        Start = new VerseRef
+                        {
+                            BookNum = 1,
+                            ChapterNum = 1,
+                            VerseNum = 1
+                        },
+                        End = new VerseRef
+                        {
+                            BookNum = 1,
+                            ChapterNum = 1,
+                            VerseNum = 1
+                        },
+                        Granularity = "verse"
+                    }
+                ]
+            };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(threads, Is.Not.Null, "Should return threads matching both filters");
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(threadId1),
+                "Should return only the 1 thread that is both read and in Gen 1:1"
+            );
+        }
+
         #endregion
 
         #region DeleteComment Tests

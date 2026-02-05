@@ -5,6 +5,11 @@ import {
   COMMENT_LIST_STRING_KEYS,
   CommentList,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   usePromise,
 } from 'platform-bible-react';
@@ -12,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -53,6 +59,12 @@ global.webViewComponent = function CommentListWebView({
   const [pendingThreadIdToSelect, setPendingThreadIdToSelect] = useState<string | undefined>(
     undefined,
   );
+
+  // Filter state
+  type CommentFilter = 'unresolved-assigned-to-me' | 'unread-assigned-to-me' | 'all';
+  type LocationFilter = 'current-chapter' | 'anywhere';
+  const [commentFilter, setCommentFilter] = useState<CommentFilter>('all');
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>('current-chapter');
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
@@ -128,17 +140,38 @@ global.webViewComponent = function CommentListWebView({
     'legacyCommentManager.comments',
     projectId,
   ).CommentThreads(
-    useMemo(() => {
-      return {
-        scriptureRanges: [
+    useMemo<LegacyCommentThreadSelector>(() => {
+      const selector: LegacyCommentThreadSelector = {};
+
+      // Apply location filter
+      if (locationFilter === 'current-chapter') {
+        selector.scriptureRanges = [
           {
-            granularity: 'chapter',
+            granularity: 'chapter' as const,
             start: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
             end: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
           },
-        ],
-      };
-    }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]),
+        ];
+      }
+
+      // Apply comment filter
+      if (commentFilter === 'unresolved-assigned-to-me') {
+        selector.status = 'Todo';
+        selector.assignedTo = currentUserName;
+      } else if (commentFilter === 'unread-assigned-to-me') {
+        selector.isRead = false;
+        selector.assignedTo = currentUserName;
+      }
+
+      return selector;
+    }, [
+      scrRef.book,
+      scrRef.chapterNum,
+      scrRef.verseNum,
+      locationFilter,
+      commentFilter,
+      currentUserName,
+    ]),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
@@ -271,30 +304,77 @@ global.webViewComponent = function CommentListWebView({
   }
 
   return (
-    <div className="tw-bg-muted">
-      {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
-        <div className="tw-m-4 tw-flex tw-justify-center">
-          <Label>{localizedStrings['%no_comments%']}</Label>
-        </div>
-      ) : (
-        <CommentList
-          classNameForVerseText="scripture-font"
-          threads={commentThreads}
-          currentUser={currentUserName}
-          localizedStrings={localizedStrings}
-          handleAddCommentToThread={handleAddCommentToThread}
-          handleUpdateComment={handleUpdateComment}
-          handleDeleteComment={handleDeleteComment}
-          handleReadStatusChange={handleReadStatusChange}
-          assignableUsers={assignableUsers}
-          canUserAddCommentToThread={canUserAddCommentToThread}
-          canUserAssignThreadCallback={canUserAssignThreadCallback}
-          canUserResolveThreadCallback={canUserResolveThreadCallback}
-          canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-          selectedThreadId={selectedThreadId}
-          onSelectedThreadChange={setSelectedThreadId}
-        />
-      )}
+    <div className="tw-bg-muted tw-flex tw-flex-col tw-h-full">
+      {/* Filter toolbar */}
+      <div className="tw-flex tw-gap-2 tw-p-2 tw-border-b tw-bg-background">
+        {/* Comment filter dropdown */}
+        <Select
+          value={commentFilter}
+          onValueChange={(value) => setCommentFilter(value as CommentFilter)}
+        >
+          <SelectTrigger className="tw-flex-1 tw-min-w-48">
+            <SelectValue>
+              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+                {commentFilter === 'unresolved-assigned-to-me'
+                  ? 'Unresolved assigned to me'
+                  : commentFilter === 'unread-assigned-to-me'
+                    ? 'Unread assigned to me'
+                    : 'All comments'}
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value="unresolved-assigned-to-me">Unresolved assigned to me</SelectItem>
+            <SelectItem value="unread-assigned-to-me">Unread assigned to me</SelectItem>
+            <SelectItem value="all">All comments</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Location filter dropdown */}
+        <Select
+          value={locationFilter}
+          onValueChange={(value) => setLocationFilter(value as LocationFilter)}
+        >
+          <SelectTrigger className="tw-flex-1 tw-min-w-32">
+            <SelectValue>
+              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+                {locationFilter === 'current-chapter' ? 'Current chapter' : 'Anywhere'}
+              </div>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value="current-chapter">Current chapter</SelectItem>
+            <SelectItem value="anywhere">Anywhere</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Comments list */}
+      <div className="tw-flex-1 tw-overflow-auto">
+        {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
+          <div className="tw-m-4 tw-flex tw-justify-center">
+            <Label>{localizedStrings['%no_comments%']}</Label>
+          </div>
+        ) : (
+          <CommentList
+            classNameForVerseText="scripture-font"
+            threads={commentThreads}
+            currentUser={currentUserName}
+            localizedStrings={localizedStrings}
+            handleAddCommentToThread={handleAddCommentToThread}
+            handleUpdateComment={handleUpdateComment}
+            handleDeleteComment={handleDeleteComment}
+            handleReadStatusChange={handleReadStatusChange}
+            assignableUsers={assignableUsers}
+            canUserAddCommentToThread={canUserAddCommentToThread}
+            canUserAssignThreadCallback={canUserAssignThreadCallback}
+            canUserResolveThreadCallback={canUserResolveThreadCallback}
+            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+            selectedThreadId={selectedThreadId}
+            onSelectedThreadChange={setSelectedThreadId}
+          />
+        )}
+      </div>
     </div>
   );
 };
