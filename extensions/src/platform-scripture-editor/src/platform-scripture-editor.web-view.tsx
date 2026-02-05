@@ -62,6 +62,7 @@ import {
   EditorMessageSetAnnotation,
   EditorWebViewMessage,
   ScriptureEditorViewType,
+  ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
@@ -969,6 +970,69 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
+  /**
+   * Handle selection changes in the editor. Updates the local ref and notifies the backend so it
+   * can track the current selection and emit events.
+   *
+   * Converts the editor's SelectionRange to ScriptureRangeUsjVerseRefChapterLocation by combining
+   * the selection range with the current verse reference.
+   */
+  const handleSelectionChange = useCallback(
+    async (change: SelectionRange | undefined) => {
+      currentSelectionRef.current = change;
+
+      // Convert to ScriptureRangeUsjVerseRefChapterLocation format
+      let scriptureSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
+      if (change?.start) {
+        scriptureSelection = {
+          start: {
+            verseRef: scrRef,
+            granularity: 'chapter',
+            documentLocation: {
+              // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              jsonPath: change.start.jsonPath as ContentJsonPath,
+              offset: change.start.offset,
+            },
+          },
+          end: {
+            verseRef: scrRef,
+            granularity: 'chapter',
+            documentLocation:
+              // If the endpoint is defined, use it; otherwise use the start point
+              change.end
+                ? {
+                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    jsonPath: change.end.jsonPath as ContentJsonPath,
+                    offset: change.end.offset,
+                  }
+                : {
+                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    jsonPath: change.start.jsonPath as ContentJsonPath,
+                    offset: change.start.offset,
+                  },
+          },
+        };
+      }
+
+      // Notify the backend of the selection change via WebViewController method
+      try {
+        const webViewController = await papi.webViews.getWebViewController(
+          'platformScriptureEditor.react',
+          webViewId,
+        );
+        if (webViewController) {
+          await webViewController.updateSelectionInternal(scriptureSelection);
+        }
+      } catch (e) {
+        logger.debug(`Failed to notify backend of selection change: ${getErrorMessage(e)}`);
+      }
+    },
+    [scrRef, webViewId],
+  );
+
   // Update the editor if a change comes in from the PDP
   // Note: this will run every time we get data from the PDP whether or not it is different than it
   // was previously. We need to know when data comes in so we can set
@@ -1027,12 +1091,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
         if (!nextTextLocationJsonPath) return;
 
-        editorRef.current?.setSelection({
+        const initialSelection: SelectionRange = {
           start: {
             jsonPath: nextTextLocationJsonPath,
             offset: 0,
           },
-        });
+        };
+        editorRef.current?.setSelection(initialSelection);
       });
 
       return cancelRunOnLoad;
@@ -1253,9 +1318,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           options={options}
           logger={logger}
           onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-          onSelectionChange={(change) => {
-            currentSelectionRef.current = change;
-          }}
+          onSelectionChange={handleSelectionChange}
         />
       </>
     );
