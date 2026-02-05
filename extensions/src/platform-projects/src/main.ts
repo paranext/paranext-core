@@ -1,6 +1,6 @@
 /**
  * === NEW IN PT10 === Reason: Extension entry point for Platform.Bible. Maps to: UI-PKG-001,
- * UI-PKG-002, UI-PKG-003, UI-PKG-004, UI-PKG-005
+ * UI-PKG-002, UI-PKG-003, UI-PKG-004, UI-PKG-005, UI-PKG-006, UI-PKG-007
  */
 
 import papi, { logger } from '@papi/backend';
@@ -30,6 +30,16 @@ import {
   EditFilingPatternWebViewOptions,
   editFilingPatternWebViewType,
 } from './edit-filing-pattern.web-view-provider';
+import {
+  CopyBooksWebViewProvider,
+  CopyBooksWebViewOptions,
+  copyBooksWebViewType,
+} from './copy-books.web-view-provider';
+import {
+  DeleteBooksWebViewProvider,
+  DeleteBooksWebViewOptions,
+  deleteBooksWebViewType,
+} from './delete-books.web-view-provider';
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Platform Projects extension is activating!');
@@ -62,6 +72,18 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const editFilingPatternProviderPromise = papi.webViewProviders.register(
     editFilingPatternWebViewType,
     new EditFilingPatternWebViewProvider(),
+  );
+
+  // Register the Copy Books web view provider
+  const copyBooksProviderPromise = papi.webViewProviders.register(
+    copyBooksWebViewType,
+    new CopyBooksWebViewProvider(),
+  );
+
+  // Register the Delete Books web view provider
+  const deleteBooksProviderPromise = papi.webViewProviders.register(
+    deleteBooksWebViewType,
+    new DeleteBooksWebViewProvider(),
   );
 
   // Register command to open Create Project dialog
@@ -167,6 +189,38 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  // Register command to open Copy Books dialog
+  const openCopyBooksCommandPromise = papi.commands.registerCommand(
+    'platformProjects.openCopyBooks',
+    async (options?: CopyBooksWebViewOptions) => {
+      logger.info('Opening Copy Books dialog');
+      return papi.webViews.openWebView(
+        copyBooksWebViewType,
+        {
+          type: 'float',
+          floatSize: { width: 600, height: 500 },
+        },
+        options || {},
+      );
+    },
+  );
+
+  // Register command to open Delete Books dialog
+  const openDeleteBooksCommandPromise = papi.commands.registerCommand(
+    'platformProjects.openDeleteBooks',
+    async (options?: DeleteBooksWebViewOptions) => {
+      logger.info('Opening Delete Books dialog');
+      return papi.webViews.openWebView(
+        deleteBooksWebViewType,
+        {
+          type: 'float',
+          floatSize: { width: 500, height: 450 },
+        },
+        options || {},
+      );
+    },
+  );
+
   // Wait for all registrations
   context.registrations.add(
     await projectPropertiesProviderPromise,
@@ -174,12 +228,16 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await languageSettingsProviderPromise,
     await chooseEncodingProviderPromise,
     await editFilingPatternProviderPromise,
+    await copyBooksProviderPromise,
+    await deleteBooksProviderPromise,
     await openCreateProjectCommandPromise,
     await openEditProjectCommandPromise,
     await openProjectNameCommandPromise,
     await openLanguageSettingsCommandPromise,
     await openChooseEncodingCommandPromise,
     await openEditFilingPatternCommandPromise,
+    await openCopyBooksCommandPromise,
+    await openDeleteBooksCommandPromise,
   );
 
   logger.info('Platform Projects extension activated successfully');
