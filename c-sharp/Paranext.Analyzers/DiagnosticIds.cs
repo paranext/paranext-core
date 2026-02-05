@@ -13,18 +13,6 @@ public static class DiagnosticIds
     public const string BanTrace = "PNX001";
 
     /// <summary>
-    /// PNX002: DataProvider classes must be internal sealed.
-    /// See: Paranext-Core-Patterns.md "Visibility and Access Modifiers" section.
-    /// </summary>
-    public const string SealedDataProvider = "PNX002";
-
-    /// <summary>
-    /// PNX003: Service classes must be internal static.
-    /// See: Paranext-Core-Patterns.md "Static Services" section.
-    /// </summary>
-    public const string StaticService = "PNX003";
-
-    /// <summary>
     /// PNX004: Only one type per file (with exceptions for exclusive records).
     /// See: Paranext-Core-Patterns.md "File Organization Patterns" section.
     /// </summary>
@@ -37,20 +25,16 @@ public static class DiagnosticIds
     public const string NamespaceMatchesDirectory = "PNX005";
 
     /// <summary>
-    /// PNX006: Class naming must follow established conventions.
-    /// See: Paranext-Core-Patterns.md "Naming Conventions Summary" section.
-    /// </summary>
-    public const string ClassNamingConvention = "PNX006";
-
-    /// <summary>
-    /// PNX007: Methods should not return tuples - use record types instead.
+    /// PNX007: DataProvider/NetworkObject methods should not return tuples - use record types instead.
     /// Tuples serialize as {} over JSON-RPC, causing data loss.
+    /// Only applies to classes that inherit from DataProvider or NetworkObject.
     /// See: phase-3-implementation-backend.md "Smoke Test 3" section.
     /// </summary>
     public const string NoTupleReturnTypes = "PNX007";
 
     /// <summary>
-    /// PNX008: Methods should return concrete types, not object or dynamic.
+    /// PNX008: DataProvider/NetworkObject methods should return concrete types, not object or dynamic.
+    /// Only applies to classes that inherit from DataProvider or NetworkObject.
     /// See: phase-3-implementation-backend.md "Smoke Test 3" section.
     /// </summary>
     public const string ConcreteReturnTypes = "PNX008";

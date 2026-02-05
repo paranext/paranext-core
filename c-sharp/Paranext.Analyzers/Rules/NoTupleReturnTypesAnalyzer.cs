@@ -7,8 +7,9 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Paranext.Analyzers.Rules;
 
 /// <summary>
-/// PNX007: Methods should not return tuples - use record types instead.
+/// PNX007: DataProvider/NetworkObject methods should not return tuples - use record types instead.
 /// Tuples (ValueTuple) serialize as empty objects {} over JSON-RPC, causing runtime failures.
+/// Only applies to classes that inherit from DataProvider or NetworkObject (serialization boundaries).
 /// See: phase-3-implementation-backend.md "Smoke Test 3: Serialization &amp; Parameter Alignment Audit"
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -19,12 +20,12 @@ public sealed class NoTupleReturnTypesAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor Rule =
         new(
             DiagnosticIds.NoTupleReturnTypes,
-            title: "Methods should not return tuples",
+            title: "DataProvider/NetworkObject methods should not return tuples",
             messageFormat: "Method '{0}' returns a tuple type; use a record type instead because tuples serialize as {{}} over JSON-RPC",
             category: "Paranext.Serialization",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "C# tuples (ValueTuple) serialize as empty objects {} over JSON-RPC, causing data loss. Use record types for structured return values.",
+            description: "C# tuples (ValueTuple) serialize as empty objects {} over JSON-RPC, causing data loss. Use record types for structured return values. Only applies to DataProvider/NetworkObject classes.",
             helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#json-serialization-converters"
         );
 
@@ -50,6 +51,15 @@ public sealed class NoTupleReturnTypesAnalyzer : DiagnosticAnalyzer
 
         // Skip private methods - they're implementation details
         if (methodSymbol.DeclaredAccessibility == Accessibility.Private)
+            return;
+
+        // Only check classes that inherit from DataProvider/NetworkObject (serialization boundary)
+        var containingType = methodSymbol.ContainingType;
+        if (containingType == null || !InheritsFromSerializationBoundary(containingType))
+            return;
+
+        // Skip abstract base classes - only check concrete implementations
+        if (containingType.IsAbstract)
             return;
 
         // Check if return type is a tuple
@@ -93,6 +103,23 @@ public sealed class NoTupleReturnTypesAnalyzer : DiagnosticAnalyzer
             }
         }
 
+        return false;
+    }
+
+    /// <summary>
+    /// Check if the class inherits from DataProvider, NetworkObject, or ProjectDataProvider.
+    /// These are the classes whose public methods cross JSON-RPC serialization boundaries.
+    /// </summary>
+    private static bool InheritsFromSerializationBoundary(INamedTypeSymbol classSymbol)
+    {
+        var baseType = classSymbol.BaseType;
+        while (baseType != null)
+        {
+            var name = baseType.Name;
+            if (name == "DataProvider" || name == "NetworkObject" || name == "ProjectDataProvider")
+                return true;
+            baseType = baseType.BaseType;
+        }
         return false;
     }
 }
