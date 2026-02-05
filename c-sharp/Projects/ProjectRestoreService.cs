@@ -172,7 +172,7 @@ internal static class ProjectRestoreService
             ShortName: shortName,
             FullName: fullName,
             Guid: HexId.FromStr(guidStr),
-            ProjectType: projectType
+            ProjectType: projectType.ToString()!
         );
     }
 

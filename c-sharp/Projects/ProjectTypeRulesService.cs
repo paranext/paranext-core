@@ -33,10 +33,11 @@ internal static class ProjectTypeRulesService
         // - Special flags (admin role, auto-generated names, etc.)
         // These rules match PT9 behavior documented in gm-004.
 
-        var projectType = request.ProjectType;
+        // Convert string to enum for comparison
+        var projectTypeString = request.ProjectType;
 
-        // Use equality comparison with PtxUtils.Enum<ProjectType> which supports == operator
-        if (projectType == ProjectType.Standard)
+        // Use string comparison for project type matching
+        if (projectTypeString == "Standard")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: false,
@@ -49,7 +50,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.BackTranslation)
+        if (projectTypeString == "BackTranslation")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -62,7 +63,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.Daughter)
+        if (projectTypeString == "Daughter")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -75,7 +76,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.Auxiliary)
+        if (projectTypeString == "Auxiliary")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -89,7 +90,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.StudyBible)
+        if (projectTypeString == "StudyBible")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -102,7 +103,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.StudyBibleAdditions)
+        if (projectTypeString == "StudyBibleAdditions")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -117,12 +118,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        // Note: TransliterationManual needs string comparison because PtxUtils.Enum
-        // constructed from string may not match == with enum value for this type
-        if (
-            projectType == ProjectType.TransliterationManual
-            || projectType.ToString() == "TransliterationManual"
-        )
+        if (projectTypeString == "TransliterationManual")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -135,7 +131,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.TransliterationWithEncoder)
+        if (projectTypeString == "TransliterationWithEncoder")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: true,
@@ -149,7 +145,7 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        if (projectType == ProjectType.ConsultantNotes)
+        if (projectTypeString == "ConsultantNotes")
         {
             return new ProjectTypeRules(
                 RequiresBaseProject: false,
@@ -163,6 +159,6 @@ internal static class ProjectTypeRulesService
             );
         }
 
-        throw new ArgumentException($"Unknown project type: {projectType}", nameof(request));
+        throw new ArgumentException($"Unknown project type: {projectTypeString}", nameof(request));
     }
 }
