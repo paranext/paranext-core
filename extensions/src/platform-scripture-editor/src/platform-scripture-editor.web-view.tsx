@@ -998,12 +998,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           end: {
             verseRef: scrRef,
             granularity: 'chapter',
-            documentLocation: {
-              // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              jsonPath: (change.end?.jsonPath ?? change.start.jsonPath) as ContentJsonPath,
-              offset: change.end?.offset ?? change.start.offset,
-            },
+            documentLocation:
+              // If the endpoint is defined, use it; otherwise use the start point
+              change.end
+                ? {
+                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    jsonPath: change.end.jsonPath as ContentJsonPath,
+                    offset: change.end.offset,
+                  }
+                : {
+                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    jsonPath: change.start.jsonPath as ContentJsonPath,
+                    offset: change.start.offset,
+                  },
           },
         };
       }

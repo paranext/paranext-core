@@ -46,12 +46,6 @@ const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionCh
 /** Event emitter for selection change events. Created in activate() */
 let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
 
-/**
- * Gets the current selection for an editor.
- *
- * @param webViewId The WebView ID of the editor
- * @returns The current selection, or undefined if there is no selection or the editor is not found
- */
 // Selection is stored per-WebViewController instance in createWebViewController.
 
 // #endregion Editor Selection Tracking
@@ -654,7 +648,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       async updateSelectionInternal(selection) {
         const webViewId = currentWebViewDefinition.id;
 
-        // If the selection changed, we don't need to do anything
+        // If the selection didn't change, we don't need to do anything
         if (deepEqual(currentSelection, selection)) return;
 
         currentSelection = selection;
