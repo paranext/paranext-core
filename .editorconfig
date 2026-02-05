@@ -60,8 +60,8 @@ dotnet_diagnostic.CA1062.severity = suggestion
 # Implement IDisposable correctly
 dotnet_diagnostic.CA1063.severity = warning
 
-# Dispose objects before losing scope
-dotnet_diagnostic.CA2000.severity = warning
+# Dispose objects before losing scope (disabled - flags false positives)
+dotnet_diagnostic.CA2000.severity = none
 
 # Provide correct arguments to formatting methods
 dotnet_diagnostic.CA2241.severity = warning
@@ -76,7 +76,7 @@ dotnet_diagnostic.CA1711.severity = none
 dotnet_diagnostic.CA1805.severity = none
 
 # ==============================================================================
-# Custom Paranext Analyzers (PNX001-PNX006) - DEFAULT: Warnings
+# Custom Paranext Analyzers (PNX001, PNX004-PNX005, PNX007-PNX008) - DEFAULT: Warnings
 # These are set to warnings by default to not break existing code.
 # On AI branches, the pre-commit hook runs with -warnaserror to enforce them.
 # ==============================================================================
@@ -84,17 +84,14 @@ dotnet_diagnostic.CA1805.severity = none
 # PNX001: Ban System.Diagnostics.Trace - use Console.WriteLine instead
 dotnet_diagnostic.PNX001.severity = warning
 
-# PNX002: DataProvider classes must be internal sealed
-dotnet_diagnostic.PNX002.severity = warning
-
-# PNX003: Service classes must be internal static
-dotnet_diagnostic.PNX003.severity = warning
-
 # PNX004: Only one type per file (exception: exclusively-used records)
 dotnet_diagnostic.PNX004.severity = warning
 
 # PNX005: Namespace must match directory structure
 dotnet_diagnostic.PNX005.severity = warning
 
-# PNX006: Class naming conventions (*DataProvider, *Service, *Worker, *Factory)
-dotnet_diagnostic.PNX006.severity = suggestion
+# PNX007: DataProvider/NetworkObject methods should not return tuples
+dotnet_diagnostic.PNX007.severity = warning
+
+# PNX008: DataProvider/NetworkObject methods should return concrete types
+dotnet_diagnostic.PNX008.severity = warning

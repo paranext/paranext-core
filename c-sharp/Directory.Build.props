@@ -3,7 +3,7 @@
     Shared build properties for all C# projects in paranext-core.
     This file configures:
     - Microsoft.CodeAnalysis.NetAnalyzers for general code quality
-    - Paranext.Analyzers for paranext-specific pattern enforcement (PNX001-PNX006)
+    - Paranext.Analyzers for paranext-specific pattern enforcement (PNX001, PNX004-PNX005, PNX007-PNX008)
 
     NOTE: Warnings are NOT treated as errors by default. On AI branches,
     the pre-commit hook runs `dotnet build -warnaserror` to enforce rules.
