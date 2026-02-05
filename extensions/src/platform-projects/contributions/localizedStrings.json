@@ -2,6 +2,7 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%mainMenu_createProject%": "New Project...",
       "%webView_projectProperties_title_create%": "Create New Project",
       "%webView_projectProperties_title_edit%": "Project Properties",
       "%webView_projectProperties_tab_general%": "General",
@@ -89,6 +90,7 @@
       "%webView_deleteBooks_ariaLabel_warningBanner%": "Warning banner"
     },
     "es": {
+      "%mainMenu_createProject%": "Nuevo Proyecto...",
       "%webView_projectProperties_title_create%": "Crear Nuevo Proyecto",
       "%webView_projectProperties_title_edit%": "Propiedades del Proyecto",
       "%webView_projectProperties_tab_general%": "General",

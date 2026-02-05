@@ -2,7 +2,15 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%mainMenu_createProject%",
+        "localizeNotes": "Application main menu > Platform.Bible > Create New Project",
+        "group": "platform.projectProjects",
+        "order": 1,
+        "command": "platformProjects.openCreateProject"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},
