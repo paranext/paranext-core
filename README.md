@@ -176,7 +176,7 @@ npm run build
 
 If you have the `scripture-editors` repository cloned as a sibling folder to this repository (i.e., `../scripture-editors`), running `npm install` will automatically link `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
 
-Note: CI and build servers checkout the `scripture-editors` repository at the branch named `platform-yalc`. To have build servers use changes from `main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
+Note: When developing on your machine, whatever version of `scripture-editors` you have currently checked out will be used. However, CI and build servers check out the `scripture-editors` repository at the branch named `platform-yalc`. To have build servers use changes from `main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
 
 ```bash
 # from a clone of scripture-editors (or adjust path accordingly)

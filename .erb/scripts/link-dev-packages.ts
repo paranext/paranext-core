@@ -11,7 +11,7 @@
  */
 
 import {
-  anyDevPackagePresent,
+  isAnyDevPackagePresent,
   devPackageExists,
   execPnpmInDevPackage,
   execInRepo,
@@ -19,7 +19,7 @@ import {
 } from './dev-package-utils';
 
 function linkDevPackages(): void {
-  if (!anyDevPackagePresent()) {
+  if (!isAnyDevPackagePresent()) {
     console.log('dev packages not found - skipping yalc linking');
     return;
   }

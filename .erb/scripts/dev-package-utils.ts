@@ -32,7 +32,7 @@ export function devPackageExists(folder: string): boolean {
   return fs.existsSync(getDevPackagePath(folder));
 }
 
-export function anyDevPackagePresent(): boolean {
+export function isAnyDevPackagePresent(): boolean {
   return DEV_PACKAGES.some((p) => devPackageExists(p.folder));
 }
 
