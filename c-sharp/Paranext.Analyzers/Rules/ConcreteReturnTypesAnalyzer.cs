@@ -7,8 +7,9 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Paranext.Analyzers.Rules;
 
 /// <summary>
-/// PNX008: Methods should not return 'object' or 'dynamic' - use concrete types.
+/// PNX008: DataProvider/NetworkObject methods should not return 'object' or 'dynamic' - use concrete types.
 /// Weakly-typed returns lose type safety and can cause serialization issues over JSON-RPC.
+/// Only applies to classes that inherit from DataProvider or NetworkObject (serialization boundaries).
 /// See: phase-3-implementation-backend.md "Smoke Test 3: Serialization &amp; Parameter Alignment Audit"
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -17,12 +18,12 @@ public sealed class ConcreteReturnTypesAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor Rule =
         new(
             DiagnosticIds.ConcreteReturnTypes,
-            title: "Methods should return concrete types",
+            title: "DataProvider/NetworkObject methods should return concrete types",
             messageFormat: "Method '{0}' returns '{1}'; use a concrete type instead for type safety and proper JSON-RPC serialization",
             category: "Paranext.Serialization",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "Returning 'object' or 'dynamic' loses type safety and can cause serialization issues. Use concrete types (classes, records, or interfaces).",
+            description: "Returning 'object' or 'dynamic' loses type safety and can cause serialization issues. Use concrete types (classes, records, or interfaces). Only applies to DataProvider/NetworkObject classes.",
             helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#json-serialization-converters"
         );
 
@@ -50,9 +51,17 @@ public sealed class ConcreteReturnTypesAnalyzer : DiagnosticAnalyzer
         if (methodSymbol.DeclaredAccessibility == Accessibility.Private)
             return;
 
-        // Skip test classes
+        // Only check classes that inherit from DataProvider/NetworkObject (serialization boundary)
         var containingType = methodSymbol.ContainingType;
-        if (containingType != null && IsTestClass(containingType))
+        if (containingType == null || !InheritsFromSerializationBoundary(containingType))
+            return;
+
+        // Skip abstract base classes - only check concrete implementations
+        if (containingType.IsAbstract)
+            return;
+
+        // Skip test classes
+        if (IsTestClass(containingType))
             return;
 
         // Check if return type is object or dynamic
@@ -133,6 +142,23 @@ public sealed class ConcreteReturnTypesAnalyzer : DiagnosticAnalyzer
         if (!methodSymbol.ExplicitInterfaceImplementations.IsEmpty)
             return true;
 
+        return false;
+    }
+
+    /// <summary>
+    /// Check if the class inherits from DataProvider, NetworkObject, or ProjectDataProvider.
+    /// These are the classes whose public methods cross JSON-RPC serialization boundaries.
+    /// </summary>
+    private static bool InheritsFromSerializationBoundary(INamedTypeSymbol classSymbol)
+    {
+        var baseType = classSymbol.BaseType;
+        while (baseType != null)
+        {
+            var name = baseType.Name;
+            if (name == "DataProvider" || name == "NetworkObject" || name == "ProjectDataProvider")
+                return true;
+            baseType = baseType.BaseType;
+        }
         return false;
     }
 }

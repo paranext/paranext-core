@@ -68,6 +68,3 @@ CLAUDE.md.backup
 c-sharp/Paranext.Analyzers/bin/
 c-sharp/Paranext.Analyzers/obj/
 
-# ESLint plugin build artifacts
-lib/eslint-plugin-paranext/dist/
-lib/eslint-plugin-paranext/node_modules/
