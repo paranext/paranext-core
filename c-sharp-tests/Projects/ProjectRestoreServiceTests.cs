@@ -150,7 +150,7 @@ internal class ProjectRestoreServiceTests : PapiTestBase
 
             var result = await ProjectRestoreService.AnalyzeBackupAsync(testBackupPath);
 
-            Assert.That(result.ProjectInfo.ProjectType, Is.EqualTo(ProjectType.Standard));
+            Assert.That(result.ProjectInfo.ProjectType, Is.EqualTo("Standard"));
         }
         finally
         {

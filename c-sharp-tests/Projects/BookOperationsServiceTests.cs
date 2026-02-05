@@ -89,7 +89,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         Assert.That(result, Is.Not.Null);
         // Standard source can copy to: Standard, Auxiliary, BackTranslation, Daughter, StudyBible, TransliterationManual
         Assert.That(
-            result.Any(p => p.ProjectType == ProjectType.Standard),
+            result.Any(p => p.ProjectType == "Standard"),
             Is.True,
             "Standard should be compatible destination for Standard source"
         );
@@ -132,7 +132,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         // Assert - Standard should NOT be in list; only StudyBibleAdditions allowed
         Assert.That(result, Is.Not.Null);
         Assert.That(
-            result.All(p => p.ProjectType == ProjectType.StudyBibleAdditions),
+            result.All(p => p.ProjectType == "StudyBibleAdditions"),
             Is.True,
             "BHV-606: StudyBibleAdditions source can only copy to StudyBibleAdditions"
         );
@@ -175,7 +175,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         // Assert - Only StudyBible should be in compatible list
         Assert.That(result, Is.Not.Null);
         Assert.That(
-            result.All(p => p.ProjectType == ProjectType.StudyBible),
+            result.All(p => p.ProjectType == "StudyBible"),
             Is.True,
             "StudyBible source can only copy to StudyBible"
         );
@@ -212,7 +212,7 @@ internal class BookOperationsServiceTests : PapiTestBase
         // Assert - Only ConsultantNotes should be in compatible list
         Assert.That(result, Is.Not.Null);
         Assert.That(
-            result.All(p => p.ProjectType == ProjectType.ConsultantNotes),
+            result.All(p => p.ProjectType == "ConsultantNotes"),
             Is.True,
             "ConsultantNotes source can only copy to ConsultantNotes"
         );
@@ -256,12 +256,12 @@ internal class BookOperationsServiceTests : PapiTestBase
         Assert.That(result, Is.Not.Null);
         // Should NOT include StudyBibleAdditions or ConsultantNotes
         Assert.That(
-            result.Any(p => p.ProjectType == ProjectType.StudyBibleAdditions),
+            result.Any(p => p.ProjectType == "StudyBibleAdditions"),
             Is.False,
             "BackTranslation cannot copy to StudyBibleAdditions"
         );
         Assert.That(
-            result.Any(p => p.ProjectType == ProjectType.ConsultantNotes),
+            result.Any(p => p.ProjectType == "ConsultantNotes"),
             Is.False,
             "BackTranslation cannot copy to ConsultantNotes"
         );
