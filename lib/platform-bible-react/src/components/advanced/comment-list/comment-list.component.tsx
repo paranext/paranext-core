@@ -28,11 +28,13 @@ export default function CommentList({
   onSelectedThreadChange,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
+  const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
 
   // When external selection changes, add it to expanded set
   useEffect(() => {
     if (externalSelectedThreadId) {
       setExpandedThreadIds((prev) => new Set(prev).add(externalSelectedThreadId));
+      setLastInteractedThreadId(externalSelectedThreadId);
     }
   }, [externalSelectedThreadId]);
 
@@ -47,6 +49,7 @@ export default function CommentList({
   const handleKeyboardSelectThread = useCallback(
     (option: ListboxOption) => {
       setExpandedThreadIds((prev) => new Set(prev).add(option.id));
+      setLastInteractedThreadId(option.id);
       onSelectedThreadChange?.(option.id);
     },
     [onSelectedThreadChange],
@@ -64,6 +67,7 @@ export default function CommentList({
         }
         return next;
       });
+      setLastInteractedThreadId(threadId);
       onSelectedThreadChange?.(isCollapsing ? undefined : threadId);
     },
     [expandedThreadIds, onSelectedThreadChange],
@@ -74,19 +78,26 @@ export default function CommentList({
     onOptionSelect: handleKeyboardSelectThread,
   });
 
-  // Collapse all expanded threads when Escape is pressed
+  // Collapse the last interacted thread when Escape is pressed
   const handleKeyDownWithEscape = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Escape') {
-        setExpandedThreadIds(new Set());
-        onSelectedThreadChange?.(undefined);
+        if (lastInteractedThreadId && expandedThreadIds.has(lastInteractedThreadId)) {
+          setExpandedThreadIds((prev) => {
+            const next = new Set(prev);
+            next.delete(lastInteractedThreadId);
+            return next;
+          });
+          setLastInteractedThreadId(undefined);
+          onSelectedThreadChange?.(undefined);
+        }
         event.preventDefault();
         event.stopPropagation();
       } else {
         handleKeyDown(event);
       }
     },
-    [handleKeyDown, onSelectedThreadChange],
+    [lastInteractedThreadId, expandedThreadIds, handleKeyDown, onSelectedThreadChange],
   );
 
   return (
