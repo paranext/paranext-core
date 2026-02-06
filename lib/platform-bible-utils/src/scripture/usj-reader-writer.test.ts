@@ -18,12 +18,17 @@ import { matthew1And2Locations } from './usj-reader-writer-test-data/web-matthew
 import {
   UsfmScrRefVerseLocation,
   UsfmVerseRefVerseLocation,
+  UsjAttributeKeyLocation,
+  UsjAttributeMarkerLocation,
+  UsjClosingAttributeMarkerLocation,
+  UsjClosingMarkerLocation,
   UsjDocumentLocation,
   UsjFlatBookLocation,
   UsjFlatChapterLocation,
   UsjFlatTextChapterLocation,
   UsjMarkerLocation,
   UsjNodeAndDocumentLocation,
+  UsjPropertyValueLocation,
   UsjReaderWriterOptions,
   UsjTextContentLocation,
   UsjVerseRefBookLocation,
@@ -1908,5 +1913,287 @@ describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(exampleProvidedRefsUsfm);
+  });
+});
+
+describe('isUsjDocumentLocationForTextContent', () => {
+  describe('with UsjDocumentLocation', () => {
+    test('returns true for UsjTextContentLocation', () => {
+      const textContentLocation: UsjTextContentLocation = {
+        jsonPath: '$.content[0]',
+        offset: 5,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(textContentLocation)).toBe(true);
+    });
+
+    test('returns false for UsjMarkerLocation', () => {
+      const markerLocation: UsjMarkerLocation = {
+        jsonPath: '$.content[0]',
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(markerLocation)).toBe(false);
+    });
+
+    test('returns false for UsjClosingMarkerLocation', () => {
+      const closingMarkerLocation: UsjClosingMarkerLocation = {
+        jsonPath: '$.content[0]',
+        closingMarkerOffset: 2,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(closingMarkerLocation)).toBe(
+        false,
+      );
+    });
+
+    test('returns false for UsjPropertyValueLocation', () => {
+      const propertyValueLocation: UsjPropertyValueLocation = {
+        jsonPath: '$.content[0].marker',
+        propertyOffset: 1,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(propertyValueLocation)).toBe(
+        false,
+      );
+    });
+
+    test('returns false for UsjAttributeKeyLocation', () => {
+      const attributeKeyLocation: UsjAttributeKeyLocation = {
+        jsonPath: '$.content[0]',
+        keyName: 'altnumber',
+        keyOffset: 0,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(attributeKeyLocation)).toBe(false);
+    });
+
+    test('returns false for UsjAttributeMarkerLocation', () => {
+      const attributeMarkerLocation: UsjAttributeMarkerLocation = {
+        jsonPath: '$.content[0]',
+        keyName: 'altnumber',
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(attributeMarkerLocation)).toBe(
+        false,
+      );
+    });
+
+    test('returns false for UsjClosingAttributeMarkerLocation', () => {
+      const closingAttributeMarkerLocation: UsjClosingAttributeMarkerLocation = {
+        jsonPath: '$.content[0]',
+        keyName: 'altnumber',
+        keyClosingMarkerOffset: 1,
+      };
+      expect(
+        UsjReaderWriter.isUsjDocumentLocationForTextContent(closingAttributeMarkerLocation),
+      ).toBe(false);
+    });
+  });
+
+  describe('with UsjNodeAndDocumentLocation', () => {
+    test('returns true for text content node with UsjTextContentLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+        node: 'some text content',
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          offset: 5,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation)).toBe(true);
+    });
+
+    test('returns false for non-string node even with offset in location', () => {
+      // This tests that the function checks both the node type AND the document location
+      const nodeAndLocation: UsjNodeAndDocumentLocation = {
+        node: { type: 'para', marker: 'p', content: [] },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          offset: 5,
+        } as UsjTextContentLocation,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns false for marker object node with UsjMarkerLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation> = {
+        node: { type: 'para', marker: 'p', content: [] },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns false for string node with UsjMarkerLocation (missing offset)', () => {
+      // This tests the edge case where node is string but location doesn't have offset
+      const nodeAndLocation = {
+        node: 'some text',
+        documentLocation: {
+          jsonPath: '$.content[0]',
+        } as UsjMarkerLocation,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation)).toBe(false);
+    });
+  });
+});
+
+describe('isUsjDocumentLocationForNode', () => {
+  describe('with UsjDocumentLocation', () => {
+    test('returns true for UsjMarkerLocation', () => {
+      const markerLocation: UsjMarkerLocation = {
+        jsonPath: '$.content[0]',
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(markerLocation)).toBe(true);
+    });
+
+    test('returns true for UsjTextContentLocation', () => {
+      const textContentLocation: UsjTextContentLocation = {
+        jsonPath: '$.content[0]',
+        offset: 5,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(textContentLocation)).toBe(true);
+    });
+
+    test('returns false for UsjClosingMarkerLocation', () => {
+      const closingMarkerLocation: UsjClosingMarkerLocation = {
+        jsonPath: '$.content[0]',
+        closingMarkerOffset: 2,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(closingMarkerLocation)).toBe(false);
+    });
+
+    test('returns false for UsjPropertyValueLocation', () => {
+      const propertyValueLocation: UsjPropertyValueLocation = {
+        jsonPath: '$.content[0].marker',
+        propertyOffset: 1,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(propertyValueLocation)).toBe(false);
+    });
+
+    test('returns false for UsjAttributeKeyLocation', () => {
+      const attributeKeyLocation: UsjAttributeKeyLocation = {
+        jsonPath: '$.content[0]',
+        keyName: 'altnumber',
+        keyOffset: 0,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(attributeKeyLocation)).toBe(false);
+    });
+
+    test('returns false for UsjAttributeMarkerLocation', () => {
+      const attributeMarkerLocation: UsjAttributeMarkerLocation = {
+        jsonPath: '$.content[0]',
+        keyName: 'altnumber',
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(attributeMarkerLocation)).toBe(false);
+    });
+
+    test('returns false for UsjClosingAttributeMarkerLocation', () => {
+      const closingAttributeMarkerLocation: UsjClosingAttributeMarkerLocation = {
+        jsonPath: '$.content[0]',
+        keyName: 'altnumber',
+        keyClosingMarkerOffset: 1,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(closingAttributeMarkerLocation)).toBe(
+        false,
+      );
+    });
+  });
+
+  describe('with UsjNodeAndDocumentLocation', () => {
+    test('returns true for marker object node with UsjMarkerLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation> = {
+        node: { type: 'para', marker: 'p', content: [] },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(true);
+    });
+
+    test('returns true for text content node with UsjTextContentLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+        node: 'some text content',
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          offset: 5,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(true);
+    });
+
+    test('returns false for marker object node with UsjClosingMarkerLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjClosingMarkerLocation> = {
+        node: { type: 'para', marker: 'p', content: [] },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          closingMarkerOffset: 2,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns false for string node with non-text-content location', () => {
+      // When node is a string, it delegates to isUsjDocumentLocationForTextContent
+      // which will return false if location doesn't have offset
+      const nodeAndLocation = {
+        node: 'some text',
+        documentLocation: {
+          jsonPath: '$.content[0]',
+        } as UsjMarkerLocation,
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns true for string node with text content location', () => {
+      // When node is a string, it delegates to isUsjDocumentLocationForTextContent
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+        node: 'some text',
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          offset: 0,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(true);
+    });
+
+    test('returns false for marker object node with UsjPropertyValueLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjPropertyValueLocation> = {
+        node: { type: 'para', marker: 'p', content: [] },
+        documentLocation: {
+          jsonPath: '$.content[0].marker',
+          propertyOffset: 1,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns false for marker object node with UsjAttributeKeyLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjAttributeKeyLocation> = {
+        node: { type: 'chapter', marker: 'c', number: '1' },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          keyName: 'altnumber',
+          keyOffset: 0,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns false for marker object node with UsjAttributeMarkerLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjAttributeMarkerLocation> = {
+        node: { type: 'chapter', marker: 'c', number: '1' },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          keyName: 'altnumber',
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
+    });
+
+    test('returns false for marker object node with UsjClosingAttributeMarkerLocation', () => {
+      const nodeAndLocation: UsjNodeAndDocumentLocation<UsjClosingAttributeMarkerLocation> = {
+        node: { type: 'chapter', marker: 'c', number: '1' },
+        documentLocation: {
+          jsonPath: '$.content[0]',
+          keyName: 'altnumber',
+          keyClosingMarkerOffset: 1,
+        },
+      };
+      expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
+    });
   });
 });
