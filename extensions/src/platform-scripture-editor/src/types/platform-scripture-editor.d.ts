@@ -1,5 +1,6 @@
 declare module 'platform-scripture-editor' {
   import {
+    AnnotationRange,
     SelectionRange as PlatformEditorSelectionRange,
     TypedMarkRemovalCause,
   } from '@eten-tech-foundation/platform-editor';
@@ -104,10 +105,7 @@ declare module 'platform-scripture-editor' {
      */
     verseRef: SerializedVerseRef;
     /** The annotation range in editor-usable format */
-    annotationRange: {
-      start: { jsonPath: string; offset: number };
-      end: { jsonPath: string; offset: number };
-    };
+    annotationRange: AnnotationRange;
     /** The type of annotation (e.g., 'translator-comment') */
     annotationType: string;
     /** Unique identifier for this annotation */

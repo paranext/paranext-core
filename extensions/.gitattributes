@@ -12,3 +12,5 @@
 *.woff2 binary
 *.ldml  binary
 *.zip  binary
+# Generated files - review tools (including GitHub's PR view) will collapse or skip by default.
+dist/**  linguist-generated=true

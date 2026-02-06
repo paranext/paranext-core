@@ -595,7 +595,10 @@ global.webViewComponent = function FindWebView({
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        editorWebViewController.selectRange(searchResult);
+        editorWebViewController.selectRange({
+          start: searchResult.start,
+          end: searchResult.end,
+        });
       }
     },
     [editorWebViewController, editorWebViewId, setVerseRefSetting],
