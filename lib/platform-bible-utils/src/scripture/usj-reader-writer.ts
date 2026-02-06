@@ -1382,8 +1382,66 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       documentLocation = usjDocumentLocationMaybeNode.documentLocation;
     }
 
+    // Document location must always have jsonPath
+    if (!('jsonPath' in documentLocation)) return false;
+
     // Text content representation in USJDocumentLocation requires offset and nothing else has offset
     return 'offset' in documentLocation;
+  }
+
+  /**
+   * Determine if the USJ document location is pointing to a node (text or start of marker) content
+   * location instead of some location related to a marker's closing marker, property, or attribute
+   *
+   * @param usjDocumentLocation USJ document location to test
+   * @returns `true` if the location is for text content; `false` otherwise
+   */
+  static isUsjDocumentLocationForNode(
+    usjDocumentLocation: UsjDocumentLocation,
+  ): usjDocumentLocation is UsjMarkerLocation | UsjTextContentLocation;
+  /**
+   * Determine if the USJ document location in this node and document location is pointing to a node
+   * (text or start of marker) content location instead of some location related to a marker's
+   * closing marker, property, or attribute
+   *
+   * @param usjNodeAndDocumentLocation USJ node and document location to test
+   * @returns `true` if the location is for text content; `false` otherwise
+   */
+  static isUsjDocumentLocationForNode(
+    usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation,
+  ): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<
+    UsjMarkerLocation | UsjTextContentLocation
+  >;
+  static isUsjDocumentLocationForNode(
+    usjDocumentLocationMaybeNode: UsjDocumentLocation | UsjNodeAndDocumentLocation,
+  ): boolean {
+    let documentLocation = usjDocumentLocationMaybeNode;
+    if ('node' in usjDocumentLocationMaybeNode) {
+      // If it's a UsjNodeAndDocumentLocation and the node is a string, check if it is a text content
+      // location
+      if (isString(usjDocumentLocationMaybeNode.node))
+        return UsjReaderWriter.isUsjDocumentLocationForTextContent(usjDocumentLocationMaybeNode);
+
+      documentLocation = usjDocumentLocationMaybeNode.documentLocation;
+    }
+
+    // Document location must always have jsonPath
+    if (!('jsonPath' in documentLocation)) return false;
+
+    // Not UsjClosingMarkerLocation
+    if ('closingMarkerOffset' in documentLocation) return false;
+    // Not UsjPropertyValueLocation
+    if ('propertyOffset' in documentLocation) return false;
+    // Not UsjAttributeMarkerLocation, UsjAttributeKeyLocation, or UsjClosingAttributeMarkerLocation
+    if ('keyName' in documentLocation) return false;
+    // Not UsjAttributeKeyLocation
+    if ('keyOffset' in documentLocation) return false;
+    // Not UsjClosingAttributeMarkerLocation
+    if ('keyClosingMarkerOffset' in documentLocation) return false;
+
+    // All that's left is UsjMarkerLocation and UsjTextContentLocation!
+    // May or may not have `offset` (text content vs marker), but either way it's a node
+    return true;
   }
 
   // #endregion UsjDocumentLocation utilities
