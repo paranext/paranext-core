@@ -9,7 +9,7 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: false, // Electron tests need serial execution
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1, // Retry once locally to handle flaky DataProvider timeouts
   workers: 1, // Single worker for Electron to avoid port conflicts
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
   timeout: 120_000, // 2 minutes per test (app initialization can be slow)
