@@ -806,4 +806,13 @@ export interface IUsjReaderWriter {
     usjLocation: UsjDocumentLocation,
     bookIdIfNotFound?: string,
   ): UsfmVerseRefVerseLocation;
+  /**
+   * Replace the content between two USJ document locations with optional plaintext. Only
+   * `UsjMarkerLocation` and `UsjTextContentLocation` are supported currently.
+   */
+  replace(
+    start: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>,
+    end: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>,
+    contentToInsert?: string,
+  ): void;
 }

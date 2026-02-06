@@ -1769,6 +1769,254 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     return retVal;
   }
 
+  /**
+   * Replace content between two USJ locations with optional plaintext. Current implementation
+   * supports replacements that are contained within a single text node or are a no-op. More complex
+   * multi-node ranges are not implemented yet.
+   */
+  replace(
+    start: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>,
+    end: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>,
+    contentToInsert?: string,
+  ): void {
+    // 1. Validate locations are node types
+    if (
+      !UsjReaderWriter.isUsjDocumentLocationForNode(start) ||
+      !UsjReaderWriter.isUsjDocumentLocationForNode(end)
+    )
+      throw new Error('replace does not yet support other location types');
+
+    // 2. contentToInsert must be plaintext (no backslashes)
+    if (
+      contentToInsert !== undefined &&
+      typeof contentToInsert === 'string' &&
+      contentToInsert.indexOf('\\') >= 0
+    )
+      throw new Error(
+        'replace does not yet support replacing with USFM markers; only plaintext strings',
+      );
+
+    // 3. If same location and no content, nothing to do
+    const startJson = start.documentLocation.jsonPath;
+    const endJson = end.documentLocation.jsonPath;
+    const startIsText = UsjReaderWriter.isUsjDocumentLocationForTextContent(start);
+    const endIsText = UsjReaderWriter.isUsjDocumentLocationForTextContent(end);
+    const startOffset = startIsText
+      ? ((start.documentLocation as UsjTextContentLocation).offset ?? 0)
+      : 0;
+    const endOffset = endIsText
+      ? ((end.documentLocation as UsjTextContentLocation).offset ?? 0)
+      : 0;
+    if (
+      startJson === endJson &&
+      startIsText &&
+      endIsText &&
+      startOffset === endOffset &&
+      !contentToInsert
+    )
+      return;
+
+    // 4. Handle simple same-text-node replacement
+    if (
+      startJson === endJson &&
+      startIsText &&
+      endIsText &&
+      typeof start.node === 'string' &&
+      typeof end.node === 'string'
+    ) {
+      const workingStack = this.convertJsonPathToWorkingStack(start.documentLocation.jsonPath);
+      const stackTop = workingStack[workingStack.length - 1];
+      const parent = stackTop.parent;
+      const idx = stackTop.index;
+      if (!parent || !Array.isArray((parent as MarkerObject).content))
+        throw new Error('Unable to locate parent for replacement');
+      const contentArray = (parent as MarkerObject).content as MarkerContent[];
+      const original = contentArray[idx] as string;
+      const newValue = `${original.substring(0, startOffset)}${contentToInsert ?? ''}${original.substring(endOffset)}`;
+      if (newValue.length === 0) contentArray.splice(idx, 1);
+      else contentArray[idx] = newValue;
+      this.usjChanged();
+      return;
+    }
+
+    // 4b. Handle multi-node ranges that share a common ancestor parent
+    const startStack = this.convertJsonPathToWorkingStack(start.documentLocation.jsonPath);
+    const endStack = this.convertJsonPathToWorkingStack(end.documentLocation.jsonPath);
+
+    // Find deepest common ancestor (by parent reference)
+    const minLen = Math.min(startStack.length, endStack.length);
+    let deepestCommon = -1;
+    for (let i = 0; i < minLen; i++) {
+      if (startStack[i].parent === endStack[i].parent) deepestCommon = i;
+      else break;
+    }
+
+    const commonParent = deepestCommon >= 0 ? startStack[deepestCommon].parent : this.usj;
+    if (
+      !commonParent ||
+      !('content' in commonParent) ||
+      !Array.isArray((commonParent as MarkerObject).content)
+    )
+      throw new Error('Unable to determine common parent');
+    const contentArray = (commonParent as MarkerObject).content as MarkerContent[];
+
+    const startTopIndex = deepestCommon >= 0 ? startStack[deepestCommon].index : 0;
+    const endTopIndex =
+      deepestCommon >= 0 ? endStack[deepestCommon].index : contentArray.length - 1;
+
+    // Helpers to trim prefix from the start child and suffix from the end child
+    // These return the content to keep before the deletion point (prefix) or after it (suffix).
+    // If the path goes into a marker, we return the marker with its content truncated appropriately.
+    const getKeptPrefixNodesFromChild = (
+      child: MarkerContent,
+      pathSuffix: StackItem[],
+      offset: number,
+    ): MarkerContent[] => {
+      // If the pathSuffix is empty, start is at this child boundary
+      if (pathSuffix.length === 0) {
+        // If child is string and offset > 0, keep its prefix
+        if (typeof child === 'string') return offset > 0 ? [child.substring(0, offset)] : [];
+        // For marker, offset doesn't apply at this level; nothing to keep
+        return [];
+      }
+      // Walk down according to pathSuffix
+      if (typeof child === 'string') return [];
+      const localIndex = pathSuffix[0].index;
+      if (localIndex < 0 || localIndex >= (child.content?.length ?? 0)) return [];
+      // Keep all nodes before localIndex
+      const keptContent: MarkerContent[] = [];
+      for (let i = 0; i < localIndex; i++) keptContent.push(child.content![i]);
+      const target = child.content![localIndex];
+      if (pathSuffix.length === 1) {
+        if (typeof target === 'string') {
+          const prefix = target.substring(0, offset);
+          if (prefix.length > 0) keptContent.push(prefix);
+        }
+        // If target is a marker, offset 0 means we're at start of marker -> no prefix content
+      } else {
+        const nestedKept = getKeptPrefixNodesFromChild(target, pathSuffix.slice(1), offset);
+        keptContent.push(...nestedKept);
+      }
+      // If there's any content to keep, return marker with that content; else return empty
+      if (keptContent.length === 0) return [];
+      // Clone the marker with only the kept content
+      const trimmedMarker: MarkerObject = { ...child, content: keptContent };
+      return [trimmedMarker];
+    };
+
+    const getKeptSuffixNodesFromChild = (
+      child: MarkerContent,
+      pathSuffix: StackItem[],
+      offset: number,
+    ): MarkerContent[] => {
+      if (pathSuffix.length === 0) {
+        if (typeof child === 'string')
+          return offset < child.length ? [child.substring(offset)] : [];
+        // For marker at boundary, nothing to keep after if offset==0 means we're at start
+        return [];
+      }
+      if (typeof child === 'string') return [];
+      const localIndex = pathSuffix[0].index;
+      if (localIndex < 0 || localIndex >= (child.content?.length ?? 0)) return [];
+      const keptContent: MarkerContent[] = [];
+      const target = child.content![localIndex];
+      if (pathSuffix.length === 1) {
+        if (typeof target === 'string') {
+          const suffix = target.substring(offset);
+          if (suffix.length > 0) keptContent.push(suffix);
+        }
+        // If target is marker at offset 0, nothing special - we keep it below
+      } else {
+        const nestedKept = getKeptSuffixNodesFromChild(target, pathSuffix.slice(1), offset);
+        keptContent.push(...nestedKept);
+      }
+      // Append nodes after localIndex
+      for (let i = localIndex + 1; i < (child.content?.length ?? 0); i++)
+        keptContent.push(child.content![i]);
+      // If there's any content to keep, return marker with that content
+      if (keptContent.length === 0) return [];
+      const trimmedMarker: MarkerObject = { ...child, content: keptContent };
+      return [trimmedMarker];
+    };
+
+    const startChild = contentArray[startTopIndex];
+    const endChild = contentArray[endTopIndex];
+    const startPathSuffix = startStack.slice(deepestCommon + 1);
+    const endPathSuffix = endStack.slice(deepestCommon + 1);
+
+    const keptStart = getKeptPrefixNodesFromChild(startChild, startPathSuffix, startOffset);
+    const keptEnd = getKeptSuffixNodesFromChild(endChild, endPathSuffix, endOffset);
+
+    // Build replacement array
+    const middleNodes: MarkerContent[] = [];
+    if (keptStart.length > 0) middleNodes.push(...keptStart);
+    if (contentToInsert && contentToInsert.length > 0) middleNodes.push(contentToInsert);
+    if (keptEnd.length > 0) middleNodes.push(...keptEnd);
+
+    // Replace range from startTopIndex..endTopIndex with middleNodes
+    const deleteCount = endTopIndex - startTopIndex + 1;
+    contentArray.splice(startTopIndex, deleteCount, ...middleNodes);
+
+    // Merge adjacent strings
+    for (let i = contentArray.length - 1; i > 0; i--) {
+      if (typeof contentArray[i] === 'string' && typeof contentArray[i - 1] === 'string') {
+        contentArray[i - 1] = `${contentArray[i - 1]}${contentArray[i]}`;
+        contentArray.splice(i, 1);
+      }
+    }
+
+    // Merge identical sibling markers (except content)
+    const sameMarkerExceptContent = (a: MarkerObject, b: MarkerObject) => {
+      const aCopy = { ...a } as any;
+      const bCopy = { ...b } as any;
+      delete aCopy.content;
+      delete bCopy.content;
+      return deepEqual(aCopy, bCopy);
+    };
+
+    for (let i = 0; i < contentArray.length - 1; i++) {
+      const a = contentArray[i];
+      const b = contentArray[i + 1];
+      if (typeof a !== 'string' && typeof b !== 'string') {
+        if (sameMarkerExceptContent(a, b)) {
+          a.content = [...(a.content ?? []), ...(b.content ?? [])];
+          // Merge adjacent strings within the merged content
+          if (a.content) {
+            for (let j = a.content.length - 1; j > 0; j--) {
+              if (typeof a.content[j] === 'string' && typeof a.content[j - 1] === 'string') {
+                a.content[j - 1] = `${a.content[j - 1]}${a.content[j]}`;
+                a.content.splice(j, 1);
+              }
+            }
+          }
+          contentArray.splice(i + 1, 1);
+          i--; // re-evaluate at this index
+        }
+      }
+    }
+
+    // Cleanup: remove empty strings and empty markers without newline before
+    for (let i = contentArray.length - 1; i >= 0; i--) {
+      const node = contentArray[i];
+      if (node === '' || node === undefined || node === null) {
+        contentArray.splice(i, 1);
+        continue;
+      }
+      if (typeof node !== 'string') {
+        const { markerTypeInfo } = this.getInfoForMarker(node, 'usfm');
+        if (
+          Array.isArray(node.content) &&
+          node.content.length === 0 &&
+          !markerTypeInfo.hasNewlineBefore
+        )
+          contentArray.splice(i, 1);
+      }
+    }
+
+    this.usjChanged();
+    return;
+  }
+
   // #endregion Edit this USJ data
 
   // #region transform USJ to USFM
