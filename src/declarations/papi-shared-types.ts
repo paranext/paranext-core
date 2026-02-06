@@ -7,6 +7,7 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from '@shared/models/data-provider.model';
   import type {
+    ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
@@ -396,8 +397,26 @@ declare module 'papi-shared-types' {
         subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
           key: ProjectSettingName,
           callback: (value: ProjectSettingTypes[ProjectSettingName] | PlatformError) => void,
-          options: DataProviderSubscriberOptions,
+          options?: DataProviderSubscriberOptions,
         ) => Promise<UnsubscriberAsync>;
+        /**
+         * Subscribe to receive updates to an extension's project data identified by `dataScope` in
+         * this project
+         *
+         * @param dataScope Information about what data is being referenced by the calling extension
+         *   given to this Project Data Provider
+         * @param callback Function to run with the updated data corresponding to the `dataScope`.
+         *   If there is an error while retrieving the updated data, the function will run with a
+         *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+         *   value to check if it is an error.
+         * @param options Various options to adjust how the subscriber emits updates
+         * @returns Unsubscriber to stop listening for updates
+         */
+        subscribeExtensionData(
+          dataScope: ExtensionDataScope,
+          callback: (extensionData: string | undefined | PlatformError) => void,
+          options?: DataProviderSubscriberOptions,
+        ): Promise<UnsubscriberAsync>;
       };
 
   /** This is just a simple example so we have more than one. It's not intended to be real. */
