@@ -47,7 +47,7 @@
   },
   "peerDependencies": {},
   "dependencies": {
-    "@eten-tech-foundation/scripture-utilities": "~0.1.5",
+    "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "async-mutex": "^0.5.0",
     "dompurify": "^3.3.0",
     "jsonpath-plus": "^10.3.0",

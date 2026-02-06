@@ -36,7 +36,7 @@
     "react-dom": ">=18.3.1"
   },
   "dependencies": {
-    "@sillsdev/scripture": "^2.0.2",
+    "@sillsdev/scripture": "^2.0.3",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {

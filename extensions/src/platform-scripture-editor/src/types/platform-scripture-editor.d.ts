@@ -1,5 +1,6 @@
 declare module 'platform-scripture-editor' {
   import {
+    AnnotationRange,
     SelectionRange as PlatformEditorSelectionRange,
     TypedMarkRemovalCause,
   } from '@eten-tech-foundation/platform-editor';
@@ -13,6 +14,7 @@ declare module 'platform-scripture-editor' {
     LocalizeKey,
     UsfmScrRefVerseLocation,
     UsfmVerseLocation,
+    UsjDocumentLocation,
     UsjChapterLocation,
     UsjFlatTextChapterLocation,
     UsjVerseRefChapterLocation,
@@ -104,10 +106,7 @@ declare module 'platform-scripture-editor' {
      */
     verseRef: SerializedVerseRef;
     /** The annotation range in editor-usable format */
-    annotationRange: {
-      start: { jsonPath: string; offset: number };
-      end: { jsonPath: string; offset: number };
-    };
+    annotationRange: AnnotationRange;
     /** The type of annotation (e.g., 'translator-comment') */
     annotationType: string;
     /** Unique identifier for this annotation */
@@ -208,14 +207,14 @@ declare module 'platform-scripture-editor' {
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
-    start: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    start: UsjChapterLocation<UsjDocumentLocation> | UsfmVerseLocation | ScriptureLocation;
     /**
      * Ending point where the check result applies in the document
      *
      * Note: some forms of this type are deprecated and will be removed eventually; see
      * {@link ScriptureLocation} for details.
      */
-    end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+    end: UsjChapterLocation<UsjDocumentLocation> | UsfmVerseLocation | ScriptureLocation;
   };
 
   /**
