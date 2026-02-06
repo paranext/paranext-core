@@ -563,25 +563,22 @@ global.webViewComponent = function ChecksSidePanelWebView({
       if (editorWebViewId && editorWebViewController) {
         // Set the focus and the range to the result in the editor
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        const normalizeLocation = (location: typeof selectedResult.start) =>
+          'jsonPath' in location
+            ? {
+                book: selectedResult.verseRef.book,
+                chapterNum: selectedResult.verseRef.chapterNum,
+                documentLocation: {
+                  jsonPath: location.jsonPath,
+                  ...('offset' in location ? { offset: location.offset } : {}),
+                },
+              }
+            : location;
         editorWebViewController.selectRange({
           // Transform deprecated check result locations to the new format. The old check result
           // types don't have book/chapter info in the location, so we need to add them.
-          start:
-            'jsonPath' in selectedResult.start
-              ? {
-                  book: selectedResult.verseRef.book,
-                  chapterNum: selectedResult.verseRef.chapterNum,
-                  ...selectedResult.start,
-                }
-              : selectedResult.start,
-          end:
-            'jsonPath' in selectedResult.end
-              ? {
-                  book: selectedResult.verseRef.book,
-                  chapterNum: selectedResult.verseRef.chapterNum,
-                  ...selectedResult.end,
-                }
-              : selectedResult.end,
+          start: normalizeLocation(selectedResult.start),
+          end: normalizeLocation(selectedResult.end),
         });
       } else {
         // Could not get controller to set specific range, so at least set the verse ref

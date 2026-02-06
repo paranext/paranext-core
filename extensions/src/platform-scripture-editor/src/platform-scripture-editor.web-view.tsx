@@ -45,7 +45,6 @@ import {
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  ContentJsonPath,
   formatReplacementString,
   getErrorMessage,
   isPlatformError,
@@ -107,23 +106,6 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
-
-/**
- * Converts a selection location to UsjDocumentLocation format. This is needed because the editor
- * returns UsjLocation which may have jsonPath, but we need UsjDocumentLocation for the
- * extractCommentScriptureText command.
- */
-function usjLocationToUsjDocumentLocation(
-  location: SelectionRange['start'] | SelectionRange['end'],
-): UsjDocumentLocation | undefined {
-  if (!location) return undefined;
-  return {
-    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    jsonPath: location.jsonPath as ContentJsonPath,
-    offset: location.offset,
-  };
-}
 
 /**
  * Extracts scripture text snippets from a selection range.
@@ -487,7 +469,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           const selection = currentSelectionRef.current;
 
           // Validate that a text range is selected
-          if (!selection || !selection.start || !selection.end) {
+          if (!selection?.start || !selection.end) {
             papi.notifications.send({
               message: '%webView_platformScriptureEditor_error_noTextSelected%',
               severity: 'warning',
@@ -586,14 +568,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           let argumentsForCommand: Parameters<AnnotationActionHandler>;
 
           const onClickAnnotation: TypedMarkOnClick | undefined = interactionCommand
-            ? async (_event: MouseEvent, typeEditorInternal: string, id: string) => {
+            ? (_event: MouseEvent, typeEditorInternal: string, id: string) => {
                 const type = typeEditorInternal.startsWith(EDITOR_ANNOTATION_TYPE_PREFIX)
                   ? typeEditorInternal.slice(EDITOR_ANNOTATION_TYPE_PREFIX.length)
                   : typeEditorInternal;
 
                 argumentsForCommand = [type, id, 'clicked'];
-                try {
-                  await papi.commands.sendCommand(
+                // Fire async operation without awaiting
+                papi.commands
+                  .sendCommand(
                     interactionCommand,
                     // We are dictating the parameters and the command is responsible for implementing
                     // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
@@ -601,14 +584,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     ...(argumentsForCommand as unknown as Parameters<
                       CommandHandlers[CommandNames]
                     >),
-                  );
-                } catch (e) {
-                  logger.warn(`Error sending annotation click command: ${getErrorMessage(e)}`);
-                }
+                  )
+                  .catch((e) => {
+                    logger.warn(`Error sending annotation click command: ${getErrorMessage(e)}`);
+                  });
               }
             : undefined;
 
-          const onRemoveAnnotation: TypedMarkOnRemove | undefined = async (
+          const onRemoveAnnotation: TypedMarkOnRemove | undefined = (
             typeEditorInternal: string,
             id: string,
             cause: TypedMarkRemovalCause,
@@ -627,17 +610,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
             if (interactionCommand) {
               argumentsForCommand = [type, id, cause];
-              try {
-                await papi.commands.sendCommand(
+              // Fire async operation without awaiting
+              papi.commands
+                .sendCommand(
                   interactionCommand,
                   // We are dictating the parameters and the command is responsible for implementing
                   // them correctly. The parameters are explained in the TSDocs for `interactionCommand`
                   // eslint-disable-next-line no-type-assertion/no-type-assertion
                   ...(argumentsForCommand as unknown as Parameters<CommandHandlers[CommandNames]>),
-                );
-              } catch (e) {
-                logger.warn(`Error sending annotation removal command: ${getErrorMessage(e)}`);
-              }
+                )
+                .catch((e) => {
+                  logger.warn(`Error sending annotation removal command: ${getErrorMessage(e)}`);
+                });
             }
           };
 
@@ -645,10 +629,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           annotationInfoByIdRef.current.set(annotationId, {
             annotationType,
             interactionCommand,
-            annotationRange: {
-              start: { ...annotationRange.start },
-              end: { ...annotationRange.end },
-            },
+            annotationRange,
           });
 
           // Keeping track of annotations being set because setAnnotation on an existing annotation
@@ -918,9 +899,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             severity: 'error',
             message: formatReplacementString(
               localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-              {
-                projectName,
-              },
+              { projectName },
             ),
           });
         } catch (innerError) {
@@ -988,31 +967,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           start: {
             verseRef: scrRef,
             granularity: 'chapter',
-            documentLocation: {
-              // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              jsonPath: change.start.jsonPath as ContentJsonPath,
-              offset: change.start.offset,
-            },
+            documentLocation: change.start,
           },
           end: {
             verseRef: scrRef,
             granularity: 'chapter',
-            documentLocation:
-              // If the endpoint is defined, use it; otherwise use the start point
-              change.end
-                ? {
-                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    jsonPath: change.end.jsonPath as ContentJsonPath,
-                    offset: change.end.offset,
-                  }
-                : {
-                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    jsonPath: change.start.jsonPath as ContentJsonPath,
-                    offset: change.start.offset,
-                  },
+            documentLocation: change.end ?? change.start,
           },
         };
       }
@@ -1067,26 +1027,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         hasFirstRetrievedScripture.current = true;
         scrollToVerse(scrRef);
 
-        let nextTextLocationJsonPath = '';
+        let nextTextLocation: UsjDocumentLocation | undefined;
         try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
+          nextTextLocation = new UsjReaderWriter(usjFromPdp, {
             markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
+          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation;
         } catch (e) {
           logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
         }
 
         editorRef.current?.focus();
 
-        if (!nextTextLocationJsonPath) return;
+        if (!nextTextLocation) return;
 
-        const initialSelection: SelectionRange = {
-          start: {
-            jsonPath: nextTextLocationJsonPath,
-            offset: 0,
-          },
-        };
-        editorRef.current?.setSelection(initialSelection);
+        editorRef.current?.setSelection({
+          start: nextTextLocation,
+        });
       });
 
       return cancelRunOnLoad;
@@ -1187,13 +1143,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       try {
         isSubmittingComment.current = true;
 
-        // Transform the captured selection from editor locations to USJ document locations
-        const startDocLocation = capturedSelection
-          ? usjLocationToUsjDocumentLocation(capturedSelection.range.start)
-          : undefined;
-        const endDocLocation = capturedSelection
-          ? usjLocationToUsjDocumentLocation(capturedSelection.range.end)
-          : undefined;
+        // The editor selection range locations are already UsjDocumentLocation
+        const startDocLocation = capturedSelection?.range.start;
+        const endDocLocation = capturedSelection?.range.end;
 
         const commentsUsjPdp = await papi.projectDataProviders.get(
           'legacyCommentManager.commentsUsj',
