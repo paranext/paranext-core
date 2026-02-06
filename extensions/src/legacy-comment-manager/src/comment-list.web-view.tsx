@@ -320,7 +320,7 @@ global.webViewComponent = function CommentListWebView({
           value={commentFilter}
           onValueChange={(value) => setCommentFilter(value as CommentFilter)}
         >
-          <SelectTrigger className="tw-flex-1 tw-min-w-48">
+          <SelectTrigger className="tw-w-auto tw-min-w-48">
             <SelectValue>
               <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
                 {commentFilter === 'unresolved-assigned-to-me'
@@ -343,7 +343,7 @@ global.webViewComponent = function CommentListWebView({
           value={locationFilter}
           onValueChange={(value) => setLocationFilter(value as LocationFilter)}
         >
-          <SelectTrigger className="tw-flex-1 tw-min-w-32">
+          <SelectTrigger className="tw-w-auto tw-min-w-32">
             <SelectValue>
               <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
                 {locationFilter === 'current-chapter' ? 'Current chapter' : 'Anywhere'}
