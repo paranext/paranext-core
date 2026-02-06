@@ -1,4 +1,5 @@
 import { WebViewProps } from '@papi/core';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
@@ -19,14 +20,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { formatReplacementString } from 'platform-bible-utils';
-import { useCallback, useMemo, useReducer } from 'react';
+import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import GeneralTab from './components/general-tab.component';
 import BooksTab from './components/books-tab.component';
 import {
   createInitialState,
   formReducer,
   validateForm,
+  buildCreateRequest,
   LOCALIZED_STRINGS,
   TAB_GENERAL,
   TAB_BOOKS,
@@ -41,8 +43,8 @@ import {
   EncoderOption,
 } from './project-properties.utils';
 
-// PLACEHOLDER data for initial development. Will be replaced with PAPI calls in integration phase.
-const PLACEHOLDER_LANGUAGES: LanguageOption[] = [
+/** Fallback languages used when PAPI options are not available */
+const FALLBACK_LANGUAGES: LanguageOption[] = [
   { id: 'eng', name: 'English', isRightToLeft: false },
   { id: 'fra', name: 'French', isRightToLeft: false },
   { id: 'spa', name: 'Spanish', isRightToLeft: false },
@@ -50,12 +52,68 @@ const PLACEHOLDER_LANGUAGES: LanguageOption[] = [
   { id: 'arb', name: 'Arabic', isRightToLeft: true },
 ];
 
-const PLACEHOLDER_BASE_PROJECTS: ProjectReference[] = [];
-const PLACEHOLDER_ENCODERS: EncoderOption[] = [];
+/** Options state loaded from PAPI or fallbacks */
+interface ProjectFormOptions {
+  languages: LanguageOption[];
+  baseProjects: ProjectReference[];
+  encoders: EncoderOption[];
+  isLoading: boolean;
+}
+
+/** Load project options from backend, falling back to defaults if unavailable */
+async function loadProjectOptions(): Promise<Omit<ProjectFormOptions, 'isLoading'>> {
+  try {
+    const response = await papi.commands.sendCommand('platformProjects.getProjectOptions');
+    return {
+      languages: response.languages ?? FALLBACK_LANGUAGES,
+      baseProjects: response.baseProjects ?? [],
+      encoders: response.encoders ?? [],
+    };
+  } catch (error) {
+    logger.warn(`Failed to load project options from backend: ${getErrorMessage(error)}`);
+    return {
+      languages: FALLBACK_LANGUAGES,
+      baseProjects: [],
+      encoders: [],
+    };
+  }
+}
 
 global.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
   const [state, dispatch] = useReducer(formReducer, undefined, createInitialState);
+  const [submitError, setSubmitError] = useState<string | undefined>(undefined);
+
+  // Options loaded from PAPI backend
+  const [options, setOptions] = useState<ProjectFormOptions>({
+    languages: FALLBACK_LANGUAGES,
+    baseProjects: [],
+    encoders: [],
+    isLoading: true,
+  });
+
+  // Load project options from backend on mount
+  useEffect(() => {
+    let cancelled = false;
+    loadProjectOptions()
+      .then((loaded) => {
+        if (!cancelled) {
+          setOptions({
+            ...loaded,
+            isLoading: false,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        logger.error(`Unexpected error loading project options: ${getErrorMessage(error)}`);
+        if (!cancelled) {
+          setOptions((prev) => ({ ...prev, isLoading: false }));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Retrieve mode from web view state (default to 'create')
   const [mode] = useWebViewState<string>('mode', 'create');
@@ -79,7 +137,9 @@ global.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }:
     [dispatch],
   );
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
+    setSubmitError(undefined);
+
     const result = validateForm(state);
     if (result.tabsWithErrors.length > 0) {
       dispatch({
@@ -94,16 +154,24 @@ global.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }:
 
     dispatch({ type: 'SET_SUBMITTING', isSubmitting: true });
 
-    // TODO: PAPI integration - call platformProjects.createProject
-    // For now just reset submitting state after a brief delay
-    setTimeout(() => {
+    try {
+      const request = buildCreateRequest(state);
+      await papi.commands.sendCommand('platformProjects.createProject', request);
+      logger.info(`Project created successfully: ${state.shortName}`);
+      // Project created successfully - the web view can be closed
       dispatch({ type: 'SET_SUBMITTING', isSubmitting: false });
-    }, 1000);
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      logger.error(`Failed to create project: ${errorMessage}`);
+      setSubmitError(errorMessage);
+      dispatch({ type: 'SET_SUBMITTING', isSubmitting: false });
+    }
   }, [state, dispatch]);
 
   const handleCancel = useCallback(() => {
-    // Close the web view - PAPI integration will handle this
-  }, []);
+    // Close the web view by dispatching a reset (the provider manages web view lifecycle)
+    dispatch({ type: 'RESET' });
+  }, [dispatch]);
 
   const handleFileNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,7 +194,7 @@ global.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }:
             'Incomplete tab(s): {tabNames}',
           { tabNames: state.tabsWithErrors.join(', ') },
         )
-      : undefined;
+      : (submitError ?? undefined);
 
   const notImplementedTooltip =
     localizedStrings['%webView_projectProperties_tooltip_notImplemented%'] ??
@@ -237,14 +305,20 @@ global.webViewComponent = function ProjectPropertiesWebView({ useWebViewState }:
             style={{ maxHeight: 'calc(100vh - 200px)' }}
           >
             <TabsContent value={TAB_GENERAL}>
-              <GeneralTab
-                state={state}
-                dispatch={dispatch}
-                languages={PLACEHOLDER_LANGUAGES}
-                baseProjects={PLACEHOLDER_BASE_PROJECTS}
-                encoders={PLACEHOLDER_ENCODERS}
-                localizedStrings={localizedStrings}
-              />
+              {options.isLoading ? (
+                <div className="tw-flex tw-justify-center tw-p-8">
+                  <Spinner />
+                </div>
+              ) : (
+                <GeneralTab
+                  state={state}
+                  dispatch={dispatch}
+                  languages={options.languages}
+                  baseProjects={options.baseProjects}
+                  encoders={options.encoders}
+                  localizedStrings={localizedStrings}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value={TAB_BOOKS}>

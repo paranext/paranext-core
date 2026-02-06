@@ -1,6 +1,22 @@
 declare module 'papi-shared-types' {
+  import type {
+    ProjectCreateRequest,
+    ProjectOptionsResponse,
+    ProjectCreateResult,
+  } from 'platform-projects';
+
   export interface CommandHandlers {
     'platformProjects.openCreateProject': () => Promise<string | undefined>;
+    'platformProjects.openProjectName': () => Promise<string | undefined>;
+    'platformProjects.openLanguageSettings': () => Promise<string | undefined>;
+    'platformProjects.openChooseEncoding': () => Promise<string | undefined>;
+    'platformProjects.getProjectOptions': () => Promise<ProjectOptionsResponse>;
+    'platformProjects.createProject': (
+      request: ProjectCreateRequest,
+    ) => Promise<ProjectCreateResult>;
+    'platformProjects.validateShortName': (
+      shortName: string,
+    ) => Promise<{ isValid: boolean; error?: string }>;
   }
 }
 
@@ -142,5 +158,23 @@ declare module 'platform-projects' {
     booksPresent: string[];
     fileNameForm: string;
     normalization: NormalizationType;
+  }
+
+  // ============================================================================
+  // PAPI RESPONSE TYPES
+  // ============================================================================
+
+  interface ProjectOptionsResponse {
+    projectTypes: ProjectTypeOption[];
+    languages: LanguageOption[];
+    versifications: VersificationOption[];
+    baseProjects: ProjectReference[];
+    encoders: EncoderOption[];
+  }
+
+  interface ProjectCreateResult {
+    success: boolean;
+    projectGuid?: string;
+    error?: string;
   }
 }

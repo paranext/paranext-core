@@ -1,8 +1,26 @@
 {
   "mainMenu": {
-    "columns": {},
-    "groups": {},
-    "items": []
+    "columns": {
+      "platformProjects.project": {
+        "label": "%mainMenu_project_column%",
+        "order": 1
+      }
+    },
+    "groups": {
+      "platformProjects.projectCreate": {
+        "column": "platformProjects.project",
+        "order": 1
+      }
+    },
+    "items": [
+      {
+        "label": "%mainMenu_project_createProject%",
+        "localizeNotes": "Menu item for creating a new project",
+        "group": "platformProjects.projectCreate",
+        "order": 1,
+        "command": "platformProjects.openCreateProject"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},
