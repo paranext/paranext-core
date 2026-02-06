@@ -25,12 +25,21 @@ namespace TestParanextDataProvider
             _projects = new DummyLocalParatextProjects();
             _client = new DummyPapiClient();
 
+            // Set up factory for creating DummyScrTextWithoutGuidSuffix in ProjectCreationService
+            // We use DummyScrTextWithoutGuidSuffix (not DummyScrText) because the standard DummyScrText
+            // appends the GUID to the ShortName, which breaks ScrTextCollection.Find(shortName) lookups.
+            Paranext.DataProvider.Projects.ProjectCreationService.ScrTextFactory =
+                details => new DummyScrTextWithoutGuidSuffix(details);
+
             return Task.CompletedTask;
         }
 
         [TearDown]
         public virtual void TestTearDown()
         {
+            // Clean up the factory
+            Paranext.DataProvider.Projects.ProjectCreationService.ScrTextFactory = null;
+
             List<ScrText> projects = ScrTextCollection
                 .ScrTexts(IncludeProjects.Everything)
                 .ToList();
@@ -76,6 +85,28 @@ namespace TestParanextDataProvider
         {
             DummyScrText scrText = new();
             return scrText;
+        }
+
+        /// <summary>
+        /// Creates a new dummy project with a specific name for testing purposes.
+        /// Uses DummyScrTextWithoutGuidSuffix so the project name exactly matches the requested name,
+        /// enabling tests to use ScrTextCollection.Find(name) and ScrTextCollection.IsNamePresent(name).
+        ///
+        /// NOTE: Changed return type from DummyScrText to ScrText to allow use of the variant
+        /// that doesn't append GUID to names. Callers should use ScrText or var.
+        /// </summary>
+        /// <param name="name">The short name for the project</param>
+        /// <param name="fullName">Optional full name (defaults to short name if not provided)</param>
+        protected static ScrText CreateDummyProject(string name, string? fullName = null)
+        {
+            var details = new ProjectDetails(
+                name,
+                new ProjectMetadata(HexId.CreateNew().ToString(), []),
+                ""
+            );
+            // Using DummyScrTextWithoutGuidSuffix because DummyScrText appends GUID to names
+            // which breaks ScrTextCollection.Find(name) and IsNamePresent(name) lookups
+            return new DummyScrTextWithoutGuidSuffix(details);
         }
 
         /// <summary>
