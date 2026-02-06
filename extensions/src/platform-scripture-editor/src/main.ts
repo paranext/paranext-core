@@ -1,4 +1,4 @@
-﻿import papi, { logger, WebViewFactory } from '@papi/backend';
+import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
   IWebViewProvider,
@@ -6,12 +6,20 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { getErrorMessage, serialize } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  deepEqual,
+  getErrorMessage,
+  PlatformEventEmitter,
+  serialize,
+} from 'platform-bible-utils';
 import {
   EditorDecorations,
+  SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
+  ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
@@ -26,6 +34,21 @@ import {
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
 logger.debug('Scripture Editor is importing!');
+
+// #region Editor Selection Tracking
+
+/**
+ * Network event name for editor selection change events. Use
+ * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')` to subscribe.
+ */
+const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange';
+
+/** Event emitter for selection change events. Created in activate() */
+let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
+
+// Selection is stored per-WebViewController instance in createWebViewController.
+
+// #endregion Editor Selection Tracking
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
@@ -355,6 +378,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
     const unsubFromWebViewUpdates = papi.webViews.onDidUpdateWebView(({ webView }) => {
       if (webView.id === currentWebViewDefinition.id) currentWebViewDefinition = webView;
     });
+    /**
+     * Variable that holds the current selection in the editor. Will be `undefined` if could not
+     * determine selection. Will also be `undefined` initially until the editor reports its first
+     * selection.
+     */
+    let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
+    /** Variable we will use to wait to get the first selection reported from the editor */
+    const firstSelectionAsync: AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined> =
+      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`);
     return {
       async selectRange(range) {
         try {
@@ -606,7 +638,28 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           throw new Error(errorMessage);
         }
       },
+      async getSelection() {
+        // If we haven't yet received the first selection, wait for it
+        if (!firstSelectionAsync.hasSettled) {
+          return firstSelectionAsync.promise;
+        }
+        return currentSelection;
+      },
+      async updateSelectionInternal(selection) {
+        const webViewId = currentWebViewDefinition.id;
+
+        // If the selection didn't change, we don't need to do anything
+        if (deepEqual(currentSelection, selection)) return;
+
+        currentSelection = selection;
+        // Resolve the first selection async variable with the first selection we get
+        if (!firstSelectionAsync.hasSettled) firstSelectionAsync.resolveToValue(selection);
+        selectionChangedEventEmitter?.emit({ webViewId, selection });
+      },
       async dispose() {
+        currentSelection = undefined;
+        // If we never got a selection, reject the first selection promise
+        firstSelectionAsync.rejectWithReason('Disposed before first selection received');
         return unsubFromWebViewUpdates();
       },
     };
@@ -819,6 +872,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  // Create the selection changed event emitter
+  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
+    EDITOR_SELECTION_CHANGED_EVENT,
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -834,6 +892,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await insertCrossReferencePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
+    selectionChangedEventEmitter,
     ...markerNotifierUnsubscribers,
   );
 

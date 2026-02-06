@@ -54,6 +54,11 @@ import { windowService } from '@shared/services/window.service';
 export const TAB_TYPE_WEBVIEW = 'webView';
 
 const BOOKS_PRESENT_DEFAULT = '';
+const WEB_VIEW_MENU_DEFAULT = {
+  topMenu: undefined,
+  includeDefaults: true,
+  contextMenu: undefined,
+};
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -483,20 +488,24 @@ export function WebView({
   // Assume the webViewType is correctly formatted because it should have already been checked
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuSelector = (webViewType as `${string}.${string}`) ?? 'invalid.invalid';
-  const menuInfo = useData(webViewType ? menuDataService.dataProviderName : undefined).WebViewMenu(
-    menuSelector,
-    {
-      topMenu: undefined,
-      includeDefaults: true,
-      contextMenu: undefined,
-    },
-  );
+  const [webViewMenuPossiblyError, , isLoadingMenu] = useData(
+    // Only load menu data if we are showing the toolbar
+    webViewType && shouldShowToolbar ? menuDataService.dataProviderName : undefined,
+  ).WebViewMenu(menuSelector, WEB_VIEW_MENU_DEFAULT);
 
-  const [webViewMenu, , isLoading] = menuInfo;
+  const webViewMenu = useMemo(() => {
+    if (isPlatformError(webViewMenuPossiblyError)) {
+      logger.warn(
+        `Failed to load web view menu for ${webViewType} (${id}): ${getErrorMessage(webViewMenuPossiblyError)}`,
+      );
+      return WEB_VIEW_MENU_DEFAULT;
+    }
+    return webViewMenuPossiblyError;
+  }, [id, webViewMenuPossiblyError, webViewType]);
 
   return (
     <div className="web-view-parent">
-      {shouldShowToolbar && !isLoading && !isPlatformError(webViewMenu) && (
+      {shouldShowToolbar && !isLoadingMenu && !isPlatformError(webViewMenu) && (
         <TabToolbar
           onSelectProjectMenuItem={projectMenuCommandHandler}
           onSelectViewInfoMenuItem={viewInfoMenuCommandHandler}

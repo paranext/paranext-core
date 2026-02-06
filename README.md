@@ -58,7 +58,7 @@ We use encryption to keep your data safe, allowing access to keychain provides e
 
 Set up pre-requisites, build, and run:
 
-1. Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node`. We recommend using [Volta](#javascript-tool-manager).
+1. Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node` and any other necessary package managers. We strongly recommend using [Volta](#javascript-tool-manager) to detect and install all necessary JavaScript package managers automatically. If you would like to install them manually, see the [JavaScript Tool Manager](#javascript-tool-manager) section for more information on how to determine which JavaScript package managers are required and at which versions.
 
 2. Install [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0).
 
@@ -74,6 +74,12 @@ Set up pre-requisites, build, and run:
 3. Prerequisites for macOS or Linux (below).
 
 4. Clone, install, build, and run (below).
+
+## JavaScript Tool Manager
+
+We strongly recommend you use [Volta](https://volta.sh/) with this repo to automatically use the right version of tools such as **node**, **npm**, and **pnpm** for each relevant repo.
+
+If you don't use Volta, you need to look at the `volta` property in the [package.json](https://github.com/paranext/paranext-core/blob/main/package.json) of this repository and each [development package repository](#linking-local-development-packages) to see the right tool versions to install in your preferred way.
 
 ### Linux Development Pre-requisites
 
@@ -147,6 +153,8 @@ your `.zprofile` so you don't have to remember to do it manually.
 
 ### Cloning and installing dependencies (all platforms)
 
+#### Cloning and checking out the right version
+
 Clone the repo:
 
 ```bash
@@ -159,6 +167,62 @@ If you want to develop an extension for Platform.Bible, check out the Git refere
 ```bash
 git checkout v0.3.0
 ```
+
+#### Linking local development packages
+
+If you are developing `paranext-core` itself or developing extensions based on a development version of `paranext-core` like `main` (as opposed to developing based on a specific [tag](https://github.com/paranext/paranext-core/tags)), you must also set up local development packages. We develop `paranext-core` based on specific branches of some dependent repositories, so you need to make them available for `paranext-core` to find. If you are developing extensions based on a specific release of Platform.Bible, no further action is necessary; you can skip to [Install and Build](#install-and-build).
+
+`paranext-core` looks for local development packages first as sub-directories of the `dev-packages` folder (e.g. `paranext-core/dev-packages/scripture-editors`). If it cannot find the appropriate directories there, it looks in the repo's parent folder (e.g. `paranext-core/../scripture-editors`).
+
+To develop `paranext-core`, you must clone and install the following repositories in one of the expected directories as mentioned above:
+
+- [`eten-tech-foundation/scripture-editors`](https://github.com/eten-tech-foundation/scripture-editors?tab=readme-ov-file#developer-quick-start)
+
+Running `npm install` in `paranext-core` will automatically link development versions of npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
+
+Note: When developing on your machine, whatever version of `scripture-editors` you have currently checked out will be used. However, CI and build servers check out the `scripture-editors` repository at the branch named `platform-yalc`. To have build servers use changes from `main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
+
+```bash
+# from a clone of scripture-editors (or adjust path accordingly)
+git fetch origin
+git checkout platform-yalc
+git rebase origin/main
+git push --force-with-lease
+```
+
+To set up `scripture-editors` to be linked locally:
+
+1. Clone `scripture-editors` as a sibling to this repo (alternatively, clone it in `paranext-core/dev-packages`):
+   ```bash
+   # from paranext-core
+   cd ..
+   git clone https://github.com/eten-tech-foundation/scripture-editors.git scripture-editors
+   # optionally checkout the platform-yalc branch to match the build servers
+   cd scripture-editors
+   git checkout platform-yalc
+   # go back to paranext-core
+   cd ../paranext-core
+   ```
+2. Install dependencies in `scripture-editors` (if you are using [Volta](#javascript-tool-manager), you must set the environment variable [`VOLTA_FEATURE_PNPM` to `1`](https://docs.volta.sh/advanced/pnpm)):
+   ```bash
+   # from paranext-core
+   cd ../scripture-editors
+   pnpm install
+   cd ../paranext-core
+   ```
+3. Run `npm install` in this repo. The postinstall script will automatically run `devpub` in `scripture-editors` and link the packages via yalc.
+
+You can also manually link/unlink packages using:
+
+- `npm run link-dev-packages` (will also run `devpub` in `scripture-editors`)
+- `npm run unlink-dev-packages`
+
+OR
+
+- `npm run editor:link` / `npm run editor:unlink`
+- `npm run utils:link` / `npm run utils:unlink`
+
+#### Install and build
 
 Install dependencies:
 
@@ -206,12 +270,6 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 **[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
 
 - Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
-
-## JavaScript Tool Manager
-
-You can use [Volta](https://volta.sh/) with this repo to use the right version of tools such as **node** and **npm**.
-
-If you don't use Volta just look at the `volta` property in [package.json](https://github.com/paranext/paranext-core/blob/main/package.json) to see the right tool versions to install in your preferred way.
 
 ## Packaging for Production
 
