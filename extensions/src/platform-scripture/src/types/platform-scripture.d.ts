@@ -22,98 +22,13 @@ declare module 'platform-scripture' {
   } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 
-  // #region Project Interface Data Types
+  // #region Scripture Project Data Provider Types
 
   /** Provides Scripture data in USFM format by book */
   export type USFMBookProjectInterfaceDataTypes = {
     /** Gets/sets the "raw" USFM data for the specified book */
     BookUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
-
-  /** Provides Scripture data in USFM format by chapter */
-  export type USFMChapterProjectInterfaceDataTypes = {
-    /** Gets/sets the "raw" USFM data for the specified chapter */
-    ChapterUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-  };
-
-  /** Provides Scripture data in USFM format by verse */
-  export type USFMVerseProjectInterfaceDataTypes = {
-    /** Gets the "raw" USFM data for the specified verse */
-    VerseUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-  };
-
-  /** Provides Scripture data in USX format by book */
-  export type USXBookProjectInterfaceDataTypes = {
-    /** Gets/sets the data in USX form for the specified book */
-    BookUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-  };
-
-  /** Provides Scripture data in USX format by chapter */
-  export type USXChapterProjectInterfaceDataTypes = {
-    /** Gets/sets the data in USX form for the specified chapter */
-    ChapterUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-  };
-
-  /** Provides Scripture data in USX format by verse */
-  export type USXVerseProjectInterfaceDataTypes = {
-    /** Gets the "raw" data in USX form for the specified verse */
-    VerseUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-  };
-
-  /** Provides Scripture data in USJ format by book */
-  export type USJBookProjectInterfaceDataTypes = {
-    /**
-     * Gets/sets the data in USJ form for the specified book
-     *
-     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
-     */
-    BookUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
-  };
-
-  /** Provides Scripture data in USJ format by chapter */
-  export type USJChapterProjectInterfaceDataTypes = {
-    /**
-     * Gets/sets the data in USJ form for the specified chapter
-     *
-     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
-     */
-    ChapterUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
-  };
-
-  /** Provides Scripture data in USJ format by verse */
-  export type USJVerseProjectInterfaceDataTypes = {
-    /**
-     * Gets the data in USJ form for the specified verse
-     *
-     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
-     */
-    VerseUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
-  };
-
-  /**
-   * Provides Scripture data in plain text format by verse. Plain text does not include notes,
-   * figures, and other things that are not considered "verse text"
-   */
-  export type PlainTextVerseProjectInterfaceDataTypes = {
-    /**
-     * Gets the data in plain text form for the specified verse. Plain text does not include notes,
-     * figures, and other things that are not considered "verse text".
-     */
-    VersePlainText: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-  };
-
-  /** Provides information about markers */
-  export type MarkerNamesProjectInterfaceDataTypes = {
-    /** Gets an array of string that contain information about markers */
-    MarkerNames: DataProviderDataType<number, string[], string[]>;
-  };
-
-  /** Provides information about running "Find" on scripture projects (intentionally empty) */
-  export type FindInScriptureProjectInterfaceDataTypes = {};
-
-  // #endregion
-
-  // #region Project Data Provider Types
 
   /** Provides Scripture data in USFM format by book */
   export type IUSFMBookProjectDataProvider =
@@ -144,6 +59,12 @@ declare module 'platform-scripture' {
     };
 
   /** Provides Scripture data in USFM format by chapter */
+  export type USFMChapterProjectInterfaceDataTypes = {
+    /** Gets/sets the "raw" USFM data for the specified chapter */
+    ChapterUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
+
+  /** Provides Scripture data in USFM format by chapter */
   export type IUSFMChapterProjectDataProvider =
     IProjectDataProvider<USFMChapterProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified chapter */
@@ -170,6 +91,12 @@ declare module 'platform-scripture' {
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
+
+  /** Provides Scripture data in USFM format by verse */
+  export type USFMVerseProjectInterfaceDataTypes = {
+    /** Gets the "raw" USFM data for the specified verse */
+    VerseUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
 
   /** Provides Scripture data in USFM format by verse */
   export type IUSFMVerseProjectDataProvider =
@@ -200,6 +127,12 @@ declare module 'platform-scripture' {
     };
 
   /** Provides Scripture data in USX format by book */
+  export type USXBookProjectInterfaceDataTypes = {
+    /** Gets/sets the data in USX form for the specified book */
+    BookUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
+
+  /** Provides Scripture data in USX format by book */
   export type IUSXBookProjectDataProvider =
     IProjectDataProvider<USXBookProjectInterfaceDataTypes> & {
       /** Gets the "raw" USX data for the specified book */
@@ -226,6 +159,12 @@ declare module 'platform-scripture' {
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
+
+  /** Provides Scripture data in USX format by chapter */
+  export type USXChapterProjectInterfaceDataTypes = {
+    /** Gets/sets the data in USX form for the specified chapter */
+    ChapterUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
 
   /** Provides Scripture data in USX format by chapter */
   export type IUSXChapterProjectDataProvider =
@@ -256,6 +195,12 @@ declare module 'platform-scripture' {
     };
 
   /** Provides Scripture data in USX format by verse */
+  export type USXVerseProjectInterfaceDataTypes = {
+    /** Gets the "raw" data in USX form for the specified verse */
+    VerseUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
+
+  /** Provides Scripture data in USX format by verse */
   export type IUSXVerseProjectDataProvider =
     IProjectDataProvider<USXVerseProjectInterfaceDataTypes> & {
       /** Gets the "raw" USX data for the specified verse */
@@ -282,6 +227,16 @@ declare module 'platform-scripture' {
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
+
+  /** Provides Scripture data in USJ format by book */
+  export type USJBookProjectInterfaceDataTypes = {
+    /**
+     * Gets/sets the data in USJ form for the specified book
+     *
+     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
+     */
+    BookUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
+  };
 
   /** Provides Scripture data in USJ format by book */
   export type IUSJBookProjectDataProvider =
@@ -328,6 +283,16 @@ declare module 'platform-scripture' {
     };
 
   /** Provides Scripture data in USJ format by chapter */
+  export type USJChapterProjectInterfaceDataTypes = {
+    /**
+     * Gets/sets the data in USJ form for the specified chapter
+     *
+     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
+     */
+    ChapterUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
+  };
+
+  /** Provides Scripture data in USJ format by chapter */
   export type IUSJChapterProjectDataProvider =
     IProjectDataProvider<USJChapterProjectInterfaceDataTypes> & {
       /**
@@ -364,6 +329,16 @@ declare module 'platform-scripture' {
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
+
+  /** Provides Scripture data in USJ format by verse */
+  export type USJVerseProjectInterfaceDataTypes = {
+    /**
+     * Gets the data in USJ form for the specified verse
+     *
+     * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
+     */
+    VerseUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
+  };
 
   /** Provides Scripture data in USJ format by verse */
   export type IUSJVerseProjectDataProvider =
@@ -413,6 +388,18 @@ declare module 'platform-scripture' {
    * Provides Scripture data in plain text format by verse. Plain text does not include notes,
    * figures, and other things that are not considered "verse text"
    */
+  export type PlainTextVerseProjectInterfaceDataTypes = {
+    /**
+     * Gets the data in plain text form for the specified verse. Plain text does not include notes,
+     * figures, and other things that are not considered "verse text".
+     */
+    VersePlainText: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
+
+  /**
+   * Provides Scripture data in plain text format by verse. Plain text does not include notes,
+   * figures, and other things that are not considered "verse text"
+   */
   export type IPlainTextVerseProjectDataProvider =
     IProjectDataProvider<PlainTextVerseProjectInterfaceDataTypes> & {
       /**
@@ -447,36 +434,97 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
-  /** Provides a string array that contains information about the markers used in this project */
-  export type IMarkerNamesProjectDataProvider =
-    IProjectDataProvider<MarkerNamesProjectInterfaceDataTypes> & {
-      /**
-       * Gets marker info for the default stylesheet
-       *
-       * @todo Add support for getting marker info from custom stylesheets
-       */
-      getMarkerNames(bookNum: number): Promise<string[] | undefined>;
-      /** Setting is not supported for now */
-      setMarkerNames(
-        markerNames: string[],
-      ): Promise<DataProviderUpdateInstructions<MarkerNamesProjectInterfaceDataTypes>>;
-      /**
-       * Subscribe to run a callback function when marker info changed
-       *
-       * @param bookNum Tells the provider what changes to listen for
-       * @param callback Function to run with the updated marker info for this selector. If there is
-       *   an error while retrieving the updated data, the function will run with a
-       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
-       *   value to check if it is an error.
-       * @param options Various options to adjust how the subscriber emits updates
-       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-       */
-      subscriberMarkerNames(
-        bookNum: number,
-        callback: (markerNames: string[] | undefined | PlatformError) => void,
-        options?: DataProviderSubscriberOptions,
-      ): Promise<UnsubscriberAsync>;
-    };
+  // #endregion Scripture Project Data Provider Types
+
+  // #region Find Types
+
+  /**
+   * Defines the scope of a find operation. A scope is a book and optionally a chapter within that
+   * book. If no chapter is provided, then the find operation should search across all chapters.
+   */
+  export type FindScope = {
+    bookId: string;
+    chapter?: number;
+  };
+
+  /** Options to use when performing a find operation. */
+  export type FindOptions = {
+    /** The text or regex pattern to search for */
+    searchString: string;
+    /**
+     * Array of {@link FindScope} values defining which books and chapters to search and in what
+     * order
+     */
+    scope: FindScope[];
+    /**
+     * If true, then the search string is treated as a regular expression. If false or undefined,
+     * then it is treated as a plain text search.
+     */
+    useRegex?: boolean;
+    /**
+     * If true, then the search is case insensitive. If false or undefined, then it is case
+     * sensitive.
+     */
+    caseInsensitive?: boolean;
+  };
+
+  /** Represents a single result from a find operation. */
+  export type FindResult = {
+    /**
+     * Beginning location in USFM of the search result. The text is inclusive of this location,
+     * meaning this is the location of the first character of the found text
+     */
+    start: UsfmVerseRefVerseLocation;
+    /**
+     * Ending location in USFM of the search result. The text is exclusive of this location, meaning
+     * this is the location right after the last character of the found text
+     */
+    end: UsfmVerseRefVerseLocation;
+    /**
+     * The matching Scripture text (not USFM string) that was found between the start and end
+     * locations
+     */
+    text: string;
+  };
+
+  /**
+   * The status of a find job.
+   *
+   * - `running`: The job is currently running
+   * - `stopped`: The job was stopped by the user
+   * - `errored`: The job encountered an error and is no longer running
+   * - `exceeded`: The job was stopped because it generated too many results
+   * - `completed`: The job completed successfully
+   */
+  export type FindJobStatus = 'running' | 'stopped' | 'errored' | 'exceeded' | 'completed';
+
+  /**
+   * Represents the status of a find job, including the results found so far and any errors that
+   * occurred.
+   */
+  export type FindJobStatusReport = {
+    /** Unique ID of the find job */
+    jobId: string;
+    /** Current status of the find job */
+    status: FindJobStatus;
+    /** Percentage of the job that is complete (0-100) */
+    percentComplete: number;
+    /** Total number of results found so far */
+    totalResultsCount: number;
+    /** The next set of results found so far, if any. */
+    nextResults?: FindResult[];
+    /** If the job encountered an error, this will contain the error message */
+    error?: string;
+    /**
+     * Total time in milliseconds that the find operation has taken to run. This is the total time
+     * from when the job started until now if the job is still running. If the job is no longer
+     * running, then this is the total time it took to run the job until it finished.
+     */
+    totalExecutionTimeMs: number;
+  };
+
+  /** Provides information about running "Find" on scripture projects (intentionally empty) */
+  export type FindInScriptureProjectInterfaceDataTypes = {};
 
   /** Provides methods for running "Find" jobs on scripture projects */
   export type IFindInScriptureProjectDataProvider =
@@ -597,96 +645,48 @@ declare module 'platform-scripture' {
       ): Promise<FindJobStatusReport>;
     };
 
-  // #endregion
+  // #endregion Find Types
 
-  // #region Find Types
+  // #region Marker Types
 
-  /**
-   * Defines the scope of a find operation. A scope is a book and optionally a chapter within that
-   * book. If no chapter is provided, then the find operation should search across all chapters.
-   */
-  export type FindScope = {
-    bookId: string;
-    chapter?: number;
+  /** Provides information about markers */
+  export type MarkerNamesProjectInterfaceDataTypes = {
+    /** Gets an array of string that contain information about markers */
+    MarkerNames: DataProviderDataType<number, string[], string[]>;
   };
 
-  /** Options to use when performing a find operation. */
-  export type FindOptions = {
-    /** The text or regex pattern to search for */
-    searchString: string;
-    /**
-     * Array of {@link FindScope} values defining which books and chapters to search and in what
-     * order
-     */
-    scope: FindScope[];
-    /**
-     * If true, then the search string is treated as a regular expression. If false or undefined,
-     * then it is treated as a plain text search.
-     */
-    useRegex?: boolean;
-    /**
-     * If true, then the search is case insensitive. If false or undefined, then it is case
-     * sensitive.
-     */
-    caseInsensitive?: boolean;
-  };
+  /** Provides a string array that contains information about the markers used in this project */
+  export type IMarkerNamesProjectDataProvider =
+    IProjectDataProvider<MarkerNamesProjectInterfaceDataTypes> & {
+      /**
+       * Gets marker info for the default stylesheet
+       *
+       * @todo Add support for getting marker info from custom stylesheets
+       */
+      getMarkerNames(bookNum: number): Promise<string[] | undefined>;
+      /** Setting is not supported for now */
+      setMarkerNames(
+        markerNames: string[],
+      ): Promise<DataProviderUpdateInstructions<MarkerNamesProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when marker info changed
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated marker info for this selector. If there is
+       *   an error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeMarkerNames(
+        bookNum: number,
+        callback: (markerNames: string[] | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
 
-  /** Represents a single result from a find operation. */
-  export type FindResult = {
-    /**
-     * Beginning location in USFM of the search result. The text is inclusive of this location,
-     * meaning this is the location of the first character of the found text
-     */
-    start: UsfmVerseRefVerseLocation;
-    /**
-     * Ending location in USFM of the search result. The text is exclusive of this location, meaning
-     * this is the location right after the last character of the found text
-     */
-    end: UsfmVerseRefVerseLocation;
-    /**
-     * The matching Scripture text (not USFM string) that was found between the start and end
-     * locations
-     */
-    text: string;
-  };
-
-  /**
-   * The status of a find job.
-   *
-   * - `running`: The job is currently running
-   * - `stopped`: The job was stopped by the user
-   * - `errored`: The job encountered an error and is no longer running
-   * - `exceeded`: The job was stopped because it generated too many results
-   * - `completed`: The job completed successfully
-   */
-  export type FindJobStatus = 'running' | 'stopped' | 'errored' | 'exceeded' | 'completed';
-
-  /**
-   * Represents the status of a find job, including the results found so far and any errors that
-   * occurred.
-   */
-  export type FindJobStatusReport = {
-    /** Unique ID of the find job */
-    jobId: string;
-    /** Current status of the find job */
-    status: FindJobStatus;
-    /** Percentage of the job that is complete (0-100) */
-    percentComplete: number;
-    /** Total number of results found so far */
-    totalResultsCount: number;
-    /** The next set of results found so far, if any. */
-    nextResults?: FindResult[];
-    /** If the job encountered an error, this will contain the error message */
-    error?: string;
-    /**
-     * Total time in milliseconds that the find operation has taken to run. This is the total time
-     * from when the job started until now if the job is still running. If the job is no longer
-     * running, then this is the total time it took to run the job until it finished.
-     */
-    totalExecutionTimeMs: number;
-  };
-
-  // #endregion
+  // #endregion Marker Types
 
   // #region Check Types
 
@@ -877,7 +877,7 @@ declare module 'platform-scripture' {
     end: UsjChapterLocation | UsfmVerseLocation | CheckLocation;
   };
 
-  // #endregion
+  // #endregion Check Types
 
   // #region Check Runner Types
 
@@ -1075,7 +1075,7 @@ declare module 'platform-scripture' {
    */
   export type ICheckAggregatorService = ICheckRunner;
 
-  // #endregion
+  // #endregion Check Runner Types
 
   // #region Inventory Data Provider Types
 
@@ -1390,7 +1390,7 @@ declare module 'platform-scripture' {
     ) => Promise<ItemizedInventoryJobStatusReport>;
   };
 
-  // #endregion
+  // #endregion Inventory Data Provider Types
 
   // #region Check Hosting (in the Extension Host) Types
 
@@ -1414,7 +1414,7 @@ declare module 'platform-scripture' {
     getCheckRunner: () => Promise<ICheckRunner>;
   };
 
-  // #endregion
+  // #region Check Hosting (in the Extension Host) Types
 
   // #region Send/Receive Types
 
@@ -1447,7 +1447,7 @@ declare module 'platform-scripture' {
    */
   export type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
 
-  // #endregion
+  // #endregion Send/Receive Types
 
   // #region ChecksSetup Types
   export type ChecksSetUpProps = {
@@ -1465,7 +1465,8 @@ declare module 'platform-scripture' {
     /** List of checks that have been selected */
     selectedChecks: string[];
   };
-  // #endregion
+
+  // #endregion ChecksSetup Types
 }
 
 declare module 'papi-shared-types' {
