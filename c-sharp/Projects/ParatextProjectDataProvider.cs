@@ -200,7 +200,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Filter by status
         if (!string.IsNullOrEmpty(selector.Status))
         {
-            var status = new Enum<NoteStatus>(selector.Status);
+            // Convert from frontend CommentStatus format (e.g., "Todo") to internal NoteStatus format (e.g., "todo")
+            string noteStatus = JsonConverterUtils.ConvertCommentStatusToNoteStatus(
+                selector.Status
+            );
+            var status = new Enum<NoteStatus>(noteStatus);
             filteredThreads = filteredThreads.Where(t => t.Status == status);
         }
 
@@ -228,6 +232,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Filter by scripture ranges
         if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
             filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
+
+        // Filter by read status
+        if (selector.IsRead is bool isRead)
+            filteredThreads = filteredThreads.Where(t => ThreadStatus.IsThreadRead(t) == isRead);
 
         return filteredThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
     }

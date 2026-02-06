@@ -39,7 +39,6 @@ export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
   '%comment_status_todo%',
   '%comment_thread_multiple_replies%',
   '%comment_thread_single_reply%',
-  '%no_comments%',
 ];
 
 /** Type definition for the localized strings used in the CommentList component */

@@ -72,7 +72,6 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
-      shouldShowToolbar: true,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
     };
   }

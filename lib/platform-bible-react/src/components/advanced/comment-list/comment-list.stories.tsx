@@ -22,7 +22,6 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_status_todo%': 'Re-opened',
   '%comment_thread_multiple_replies%': '{count} replies',
   '%comment_thread_single_reply%': '1 reply',
-  '%no_comments%': 'No comments yet',
 };
 
 const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];

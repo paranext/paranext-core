@@ -133,6 +133,8 @@ declare module 'legacy-comment-manager' {
     assignedTo?: string;
     /** Filter by scripture range */
     scriptureRanges?: CommentScriptureRange[];
+    /** Filter by read status */
+    isRead?: boolean;
   };
 
   // #endregion
