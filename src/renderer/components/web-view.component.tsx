@@ -93,7 +93,7 @@ export function WebView({
   allowPopups,
   scrollGroupScrRef,
   projectId,
-  shouldShowToolbar,
+  shouldShowToolbar = false, // TODO (PT-3813): Revisit how this should be turned off.
 }: WebViewTabProps) {
   // React starts refs as null
   // eslint-disable-next-line no-null/no-null
