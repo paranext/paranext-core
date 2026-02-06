@@ -22,6 +22,18 @@ declare module 'platform-scripture' {
   } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 
+  // #region USFM locations and ranges
+
+  /** A pair of Scripture positions that are in USJ Chapter or USFM Verse format */
+  export type ScriptureRangeUsjChapterOrUsfmVerseLocation = {
+    /** Starting point of the Scripture range in the document */
+    start: UsjChapterLocation | UsfmVerseLocation;
+    /** Ending point of the Scripture range in the document */
+    end: UsjChapterLocation | UsfmVerseLocation;
+  };
+
+  // #endregion USFM locations and ranges
+
   // #region Scripture Project Data Provider Types
 
   /** Provides Scripture data in USFM format by book */
