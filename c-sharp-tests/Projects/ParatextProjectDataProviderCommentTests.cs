@@ -1157,9 +1157,9 @@ namespace TestParanextDataProvider.Projects
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
                 .Single();
             Assert.That(
-                threadAfterUnresolve.Status.ToString().ToLowerInvariant(),
+                threadAfterUnresolve.Status.ToString(),
                 Is.EqualTo("todo"),
-                "Thread status should be Todo after unresolving"
+                "Thread status should be todo after unresolving"
             );
 
             // Verify thread is marked as read
@@ -1179,9 +1179,9 @@ namespace TestParanextDataProvider.Projects
             // Verify the new comment has Todo status
             var lastComment = threadAfterUnresolve.Comments.Last();
             Assert.That(
-                lastComment.Status.ToString().ToLowerInvariant(),
+                lastComment.Status.ToString(),
                 Is.EqualTo("todo"),
-                "Last comment should have Todo status"
+                "Last comment should have `todo` status"
             );
 
             // Verify comment is marked as read
@@ -1207,9 +1207,9 @@ namespace TestParanextDataProvider.Projects
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
-            // Assert - Verify it appears in resolved filter (using ParatextData's 'deleted' label)
+            // Assert - Verify it appears in resolved filter
             var resolvedThreads = _provider.GetCommentThreads(
-                new CommentThreadSelector { Status = "deleted" }
+                new CommentThreadSelector { Status = "Resolved" }
             );
 
             Assert.That(
@@ -1222,40 +1222,54 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void AddCommentToThread_UnresolvedThreadAppearsInTodoFilter()
         {
-            // Arrange - Create and resolve a thread
-            var comment = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
-            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
-            string threadId = _provider
+            // Arrange - Create two threads: one todo and one resolved
+            var comment1 = CreateTestComment("GEN", 1, 1, "Test comment for todo filter");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string todoThreadId = _provider
                 .GetCommentThreads(new CommentThreadSelector())
-                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
                 .Id;
 
-            // Resolve first via AddCommentToThread
-            var resolveComment = new Comment(_scrText.User)
+            var comment2 = CreateTestComment("GEN", 1, 2, "Test comment for resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string resolvedThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+
+            // Resolve the first thread
+            var resolveComment1 = new Comment(_scrText.User)
             {
-                Thread = threadId,
+                Thread = todoThreadId,
                 Status = NoteStatus.Resolved
             };
-            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
+            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment1));
 
-            // Act - Unresolve it via AddCommentToThread
+            // Resolve the second thread and keep it resolved
+            var resolveComment2 = new Comment(_scrText.User)
+            {
+                Thread = resolvedThreadId,
+                Status = NoteStatus.Resolved
+            };
+            _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment2));
+
+            // Act - Unresolve the first thread
             var unresolveComment = new Comment(_scrText.User)
             {
-                Thread = threadId,
+                Thread = todoThreadId,
                 Status = NoteStatus.Todo
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
-            ;
 
-            // Assert - Verify it appears in Todo filter
+            // Assert - Verify only the todo thread appears in Todo filter
             var todoThreads = _provider.GetCommentThreads(
-                new CommentThreadSelector { Status = "todo" }
+                new CommentThreadSelector { Status = "Todo" }
             );
 
             Assert.That(
-                todoThreads.Any(t => t.Id == threadId),
-                Is.True,
-                "Unresolved thread should appear in Todo filter"
+                todoThreads.Single().Id,
+                Is.EqualTo(todoThreadId),
+                "Only the unresolved thread should appear in `todo` filter"
             );
         }
 
