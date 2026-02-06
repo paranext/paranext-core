@@ -98,6 +98,7 @@
     "test:e2e:ui": "playwright test --config e2e-tests/playwright.config.ts --ui",
     "test:e2e:debug": "playwright test --config e2e-tests/playwright.config.ts --debug",
     "test:e2e:report": "playwright show-report e2e-tests/playwright-report",
+    "test:e2e:wsl": "e2e-tests/run-e2e-wsl.sh",
     "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",
     "typecheck:core": "tsc -p ./tsconfig.json",
     "typecheck:papi-dts": "cd lib/papi-dts && npm run typecheck",

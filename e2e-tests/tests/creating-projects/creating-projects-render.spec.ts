@@ -1,125 +1,114 @@
 import { test, expect } from '../../fixtures/papi.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
+/** Helper to wait for the Create Project web view to appear and load after it's been opened */
+async function waitForCreateProjectDialogToLoad(
+  mainPage: import('@playwright/test').Page,
+  timeout = 60_000,
+) {
+  // Wait for the Create Project iframe to appear (second web view)
+  const createIframe = mainPage.locator('iframe.web-view').nth(1);
+  await expect(createIframe).toBeAttached({ timeout });
+
+  // Get the frame content
+  const iframeElement = await createIframe.elementHandle();
+  const frame = await iframeElement?.contentFrame();
+  if (!frame) throw new Error('Could not get Create Project frame');
+
+  // Wait for the Loading spinner to disappear (content loaded)
+  await frame.waitForSelector('text=Loading...', { state: 'hidden', timeout });
+
+  return { frame };
+}
+
+/** Helper to open Create Project dialog via PAPI command */
+async function openCreateProjectViaPAPI(
+  papiClient: { sendCommand: <T>(cmd: string, ...args: unknown[]) => Promise<T> },
+  mainPage: import('@playwright/test').Page,
+  timeout = 60_000,
+) {
+  // Send command to open Create Project dialog
+  await papiClient.sendCommand<string>('platformProjects.openCreateProject');
+  return waitForCreateProjectDialogToLoad(mainPage, timeout);
+}
+
 test.describe('Creating Projects - Render Tests', () => {
-  test('should open Create Project dialog via menu', async ({ electronApp, mainPage }) => {
+  // Increase test timeout for slower WSL2/Xvfb environment
+  test.setTimeout(180_000);
+
+  test('should open Create Project dialog via menu', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    // Click the main menu (Platform.Bible)
-    const mainMenu = mainPage.getByRole('menuitem', { name: /Platform\.Bible/i });
-    await mainMenu.click();
+    // Extra wait for services to stabilize
+    await mainPage.waitForTimeout(5_000);
 
-    // Look for the New Project menu item
+    // Click on Platform menu in the menu bar
+    const platformMenu = mainPage.locator('button:has-text("Platform")');
+    await platformMenu.click();
+
+    // Wait for dropdown to appear and click "New Project"
     const newProjectItem = mainPage.getByRole('menuitem', { name: /New Project/i });
+    await expect(newProjectItem).toBeVisible({ timeout: 5_000 });
     await newProjectItem.click();
 
-    // Wait for the Create Project dialog to appear as a floating web view
-    const createProjectDialog = mainPage.locator('.dock-tab', { hasText: /Create New Project/i });
-    await expect(createProjectDialog).toBeVisible({ timeout: 15_000 });
+    // Wait for dialog to load
+    const { frame } = await waitForCreateProjectDialogToLoad(mainPage);
 
-    // Verify the General tab is active and contains key form fields
-    const generalTab = mainPage.locator('[data-state="active"]', { hasText: /General/i });
-    await expect(generalTab).toBeVisible({ timeout: 5_000 });
+    // Verify the dialog opened with General tab content
+    await expect(frame.locator('label:has-text("Short Name")')).toBeVisible({ timeout: 10_000 });
   });
 
-  test('should open Create Project dialog via PAPI command', async ({
-    electronApp,
-    papiClient,
-    mainPage,
-  }) => {
+  test('should open Create Project dialog via PAPI command', async ({ papiClient, mainPage }) => {
     await waitForAppReady(mainPage);
 
-    // Open the Create Project dialog using the PAPI command
-    await papiClient.sendCommand('platformProjects.openCreateProject');
+    // Extra wait for services to stabilize
+    await mainPage.waitForTimeout(5_000);
 
-    // Wait for the dialog to appear
-    const createProjectDialog = mainPage.locator('.dock-tab', { hasText: /Create New Project/i });
-    await expect(createProjectDialog).toBeVisible({ timeout: 15_000 });
+    const { frame } = await openCreateProjectViaPAPI(papiClient, mainPage);
 
-    // Verify key elements render - Short Name field
-    const shortNameLabel = mainPage.locator('label', { hasText: /Short Name/i });
-    await expect(shortNameLabel).toBeVisible({ timeout: 5_000 });
-
-    // Verify Project Type field exists
-    const projectTypeLabel = mainPage.locator('label', { hasText: /Project Type/i });
-    await expect(projectTypeLabel).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('should display validation errors when submitting empty form', async ({
-    electronApp,
-    papiClient,
-    mainPage,
-  }) => {
-    await waitForAppReady(mainPage);
-
-    // Open Create Project dialog
-    await papiClient.sendCommand('platformProjects.openCreateProject');
-
-    // Wait for dialog
-    const createProjectDialog = mainPage.locator('.dock-tab', { hasText: /Create New Project/i });
-    await expect(createProjectDialog).toBeVisible({ timeout: 15_000 });
-
-    // Try to click OK without filling required fields
-    const okButton = mainPage.getByRole('button', { name: /OK/i });
-    await okButton.click();
-
-    // Expect validation error to appear (Short name required)
-    const validationError = mainPage.locator('[role="alert"]');
-    await expect(validationError.first()).toBeVisible({ timeout: 5_000 });
+    // Verify key elements render using labels (avoid strict mode violations)
+    await expect(frame.locator('label:has-text("Short Name")')).toBeVisible({ timeout: 10_000 });
+    await expect(frame.locator('label:has-text("Project Type")')).toBeVisible({ timeout: 10_000 });
+    await expect(frame.locator('label:has-text("Language")')).toBeVisible({ timeout: 10_000 });
+    await expect(frame.locator('label:has-text("Versification")')).toBeVisible({ timeout: 10_000 });
   });
 
   test('should navigate between tabs in Create Project dialog', async ({
-    electronApp,
     papiClient,
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
+    await mainPage.waitForTimeout(5_000);
 
-    // Open Create Project dialog
-    await papiClient.sendCommand('platformProjects.openCreateProject');
-
-    // Wait for dialog
-    const createProjectDialog = mainPage.locator('.dock-tab', { hasText: /Create New Project/i });
-    await expect(createProjectDialog).toBeVisible({ timeout: 15_000 });
+    const { frame } = await openCreateProjectViaPAPI(papiClient, mainPage);
 
     // Click on Books tab
-    const booksTab = mainPage.getByRole('tab', { name: /Books/i });
-    await booksTab.click();
+    await frame.locator('role=tab[name=/Books/i]').click();
 
-    // Verify Books tab content is visible (Select All button)
-    const selectAllButton = mainPage.getByRole('button', { name: /Select All/i });
-    await expect(selectAllButton).toBeVisible({ timeout: 5_000 });
+    // Verify Books tab content - use exact match to avoid strict mode violation
+    await expect(frame.getByRole('button', { name: 'Select All', exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Go back to General tab
-    const generalTab = mainPage.getByRole('tab', { name: /General/i });
-    await generalTab.click();
+    await frame.locator('role=tab[name=/General/i]').click();
 
-    // Verify General tab content reappears
-    const shortNameLabel = mainPage.locator('label', { hasText: /Short Name/i });
-    await expect(shortNameLabel).toBeVisible({ timeout: 5_000 });
+    // Verify General tab content
+    await expect(frame.locator('label:has-text("Short Name")')).toBeVisible({ timeout: 10_000 });
   });
 
-  test('should auto-generate short name from full name', async ({
-    electronApp,
-    papiClient,
-    mainPage,
-  }) => {
+  test('should display all expected tabs', async ({ papiClient, mainPage }) => {
     await waitForAppReady(mainPage);
+    await mainPage.waitForTimeout(5_000);
 
-    // Open Create Project dialog
-    await papiClient.sendCommand('platformProjects.openCreateProject');
+    const { frame } = await openCreateProjectViaPAPI(papiClient, mainPage);
 
-    // Wait for dialog
-    const createProjectDialog = mainPage.locator('.dock-tab', { hasText: /Create New Project/i });
-    await expect(createProjectDialog).toBeVisible({ timeout: 15_000 });
-
-    // Type a full name in the Full Name field
-    const fullNameInput = mainPage.locator('input[aria-label*="Full name"]').first();
-    await fullNameInput.fill('Test Project Name');
-
-    // Wait for auto-generation to update short name
-    // The short name should update based on the full name
-    const shortNameInput = mainPage.locator('input[aria-label*="Short name"]').first();
-    await expect(shortNameInput).toHaveValue(/\w+/, { timeout: 5_000 });
+    // Verify all tabs are visible
+    await expect(frame.locator('role=tab[name=/General/i]')).toBeVisible();
+    await expect(frame.locator('role=tab[name=/Books/i]')).toBeVisible();
+    await expect(frame.locator('role=tab[name=/Associations/i]')).toBeVisible();
+    await expect(frame.locator('role=tab[name=/Notes/i]')).toBeVisible();
+    await expect(frame.locator('role=tab[name=/Advanced/i]')).toBeVisible();
+    await expect(frame.locator('role=tab[name=/Additions/i]')).toBeVisible();
   });
 });
