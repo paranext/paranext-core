@@ -48,7 +48,15 @@ global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   projectId,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(COMMENT_LIST_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => {
+      return [
+        ...Array.from(COMMENT_LIST_STRING_KEYS),
+        '%no_comments%',
+        '%no_comments_match_filter%',
+      ];
+    }, []),
+  );
   const [scrRef] = useWebViewScrollGroupScrRef();
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
@@ -353,7 +361,11 @@ global.webViewComponent = function CommentListWebView({
       <div className="tw-flex-1 tw-overflow-auto">
         {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
           <div className="tw-m-4 tw-flex tw-justify-center">
-            <Label>{localizedStrings['%no_comments%']}</Label>
+            <Label>
+              {commentFilter !== 'all' || locationFilter !== 'anywhere'
+                ? localizedStrings['%no_comments_match_filter%']
+                : localizedStrings['%no_comments%']}
+            </Label>
           </div>
         ) : (
           <CommentList

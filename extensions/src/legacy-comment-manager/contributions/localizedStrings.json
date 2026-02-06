@@ -1,5 +1,10 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%no_comments_match_filter%": {
+      "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_7%",
+      "%webView_legacyCommentManager_commentList_title%": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
+    }
+  },
   "localizedStrings": {
     "en": {
       "%comment_assign_team%": "Team",
@@ -18,6 +23,7 @@
       "%comment_thread_multiple_replies%": "{count} replies",
       "%comment_thread_single_reply%": "1 reply",
       "%no_comments%": "No comments yet",
+      "%no_comments_match_filter%": "No comments match your filter settings.",
       "%webView_legacyCommentManager_commentList_title%": "Comments",
       "%webView_legacyCommentManager_openComments%": "Open Comments"
     },
@@ -38,6 +44,7 @@
       "%comment_thread_multiple_replies%": "{count} respuestas",
       "%comment_thread_single_reply%": "1 respuesta",
       "%no_comments%": "No hay comentarios todavía",
+      "%no_comments_match_filter%": "No hay comentarios que coincidan con sus parámetros de filtros.",
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
     }
