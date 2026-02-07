@@ -2,7 +2,7 @@ import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
 const createRule = ESLintUtils.RuleCreator(
   (name) =>
-    `https://github.com/paranext/paranext-core/blob/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
+    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
 );
 
 type MessageIds = 'missingMetadata' | 'missingMethodProperty';
