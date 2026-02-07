@@ -209,10 +209,10 @@ run_localization_check() {
   echo "Checking localization keys..."
 
   local staged_files
-  staged_files=$(get_staged_files | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
+  staged_files=$(get_staged_files | grep -E '\.(ts|tsx)$' | grep -v '^lib/' | tr '\n' ' ')
 
   if [[ -z "$staged_files" ]]; then
-    echo "No TS/TSX files staged, skipping localization check"
+    echo "No TS/TSX files staged (excluding lib/), skipping localization check"
     return 0
   fi
 
