@@ -11,6 +11,7 @@
 module.exports = {
   extends: ['./.eslintrc.js'],
   plugins: ['paranext'],
+  ignorePatterns: ['.erb/**'],
   rules: {
     // === Naming conventions ===
 
@@ -102,6 +103,24 @@ module.exports = {
       excludedFiles: ['**/*.test.ts', '**/*.test.tsx', '**/*.d.ts'],
       rules: {
         'paranext/require-provenance-comment': 'warn',
+      },
+    },
+    {
+      // Test files and stories - disable localization rules (hardcoded strings are fine)
+      files: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.spec.ts',
+        '**/*.spec.tsx',
+        '**/*.stories.ts',
+        '**/*.stories.tsx',
+        '**/testing/**',
+      ],
+      rules: {
+        'paranext/no-hardcoded-jsx-strings': 'off',
+        'paranext/require-localized-aria': 'off',
+        'paranext/require-localized-strings-array': 'off',
+        'paranext/no-hardcoded-string-comparison': 'off',
       },
     },
   ],

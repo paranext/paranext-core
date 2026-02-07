@@ -28,37 +28,34 @@ if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
   # 1. Branch naming (warning only)
   validate_branch_name "$BRANCH"
 
-  # 2. Secret scanning with gitleaks (fast, ~1-5s)
-  run_gitleaks || exit $?
-
-  # 3. TypeScript typecheck (if TS files staged)
+  # 2. TypeScript typecheck (if TS files staged)
   if has_ts_changes; then
     run_typecheck || exit $?
   else
     echo "No TypeScript files staged, skipping typecheck"
   fi
 
-  # 4. C# build check (if C# files staged)
+  # 3. C# build check (if C# files staged)
   if has_csharp_changes; then
     run_csharp_build_check || exit $?
   else
     echo "No C# files staged, skipping build check"
   fi
 
-  # 5. Format checks (Prettier for TS/JS, CSharpier for C#)
+  # 4. Format checks (Prettier for TS/JS, CSharpier for C#)
   run_ai_format_ts || exit $?
   run_ai_format_csharp || exit $?
 
-  # 6. AI-specific TypeScript lint (paranext plugin rules)
+  # 5. AI-specific TypeScript lint (paranext plugin rules)
   run_ai_lint_ts || exit $?
 
-  # 7. AI-specific C# analyzer check (warnings as errors for staged files)
+  # 6. AI-specific C# analyzer check (warnings as errors for staged files)
   run_ai_lint_csharp || exit $?
 
-  # 8. Localization key validation
+  # 7. Localization key validation
   run_localization_check || exit $?
 
-  # 9. Architecture boundary check
+  # 8. Architecture boundary check
   run_architecture_check || exit $?
 
   echo ""

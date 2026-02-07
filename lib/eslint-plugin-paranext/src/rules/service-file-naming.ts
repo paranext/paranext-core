@@ -3,7 +3,7 @@ import * as path from 'path';
 
 const createRule = ESLintUtils.RuleCreator(
   (name) =>
-    `https://github.com/paranext/paranext-core/blob/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
+    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
 );
 
 type MessageIds = 'serviceNotInServicesDir' | 'serviceWrongExtension';
@@ -11,8 +11,11 @@ type MessageIds = 'serviceNotInServicesDir' | 'serviceWrongExtension';
 /**
  * ESLint rule: paranext/service-file-naming
  *
- * Enforces that service files are named with .service.ts suffix and are located in a services/
- * directory.
+ * Enforces that service files are named with .service.ts or .service-host.ts suffix and are located
+ * in a services/ directory.
+ *
+ * The .service-host.ts pattern is used for files under extension-host/ or main/ that create network
+ * objects or data providers consumed by the corresponding .service.ts in shared/.
  *
  * See: .context/standards/Paranext-Core-Patterns.md "Extension Structure"
  */
@@ -21,13 +24,15 @@ export default createRule<[], MessageIds>({
   meta: {
     type: 'suggestion',
     docs: {
-      description: 'Enforce service file naming convention: *.service.ts in services/ directory',
+      description:
+        'Enforce service file naming convention: *.service.ts or *.service-host.ts in services/ directory',
       recommended: 'warn',
     },
     schema: [],
     messages: {
       serviceNotInServicesDir: "Service file '{{filename}}' should be in a 'services/' directory",
-      serviceWrongExtension: "Service file '{{filename}}' should end with '.service.ts'",
+      serviceWrongExtension:
+        "Service file '{{filename}}' should end with '.service.ts' or '.service-host.ts'",
     },
   },
   defaultOptions: [],
@@ -52,7 +57,8 @@ export default createRule<[], MessageIds>({
     }
 
     const isInServicesDir = filename.includes('/services/') || filename.includes('\\services\\');
-    const hasServiceSuffix = basename.endsWith('.service.ts');
+    const hasServiceSuffix =
+      basename.endsWith('.service.ts') || basename.endsWith('.service-host.ts');
 
     const messages: { messageId: MessageIds; data: Record<string, string> }[] = [];
 

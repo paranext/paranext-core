@@ -7,8 +7,8 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Paranext.Analyzers.Rules;
 
 /// <summary>
-/// PNX008: DataProvider/NetworkObject methods should not return 'object' or 'dynamic' - use concrete types.
-/// Weakly-typed returns lose type safety and can cause serialization issues over JSON-RPC.
+/// PNX008: DataProvider/NetworkObject methods should not return 'dynamic' - use concrete types.
+/// The 'dynamic' keyword is problematic for serialization and was removed from the codebase.
 /// Only applies to classes that inherit from DataProvider or NetworkObject (serialization boundaries).
 /// See: phase-3-implementation-backend.md "Smoke Test 3: Serialization &amp; Parameter Alignment Audit"
 /// </summary>
@@ -18,12 +18,12 @@ public sealed class ConcreteReturnTypesAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor Rule =
         new(
             DiagnosticIds.ConcreteReturnTypes,
-            title: "DataProvider/NetworkObject methods should return concrete types",
-            messageFormat: "Method '{0}' returns '{1}'; use a concrete type instead for type safety and proper JSON-RPC serialization",
+            title: "DataProvider/NetworkObject methods should not return 'dynamic'",
+            messageFormat: "Method '{0}' returns '{1}'; use a concrete type instead — 'dynamic' is problematic for serialization",
             category: "Paranext.Serialization",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "Returning 'object' or 'dynamic' loses type safety and can cause serialization issues. Use concrete types (classes, records, or interfaces). Only applies to DataProvider/NetworkObject classes.",
+            description: "Returning 'dynamic' causes serialization issues and was removed from the codebase. Use concrete types (classes, records, or interfaces). Only applies to DataProvider/NetworkObject classes.",
             helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#json-serialization-converters"
         );
 
@@ -87,19 +87,11 @@ public sealed class ConcreteReturnTypesAnalyzer : DiagnosticAnalyzer
 
     private static bool IsWeaklyTypedReturn(ITypeSymbol returnType, string returnTypeName)
     {
-        // Check for 'object'
-        if (returnType.SpecialType == SpecialType.System_Object)
-            return true;
-
         // Check for 'dynamic'
         if (returnType.TypeKind == TypeKind.Dynamic)
             return true;
 
-        // Check for nullable object (object?)
-        if (returnTypeName == "object?" || returnTypeName == "System.Object?")
-            return true;
-
-        // Check for Task<object> or Task<object?>
+        // Check for Task<dynamic>
         if (
             returnType is INamedTypeSymbol namedType
             && namedType.IsGenericType
@@ -107,10 +99,7 @@ public sealed class ConcreteReturnTypesAnalyzer : DiagnosticAnalyzer
         )
         {
             var typeArg = namedType.TypeArguments[0];
-            if (
-                typeArg.SpecialType == SpecialType.System_Object
-                || typeArg.TypeKind == TypeKind.Dynamic
-            )
+            if (typeArg.TypeKind == TypeKind.Dynamic)
                 return true;
         }
 

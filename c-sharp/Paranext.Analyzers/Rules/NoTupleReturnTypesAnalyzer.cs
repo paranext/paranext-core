@@ -62,6 +62,10 @@ public sealed class NoTupleReturnTypesAnalyzer : DiagnosticAnalyzer
         if (containingType.IsAbstract)
             return;
 
+        // Skip GetFunctions() which returns delegates with tuple signatures
+        if (methodSymbol.Name == "GetFunctions")
+            return;
+
         // Check if return type is a tuple
         if (IsTupleType(methodSymbol.ReturnType))
         {

@@ -3,7 +3,7 @@ import { isValidExtensionIdentifier, suggestFix } from '../utils/naming-patterns
 
 const createRule = ESLintUtils.RuleCreator(
   (name) =>
-    `https://github.com/paranext/paranext-core/blob/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
+    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
 );
 
 /**
