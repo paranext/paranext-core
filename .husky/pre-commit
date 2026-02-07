@@ -1,6 +1,65 @@
+#!/usr/bin/env bash
+
+# ============================================
+# Standard hooks (ALL branches)
+# ============================================
 echo "Format and stylelint fixes..."
 npm run lint:staged
 echo "Format and stylelint fixes finished"
 
 echo "If the following fails run: npm run editor:unlink && npm run utils:unlink"
 npx yalc check
+
+# ============================================
+# AI-specific hooks (ai/* branches only)
+# ============================================
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+
+if [[ "$BRANCH" == "ai/main" || "$BRANCH" == ai/feature/* ]]; then
+  echo ""
+  echo "=========================================="
+  echo "AI Branch Detected: $BRANCH"
+  echo "Running additional validations..."
+  echo "=========================================="
+
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  source "$SCRIPT_DIR/lib/ai-hooks.sh"
+
+  # 1. Branch naming (warning only)
+  validate_branch_name "$BRANCH"
+
+  # 2. TypeScript typecheck (if TS files staged)
+  if has_ts_changes; then
+    run_typecheck || exit $?
+  else
+    echo "No TypeScript files staged, skipping typecheck"
+  fi
+
+  # 3. C# build check (if C# files staged)
+  if has_csharp_changes; then
+    run_csharp_build_check || exit $?
+  else
+    echo "No C# files staged, skipping build check"
+  fi
+
+  # 4. Format checks (Prettier for TS/JS, CSharpier for C#)
+  run_ai_format_ts || exit $?
+  run_ai_format_csharp || exit $?
+
+  # 5. AI-specific TypeScript lint (paranext plugin rules)
+  run_ai_lint_ts || exit $?
+
+  # 6. AI-specific C# analyzer check (warnings as errors for staged files)
+  run_ai_lint_csharp || exit $?
+
+  # 7. Localization key validation
+  run_localization_check || exit $?
+
+  # 8. Architecture boundary check
+  run_architecture_check || exit $?
+
+  echo ""
+  echo "=========================================="
+  echo "AI validations completed successfully"
+  echo "=========================================="
+fi

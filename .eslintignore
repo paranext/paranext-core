@@ -44,6 +44,7 @@ dist
 e2e-tests
 extensions
 lib/browserslist-config-detect-electron
+lib/eslint-plugin-paranext
 lib/papi-dts
 lib/platform-bible-react
 lib/platform-bible-utils
