@@ -5,7 +5,7 @@
 # Exit codes
 readonly AI_EXIT_TYPECHECK=1
 readonly AI_EXIT_CSHARP=2
-readonly AI_EXIT_SECRETS=3
+# AI_EXIT_SECRETS=3 removed — gitleaks now CI-only (see ai-security-scan.yml)
 readonly AI_EXIT_LINT_TS=4
 readonly AI_EXIT_LINT_CSHARP=5
 readonly AI_EXIT_FORMAT_TS=6
@@ -64,25 +64,6 @@ run_csharp_build_check() {
     return $AI_EXIT_CSHARP
   fi
   echo "C# build check passed"
-}
-
-run_gitleaks() {
-  echo "Scanning for secrets with gitleaks..."
-
-  # Check if gitleaks is installed
-  if ! command -v gitleaks &> /dev/null; then
-    echo "WARNING: gitleaks not installed, skipping secret scan"
-    echo "Install with: brew install gitleaks (macOS) or see https://github.com/gitleaks/gitleaks"
-    return 0
-  fi
-
-  # Scan only staged files for secrets
-  if ! gitleaks protect --staged --no-banner 2>&1; then
-    error_msg "AI-003" "Potential secrets detected in staged files" \
-      "Review flagged files. Use .env.example for templates, never commit credentials."
-    return $AI_EXIT_SECRETS
-  fi
-  echo "No secrets detected"
 }
 
 # ============================================

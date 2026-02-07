@@ -10,7 +10,7 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": ["eslint", "eslintplugin", "paranext"],
-  "author": "SIL International",
+  "author": "Paranext",
   "license": "MIT",
   "peerDependencies": {
     "eslint": ">=8.0.0",

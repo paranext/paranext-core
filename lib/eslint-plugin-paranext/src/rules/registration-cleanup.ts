@@ -2,7 +2,7 @@ import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
 const createRule = ESLintUtils.RuleCreator(
   (name) =>
-    `https://github.com/paranext/paranext-core/blob/main/.context/standards/Entry-Point-Guide.md#${name}`,
+    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Entry-Point-Guide.md#${name}`,
 );
 
 /** Registration methods that return promises which must be tracked for cleanup. */
@@ -15,6 +15,8 @@ const REGISTRATION_METHODS = [
   'registerEngine',
   // papi.projectDataProviders.registerProjectDataProviderEngineFactory
   'registerProjectDataProviderEngineFactory',
+  // papi.projectSettings.registerValidator
+  'registerValidator',
 ];
 
 /** Objects that have registration methods. */
@@ -23,6 +25,7 @@ const REGISTRATION_OBJECTS = [
   'webViewProviders',
   'dataProviders',
   'projectDataProviders',
+  'projectSettings',
 ];
 
 /**
