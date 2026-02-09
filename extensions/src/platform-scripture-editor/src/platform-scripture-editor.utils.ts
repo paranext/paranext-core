@@ -273,3 +273,10 @@ export async function convertScriptureRangeToEditorRange(
 }
 
 // #endregion USJ location conversion helper functions
+
+/**
+ * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+ * placeholder and will be refactored significantly in
+ * https://github.com/paranext/paranext-core/issues/788
+ */
+export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
