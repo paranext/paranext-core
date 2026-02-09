@@ -10,7 +10,7 @@ import {
   LanguageStrings,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjNodeAndDocumentLocation,
+  UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
@@ -140,16 +140,13 @@ function determineLocationProperties(
   rangeLocation: ScriptureRange['start'],
   baseVerseRef: SerializedVerseRef,
 ): {
-  /** Empty string if not found */
-  jsonPath: string;
   /** `undefined` if not found */
-  jsonPathOffset: number | undefined;
+  documentLocation: UsjDocumentLocation | undefined;
   verseRef: SerializedVerseRef;
   /** `undefined` if not found */
   verseOffset: number | undefined;
 } {
-  let jsonPath = '';
-  let jsonPathOffset: number | undefined;
+  let documentLocation: UsjDocumentLocation | undefined;
   let verseRef = { ...baseVerseRef };
   let verseOffset: number | undefined;
 
@@ -158,9 +155,7 @@ function determineLocationProperties(
       UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(rangeLocation);
     verseRef.book = chapterLocation.verseRef.book;
     verseRef.chapterNum = chapterLocation.verseRef.chapterNum;
-    jsonPath = chapterLocation.documentLocation.jsonPath;
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(chapterLocation.documentLocation))
-      jsonPathOffset = chapterLocation.documentLocation.offset;
+    documentLocation = chapterLocation.documentLocation;
   } else {
     const startVerseLocation =
       UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(rangeLocation);
@@ -169,88 +164,23 @@ function determineLocationProperties(
   }
 
   return {
-    jsonPath,
-    jsonPathOffset,
+    documentLocation,
     verseRef,
     verseOffset,
   };
-}
-
-/**
- * Calculate the USJ JSONPath and offset within it to a text location from USFM verse location
- * information if the USJ location information is not already determined
- *
- * @param usjRW {@link UsjReaderWriter} to use for getting the USJ location info
- * @param verseRef Which verse the location is in
- * @param verseOffset The offset in USFM space from the start of the verse
- * @param currentJsonPath Current value of the JSONPath for this location. Empty string if not
- *   determined yet
- * @param currentJsonPathOffset Current value of the USJ offset in the location. `undefined` if not
- *   determined yet
- * @returns USJ location properties
- */
-function calculateUsjLocationProperties(
-  usjRW: UsjReaderWriter,
-  verseRef: SerializedVerseRef,
-  verseOffset: number | undefined,
-  currentJsonPath: string,
-  currentJsonPathOffset: number | undefined,
-): {
-  jsonPath: string;
-  jsonPathOffset: number;
-  usjContentLocation: UsjNodeAndDocumentLocation | undefined;
-} {
-  let jsonPath = currentJsonPath;
-  let jsonPathOffset = currentJsonPathOffset;
-
-  // Convert the UsfmVerseLocation to get jsonPath and offset from them
-  let usjContentLocation: UsjNodeAndDocumentLocation | undefined;
-  if (!jsonPath) {
-    usjContentLocation = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
-      verseRef,
-      offset: verseOffset,
-    });
-
-    jsonPath = usjContentLocation.documentLocation.jsonPath;
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(usjContentLocation.documentLocation)) {
-      jsonPathOffset = usjContentLocation.documentLocation.offset;
-    }
-  }
-
-  // If we haven't found JSONPath offsets, find the nearest text location. We only need to do
-  // this because the editor does not support the full `UsjDocumentLocation`; once it is
-  // updated to support them, we can stop tracking jsonPathOffsets
-  if (jsonPathOffset === undefined) {
-    usjContentLocation = usjContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(jsonPath);
-    const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(usjContentLocation, '');
-    if (nextTextContentLocation) {
-      jsonPath = nextTextContentLocation.documentLocation.jsonPath;
-      jsonPathOffset = nextTextContentLocation.documentLocation.offset;
-    } else
-      // Just put the offset at the start of the marker pointed to by the jsonPath and
-      // hope that's good enough for now. This probably won't happen much, and this case
-      // will not exist once the editor is updated
-      jsonPathOffset = 0;
-  }
-
-  return { jsonPath, jsonPathOffset, usjContentLocation };
 }
 
 /** Result of converting a ScriptureRange to an editor-usable range */
 interface ConvertedEditorRange {
   /** The scripture reference for the start of the range */
   verseRef: SerializedVerseRef;
-  /** The editor-usable range with jsonPath and offset */
+  /** The editor-usable range with start and end locations in USJ format */
   editorRange: {
-    start: { jsonPath: string; offset: number };
-    end: { jsonPath: string; offset: number };
+    start: UsjDocumentLocation;
+    end: UsjDocumentLocation;
   };
   /** The UsjReaderWriter instance used for conversion, for further text extraction */
   usjReaderWriter: UsjReaderWriter;
-  /** The start location in USJ format */
-  startLocation: UsjNodeAndDocumentLocation;
-  /** The end location in USJ format */
-  endLocation: UsjNodeAndDocumentLocation;
 }
 
 /**
@@ -268,15 +198,12 @@ export async function convertScriptureRangeToEditorRange(
   projectId: string,
 ): Promise<ConvertedEditorRange> {
   // Figure out the information needed to make the USJ range to give to the editor:
-  // book, chapter, start jsonPath and offset, and end jsonPath and offset.
+  // book, chapter, and start/end document locations.
   // Also need to get the verse to set the scroll group verse to because the editor doesn't
   // do it automatically right now
   let startVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: -1 };
-  let startJsonPath = '';
-  let endJsonPath = '';
-  // Start and end offsets based on the USJ JSONPath location
-  let startJsonPathOffset: number | undefined;
-  let endJsonPathOffset: number | undefined;
+  let startDocumentLocation: UsjDocumentLocation | undefined;
+  let endDocumentLocation: UsjDocumentLocation | undefined;
 
   // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
   let endVerseRef: SerializedVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
@@ -288,22 +215,14 @@ export async function convertScriptureRangeToEditorRange(
     range.start,
     startVerseRef,
   );
-  ({
-    jsonPath: startJsonPath,
-    jsonPathOffset: startJsonPathOffset,
-    verseRef: startVerseRef,
-  } = startLocationProperties);
+  ({ documentLocation: startDocumentLocation, verseRef: startVerseRef } = startLocationProperties);
 
   // Process the ending location
   const { verseOffset: endVerseOffset, ...endLocationProperties } = determineLocationProperties(
     range.end,
     endVerseRef,
   );
-  ({
-    jsonPath: endJsonPath,
-    jsonPathOffset: endJsonPathOffset,
-    verseRef: endVerseRef,
-  } = endLocationProperties);
+  ({ documentLocation: endDocumentLocation, verseRef: endVerseRef } = endLocationProperties);
   if (
     startVerseRef.book !== endVerseRef.book ||
     startVerseRef.chapterNum !== endVerseRef.chapterNum
@@ -321,57 +240,35 @@ export async function convertScriptureRangeToEditorRange(
       `USJ Chapter for project id ${projectId} target scrRef ${serialize(startVerseRef)} is undefined!`,
     );
 
-  const usjRW = new UsjReaderWriter(usjChapter, {
-    markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-  });
+  const usjRW = new UsjReaderWriter(usjChapter, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
 
-  // Convert the UsfmVerseLocations to get jsonPath and offset from them
-  const startLocationResult = calculateUsjLocationProperties(
-    usjRW,
-    startVerseRef,
-    startVerseOffset,
-    startJsonPath,
-    startJsonPathOffset,
+  startDocumentLocation ??= usjRW.usfmVerseLocationToUsjDocumentLocation(
+    startVerseOffset === undefined
+      ? startVerseRef
+      : { verseRef: startVerseRef, offset: startVerseOffset },
   );
-  startJsonPath = startLocationResult.jsonPath;
-  startJsonPathOffset = startLocationResult.jsonPathOffset;
-  const startContentLocation = startLocationResult.usjContentLocation;
 
-  const endLocationResult = calculateUsjLocationProperties(
-    usjRW,
-    endVerseRef,
-    endVerseOffset,
-    endJsonPath,
-    endJsonPathOffset,
+  endDocumentLocation ??= usjRW.usfmVerseLocationToUsjDocumentLocation(
+    endVerseOffset === undefined ? endVerseRef : { verseRef: endVerseRef, offset: endVerseOffset },
   );
-  endJsonPath = endLocationResult.jsonPath;
-  endJsonPathOffset = endLocationResult.jsonPathOffset;
-  const endContentLocation = endLocationResult.usjContentLocation;
 
   // If we don't have which verse we're setting the scroll group to, get it
   if (startVerseRef.verseNum === -1) {
-    const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-      (startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath))
-        .documentLocation,
-    );
+    const startUsfmLocation =
+      usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(startDocumentLocation);
     startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
   }
 
-  // Get or create the content locations for return
-  const finalStartLocation =
-    startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath);
-  const finalEndLocation =
-    endContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(endJsonPath);
+  if (!startDocumentLocation || !endDocumentLocation)
+    throw new Error('Could not determine USJ document locations for selection range');
 
   return {
     verseRef: startVerseRef,
     editorRange: {
-      start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
-      end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
+      start: startDocumentLocation,
+      end: endDocumentLocation,
     },
     usjReaderWriter: usjRW,
-    startLocation: finalStartLocation,
-    endLocation: finalEndLocation,
   };
 }
 
