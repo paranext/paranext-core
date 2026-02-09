@@ -60,7 +60,6 @@ import {
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
-  WebViewMenu,
 } from 'platform-bible-utils';
 import {
   AnnotationActionHandler,
@@ -72,6 +71,7 @@ import {
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
+import { Redo, Undo } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
@@ -87,7 +87,6 @@ import {
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
-import { Redo, Undo } from 'lucide-react';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -1275,9 +1274,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
-  const menuCommandHandler = useCallback<SelectMenuItemHandler>((projectMenuCommand) => {
-    papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
-  }, []);
+  const menuCommandHandler = useCallback<SelectMenuItemHandler>(
+    (projectMenuCommand) => {
+      // Assuming that the project menu command is one of the registered command handlers in papi
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
+    },
+    [webViewId],
+  );
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [canUndo, setCanUndo] = useState(false);
