@@ -3476,6 +3476,9 @@ video:where(.pr-twp,.pr-twp *) {
 .hover\\:tw-bg-muted\\/80:hover {
   background-color: hsl(var(--muted) / 0.8);
 }
+.hover\\:tw-bg-primary\\/10:hover {
+  background-color: hsl(var(--primary) / 0.1);
+}
 .hover\\:tw-bg-primary\\/70:hover {
   background-color: hsl(var(--primary) / 0.7);
 }
@@ -3627,6 +3630,9 @@ video:where(.pr-twp,.pr-twp *) {
 }
 .disabled\\:tw-opacity-50:disabled {
   opacity: 0.5;
+}
+.tw-group:hover .group-hover\\:tw-opacity-100 {
+  opacity: 1;
 }
 .tw-peer:disabled ~ .peer-disabled\\:tw-cursor-not-allowed {
   cursor: not-allowed;
