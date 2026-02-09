@@ -1,5 +1,8 @@
 {
   "metadata": {
+    "%comment_filter_scope_current_chapter%": {
+      "fallbackKey": "%webView_inventory_scope_chapter%"
+    },
     "%no_comments_match_filter%": {
       "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_7%",
       "%webView_legacyCommentManager_commentList_title%": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
@@ -22,6 +25,11 @@
       "%comment_status_todo%": "Re-opened",
       "%comment_thread_multiple_replies%": "{count} replies",
       "%comment_thread_single_reply%": "1 reply",
+      "%comment_filter_all%": "All comments",
+      "%comment_filter_scope_all_books%": "All books",
+      "%comment_filter_scope_current_chapter%": "Current chapter",
+      "%comment_filter_unread_assigned_to_me%": "Unread assigned to me",
+      "%comment_filter_unresolved_assigned_to_me%": "Unresolved assigned to me",
       "%no_comments%": "No comments yet",
       "%no_comments_match_filter%": "No comments match your filter settings.",
       "%webView_legacyCommentManager_commentList_title%": "Comments",
@@ -43,6 +51,11 @@
       "%comment_status_todo%": "Reabierto",
       "%comment_thread_multiple_replies%": "{count} respuestas",
       "%comment_thread_single_reply%": "1 respuesta",
+      "%comment_filter_all%": "Todos los comentarios",
+      "%comment_filter_scope_all_books%": "Todos los libros",
+      "%comment_filter_scope_current_chapter%": "Capítulo actual",
+      "%comment_filter_unread_assigned_to_me%": "Sin leer asignados a mí",
+      "%comment_filter_unresolved_assigned_to_me%": "Pendientes asignados a mí",
       "%no_comments%": "No hay comentarios todavía",
       "%no_comments_match_filter%": "No hay comentarios que coincidan con sus parámetros de filtros.",
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",

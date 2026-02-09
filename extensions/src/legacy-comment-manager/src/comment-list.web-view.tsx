@@ -16,8 +16,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
-import { CommentListWebViewMessage } from './comment-list-messages.model';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import { CommentListWebViewMessage } from './comment-list-messages.model';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -52,6 +52,11 @@ global.webViewComponent = function CommentListWebView({
     useMemo(() => {
       return [
         ...Array.from(COMMENT_LIST_STRING_KEYS),
+        '%comment_filter_all%',
+        '%comment_filter_scope_all_books%',
+        '%comment_filter_scope_current_chapter%',
+        '%comment_filter_unread_assigned_to_me%',
+        '%comment_filter_unresolved_assigned_to_me%',
         '%no_comments%',
         '%no_comments_match_filter%',
       ];
@@ -68,11 +73,35 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  // Filter state
-  type CommentFilter = 'unresolved-assigned-to-me' | 'unread-assigned-to-me' | 'all';
-  type LocationFilter = 'current-chapter' | 'anywhere';
-  const [commentFilter, setCommentFilter] = useState<CommentFilter>('all');
-  const [locationFilter, setLocationFilter] = useState<LocationFilter>('current-chapter');
+  // Filter constants and types
+  const UNFILTERED = 'unfiltered';
+  const FILTER_UNRESOLVED_ASSIGNED = 'unresolved-assigned-to-me';
+  const FILTER_UNREAD_ASSIGNED = 'unread-assigned-to-me';
+  const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
+
+  const commentFilterToLabelKey = {
+    [FILTER_UNRESOLVED_ASSIGNED]: '%comment_filter_unresolved_assigned_to_me%',
+    [FILTER_UNREAD_ASSIGNED]: '%comment_filter_unread_assigned_to_me%',
+    [UNFILTERED]: '%comment_filter_all%',
+  } as const;
+
+  type CommentFilter = keyof typeof commentFilterToLabelKey;
+
+  const scopeFilterToLabelKey = {
+    [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
+    [UNFILTERED]: '%comment_filter_scope_all_books%',
+  } as const;
+
+  type ScopeFilter = keyof typeof scopeFilterToLabelKey;
+
+  function isCommentFilter(value: string): value is CommentFilter {
+    return value in commentFilterToLabelKey;
+  }
+  function isScopeFilter(value: string): value is ScopeFilter {
+    return value in scopeFilterToLabelKey;
+  }
+  const [commentFilter, setCommentFilter] = useState<CommentFilter>(UNFILTERED);
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
@@ -151,8 +180,8 @@ global.webViewComponent = function CommentListWebView({
     useMemo<LegacyCommentThreadSelector>(() => {
       const selector: LegacyCommentThreadSelector = {};
 
-      // Apply location filter
-      if (locationFilter === 'current-chapter') {
+      // Apply scope (Scripture ranges) filter
+      if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
         selector.scriptureRanges = [
           {
             granularity: 'chapter' as const,
@@ -163,10 +192,10 @@ global.webViewComponent = function CommentListWebView({
       }
 
       // Apply comment filter
-      if (commentFilter === 'unresolved-assigned-to-me') {
+      if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
         selector.status = 'Todo';
         selector.assignedTo = currentUserName;
-      } else if (commentFilter === 'unread-assigned-to-me') {
+      } else if (commentFilter === FILTER_UNREAD_ASSIGNED) {
         selector.isRead = false;
         selector.assignedTo = currentUserName;
       }
@@ -176,7 +205,7 @@ global.webViewComponent = function CommentListWebView({
       scrRef.book,
       scrRef.chapterNum,
       scrRef.verseNum,
-      locationFilter,
+      scopeFilter,
       commentFilter,
       currentUserName,
     ]),
@@ -318,41 +347,50 @@ global.webViewComponent = function CommentListWebView({
         {/* Comment filter dropdown */}
         <Select
           value={commentFilter}
-          onValueChange={(value) => setCommentFilter(value as CommentFilter)}
+          onValueChange={(value) => {
+            if (isCommentFilter(value)) setCommentFilter(value);
+          }}
         >
           <SelectTrigger className="tw-w-auto tw-min-w-48">
             <SelectValue>
               <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
-                {commentFilter === 'unresolved-assigned-to-me'
-                  ? 'Unresolved assigned to me'
-                  : commentFilter === 'unread-assigned-to-me'
-                    ? 'Unread assigned to me'
-                    : 'All comments'}
+                {localizedStrings[commentFilterToLabelKey[commentFilter]]}
               </div>
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
-            <SelectItem value="unresolved-assigned-to-me">Unresolved assigned to me</SelectItem>
-            <SelectItem value="unread-assigned-to-me">Unread assigned to me</SelectItem>
-            <SelectItem value="all">All comments</SelectItem>
+            {Object.keys(commentFilterToLabelKey)
+              .filter(isCommentFilter)
+              .map((value) => (
+                <SelectItem key={value} value={value}>
+                  {localizedStrings[commentFilterToLabelKey[value]]}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
 
-        {/* Location filter dropdown */}
+        {/* Scope filter dropdown */}
         <Select
-          value={locationFilter}
-          onValueChange={(value) => setLocationFilter(value as LocationFilter)}
+          value={scopeFilter}
+          onValueChange={(value) => {
+            if (isScopeFilter(value)) setScopeFilter(value);
+          }}
         >
           <SelectTrigger className="tw-w-auto tw-min-w-32">
             <SelectValue>
               <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
-                {locationFilter === 'current-chapter' ? 'Current chapter' : 'Anywhere'}
+                {localizedStrings[scopeFilterToLabelKey[scopeFilter]]}
               </div>
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
-            <SelectItem value="current-chapter">Current chapter</SelectItem>
-            <SelectItem value="anywhere">Anywhere</SelectItem>
+            {Object.keys(scopeFilterToLabelKey)
+              .filter(isScopeFilter)
+              .map((value) => (
+                <SelectItem key={value} value={value}>
+                  {localizedStrings[scopeFilterToLabelKey[value]]}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
@@ -362,9 +400,9 @@ global.webViewComponent = function CommentListWebView({
         {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
           <div className="tw-m-4 tw-flex tw-justify-center">
             <Label>
-              {commentFilter !== 'all' || locationFilter !== 'anywhere'
-                ? localizedStrings['%no_comments_match_filter%']
-                : localizedStrings['%no_comments%']}
+              {commentFilter === UNFILTERED && scopeFilter === UNFILTERED
+                ? localizedStrings['%no_comments%']
+                : localizedStrings['%no_comments_match_filter%']}
             </Label>
           </div>
         ) : (
