@@ -17,7 +17,7 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedEditorState } from 'lexical';
-import { ArrowUp, Check, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
@@ -33,13 +33,10 @@ export function CommentItem({
   isReply = false,
   localizedStrings,
   isThreadExpanded = false,
-  threadStatus = 'Unspecified',
-  handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
   canEditOrDelete = false,
-  canUserResolveThread = false,
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editorState, setEditorState] = useState<SerializedEditorState>();
@@ -277,23 +274,6 @@ export function CommentItem({
           </>
         )}
       </div>
-      {isThreadExpanded &&
-        canUserResolveThread &&
-        !isReply &&
-        threadStatus !== 'Resolved' &&
-        handleAddCommentToThread && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="tw-shrink-0"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent triggering the expand/collapse
-              handleAddCommentToThread({ threadId: comment.thread, status: 'Resolved' });
-            }}
-          >
-            <Check />
-          </Button>
-        )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
