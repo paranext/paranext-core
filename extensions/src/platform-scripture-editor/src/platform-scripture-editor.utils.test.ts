@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
+import { UsjTextContentLocation } from 'platform-bible-utils';
 import { convertScriptureRangeToEditorRange } from './platform-scripture-editor.utils';
 
 // Sample USJ chapter data for Genesis chapter 1 with multiple verses
@@ -27,12 +28,12 @@ const SAMPLE_USJ_CHAPTER = Object.freeze({
 
 // @ts-expect-error ts(6133) - this is unused, but we want to keep it for reference
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const SAMPLE_USFM_CHAPTER = `\\id GEN GEN - Genesis
-\\c 1
-\\p
-\\v 1 In the beginning God created the heavens and the earth.
-\\v 2 Now the earth was formless and empty.
-\\v 3 And God said, "Let there be light," and there was light.`;
+const SAMPLE_USFM_CHAPTER = String.raw`\id GEN GEN - Genesis
+\c 1
+\p
+\v 1 In the beginning God created the heavens and the earth.
+\v 2 Now the earth was formless and empty.
+\v 3 And God said, "Let there be light," and there was light.`;
 
 // Special object to pass into `createMockPapi` to make the USJ chapter return nothing
 const USJ_NOTHING = {};
@@ -64,6 +65,14 @@ function createMockPapi(usjChapter: object | undefined = SAMPLE_USJ_CHAPTER): Mo
   return { papi, mockGet, mockGetChapterUSJ };
 }
 
+/** Helper to extract offset from UsjDocumentLocation, asserting it has one */
+function getOffset(location: unknown): number {
+  expect(location).toHaveProperty('offset');
+  // We just checked it has an `offset` property
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (location as UsjTextContentLocation).offset;
+}
+
 describe('convertScriptureRangeToEditorRange', () => {
   const PROJECT_ID = 'test-project-id';
 
@@ -81,11 +90,11 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
       expect(result.verseRef.verseNum).toBe(1);
-      // Verse 1 text is at $.content[2].content[1], offset 0 is start of text
-      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(0);
-      expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.end.offset).toBe(0);
+      // Verse 1 marker is at $.content[2].content[0] (UsjMarkerLocation, no offset)
+      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[0]');
+      expect(result.editorRange.start).not.toHaveProperty('offset');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[0]');
+      expect(result.editorRange.end).not.toHaveProperty('offset');
     });
 
     it('should convert verse locations spanning multiple verses in the same chapter', async () => {
@@ -99,11 +108,11 @@ describe('convertScriptureRangeToEditorRange', () => {
 
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
-      // Verse 1 text at $.content[2].content[1], verse 3 text at $.content[2].content[5]
-      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(0);
-      expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[5]');
-      expect(result.editorRange.end.offset).toBe(0);
+      // Verse 1 marker at $.content[2].content[0], verse 3 marker at $.content[2].content[4] (UsjMarkerLocation, no offset)
+      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[0]');
+      expect(result.editorRange.start).not.toHaveProperty('offset');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[4]');
+      expect(result.editorRange.end).not.toHaveProperty('offset');
     });
   });
 
@@ -121,13 +130,13 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
       expect(result.verseRef.verseNum).toBe(1);
-      // Verse 1 text at $.content[2].content[1]
-      // USFM offset 0 points to \v marker; offset 10 is 10 chars from \v, but verse marker '\v 1 ' is 5 chars
-      // So USJ text offset = USFM offset - 5 (verse marker length)
-      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(0);
+      // Verse 1 marker at $.content[2].content[0]
+      // USFM offset 0 points to \v marker (UsjMarkerLocation, no propertyOffset); offset 10 is 10 chars from \v
+      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[0]');
+      expect(result.editorRange.start).not.toHaveProperty('offset');
+      expect(result.editorRange.start).not.toHaveProperty('propertyOffset');
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.end.offset).toBe(5);
+      expect(getOffset(result.editorRange.end)).toBe(5);
     });
 
     it('should convert scrRef location with non-zero offset', async () => {
@@ -146,9 +155,9 @@ describe('convertScriptureRangeToEditorRange', () => {
       // USFM offset includes verse marker '\v 2 ' (5 chars), so USJ offset = USFM offset - 5
       // USFM offset 5 -> USJ offset 0, USFM offset 20 -> USJ offset 15
       expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[3]');
-      expect(result.editorRange.start.offset).toBe(0);
+      expect(getOffset(result.editorRange.start)).toBe(0);
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[3]');
-      expect(result.editorRange.end.offset).toBe(15);
+      expect(getOffset(result.editorRange.end)).toBe(15);
     });
   });
 
@@ -172,9 +181,9 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
       expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(0);
+      expect(getOffset(result.editorRange.start)).toBe(0);
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.end.offset).toBe(10);
+      expect(getOffset(result.editorRange.end)).toBe(10);
     });
 
     it('should convert UsjFlatChapterLocation (book + chapterNum + documentLocation)', async () => {
@@ -198,9 +207,9 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
       expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(5);
+      expect(getOffset(result.editorRange.start)).toBe(5);
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[3]');
-      expect(result.editorRange.end.offset).toBe(15);
+      expect(getOffset(result.editorRange.end)).toBe(15);
     });
   });
 
@@ -218,9 +227,9 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
       expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(3);
+      expect(getOffset(result.editorRange.start)).toBe(3);
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.end.offset).toBe(20);
+      expect(getOffset(result.editorRange.end)).toBe(20);
     });
 
     it('should convert UsjFlatTextChapterLocation with marker location (no offset)', async () => {
@@ -235,12 +244,12 @@ describe('convertScriptureRangeToEditorRange', () => {
 
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
-      // Marker locations without offset: finds next text location
-      // content[0] is verse 1 marker, next text is content[1]; content[2] is verse 2 marker, next text is content[3]
-      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(0);
-      expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[3]');
-      expect(result.editorRange.end.offset).toBe(0);
+      // Marker locations without offset are preserved as UsjMarkerLocation (no offset property)
+      // content[0] is verse 1 marker, content[2] is verse 2 marker
+      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[0]');
+      expect(result.editorRange.start).not.toHaveProperty('offset');
+      expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[2]');
+      expect(result.editorRange.end).not.toHaveProperty('offset');
     });
   });
 
@@ -261,12 +270,12 @@ describe('convertScriptureRangeToEditorRange', () => {
 
       expect(result.verseRef.book).toBe('GEN');
       expect(result.verseRef.chapterNum).toBe(1);
-      // Start: SerializedVerseRef for verse 1 -> text at content[1], offset 0
-      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(0);
+      // Start: SerializedVerseRef for verse 1 -> marker at content[0] (UsjMarkerLocation, no offset)
+      expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[0]');
+      expect(result.editorRange.start).not.toHaveProperty('offset');
       // End: explicit documentLocation preserved
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.end.offset).toBe(25);
+      expect(getOffset(result.editorRange.end)).toBe(25);
     });
 
     it('should convert range with UsjFlatTextChapterLocation start and UsfmScrRefVerseLocation end', async () => {
@@ -284,11 +293,11 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.verseRef.chapterNum).toBe(1);
       // Start: explicit jsonPath and offset preserved
       expect(result.editorRange.start.jsonPath).toBe('$.content[2].content[1]');
-      expect(result.editorRange.start.offset).toBe(5);
+      expect(getOffset(result.editorRange.start)).toBe(5);
       // End: scrRef verse 2 with USFM offset 10 -> verse 2 text at content[3]
       // USFM offset 10 - verse marker '\v 2 ' (5 chars) = USJ offset 5
       expect(result.editorRange.end.jsonPath).toBe('$.content[2].content[3]');
-      expect(result.editorRange.end.offset).toBe(5);
+      expect(getOffset(result.editorRange.end)).toBe(5);
     });
   });
 
@@ -349,18 +358,10 @@ describe('convertScriptureRangeToEditorRange', () => {
       expect(result.editorRange).toHaveProperty('start');
       expect(result.editorRange).toHaveProperty('end');
       expect(result.editorRange.start).toHaveProperty('jsonPath');
-      expect(result.editorRange.start).toHaveProperty('offset');
       expect(result.editorRange.end).toHaveProperty('jsonPath');
-      expect(result.editorRange.end).toHaveProperty('offset');
 
       // Verify usjReaderWriter is returned
       expect(result.usjReaderWriter).toBeDefined();
-
-      // Verify startLocation and endLocation are returned
-      expect(result.startLocation).toBeDefined();
-      expect(result.startLocation).toHaveProperty('documentLocation');
-      expect(result.endLocation).toBeDefined();
-      expect(result.endLocation).toHaveProperty('documentLocation');
     });
   });
 

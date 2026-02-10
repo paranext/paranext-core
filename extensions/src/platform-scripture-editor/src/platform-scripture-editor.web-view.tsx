@@ -45,7 +45,6 @@ import {
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  ContentJsonPath,
   formatReplacementString,
   getErrorMessage,
   isPlatformError,
@@ -53,7 +52,6 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -107,23 +105,6 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
-
-/**
- * Converts a selection location to UsjDocumentLocation format. This is needed because the editor
- * returns UsjLocation which may have jsonPath, but we need UsjDocumentLocation for the
- * extractCommentScriptureText command.
- */
-function usjLocationToUsjDocumentLocation(
-  location: SelectionRange['start'] | SelectionRange['end'],
-): UsjDocumentLocation | undefined {
-  if (!location) return undefined;
-  return {
-    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    jsonPath: location.jsonPath as ContentJsonPath,
-    offset: location.offset,
-  };
-}
 
 /**
  * Extracts scripture text snippets from a selection range.
@@ -487,7 +468,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           const selection = currentSelectionRef.current;
 
           // Validate that a text range is selected
-          if (!selection || !selection.start || !selection.end) {
+          if (!selection?.start || !selection.end) {
             papi.notifications.send({
               message: '%webView_platformScriptureEditor_error_noTextSelected%',
               severity: 'warning',
@@ -645,10 +626,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           annotationInfoByIdRef.current.set(annotationId, {
             annotationType,
             interactionCommand,
-            annotationRange: {
-              start: { ...annotationRange.start },
-              end: { ...annotationRange.end },
-            },
+            annotationRange,
           });
 
           // Keeping track of annotations being set because setAnnotation on an existing annotation
@@ -918,9 +896,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             severity: 'error',
             message: formatReplacementString(
               localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-              {
-                projectName,
-              },
+              { projectName },
             ),
           });
         } catch (innerError) {
@@ -988,31 +964,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           start: {
             verseRef: scrRef,
             granularity: 'chapter',
-            documentLocation: {
-              // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              jsonPath: change.start.jsonPath as ContentJsonPath,
-              offset: change.start.offset,
-            },
+            documentLocation: change.start,
           },
           end: {
             verseRef: scrRef,
             granularity: 'chapter',
-            documentLocation:
-              // If the endpoint is defined, use it; otherwise use the start point
-              change.end
-                ? {
-                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    jsonPath: change.end.jsonPath as ContentJsonPath,
-                    offset: change.end.offset,
-                  }
-                : {
-                    // The location from the editor is a ContentJsonPath but it just doesn't use that type.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    jsonPath: change.start.jsonPath as ContentJsonPath,
-                    offset: change.start.offset,
-                  },
+            documentLocation: change.end ?? change.start,
           },
         };
       }
@@ -1066,27 +1023,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
         scrollToVerse(scrRef);
-
-        let nextTextLocationJsonPath = '';
-        try {
-          nextTextLocationJsonPath = new UsjReaderWriter(usjFromPdp, {
-            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation.jsonPath;
-        } catch (e) {
-          logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
-        }
-
         editorRef.current?.focus();
-
-        if (!nextTextLocationJsonPath) return;
-
-        const initialSelection: SelectionRange = {
-          start: {
-            jsonPath: nextTextLocationJsonPath,
-            offset: 0,
-          },
-        };
-        editorRef.current?.setSelection(initialSelection);
+        // On Load, the editor sets the selection to `scrRef`. Since this is an internal change, we
+        // don't want to scroll again when we get this scrRef back from the PDP, so we set
+        // `internalVerseLocationRef` to it.
+        internalVerseLocationRef.current = scrRef;
       });
 
       return cancelRunOnLoad;
@@ -1187,13 +1128,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       try {
         isSubmittingComment.current = true;
 
-        // Transform the captured selection from editor locations to USJ document locations
-        const startDocLocation = capturedSelection
-          ? usjLocationToUsjDocumentLocation(capturedSelection.range.start)
-          : undefined;
-        const endDocLocation = capturedSelection
-          ? usjLocationToUsjDocumentLocation(capturedSelection.range.end)
-          : undefined;
+        // The editor selection range locations are already UsjDocumentLocation
+        const startDocLocation = capturedSelection?.range.start;
+        const endDocLocation = capturedSelection?.range.end;
 
         const commentsUsjPdp = await papi.projectDataProviders.get(
           'legacyCommentManager.commentsUsj',

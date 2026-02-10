@@ -54,6 +54,12 @@ Once the app is opened, you may see a dialog that says "Platform.Bible wants to 
 
 We use encryption to keep your data safe, allowing access to keychain provides encryption services with `papi.dataProtection` so extensions can store user data securely. If you approve of this, please allow keychain access.
 
+## JavaScript Tool Manager
+
+We strongly recommend you use [Volta](https://volta.sh/) with this repo to automatically use the right version of tools such as **node**, **npm**, and **pnpm** for each relevant repo.
+
+If you don't use Volta, you need to look at the `volta` property in the [package.json](https://github.com/paranext/paranext-core/blob/main/package.json) of this repository and each [development package repository](#linking-local-development-packages) to see the right tool versions to install in your preferred way.
+
 ## Developer Install
 
 Set up pre-requisites, build, and run:
@@ -74,12 +80,6 @@ Set up pre-requisites, build, and run:
 3. Prerequisites for macOS or Linux (below).
 
 4. Clone, install, build, and run (below).
-
-## JavaScript Tool Manager
-
-We strongly recommend you use [Volta](https://volta.sh/) with this repo to automatically use the right version of tools such as **node**, **npm**, and **pnpm** for each relevant repo.
-
-If you don't use Volta, you need to look at the `volta` property in the [package.json](https://github.com/paranext/paranext-core/blob/main/package.json) of this repository and each [development package repository](#linking-local-development-packages) to see the right tool versions to install in your preferred way.
 
 ### Linux Development Pre-requisites
 
