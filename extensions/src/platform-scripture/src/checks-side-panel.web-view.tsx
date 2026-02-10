@@ -769,7 +769,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-container  tw-mx-auto  tw-flex tw-flex-col tw-max-h-screen tw-gap-6 tw-p-4 tw-min-w-[10rem]">
+    <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-max-h-screen tw-gap-6 tw-p-4 tw-min-w-[10rem]">
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}

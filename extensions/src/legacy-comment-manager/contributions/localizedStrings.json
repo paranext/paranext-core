@@ -4,8 +4,10 @@
       "fallbackKey": "%webView_inventory_scope_chapter%"
     },
     "%no_comments_match_filter%": {
-      "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_7%",
-      "%webView_legacyCommentManager_commentList_title%": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
+      "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_7%"
+    },
+    "%webView_legacyCommentManager_commentList_title%": {
+      "fallbackKey": "%Paratext.ProjectComments.CommentListForm.CommentListForm_11CommentListForm_ShortTitle%"
     }
   },
   "localizedStrings": {

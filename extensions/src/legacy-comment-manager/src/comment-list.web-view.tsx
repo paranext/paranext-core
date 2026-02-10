@@ -44,6 +44,34 @@ async function withPdp<PDP, T>(
   return action(pdp);
 }
 
+// Filter constants and types
+const UNFILTERED = 'unfiltered';
+const FILTER_UNRESOLVED_ASSIGNED = 'unresolved-assigned-to-me';
+const FILTER_UNREAD_ASSIGNED = 'unread-assigned-to-me';
+const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
+
+const commentFilterToLabelKey = {
+  [FILTER_UNRESOLVED_ASSIGNED]: '%comment_filter_unresolved_assigned_to_me%',
+  [FILTER_UNREAD_ASSIGNED]: '%comment_filter_unread_assigned_to_me%',
+  [UNFILTERED]: '%comment_filter_all%',
+} as const;
+
+type CommentFilter = keyof typeof commentFilterToLabelKey;
+
+const scopeFilterToLabelKey = {
+  [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
+  [UNFILTERED]: '%comment_filter_scope_all_books%',
+} as const;
+
+type ScopeFilter = keyof typeof scopeFilterToLabelKey;
+
+function isCommentFilter(value: string): value is CommentFilter {
+  return value in commentFilterToLabelKey;
+}
+function isScopeFilter(value: string): value is ScopeFilter {
+  return value in scopeFilterToLabelKey;
+}
+
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   projectId,
@@ -73,33 +101,6 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  // Filter constants and types
-  const UNFILTERED = 'unfiltered';
-  const FILTER_UNRESOLVED_ASSIGNED = 'unresolved-assigned-to-me';
-  const FILTER_UNREAD_ASSIGNED = 'unread-assigned-to-me';
-  const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
-
-  const commentFilterToLabelKey = {
-    [FILTER_UNRESOLVED_ASSIGNED]: '%comment_filter_unresolved_assigned_to_me%',
-    [FILTER_UNREAD_ASSIGNED]: '%comment_filter_unread_assigned_to_me%',
-    [UNFILTERED]: '%comment_filter_all%',
-  } as const;
-
-  type CommentFilter = keyof typeof commentFilterToLabelKey;
-
-  const scopeFilterToLabelKey = {
-    [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
-    [UNFILTERED]: '%comment_filter_scope_all_books%',
-  } as const;
-
-  type ScopeFilter = keyof typeof scopeFilterToLabelKey;
-
-  function isCommentFilter(value: string): value is CommentFilter {
-    return value in commentFilterToLabelKey;
-  }
-  function isScopeFilter(value: string): value is ScopeFilter {
-    return value in scopeFilterToLabelKey;
-  }
   const [commentFilter, setCommentFilter] = useState<CommentFilter>(UNFILTERED);
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
 
@@ -341,9 +342,9 @@ global.webViewComponent = function CommentListWebView({
   }
 
   return (
-    <div className="tw-bg-muted tw-flex tw-flex-col tw-h-full">
+    <div className="tw-flex tw-flex-col tw-h-full">
       {/* Filter toolbar */}
-      <div className="tw-flex tw-gap-2 tw-p-2 tw-border-b tw-bg-background">
+      <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-px-4 tw-pt-4">
         {/* Comment filter dropdown */}
         <Select
           value={commentFilter}
@@ -358,7 +359,7 @@ global.webViewComponent = function CommentListWebView({
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent align="start">
+          <SelectContent className="tw-max-w-sm" align="start">
             {Object.keys(commentFilterToLabelKey)
               .filter(isCommentFilter)
               .map((value) => (
@@ -376,14 +377,14 @@ global.webViewComponent = function CommentListWebView({
             if (isScopeFilter(value)) setScopeFilter(value);
           }}
         >
-          <SelectTrigger className="tw-w-auto tw-min-w-32">
+          <SelectTrigger className="tw-w-auto tw-min-w-48">
             <SelectValue>
               <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
                 {localizedStrings[scopeFilterToLabelKey[scopeFilter]]}
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent align="start">
+          <SelectContent className="tw-max-w-sm" align="start">
             {Object.keys(scopeFilterToLabelKey)
               .filter(isScopeFilter)
               .map((value) => (
