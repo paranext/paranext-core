@@ -52,7 +52,6 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -1024,23 +1023,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const cancelRunOnLoad = runOnFirstLoad(() => {
         hasFirstRetrievedScripture.current = true;
         scrollToVerse(scrRef);
-
-        let nextTextLocation: UsjDocumentLocation | undefined;
-        try {
-          nextTextLocation = new UsjReaderWriter(usjFromPdp, {
-            markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-          }).usfmVerseLocationToNextTextLocation(scrRef).documentLocation;
-        } catch (e) {
-          logger.debug(`Could not get next text location for verse ref ${serialize(scrRef)}`);
-        }
-
         editorRef.current?.focus();
-
-        if (!nextTextLocation) return;
-
-        editorRef.current?.setSelection({
-          start: nextTextLocation,
-        });
+        // On Load, the editor sets the selection to `scrRef`. Since this is an internal change, we
+        // don't want to scroll again when we get this scrRef back from the PDP, so we set
+        // `internalVerseLocationRef` to it.
+        internalVerseLocationRef.current = scrRef;
       });
 
       return cancelRunOnLoad;
