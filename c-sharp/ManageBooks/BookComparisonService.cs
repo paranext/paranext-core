@@ -6,7 +6,7 @@ namespace Paranext.DataProvider.ManageBooks;
 ///
 /// Contains CAP-022 (BookDisplayStyling) and will contain future capabilities.
 /// </summary>
-public static class BookComparisonService
+internal static class BookComparisonService
 {
     /// <summary>
     /// Determine display style based on comparison state.
