@@ -647,5 +647,391 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        #region CAP-008: GetAvailableBooks Tests
+
+        /// <summary>
+        /// Acceptance test: Standard project returns all canonical books minus existing.
+        /// This is the "done signal" for the standard project path of CAP-008.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-019-available-books
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-072")]
+        [Property("BehaviorId", "BHV-104")]
+        [Property("GoldenMaster", "gm-019")]
+        [Description("Acceptance test: Standard project available books excludes existing")]
+        public void GetAvailableBooks_StandardProject_AcceptanceTest()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            _scrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 In the beginning...", null);
+            _scrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Now these are the names...", null);
+            var projectId = _scrText.Guid.ToString();
+
+            // Act
+            var result = BookCreationService.GetAvailableBooks(projectId);
+
+            // Assert - Full outcome verification
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.IsStudyBible, Is.False, "Standard project should not be marked as study bible");
+
+            // Available books should not include GEN (1) or EXO (2)
+            var availableBookNums = result.AvailableBooks.Select(b => b.BookNum).ToList();
+            Assert.That(availableBookNums, Does.Not.Contain(1), "GEN should not be available (already exists)");
+            Assert.That(availableBookNums, Does.Not.Contain(2), "EXO should not be available (already exists)");
+
+            // Should include at least LEV (3) and other canonical books
+            Assert.That(availableBookNums, Does.Contain(3), "LEV should be available");
+
+            // Existing books should include GEN and EXO
+            var existingBookNums = result.ExistingBooks.Select(b => b.BookNum).ToList();
+            Assert.That(existingBookNums, Does.Contain(1), "GEN should be in existing books");
+            Assert.That(existingBookNums, Does.Contain(2), "EXO should be in existing books");
+        }
+
+        /// <summary>
+        /// Acceptance test: SBA project returns only non-canonical books.
+        /// This is the "done signal" for the SBA project path of CAP-008.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-017-sba-noncanonical
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-067")]
+        [Property("BehaviorId", "BHV-114")]
+        [Property("GoldenMaster", "gm-017")]
+        [Description("Acceptance test: SBA project only allows non-canonical books")]
+        public void GetAvailableBooks_SBAProject_AcceptanceTest()
+        {
+            // Arrange - Create an SBA project
+            var baseProject = _scrText; // Use the standard project as base
+            var sbaProject = new DummySBAScrText(baseProject);
+            var sbaProjectDetails = CreateProjectDetails(sbaProject);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaProject);
+            var projectId = sbaProject.Guid.ToString();
+
+            try
+            {
+                // Act
+                var result = BookCreationService.GetAvailableBooks(projectId);
+
+                // Assert - Full outcome verification
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.IsStudyBible, Is.True, "SBA project should be marked as study bible");
+
+                // All available books should be non-canonical (67-123)
+                var availableBookNums = result.AvailableBooks.Select(b => b.BookNum).ToList();
+
+                foreach (var bookNum in availableBookNums)
+                {
+                    Assert.That(bookNum, Is.GreaterThanOrEqualTo(67),
+                        $"Book {bookNum} is canonical - SBA should only allow non-canonical (67+)");
+                }
+
+                // Should NOT include any canonical books (1-66)
+                for (int canonicalBook = 1; canonicalBook <= 66; canonicalBook++)
+                {
+                    Assert.That(availableBookNums, Does.Not.Contain(canonicalBook),
+                        $"Canonical book {canonicalBook} should not be available for SBA project");
+                }
+            }
+            finally
+            {
+                sbaProject.Dispose();
+            }
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-072")]
+        [Property("BehaviorId", "BHV-104")]
+        public void GetAvailableBooks_StandardProjectWithNoBooks_ReturnsAllBooks()
+        {
+            // Arrange - Empty standard project
+            var projectId = _scrText.Guid.ToString();
+
+            // Act
+            var result = BookCreationService.GetAvailableBooks(projectId);
+
+            // Assert
+            Assert.That(result.AvailableBooks, Has.Length.GreaterThanOrEqualTo(66),
+                "Empty standard project should have at least 66 canonical books available");
+            Assert.That(result.ExistingBooks, Is.Empty,
+                "Empty project should have no existing books");
+            Assert.That(result.IsStudyBible, Is.False);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-072")]
+        [Property("BehaviorId", "BHV-104")]
+        public void GetAvailableBooks_StandardProjectWithSomeBooks_ExcludesExisting()
+        {
+            // Arrange - Project with GEN, EXO, MAT
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int MATTHEW = 40;
+            _scrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            _scrText.PutText(MATTHEW, 0, false, @"\id MAT \c 1 \v 1 Matthew content", null);
+            var projectId = _scrText.Guid.ToString();
+
+            // Act
+            var result = BookCreationService.GetAvailableBooks(projectId);
+
+            // Assert
+            var availableBookNums = result.AvailableBooks.Select(b => b.BookNum).ToHashSet();
+
+            Assert.That(availableBookNums, Does.Not.Contain(1), "GEN (1) exists and should not be available");
+            Assert.That(availableBookNums, Does.Not.Contain(2), "EXO (2) exists and should not be available");
+            Assert.That(availableBookNums, Does.Not.Contain(40), "MAT (40) exists and should not be available");
+            Assert.That(availableBookNums, Does.Contain(3), "LEV (3) should be available");
+            Assert.That(availableBookNums, Does.Contain(41), "MRK (41) should be available");
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-072")]
+        [Property("BehaviorId", "BHV-104")]
+        public void GetAvailableBooks_StandardProjectWithAllBooks_ReturnsEmpty()
+        {
+            // Arrange - Project with all 66 canonical books
+            for (int bookNum = 1; bookNum <= 66; bookNum++)
+            {
+                string bookId = Canon.BookNumberToId(bookNum);
+                _scrText.PutText(bookNum, 0, false, $@"\id {bookId} \c 1 \v 1 Content", null);
+            }
+            var projectId = _scrText.Guid.ToString();
+
+            // Act
+            var result = BookCreationService.GetAvailableBooks(projectId);
+
+            // Assert - No canonical books available when all exist
+            var canonicalAvailable = result.AvailableBooks
+                .Where(b => b.BookNum >= 1 && b.BookNum <= 66)
+                .ToList();
+
+            Assert.That(canonicalAvailable, Is.Empty,
+                "When all canonical books exist, none should be available");
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-067")]
+        [Property("BehaviorId", "BHV-114")]
+        public void GetAvailableBooks_SBAProjectWithNoBooks_ReturnsNonCanonicalOnly()
+        {
+            // Arrange - Create SBA project
+            var baseProject = _scrText;
+            var sbaProject = new DummySBAScrText(baseProject);
+            var sbaProjectDetails = CreateProjectDetails(sbaProject);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaProject);
+            var projectId = sbaProject.Guid.ToString();
+
+            try
+            {
+                // Act
+                var result = BookCreationService.GetAvailableBooks(projectId);
+
+                // Assert - Only non-canonical books (67+) should be available
+                Assert.That(result.AvailableBooks.All(b => b.BookNum >= 67),
+                    Is.True,
+                    "SBA project should only offer non-canonical books (67+)");
+
+                Assert.That(result.IsStudyBible, Is.True,
+                    "SBA project should have IsStudyBible = true");
+            }
+            finally
+            {
+                sbaProject.Dispose();
+            }
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-067")]
+        [Property("BehaviorId", "BHV-114")]
+        public void GetAvailableBooks_SBAProjectWithSomeBooks_ExcludesExisting()
+        {
+            // Arrange - SBA project with TOB (67 - Tobit) already created
+            var baseProject = _scrText;
+            var sbaProject = new DummySBAScrText(baseProject);
+            var sbaProjectDetails = CreateProjectDetails(sbaProject);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaProject);
+            const int TOBIT = 67;
+            sbaProject.PutText(TOBIT, 0, false, @"\id TOB \c 1 \v 1 Content", null);
+            var projectId = sbaProject.Guid.ToString();
+
+            try
+            {
+                // Act
+                var result = BookCreationService.GetAvailableBooks(projectId);
+
+                // Assert
+                var availableBookNums = result.AvailableBooks.Select(b => b.BookNum).ToList();
+
+                Assert.That(availableBookNums, Does.Not.Contain(67),
+                    "Tobit (67) exists and should not be available");
+                Assert.That(availableBookNums, Does.Contain(68),
+                    "Judith (68) should still be available");
+            }
+            finally
+            {
+                sbaProject.Dispose();
+            }
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-072")]
+        [Property("BehaviorId", "BHV-104")]
+        public void GetAvailableBooks_ReturnsCorrectBookInfo()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            _scrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            var projectId = _scrText.Guid.ToString();
+
+            // Act
+            var result = BookCreationService.GetAvailableBooks(projectId);
+
+            // Assert - Check BookInfo structure for Exodus (should be available)
+            var exodusInfo = result.AvailableBooks.FirstOrDefault(b => b.BookNum == 2);
+            Assert.That(exodusInfo, Is.Not.Null, "Exodus should be in available books");
+
+            Assert.That(exodusInfo.BookNum, Is.EqualTo(2));
+            Assert.That(exodusInfo.BookId, Is.EqualTo("EXO"));
+            Assert.That(exodusInfo.BookName, Is.Not.Null.And.Not.Empty);
+            Assert.That(exodusInfo.IsCanonical, Is.True, "Exodus is a canonical book");
+
+            // Check existing book info for Genesis
+            var genesisInfo = result.ExistingBooks.FirstOrDefault(b => b.BookNum == 1);
+            Assert.That(genesisInfo, Is.Not.Null, "Genesis should be in existing books");
+            Assert.That(genesisInfo.BookId, Is.EqualTo("GEN"));
+            Assert.That(genesisInfo.IsCanonical, Is.True);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("ScenarioId", "TS-067")]
+        [Property("BehaviorId", "BHV-114")]
+        public void GetAvailableBooks_SetsIsStudyBibleFlagCorrectly()
+        {
+            // Arrange
+            var standardProjectId = _scrText.Guid.ToString();
+
+            var sbaProject = new DummySBAScrText(_scrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaProject);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaProject);
+            var sbaProjectId = sbaProject.Guid.ToString();
+
+            try
+            {
+                // Act
+                var standardResult = BookCreationService.GetAvailableBooks(standardProjectId);
+                var sbaResult = BookCreationService.GetAvailableBooks(sbaProjectId);
+
+                // Assert
+                Assert.That(standardResult.IsStudyBible, Is.False,
+                    "Standard project should have IsStudyBible = false");
+                Assert.That(sbaResult.IsStudyBible, Is.True,
+                    "SBA project should have IsStudyBible = true");
+            }
+            finally
+            {
+                sbaProject.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// INV-004: SBA projects can only create non-canonical books (67-123).
+        /// This invariant must ALWAYS hold - SBA projects should NEVER return canonical books.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("InvariantId", "INV-004")]
+        [Property("ScenarioId", "TS-067")]
+        [Property("BehaviorId", "BHV-114")]
+        [Description("INV-004: SBA projects can only create non-canonical books")]
+        public void GetAvailableBooks_SBAProject_NeverReturnsCanonicalBooks()
+        {
+            // Arrange - SBA project
+            var sbaProject = new DummySBAScrText(_scrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaProject);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaProject);
+            var projectId = sbaProject.Guid.ToString();
+
+            try
+            {
+                // Act
+                var result = BookCreationService.GetAvailableBooks(projectId);
+
+                // Assert - Invariant: NO canonical books should ever be in available list
+                var canonicalBooks = result.AvailableBooks
+                    .Where(b => b.BookNum >= 1 && b.BookNum <= 66)
+                    .Select(b => $"{b.BookId} ({b.BookNum})")
+                    .ToList();
+
+                Assert.That(canonicalBooks, Is.Empty,
+                    $"INV-004 VIOLATED: SBA project returned canonical books: {string.Join(", ", canonicalBooks)}");
+            }
+            finally
+            {
+                sbaProject.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Test with multiple representative values to strengthen invariant coverage.
+        /// </summary>
+        [TestCase(1, "GEN")]
+        [TestCase(39, "MAL")]
+        [TestCase(40, "MAT")]
+        [TestCase(66, "REV")]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-008")]
+        [Property("InvariantId", "INV-004")]
+        public void GetAvailableBooks_SBAProject_SpecificCanonicalBooksNeverAvailable(
+            int canonicalBookNum, string bookId)
+        {
+            // Arrange
+            var sbaProject = new DummySBAScrText(_scrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaProject);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaProject);
+            var projectId = sbaProject.Guid.ToString();
+
+            try
+            {
+                // Act
+                var result = BookCreationService.GetAvailableBooks(projectId);
+
+                // Assert
+                var availableBookNums = result.AvailableBooks.Select(b => b.BookNum).ToList();
+
+                Assert.That(availableBookNums, Does.Not.Contain(canonicalBookNum),
+                    $"INV-004: SBA should never allow {bookId} ({canonicalBookNum})");
+            }
+            finally
+            {
+                sbaProject.Dispose();
+            }
+        }
+
+        #endregion
     }
 }

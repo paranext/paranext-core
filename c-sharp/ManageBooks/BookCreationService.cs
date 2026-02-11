@@ -116,4 +116,147 @@ internal static class BookCreationService
 
         return availableBooks;
     }
+
+    /// <summary>
+    /// Gets books available for creation in a project.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI command pattern - wraps CreateAvailableBookSet for JSON-RPC access
+    /// Maps to: CAP-008 (GetAvailableBooks)
+    ///
+    /// This method:
+    /// 1. Looks up the ScrText by project ID
+    /// 2. Determines if the project is an SBA (Study Bible Additions) project
+    /// 3. Calls CreateAvailableBookSet (CAP-019) to calculate available books
+    /// 4. Returns AvailableBooksResult with available and existing books
+    ///
+    /// For SBA projects, only non-canonical books (67-123) are available (INV-004).
+    /// For standard projects, all books (1-123) minus existing are available.
+    /// </remarks>
+    /// <param name="projectId">Project ID (GUID string).</param>
+    /// <returns>Available books result with book info.</returns>
+    public static AvailableBooksResult GetAvailableBooks(string projectId)
+    {
+        // Find the ScrText for this project
+        ScrText? scrText = FindScrText(projectId);
+
+        if (scrText == null)
+        {
+            return new AvailableBooksResult([], [], false);
+        }
+
+        // Determine if this is a Study Bible Additions project
+        bool isStudyBible = scrText.Settings.IsStudyBibleAdditions;
+
+        // Get the available books using CAP-019 implementation
+        BookSet availableBookSet = CreateAvailableBookSet(scrText, isStudyBible);
+
+        // Convert available books to BookInfo array
+        List<BookInfo> availableBooks = [];
+        foreach (int bookNum in availableBookSet.SelectedBookNumbers)
+        {
+            availableBooks.Add(CreateBookInfo(bookNum));
+        }
+
+        // Get existing books from the project
+        List<BookInfo> existingBooks = [];
+        for (int bookNum = FirstBookNum; bookNum <= LastBookNum; bookNum++)
+        {
+            if (scrText.BookPresent(bookNum))
+            {
+                existingBooks.Add(CreateBookInfo(bookNum));
+            }
+        }
+
+        return new AvailableBooksResult([.. availableBooks], [.. existingBooks], isStudyBible);
+    }
+
+    /// <summary>
+    /// Creates BookInfo for a book number.
+    /// </summary>
+    private static BookInfo CreateBookInfo(int bookNum)
+    {
+        string bookId = GetBookId(bookNum);
+        string bookName = GetBookName(bookNum);
+        bool isCanonical = bookNum >= FirstBookNum && bookNum <= LastCanonicalBookNum;
+
+        return new BookInfo(bookNum, bookId, bookName, isCanonical);
+    }
+
+    /// <summary>
+    /// Gets the 3-letter book ID for a book number.
+    /// </summary>
+    private static string GetBookId(int bookNum)
+    {
+        try
+        {
+            string bookId = Canon.BookNumberToId(bookNum);
+            return !string.IsNullOrEmpty(bookId) ? bookId : $"B{bookNum:D2}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"BookCreationService: Could not get book ID for book {bookNum}: {ex.Message}"
+            );
+            return $"B{bookNum:D2}";
+        }
+    }
+
+    /// <summary>
+    /// Gets a book name for display.
+    /// </summary>
+    private static string GetBookName(int bookNum)
+    {
+        try
+        {
+            return Canon.BookNumberToEnglishName(bookNum);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"BookCreationService: Could not get book name for book {bookNum}: {ex.Message}"
+            );
+            return $"Book {bookNum}";
+        }
+    }
+
+    /// <summary>
+    /// Finds a ScrText by project ID.
+    /// </summary>
+    private static ScrText? FindScrText(string projectId)
+    {
+        if (string.IsNullOrEmpty(projectId))
+        {
+            return null;
+        }
+
+        // Try to find by HexId first (most common case)
+        try
+        {
+            HexId hexId = HexId.FromStr(projectId);
+            return ScrTextCollection.GetById(hexId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"BookCreationService: Could not find project by HexId '{projectId}': {ex.Message}"
+            );
+        }
+
+        // Fallback: try to find by iterating through all projects
+        try
+        {
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .FirstOrDefault(st => st.Guid.ToString() == projectId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"BookCreationService: Could not find project by iteration for '{projectId}': {ex.Message}"
+            );
+            return null;
+        }
+    }
 }
