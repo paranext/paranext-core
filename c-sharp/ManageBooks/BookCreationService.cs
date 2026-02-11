@@ -37,7 +37,7 @@ internal static class BookCreationService
         ArgumentNullException.ThrowIfNull(scrText);
 
         // Collect books where user does not have permission
-        List<int> unauthorizedBooks = new();
+        List<int> unauthorizedBooks = [];
 
         foreach (int bookNum in selectedBooks.SelectedBookNumbers)
         {
@@ -56,6 +56,6 @@ internal static class BookCreationService
             );
         }
 
-        return new PermissionResult(Success: true, ErrorMessage: null, UnauthorizedBooks: new());
+        return new PermissionResult(Success: true, ErrorMessage: null, UnauthorizedBooks: []);
     }
 }

@@ -10,4 +10,8 @@ namespace Paranext.DataProvider.ManageBooks;
 /// <param name="Success">Whether permission was granted for all requested books.</param>
 /// <param name="ErrorMessage">User-friendly error message if permission denied.</param>
 /// <param name="UnauthorizedBooks">List of book numbers that the user cannot create.</param>
-public record PermissionResult(bool Success, string? ErrorMessage, List<int> UnauthorizedBooks);
+public record PermissionResult(
+    bool Success,
+    string? ErrorMessage,
+    IReadOnlyList<int> UnauthorizedBooks
+);
