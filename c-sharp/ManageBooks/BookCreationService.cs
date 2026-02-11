@@ -59,12 +59,6 @@ internal static class BookCreationService
         return new PermissionResult(Success: true, ErrorMessage: null, UnauthorizedBooks: []);
     }
 
-    // Use shared constants from BookServiceHelpers
-    private const int FirstBookNum = BookServiceHelpers.FirstBookNum;
-    private const int LastBookNum = BookServiceHelpers.LastBookNum;
-    private const int LastCanonicalBookNum = BookServiceHelpers.LastCanonicalBookNum;
-    private const int FirstNonCanonicalBookNum = BookServiceHelpers.FirstNonCanonicalBookNum;
-
     /// <summary>
     /// Calculate available books for creation (excludes existing books).
     /// </summary>
@@ -98,13 +92,15 @@ internal static class BookCreationService
 
         // Determine the starting book number based on project type
         // SBA projects can only create non-canonical books (INV-004)
-        int startBookNum = isStudyBible ? FirstNonCanonicalBookNum : FirstBookNum;
+        int startBookNum = isStudyBible
+            ? BookServiceHelpers.FirstNonCanonicalBookNum
+            : BookServiceHelpers.FirstBookNum;
 
         // Get books already present in the project
         BookSet existingBooks = scrText.Settings.LocalBooksPresentSet;
 
         // Add all books in the appropriate range that don't already exist
-        for (int bookNum = startBookNum; bookNum <= LastBookNum; bookNum++)
+        for (int bookNum = startBookNum; bookNum <= BookServiceHelpers.LastBookNum; bookNum++)
         {
             // Only add if book doesn't already exist in project
             if (!existingBooks.IsSelected(bookNum) && !scrText.BookPresent(bookNum))
@@ -160,7 +156,11 @@ internal static class BookCreationService
 
         // Get existing books from the project
         List<BookInfo> existingBooks = [];
-        for (int bookNum = FirstBookNum; bookNum <= LastBookNum; bookNum++)
+        for (
+            int bookNum = BookServiceHelpers.FirstBookNum;
+            bookNum <= BookServiceHelpers.LastBookNum;
+            bookNum++
+        )
         {
             if (scrText.BookPresent(bookNum))
             {
@@ -242,12 +242,15 @@ internal static class BookCreationService
         // Validate book numbers are in valid range
         foreach (int bookNum in request.BookNumbers)
         {
-            if (bookNum < FirstBookNum || bookNum > LastBookNum)
+            if (
+                bookNum < BookServiceHelpers.FirstBookNum
+                || bookNum > BookServiceHelpers.LastBookNum
+            )
             {
                 return Task.FromResult(
                     BookOperationResult.ErrorResult(
                         BookErrorCode.InvalidBookNumber,
-                        $"Book number {bookNum} is not valid (must be {FirstBookNum}-{LastBookNum})"
+                        $"Book number {bookNum} is not valid (must be {BookServiceHelpers.FirstBookNum}-{BookServiceHelpers.LastBookNum})"
                     )
                 );
             }
