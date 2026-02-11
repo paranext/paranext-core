@@ -323,6 +323,15 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
   b: '%paragraphMenu_b_markerDescription%',
 };
 
+/**
+ * Generates the marker menu list items specifically inserting appropriate action functions using
+ * the provided `editorRef` parameter and localizes the marker titles with the provided
+ * `localizedStrings` parameter
+ *
+ * @param editorRef Provided ref for the editor component
+ * @param localizedStrings The localized strings to use to localize the marker titles
+ * @returns List of marker menu items to be used for the paragraph menu
+ */
 export function generateMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
   localizedStrings: LanguageStrings,
