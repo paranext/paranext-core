@@ -265,9 +265,116 @@ internal static class BookValidationService
         int[] bookNumbers
     )
     {
-        throw new NotImplementedException(
-            "CAP-011: CheckVersificationCompatibility public API not yet implemented"
-        );
+        // Handle null/empty target project ID - return error
+        if (string.IsNullOrEmpty(targetProjectId))
+        {
+            return new VersificationCheckResult(
+                IsCompatible: false,
+                WarningMessage: "Target project ID is required but was not provided.",
+                SourceVersification: string.Empty,
+                TargetVersification: string.Empty
+            );
+        }
+
+        // Handle null model project ID - no model means no comparison needed
+        if (string.IsNullOrEmpty(modelProjectId))
+        {
+            // Try to get target project to return its versification info
+            ScrText targetScrTextForNullModel;
+            try
+            {
+                targetScrTextForNullModel = LocalParatextProjects.GetParatextProject(
+                    targetProjectId
+                );
+            }
+            catch (Exception)
+            {
+                return new VersificationCheckResult(
+                    IsCompatible: true,
+                    WarningMessage: null,
+                    SourceVersification: string.Empty,
+                    TargetVersification: string.Empty
+                );
+            }
+
+            return new VersificationCheckResult(
+                IsCompatible: true,
+                WarningMessage: null,
+                SourceVersification: string.Empty,
+                TargetVersification: targetScrTextForNullModel.Settings.Versification.Name
+            );
+        }
+
+        // Handle null/empty book array - empty selection is compatible
+        if (bookNumbers == null || bookNumbers.Length == 0)
+        {
+            // Still need to resolve projects to return versification info
+            ScrText targetScrTextForEmpty;
+            ScrText modelScrTextForEmpty;
+            try
+            {
+                targetScrTextForEmpty = LocalParatextProjects.GetParatextProject(targetProjectId);
+                modelScrTextForEmpty = LocalParatextProjects.GetParatextProject(modelProjectId);
+            }
+            catch (Exception)
+            {
+                return new VersificationCheckResult(
+                    IsCompatible: true,
+                    WarningMessage: null,
+                    SourceVersification: string.Empty,
+                    TargetVersification: string.Empty
+                );
+            }
+
+            return new VersificationCheckResult(
+                IsCompatible: true,
+                WarningMessage: null,
+                SourceVersification: modelScrTextForEmpty.Settings.Versification.Name,
+                TargetVersification: targetScrTextForEmpty.Settings.Versification.Name
+            );
+        }
+
+        // Try to resolve the target project ID to a ScrText
+        ScrText targetScrText;
+        try
+        {
+            targetScrText = LocalParatextProjects.GetParatextProject(targetProjectId);
+        }
+        catch (Exception)
+        {
+            return new VersificationCheckResult(
+                IsCompatible: false,
+                WarningMessage: $"Could not find target project with ID '{targetProjectId}'.",
+                SourceVersification: string.Empty,
+                TargetVersification: string.Empty
+            );
+        }
+
+        // Try to resolve the model project ID to a ScrText
+        ScrText modelScrText;
+        try
+        {
+            modelScrText = LocalParatextProjects.GetParatextProject(modelProjectId);
+        }
+        catch (Exception)
+        {
+            return new VersificationCheckResult(
+                IsCompatible: false,
+                WarningMessage: $"Could not find model project with ID '{modelProjectId}'.",
+                SourceVersification: string.Empty,
+                TargetVersification: targetScrText.Settings.Versification.Name
+            );
+        }
+
+        // Convert int[] to BookSet for the internal API
+        var selectedBooks = new BookSet();
+        foreach (var bookNum in bookNumbers)
+        {
+            selectedBooks.Add(bookNum);
+        }
+
+        // Delegate to the internal method (CAP-018)
+        return CheckVersificationCompatibility(targetScrText, modelScrText, selectedBooks);
     }
 
     /// <summary>
