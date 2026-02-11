@@ -20,8 +20,43 @@ public static class BookComparisonService
     /// <returns>Style to apply (Bold for newer, Gray for missing, Regular for same)</returns>
     public static BookDisplayStyle GetDisplayStyle(ComparisonResult state)
     {
-        // TODO: Implementation to be added by TDD Implementer
-        // This is the RED phase - method exists but throws NotImplementedException
-        throw new NotImplementedException("CAP-022: GetDisplayStyle not yet implemented");
+        return state switch
+        {
+            ComparisonResult.SourceNewer => new BookDisplayStyle(
+                SourceBold: true,
+                DestBold: false,
+                SourceGray: false,
+                DestGray: false
+            ),
+            ComparisonResult.DestNewer => new BookDisplayStyle(
+                SourceBold: false,
+                DestBold: true,
+                SourceGray: false,
+                DestGray: false
+            ),
+            ComparisonResult.Same => new BookDisplayStyle(
+                SourceBold: false,
+                DestBold: false,
+                SourceGray: false,
+                DestGray: false
+            ),
+            ComparisonResult.OnlyInSource => new BookDisplayStyle(
+                SourceBold: false,
+                DestBold: false,
+                SourceGray: false,
+                DestGray: true
+            ),
+            ComparisonResult.OnlyInDest => new BookDisplayStyle(
+                SourceBold: false,
+                DestBold: false,
+                SourceGray: true,
+                DestGray: false
+            ),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(state),
+                state,
+                "Unknown ComparisonResult value"
+            ),
+        };
     }
 }
