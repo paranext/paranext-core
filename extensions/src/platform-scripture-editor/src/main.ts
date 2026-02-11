@@ -366,7 +366,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       state: savedWebViewStateUpdated,
       projectId,
       allowPopups: true,
-      shouldShowToolbar: true,
+      shouldShowToolbar: false,
     };
   }
 

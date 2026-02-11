@@ -21,7 +21,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
-import { LucideProps } from 'lucide-react';
+import { LucideIcon, LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
@@ -949,7 +949,7 @@ export interface MarkerMenuItem {
 	/** An optional subtitle for the marker */
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
-	icon?: React$1.ReactNode;
+	icon?: LucideIcon;
 	/** Whether the command/marker is deprecated */
 	isDeprecated?: boolean;
 	/** Whether the command/marker is disallowed for this project */
