@@ -11,14 +11,11 @@ namespace Paranext.DataProvider.ManageBooks;
 /// PT9 Source: ParatextBase/ScriptureTemplate.cs:257-340
 /// Capability: CAP-029 (ChapterVerseTemplateGeneration)
 /// </remarks>
-public static class ScriptureTemplateService
+internal static class ScriptureTemplateService
 {
     // Book number range constants (matching ManageBooksService)
     private const int FirstBookNum = 1;
     private const int LastBookNum = 123;
-
-    // ESG (Esther Greek) book number - requires special handling (SUBFLOW-004)
-    private const int ESG_BOOK_NUM = 84;
 
     /// <summary>
     /// Creates chapter and verse markers for a book based on the project's versification.
