@@ -38,7 +38,15 @@ export function isAnyDevPackagePresent(): boolean {
 
 export function execInDevPackage(folder: string, cmd: string): void {
   const pathToUse = getDevPackagePath(folder);
-  const env = { ...process.env, VOLTA_FEATURE_PNPM: '1' };
+  const env = {
+    ...process.env,
+    // Allow volta to run pnpm commands
+    VOLTA_FEATURE_PNPM: '1',
+    // Disable Nx Cloud telemetry since it is not configured and would cause warnings
+    NX_CLOUD_ACCESS_TOKEN: '',
+    // Disable npm registry authentication since it is not needed and would cause warnings
+    NODE_AUTH_TOKEN: '',
+  };
   execSync(cmd, { stdio: 'inherit', cwd: pathToUse, env });
 }
 
