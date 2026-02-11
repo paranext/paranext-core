@@ -110,15 +110,9 @@ internal static class BookValidationService
         string targetVersification = targetScrText.Settings.Versification.Name;
 
         // Check if any selected book is canonical (book number <= 66)
-        bool hasCanonicalBook = false;
-        foreach (int bookNum in selectedBooks.SelectedBookNumbers)
-        {
-            if (bookNum <= LastCanonicalBookNum)
-            {
-                hasCanonicalBook = true;
-                break;
-            }
-        }
+        bool hasCanonicalBook = selectedBooks.SelectedBookNumbers.Any(bookNum =>
+            bookNum <= LastCanonicalBookNum
+        );
 
         // If no canonical books selected, versification is compatible (no check needed)
         if (!hasCanonicalBook)
