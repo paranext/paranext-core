@@ -30,13 +30,8 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Provides the list of functions that can be called on this data provider.
+    /// Returns registered PAPI functions: createBooks, getBooksPresent, getAvailableBooks.
     /// </summary>
-    /// <remarks>
-    /// === NEW IN PT10 ===
-    /// Reason: PAPI command registration pattern
-    /// Maps to: CAP-001, CAP-008, CAP-009
-    /// </remarks>
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
         return
@@ -56,52 +51,20 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
         return Task.CompletedTask;
     }
 
-    #region Command Handlers
-
     /// <summary>
-    /// Handles the createBooks PAPI command.
+    /// Handles the createBooks PAPI command (CAP-001).
+    /// Deserializes the request from JSON and delegates to ExecuteCreateBooksAsync.
     /// </summary>
-    /// <remarks>
-    /// === NEW IN PT10 ===
-    /// Reason: PAPI command wrapper for CAP-001
-    /// Maps to: CAP-001 (CreateBooks PAPI Command)
-    ///
-    /// This handler:
-    /// 1. Deserializes the CreateBooksRequest from JSON
-    /// 2. Delegates to BookCreationService.CreateBooksAsync (CAP-016)
-    /// 3. Fires BooksChanged event on success via SendDataUpdateEvent
-    /// 4. Returns the BookOperationResult
-    /// </remarks>
-    /// <param name="requestElement">JSON element containing CreateBooksRequest</param>
-    /// <returns>BookOperationResult indicating success or failure</returns>
     private async Task<BookOperationResult> HandleCreateBooks(JsonElement requestElement)
     {
         try
         {
-            // Deserialize request
             CreateBooksRequest? request = JsonSerializer.Deserialize<CreateBooksRequest>(
                 requestElement.GetRawText(),
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
             );
 
-            if (request == null)
-            {
-                return BookOperationResult.ErrorResult(
-                    BookErrorCode.ValidationFailed,
-                    "Request cannot be null"
-                );
-            }
-
-            // Delegate to BookCreationService (CAP-016)
-            BookOperationResult result = await BookCreationService.CreateBooksAsync(request);
-
-            // Fire update event on success
-            if (result.Success)
-            {
-                SendDataUpdateEvent("*", "Books created successfully");
-            }
-
-            return result;
+            return await ExecuteCreateBooksAsync(request);
         }
         catch (JsonException ex)
         {
@@ -120,47 +83,33 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Handles the getBooksPresent PAPI command.
+    /// Handles the getBooksPresent PAPI command (CAP-009).
     /// </summary>
-    /// <remarks>
-    /// === NEW IN PT10 ===
-    /// Reason: PAPI command wrapper for CAP-009
-    /// Maps to: CAP-009 (GetBooksPresent)
-    /// </remarks>
-    /// <param name="projectId">Project ID as JSON string</param>
-    /// <returns>BooksPresentResult with books in the project</returns>
     private BooksPresentResult HandleGetBooksPresent(string projectId)
     {
         return ManageBooksService.GetBooksPresent(projectId);
     }
 
     /// <summary>
-    /// Handles the getAvailableBooks PAPI command.
+    /// Handles the getAvailableBooks PAPI command (CAP-008).
     /// </summary>
-    /// <remarks>
-    /// === NEW IN PT10 ===
-    /// Reason: PAPI command wrapper for CAP-008
-    /// Maps to: CAP-008 (GetAvailableBooks)
-    /// </remarks>
-    /// <param name="projectId">Project ID as JSON string</param>
-    /// <returns>AvailableBooksResult with available and existing books</returns>
     private AvailableBooksResult HandleGetAvailableBooks(string projectId)
     {
         return BookCreationService.GetAvailableBooks(projectId);
     }
 
-    #endregion
-
-    #region Test Support (internal)
+    /// <summary>
+    /// Test entry point for createBooks - bypasses JSON deserialization.
+    /// </summary>
+    internal Task<BookOperationResult> HandleCreateBooksCommand(CreateBooksRequest? request)
+    {
+        return ExecuteCreateBooksAsync(request);
+    }
 
     /// <summary>
-    /// Exposes HandleCreateBooks for direct testing without JSON serialization.
+    /// Core implementation for creating books - shared by PAPI handler and test method.
     /// </summary>
-    /// <remarks>
-    /// This method is for testing CAP-001 without needing the full PAPI infrastructure.
-    /// It bypasses JSON deserialization and calls the service directly.
-    /// </remarks>
-    internal async Task<BookOperationResult> HandleCreateBooksCommand(CreateBooksRequest request)
+    private async Task<BookOperationResult> ExecuteCreateBooksAsync(CreateBooksRequest? request)
     {
         if (request == null)
         {
@@ -170,10 +119,8 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
             );
         }
 
-        // Delegate to BookCreationService (CAP-016)
         BookOperationResult result = await BookCreationService.CreateBooksAsync(request);
 
-        // Fire update event on success
         if (result.Success)
         {
             SendDataUpdateEvent("*", "Books created successfully");
@@ -181,6 +128,4 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
 
         return result;
     }
-
-    #endregion
 }
