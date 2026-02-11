@@ -4,7 +4,6 @@ declare module 'platform-scripture' {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-    ExtensionDataScope,
     IDataProvider,
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
@@ -658,6 +657,64 @@ declare module 'platform-scripture' {
     };
 
   // #endregion Find Types
+
+  // #region Replace Types
+
+  /** Provides information about replacing text in scripture projects (intentionally empty) */
+  export type ReplaceWithUsfmProjectInterfaceDataTypes = {};
+
+  /** Provides methods for replacing scripture content with USFM text */
+  export type IReplaceWithUsfmProjectDataProvider =
+    IProjectDataProvider<ReplaceWithUsfmProjectInterfaceDataTypes> & {
+      /**
+       * Replaces text at specified Scripture ranges with new USFM content.
+       *
+       * This method allows replacing multiple ranges of scripture text with USFM strings. Each
+       * range specifies a start and end location that can be either a USJ chapter-based location or
+       * a USFM verse-based location. The replacement operations are performed atomically.
+       *
+       * **Important Notes:**
+       *
+       * - All ranges must be within the same book. Cross-book replacements are not supported.
+       * - If `usfmToInsert` is an array, its length must match `rangesToReplace` length exactly.
+       * - If `usfmToInsert` is a single string, it will be used for all replacements.
+       * - Ranges are processed in reverse index order to preserve indices during replacement.
+       *
+       * @example
+       *
+       * ```typescript
+       * // Replace a single range
+       * await pdp.replace(
+       *   [
+       *     {
+       *       start: { verseRef: { book: 'MAT', chapterNum: 5, verseNum: 3 }, offset: 0 },
+       *       end: { verseRef: { book: 'MAT', chapterNum: 5, verseNum: 3 }, offset: 10 },
+       *     },
+       *   ],
+       *   'Blessed are the poor in spirit',
+       * );
+       *
+       * // Replace multiple ranges with different content
+       * await pdp.replace(
+       *   [range1, range2, range3],
+       *   ['replacement1', 'replacement2', 'replacement3'],
+       * );
+       * ```
+       *
+       * @param rangesToReplace - Array of scripture ranges to replace. Each range has a start and
+       *   end location that can be {@link UsjChapterLocation} or {@link UsfmVerseLocation}.
+       * @param usfmToInsert - The USFM content to insert at each range. Can be a single string
+       *   (used for all ranges) or an array of strings (one per range).
+       * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
+       * @throws Error if any range spans multiple books
+       */
+      replace(
+        rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
+        usfmToInsert: string | string[],
+      ): Promise<void>;
+    };
+
+  // #endregion Replace Types
 
   // #region Marker Types
 
@@ -1497,6 +1554,7 @@ declare module 'papi-shared-types' {
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
     IFindInScriptureProjectDataProvider,
+    IReplaceWithUsfmProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     IInventoryDataProvider,
@@ -1518,6 +1576,7 @@ declare module 'papi-shared-types' {
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
+    'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
   }
 
   export interface DataProviders {
