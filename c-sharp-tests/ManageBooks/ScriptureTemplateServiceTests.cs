@@ -642,6 +642,473 @@ namespace TestParanextDataProvider.ManageBooks
 
         #endregion
 
+        #region CAP-030: ExtractTemplate Tests
+
+        // ===================================================================
+        // CAP-030: ModelTextTemplateExtraction
+        // Strategy: Classic TDD - Algorithmic complexity requiring incremental discovery
+        //
+        // This capability extracts template structure from a model project's book
+        // while stripping the actual text content.
+        //
+        // Golden Masters: gm-012-create-model, gm-022-from-model-project
+        // Extraction: EXT-016 (ScriptureTemplate.ExtractTemplate from PT9/ParatextBase/ScriptureTemplate.cs:129-216)
+        // Behaviors: BHV-T003
+        // Scenarios: TS-062, TS-075
+        // ===================================================================
+
+        #region CAP-030 Test Data
+
+        // Sample USFM from a model project with various markers and content
+        private const string ModelUsfmWithContent =
+            @"\id MRK Mark - Model Project
+\h Mark
+\toc1 The Gospel According to Mark
+\toc2 Mark
+\toc3 Mrk
+\mt1 Mark
+\c 1
+\s Section Heading
+\p
+\v 1 The beginning of the gospel of Jesus Christ, the Son of God.
+\v 2 As it is written in Isaiah the prophet, ""Behold, I send my messenger before your face.""
+\p
+\v 3 A voice crying in the wilderness, ""Prepare the way of the Lord.""
+\c 2
+\s Another Section
+\p
+\v 1 And again he entered Capernaum after some days.
+\q1 Poetry line one
+\q2 Poetry line two
+\v 2 And many were gathered together.";
+
+        // Simple single-chapter book (like Jude)
+        private const string ModelUsfmSingleChapter =
+            @"\id JUD Jude - Model Project
+\h Jude
+\mt1 Jude
+\c 1
+\p
+\v 1 Jude, a servant of Jesus Christ.
+\v 2 Mercy to you and peace and love.
+\p
+\v 3 Beloved, while I was making every effort to write.";
+
+        // USFM with complex formatting markers
+        private const string ModelUsfmComplexFormatting =
+            @"\id GEN Genesis - Model Project
+\c 1
+\p
+\v 1 In the \nd Lord\nd* beginning.
+\v 2 And the earth was \add without form\add*.
+\f + \fr 1:2 \ft Some footnote text.\f*
+\p
+\v 3 Then God said.";
+
+        #endregion
+
+        #region CAP-030 Acceptance Test
+
+        /// <summary>
+        /// Acceptance test for CAP-030: Model text template extraction.
+        /// This test verifies the complete behavior of ExtractTemplate.
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-030")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Property("ExtractionId", "EXT-016")]
+        [Description("Acceptance test: ExtractTemplate preserves structural markers while stripping text content")]
+        public void ExtractTemplate_FromModelProject_PreservesMarkersStripsContent()
+        {
+            // Arrange: Create a model ScrText with book content
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent); // Mark = book 41
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert: Template should contain all structural markers
+            Assert.That(template, Does.Contain(@"\id MRK"), "Template should preserve book ID marker");
+            Assert.That(template, Does.Contain(@"\c 1"), "Template should preserve chapter markers");
+            Assert.That(template, Does.Contain(@"\c 2"), "Template should preserve all chapter markers");
+            Assert.That(template, Does.Contain(@"\v 1"), "Template should preserve verse markers");
+            Assert.That(template, Does.Contain(@"\p"), "Template should preserve paragraph markers");
+            Assert.That(template, Does.Contain(@"\s"), "Template should preserve section heading markers");
+
+            // Template should NOT contain actual text content
+            Assert.That(
+                template,
+                Does.Not.Contain("beginning of the gospel"),
+                "Template should strip verse text"
+            );
+            Assert.That(
+                template,
+                Does.Not.Contain("Section Heading"),
+                "Template should strip section heading text"
+            );
+            Assert.That(
+                template,
+                Does.Not.Contain("Model Project"),
+                "Template should strip ID line description"
+            );
+            Assert.That(template, Does.Not.Contain("Isaiah"), "Template should strip all content text");
+        }
+
+        #endregion
+
+        #region CAP-030 Marker Preservation Tests
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves chapter marker numbers")]
+        public void ExtractTemplate_WithMultipleChapters_PreservesChapterNumbers()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\c 1"));
+            Assert.That(template, Does.Contain(@"\c 2"));
+            // Verify the chapter numbers are preserved with their values
+            Assert.That(template, Does.Match(@"\\c 1\s"));
+            Assert.That(template, Does.Match(@"\\c 2\s"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves verse marker numbers")]
+        public void ExtractTemplate_WithVerses_PreservesVerseNumbers()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\v 1"));
+            Assert.That(template, Does.Contain(@"\v 2"));
+            Assert.That(template, Does.Contain(@"\v 3"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves paragraph markers")]
+        public void ExtractTemplate_WithParagraphs_PreservesParagraphMarkers()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert: Count paragraph markers - there should be multiple
+            int paragraphCount = CountOccurrences(template, @"\p");
+            Assert.That(
+                paragraphCount,
+                Is.GreaterThan(1),
+                "Template should preserve multiple paragraph markers"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves section heading markers")]
+        public void ExtractTemplate_WithSectionHeadings_PreservesSectionMarkers()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\s"), "Template should preserve section markers");
+            // But the heading text should be stripped
+            Assert.That(template, Does.Not.Contain("Section Heading"));
+            Assert.That(template, Does.Not.Contain("Another Section"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves poetry markers")]
+        public void ExtractTemplate_WithPoetryMarkers_PreservesPoetryMarkers()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\q1"), @"Template should preserve \q1 marker");
+            Assert.That(template, Does.Contain(@"\q2"), @"Template should preserve \q2 marker");
+            // But poetry content should be stripped
+            Assert.That(template, Does.Not.Contain("Poetry line"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves title markers")]
+        public void ExtractTemplate_WithTitles_PreservesTitleMarkers()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\mt1"), "Template should preserve main title marker");
+            Assert.That(template, Does.Contain(@"\h"), "Template should preserve header marker");
+            Assert.That(template, Does.Contain(@"\toc1"), "Template should preserve TOC markers");
+        }
+
+        #endregion
+
+        #region CAP-030 Content Stripping Tests
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate strips verse text content")]
+        public void ExtractTemplate_WithVerseContent_StripsVerseText()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Not.Contain("beginning of the gospel"));
+            Assert.That(template, Does.Not.Contain("Jesus Christ"));
+            Assert.That(template, Does.Not.Contain("Isaiah the prophet"));
+            Assert.That(template, Does.Not.Contain("Capernaum"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate strips section heading text")]
+        public void ExtractTemplate_WithSectionHeadingText_StripsSectionText()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Not.Contain("Section Heading"));
+            Assert.That(template, Does.Not.Contain("Another Section"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate strips ID line description text")]
+        public void ExtractTemplate_WithIdLineDescription_StripsDescriptionButKeepsBookCode()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\id MRK"), "Template should keep book code");
+            Assert.That(
+                template,
+                Does.Not.Contain("Model Project"),
+                "Template should strip project name from ID line"
+            );
+            Assert.That(
+                template,
+                Does.Not.Contain("Mark -"),
+                "Template should strip book name from ID line"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate strips inline character styles but preserves paragraph structure")]
+        public void ExtractTemplate_WithCharacterStyles_StripsCharacterStyleContent()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(1, ModelUsfmComplexFormatting); // Genesis = book 1
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 1);
+
+            // Assert: Character style content should be stripped
+            Assert.That(template, Does.Not.Contain(@"\nd"));
+            Assert.That(template, Does.Not.Contain("Lord"));
+            Assert.That(template, Does.Not.Contain(@"\add"));
+            Assert.That(template, Does.Not.Contain("without form"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate strips footnotes completely")]
+        public void ExtractTemplate_WithFootnotes_StripsFootnoteContent()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(1, ModelUsfmComplexFormatting);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 1);
+
+            // Assert
+            Assert.That(template, Does.Not.Contain(@"\f"));
+            Assert.That(template, Does.Not.Contain(@"\fr"));
+            Assert.That(template, Does.Not.Contain(@"\ft"));
+            Assert.That(template, Does.Not.Contain("footnote"));
+        }
+
+        #endregion
+
+        #region CAP-030 Edge Case Tests
+
+        [Test]
+        [Category("EdgeCase")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate works with single-chapter books like Jude")]
+        public void ExtractTemplate_SingleChapterBook_PreservesStructure()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(65, ModelUsfmSingleChapter); // Jude = book 65
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 65);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\id JUD"));
+            Assert.That(template, Does.Contain(@"\c 1"));
+            Assert.That(template, Does.Contain(@"\v 1"));
+            Assert.That(template, Does.Contain(@"\v 2"));
+            Assert.That(template, Does.Contain(@"\v 3"));
+            Assert.That(template, Does.Contain(@"\p"));
+
+            // Only chapter 1 should exist
+            Assert.That(template, Does.Not.Contain(@"\c 2"));
+
+            // Content should be stripped
+            Assert.That(template, Does.Not.Contain("servant of Jesus Christ"));
+            Assert.That(template, Does.Not.Contain("Mercy to you"));
+        }
+
+        [Test]
+        [Category("EdgeCase")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate handles empty book gracefully")]
+        public void ExtractTemplate_EmptyBook_ReturnsMinimalTemplate()
+        {
+            // Arrange
+            const string emptyUsfm = @"\id MRK";
+            var modelScrText = CreateModelScrTextWithBook(41, emptyUsfm);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert
+            Assert.That(
+                template,
+                Does.Contain(@"\id MRK"),
+                "Should at minimum contain the ID marker"
+            );
+            // Should not throw and should return something usable
+            Assert.That(template, Is.Not.Null);
+            Assert.That(template, Is.Not.Empty);
+        }
+
+        [Test]
+        [Category("EdgeCase")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate handles book with only ID and chapter markers")]
+        public void ExtractTemplate_IdAndChaptersOnly_PreservesStructure()
+        {
+            // Arrange
+            const string minimalUsfm =
+                @"\id PHM
+\c 1";
+            var modelScrText = CreateModelScrTextWithBook(57, minimalUsfm); // Philemon = book 57
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 57);
+
+            // Assert
+            Assert.That(template, Does.Contain(@"\id PHM"));
+            Assert.That(template, Does.Contain(@"\c 1"));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-075")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("ExtractTemplate preserves correct book ID code")]
+        public void ExtractTemplate_BookIdPreserved_MatchesCanonicalCode()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            string template = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Assert: The first non-whitespace content after \id should be MRK
+            Assert.That(template, Does.StartWith(@"\id MRK"));
+        }
+
+        #endregion
+
+        #region CAP-030 Helper Methods
+
+        /// <summary>
+        /// Creates a model ScrText with the specified book content.
+        /// Uses DummyScrText to provide in-memory USFM content.
+        /// </summary>
+        private ScrText CreateModelScrTextWithBook(int bookNum, string usfmContent)
+        {
+            // Create a dummy model project
+            var modelScrText = CreateDummyProject();
+
+            // Put the USFM content into the book
+            // DummyScrText.PutText stores content in the in-memory file manager
+            modelScrText.PutText(bookNum, 0, false, usfmContent, null);
+
+            return modelScrText;
+        }
+
+        #endregion
+
+        #endregion
+
         #region Helper Methods
 
         /// <summary>

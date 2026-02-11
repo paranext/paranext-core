@@ -5,11 +5,14 @@ using SIL.Scripture;
 namespace Paranext.DataProvider.ManageBooks;
 
 /// <summary>
-/// Service for generating Scripture templates (CV markers) based on versification.
+/// Service for generating Scripture templates (CV markers) based on versification
+/// and extracting templates from model projects.
 /// </summary>
 /// <remarks>
-/// PT9 Source: ParatextBase/ScriptureTemplate.cs:257-340
-/// Capability: CAP-029 (ChapterVerseTemplateGeneration)
+/// PT9 Source: ParatextBase/ScriptureTemplate.cs
+/// Capabilities:
+/// - CAP-029 (ChapterVerseTemplateGeneration): Lines 257-340
+/// - CAP-030 (ModelTextTemplateExtraction): Lines 129-216
 /// </remarks>
 internal static class ScriptureTemplateService
 {
@@ -94,5 +97,55 @@ internal static class ScriptureTemplateService
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Extracts a template from a model project's book, preserving structure but stripping content.
+    /// </summary>
+    /// <param name="modelScrText">The model project containing the source book.</param>
+    /// <param name="bookNum">The canonical book number (1-based).</param>
+    /// <returns>USFM template string with markers but no content.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when modelScrText is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when bookNum is invalid.</exception>
+    /// <remarks>
+    /// === PORTED FROM PT9 ===
+    /// Source: PT9/ParatextBase/ScriptureTemplate.cs:129-216
+    /// Method: ScriptureTemplate.ExtractTemplate()
+    /// Maps to: EXT-016, BHV-T003, CAP-030
+    ///
+    /// EXPLANATION:
+    /// This algorithm extracts structural markers from a model book while stripping text content:
+    /// 1. Get the model book's USFM text via ScrText.GetText()
+    /// 2. Parse line by line, identifying USFM markers
+    /// 3. Preserve structural markers (\id, \c, \v, \p, \s, \q, etc.)
+    /// 4. Keep chapter and verse numbers
+    /// 5. Strip all text content after markers
+    /// 6. Return the resulting template
+    ///
+    /// Structural markers preserved:
+    /// - \id (book ID only, no description)
+    /// - \c (chapter number preserved)
+    /// - \v (verse number preserved)
+    /// - \p, \m, \pi, \nb, \pc, \pr (paragraph markers)
+    /// - \s, \s1, \s2, \s3 (section heading markers, no text)
+    /// - \q, \q1, \q2, \q3 (poetry markers, no text)
+    /// - \mt, \mt1, \mt2 (main title markers, no text)
+    /// - \h, \toc1, \toc2, \toc3 (header/TOC markers, no text)
+    ///
+    /// Markers stripped completely:
+    /// - \f...\f* (footnotes)
+    /// - \x...\x* (cross references)
+    /// - Character styles (\nd, \add, etc.)
+    /// </remarks>
+    public static string ExtractTemplate(ScrText modelScrText, int bookNum)
+    {
+        // TODO: Implement - this is a stub for TDD RED phase
+        // The implementation should:
+        // 1. Call modelScrText.GetText(new VerseRef(bookNum, 0, 0), false, false)
+        // 2. Process each line to extract structure
+        // 3. Return the template string
+        throw new NotImplementedException(
+            "CAP-030: ExtractTemplate not yet implemented - RED phase"
+        );
     }
 }
