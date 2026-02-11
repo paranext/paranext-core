@@ -36,13 +36,9 @@ internal static class BookComparisonService
         LocalParatextProjects paratextProjects
     )
     {
-        // Get the source project
-        ScrText? sourceScrText;
-        try
-        {
-            sourceScrText = LocalParatextProjects.GetParatextProject(sourceProjectId);
-        }
-        catch (Exception)
+        // Get the source project using shared helper
+        ScrText? sourceScrText = BookServiceHelpers.FindScrText(sourceProjectId);
+        if (sourceScrText == null)
         {
             // Source project not found - return empty array
             return [];
