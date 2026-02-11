@@ -139,13 +139,337 @@ internal static class ScriptureTemplateService
     /// </remarks>
     public static string ExtractTemplate(ScrText modelScrText, int bookNum)
     {
-        // TODO: Implement - this is a stub for TDD RED phase
-        // The implementation should:
-        // 1. Call modelScrText.GetText(new VerseRef(bookNum, 0, 0), false, false)
-        // 2. Process each line to extract structure
-        // 3. Return the template string
-        throw new NotImplementedException(
-            "CAP-030: ExtractTemplate not yet implemented - RED phase"
+        // Validate null argument
+        if (modelScrText == null)
+        {
+            throw new ArgumentNullException(nameof(modelScrText));
+        }
+
+        // Validate book number range
+        if (bookNum < FirstBookNum || bookNum > LastBookNum)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(bookNum),
+                bookNum,
+                $"Book number must be between {FirstBookNum} and {LastBookNum}."
+            );
+        }
+
+        // Get the model book text
+        string modelText = modelScrText.GetText(new VerseRef(bookNum, 0, 0), false, false);
+
+        // Strip footnotes and cross-references completely (they can span content)
+        modelText = StripFootnotesAndCrossRefs(modelText);
+
+        // Strip character styles (e.g., \nd...\nd*, \add...\add*)
+        modelText = StripCharacterStyles(modelText);
+
+        // Parse line by line and extract structure
+        string[] lines = modelText.Split('\n');
+        StringBuilder result = new StringBuilder();
+
+        foreach (string rawLine in lines)
+        {
+            string line = rawLine.TrimEnd('\r');
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            string trimmedLine = line.TrimStart();
+
+            // Check if line starts with a marker
+            if (trimmedLine.StartsWith("\\"))
+            {
+                string marker = ExtractMarker(trimmedLine);
+                string lowerMarker = marker.ToLowerInvariant();
+
+                if (IsIdMarker(lowerMarker))
+                {
+                    // For \id, keep book code only (first 3 chars after \id)
+                    string bookCode = ExtractBookCode(trimmedLine);
+                    result.AppendLine($"\\id {bookCode}");
+                }
+                else if (IsChapterMarker(lowerMarker))
+                {
+                    // Keep chapter marker with number
+                    string chapterNum = ExtractNumber(trimmedLine, "c");
+                    result.AppendLine($"\\c {chapterNum}");
+                }
+                else if (IsVerseMarker(lowerMarker))
+                {
+                    // Keep verse marker with number
+                    string verseNum = ExtractNumber(trimmedLine, "v");
+                    result.AppendLine($"\\v {verseNum}");
+                }
+                else if (IsStructuralMarker(lowerMarker))
+                {
+                    // Keep structural marker without text
+                    result.AppendLine($"\\{marker}");
+                }
+                // Non-structural markers are dropped
+            }
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Strips footnotes (\f...\f*) and cross-references (\x...\x*) from USFM text.
+    /// </summary>
+    private static string StripFootnotesAndCrossRefs(string text)
+    {
+        // Remove footnotes: \f ... \f*
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"\\f\s+[+\-]?\s*.*?\\f\*",
+            "",
+            System.Text.RegularExpressions.RegexOptions.Singleline
         );
+
+        // Remove cross-references: \x ... \x*
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"\\x\s+[+\-]?\s*.*?\\x\*",
+            "",
+            System.Text.RegularExpressions.RegexOptions.Singleline
+        );
+
+        return text;
+    }
+
+    /// <summary>
+    /// Strips character styles (e.g., \nd...\nd*, \add...\add*) from USFM text.
+    /// </summary>
+    private static string StripCharacterStyles(string text)
+    {
+        // Character style markers to strip: common ones like \nd, \add, \wj, \qt, \k, etc.
+        // Pattern: \marker text \marker*
+        // This removes the markers and their content
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"\\(nd|add|wj|qt|k|sls|dc|bk|pn|ord|no|it|bd|em|sc)\s+.*?\\(\1)\*",
+            "",
+            System.Text.RegularExpressions.RegexOptions.Singleline
+        );
+
+        // Also remove any remaining character style end markers that might be orphaned
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"\\(nd|add|wj|qt|k|sls|dc|bk|pn|ord|no|it|bd|em|sc)\*",
+            ""
+        );
+
+        return text;
+    }
+
+    /// <summary>
+    /// Extracts the marker name from a USFM line (e.g., "\\v 1 text" returns "v").
+    /// </summary>
+    private static string ExtractMarker(string line)
+    {
+        // Skip the backslash and extract the marker (up to space or end)
+        int start = line.IndexOf('\\') + 1;
+        int end = start;
+
+        while (end < line.Length && !char.IsWhiteSpace(line[end]))
+        {
+            end++;
+        }
+
+        return line.Substring(start, end - start);
+    }
+
+    /// <summary>
+    /// Extracts the book code from an \id line (e.g., "\\id MRK Mark - Model" returns "MRK").
+    /// </summary>
+    private static string ExtractBookCode(string line)
+    {
+        // Pattern: \id XXX [description]
+        // Extract the 3-letter code after \id
+        string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+        // parts[0] = "\id", parts[1] = "XXX"
+        if (parts.Length >= 2)
+        {
+            return parts[1].ToUpperInvariant();
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Extracts a number from a USFM marker line (e.g., "\\c 1" or "\\v 2").
+    /// </summary>
+    private static string ExtractNumber(string line, string markerType)
+    {
+        // Pattern: \c N or \v N
+        string[] parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length >= 2)
+        {
+            // Return the number portion (may be a verse range like "1-2")
+            return parts[1];
+        }
+
+        return "1"; // Default if parsing fails
+    }
+
+    /// <summary>
+    /// Checks if the marker is the \id marker.
+    /// </summary>
+    private static bool IsIdMarker(string marker)
+    {
+        return marker == "id";
+    }
+
+    /// <summary>
+    /// Checks if the marker is a chapter marker (\c).
+    /// </summary>
+    private static bool IsChapterMarker(string marker)
+    {
+        return marker == "c";
+    }
+
+    /// <summary>
+    /// Checks if the marker is a verse marker (\v).
+    /// </summary>
+    private static bool IsVerseMarker(string marker)
+    {
+        return marker == "v";
+    }
+
+    /// <summary>
+    /// Checks if the marker is a structural marker that should be preserved.
+    /// </summary>
+    private static bool IsStructuralMarker(string marker)
+    {
+        // Paragraph markers
+        if (
+            marker == "p"
+            || marker == "m"
+            || marker == "pi"
+            || marker == "pi1"
+            || marker == "pi2"
+            || marker == "pi3"
+            || marker == "nb"
+            || marker == "pc"
+            || marker == "pr"
+            || marker == "cls"
+            || marker == "li"
+            || marker == "li1"
+            || marker == "li2"
+            || marker == "li3"
+        )
+        {
+            return true;
+        }
+
+        // Section heading markers
+        if (
+            marker == "s"
+            || marker == "s1"
+            || marker == "s2"
+            || marker == "s3"
+            || marker == "sr"
+            || marker == "r"
+            || marker == "sp"
+            || marker == "d"
+            || marker == "ms"
+            || marker == "ms1"
+            || marker == "ms2"
+        )
+        {
+            return true;
+        }
+
+        // Poetry markers
+        if (
+            marker == "q"
+            || marker == "q1"
+            || marker == "q2"
+            || marker == "q3"
+            || marker == "qr"
+            || marker == "qc"
+            || marker == "qa"
+            || marker == "qm"
+            || marker == "qm1"
+            || marker == "qm2"
+        )
+        {
+            return true;
+        }
+
+        // Title markers
+        if (
+            marker == "mt"
+            || marker == "mt1"
+            || marker == "mt2"
+            || marker == "mt3"
+            || marker == "mte"
+            || marker == "mte1"
+            || marker == "mte2"
+        )
+        {
+            return true;
+        }
+
+        // Header/TOC markers
+        if (
+            marker == "h"
+            || marker == "h1"
+            || marker == "h2"
+            || marker == "h3"
+            || marker == "toc1"
+            || marker == "toc2"
+            || marker == "toc3"
+            || marker == "toca1"
+            || marker == "toca2"
+            || marker == "toca3"
+        )
+        {
+            return true;
+        }
+
+        // Introduction markers
+        if (
+            marker == "imt"
+            || marker == "imt1"
+            || marker == "imt2"
+            || marker == "is"
+            || marker == "is1"
+            || marker == "is2"
+            || marker == "ip"
+            || marker == "ipi"
+            || marker == "im"
+            || marker == "imi"
+            || marker == "ipq"
+            || marker == "imq"
+            || marker == "ipr"
+            || marker == "iq"
+            || marker == "iq1"
+            || marker == "iq2"
+            || marker == "ili"
+            || marker == "ili1"
+            || marker == "ili2"
+            || marker == "iot"
+            || marker == "io"
+            || marker == "io1"
+            || marker == "io2"
+            || marker == "iex"
+            || marker == "ie"
+        )
+        {
+            return true;
+        }
+
+        // Other structural markers
+        if (marker == "b" || marker == "rem" || marker == "sts" || marker == "lit")
+        {
+            return true;
+        }
+
+        return false;
     }
 }
