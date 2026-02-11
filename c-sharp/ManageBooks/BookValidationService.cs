@@ -25,10 +25,46 @@ internal static class BookValidationService
     /// <returns>Validation result with missing books if any</returns>
     public static ModelValidationResult ValidateModelBooks(int[] bookNumbers, ScrText modelScrText)
     {
-        // TDD RED PHASE: This stub exists to allow tests to compile.
-        // The TDD Implementer will provide the actual implementation.
-        throw new NotImplementedException(
-            "CAP-017: ValidateModelBooks not yet implemented. TDD RED phase."
+        // Handle empty selection case - vacuously valid
+        if (bookNumbers.Length == 0)
+        {
+            return new ModelValidationResult(
+                IsValid: true,
+                ValidBooks: [],
+                MissingBooks: [],
+                WarningMessage: null
+            );
+        }
+
+        var validBooks = new List<int>();
+        var missingBooks = new List<int>();
+
+        // Check each book against the model project
+        foreach (int bookNum in bookNumbers)
+        {
+            if (modelScrText.BookPresent(bookNum))
+            {
+                validBooks.Add(bookNum);
+            }
+            else
+            {
+                missingBooks.Add(bookNum);
+            }
+        }
+
+        // Build warning message if any books are missing
+        string? warningMessage = null;
+        if (missingBooks.Count > 0)
+        {
+            warningMessage =
+                "Unable to create book(s) because these book(s) are not in the model project";
+        }
+
+        return new ModelValidationResult(
+            IsValid: missingBooks.Count == 0,
+            ValidBooks: validBooks.ToArray(),
+            MissingBooks: missingBooks.ToArray(),
+            WarningMessage: warningMessage
         );
     }
 }
