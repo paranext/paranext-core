@@ -52,13 +52,13 @@ export const Default: Story = {
         action: () => alert('Paragraph marker selected!'),
       },
       {
-        icon: <ClipboardPaste size={16} />,
+        icon: ClipboardPaste,
         title: 'Paste',
         // eslint-disable-next-line no-alert
         action: () => alert('Paste command selected!'),
       },
       {
-        icon: <ClipboardPaste size={16} />,
+        icon: ClipboardPaste,
         title: 'Paste as plaintext',
         // eslint-disable-next-line no-alert
         action: () => alert('Past as plaintext selected!'),
