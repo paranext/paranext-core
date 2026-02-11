@@ -33,10 +33,29 @@ internal static class BookCreationService
         ScrText scrText
     )
     {
-        // RED PHASE: This method should throw NotImplementedException
-        // so that tests fail for the right reason (not compilation errors)
-        throw new NotImplementedException(
-            "CAP-015: CheckAndGrantBookPermissions not yet implemented"
-        );
+        ArgumentNullException.ThrowIfNull(selectedBooks);
+        ArgumentNullException.ThrowIfNull(scrText);
+
+        // Collect books where user does not have permission
+        List<int> unauthorizedBooks = new();
+
+        foreach (int bookNum in selectedBooks.SelectedBookNumbers)
+        {
+            if (!scrText.Creatable(bookNum))
+            {
+                unauthorizedBooks.Add(bookNum);
+            }
+        }
+
+        if (unauthorizedBooks.Count > 0)
+        {
+            return new PermissionResult(
+                Success: false,
+                ErrorMessage: "You do not have permission to create some books",
+                UnauthorizedBooks: unauthorizedBooks
+            );
+        }
+
+        return new PermissionResult(Success: true, ErrorMessage: null, UnauthorizedBooks: new());
     }
 }
