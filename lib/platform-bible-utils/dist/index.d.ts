@@ -5169,6 +5169,14 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 		offset: number;
 	};
 	/**
+	 * Type guard to check if a location is a {@link UsjChapterLocation} rather than a
+	 * {@link UsjBookLocation} or {@link UsfmVerseLocation}.
+	 *
+	 * @param location The location to check
+	 * @returns `true` if the location is a {@link UsjChapterLocation}
+	 */
+	static isUsjChapterLocation(location: UsjLocation | UsfmVerseLocation): location is UsjChapterLocation;
+	/**
 	 * Transforms a USJ chapter-based location into a single standardized format of USJ chapter-based
 	 * location for ease of accessing the location's properties
 	 *
@@ -5208,6 +5216,23 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @returns `true` if the location is for text content; `false` otherwise
 	 */
 	static isUsjDocumentLocationForTextContent(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * Determine if the USJ document location is pointing to a node (text or start of marker) content
+	 * location instead of some location related to a marker's closing marker, property, or attribute
+	 *
+	 * @param usjDocumentLocation USJ document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForNode(usjDocumentLocation: UsjDocumentLocation): usjDocumentLocation is UsjMarkerLocation | UsjTextContentLocation;
+	/**
+	 * Determine if the USJ document location in this node and document location is pointing to a node
+	 * (text or start of marker) content location instead of some location related to a marker's
+	 * closing marker, property, or attribute
+	 *
+	 * @param usjNodeAndDocumentLocation USJ node and document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForNode(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	usfmVerseLocationToNextTextLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 	findNextLocationOfMatchingText(startingPoint: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch?: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
 	search(regex: RegExp): UsjSearchResult[];
