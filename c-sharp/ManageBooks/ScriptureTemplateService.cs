@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Paratext.Data;
 using SIL.Scripture;
 
@@ -19,6 +20,112 @@ internal static class ScriptureTemplateService
     // Book number range constants (matching ManageBooksService)
     private const int FirstBookNum = 1;
     private const int LastBookNum = 123;
+
+    /// <summary>
+    /// Set of USFM structural markers that should be preserved in templates.
+    /// These markers define document structure but their text content is stripped.
+    /// </summary>
+    /// <remarks>
+    /// Categories:
+    /// - Paragraph: p, m, pi, pi1-3, nb, pc, pr, cls, li, li1-3
+    /// - Section headings: s, s1-3, sr, r, sp, d, ms, ms1-2
+    /// - Poetry: q, q1-3, qr, qc, qa, qm, qm1-2
+    /// - Titles: mt, mt1-3, mte, mte1-2
+    /// - Headers/TOC: h, h1-3, toc1-3, toca1-3
+    /// - Introduction: imt, imt1-2, is, is1-2, ip, ipi, im, imi, ipq, imq, ipr, iq, iq1-2, ili, ili1-2, iot, io, io1-2, iex, ie
+    /// - Other: b, rem, sts, lit
+    /// </remarks>
+    private static readonly HashSet<string> s_structuralMarkers =
+    [
+        // Paragraph markers
+        "p",
+        "m",
+        "pi",
+        "pi1",
+        "pi2",
+        "pi3",
+        "nb",
+        "pc",
+        "pr",
+        "cls",
+        "li",
+        "li1",
+        "li2",
+        "li3",
+        // Section heading markers
+        "s",
+        "s1",
+        "s2",
+        "s3",
+        "sr",
+        "r",
+        "sp",
+        "d",
+        "ms",
+        "ms1",
+        "ms2",
+        // Poetry markers
+        "q",
+        "q1",
+        "q2",
+        "q3",
+        "qr",
+        "qc",
+        "qa",
+        "qm",
+        "qm1",
+        "qm2",
+        // Title markers
+        "mt",
+        "mt1",
+        "mt2",
+        "mt3",
+        "mte",
+        "mte1",
+        "mte2",
+        // Header/TOC markers
+        "h",
+        "h1",
+        "h2",
+        "h3",
+        "toc1",
+        "toc2",
+        "toc3",
+        "toca1",
+        "toca2",
+        "toca3",
+        // Introduction markers
+        "imt",
+        "imt1",
+        "imt2",
+        "is",
+        "is1",
+        "is2",
+        "ip",
+        "ipi",
+        "im",
+        "imi",
+        "ipq",
+        "imq",
+        "ipr",
+        "iq",
+        "iq1",
+        "iq2",
+        "ili",
+        "ili1",
+        "ili2",
+        "iot",
+        "io",
+        "io1",
+        "io2",
+        "iex",
+        "ie",
+        // Other structural markers
+        "b",
+        "rem",
+        "sts",
+        "lit",
+    ];
 
     /// <summary>
     /// Creates chapter and verse markers for a book based on the project's versification.
@@ -221,20 +328,10 @@ internal static class ScriptureTemplateService
     private static string StripFootnotesAndCrossRefs(string text)
     {
         // Remove footnotes: \f ... \f*
-        text = System.Text.RegularExpressions.Regex.Replace(
-            text,
-            @"\\f\s+[+\-]?\s*.*?\\f\*",
-            "",
-            System.Text.RegularExpressions.RegexOptions.Singleline
-        );
+        text = Regex.Replace(text, @"\\f\s+[+\-]?\s*.*?\\f\*", "", RegexOptions.Singleline);
 
         // Remove cross-references: \x ... \x*
-        text = System.Text.RegularExpressions.Regex.Replace(
-            text,
-            @"\\x\s+[+\-]?\s*.*?\\x\*",
-            "",
-            System.Text.RegularExpressions.RegexOptions.Singleline
-        );
+        text = Regex.Replace(text, @"\\x\s+[+\-]?\s*.*?\\x\*", "", RegexOptions.Singleline);
 
         return text;
     }
@@ -247,19 +344,15 @@ internal static class ScriptureTemplateService
         // Character style markers to strip: common ones like \nd, \add, \wj, \qt, \k, etc.
         // Pattern: \marker text \marker*
         // This removes the markers and their content
-        text = System.Text.RegularExpressions.Regex.Replace(
+        text = Regex.Replace(
             text,
             @"\\(nd|add|wj|qt|k|sls|dc|bk|pn|ord|no|it|bd|em|sc)\s+.*?\\(\1)\*",
             "",
-            System.Text.RegularExpressions.RegexOptions.Singleline
+            RegexOptions.Singleline
         );
 
         // Also remove any remaining character style end markers that might be orphaned
-        text = System.Text.RegularExpressions.Regex.Replace(
-            text,
-            @"\\(nd|add|wj|qt|k|sls|dc|bk|pn|ord|no|it|bd|em|sc)\*",
-            ""
-        );
+        text = Regex.Replace(text, @"\\(nd|add|wj|qt|k|sls|dc|bk|pn|ord|no|it|bd|em|sc)\*", "");
 
         return text;
     }
@@ -343,133 +436,5 @@ internal static class ScriptureTemplateService
     /// <summary>
     /// Checks if the marker is a structural marker that should be preserved.
     /// </summary>
-    private static bool IsStructuralMarker(string marker)
-    {
-        // Paragraph markers
-        if (
-            marker == "p"
-            || marker == "m"
-            || marker == "pi"
-            || marker == "pi1"
-            || marker == "pi2"
-            || marker == "pi3"
-            || marker == "nb"
-            || marker == "pc"
-            || marker == "pr"
-            || marker == "cls"
-            || marker == "li"
-            || marker == "li1"
-            || marker == "li2"
-            || marker == "li3"
-        )
-        {
-            return true;
-        }
-
-        // Section heading markers
-        if (
-            marker == "s"
-            || marker == "s1"
-            || marker == "s2"
-            || marker == "s3"
-            || marker == "sr"
-            || marker == "r"
-            || marker == "sp"
-            || marker == "d"
-            || marker == "ms"
-            || marker == "ms1"
-            || marker == "ms2"
-        )
-        {
-            return true;
-        }
-
-        // Poetry markers
-        if (
-            marker == "q"
-            || marker == "q1"
-            || marker == "q2"
-            || marker == "q3"
-            || marker == "qr"
-            || marker == "qc"
-            || marker == "qa"
-            || marker == "qm"
-            || marker == "qm1"
-            || marker == "qm2"
-        )
-        {
-            return true;
-        }
-
-        // Title markers
-        if (
-            marker == "mt"
-            || marker == "mt1"
-            || marker == "mt2"
-            || marker == "mt3"
-            || marker == "mte"
-            || marker == "mte1"
-            || marker == "mte2"
-        )
-        {
-            return true;
-        }
-
-        // Header/TOC markers
-        if (
-            marker == "h"
-            || marker == "h1"
-            || marker == "h2"
-            || marker == "h3"
-            || marker == "toc1"
-            || marker == "toc2"
-            || marker == "toc3"
-            || marker == "toca1"
-            || marker == "toca2"
-            || marker == "toca3"
-        )
-        {
-            return true;
-        }
-
-        // Introduction markers
-        if (
-            marker == "imt"
-            || marker == "imt1"
-            || marker == "imt2"
-            || marker == "is"
-            || marker == "is1"
-            || marker == "is2"
-            || marker == "ip"
-            || marker == "ipi"
-            || marker == "im"
-            || marker == "imi"
-            || marker == "ipq"
-            || marker == "imq"
-            || marker == "ipr"
-            || marker == "iq"
-            || marker == "iq1"
-            || marker == "iq2"
-            || marker == "ili"
-            || marker == "ili1"
-            || marker == "ili2"
-            || marker == "iot"
-            || marker == "io"
-            || marker == "io1"
-            || marker == "io2"
-            || marker == "iex"
-            || marker == "ie"
-        )
-        {
-            return true;
-        }
-
-        // Other structural markers
-        if (marker == "b" || marker == "rem" || marker == "sts" || marker == "lit")
-        {
-            return true;
-        }
-
-        return false;
-    }
+    private static bool IsStructuralMarker(string marker) => s_structuralMarkers.Contains(marker);
 }
