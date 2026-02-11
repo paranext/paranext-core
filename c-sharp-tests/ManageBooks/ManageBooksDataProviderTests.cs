@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using SIL.Scripture;
@@ -223,11 +224,12 @@ namespace TestParanextDataProvider.ManageBooks
         public void GetBooksPresent_ReturnsCorrectBookInfo_ForEachBook()
         {
             // Arrange: Create canonical and non-canonical books
+            // Book 67 is Tobit (TOB) in Paratext's numbering scheme
             const int GENESIS = 1;
-            const int EXTRA_A = 67; // Non-canonical book number
+            const int TOBIT = 67; // First non-canonical book (deuterocanon)
 
             _scrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
-            _scrText.PutText(EXTRA_A, 0, false, @"\id XXA \c 1 \v 1 Extra A content", null);
+            _scrText.PutText(TOBIT, 0, false, @"\id TOB \c 1 \v 1 Tobit content", null);
 
             // Act
             var result = GetBooksPresentResult(_projectDetails.Metadata.Id);
@@ -240,12 +242,12 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(genesisInfo.IsCanonical, Is.True);
             Assert.That(genesisInfo.BookName, Is.Not.Empty);
 
-            // Assert: Verify Extra A info
-            var extraAInfo = result.Books.FirstOrDefault(b => b.BookNum == EXTRA_A);
-            Assert.That(extraAInfo, Is.Not.Null);
-            Assert.That(extraAInfo!.BookNum, Is.EqualTo(EXTRA_A));
-            Assert.That(extraAInfo.BookId, Is.EqualTo("XXA"));
-            Assert.That(extraAInfo.IsCanonical, Is.False);
+            // Assert: Verify Tobit info (non-canonical deuterocanonical book)
+            var tobitInfo = result.Books.FirstOrDefault(b => b.BookNum == TOBIT);
+            Assert.That(tobitInfo, Is.Not.Null);
+            Assert.That(tobitInfo!.BookNum, Is.EqualTo(TOBIT));
+            Assert.That(tobitInfo.BookId, Is.EqualTo("TOB"));
+            Assert.That(tobitInfo.IsCanonical, Is.False);
         }
 
         /// <summary>
@@ -318,105 +320,47 @@ namespace TestParanextDataProvider.ManageBooks
         #region Helper Methods
 
         /// <summary>
-        /// Calls the GetBooksPresent method on the DataProvider.
-        /// This is a placeholder that will fail in RED phase until implemented.
+        /// Calls the GetBooksPresent method via the real implementation.
+        /// GREEN PHASE: Now using ManageBooksService.GetBooksPresentFromScrText()
         /// </summary>
-        /// <remarks>
-        /// In the GREEN phase, this will be replaced with:
-        /// var provider = new ManageBooksDataProvider(...);
-        /// return provider.GetBooksPresent(projectId);
-        /// </remarks>
         private BooksPresentResult GetBooksPresentResult(string projectId)
         {
-            // RED PHASE: This method calls the not-yet-implemented capability.
-            // When implementation exists, replace with actual call to ManageBooksDataProvider.
+            // For test purposes, check if this is the test project's ID
+            // and use the _scrText member directly since ScrTextCollection
+            // lookup may not work correctly with DummyScrText
+            if (projectId == _projectDetails.Metadata.Id && _scrText != null)
+            {
+                return ManageBooksService.GetBooksPresentFromScrText(_scrText);
+            }
 
-            // For now, simulate what the implementation should do by directly
-            // using ParatextData APIs - this proves the test logic is correct
-            // and will fail appropriately when the actual implementation differs.
-
-            // Find the ScrText for this project
+            // For other project IDs (e.g., invalid ones), try the collection lookup
             ScrText? scrText = ScrTextCollection
                 .ScrTexts(IncludeProjects.Everything)
                 .FirstOrDefault(st => st.Guid.ToString() == projectId);
 
             if (scrText == null)
             {
-                return new BooksPresentResult(Array.Empty<int>(), Array.Empty<BookInfo>());
+                return new BooksPresentResult([], []);
             }
 
-            // Get books present using ParatextData
-            var bookNumbers = scrText.Settings.BooksPresentSet.SelectedBookNumbers.ToArray();
-
-            // Build BookInfo array
-            var books = bookNumbers.Select(bookNum => new BookInfo(
-                bookNum,
-                Canon.BookIdToNumber(Canon.BookNumberToId(bookNum)) > 0
-                    ? Canon.BookNumberToId(bookNum)
-                    : $"B{bookNum:D2}",
-                GetBookName(bookNum),
-                bookNum >= 1 && bookNum <= 66
-            )).ToArray();
-
-            return new BooksPresentResult(bookNumbers, books);
+            return ManageBooksService.GetBooksPresentFromScrText(scrText);
         }
 
         /// <summary>
-        /// Gets a book name for display. Uses ParatextData Canon.
-        /// </summary>
-        private static string GetBookName(int bookNum)
-        {
-            try
-            {
-                return Canon.BookNumberToEnglishName(bookNum);
-            }
-            catch
-            {
-                return $"Book {bookNum}";
-            }
-        }
-
-        /// <summary>
-        /// Gets the 3-letter book ID for a book number.
+        /// Gets the 3-letter book ID for a book number using Canon.
         /// </summary>
         private static string GetBookIdForNumber(int bookNum)
         {
-            return bookNum switch
+            try
             {
-                1 => "GEN",
-                2 => "EXO",
-                3 => "LEV",
-                40 => "MAT",
-                41 => "MRK",
-                42 => "LUK",
-                65 => "JUD",
-                66 => "REV",
-                67 => "TOB",
-                _ => $"B{bookNum:D2}"
-            };
+                string bookId = Canon.BookNumberToId(bookNum);
+                return !string.IsNullOrEmpty(bookId) ? bookId : $"B{bookNum:D2}";
+            }
+            catch
+            {
+                return $"B{bookNum:D2}";
+            }
         }
-
-        #endregion
-
-        #region Contract Types (to be moved to ManageBooks folder)
-
-        /// <summary>
-        /// Result of GetBooksPresent operation.
-        /// This record should be defined in c-sharp/ManageBooks/BooksPresentResult.cs
-        /// </summary>
-        /// <param name="BookNumbers">Book numbers present in the project.</param>
-        /// <param name="Books">Detailed book information.</param>
-        private record BooksPresentResult(int[] BookNumbers, BookInfo[] Books);
-
-        /// <summary>
-        /// Basic book information.
-        /// This record should be defined in c-sharp/ManageBooks/BookInfo.cs
-        /// </summary>
-        /// <param name="BookNum">Canonical book number (1-124).</param>
-        /// <param name="BookId">Three-letter book ID (GEN, EXO, etc.).</param>
-        /// <param name="BookName">Display name.</param>
-        /// <param name="IsCanonical">Whether in canonical range (1-66).</param>
-        private record BookInfo(int BookNum, string BookId, string BookName, bool IsCanonical);
 
         #endregion
     }
