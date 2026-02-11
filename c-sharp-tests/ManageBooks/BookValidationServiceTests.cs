@@ -1834,5 +1834,575 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        #region CAP-011: CheckVersificationCompatibility Public API Tests (Outer Loop)
+
+        /// <summary>
+        /// Acceptance test for CAP-011: CheckVersificationCompatibility public API.
+        /// This is the "done signal" - when this passes, CAP-011 is complete.
+        ///
+        /// The public API:
+        /// - Takes targetProjectId (string), modelProjectId (string), and bookNumbers (int[])
+        /// - Resolves project IDs to ScrText via LocalParatextProjects
+        /// - Uses CAP-018 internally to check versification compatibility
+        /// - Returns VersificationCheckResult
+        ///
+        /// This follows the same pattern as CAP-010 wrapping CAP-017.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-024-versification-check
+        /// Extraction: EXT-004 (PT9/Paratext/ToolsMenu/CreateBooksForm.cs:298-316)
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        [Property("GoldenMaster", "gm-024")]
+        [Description("Acceptance test: CheckVersificationCompatibility public API validates versification compatibility")]
+        public void CheckVersificationCompatibility_PublicApi_AcceptanceTest()
+        {
+            // Arrange - Create target project
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            // _modelScrText is created in SetUp with default versification
+            // Both projects will have the same versification (default)
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+
+            // Select canonical books to trigger versification check
+            var bookNumbers = new[] { 1, 40 }; // Genesis, Matthew
+
+            // Act - Call the public API with project ID strings
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert - Full outcome verification
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+
+            // Same versification should be compatible
+            Assert.That(result.IsCompatible, Is.True, "Same versifications should be compatible");
+            Assert.That(result.WarningMessage, Is.Null, "No warning for compatible versifications");
+
+            // Versification names should be populated
+            Assert.That(result.SourceVersification, Is.Not.Null.And.Not.Empty, "Source versification should be set");
+            Assert.That(result.TargetVersification, Is.Not.Null.And.Not.Empty, "Target versification should be set");
+
+            targetScrText.Dispose();
+        }
+
+        #endregion
+
+        #region CAP-011 Contract Tests - Project ID Resolution
+
+        /// <summary>
+        /// Verifies the public API correctly resolves target project ID to ScrText.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        public void CheckVersificationCompatibility_ValidTargetProjectId_ResolvesCorrectly()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1 }; // Genesis
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert - Should successfully resolve and check versification
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.TargetVersification, Is.Not.Null.And.Not.Empty);
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Verifies the public API correctly resolves model project ID to ScrText.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        public void CheckVersificationCompatibility_ValidModelProjectId_ResolvesCorrectly()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1 }; // Genesis
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert - Should successfully resolve and get model versification
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.SourceVersification, Is.Not.Null.And.Not.Empty);
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Verifies the public API handles invalid target project ID gracefully.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        public void CheckVersificationCompatibility_InvalidTargetProjectId_ReturnsError()
+        {
+            // Arrange
+            var invalidTargetProjectId = Guid.NewGuid().ToString("N"); // Non-existent project
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1 };
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                invalidTargetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert - Should indicate failure with error
+            Assert.That(result.IsCompatible, Is.False, "Should fail for invalid target project ID");
+            Assert.That(result.WarningMessage, Is.Not.Null.And.Not.Empty, "Should provide error message");
+        }
+
+        /// <summary>
+        /// Verifies the public API handles invalid model project ID gracefully.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        public void CheckVersificationCompatibility_InvalidModelProjectId_ReturnsError()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var invalidModelProjectId = Guid.NewGuid().ToString("N"); // Non-existent project
+            var bookNumbers = new[] { 1 };
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                invalidModelProjectId,
+                bookNumbers
+            );
+
+            // Assert - Should indicate failure with error
+            Assert.That(result.IsCompatible, Is.False, "Should fail for invalid model project ID");
+            Assert.That(result.WarningMessage, Is.Not.Null.And.Not.Empty, "Should provide error message");
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Verifies the public API handles null target project ID.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        public void CheckVersificationCompatibility_NullTargetProjectId_ReturnsError()
+        {
+            // Arrange
+            string? nullTargetProjectId = null;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1 };
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                nullTargetProjectId!,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert
+            Assert.That(result.IsCompatible, Is.False, "Should fail for null target project ID");
+            Assert.That(result.WarningMessage, Is.Not.Null.And.Not.Empty);
+        }
+
+        /// <summary>
+        /// Verifies the public API handles null model project ID.
+        /// The model project can be null when creating books without a model (e.g., from scratch).
+        /// In this case, versification check is not applicable and should return compatible.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        public void CheckVersificationCompatibility_NullModelProjectId_ReturnsCompatible()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            string? nullModelProjectId = null;
+            var bookNumbers = new[] { 1 };
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                nullModelProjectId!,
+                bookNumbers
+            );
+
+            // Assert - No model means no versification comparison needed
+            Assert.That(result.IsCompatible, Is.True, "Should be compatible when no model project");
+            Assert.That(result.WarningMessage, Is.Null);
+
+            targetScrText.Dispose();
+        }
+
+        #endregion
+
+        #region CAP-011 Contract Tests - Versification Compatibility
+
+        /// <summary>
+        /// Same versifications should be compatible.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        public void CheckVersificationCompatibility_PublicApi_SameVersifications_ReturnsCompatible()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 2, 3 }; // Genesis, Exodus, Leviticus
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert
+            Assert.That(result.IsCompatible, Is.True);
+            Assert.That(result.SourceVersification, Is.EqualTo(result.TargetVersification));
+            Assert.That(result.WarningMessage, Is.Null);
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Empty book selection should return compatible (no canonical books to compare).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        public void CheckVersificationCompatibility_PublicApi_EmptySelection_ReturnsCompatible()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = Array.Empty<int>();
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert
+            Assert.That(result.IsCompatible, Is.True, "Empty selection should be compatible");
+            Assert.That(result.WarningMessage, Is.Null);
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Null book array should be handled gracefully.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        public void CheckVersificationCompatibility_PublicApi_NullBookArray_ReturnsCompatible()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            int[]? nullBookNumbers = null;
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                nullBookNumbers!
+            );
+
+            // Assert
+            Assert.That(result.IsCompatible, Is.True, "Null selection should be treated as empty/compatible");
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Non-canonical books only should return compatible (versification only applies to canonical).
+        /// Per EXT-004: Only checks if any canonical books are selected (Canon.IsCanonical)
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        public void CheckVersificationCompatibility_PublicApi_NonCanonicalBooksOnly_ReturnsCompatible()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 67, 68 }; // Tobit, Judith (non-canonical)
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert
+            Assert.That(result.IsCompatible, Is.True, "Non-canonical books only should be compatible");
+            Assert.That(result.WarningMessage, Is.Null);
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Mixed canonical and non-canonical books should trigger versification check.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Property("ExtractionId", "EXT-004")]
+        public void CheckVersificationCompatibility_PublicApi_MixedBooks_ChecksVersification()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 67 }; // Genesis (canonical), Tobit (non-canonical)
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert - Should check versification due to canonical book
+            Assert.That(result.SourceVersification, Is.Not.Null.And.Not.Empty);
+            Assert.That(result.TargetVersification, Is.Not.Null.And.Not.Empty);
+
+            targetScrText.Dispose();
+        }
+
+        #endregion
+
+        #region CAP-011 Contract Tests - VersificationCheckResult Fields
+
+        /// <summary>
+        /// SourceVersification should be the model's versification.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        public void CheckVersificationCompatibility_PublicApi_SourceVersification_MatchesModel()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1 };
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert
+            Assert.That(
+                result.SourceVersification,
+                Is.EqualTo(_modelScrText.Settings.Versification.Name),
+                "SourceVersification should be the model project's versification"
+            );
+
+            targetScrText.Dispose();
+        }
+
+        /// <summary>
+        /// TargetVersification should be the target's versification.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        public void CheckVersificationCompatibility_PublicApi_TargetVersification_MatchesTarget()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1 };
+
+            // Act
+            var result = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            // Assert
+            Assert.That(
+                result.TargetVersification,
+                Is.EqualTo(targetScrText.Settings.Versification.Name),
+                "TargetVersification should be the target project's versification"
+            );
+
+            targetScrText.Dispose();
+        }
+
+        #endregion
+
+        #region CAP-011 Contract Tests - Delegation to CAP-018
+
+        /// <summary>
+        /// Verifies that the public API delegates to CAP-018 correctly.
+        /// Same behavior should be observed as calling CAP-018 directly.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-011")]
+        [Property("ScenarioId", "TS-071")]
+        [Property("BehaviorId", "BHV-308")]
+        [Description("Public API should produce same result as internal API")]
+        public void CheckVersificationCompatibility_PublicApi_DelegatesToInternalApi()
+        {
+            // Arrange
+            var targetScrText = CreateDummyProject();
+            var targetProjectDetails = CreateProjectDetails(targetScrText);
+            ParatextProjects.FakeAddProject(targetProjectDetails, targetScrText);
+
+            var targetProjectId = targetProjectDetails.Metadata.Id;
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 40 }; // Genesis, Matthew
+
+            // Convert to BookSet for internal API
+            var selectedBooks = new BookSet();
+            foreach (var bookNum in bookNumbers)
+            {
+                selectedBooks.Add(bookNum);
+            }
+
+            // Act - Call both APIs
+            var publicResult = BookValidationService.CheckVersificationCompatibility(
+                targetProjectId,
+                modelProjectId,
+                bookNumbers
+            );
+
+            var internalResult = BookValidationService.CheckVersificationCompatibility(
+                targetScrText,
+                _modelScrText,
+                selectedBooks
+            );
+
+            // Assert - Results should match
+            Assert.That(
+                publicResult.IsCompatible,
+                Is.EqualTo(internalResult.IsCompatible),
+                "Public and internal API should agree on compatibility"
+            );
+            Assert.That(
+                publicResult.SourceVersification,
+                Is.EqualTo(internalResult.SourceVersification),
+                "Public and internal API should report same source versification"
+            );
+            Assert.That(
+                publicResult.TargetVersification,
+                Is.EqualTo(internalResult.TargetVersification),
+                "Public and internal API should report same target versification"
+            );
+
+            targetScrText.Dispose();
+        }
+
+        #endregion
     }
 }

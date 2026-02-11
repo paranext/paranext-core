@@ -239,6 +239,38 @@ internal static class BookValidationService
     }
 
     /// <summary>
+    /// Check versification compatibility between target and model projects (public API taking project IDs).
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: Public API that resolves project IDs to ScrText before delegating to CAP-018
+    /// Maps to: CAP-011, TS-071, BHV-308
+    ///
+    /// EXPLANATION:
+    /// This method is the public API for versification compatibility checking. It:
+    /// 1. Handles null target project ID by returning an error result
+    /// 2. Handles null model project ID by returning compatible (no model = no comparison)
+    /// 3. Handles null/empty book array by treating as compatible (empty selection)
+    /// 4. Resolves the project ID strings to ScrText via LocalParatextProjects
+    /// 5. Converts int[] to BookSet
+    /// 6. Delegates to the internal CheckVersificationCompatibility(ScrText, ScrText, BookSet) method (CAP-018)
+    /// </remarks>
+    /// <param name="targetProjectId">Target project ID string (GUID format)</param>
+    /// <param name="modelProjectId">Model project ID string (GUID format), or null if no model</param>
+    /// <param name="bookNumbers">Books to check (null treated as empty)</param>
+    /// <returns>Versification compatibility result</returns>
+    public static VersificationCheckResult CheckVersificationCompatibility(
+        string targetProjectId,
+        string modelProjectId,
+        int[] bookNumbers
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-011: CheckVersificationCompatibility public API not yet implemented"
+        );
+    }
+
+    /// <summary>
     /// Check if selected books overlap with SBA base project.
     /// </summary>
     /// <remarks>
