@@ -39,9 +39,12 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
+  MARKER_MENU_STRING_KEYS,
+  MarkerMenu,
   Popover,
   PopoverAnchor,
   PopoverContent,
+  PopoverTrigger,
   ScrollGroupSelector,
   SelectMenuItemHandler,
   Spinner,
@@ -82,8 +85,10 @@ import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
+  blockMarkerToBlockNames,
   deepEqualAcrossIframes,
   formatEditorTitle,
+  generateMarkerMenuListItems,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
@@ -100,6 +105,9 @@ const EDITOR_LOAD_DELAY_TIME = 200;
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
+  ...MARKER_MENU_STRING_KEYS,
+  ...Object.values(blockMarkerToBlockNames),
+  '%paragraphMenu_misc_markerDescription%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -434,6 +442,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         },
       }),
     [],
+  );
+
+  const paragraphSwitcherMenuItems = useMemo(
+    () => generateMarkerMenuListItems(editorRef, localizedStrings),
+    [localizedStrings],
   );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
@@ -1287,6 +1300,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [canUndo, setCanUndo] = useState(false);
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [canRedo, setCanRedo] = useState(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [blockMarker, setBlockMarker] = useState<string | undefined>();
 
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
@@ -1327,6 +1342,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           onStateChange={(state) => {
             setCanUndo(state.canUndo);
             setCanRedo(state.canRedo);
+            setBlockMarker(state.blockMarker);
           }}
         />
       </>
@@ -1372,6 +1388,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 >
                   <Redo />
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      className="tw-h-8"
+                      aria-label="Paragraph Selection"
+                      title="Paragraph Selection"
+                      variant="outline"
+                    >
+                      {blockMarker} -{' '}
+                      {blockMarker &&
+                      Object.entries(blockMarkerToBlockNames).find(
+                        ([marker]) => marker === blockMarker,
+                      )
+                        ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                        : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="tw-p-0 tw-w-96">
+                    <MarkerMenu
+                      localizedStrings={localizedStrings}
+                      markerMenuItems={paragraphSwitcherMenuItems}
+                    />
+                  </PopoverContent>
+                </Popover>
               </>
             )}
           </>

@@ -1,4 +1,5 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Ban, LucideIcon } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -34,7 +35,7 @@ export interface MarkerMenuItem {
   /** An optional subtitle for the marker */
   subtitle?: string;
   /** Optional name of icon to use instead of the marker */
-  icon?: ReactNode;
+  icon?: LucideIcon;
   /** Whether the command/marker is deprecated */
   isDeprecated?: boolean;
   /** Whether the command/marker is disallowed for this project */
@@ -52,6 +53,12 @@ export interface MarkerMenuProps {
    * actions
    */
   markerMenuItems: MarkerMenuItem[];
+}
+
+/** Function to format the marker menu icon and size it accordingly */
+function MenuMarkerIcon({ icon, className }: { icon?: LucideIcon; className?: string }) {
+  const IconComponent = icon ?? Ban;
+  return <IconComponent className={className} size={16} />;
 }
 
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
@@ -86,13 +93,15 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
               className="tw-flex tw-gap-2 hover:tw-bg-accent"
               disabled={item.isDisallowed || item.isDeprecated}
               onSelect={item.action}
-              key={`item-${item.title}`}
+              key={`item-${item.marker ?? item.icon?.name}-${item.title.replaceAll(' ', '')}`}
             >
               <div className="tw-w-6">
                 {item.marker ? (
                   <span className="tw-text-xs">{item.marker}</span>
                 ) : (
-                  <div>{item.icon}</div>
+                  <div>
+                    <MenuMarkerIcon icon={item.icon} />
+                  </div>
                 )}
               </div>
               <div>
