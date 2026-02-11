@@ -172,6 +172,244 @@ internal static class BookCreationService
     }
 
     /// <summary>
+    /// Creates books in a project using the specified creation mode.
+    /// </summary>
+    /// <remarks>
+    /// === PORTED FROM PT9 ===
+    /// Source: PT9/Paratext/ToolsMenu/CreateBooksForm.cs:152-198
+    /// Method: CreateBooksForm.cmdOK_Click (book creation section)
+    /// Maps to: EXT-002, CAP-016, BHV-300, BHV-T001, BHV-T002, BHV-T003
+    ///
+    /// EXPLANATION:
+    /// This orchestration method coordinates book creation across multiple capabilities:
+    /// 1. Validate the request (project exists, book numbers valid)
+    /// 2. Check if any books already exist (return error if so)
+    /// 3. Check permissions via CheckAndGrantBookPermissions (CAP-015)
+    /// 4. If BasedOnModel mode:
+    ///    a. Validate model project provided
+    ///    b. Validate model books exist (CAP-017)
+    ///    c. Check versification compatibility (CAP-018)
+    /// 5. For each book: call ScriptureTemplateService.CreateOneBook (CAP-028)
+    /// 6. Return success result with created books
+    /// </remarks>
+    /// <param name="request">Creation request parameters.</param>
+    /// <returns>Operation result with created books.</returns>
+    public static Task<BookOperationResult> CreateBooksAsync(CreateBooksRequest request)
+    {
+        // Validate request
+        if (request == null)
+        {
+            return Task.FromResult(
+                BookOperationResult.ErrorResult(
+                    BookErrorCode.ValidationFailed,
+                    "Request cannot be null"
+                )
+            );
+        }
+
+        if (string.IsNullOrEmpty(request.ProjectId))
+        {
+            return Task.FromResult(
+                BookOperationResult.ErrorResult(
+                    BookErrorCode.ValidationFailed,
+                    "Project ID is required"
+                )
+            );
+        }
+
+        if (request.BookNumbers == null || request.BookNumbers.Length == 0)
+        {
+            return Task.FromResult(
+                BookOperationResult.ErrorResult(
+                    BookErrorCode.ValidationFailed,
+                    "At least one book number is required"
+                )
+            );
+        }
+
+        // Find the target project
+        ScrText? scrText = FindScrText(request.ProjectId);
+        if (scrText == null)
+        {
+            return Task.FromResult(
+                BookOperationResult.ErrorResult(
+                    BookErrorCode.ProjectNotFound,
+                    $"Could not find project with ID '{request.ProjectId}'"
+                )
+            );
+        }
+
+        // Validate book numbers are in valid range
+        foreach (int bookNum in request.BookNumbers)
+        {
+            if (bookNum < FirstBookNum || bookNum > LastBookNum)
+            {
+                return Task.FromResult(
+                    BookOperationResult.ErrorResult(
+                        BookErrorCode.InvalidBookNumber,
+                        $"Book number {bookNum} is not valid (must be {FirstBookNum}-{LastBookNum})"
+                    )
+                );
+            }
+        }
+
+        // Check if any books already exist
+        List<int> existingBooks = [];
+        foreach (int bookNum in request.BookNumbers)
+        {
+            if (scrText.BookPresent(bookNum))
+            {
+                existingBooks.Add(bookNum);
+            }
+        }
+
+        if (existingBooks.Count > 0)
+        {
+            string bookIds = string.Join(", ", existingBooks.Select(b => Canon.BookNumberToId(b)));
+            return Task.FromResult(
+                BookOperationResult.ErrorResultWithFailedBooks(
+                    BookErrorCode.BookAlreadyExists,
+                    $"Book(s) already exist in project: {bookIds}",
+                    existingBooks.ToArray()
+                )
+            );
+        }
+
+        // Check permissions (CAP-015)
+        BookSet selectedBooks = new();
+        foreach (int bookNum in request.BookNumbers)
+        {
+            selectedBooks.Add(bookNum);
+        }
+
+        PermissionResult permissionResult = CheckAndGrantBookPermissions(selectedBooks, scrText);
+        if (!permissionResult.Success)
+        {
+            return Task.FromResult(
+                BookOperationResult.ErrorResultWithFailedBooks(
+                    BookErrorCode.PermissionDenied,
+                    permissionResult.ErrorMessage ?? "Permission denied",
+                    permissionResult.UnauthorizedBooks.ToArray()
+                )
+            );
+        }
+
+        // Collect warnings for model-based creation
+        List<string> warnings = [];
+        ScrText? modelScrText = null;
+
+        // Handle BasedOnModel mode validation
+        if (request.Mode == BookCreationMode.BasedOnModel)
+        {
+            // Validate model project is provided
+            if (string.IsNullOrEmpty(request.ModelProjectId))
+            {
+                return Task.FromResult(
+                    BookOperationResult.ErrorResult(
+                        BookErrorCode.ModelNotSelected,
+                        "Please select a model text"
+                    )
+                );
+            }
+
+            // Find model project
+            modelScrText = FindScrText(request.ModelProjectId);
+            if (modelScrText == null)
+            {
+                return Task.FromResult(
+                    BookOperationResult.ErrorResult(
+                        BookErrorCode.ProjectNotFound,
+                        $"Could not find model project with ID '{request.ModelProjectId}'"
+                    )
+                );
+            }
+
+            // Validate model books exist (CAP-017)
+            ModelValidationResult modelValidation = BookValidationService.ValidateModelBooks(
+                request.BookNumbers,
+                modelScrText
+            );
+            if (!modelValidation.IsValid)
+            {
+                // Add warning for missing books but continue (per PT9 behavior)
+                if (modelValidation.WarningMessage != null)
+                {
+                    warnings.Add(modelValidation.WarningMessage);
+                }
+            }
+
+            // Check versification compatibility (CAP-018)
+            VersificationCheckResult versificationCheck =
+                BookValidationService.CheckVersificationCompatibility(
+                    scrText,
+                    modelScrText,
+                    selectedBooks
+                );
+            if (!versificationCheck.IsCompatible && versificationCheck.WarningMessage != null)
+            {
+                warnings.Add(versificationCheck.WarningMessage);
+            }
+        }
+
+        // Create books using ScriptureTemplateService (CAP-028)
+        List<int> createdBooks = [];
+        int lastBookNum = 0;
+        bool createCV = request.Mode == BookCreationMode.WithCV;
+
+        foreach (int bookNum in request.BookNumbers)
+        {
+            try
+            {
+                bool created = ScriptureTemplateService.CreateOneBook(
+                    scrText,
+                    bookNum,
+                    createCV,
+                    modelScrText
+                );
+
+                if (created)
+                {
+                    createdBooks.Add(bookNum);
+                    lastBookNum = bookNum;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but continue with other books
+                warnings.Add(
+                    $"Failed to create book {Canon.BookNumberToId(bookNum)}: {ex.Message}"
+                );
+            }
+        }
+
+        // Return result
+        if (createdBooks.Count == 0)
+        {
+            return Task.FromResult(
+                BookOperationResult.ErrorResult(
+                    BookErrorCode.ValidationFailed,
+                    "No books were created"
+                )
+            );
+        }
+
+        if (warnings.Count > 0)
+        {
+            return Task.FromResult(
+                BookOperationResult.SuccessResultWithWarnings(
+                    createdBooks.ToArray(),
+                    lastBookNum,
+                    warnings
+                )
+            );
+        }
+
+        return Task.FromResult(
+            BookOperationResult.SuccessResult(createdBooks.ToArray(), lastBookNum)
+        );
+    }
+
+    /// <summary>
     /// Creates BookInfo for a book number.
     /// </summary>
     /// <remarks>

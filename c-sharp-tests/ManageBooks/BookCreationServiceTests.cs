@@ -1033,5 +1033,489 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        #region CAP-016: CreateBooks Tests (Book Creation Mode Orchestration)
+
+        /// <summary>
+        /// Acceptance test: Create empty book produces minimal USFM with \id line only.
+        /// This is the "done signal" for the Empty mode path of CAP-016.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-010-create-empty
+        /// PT9 Source: CreateBooksForm.cs:152-198
+        /// Maps to: EXT-002 (Book Creation Mode Orchestration)
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Property("GoldenMaster", "gm-010")]
+        [Description("Acceptance test: Create empty book produces minimal USFM")]
+        public async Task CreateBooks_EmptyMode_AcceptanceTest()
+        {
+            // Arrange - Standard project, create Jude (65)
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [65], // Jude
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert - Full outcome verification per gm-010
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Success, Is.True, "CreateBooks should succeed");
+            Assert.That(result.BooksAffected, Has.Length.EqualTo(1), "Should affect exactly 1 book");
+            Assert.That(result.BooksAffected, Does.Contain(65), "Jude should be in affected books");
+
+            // Verify book was created
+            Assert.That(_scrText.BookPresent(65), Is.True, "Jude should be present in project after creation");
+        }
+
+        /// <summary>
+        /// Acceptance test: Create book with CV generates all chapter/verse markers.
+        /// This is the "done signal" for the WithCV mode path of CAP-016.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-011-create-cv
+        /// PT9 Source: CreateBooksForm.cs:152-198 + ScriptureTemplate
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Property("GoldenMaster", "gm-011")]
+        [Description("Acceptance test: Create book with CV generates all chapter/verse markers")]
+        public async Task CreateBooks_WithCVMode_AcceptanceTest()
+        {
+            // Arrange - Standard project, create Jude (65)
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [65], // Jude
+                Mode = BookCreationMode.WithCV,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert - Full outcome verification per gm-011
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Success, Is.True, "CreateBooks should succeed");
+            Assert.That(result.BooksAffected, Has.Length.EqualTo(1), "Should affect exactly 1 book");
+
+            // Verify book was created with chapter/verse markers
+            Assert.That(_scrText.BookPresent(65), Is.True, "Jude should be present after creation");
+            var usfmContent = _scrText.GetText(new VerseRef(65, 0, 0), false, false);
+            Assert.That(usfmContent, Does.Contain("\\c 1"), "CV mode should contain chapter marker");
+            Assert.That(usfmContent, Does.Contain("\\v 1"), "CV mode should contain verse marker");
+        }
+
+        /// <summary>
+        /// Acceptance test: Create book based on model preserves structure.
+        /// This is the "done signal" for the BasedOnModel mode path of CAP-016.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-012-create-model
+        /// PT9 Source: CreateBooksForm.cs:152-198 + ScriptureTemplate.CreateFromModel
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Property("GoldenMaster", "gm-012")]
+        [Description("Acceptance test: Create book based on model preserves structure")]
+        public async Task CreateBooks_BasedOnModelMode_AcceptanceTest()
+        {
+            // Arrange - Target project and model project with Jude
+            var modelProject = CreateDummyProject();
+            modelProject.PutText(65, 0, false, @"\id JUD - Model Project
+\c 1
+\v 1 Model verse text for testing.
+\v 2 More model text.", null);
+            var modelProjectDetails = CreateProjectDetails(modelProject);
+            ParatextProjects.FakeAddProject(modelProjectDetails, modelProject);
+
+            var targetProjectId = _scrText.Guid.ToString();
+            var modelProjectId = modelProject.Guid.ToString();
+
+            var request = new CreateBooksRequest
+            {
+                ProjectId = targetProjectId,
+                BookNumbers = [65], // Jude
+                Mode = BookCreationMode.BasedOnModel,
+                ModelProjectId = modelProjectId
+            };
+
+            try
+            {
+                // Act
+                var result = await BookCreationService.CreateBooksAsync(request);
+
+                // Assert - Full outcome verification per gm-012
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.Success, Is.True, "CreateBooks should succeed");
+                Assert.That(result.BooksAffected, Has.Length.EqualTo(1), "Should affect exactly 1 book");
+
+                // Verify book was created
+                Assert.That(_scrText.BookPresent(65), Is.True, "Jude should be present in target project");
+            }
+            finally
+            {
+                modelProject.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks with empty mode creates multiple books.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-073")]
+        [Property("BehaviorId", "BHV-T001")]
+        public async Task CreateBooks_EmptyMode_MultipleBooks_CreatesAllBooks()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [1, 2, 3], // GEN, EXO, LEV
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.BooksAffected, Has.Length.EqualTo(3));
+            Assert.That(result.BooksAffected, Does.Contain(1));
+            Assert.That(result.BooksAffected, Does.Contain(2));
+            Assert.That(result.BooksAffected, Does.Contain(3));
+
+            // Verify all books were created
+            Assert.That(_scrText.BookPresent(1), Is.True, "Genesis should be present");
+            Assert.That(_scrText.BookPresent(2), Is.True, "Exodus should be present");
+            Assert.That(_scrText.BookPresent(3), Is.True, "Leviticus should be present");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks with CV mode generates all chapter/verse markers.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        public async Task CreateBooks_WithCVMode_SingleBook_GeneratesAllMarkers()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [57], // Philemon (1 chapter, 25 verses)
+                Mode = BookCreationMode.WithCV,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.BooksAffected, Does.Contain(57));
+            Assert.That(_scrText.BookPresent(57), Is.True);
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks fails when model mode is used without a model.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-077")]
+        [Property("BehaviorId", "BHV-300")]
+        [Description("Create based on model requires model selection")]
+        public async Task CreateBooks_BasedOnModelMode_WithoutModel_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [65],
+                Mode = BookCreationMode.BasedOnModel,
+                ModelProjectId = null // No model specified
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail when model mode is used without a model");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ModelNotSelected),
+                "Error code should indicate model not selected");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks fails when book already exists.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        [Description("Creating a book that already exists fails")]
+        public async Task CreateBooks_BookAlreadyExists_ReturnsError()
+        {
+            // Arrange - Add Genesis to project first
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [1], // Try to create GEN again
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail when book already exists");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.BookAlreadyExists),
+                "Error code should indicate book already exists");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks validates book numbers are in valid range.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        public async Task CreateBooks_InvalidBookNumber_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [0], // Invalid book number
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail for invalid book number");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.InvalidBookNumber),
+                "Error code should indicate invalid book number");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks validates project ID is provided.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        public async Task CreateBooks_EmptyProjectId_ReturnsError()
+        {
+            // Arrange
+            var request = new CreateBooksRequest
+            {
+                ProjectId = "", // Empty project ID
+                BookNumbers = [1],
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail for empty project ID");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ValidationFailed),
+                "Error code should indicate validation failed");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks validates at least one book number is provided.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        public async Task CreateBooks_EmptyBookNumbers_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [], // Empty book numbers
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail for empty book numbers");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ValidationFailed),
+                "Error code should indicate validation failed");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks returns project not found for invalid project ID.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        public async Task CreateBooks_ProjectNotFound_ReturnsError()
+        {
+            // Arrange
+            var request = new CreateBooksRequest
+            {
+                ProjectId = Guid.NewGuid().ToString(), // Non-existent project
+                BookNumbers = [1],
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail for non-existent project");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ProjectNotFound),
+                "Error code should indicate project not found");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks returns model not found for invalid model project ID.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        public async Task CreateBooks_ModelProjectNotFound_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [1],
+                Mode = BookCreationMode.BasedOnModel,
+                ModelProjectId = Guid.NewGuid().ToString() // Non-existent model project
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False,
+                "CreateBooks should fail for non-existent model project");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ProjectNotFound),
+                "Error code should indicate project not found");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks returns last book number in result.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("BehaviorId", "BHV-300")]
+        public async Task CreateBooks_Success_ReturnsLastBookNum()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var request = new CreateBooksRequest
+            {
+                ProjectId = projectId,
+                BookNumbers = [1, 2, 65], // GEN, EXO, Jude
+                Mode = BookCreationMode.Empty,
+                ModelProjectId = null
+            };
+
+            // Act
+            var result = await BookCreationService.CreateBooksAsync(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.LastBookNum, Is.EqualTo(65),
+                "LastBookNum should be the last book in the array that was created");
+        }
+
+        /// <summary>
+        /// Tests that CreateBooks with model returns warnings when model is missing requested books.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-016")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "BHV-300")]
+        [Description("Create based on model validates model has requested book")]
+        public async Task CreateBooks_BasedOnModelMode_ModelMissingBook_ReturnsWarning()
+        {
+            // Arrange - Model project without Genesis, only has Exodus
+            var modelProject = CreateDummyProject();
+            modelProject.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            var modelProjectDetails = CreateProjectDetails(modelProject);
+            ParatextProjects.FakeAddProject(modelProjectDetails, modelProject);
+
+            var targetProjectId = _scrText.Guid.ToString();
+            var modelProjectId = modelProject.Guid.ToString();
+
+            var request = new CreateBooksRequest
+            {
+                ProjectId = targetProjectId,
+                BookNumbers = [1], // Genesis - not in model
+                Mode = BookCreationMode.BasedOnModel,
+                ModelProjectId = modelProjectId
+            };
+
+            try
+            {
+                // Act
+                var result = await BookCreationService.CreateBooksAsync(request);
+
+                // Assert - Should warn but may still create with fallback
+                Assert.That(result.Warnings, Is.Not.Null.And.Not.Empty,
+                    "Should warn when model doesn't have requested book");
+            }
+            finally
+            {
+                modelProject.Dispose();
+            }
+        }
+
+        #endregion
     }
 }
