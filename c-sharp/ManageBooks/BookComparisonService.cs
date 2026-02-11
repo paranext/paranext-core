@@ -1,13 +1,44 @@
+using Paranext.DataProvider.Projects;
+
 namespace Paranext.DataProvider.ManageBooks;
 
 /// <summary>
 /// Service for book comparison operations.
 /// Provides functionality for comparing books between projects for copy dialog.
 ///
-/// Contains CAP-022 (BookDisplayStyling) and will contain future capabilities.
+/// Contains CAP-022 (BookDisplayStyling) and CAP-013 (GetCompatibleCopyTargets).
 /// </summary>
 internal static class BookComparisonService
 {
+    /// <summary>
+    /// Get compatible copy target projects for a source project.
+    ///
+    /// === CAP-013: GetCompatibleCopyTargets ===
+    /// Filters projects based on source project type compatibility.
+    ///
+    /// Rules (from PT9):
+    /// - INV-007: StudyBible projects can only copy to other StudyBible projects
+    /// - INV-008: SBA (StudyBibleAdditions) projects can only copy to other SBA projects
+    /// - Standard projects can copy to multiple compatible types
+    ///
+    /// Maps to: BHV-552, BHV-553, BHV-554
+    /// Golden Masters: gm-003, gm-004, gm-005
+    /// </summary>
+    /// <param name="sourceProjectId">ID of the source project</param>
+    /// <param name="paratextProjects">Project repository for accessing project metadata</param>
+    /// <returns>Array of compatible target projects (never null)</returns>
+    public static ProjectInfo[] GetCompatibleCopyTargets(
+        string sourceProjectId,
+        LocalParatextProjects paratextProjects
+    )
+    {
+        // TDD RED phase stub - implementation will be added by tdd-implementer
+        throw new NotImplementedException(
+            "CAP-013: GetCompatibleCopyTargets not yet implemented. "
+                + "This stub exists for TDD RED phase - tests should compile but fail."
+        );
+    }
+
     /// <summary>
     /// Determine display style based on comparison state.
     ///

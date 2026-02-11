@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.ManageBooks;
+using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.ManageBooks
 {
@@ -274,6 +275,373 @@ namespace TestParanextDataProvider.ManageBooks
                     $"Dest column should not be both bold and gray for {result}"
                 );
             }
+        }
+
+        #endregion
+
+        #region CAP-013: GetCompatibleCopyTargets - Acceptance Test (Outer Loop)
+
+        /// <summary>
+        /// Acceptance test for CAP-013: GetCompatibleCopyTargets capability.
+        /// This test verifies the complete workflow - when it passes, the capability is complete.
+        ///
+        /// The test calls GetCompatibleCopyTargets with different source project types and verifies
+        /// that only compatible target projects are returned based on INV-007 and INV-008.
+        ///
+        /// Related to gm-003 (Standard), gm-004 (StudyBible), gm-005 (SBA).
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-552")]
+        [Property("GoldenMasterId", "gm-003")]
+        [Description("Acceptance test: GetCompatibleCopyTargets filters projects based on source type compatibility")]
+        public void GetCompatibleCopyTargets_AcceptanceTest()
+        {
+            // Arrange: Create projects of various types
+            SetupProjectsOfVariousTypes();
+
+            // Act: Get compatible targets for Standard project
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _standardProjectId,
+                ParatextProjects
+            );
+
+            // Assert: Standard project should have multiple compatible target types
+            Assert.That(targets, Is.Not.Null);
+            Assert.That(targets.Length, Is.GreaterThan(0), "Standard project should have compatible targets");
+
+            // Should include Standard, Auxiliary, BackTranslation, Daughter, StudyBible types
+            // Should NOT be limited to only Standard
+            var targetTypes = targets.Select(t => t.ProjectType).Distinct().ToList();
+            Assert.That(targetTypes.Count, Is.GreaterThan(1), "Should have multiple compatible types");
+        }
+
+        #endregion
+
+        #region CAP-013: GetCompatibleCopyTargets - Golden Master Tests
+
+        /// <summary>
+        /// gm-003: Standard project shows multiple compatible types in To dropdown.
+        /// From BHV-552: Standard projects can copy to Auxiliary, BackTranslation, Daughter,
+        /// Standard, StudyBible, StudyBibleAdditions, and TransliterationManual types.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-552")]
+        [Property("GoldenMasterId", "gm-003")]
+        [Description("Standard project returns compatible project types (Auxiliary, BackTranslation, etc.)")]
+        public void GetCompatibleCopyTargets_StandardProject_ReturnsCompatibleTypes()
+        {
+            // Arrange: Create Standard source project and various target projects
+            SetupProjectsOfVariousTypes();
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _standardProjectId,
+                ParatextProjects
+            );
+
+            // Assert: Standard can copy to many types per gm-003
+            Assert.That(targets, Is.Not.Null);
+            Assert.That(targets.Length, Is.GreaterThan(0));
+
+            // Verify structure of returned ProjectInfo
+            foreach (var target in targets)
+            {
+                Assert.That(target.ProjectId, Is.Not.Null.And.Not.Empty);
+                Assert.That(target.ProjectName, Is.Not.Null.And.Not.Empty);
+                Assert.That(target.ProjectType, Is.Not.Null.And.Not.Empty);
+            }
+        }
+
+        /// <summary>
+        /// gm-004: StudyBible project shows only StudyBible in To dropdown.
+        /// From INV-007: StudyBible projects can only copy to other StudyBible projects.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-038")]
+        [Property("BehaviorId", "BHV-553")]
+        [Property("InvariantId", "INV-007")]
+        [Property("GoldenMasterId", "gm-004")]
+        [Description("StudyBible project returns only StudyBible projects (INV-007)")]
+        public void GetCompatibleCopyTargets_StudyBibleProject_ReturnsOnlyStudyBible()
+        {
+            // Arrange: Create StudyBible source project and various target projects
+            SetupProjectsOfVariousTypes();
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _studyBibleProjectId,
+                ParatextProjects
+            );
+
+            // Assert: StudyBible can ONLY copy to other StudyBible projects (INV-007)
+            Assert.That(targets, Is.Not.Null);
+            foreach (var target in targets)
+            {
+                Assert.That(
+                    target.ProjectType,
+                    Is.EqualTo("StudyBible"),
+                    $"StudyBible source should only return StudyBible targets, but got {target.ProjectType}"
+                );
+            }
+        }
+
+        /// <summary>
+        /// gm-005: SBA project shows only SBA in To dropdown.
+        /// From INV-008: SBA projects can only copy to other SBA projects.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-039")]
+        [Property("BehaviorId", "BHV-554")]
+        [Property("InvariantId", "INV-008")]
+        [Property("GoldenMasterId", "gm-005")]
+        [Description("SBA project returns only SBA projects (INV-008)")]
+        public void GetCompatibleCopyTargets_SBAProject_ReturnsOnlySBA()
+        {
+            // Arrange: Create SBA source project and various target projects
+            SetupProjectsOfVariousTypes();
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _sbaProjectId,
+                ParatextProjects
+            );
+
+            // Assert: SBA can ONLY copy to other SBA projects (INV-008)
+            Assert.That(targets, Is.Not.Null);
+            foreach (var target in targets)
+            {
+                Assert.That(
+                    target.ProjectType,
+                    Is.EqualTo("StudyBibleAdditions"),
+                    $"SBA source should only return SBA targets, but got {target.ProjectType}"
+                );
+            }
+        }
+
+        #endregion
+
+        #region CAP-013: GetCompatibleCopyTargets - Invariant Tests
+
+        /// <summary>
+        /// INV-007: StudyBible projects can only copy to other StudyBible projects.
+        /// Verifies that no non-StudyBible projects appear in the target list.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("InvariantId", "INV-007")]
+        [Property("BehaviorId", "BHV-553")]
+        [Description("INV-007: StudyBible project must not have non-StudyBible in targets")]
+        public void GetCompatibleCopyTargets_StudyBibleToNonStudyBible_NotAllowed()
+        {
+            // Arrange: Create diverse project types
+            SetupProjectsOfVariousTypes();
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _studyBibleProjectId,
+                ParatextProjects
+            );
+
+            // Assert: No non-StudyBible types should be in the list
+            var nonStudyBibleTargets = targets.Where(
+                t => t.ProjectType != "StudyBible"
+            ).ToList();
+
+            Assert.That(
+                nonStudyBibleTargets,
+                Is.Empty,
+                $"StudyBible source should not allow non-StudyBible targets. Found: {string.Join(", ", nonStudyBibleTargets.Select(t => t.ProjectType))}"
+            );
+        }
+
+        /// <summary>
+        /// INV-008: SBA projects can only copy to other SBA projects.
+        /// Verifies that no non-SBA projects appear in the target list.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("InvariantId", "INV-008")]
+        [Property("BehaviorId", "BHV-554")]
+        [Description("INV-008: SBA project must not have non-SBA in targets")]
+        public void GetCompatibleCopyTargets_SBAToNonSBA_NotAllowed()
+        {
+            // Arrange: Create diverse project types
+            SetupProjectsOfVariousTypes();
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _sbaProjectId,
+                ParatextProjects
+            );
+
+            // Assert: No non-SBA types should be in the list
+            var nonSBATargets = targets.Where(
+                t => t.ProjectType != "StudyBibleAdditions"
+            ).ToList();
+
+            Assert.That(
+                nonSBATargets,
+                Is.Empty,
+                $"SBA source should not allow non-SBA targets. Found: {string.Join(", ", nonSBATargets.Select(t => t.ProjectType))}"
+            );
+        }
+
+        #endregion
+
+        #region CAP-013: GetCompatibleCopyTargets - Edge Case Tests
+
+        /// <summary>
+        /// Edge case: Source project not found should return empty array.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-037")]
+        [Description("Non-existent source project returns empty array")]
+        public void GetCompatibleCopyTargets_SourceNotFound_ReturnsEmptyArray()
+        {
+            // Arrange: No projects added, use valid hex format but non-existent ID
+            var nonExistentProjectId = "0000000000000000000000000000000000000000";
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                nonExistentProjectId,
+                ParatextProjects
+            );
+
+            // Assert: Should return empty array, not null
+            Assert.That(targets, Is.Not.Null);
+            Assert.That(targets, Is.Empty);
+        }
+
+        /// <summary>
+        /// Edge case: No compatible targets available should return empty array.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-038")]
+        [Description("No compatible targets returns empty array")]
+        public void GetCompatibleCopyTargets_NoCompatibleTargets_ReturnsEmptyArray()
+        {
+            // Arrange: Create only a StudyBible project with no other StudyBible projects
+            // For TDD RED phase, we simulate this scenario by creating a project
+            // that the implementation should treat as StudyBible (once implemented).
+            var studyBibleScrText = CreateDummyProject();
+            var studyBibleDetails = CreateProjectDetails(studyBibleScrText);
+            var studyBibleProjectId = studyBibleDetails.Metadata.Id;
+            ParatextProjects.FakeAddProject(studyBibleDetails, studyBibleScrText);
+
+            // Create Standard projects only (not compatible with StudyBible per INV-007)
+            var standardScrText = CreateDummyProject();
+            var standardDetails = CreateProjectDetails(standardScrText);
+            ParatextProjects.FakeAddProject(standardDetails, standardScrText);
+
+            // Act: GetCompatibleCopyTargets for StudyBible - no other StudyBible exists
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                studyBibleProjectId,
+                ParatextProjects
+            );
+
+            // Assert: Empty array since no compatible targets
+            Assert.That(targets, Is.Not.Null);
+            Assert.That(targets, Is.Empty);
+        }
+
+        /// <summary>
+        /// Edge case: Source project should not appear in its own target list.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-013")]
+        [Property("ScenarioId", "TS-037")]
+        [Description("Source project should not be in its own target list")]
+        public void GetCompatibleCopyTargets_SourceProject_ExcludesItself()
+        {
+            // Arrange: Create Standard projects
+            SetupProjectsOfVariousTypes();
+
+            // Act
+            var targets = BookComparisonService.GetCompatibleCopyTargets(
+                _standardProjectId,
+                ParatextProjects
+            );
+
+            // Assert: Source should not be in targets
+            var selfInTargets = targets.Any(t => t.ProjectId == _standardProjectId);
+            Assert.That(
+                selfInTargets,
+                Is.False,
+                "Source project should not appear in its own target list"
+            );
+        }
+
+        #endregion
+
+        #region CAP-013: Helper Methods
+
+        // Store project IDs for test assertions
+        private string _standardProjectId = string.Empty;
+        private string _studyBibleProjectId = string.Empty;
+        private string _sbaProjectId = string.Empty;
+
+        /// <summary>
+        /// Sets up projects of various types for testing GetCompatibleCopyTargets.
+        /// Creates Standard, StudyBible, SBA, and additional projects.
+        /// </summary>
+        private void SetupProjectsOfVariousTypes()
+        {
+            // Standard project 1
+            var standardScrText = CreateDummyProject();
+            var standardDetails = CreateProjectDetails(standardScrText);
+            _standardProjectId = standardDetails.Metadata.Id;
+            ParatextProjects.FakeAddProject(standardDetails, standardScrText);
+
+            // StudyBible project 1
+            // Note: For TDD RED phase, we create standard DummyScrText.
+            // The implementer will need to set the ProjectType correctly.
+            var studyBibleScrText = CreateDummyProject();
+            var studyBibleDetails = CreateProjectDetails(studyBibleScrText);
+            _studyBibleProjectId = studyBibleDetails.Metadata.Id;
+            ParatextProjects.FakeAddProject(studyBibleDetails, studyBibleScrText);
+
+            // SBA project 1
+            // Note: For TDD RED phase, we create standard DummyScrText.
+            // The implementer will need to set the ProjectType correctly.
+            var sbaScrText = CreateDummyProject();
+            var sbaDetails = CreateProjectDetails(sbaScrText);
+            _sbaProjectId = sbaDetails.Metadata.Id;
+            ParatextProjects.FakeAddProject(sbaDetails, sbaScrText);
+
+            // Additional StudyBible project 2 (for target testing)
+            var studyBible2ScrText = CreateDummyProject();
+            var studyBible2Details = CreateProjectDetails(studyBible2ScrText);
+            ParatextProjects.FakeAddProject(studyBible2Details, studyBible2ScrText);
+
+            // Additional SBA project 2 (for target testing)
+            var sba2ScrText = CreateDummyProject();
+            var sba2Details = CreateProjectDetails(sba2ScrText);
+            ParatextProjects.FakeAddProject(sba2Details, sba2ScrText);
+
+            // Additional Standard project 2
+            var standard2ScrText = CreateDummyProject();
+            var standard2Details = CreateProjectDetails(standard2ScrText);
+            ParatextProjects.FakeAddProject(standard2Details, standard2ScrText);
         }
 
         #endregion
