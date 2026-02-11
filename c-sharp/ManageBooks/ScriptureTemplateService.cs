@@ -150,11 +150,7 @@ internal static class ScriptureTemplateService
     /// </remarks>
     public static string CreateCV(ScrText scrText, int bookNum)
     {
-        // Validate null argument
-        if (scrText == null)
-        {
-            throw new ArgumentNullException(nameof(scrText));
-        }
+        ArgumentNullException.ThrowIfNull(scrText);
 
         // Validate book number range
         if (bookNum < FirstBookNum || bookNum > LastBookNum)
@@ -246,11 +242,7 @@ internal static class ScriptureTemplateService
     /// </remarks>
     public static string ExtractTemplate(ScrText modelScrText, int bookNum)
     {
-        // Validate null argument
-        if (modelScrText == null)
-        {
-            throw new ArgumentNullException(nameof(modelScrText));
-        }
+        ArgumentNullException.ThrowIfNull(modelScrText);
 
         // Validate book number range
         if (bookNum < FirstBookNum || bookNum > LastBookNum)
@@ -476,11 +468,7 @@ internal static class ScriptureTemplateService
         // Method: ScriptureTemplate.CreateOneBook()
         // Maps to: EXT-014
 
-        // Validate null argument
-        if (scrText == null)
-        {
-            throw new ArgumentNullException(nameof(scrText));
-        }
+        ArgumentNullException.ThrowIfNull(scrText);
 
         // Validate book number range
         if (bookNum < FirstBookNum || bookNum > LastBookNum)
