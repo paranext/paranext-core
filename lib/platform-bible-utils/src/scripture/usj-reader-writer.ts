@@ -35,6 +35,7 @@ import {
   UsjClosingAttributeMarkerLocation,
   UsjClosingMarkerLocation,
   UsjDocumentLocation,
+  UsjLocation,
   UsjMarkerLocation,
   UsjNodeAndDocumentLocation,
   UsjPropertyValueLocation,
@@ -1180,6 +1181,39 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       verseRef: usfmVerseLocation,
       offset: 0,
     };
+  }
+
+  /**
+   * Type guard to check if a location is a {@link UsjChapterLocation} rather than a
+   * {@link UsjBookLocation} or {@link UsfmVerseLocation}.
+   *
+   * @param location The location to check
+   * @returns `true` if the location is a {@link UsjChapterLocation}
+   */
+  static isUsjChapterLocation(
+    location: UsjLocation | UsfmVerseLocation,
+  ): location is UsjChapterLocation {
+    // Check for UsjVerseRefChapterLocation with documentLocation
+    // Note: UsjVerseRefBookLocation also has verseRef + documentLocation but has
+    // granularity: 'book'. UsjChapterLocation has granularity: 'chapter' or undefined.
+    if (
+      'verseRef' in location &&
+      'documentLocation' in location &&
+      (!location.granularity || location.granularity === 'chapter')
+    ) {
+      return true;
+    }
+
+    // Check for UsjFlatChapterLocation or UsjFlatTextChapterLocation
+    if (
+      'book' in location &&
+      'chapterNum' in location &&
+      ('documentLocation' in location || 'jsonPath' in location)
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   /**

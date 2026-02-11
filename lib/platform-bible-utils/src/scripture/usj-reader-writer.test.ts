@@ -2003,7 +2003,7 @@ describe('isUsjDocumentLocationForTextContent', () => {
         documentLocation: {
           jsonPath: '$.content[0]',
           offset: 5,
-        } as UsjTextContentLocation,
+        },
       };
       expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation)).toBe(false);
     });
@@ -2020,11 +2020,11 @@ describe('isUsjDocumentLocationForTextContent', () => {
 
     test('returns false for string node with UsjMarkerLocation (missing offset)', () => {
       // This tests the edge case where node is string but location doesn't have offset
-      const nodeAndLocation = {
+      const nodeAndLocation: UsjNodeAndDocumentLocation = {
         node: 'some text',
         documentLocation: {
           jsonPath: '$.content[0]',
-        } as UsjMarkerLocation,
+        },
       };
       expect(UsjReaderWriter.isUsjDocumentLocationForTextContent(nodeAndLocation)).toBe(false);
     });
@@ -2129,11 +2129,11 @@ describe('isUsjDocumentLocationForNode', () => {
     test('returns false for string node with non-text-content location', () => {
       // When node is a string, it delegates to isUsjDocumentLocationForTextContent
       // which will return false if location doesn't have offset
-      const nodeAndLocation = {
+      const nodeAndLocation: UsjNodeAndDocumentLocation = {
         node: 'some text',
         documentLocation: {
           jsonPath: '$.content[0]',
-        } as UsjMarkerLocation,
+        },
       };
       expect(UsjReaderWriter.isUsjDocumentLocationForNode(nodeAndLocation)).toBe(false);
     });
