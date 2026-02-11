@@ -4,18 +4,15 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
 
-// === NEW IN PT10 ===
-// Reason: Service layer for manage-books PAPI commands
-// Maps to: CAP-009
-
 /// <summary>
 /// Service providing book management operations.
 /// </summary>
-public static class ManageBooksService
+internal static class ManageBooksService
 {
-    // Book number range: 1-66 canonical, 67-124 non-canonical (including deuterocanon and extras)
+    // Book number range: 1-66 canonical, 67-123 non-canonical (deuterocanon and extras)
+    // Note: Canon API only supports book numbers 1-123; 124 causes errors
     private const int FirstBookNum = 1;
-    private const int LastBookNum = 124;
+    private const int LastBookNum = 123;
     private const int LastCanonicalBookNum = 66;
 
     /// <summary>
@@ -73,9 +70,12 @@ public static class ManageBooksService
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Skip books that cause errors (e.g., invalid book numbers)
+                Console.WriteLine(
+                    $"ManageBooksService: Skipping book {bookNum} due to error: {ex.Message}"
+                );
             }
         }
 
@@ -107,8 +107,11 @@ public static class ManageBooksService
             string bookId = Canon.BookNumberToId(bookNum);
             return !string.IsNullOrEmpty(bookId) ? bookId : $"B{bookNum:D2}";
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine(
+                $"ManageBooksService: Could not get book ID for book {bookNum}: {ex.Message}"
+            );
             return $"B{bookNum:D2}";
         }
     }
@@ -122,8 +125,11 @@ public static class ManageBooksService
         {
             return Canon.BookNumberToEnglishName(bookNum);
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine(
+                $"ManageBooksService: Could not get book name for book {bookNum}: {ex.Message}"
+            );
             return $"Book {bookNum}";
         }
     }
@@ -138,24 +144,32 @@ public static class ManageBooksService
             return null;
         }
 
+        // Try to find by HexId first (most common case)
         try
         {
             HexId hexId = HexId.FromStr(projectId);
             return ScrTextCollection.GetById(hexId);
         }
-        catch
+        catch (Exception ex)
         {
-            // If GetById fails, try to find by iterating
-            try
-            {
-                return ScrTextCollection
-                    .ScrTexts(IncludeProjects.Everything)
-                    .FirstOrDefault(st => st.Guid.ToString() == projectId);
-            }
-            catch
-            {
-                return null;
-            }
+            Console.WriteLine(
+                $"ManageBooksService: Could not find project by HexId '{projectId}': {ex.Message}"
+            );
+        }
+
+        // Fallback: try to find by iterating through all projects
+        try
+        {
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .FirstOrDefault(st => st.Guid.ToString() == projectId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"ManageBooksService: Could not find project by iteration for '{projectId}': {ex.Message}"
+            );
+            return null;
         }
     }
 }
