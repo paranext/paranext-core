@@ -1109,6 +1109,706 @@ namespace TestParanextDataProvider.ManageBooks
 
         #endregion
 
+        #region CAP-028: CreateOneBook Tests
+
+        // ===================================================================
+        // CAP-028: ScriptureTemplateBookCreation
+        // Strategy: Classic TDD - Algorithm extraction requiring incremental discovery
+        //
+        // This capability orchestrates book creation based on the selected mode:
+        // - Empty: Just the \id line with book code and project name
+        // - CV: \id line + chapter/verse markers (delegates to CreateCV - CAP-029)
+        // - Model: Extracts template from model project (delegates to ExtractTemplate - CAP-030)
+        //
+        // PT9 Source: ParatextBase/ScriptureTemplate.cs:45-103
+        // Golden Masters: gm-020-scripture-template-empty, gm-021-scripture-template-cv, gm-022-from-model-project
+        // Extraction: EXT-014 (ScriptureTemplate.CreateOneBook)
+        // Behaviors: BHV-T001, BHV-T002, BHV-T003
+        // Scenarios: TS-060, TS-061, TS-062, TS-073
+        // ===================================================================
+
+        #region CAP-028 Acceptance Tests
+
+        /// <summary>
+        /// Acceptance test for CAP-028: ScriptureTemplateBookCreation (Empty mode).
+        /// This test verifies CreateOneBook produces correct output for empty book creation.
+        /// </summary>
+        /// <remarks>
+        /// Golden master: gm-020-scripture-template-empty
+        /// - Book: Jude (65)
+        /// - Mode: Empty (createCV: false, modelScrText: null)
+        /// - Expected: Only \id line with book code
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Property("ExtractionId", "EXT-014")]
+        [Property("GoldenMaster", "gm-020-scripture-template-empty")]
+        [Description("Acceptance test: CreateOneBook in empty mode produces minimal USFM with \\id line only")]
+        public void CreateOneBook_AcceptanceTest_EmptyMode_ProducesMinimalUSFM()
+        {
+            // Arrange: Use the test project, Jude book number
+            // Empty mode: createCV = false, modelScrText = null
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: false, modelScrText: null);
+
+            // Assert: Should succeed
+            Assert.That(result, Is.True, "CreateOneBook should return true on success");
+
+            // Verify book content was created
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+            Assert.That(bookContent, Is.Not.Null.And.Not.Empty, "Book content should be created");
+
+            // Should contain \id line with correct book code (JUD for Jude)
+            Assert.That(bookContent, Does.Contain(@"\id JUD"), "Book should have \\id JUD marker");
+
+            // Empty mode should NOT have chapter or verse markers
+            Assert.That(bookContent, Does.Not.Contain(@"\c "), "Empty mode should not have chapter markers");
+            Assert.That(bookContent, Does.Not.Contain(@"\v "), "Empty mode should not have verse markers");
+        }
+
+        /// <summary>
+        /// Acceptance test for CAP-028: ScriptureTemplateBookCreation (CV mode).
+        /// This test verifies CreateOneBook produces correct output when creating with CV markers.
+        /// </summary>
+        /// <remarks>
+        /// Golden master: gm-021-scripture-template-cv
+        /// - Book: Jude (65)
+        /// - Mode: CV (createCV: true, modelScrText: null)
+        /// - Expected: \id line + chapter/verse markers from versification
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Property("ExtractionId", "EXT-014")]
+        [Property("GoldenMaster", "gm-021-scripture-template-cv")]
+        [Description("Acceptance test: CreateOneBook in CV mode produces USFM with chapter/verse markers")]
+        public void CreateOneBook_AcceptanceTest_CVMode_ProducesUSFMWithMarkers()
+        {
+            // Arrange: CV mode - createCV = true, modelScrText = null
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: true, modelScrText: null);
+
+            // Assert: Should succeed
+            Assert.That(result, Is.True, "CreateOneBook should return true on success");
+
+            // Verify book content was created
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+            Assert.That(bookContent, Is.Not.Null.And.Not.Empty, "Book content should be created");
+
+            // Should contain \id line
+            Assert.That(bookContent, Does.Contain(@"\id JUD"), "Book should have \\id JUD marker");
+
+            // CV mode should have chapter markers (Jude has 1 chapter)
+            Assert.That(bookContent, Does.Contain(@"\c 1"), "CV mode should have chapter 1 marker");
+
+            // Should have verse markers (Jude has 25 verses)
+            Assert.That(bookContent, Does.Contain(@"\v 1"), "CV mode should have verse markers");
+            Assert.That(bookContent, Does.Contain(@"\v 25"), "CV mode should have verse 25 (last verse in Jude)");
+        }
+
+        /// <summary>
+        /// Acceptance test for CAP-028: ScriptureTemplateBookCreation (Model mode).
+        /// This test verifies CreateOneBook produces correct output when based on a model project.
+        /// </summary>
+        /// <remarks>
+        /// Golden master: gm-022-from-model-project
+        /// - Book: Mark (41)
+        /// - Mode: Model (createCV: false, modelScrText: model project with Mark)
+        /// - Expected: Template structure from model, text content stripped
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Property("ExtractionId", "EXT-014")]
+        [Property("GoldenMaster", "gm-022-from-model-project")]
+        [Description("Acceptance test: CreateOneBook in model mode produces USFM template from model project")]
+        public void CreateOneBook_AcceptanceTest_ModelMode_ProducesTemplateFromModel()
+        {
+            // Arrange: Create a model project with Mark content
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act: Create book based on model (createCV = false, modelScrText = model project)
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, 41, createCV: false, modelScrText: modelScrText);
+
+            // Assert: Should succeed
+            Assert.That(result, Is.True, "CreateOneBook should return true on success");
+
+            // Verify book content was created
+            string bookContent = _scrText.GetText(new VerseRef(41, 0, 0), false, false);
+            Assert.That(bookContent, Is.Not.Null.And.Not.Empty, "Book content should be created");
+
+            // Should contain structural markers from model
+            Assert.That(bookContent, Does.Contain(@"\id MRK"), "Should have book ID marker");
+            Assert.That(bookContent, Does.Contain(@"\c 1"), "Should have chapter markers from model");
+            Assert.That(bookContent, Does.Contain(@"\v 1"), "Should have verse markers from model");
+            Assert.That(bookContent, Does.Contain(@"\p"), "Should have paragraph markers from model");
+            Assert.That(bookContent, Does.Contain(@"\s"), "Should have section markers from model");
+
+            // Should NOT contain actual text content from model
+            Assert.That(bookContent, Does.Not.Contain("beginning of the gospel"), "Should not have verse text");
+            Assert.That(bookContent, Does.Not.Contain("Section Heading"), "Should not have section heading text");
+        }
+
+        #endregion
+
+        #region CAP-028 Golden Master Tests
+
+        /// <summary>
+        /// TS-073: ScriptureTemplate creates empty book.
+        /// Tests empty book creation matches golden master expectations.
+        /// </summary>
+        /// <remarks>
+        /// Golden master: gm-020-scripture-template-empty
+        /// Input: bookNum 65 (Jude), createCV: false, modelScrText: null
+        /// Expected: bookCreated: true, hasIdLine: true, hasChapterMarkers: false
+        /// </remarks>
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-073")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Property("ExtractionId", "EXT-014")]
+        [Property("GoldenMaster", "gm-020-scripture-template-empty")]
+        [Description("TS-073: ScriptureTemplate creates empty book with ID line only")]
+        public void CreateOneBook_EmptyMode_MatchesGoldenMasterStructure()
+        {
+            // Arrange
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: false, modelScrText: null);
+
+            // Assert: Per gm-020 expectations
+            Assert.That(result, Is.True, "bookCreated should be true");
+
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+
+            // hasIdLine: true
+            Assert.That(bookContent, Does.Contain(@"\id"), "hasIdLine should be true");
+
+            // hasChapterMarkers: false
+            Assert.That(bookContent, Does.Not.Contain(@"\c"), "hasChapterMarkers should be false for empty mode");
+
+            // hasVerseMarkers: false
+            Assert.That(bookContent, Does.Not.Contain(@"\v"), "hasVerseMarkers should be false for empty mode");
+        }
+
+        /// <summary>
+        /// TS-060: Create empty book produces minimal USFM.
+        /// </summary>
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Property("ExtractionId", "EXT-014")]
+        [Description("TS-060: Create empty book produces minimal USFM with \\id line only")]
+        public void CreateOneBook_EmptyMode_ProducesMinimalUSFM()
+        {
+            // Arrange
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: false, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+
+            // Should be minimal - just the \id line
+            // Format per PT9: "\id {BOOK} {BookEnglishName} - {ProjectName}" or just "\id {BOOK}"
+            Assert.That(bookContent, Does.StartWith(@"\id JUD"), "Should start with \\id JUD");
+
+            // Verify it's minimal by checking there are no other major markers
+            int markerCount = CountOccurrences(bookContent, @"\");
+            // Allow for \id and possibly project name, but not chapter/verse/paragraph markers
+            Assert.That(markerCount, Is.LessThanOrEqualTo(3), "Empty mode should have minimal markers (just \\id line)");
+        }
+
+        #endregion
+
+        #region CAP-028 Happy Path Tests
+
+        /// <summary>
+        /// Tests CreateOneBook returns true on successful empty book creation.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook returns true on successful empty book creation")]
+        public void CreateOneBook_EmptyMode_ReturnsTrue()
+        {
+            // Arrange
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, GENESIS, createCV: false, modelScrText: null);
+
+            // Assert
+            Assert.That(result, Is.True, "Should return true on successful creation");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook returns true on successful CV book creation.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Description("CreateOneBook returns true on successful CV book creation")]
+        public void CreateOneBook_CVMode_ReturnsTrue()
+        {
+            // Arrange
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, GENESIS, createCV: true, modelScrText: null);
+
+            // Assert
+            Assert.That(result, Is.True, "Should return true on successful creation");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook returns true on successful model-based book creation.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("CreateOneBook returns true on successful model-based book creation")]
+        public void CreateOneBook_ModelMode_ReturnsTrue()
+        {
+            // Arrange
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, 41, createCV: false, modelScrText: modelScrText);
+
+            // Assert
+            Assert.That(result, Is.True, "Should return true on successful creation");
+        }
+
+        /// <summary>
+        /// Tests that CV mode delegates to CreateCV (CAP-029) correctly.
+        /// Verified by checking output structure matches what CreateCV would produce.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Description("CreateOneBook CV mode delegates to CreateCV correctly")]
+        public void CreateOneBook_CVMode_DelegatesToCreateCV()
+        {
+            // Arrange: Get expected CV output directly
+            string expectedCV = ScriptureTemplateService.CreateCV(_scrText, GENESIS);
+
+            // Act: Create book with CV mode
+            ScriptureTemplateService.CreateOneBook(_scrText, GENESIS, createCV: true, modelScrText: null);
+
+            // Assert: Book content should include CV output
+            string bookContent = _scrText.GetText(new VerseRef(GENESIS, 0, 0), false, false);
+
+            // Should have same chapter/verse structure as CreateCV
+            int expectedChapters = CountOccurrences(expectedCV, @"\c ");
+            int actualChapters = CountOccurrences(bookContent, @"\c ");
+            Assert.That(actualChapters, Is.EqualTo(expectedChapters), "Should have same chapter count as CreateCV");
+
+            int expectedVerses = CountOccurrences(expectedCV, @"\v ");
+            int actualVerses = CountOccurrences(bookContent, @"\v ");
+            Assert.That(actualVerses, Is.EqualTo(expectedVerses), "Should have same verse count as CreateCV");
+        }
+
+        /// <summary>
+        /// Tests that model mode delegates to ExtractTemplate (CAP-030) correctly.
+        /// Verified by checking output structure matches what ExtractTemplate would produce.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("CreateOneBook model mode delegates to ExtractTemplate correctly")]
+        public void CreateOneBook_ModelMode_DelegatesToExtractTemplate()
+        {
+            // Arrange: Create model and get expected template directly
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+            string expectedTemplate = ScriptureTemplateService.ExtractTemplate(modelScrText, 41);
+
+            // Act: Create book with model mode
+            ScriptureTemplateService.CreateOneBook(_scrText, 41, createCV: false, modelScrText: modelScrText);
+
+            // Assert: Book content should include template output
+            string bookContent = _scrText.GetText(new VerseRef(41, 0, 0), false, false);
+
+            // Should have structural markers from template
+            Assert.That(bookContent, Does.Contain(@"\c 1"), "Should have chapter markers from template");
+            Assert.That(bookContent, Does.Contain(@"\c 2"), "Should have all chapter markers from template");
+            Assert.That(bookContent, Does.Contain(@"\s"), "Should have section markers from template");
+
+            // Content should be stripped (same as ExtractTemplate)
+            Assert.That(bookContent, Does.Not.Contain("beginning of the gospel"), "Should not have verse text");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook for multi-chapter book (Genesis) in empty mode.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook creates empty book for multi-chapter book")]
+        public void CreateOneBook_EmptyMode_ForGenesis_CreatesEmptyBook()
+        {
+            // Arrange
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, GENESIS, createCV: false, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(GENESIS, 0, 0), false, false);
+            Assert.That(bookContent, Does.Contain(@"\id GEN"), "Should have Genesis ID marker");
+            Assert.That(bookContent, Does.Not.Contain(@"\c"), "Empty mode should not have chapter markers");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook for multi-chapter book (Genesis) in CV mode.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Description("CreateOneBook CV mode creates all chapters for multi-chapter book")]
+        public void CreateOneBook_CVMode_ForGenesis_Creates50Chapters()
+        {
+            // Arrange
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, GENESIS, createCV: true, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(GENESIS, 0, 0), false, false);
+            int chapterCount = CountOccurrences(bookContent, @"\c ");
+            Assert.That(chapterCount, Is.EqualTo(50), "Genesis should have 50 chapters");
+        }
+
+        #endregion
+
+        #region CAP-028 ID Line Format Tests
+
+        /// <summary>
+        /// Tests that the \id line contains the correct 3-letter book code.
+        /// Per PT9 ScriptureTemplate.cs:67-68, format is "\id {BOOK}"
+        /// </summary>
+        [TestCase(GENESIS, "GEN", TestName = "Genesis has code GEN")]
+        [TestCase(EXODUS, "EXO", TestName = "Exodus has code EXO")]
+        [TestCase(PSALMS, "PSA", TestName = "Psalms has code PSA")]
+        [TestCase(MATTHEW, "MAT", TestName = "Matthew has code MAT")]
+        [TestCase(JUDE, "JUD", TestName = "Jude has code JUD")]
+        [TestCase(REVELATION, "REV", TestName = "Revelation has code REV")]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook uses correct 3-letter book code in \\id line")]
+        public void CreateOneBook_EmptyMode_UsesCorrectBookCode(int bookNum, string expectedCode)
+        {
+            // Arrange
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, bookNum, createCV: false, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(bookNum, 0, 0), false, false);
+            Assert.That(bookContent, Does.Contain($@"\id {expectedCode}"), $"Should contain \\id {expectedCode}");
+        }
+
+        /// <summary>
+        /// Tests that the \id line starts the book content.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-060")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook starts content with \\id line")]
+        public void CreateOneBook_EmptyMode_StartsWithIdLine()
+        {
+            // Arrange
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: false, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+            string trimmed = bookContent.TrimStart();
+            Assert.That(trimmed, Does.StartWith(@"\id"), "Book content should start with \\id marker");
+        }
+
+        #endregion
+
+        #region CAP-028 Error Cases
+
+        /// <summary>
+        /// Tests CreateOneBook throws ArgumentNullException for null ScrText.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-073")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook throws ArgumentNullException for null ScrText")]
+        public void CreateOneBook_WithNullScrText_ThrowsArgumentNullException()
+        {
+            // Arrange
+            ScrText? nullScrText = null;
+
+            // Act & Assert
+            Assert.That(
+                () => ScriptureTemplateService.CreateOneBook(nullScrText!, JUDE, createCV: false, modelScrText: null),
+                Throws.TypeOf<ArgumentNullException>()
+            );
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook handles invalid book number (0).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-073")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook throws for invalid book number 0")]
+        public void CreateOneBook_WithBookNumberZero_Throws()
+        {
+            // Arrange
+            const int invalidBookNum = 0;
+
+            // Act & Assert
+            Assert.That(
+                () => ScriptureTemplateService.CreateOneBook(_scrText, invalidBookNum, createCV: false, modelScrText: null),
+                Throws.TypeOf<ArgumentException>()
+                    .Or.TypeOf<ArgumentOutOfRangeException>()
+            );
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook handles negative book number.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-073")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook throws for negative book number")]
+        public void CreateOneBook_WithNegativeBookNumber_Throws()
+        {
+            // Arrange
+            const int negativeBookNum = -1;
+
+            // Act & Assert
+            Assert.That(
+                () => ScriptureTemplateService.CreateOneBook(_scrText, negativeBookNum, createCV: false, modelScrText: null),
+                Throws.TypeOf<ArgumentException>()
+                    .Or.TypeOf<ArgumentOutOfRangeException>()
+            );
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook handles book number beyond valid range.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-073")]
+        [Property("BehaviorId", "BHV-T001")]
+        [Description("CreateOneBook throws for book number beyond valid range")]
+        public void CreateOneBook_WithBookNumberBeyondRange_Throws()
+        {
+            // Arrange
+            const int invalidBookNum = 999;
+
+            // Act & Assert
+            Assert.That(
+                () => ScriptureTemplateService.CreateOneBook(_scrText, invalidBookNum, createCV: false, modelScrText: null),
+                Throws.TypeOf<ArgumentException>()
+                    .Or.TypeOf<ArgumentOutOfRangeException>()
+            );
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook in model mode throws when model ScrText is null but mode expects it.
+        /// Note: The method signature allows null modelScrText for empty/CV modes, but if we expect
+        /// model mode behavior and pass null, we should get empty mode behavior (not an exception).
+        /// This test documents the expected behavior.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("CreateOneBook with null modelScrText falls back to empty mode (not model mode)")]
+        public void CreateOneBook_WithNullModelScrText_FallsBackToEmptyMode()
+        {
+            // Arrange: createCV = false, modelScrText = null -> should be empty mode
+            // Not an error, just falls back to empty mode behavior
+
+            // Act
+            bool result = ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: false, modelScrText: null);
+
+            // Assert: Should succeed with empty mode behavior
+            Assert.That(result, Is.True, "Should return true for empty mode");
+
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+            Assert.That(bookContent, Does.Contain(@"\id JUD"), "Should have ID line");
+            Assert.That(bookContent, Does.Not.Contain(@"\c"), "Empty mode should not have chapters");
+        }
+
+        #endregion
+
+        #region CAP-028 Edge Cases
+
+        /// <summary>
+        /// Tests CreateOneBook works for single-chapter book (Jude).
+        /// </summary>
+        [Test]
+        [Category("EdgeCase")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Description("CreateOneBook CV mode works for single-chapter book")]
+        public void CreateOneBook_CVMode_ForSingleChapterBook_Works()
+        {
+            // Arrange: Jude has 1 chapter
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: true, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+            int chapterCount = CountOccurrences(bookContent, @"\c ");
+            Assert.That(chapterCount, Is.EqualTo(1), "Jude should have exactly 1 chapter");
+            Assert.That(bookContent, Does.Not.Contain(@"\c 2"), "Should not have chapter 2");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook works for Psalms (150 chapters).
+        /// </summary>
+        [Test]
+        [Category("EdgeCase")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Description("CreateOneBook CV mode works for large chapter count (Psalms)")]
+        public void CreateOneBook_CVMode_ForPsalms_Creates150Chapters()
+        {
+            // Arrange: Psalms has 150 chapters
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, PSALMS, createCV: true, modelScrText: null);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(PSALMS, 0, 0), false, false);
+            int chapterCount = CountOccurrences(bookContent, @"\c ");
+            Assert.That(chapterCount, Is.EqualTo(150), "Psalms should have 150 chapters");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook model mode with single-chapter model book.
+        /// </summary>
+        [Test]
+        [Category("EdgeCase")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("CreateOneBook model mode works with single-chapter model")]
+        public void CreateOneBook_ModelMode_WithSingleChapterModel_Works()
+        {
+            // Arrange: Create model with Jude (single chapter)
+            var modelScrText = CreateModelScrTextWithBook(JUDE, ModelUsfmSingleChapter);
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: false, modelScrText: modelScrText);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+            Assert.That(bookContent, Does.Contain(@"\id JUD"), "Should have ID marker");
+            Assert.That(bookContent, Does.Contain(@"\c 1"), "Should have chapter 1 from model");
+            Assert.That(bookContent, Does.Not.Contain("servant of Jesus Christ"), "Should not have verse text");
+        }
+
+        /// <summary>
+        /// Tests CreateOneBook model mode when model book has complex formatting.
+        /// </summary>
+        [Test]
+        [Category("EdgeCase")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-062")]
+        [Property("BehaviorId", "BHV-T003")]
+        [Description("CreateOneBook model mode handles complex formatting in model")]
+        public void CreateOneBook_ModelMode_WithComplexModel_StripsFormatting()
+        {
+            // Arrange: Create model with complex formatting (character styles, footnotes)
+            var modelScrText = CreateModelScrTextWithBook(GENESIS, ModelUsfmComplexFormatting);
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, GENESIS, createCV: false, modelScrText: modelScrText);
+
+            // Assert
+            string bookContent = _scrText.GetText(new VerseRef(GENESIS, 0, 0), false, false);
+
+            // Character styles and footnotes should be stripped (per ExtractTemplate behavior)
+            Assert.That(bookContent, Does.Not.Contain(@"\nd"), "Should strip character styles");
+            Assert.That(bookContent, Does.Not.Contain(@"\f"), "Should strip footnotes");
+            Assert.That(bookContent, Does.Not.Contain("Lord"), "Should strip character style content");
+        }
+
+        /// <summary>
+        /// Tests that createCV flag takes precedence over modelScrText presence.
+        /// When createCV is true, it should use CV mode even if modelScrText is provided.
+        /// </summary>
+        [Test]
+        [Category("EdgeCase")]
+        [Property("CapabilityId", "CAP-028")]
+        [Property("ScenarioId", "TS-061")]
+        [Property("BehaviorId", "BHV-T002")]
+        [Description("CreateOneBook: createCV=true takes precedence over model mode")]
+        public void CreateOneBook_CreateCVTrueWithModel_UsesCVMode()
+        {
+            // Arrange: Both createCV=true and modelScrText provided
+            // Per PT9 logic, createCV should take precedence
+            var modelScrText = CreateModelScrTextWithBook(41, ModelUsfmWithContent);
+
+            // Act
+            ScriptureTemplateService.CreateOneBook(_scrText, JUDE, createCV: true, modelScrText: modelScrText);
+
+            // Assert: Should use CV mode, not model mode
+            string bookContent = _scrText.GetText(new VerseRef(JUDE, 0, 0), false, false);
+
+            // CV mode for Jude: 1 chapter, 25 verses
+            int chapterCount = CountOccurrences(bookContent, @"\c ");
+            Assert.That(chapterCount, Is.EqualTo(1), "Should use CV mode (1 chapter for Jude)");
+
+            // Should NOT have model-specific markers (like \s from the model Mark content)
+            // Note: CV mode generates clean markers, not model-derived structure
+            int verseCount = CountOccurrences(bookContent, @"\v ");
+            Assert.That(verseCount, Is.EqualTo(25), "Should have 25 verses from versification (CV mode)");
+        }
+
+        #endregion
+
+        #endregion
+
         #region Helper Methods
 
         /// <summary>

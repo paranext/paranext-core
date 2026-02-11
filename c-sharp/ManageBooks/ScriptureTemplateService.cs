@@ -437,4 +437,41 @@ internal static class ScriptureTemplateService
     /// Checks if the marker is a structural marker that should be preserved.
     /// </summary>
     private static bool IsStructuralMarker(string marker) => s_structuralMarkers.Contains(marker);
+
+    /// <summary>
+    /// Creates a new book in the project using the specified creation mode.
+    /// </summary>
+    /// <param name="scrText">The project to create the book in.</param>
+    /// <param name="bookNum">The canonical book number (1-based, e.g., 65 for Jude).</param>
+    /// <param name="createCV">If true, creates chapter/verse markers; if false, creates empty book or uses model.</param>
+    /// <param name="modelScrText">Optional model project to extract template from. If provided and createCV is false, uses model mode.</param>
+    /// <returns>True if the book was created successfully, false otherwise.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when scrText is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when bookNum is invalid.</exception>
+    /// <remarks>
+    /// === CAP-028: ScriptureTemplateBookCreation ===
+    /// PT9 Source: ParatextBase/ScriptureTemplate.cs:45-103
+    /// Maps to: EXT-014, BHV-T001, BHV-T002, BHV-T003
+    ///
+    /// Mode selection:
+    /// - If createCV is true: Creates book with chapter/verse markers (delegates to CreateCV)
+    /// - If modelScrText is not null: Creates book using template from model (delegates to ExtractTemplate)
+    /// - Otherwise: Creates empty book with just \id line
+    ///
+    /// Book creation process:
+    /// 1. Check if book is creatable (ScrText.Creatable)
+    /// 2. Generate content based on mode
+    /// 3. Write content using ScrText.PutText
+    /// 4. Return true on success
+    /// </remarks>
+    public static bool CreateOneBook(
+        ScrText scrText,
+        int bookNum,
+        bool createCV,
+        ScrText? modelScrText
+    )
+    {
+        // CAP-028: CreateOneBook not yet implemented - RED phase
+        throw new NotImplementedException("CAP-028: CreateOneBook not yet implemented - RED phase");
+    }
 }
