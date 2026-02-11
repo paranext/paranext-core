@@ -471,7 +471,64 @@ internal static class ScriptureTemplateService
         ScrText? modelScrText
     )
     {
-        // CAP-028: CreateOneBook not yet implemented - RED phase
-        throw new NotImplementedException("CAP-028: CreateOneBook not yet implemented - RED phase");
+        // === PORTED FROM PT9 ===
+        // Source: PT9/ParatextBase/ScriptureTemplate.cs:45-103
+        // Method: ScriptureTemplate.CreateOneBook()
+        // Maps to: EXT-014
+
+        // Validate null argument
+        if (scrText == null)
+        {
+            throw new ArgumentNullException(nameof(scrText));
+        }
+
+        // Validate book number range
+        if (bookNum < FirstBookNum || bookNum > LastBookNum)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(bookNum),
+                bookNum,
+                $"Book number must be between {FirstBookNum} and {LastBookNum}."
+            );
+        }
+
+        // Get the 3-letter book code for the \id line
+        string bookCode = Canon.BookNumberToId(bookNum);
+        if (string.IsNullOrEmpty(bookCode))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(bookNum),
+                bookNum,
+                $"Cannot determine book code for book number {bookNum}."
+            );
+        }
+
+        // Determine the mode and generate content
+        string content;
+
+        if (createCV)
+        {
+            // CV mode: Generate chapter/verse markers using CreateCV (CAP-029)
+            // Then prepend the \id line
+            string cvContent = CreateCV(scrText, bookNum);
+            content = $"\\id {bookCode}\r\n{cvContent}";
+        }
+        else if (modelScrText != null)
+        {
+            // Model mode: Extract template from model project using ExtractTemplate (CAP-030)
+            // The ExtractTemplate already includes the \id line
+            content = ExtractTemplate(modelScrText, bookNum);
+        }
+        else
+        {
+            // Empty mode: Just the \id line
+            content = $"\\id {bookCode}\r\n";
+        }
+
+        // Write the content to the project
+        // PutText parameters: bookNum, chapterNum (0 = whole book), doMapOut, text, writer (null)
+        scrText.PutText(bookNum, 0, false, content, null);
+
+        return true;
     }
 }
