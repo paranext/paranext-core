@@ -99,6 +99,12 @@ export class ScriptureFinderProjectDataProviderEngine
   /** Mutex map to prevent concurrent fetches of the same book/chapter data */
   readonly #readerWriterMutexMap = new MutexMap();
 
+  /**
+   * Monotonically increasing version number incremented on every cache invalidation. Used to detect
+   * when the cache was cleared during an in-flight USX fetch.
+   */
+  #cacheVersion = 0;
+
   /** Promise for the book USX subscription unsubscriber */
   #bookUSXUnsubscriberPromise: Promise<UnsubscriberAsync>;
 
@@ -120,11 +126,7 @@ export class ScriptureFinderProjectDataProviderEngine
       // here because we're listening for all updates
       { book: 'GEN', chapterNum: 1, verseNum: 1 },
       () => {
-        // Clear the entire book cache when any book changes
-        // A more sophisticated approach could track which book changed
-        this.#bookCache.clear();
-        // Also clear chapter cache since chapter data derives from book data
-        this.#chapterCache.clear();
+        this.#invalidateCaches();
       },
       { whichUpdates: '*', retrieveDataImmediately: false },
     );
@@ -147,11 +149,7 @@ export class ScriptureFinderProjectDataProviderEngine
       // here because we're listening for all updates
       { book: 'GEN', chapterNum: 1, verseNum: 1 },
       () => {
-        // Clear the entire chapter cache when any chapter changes
-        // A more sophisticated approach could track which chapter changed
-        this.#chapterCache.clear();
-        // Also clear book cache since book data includes chapter data
-        this.#bookCache.clear();
+        this.#invalidateCaches();
       },
       { whichUpdates: '*', retrieveDataImmediately: false },
     );
@@ -278,6 +276,16 @@ export class ScriptureFinderProjectDataProviderEngine
           this.#convertToUsfmVerseRefVerseLocation(range.end),
         ]);
 
+        // Skip no-op ranges: same start/end position with a falsy replacement string
+        if (
+          !replacements[i] &&
+          startLocation.verseRef.book === endLocation.verseRef.book &&
+          startLocation.verseRef.chapterNum === endLocation.verseRef.chapterNum &&
+          startLocation.verseRef.verseNum === endLocation.verseRef.verseNum &&
+          (startLocation.offset ?? 0) === (endLocation.offset ?? 0)
+        )
+          return;
+
         // Validate both endpoints are in the same book
         if (startLocation.verseRef.book !== endLocation.verseRef.book) {
           throw new Error(
@@ -328,6 +336,7 @@ export class ScriptureFinderProjectDataProviderEngine
 
         // Perform string replacements in reverse index order
         let modifiedUsfm = usjReaderWriter.toUsfm();
+        const originalUsfm = modifiedUsfm;
         rangesWithIndices.forEach((rangeWithIndex) => {
           const replacement = replacements[rangeWithIndex.originalIndex];
           modifiedUsfm =
@@ -335,6 +344,9 @@ export class ScriptureFinderProjectDataProviderEngine
             replacement +
             modifiedUsfm.substring(rangeWithIndex.endIndex);
         });
+
+        // Only write if the USFM was actually changed
+        if (modifiedUsfm === originalUsfm) return;
 
         // Set up the USFM to be written for this book/chapter
         pendingWrites.push({
@@ -481,6 +493,17 @@ export class ScriptureFinderProjectDataProviderEngine
   }
 
   /**
+   * Invalidates all cached reader writers. Clears both caches and increments the version counter so
+   * any in-flight USX fetch in {@link #getOrCreateCachedReaderWriter} can detect the invalidation
+   * and retry.
+   */
+  #invalidateCaches(): void {
+    this.#cacheVersion += 1;
+    this.#bookCache.clear();
+    this.#chapterCache.clear();
+  }
+
+  /**
    * Gets or creates a cached UsjReaderWriter for the specified book/chapter.
    *
    * If no chapter is specified, returns the book-level reader writer. If a chapter is specified,
@@ -494,6 +517,11 @@ export class ScriptureFinderProjectDataProviderEngine
     // Determine cache key and use mutex to prevent concurrent fetches for the same scope
     const isChapterLevel = chapter !== undefined;
     const cacheKey = isChapterLevel ? `${bookId}:${chapter}` : bookId;
+
+    // If the cache is invalidated while we're fetching USX, retry up to this many times.
+    // The retried USX is known to be out-of-date when the cache is cleared during the final
+    // retry, but retrying indefinitely could cause an infinite loop. We can improve later.
+    const MAX_RETRIES = 3;
 
     return this.#readerWriterMutexMap.get(cacheKey).runExclusive(async () => {
       const cache = isChapterLevel ? this.#chapterCache : this.#bookCache;
@@ -509,24 +537,51 @@ export class ScriptureFinderProjectDataProviderEngine
         verseNum: 0,
       };
 
-      // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of asking
-      // USJ PDPs for the data because of the following layering PDP wait bug. Turtles all the way
-      // down. https://paratextstudio.atlassian.net/browse/PT-3233
-      const usx = isChapterLevel
-        ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
-        : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-      if (!usx)
-        throw new Error(
-          `No scripture found for: ${JSON.stringify({ bookId, chapter: chapter ?? 'entire book' })}`,
-        );
+      // We intentionally await inside this loop to retry fetching USX when the cache is
+      // invalidated during a fetch. The loop is sequential by design.
+      /* eslint-disable no-await-in-loop */
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const versionBeforeFetch = this.#cacheVersion;
 
-      const scripture: Usj | undefined = correctUsjVersion(usxStringToUsj(usx));
-      const usjReaderWriter = new UsjReaderWriter(scripture, {
-        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-      });
+        // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of
+        // asking USJ PDPs for the data because of the following layering PDP wait bug. Turtles
+        // all the way down. https://paratextstudio.atlassian.net/browse/PT-3233
+        const usx = isChapterLevel
+          ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
+          : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
+        if (!usx)
+          throw new Error(
+            `No scripture found for: ${JSON.stringify({ bookId, chapter: chapter ?? 'entire book' })}`,
+          );
 
-      cache.set(cacheKey, usjReaderWriter);
-      return usjReaderWriter;
+        // If the cache was invalidated during the fetch, the data we just got may be stale.
+        // The retried USX is known to be out-of-date when this happens on the final retry, but
+        // retrying indefinitely could cause an infinite loop. We can improve later.
+        if (this.#cacheVersion !== versionBeforeFetch) {
+          if (attempt === MAX_RETRIES)
+            throw new Error(
+              `Cache was invalidated ${MAX_RETRIES + 1} times while fetching USX for ` +
+                `${cacheKey}. The fetched data is known to be out-of-date, but retrying ` +
+                'indefinitely could cause an infinite loop. Consider improving the retry strategy.',
+            );
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+        /* eslint-enable no-await-in-loop */
+
+        const scripture: Usj | undefined = correctUsjVersion(usxStringToUsj(usx));
+        const usjReaderWriter = new UsjReaderWriter(scripture, {
+          markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+        });
+
+        cache.set(cacheKey, usjReaderWriter);
+        return usjReaderWriter;
+      }
+
+      // Unreachable: the loop always returns or throws, but TypeScript needs a return
+      throw new Error(
+        `Unexpected: retry loop exited without returning or throwing for ${cacheKey}`,
+      );
     });
   }
 }
