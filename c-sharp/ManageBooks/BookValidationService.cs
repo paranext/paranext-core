@@ -151,4 +151,42 @@ internal static class BookValidationService
             TargetVersification: targetVersification
         );
     }
+
+    /// <summary>
+    /// Check if selected books overlap with SBA base project.
+    /// </summary>
+    /// <remarks>
+    /// === STUB FOR TDD RED PHASE ===
+    /// Source: PT9/ParatextBase/CommonForms/BookChooserForm.cs:173-206
+    /// Method: BookChooserForm.UpdateState
+    /// Maps to: EXT-013, CAP-027, TS-068, BHV-314, BHV-T016
+    ///
+    /// EXPLANATION:
+    /// This method checks if an SBA (Study Bible Additions) project has selected
+    /// books that don't exist in its base project. SBA projects add content to
+    /// a base project, so creating books that don't exist in the base is unusual
+    /// and warrants a warning.
+    ///
+    /// The algorithm is:
+    /// 1. Check if the project is an SBA project (TranslationInfo.Type.IsStudyBibleAdditions)
+    /// 2. If not SBA: return no warning
+    /// 3. If SBA: get base project from TranslationInfo.BaseProjectGuid
+    /// 4. Compare selected books against base project's BooksPresentSet
+    /// 5. If any selected books are NOT in base: return warning with list
+    /// </remarks>
+    /// <param name="scrText">Project to check (may or may not be SBA)</param>
+    /// <param name="selectedBooks">Books selected for creation</param>
+    /// <returns>Warning result indicating if books are missing from base</returns>
+    public static SBAWarningResult CheckSBABaseProjectOverlap(
+        ScrText scrText,
+        BookSet selectedBooks
+    )
+    {
+        // TODO: Implement in GREEN phase
+        // This stub exists so tests compile but fail (TDD RED phase)
+        throw new NotImplementedException(
+            "CAP-027: CheckSBABaseProjectOverlap not yet implemented. "
+                + "TDD RED phase - tests should compile but fail."
+        );
+    }
 }
