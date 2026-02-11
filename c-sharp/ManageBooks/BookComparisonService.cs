@@ -146,45 +146,20 @@ internal static class BookComparisonService
             bool sourceHasBook = IsBookPresent(sourceScrText, bookNum);
             bool destHasBook = IsBookPresent(destScrText, bookNum);
 
-            DateTime? sourceModified = null;
-            DateTime? destModified = null;
-            ComparisonResult comparison;
-
-            if (sourceHasBook)
-            {
-                sourceModified = GetBookModificationDate(sourceScrText, bookNum);
-            }
-
-            if (destHasBook)
-            {
-                destModified = GetBookModificationDate(destScrText, bookNum);
-            }
+            DateTime? sourceModified = sourceHasBook
+                ? GetBookModificationDate(sourceScrText, bookNum)
+                : null;
+            DateTime? destModified = destHasBook
+                ? GetBookModificationDate(destScrText, bookNum)
+                : null;
 
             // Determine comparison state
-            if (sourceHasBook && destHasBook)
-            {
-                // Both have the book - compare dates
-                if (sourceModified > destModified)
-                {
-                    comparison = ComparisonResult.SourceNewer;
-                }
-                else if (destModified > sourceModified)
-                {
-                    comparison = ComparisonResult.DestNewer;
-                }
-                else
-                {
-                    comparison = ComparisonResult.Same;
-                }
-            }
-            else if (sourceHasBook)
-            {
-                comparison = ComparisonResult.OnlyInSource;
-            }
-            else
-            {
-                comparison = ComparisonResult.OnlyInDest;
-            }
+            var comparison = DetermineComparisonResult(
+                sourceHasBook,
+                destHasBook,
+                sourceModified,
+                destModified
+            );
 
             // Default selection: select if source is newer or only in source (per gm-023)
             bool defaultSelected =
@@ -207,6 +182,37 @@ internal static class BookComparisonService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Determines the comparison result based on book presence and modification dates.
+    /// </summary>
+    /// <param name="sourceHasBook">Whether source project has the book.</param>
+    /// <param name="destHasBook">Whether destination project has the book.</param>
+    /// <param name="sourceModified">Source file modification date (null if not present).</param>
+    /// <param name="destModified">Destination file modification date (null if not present).</param>
+    /// <returns>The comparison result for the book.</returns>
+    private static ComparisonResult DetermineComparisonResult(
+        bool sourceHasBook,
+        bool destHasBook,
+        DateTime? sourceModified,
+        DateTime? destModified
+    )
+    {
+        if (sourceHasBook && destHasBook)
+        {
+            // Both have the book - compare dates
+            if (sourceModified > destModified)
+                return ComparisonResult.SourceNewer;
+            if (destModified > sourceModified)
+                return ComparisonResult.DestNewer;
+            return ComparisonResult.Same;
+        }
+
+        if (sourceHasBook)
+            return ComparisonResult.OnlyInSource;
+
+        return ComparisonResult.OnlyInDest;
     }
 
     /// <summary>
