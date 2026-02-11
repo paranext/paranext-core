@@ -1283,7 +1283,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       return ids;
     }, []);
-  }, []);
+  }, [booksPresent]);
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
