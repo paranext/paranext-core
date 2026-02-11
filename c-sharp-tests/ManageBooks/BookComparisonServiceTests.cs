@@ -540,9 +540,8 @@ namespace TestParanextDataProvider.ManageBooks
         public void GetCompatibleCopyTargets_NoCompatibleTargets_ReturnsEmptyArray()
         {
             // Arrange: Create only a StudyBible project with no other StudyBible projects
-            // For TDD RED phase, we simulate this scenario by creating a project
-            // that the implementation should treat as StudyBible (once implemented).
-            var studyBibleScrText = CreateDummyProject();
+            // Uses DummyStudyBibleScrText which sets ProjectType.StudyBible
+            var studyBibleScrText = new DummyStudyBibleScrText();
             var studyBibleDetails = CreateProjectDetails(studyBibleScrText);
             var studyBibleProjectId = studyBibleDetails.Metadata.Id;
             ParatextProjects.FakeAddProject(studyBibleDetails, studyBibleScrText);
@@ -606,35 +605,38 @@ namespace TestParanextDataProvider.ManageBooks
         /// </summary>
         private void SetupProjectsOfVariousTypes()
         {
-            // Standard project 1
+            // Standard project 1 - uses default DummyScrText (Standard type by default)
             var standardScrText = CreateDummyProject();
             var standardDetails = CreateProjectDetails(standardScrText);
             _standardProjectId = standardDetails.Metadata.Id;
             ParatextProjects.FakeAddProject(standardDetails, standardScrText);
 
-            // StudyBible project 1
-            // Note: For TDD RED phase, we create standard DummyScrText.
-            // The implementer will need to set the ProjectType correctly.
-            var studyBibleScrText = CreateDummyProject();
+            // StudyBible project 1 - uses DummyStudyBibleScrText with ProjectType.StudyBible
+            var studyBibleScrText = new DummyStudyBibleScrText();
             var studyBibleDetails = CreateProjectDetails(studyBibleScrText);
             _studyBibleProjectId = studyBibleDetails.Metadata.Id;
             ParatextProjects.FakeAddProject(studyBibleDetails, studyBibleScrText);
 
-            // SBA project 1
-            // Note: For TDD RED phase, we create standard DummyScrText.
-            // The implementer will need to set the ProjectType correctly.
-            var sbaScrText = CreateDummyProject();
+            // SBA project 1 - uses DummySBAScrText with ProjectType.StudyBibleAdditions
+            // Note: DummySBAScrText requires a base project
+            var sbaBaseScrText = CreateDummyProject();
+            var sbaBaseDetails = CreateProjectDetails(sbaBaseScrText);
+            ParatextProjects.FakeAddProject(sbaBaseDetails, sbaBaseScrText);
+            var sbaScrText = new DummySBAScrText(sbaBaseScrText);
             var sbaDetails = CreateProjectDetails(sbaScrText);
             _sbaProjectId = sbaDetails.Metadata.Id;
             ParatextProjects.FakeAddProject(sbaDetails, sbaScrText);
 
             // Additional StudyBible project 2 (for target testing)
-            var studyBible2ScrText = CreateDummyProject();
+            var studyBible2ScrText = new DummyStudyBibleScrText();
             var studyBible2Details = CreateProjectDetails(studyBible2ScrText);
             ParatextProjects.FakeAddProject(studyBible2Details, studyBible2ScrText);
 
             // Additional SBA project 2 (for target testing)
-            var sba2ScrText = CreateDummyProject();
+            var sba2BaseScrText = CreateDummyProject();
+            var sba2BaseDetails = CreateProjectDetails(sba2BaseScrText);
+            ParatextProjects.FakeAddProject(sba2BaseDetails, sba2BaseScrText);
+            var sba2ScrText = new DummySBAScrText(sba2BaseScrText);
             var sba2Details = CreateProjectDetails(sba2ScrText);
             ParatextProjects.FakeAddProject(sba2Details, sba2ScrText);
 

@@ -1,4 +1,5 @@
 using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.ManageBooks;
 
@@ -13,7 +14,10 @@ internal static class BookComparisonService
     /// <summary>
     /// Get compatible copy target projects for a source project.
     ///
-    /// === CAP-013: GetCompatibleCopyTargets ===
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI command pattern for copy books dialog
+    /// Maps to: CAP-013
+    ///
     /// Filters projects based on source project type compatibility.
     ///
     /// Rules (from PT9):
@@ -32,11 +36,70 @@ internal static class BookComparisonService
         LocalParatextProjects paratextProjects
     )
     {
-        // TDD RED phase stub - implementation will be added by tdd-implementer
-        throw new NotImplementedException(
-            "CAP-013: GetCompatibleCopyTargets not yet implemented. "
-                + "This stub exists for TDD RED phase - tests should compile but fail."
-        );
+        // Get the source project
+        ScrText? sourceScrText;
+        try
+        {
+            sourceScrText = LocalParatextProjects.GetParatextProject(sourceProjectId);
+        }
+        catch (Exception)
+        {
+            // Source project not found - return empty array
+            return [];
+        }
+
+        // Get source project type information
+        var sourceType = sourceScrText.Settings.TranslationInfo.Type;
+        bool sourceIsSBA = sourceScrText.Settings.IsStudyBibleAdditions;
+        bool sourceIsStudyBible = sourceType == ProjectType.StudyBible;
+
+        // Get all available projects
+        var allProjects = ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly);
+
+        var compatibleTargets = new List<ProjectInfo>();
+
+        foreach (var targetScrText in allProjects)
+        {
+            // Exclude the source project from its own target list
+            // Use case-insensitive comparison because HexId.ToString() may differ in case
+            if (
+                string.Equals(
+                    targetScrText.Guid.ToString(),
+                    sourceProjectId,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+                continue;
+
+            var targetType = targetScrText.Settings.TranslationInfo.Type;
+            bool targetIsSBA = targetScrText.Settings.IsStudyBibleAdditions;
+            bool targetIsStudyBible = targetType == ProjectType.StudyBible;
+
+            // Apply compatibility rules:
+            // INV-007: StudyBible can only copy to StudyBible
+            if (sourceIsStudyBible && !targetIsStudyBible)
+                continue;
+
+            // INV-008: SBA can only copy to SBA
+            if (sourceIsSBA && !targetIsSBA)
+                continue;
+
+            // For standard projects (not StudyBible, not SBA):
+            // Can copy to most types including StudyBible and SBA per gm-003
+            // No additional filtering needed for standard projects
+
+            // Project is compatible - add to results
+            compatibleTargets.Add(
+                new ProjectInfo(
+                    ProjectId: targetScrText.Guid.ToString(),
+                    ProjectName: targetScrText.Name,
+                    ProjectType: targetType.ToString() ?? "Unknown",
+                    IsStudyBible: targetIsStudyBible || targetIsSBA
+                )
+            );
+        }
+
+        return [.. compatibleTargets];
     }
 
     /// <summary>
