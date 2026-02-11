@@ -1116,7 +1116,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             writeLock =>
             {
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
-                isNewBook = localBooksPresentSet.IsSelected(verseRef.BookNum);
+                isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }

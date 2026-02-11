@@ -1483,7 +1483,7 @@ declare module 'platform-scripture' {
     getCheckRunner: () => Promise<ICheckRunner>;
   };
 
-  // #region Check Hosting (in the Extension Host) Types
+  // #endregion Check Hosting (in the Extension Host) Types
 
   // #region Send/Receive Types
 
