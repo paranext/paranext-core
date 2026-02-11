@@ -811,4 +811,157 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await expect(engine.replace(ranges, 'test')).rejects.toThrow('PDP error');
     });
   });
+
+  describe('cache invalidation retry', () => {
+    /**
+     * Gets the subscribe callback captured by the mock `subscribeChapterUSX`. The constructor
+     * passes this callback when subscribing for chapter-level USX change notifications. Calling it
+     * simulates an incoming data-changed notification that triggers `#invalidateCaches()`.
+     */
+    function getCapturedChapterSubscribeCallback(): () => void {
+      const subscribeMock = vi.mocked(
+        mockPdps['platformScripture.USX_Chapter'].subscribeChapterUSX,
+      );
+      // The callback is the second argument passed to subscribeChapterUSX
+      return subscribeMock.mock.calls[0][1] as () => void;
+    }
+
+    it('should retry and succeed when cache is invalidated once during fetch', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let callCount = 0;
+
+      // On the first call, simulate a cache invalidation mid-fetch, then return normally after
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) invalidateCache();
+        return Promise.resolve(TEST_CHAPTER_1_USX);
+      });
+
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await engine.replace(ranges, 'RETRIED');
+
+      const writtenUsfm = getWrittenUsfm();
+      expect(writtenUsfm).toContain('\\v 1 RETRIED book');
+      // Should have fetched twice: first was invalidated, second succeeded
+      expect(callCount).toBe(2);
+    });
+
+    it('should retry up to 3 times and succeed on the last clean fetch', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let callCount = 0;
+
+      // Invalidate the cache on the first 3 calls, succeed on the 4th (attempt index 3)
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(() => {
+        callCount += 1;
+        if (callCount <= 3) invalidateCache();
+        return Promise.resolve(TEST_CHAPTER_1_USX);
+      });
+
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await engine.replace(ranges, 'OK');
+
+      const writtenUsfm = getWrittenUsfm();
+      expect(writtenUsfm).toContain('\\v 1 OK book');
+      // 3 invalidated + 1 successful = 4 total fetches
+      expect(callCount).toBe(4);
+    });
+
+    it('should throw when cache is invalidated on every attempt including the last retry', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+
+      // Invalidate the cache on every call (4 total: initial + 3 retries)
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(() => {
+        invalidateCache();
+        return Promise.resolve(TEST_CHAPTER_1_USX);
+      });
+
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await expect(engine.replace(ranges, 'FAIL')).rejects.toThrow(/Cache was invalidated 4 times/);
+    });
+
+    it('should use fresh data after a successful retry', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let callCount = 0;
+
+      // First call: invalidate and return original data. Second call: return "updated" data.
+      const UPDATED_CHAPTER_1_USX = TEST_CHAPTER_1_USX.replace(
+        'The book of the genealogy',
+        'The UPDATED book of the genealogy',
+      );
+
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          invalidateCache();
+          return Promise.resolve(TEST_CHAPTER_1_USX);
+        }
+        return Promise.resolve(UPDATED_CHAPTER_1_USX);
+      });
+
+      // Replace "The" (offset 5-8) with "A" — this works regardless of which data version
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await engine.replace(ranges, 'A');
+
+      const writtenUsfm = getWrittenUsfm();
+      // Should contain the UPDATED text from the retry, not the original
+      expect(writtenUsfm).toContain('UPDATED');
+      expect(writtenUsfm).toContain('\\v 1 A UPDATED book');
+      expect(callCount).toBe(2);
+    });
+
+    it('should retry for book-level fetches when cache is invalidated', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let callCount = 0;
+
+      // Invalidate once during book-level fetch (multi-chapter ranges use getBookUSX)
+      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) invalidateCache();
+        return Promise.resolve(TEST_BOOK_USX);
+      });
+
+      // Use ranges spanning multiple chapters to force book-level fetch
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await engine.replace(ranges, ['A', 'B']);
+
+      const writtenUsfm = getWrittenUsfm();
+      expect(writtenUsfm).toContain('\\v 1 A book');
+      expect(writtenUsfm).toContain('\\v 1 B after');
+      expect(callCount).toBe(2);
+    });
+  });
 });
