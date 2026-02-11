@@ -8,7 +8,12 @@ namespace Paranext.DataProvider.ManageBooks;
 /// Service providing book validation operations.
 /// </summary>
 /// <remarks>
-/// This service implements CAP-017 (ModelBookAvailabilityCheck).
+/// This service implements:
+/// - CAP-017: ModelBookAvailabilityCheck (internal ScrText-based validation)
+/// - CAP-010: ValidateModelBooks (public API with project ID string)
+/// - CAP-018: VersificationCompatibilityCheck
+/// - CAP-027: SBABaseProjectBookWarning
+///
 /// Ported from PT9/Paratext/ToolsMenu/CreateBooksForm.cs
 /// </remarks>
 internal static class BookValidationService
