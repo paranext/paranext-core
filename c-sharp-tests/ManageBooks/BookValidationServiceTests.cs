@@ -1199,5 +1199,640 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        #region CAP-010 Acceptance Tests (Outer Loop)
+
+        /// <summary>
+        /// Acceptance test for CAP-010: ValidateModelBooks public API.
+        /// This is the "done signal" - when this passes, CAP-010 is complete.
+        ///
+        /// The public API:
+        /// - Takes bookNumbers (int[]) and modelProjectId (string)
+        /// - Resolves modelProjectId to ScrText via LocalParatextProjects
+        /// - Uses CAP-017 internally to check book presence
+        /// - Returns ModelValidationResult
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-012-create-model
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "BHV-104")]
+        [Property("GoldenMaster", "gm-012")]
+        [Description("Acceptance test: ValidateModelBooks public API validates books exist in model project")]
+        public void ValidateModelBooks_PublicApi_AcceptanceTest()
+        {
+            // Arrange - Create model project with some books
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int LEVITICUS = 3;
+            const int MATTHEW = 40;
+            const int JOHN = 43;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 In the beginning...", null);
+            _modelScrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Now these are...", null);
+            _modelScrText.PutText(MATTHEW, 0, false, @"\id MAT \c 1 \v 1 The genealogy...", null);
+            // Note: Leviticus and John are NOT in the model project
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+
+            // Select books - some exist in model, some don't
+            var bookNumbers = new[] { GENESIS, EXODUS, LEVITICUS, MATTHEW, JOHN };
+
+            // Act - Call the public API with project ID string
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert - Full outcome verification
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.IsValid, Is.False, "Should not be valid when books are missing");
+
+            // Valid books should include GEN(1), EXO(2), MAT(40)
+            Assert.That(result.ValidBooks, Does.Contain(GENESIS), "GEN should be valid (exists in model)");
+            Assert.That(result.ValidBooks, Does.Contain(EXODUS), "EXO should be valid (exists in model)");
+            Assert.That(result.ValidBooks, Does.Contain(MATTHEW), "MAT should be valid (exists in model)");
+
+            // Missing books should include LEV(3), JHN(43)
+            Assert.That(result.MissingBooks, Does.Contain(LEVITICUS), "LEV should be missing (not in model)");
+            Assert.That(result.MissingBooks, Does.Contain(JOHN), "JHN should be missing (not in model)");
+
+            // Warning message should be set
+            Assert.That(
+                result.WarningMessage,
+                Is.Not.Null.And.Not.Empty,
+                "Warning message should be provided when books are missing"
+            );
+        }
+
+        #endregion
+
+        #region CAP-010 Contract Tests - Project ID Resolution
+
+        /// <summary>
+        /// Verifies the public API correctly resolves project ID to ScrText.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "BHV-104")]
+        public void ValidateModelBooks_ValidProjectId_ResolvesProjectCorrectly()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _modelScrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, EXODUS };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert - Should successfully resolve and validate
+            Assert.That(result.IsValid, Is.True, "All requested books exist in model");
+            Assert.That(result.ValidBooks.Length, Is.EqualTo(2));
+        }
+
+        /// <summary>
+        /// Verifies the public API handles invalid project ID gracefully.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "BHV-104")]
+        public void ValidateModelBooks_InvalidProjectId_ReturnsError()
+        {
+            // Arrange
+            var invalidProjectId = Guid.NewGuid().ToString("N"); // Non-existent project
+            var bookNumbers = new[] { 1, 2 };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, invalidProjectId);
+
+            // Assert - Should indicate failure
+            Assert.That(result.IsValid, Is.False, "Should fail for invalid project ID");
+            Assert.That(
+                result.WarningMessage,
+                Is.Not.Null.And.Not.Empty,
+                "Should provide error message for invalid project"
+            );
+        }
+
+        /// <summary>
+        /// Verifies the public API handles null project ID.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_NullProjectId_ReturnsError()
+        {
+            // Arrange
+            string? nullProjectId = null;
+            var bookNumbers = new[] { 1, 2 };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, nullProjectId!);
+
+            // Assert
+            Assert.That(result.IsValid, Is.False, "Should fail for null project ID");
+            Assert.That(result.WarningMessage, Is.Not.Null.And.Not.Empty);
+        }
+
+        /// <summary>
+        /// Verifies the public API handles empty project ID.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_EmptyProjectId_ReturnsError()
+        {
+            // Arrange
+            var emptyProjectId = string.Empty;
+            var bookNumbers = new[] { 1, 2 };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, emptyProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.False, "Should fail for empty project ID");
+            Assert.That(result.WarningMessage, Is.Not.Null.And.Not.Empty);
+        }
+
+        #endregion
+
+        #region CAP-010 Contract Tests - All Books Valid
+
+        /// <summary>
+        /// When all requested books exist in model, should return valid result.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "BHV-104")]
+        public void ValidateModelBooks_AllBooksExistInModel_ReturnsValid()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int LEVITICUS = 3;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            _modelScrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Exodus", null);
+            _modelScrText.PutText(LEVITICUS, 0, false, @"\id LEV \c 1 \v 1 Leviticus", null);
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, EXODUS, LEVITICUS };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.True, "Should be valid when all books exist");
+            Assert.That(result.ValidBooks, Is.EquivalentTo(new[] { GENESIS, EXODUS, LEVITICUS }));
+            Assert.That(result.MissingBooks, Is.Empty);
+            Assert.That(result.WarningMessage, Is.Null.Or.Empty);
+        }
+
+        /// <summary>
+        /// When requesting subset of model books, should return valid.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_SubsetOfModelBooks_ReturnsValid()
+        {
+            // Arrange - Model has multiple books
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int LEVITICUS = 3;
+            const int MATTHEW = 40;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            _modelScrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Exodus", null);
+            _modelScrText.PutText(LEVITICUS, 0, false, @"\id LEV \c 1 \v 1 Leviticus", null);
+            _modelScrText.PutText(MATTHEW, 0, false, @"\id MAT \c 1 \v 1 Matthew", null);
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, MATTHEW }; // Just a subset
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.True);
+            Assert.That(result.ValidBooks, Is.EquivalentTo(new[] { GENESIS, MATTHEW }));
+            Assert.That(result.MissingBooks, Is.Empty);
+        }
+
+        #endregion
+
+        #region CAP-010 Contract Tests - Missing Books
+
+        /// <summary>
+        /// When some books don't exist in model, should return missing books list.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "BHV-104")]
+        public void ValidateModelBooks_SomeBooksNotInModel_ReturnsMissingBooks()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int LEVITICUS = 3;
+            const int MATTHEW = 40;
+            const int JOHN = 43;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            _modelScrText.PutText(MATTHEW, 0, false, @"\id MAT \c 1 \v 1 Matthew", null);
+            // LEV and JHN are NOT in the model
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, LEVITICUS, MATTHEW, JOHN };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.False, "Should not be valid when books missing");
+            Assert.That(result.ValidBooks, Is.EquivalentTo(new[] { GENESIS, MATTHEW }));
+            Assert.That(result.MissingBooks, Is.EquivalentTo(new[] { LEVITICUS, JOHN }));
+        }
+
+        /// <summary>
+        /// When no requested books exist in model, all should be in missing list.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_NoBooksInModel_ReturnsAllMissing()
+        {
+            // Arrange - Empty model project (no books added)
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 2, 3 };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(result.ValidBooks, Is.Empty, "No books should be valid");
+            Assert.That(result.MissingBooks, Is.EquivalentTo(new[] { 1, 2, 3 }));
+        }
+
+        /// <summary>
+        /// Single missing book should still make result invalid.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_SingleBookMissing_ReturnsInvalid()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int LEVITICUS = 3;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            _modelScrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Exodus", null);
+            // LEV(3) is missing
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, EXODUS, LEVITICUS };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.False, "Single missing book should invalidate");
+            Assert.That(result.MissingBooks, Has.Exactly(1).Items);
+            Assert.That(result.MissingBooks, Does.Contain(LEVITICUS));
+        }
+
+        #endregion
+
+        #region CAP-010 Contract Tests - Edge Cases
+
+        /// <summary>
+        /// Empty book selection should return valid (nothing to validate).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_EmptyBookList_ReturnsValid()
+        {
+            // Arrange
+            _modelScrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = Array.Empty<int>();
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.True, "Empty selection should be valid");
+            Assert.That(result.ValidBooks, Is.Empty);
+            Assert.That(result.MissingBooks, Is.Empty);
+        }
+
+        /// <summary>
+        /// Null book array should be handled gracefully.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_NullBookArray_ReturnsValid()
+        {
+            // Arrange
+            _modelScrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            int[]? nullBookNumbers = null;
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(nullBookNumbers!, modelProjectId);
+
+            // Assert - Should handle null gracefully
+            Assert.That(result.IsValid, Is.True, "Null selection should be treated as empty/valid");
+        }
+
+        /// <summary>
+        /// Single book that exists should return valid (public API with project ID).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_PublicApi_SingleBookExists_ReturnsValid()
+        {
+            // Arrange
+            const int JUDE = 65;
+            _modelScrText.PutText(JUDE, 0, false, @"\id JUD \c 1 \v 1 Jude content", null);
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { JUDE };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.True);
+            Assert.That(result.ValidBooks, Is.EquivalentTo(new[] { JUDE }));
+        }
+
+        /// <summary>
+        /// Non-canonical books should be validated the same way (public API with project ID).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_PublicApi_NonCanonicalBooks_ValidatesCorrectly()
+        {
+            // Arrange - Model has some non-canonical books
+            const int TOBIT = 67;
+            const int JUDITH = 68;
+            const int WISDOM = 69;
+
+            _modelScrText.PutText(TOBIT, 0, false, @"\id TOB \c 1 \v 1 Tobit", null);
+            _modelScrText.PutText(JUDITH, 0, false, @"\id JDT \c 1 \v 1 Judith", null);
+            // WISDOM not in model
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { TOBIT, WISDOM }; // TOB exists, WIS doesn't
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(result.ValidBooks, Does.Contain(TOBIT));
+            Assert.That(result.MissingBooks, Does.Contain(WISDOM));
+        }
+
+        #endregion
+
+        #region CAP-010 Contract Tests - Warning Message
+
+        /// <summary>
+        /// Warning message should be set when books are missing.
+        /// Per EXT-003: "Unable to create book(s) because these book(s) are not in the model project {name}"
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Property("BehaviorId", "VAL-008")]
+        public void ValidateModelBooks_MissingBooks_ReturnsCorrectWarningMessage()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int LEVITICUS = 3;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            // EXO(2) and LEV(3) missing
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, EXODUS, LEVITICUS };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert - Warning should follow PT9 format from EXT-003
+            Assert.That(result.WarningMessage, Is.Not.Null);
+            Assert.That(
+                result.WarningMessage,
+                Does.Contain("not in the model project"),
+                "Warning should indicate books not in model"
+            );
+        }
+
+        /// <summary>
+        /// Warning message should include model project name for context.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_MissingBooks_WarningIncludesModelProjectName()
+        {
+            // Arrange
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            // EXO(2) missing
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var modelProjectName = _modelScrText.Name;
+            var bookNumbers = new[] { GENESIS, EXODUS };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert
+            Assert.That(
+                result.WarningMessage,
+                Does.Contain(modelProjectName),
+                "Warning should include model project name"
+            );
+        }
+
+        /// <summary>
+        /// Warning message should list all missing book names.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        public void ValidateModelBooks_MultipleMissing_WarningIncludesAllBookNames()
+        {
+            // Arrange - Model has only Genesis
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int LEVITICUS = 3;
+            const int MATTHEW = 40;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis", null);
+            // All others missing
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { EXODUS, LEVITICUS, MATTHEW };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert - Should mention all missing books
+            Assert.That(result.WarningMessage, Is.Not.Null);
+            Assert.That(result.MissingBooks, Has.Length.EqualTo(3));
+        }
+
+        #endregion
+
+        #region CAP-010 Invariant Tests
+
+        /// <summary>
+        /// VAL-008: Model book must exist for model-based creation.
+        /// This invariant ensures validation catches ALL missing books.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("InvariantId", "VAL-008")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-070")]
+        [Description("VAL-008: Every missing book must be reported in MissingBooks array")]
+        public void ValidateModelBooks_Invariant_AllMissingBooksReported()
+        {
+            // Arrange - Model has books 1, 3, 5
+            const int GENESIS = 1;
+            const int LEVITICUS = 3;
+            const int DEUTERONOMY = 5;
+
+            _modelScrText.PutText(GENESIS, 0, false, @"\id GEN Genesis", null);
+            _modelScrText.PutText(LEVITICUS, 0, false, @"\id LEV Leviticus", null);
+            _modelScrText.PutText(DEUTERONOMY, 0, false, @"\id DEU Deuteronomy", null);
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            // Request books 1-6: 1,3,5 exist; 2,4,6 don't
+            var bookNumbers = new[] { 1, 2, 3, 4, 5, 6 };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert - Invariant: every book in request is either valid OR missing
+            Assert.That(
+                result.ValidBooks.Length + result.MissingBooks.Length,
+                Is.EqualTo(bookNumbers.Length),
+                "VAL-008: Every requested book must be accounted for"
+            );
+
+            Assert.That(
+                result.MissingBooks,
+                Is.EquivalentTo(new[] { 2, 4, 6 }),
+                "VAL-008: All non-existent books must be in MissingBooks"
+            );
+        }
+
+        /// <summary>
+        /// VAL-008: ValidBooks and MissingBooks should be disjoint (no overlap).
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("InvariantId", "VAL-008")]
+        [Property("CapabilityId", "CAP-010")]
+        public void ValidateModelBooks_Invariant_ValidAndMissingAreDisjoint()
+        {
+            // Arrange
+            _modelScrText.PutText(1, 0, false, @"\id GEN Genesis", null);
+            _modelScrText.PutText(2, 0, false, @"\id EXO Exodus", null);
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 2, 3, 4 };
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(bookNumbers, modelProjectId);
+
+            // Assert - No book should appear in both lists
+            var overlap = result.ValidBooks.Intersect(result.MissingBooks).ToArray();
+            Assert.That(
+                overlap,
+                Is.Empty,
+                "VAL-008: No book should be in both ValidBooks and MissingBooks"
+            );
+        }
+
+        /// <summary>
+        /// VAL-008: IsValid should be true IFF MissingBooks is empty.
+        /// </summary>
+        [TestCase(new[] { 1, 2 }, new[] { 1, 2 }, true, Description = "All exist -> valid")]
+        [TestCase(new[] { 1, 2 }, new[] { 1, 2, 3 }, false, Description = "One missing -> invalid")]
+        [TestCase(new int[] { }, new[] { 1 }, false, Description = "All missing -> invalid")]
+        [Category("Invariant")]
+        [Property("InvariantId", "VAL-008")]
+        [Property("CapabilityId", "CAP-010")]
+        public void ValidateModelBooks_Invariant_IsValidMatchesMissingBooksEmpty(
+            int[] modelBooks,
+            int[] requestedBooks,
+            bool expectedValid
+        )
+        {
+            // Arrange
+            foreach (var bookNum in modelBooks)
+            {
+                var bookId = Canon.BookNumberToId(bookNum);
+                _modelScrText.PutText(bookNum, 0, false, $@"\id {bookId}", null);
+            }
+
+            var modelProjectId = _modelProjectDetails.Metadata.Id;
+
+            // Act
+            var result = BookValidationService.ValidateModelBooks(requestedBooks, modelProjectId);
+
+            // Assert
+            Assert.That(
+                result.IsValid,
+                Is.EqualTo(expectedValid),
+                "VAL-008: IsValid must equal (MissingBooks.Length == 0)"
+            );
+            Assert.That(
+                result.IsValid,
+                Is.EqualTo(result.MissingBooks.Length == 0),
+                "VAL-008: Consistency check - IsValid <=> no missing books"
+            );
+        }
+
+        #endregion
     }
 }

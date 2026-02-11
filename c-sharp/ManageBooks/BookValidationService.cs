@@ -70,6 +70,86 @@ internal static class BookValidationService
         );
     }
 
+    /// <summary>
+    /// Validate that selected books exist in model project (public API taking project ID).
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: Public API that resolves project ID to ScrText before delegating to CAP-017
+    /// Maps to: CAP-010
+    ///
+    /// EXPLANATION:
+    /// This method is the public API for model book validation. It:
+    /// 1. Handles null/empty project ID by returning an error result
+    /// 2. Handles null/empty book array by treating as valid (empty selection)
+    /// 3. Resolves the project ID string to a ScrText via LocalParatextProjects
+    /// 4. Delegates to the internal ValidateModelBooks(int[], ScrText) method (CAP-017)
+    /// 5. Enhances the warning message to include the model project name
+    /// </remarks>
+    /// <param name="bookNumbers">Books to validate (null treated as empty)</param>
+    /// <param name="modelProjectId">Model project ID string (GUID format)</param>
+    /// <returns>Validation result with valid/missing books and warning message</returns>
+    public static ModelValidationResult ValidateModelBooks(int[] bookNumbers, string modelProjectId)
+    {
+        // Handle null/empty project ID - return error
+        if (string.IsNullOrEmpty(modelProjectId))
+        {
+            return new ModelValidationResult(
+                IsValid: false,
+                ValidBooks: [],
+                MissingBooks: [],
+                WarningMessage: "Model project ID is required but was not provided."
+            );
+        }
+
+        // Handle null book array - treat as empty (valid)
+        if (bookNumbers == null || bookNumbers.Length == 0)
+        {
+            return new ModelValidationResult(
+                IsValid: true,
+                ValidBooks: [],
+                MissingBooks: [],
+                WarningMessage: null
+            );
+        }
+
+        // Try to resolve the project ID to a ScrText
+        ScrText modelScrText;
+        try
+        {
+            modelScrText = LocalParatextProjects.GetParatextProject(modelProjectId);
+        }
+        catch (Exception)
+        {
+            return new ModelValidationResult(
+                IsValid: false,
+                ValidBooks: [],
+                MissingBooks: [],
+                WarningMessage: $"Could not find model project with ID '{modelProjectId}'."
+            );
+        }
+
+        // Delegate to the internal method (CAP-017)
+        var result = ValidateModelBooks(bookNumbers, modelScrText);
+
+        // If there are missing books, enhance the warning message to include the project name
+        if (result.MissingBooks.Length > 0)
+        {
+            string projectName = modelScrText.Name;
+            string warningMessage =
+                $"Unable to create book(s) because these book(s) are not in the model project {projectName}";
+
+            return new ModelValidationResult(
+                IsValid: result.IsValid,
+                ValidBooks: result.ValidBooks,
+                MissingBooks: result.MissingBooks,
+                WarningMessage: warningMessage
+            );
+        }
+
+        return result;
+    }
+
     // Canonical books are 1-66, non-canonical are 67+
     private const int LastCanonicalBookNum = 66;
 
