@@ -93,7 +93,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
               className="tw-flex tw-gap-2 hover:tw-bg-accent"
               disabled={item.isDisallowed || item.isDeprecated}
               onSelect={item.action}
-              key={`item-${item.marker ?? item.icon?.name}-${item.title.replaceAll(' ', '')}`}
+              key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
             >
               <div className="tw-w-6">
                 {item.marker ? (

@@ -1275,7 +1275,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = () => {
+  const fetchActiveBooks = useCallback(() => {
     return Array.from(booksPresent).reduce((ids: string[], char, index) => {
       if (char === '1') {
         ids.push(Canon.bookNumberToId(index + 1));
@@ -1283,7 +1283,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       return ids;
     }, []);
-  };
+  }, []);
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
@@ -1396,7 +1396,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       title="Paragraph Selection"
                       variant="outline"
                     >
-                      {blockMarker} -{' '}
+                      {blockMarker ? `${blockMarker} - ` : ''}
                       {blockMarker &&
                       Object.entries(blockMarkerToBlockNames).find(
                         ([marker]) => marker === blockMarker,
