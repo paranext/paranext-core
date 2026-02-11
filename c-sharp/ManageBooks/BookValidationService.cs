@@ -1,3 +1,4 @@
+using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using SIL.Scripture;
 
@@ -156,7 +157,7 @@ internal static class BookValidationService
     /// Check if selected books overlap with SBA base project.
     /// </summary>
     /// <remarks>
-    /// === STUB FOR TDD RED PHASE ===
+    /// === PORTED FROM PT9 ===
     /// Source: PT9/ParatextBase/CommonForms/BookChooserForm.cs:173-206
     /// Method: BookChooserForm.UpdateState
     /// Maps to: EXT-013, CAP-027, TS-068, BHV-314, BHV-T016
@@ -168,11 +169,12 @@ internal static class BookValidationService
     /// and warrants a warning.
     ///
     /// The algorithm is:
-    /// 1. Check if the project is an SBA project (TranslationInfo.Type.IsStudyBibleAdditions)
-    /// 2. If not SBA: return no warning
-    /// 3. If SBA: get base project from TranslationInfo.BaseProjectGuid
-    /// 4. Compare selected books against base project's BooksPresentSet
-    /// 5. If any selected books are NOT in base: return warning with list
+    /// 1. Handle empty selection - no warning needed
+    /// 2. Check if the project is an SBA project (Settings.IsStudyBibleAdditions)
+    /// 3. If not SBA: return no warning
+    /// 4. If SBA: get base project from TranslationInfo.BaseProjectGuid
+    /// 5. Compare selected books against base project's BooksPresentSet
+    /// 6. If any selected books are NOT in base: return warning with list
     /// </remarks>
     /// <param name="scrText">Project to check (may or may not be SBA)</param>
     /// <param name="selectedBooks">Books selected for creation</param>
@@ -182,11 +184,103 @@ internal static class BookValidationService
         BookSet selectedBooks
     )
     {
-        // TODO: Implement in GREEN phase
-        // This stub exists so tests compile but fail (TDD RED phase)
-        throw new NotImplementedException(
-            "CAP-027: CheckSBABaseProjectOverlap not yet implemented. "
-                + "TDD RED phase - tests should compile but fail."
+        // Handle empty selection case - no warning needed
+        if (selectedBooks.Count == 0)
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Check if this is an SBA project
+        // If not SBA, no warning is needed regardless of selected books
+        if (!scrText.Settings.IsStudyBibleAdditions)
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Get the base project GUID from translation info
+        var baseProjectHexId = scrText.Settings.TranslationInfo.BaseProjectGuid;
+        string baseProjectGuid = baseProjectHexId.ToString();
+
+        // If no base project is configured, we can't check - return no warning
+        // HexId.ToString() returns "00000000000000000000000000000000" for default/empty
+        if (
+            string.IsNullOrEmpty(baseProjectGuid)
+            || baseProjectGuid == "00000000000000000000000000000000"
+        )
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Try to get the base project
+        ScrText? baseScrText;
+        try
+        {
+            baseScrText = LocalParatextProjects.GetParatextProject(baseProjectGuid);
+        }
+        catch
+        {
+            // If we can't load the base project, return no warning
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        if (baseScrText == null)
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Get books present in the base project
+        BookSet baseBooksPresent = baseScrText.Settings.BooksPresentSet;
+
+        // Find books that are selected but not in the base project
+        var booksNotInBase = new List<int>();
+        foreach (int bookNum in selectedBooks.SelectedBookNumbers)
+        {
+            if (!baseBooksPresent.IsSelected(bookNum))
+            {
+                booksNotInBase.Add(bookNum);
+            }
+        }
+
+        // If all selected books are in the base, no warning needed
+        if (booksNotInBase.Count == 0)
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Build warning message for books not in base project
+        string warningMessage =
+            "The selected book(s) do not exist in the base project. "
+            + "Study Bible Additions projects typically only add content to books "
+            + "that exist in the base project.";
+
+        return new SBAWarningResult(
+            ShowWarning: true,
+            BooksNotInBase: booksNotInBase.ToArray(),
+            WarningMessage: warningMessage
         );
     }
 }

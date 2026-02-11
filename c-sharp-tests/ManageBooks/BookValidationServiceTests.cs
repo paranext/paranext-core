@@ -1190,23 +1190,12 @@ namespace TestParanextDataProvider.ManageBooks
 
         /// <summary>
         /// Creates a dummy SBA project linked to the specified base project.
-        /// Note: This helper method creates an SBA-type project for testing.
-        /// The actual implementation may need to set TranslationInfo.Type.IsStudyBibleAdditions = true
-        /// and TranslationInfo.BaseProjectGuid to link to the base project.
+        /// Uses a DummySBAScrText which is configured as a Study Bible Additions project.
         /// </summary>
         private ScrText CreateDummySBAProject(ScrText baseProject)
         {
-            // Create a new DummyScrText configured as an SBA project
-            // The DummyScrText needs to be configured with:
-            // - Type = StudyBibleAdditions
-            // - BaseProjectGuid = baseProject.Guid
-            // For the RED phase, this helper creates the test infrastructure needed
-            // The implementer will verify this works with actual ParatextData APIs
-            var sbaProject = CreateDummyProject();
-            // TODO: Configure as SBA project - implementation will need to:
-            // - Set sbaProject.Settings.TranslationInfo.Type to SBA
-            // - Set sbaProject.Settings.TranslationInfo.BaseProjectGuid
-            return sbaProject;
+            // Create a new DummySBAScrText configured as an SBA project linked to the base
+            return new DummySBAScrText(baseProject);
         }
 
         #endregion
