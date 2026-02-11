@@ -647,5 +647,269 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        // ===================================================================
+        // CAP-021: BookComparisonForCopyDialog Tests
+        // ===================================================================
+
+        #region CAP-021: CompareBooks - Acceptance Test (Outer Loop)
+
+        /// <summary>
+        /// Acceptance test for CAP-021: BookComparisonForCopyDialog
+        /// Tests full comparison workflow matching gm-023 golden master.
+        /// When this test passes, the capability is complete.
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-021")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303,BHV-T009")]
+        [Property("ExtractionId", "EXT-007")]
+        [Property("GoldenMasterId", "gm-023")]
+        [Description("Acceptance test: Compare books between source and destination projects")]
+        public void CompareBooks_AcceptanceTest()
+        {
+            // Arrange: Create source and dest projects with books at different dates
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15, 10, 30, 0)); // GEN, newer
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 14, 9, 0, 0)); // GEN, older
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert: Should return comparison with source newer
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Count, Is.EqualTo(1));
+            Assert.That(result[0].BookNum, Is.EqualTo(1));
+            Assert.That(result[0].Comparison, Is.EqualTo(ComparisonResult.SourceNewer));
+            Assert.That(result[0].DefaultSelected, Is.True);
+        }
+
+        #endregion
+
+        #region CAP-021: CompareBooks - Contract Tests (ComparisonResult States)
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-T009")]
+        [Property("ExtractionId", "EXT-007")]
+        [Property("GoldenMasterId", "gm-023")]
+        public void CompareBooks_BothHaveBook_SourceNewer_ReturnsSourceNewer()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15, 10, 30, 0));
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 14, 9, 0, 0));
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert
+            Assert.That(result[0].Comparison, Is.EqualTo(ComparisonResult.SourceNewer));
+            Assert.That(result[0].SourceModified, Is.EqualTo(new DateTime(2024, 1, 15, 10, 30, 0)));
+            Assert.That(result[0].DestModified, Is.EqualTo(new DateTime(2024, 1, 14, 9, 0, 0)));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-T009")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_BothHaveBook_DestNewer_ReturnsDestNewer()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 14, 9, 0, 0));
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15, 10, 30, 0));
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert
+            Assert.That(result[0].Comparison, Is.EqualTo(ComparisonResult.DestNewer));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-T009")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_BothHaveBook_SameDate_ReturnsSame()
+        {
+            // Arrange
+            var sameDate = new DateTime(2024, 1, 15, 10, 30, 0);
+            var sourceProject = CreateDummyProjectWithBook(1, sameDate);
+            var destProject = CreateDummyProjectWithBook(1, sameDate);
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert
+            Assert.That(result[0].Comparison, Is.EqualTo(ComparisonResult.Same));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_OnlyInSource_ReturnsOnlyInSource()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15));
+            var destProject = CreateDummyProjectWithoutBooks();
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert
+            Assert.That(result[0].Comparison, Is.EqualTo(ComparisonResult.OnlyInSource));
+            Assert.That(result[0].SourceModified, Is.Not.Null);
+            Assert.That(result[0].DestModified, Is.Null);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_OnlyInDest_ReturnsOnlyInDest()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithoutBooks();
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15));
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert
+            Assert.That(result[0].Comparison, Is.EqualTo(ComparisonResult.OnlyInDest));
+            Assert.That(result[0].SourceModified, Is.Null);
+            Assert.That(result[0].DestModified, Is.Not.Null);
+        }
+
+        #endregion
+
+        #region CAP-021: CompareBooks - Default Selection Tests
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        [Property("GoldenMasterId", "gm-023")]
+        public void CompareBooks_SourceNewer_DefaultSelectedTrue()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15));
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 14));
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert: Source newer books should be selected by default
+            Assert.That(result[0].DefaultSelected, Is.True);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        [Property("GoldenMasterId", "gm-023")]
+        public void CompareBooks_OnlyInSource_DefaultSelectedTrue()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15));
+            var destProject = CreateDummyProjectWithoutBooks();
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert: OnlyInSource books should be selected by default
+            Assert.That(result[0].DefaultSelected, Is.True);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_DestNewer_DefaultSelectedFalse()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 14));
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15));
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert: Dest newer books should NOT be selected by default
+            Assert.That(result[0].DefaultSelected, Is.False);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_OnlyInDest_DefaultSelectedFalse()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithoutBooks();
+            var destProject = CreateDummyProjectWithBook(1, new DateTime(2024, 1, 15));
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert: OnlyInDest books should NOT be selected by default
+            Assert.That(result[0].DefaultSelected, Is.False);
+        }
+
+        #endregion
+
+        #region CAP-021: CompareBooks - Edge Case Tests
+
+        [Test]
+        [Category("EdgeCase")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("ExtractionId", "EXT-007")]
+        public void CompareBooks_EmptyProjects_ReturnsEmptyList()
+        {
+            // Arrange
+            var sourceProject = CreateDummyProjectWithoutBooks();
+            var destProject = CreateDummyProjectWithoutBooks();
+
+            // Act
+            var result = BookComparisonService.CompareBooks(sourceProject, destProject);
+
+            // Assert: Empty projects should return empty list
+            Assert.That(result, Is.Empty);
+        }
+
+        #endregion
+
+        #region CAP-021: Test Helpers
+
+        /// <summary>
+        /// Creates a dummy project with a single book at a specified modification date.
+        /// Used for testing CompareBooks functionality (CAP-021).
+        /// </summary>
+        private static DummyScrText CreateDummyProjectWithBook(int bookNum, DateTime modifiedDate)
+        {
+            var scrText = new DummyScrText();
+            scrText.SetBookPresent(bookNum, true, modifiedDate);
+            return scrText;
+        }
+
+        /// <summary>
+        /// Creates a dummy project with no books.
+        /// Used for testing CompareBooks functionality (CAP-021).
+        /// </summary>
+        private static DummyScrText CreateDummyProjectWithoutBooks()
+        {
+            return new DummyScrText();
+        }
+
+        #endregion
     }
 }

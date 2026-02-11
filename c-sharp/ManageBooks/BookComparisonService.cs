@@ -7,7 +7,7 @@ namespace Paranext.DataProvider.ManageBooks;
 /// Service for book comparison operations.
 /// Provides functionality for comparing books between projects for copy dialog.
 ///
-/// Contains CAP-022 (BookDisplayStyling) and CAP-013 (GetCompatibleCopyTargets).
+/// Contains CAP-021 (CompareBooks), CAP-022 (BookDisplayStyling), and CAP-013 (GetCompatibleCopyTargets).
 /// </summary>
 internal static class BookComparisonService
 {
@@ -96,6 +96,163 @@ internal static class BookComparisonService
         }
 
         return [.. compatibleTargets];
+    }
+
+    /// <summary>
+    /// Compare books between source and destination projects.
+    /// Determines newer/older/same status for each book.
+    ///
+    /// === PORTED FROM PT9 ===
+    /// Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:279-363
+    /// Method: CopyBooksForm.LoadBooks
+    /// Maps to: EXT-007, CAP-021, BHV-303, BHV-T009, BHV-552-555
+    ///
+    /// Algorithm (from EXT-007):
+    /// 1. Get union of BooksPresentSet from source and dest projects
+    /// 2. For each book, check BookPresent() in both projects
+    /// 3. If both have book, compare file modification dates
+    /// 4. Set DefaultSelected = true only for SourceNewer and OnlyInSource
+    /// </summary>
+    /// <param name="sourceScrText">Source project</param>
+    /// <param name="destScrText">Destination project</param>
+    /// <returns>List of BookComparisonInfo with comparison states</returns>
+    public static List<BookComparisonInfo> CompareBooks(ScrText sourceScrText, ScrText destScrText)
+    {
+        var result = new List<BookComparisonInfo>();
+
+        // Get union of books present in both projects
+        // PT9 uses: BookSet allBooks = fromScrText.Settings.BooksPresentSet | toScrText.Settings.BooksPresentSet;
+        // We iterate through all possible book numbers and check presence via file existence
+        // because BooksPresentSet may not be updated in DummyScrText test scenarios
+
+        var allBookNumbers = new HashSet<int>();
+
+        // Scan source for present books
+        for (
+            int bookNum = BookServiceHelpers.FirstBookNum;
+            bookNum <= BookServiceHelpers.LastBookNum;
+            bookNum++
+        )
+        {
+            if (IsBookPresent(sourceScrText, bookNum) || IsBookPresent(destScrText, bookNum))
+            {
+                allBookNumbers.Add(bookNum);
+            }
+        }
+
+        // Process each book in the union
+        foreach (int bookNum in allBookNumbers.OrderBy(n => n))
+        {
+            bool sourceHasBook = IsBookPresent(sourceScrText, bookNum);
+            bool destHasBook = IsBookPresent(destScrText, bookNum);
+
+            DateTime? sourceModified = null;
+            DateTime? destModified = null;
+            ComparisonResult comparison;
+
+            if (sourceHasBook)
+            {
+                sourceModified = GetBookModificationDate(sourceScrText, bookNum);
+            }
+
+            if (destHasBook)
+            {
+                destModified = GetBookModificationDate(destScrText, bookNum);
+            }
+
+            // Determine comparison state
+            if (sourceHasBook && destHasBook)
+            {
+                // Both have the book - compare dates
+                if (sourceModified > destModified)
+                {
+                    comparison = ComparisonResult.SourceNewer;
+                }
+                else if (destModified > sourceModified)
+                {
+                    comparison = ComparisonResult.DestNewer;
+                }
+                else
+                {
+                    comparison = ComparisonResult.Same;
+                }
+            }
+            else if (sourceHasBook)
+            {
+                comparison = ComparisonResult.OnlyInSource;
+            }
+            else
+            {
+                comparison = ComparisonResult.OnlyInDest;
+            }
+
+            // Default selection: select if source is newer or only in source (per gm-023)
+            bool defaultSelected =
+                comparison == ComparisonResult.SourceNewer
+                || comparison == ComparisonResult.OnlyInSource;
+
+            // Get book name
+            string bookName = BookServiceHelpers.GetBookName(bookNum);
+
+            result.Add(
+                new BookComparisonInfo(
+                    BookNum: bookNum,
+                    BookName: bookName,
+                    Comparison: comparison,
+                    SourceModified: sourceModified,
+                    DestModified: destModified,
+                    DefaultSelected: defaultSelected
+                )
+            );
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Checks if a book is present in a project by checking if the book file exists.
+    /// This is more reliable than BookPresent() for DummyScrText test scenarios.
+    /// </summary>
+    private static bool IsBookPresent(ScrText scrText, int bookNum)
+    {
+        try
+        {
+            // First try the canonical BookPresent method
+            if (scrText.BookPresent(bookNum))
+            {
+                return true;
+            }
+
+            // Fallback: Check if book file exists directly
+            // This handles cases where BooksPresentSet isn't updated (e.g., in-memory tests)
+            string bookFilePath = scrText.BookFilePath(bookNum);
+            return !string.IsNullOrEmpty(bookFilePath) && scrText.FileManager.Exists(bookFilePath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the modification date of a book file.
+    /// </summary>
+    private static DateTime? GetBookModificationDate(ScrText scrText, int bookNum)
+    {
+        try
+        {
+            string bookFilePath = scrText.BookFilePath(bookNum);
+            if (!string.IsNullOrEmpty(bookFilePath) && scrText.FileManager.Exists(bookFilePath))
+            {
+                return scrText.FileManager.GetLastWriteTime(bookFilePath);
+            }
+        }
+        catch
+        {
+            // If we can't get the date, return null
+        }
+
+        return null;
     }
 
     /// <summary>

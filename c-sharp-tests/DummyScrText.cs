@@ -8,6 +8,7 @@ using Paratext.Data.ProjectFileAccess;
 using Paratext.Data.ProjectSettingsAccess;
 using Paratext.Data.Users;
 using PtxUtils;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider
 {
@@ -56,6 +57,41 @@ namespace TestParanextDataProvider
                     ""
                 )
             ) { }
+
+        /// <summary>
+        /// Sets a book as present with a specific modification date.
+        /// Used for testing book comparison functionality (CAP-021).
+        /// </summary>
+        /// <param name="bookNum">Book number (1-123)</param>
+        /// <param name="isPresent">Whether the book should be marked as present</param>
+        /// <param name="modifiedDate">The modification date to set for the book file</param>
+        public void SetBookPresent(int bookNum, bool isPresent, DateTime modifiedDate)
+        {
+            if (isPresent)
+            {
+                // Create minimal USFM content for the book
+                string bookId = Canon.BookNumberToId(bookNum);
+                string usfmContent = $"\\id {bookId}\n\\c 1\n\\v 1 Test content.";
+
+                // Get the file path for this book
+                string bookFilePath = BookFilePath(bookNum);
+
+                // Write the file with the specified date
+                if (FileManager is InMemoryFileManager inMemoryManager)
+                {
+                    inMemoryManager.WriteFileWithDate(bookFilePath, usfmContent, modifiedDate);
+                }
+            }
+            else
+            {
+                // Remove the book file if it exists
+                string bookFilePath = BookFilePath(bookNum);
+                if (FileManager.Exists(bookFilePath))
+                {
+                    FileManager.Delete(bookFilePath);
+                }
+            }
+        }
 
         protected override void Load(bool ignoreLoadErrors = false)
         {
@@ -224,6 +260,19 @@ namespace TestParanextDataProvider
             {
                 return Path.Combine(figuresFolder, fileName);
             }
+
+            /// <summary>
+            /// Writes a file with a specific modification date.
+            /// Used for testing book comparison functionality (CAP-021).
+            /// </summary>
+            /// <param name="relFilePath">Relative file path</param>
+            /// <param name="content">File content as string</param>
+            /// <param name="writeTime">The modification date to set</param>
+            public void WriteFileWithDate(string relFilePath, string content, DateTime writeTime)
+            {
+                byte[] data = s_utf8NoBOM.GetBytes(content);
+                _fileSystem[relFilePath] = new InMemoryFile(data, writeTime);
+            }
             #endregion
 
             #region Private helper methods
@@ -302,9 +351,12 @@ namespace TestParanextDataProvider
                 public readonly byte[] Data;
 
                 public InMemoryFile(byte[] data)
+                    : this(data, DateTime.Now) { }
+
+                public InMemoryFile(byte[] data, DateTime writeTime)
                 {
                     Data = data ?? throw new ArgumentNullException(nameof(data));
-                    WriteTime = DateTime.Now;
+                    WriteTime = writeTime;
                 }
             }
             #endregion
