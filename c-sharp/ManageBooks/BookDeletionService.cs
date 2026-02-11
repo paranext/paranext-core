@@ -82,11 +82,3 @@ internal static class BookDeletionService
         return message;
     }
 }
-
-/// <summary>
-/// Information needed to confirm book deletion.
-/// </summary>
-/// <param name="Message">Confirmation message to display</param>
-/// <param name="DefaultToNo">Whether the default button should be No (for safety)</param>
-/// <param name="IsSharedProject">Whether the project is S/R enabled</param>
-public record DeleteConfirmation(string Message, bool DefaultToNo, bool IsSharedProject);
