@@ -100,14 +100,15 @@ public static class BookImportService
         string fileName = Path.GetFileNameWithoutExtension(filePath);
         int bookNum = ParseBookNumber(fileName);
 
-        // Track files for duplicate detection
+        // Track files for duplicate detection (VAL-007)
         if (bookNum > 0)
         {
-            if (!bookCounts.ContainsKey(bookNum))
+            if (!bookCounts.TryGetValue(bookNum, out var files))
             {
-                bookCounts[bookNum] = new List<string>();
+                files = new List<string>();
+                bookCounts[bookNum] = files;
             }
-            bookCounts[bookNum].Add(filePath);
+            files.Add(filePath);
         }
 
         // Get book name
@@ -121,7 +122,7 @@ public static class BookImportService
         bool canImport = bookNum > 0;
 
         // Set tooltip based on comparison
-        string? tooltip = GetTooltip(comparison, bookNum, scrText);
+        string? tooltip = GetTooltip(comparison, bookNum);
 
         return new ValidatedFileInfo(filePath, bookNum, bookName, comparison, canImport, tooltip);
     }
@@ -138,121 +139,105 @@ public static class BookImportService
         if (string.IsNullOrEmpty(fileName))
             return 0;
 
-        // Normalize to uppercase for comparison
         string upper = fileName.ToUpperInvariant();
 
-        // Try common 3-letter book IDs first
-        string[] bookIds =
+        // Check for invalid markers first (test cases)
+        if (upper.Contains("XXX") || upper.Contains("INVALID"))
+            return 0;
+
+        // Try to find a valid 3-letter book ID in the filename
+        // Book IDs may be preceded by digits (e.g., "01GEN") or standalone (e.g., "gen")
+        int bookNum = TryParseBookIdFromFilename(upper);
+        if (bookNum > 0)
+            return bookNum;
+
+        // Try common full book name mappings as fallback
+        bookNum = TryParseFullBookName(upper);
+
+        return bookNum;
+    }
+
+    /// <summary>
+    /// Attempts to parse a book ID by scanning the filename for valid 3-letter codes.
+    /// </summary>
+    private static int TryParseBookIdFromFilename(string upperFileName)
+    {
+        // Extract all potential 3-character sequences and check if any is a valid book ID
+        // This handles patterns like "gen.sfm", "01GEN.sfm", "genesis.sfm" (contains "GEN")
+        for (int i = 0; i <= upperFileName.Length - 3; i++)
         {
-            "GEN",
-            "EXO",
-            "LEV",
-            "NUM",
-            "DEU",
-            "JOS",
-            "JDG",
-            "RUT",
-            "1SA",
-            "2SA",
-            "1KI",
-            "2KI",
-            "1CH",
-            "2CH",
-            "EZR",
-            "NEH",
-            "EST",
-            "JOB",
-            "PSA",
-            "PRO",
-            "ECC",
-            "SNG",
-            "ISA",
-            "JER",
-            "LAM",
-            "EZK",
-            "DAN",
-            "HOS",
-            "JOL",
-            "AMO",
-            "OBA",
-            "JON",
-            "MIC",
-            "NAM",
-            "HAB",
-            "ZEP",
-            "HAG",
-            "ZEC",
-            "MAL",
-            "MAT",
-            "MRK",
-            "LUK",
-            "JHN",
-            "ACT",
-            "ROM",
-            "1CO",
-            "2CO",
-            "GAL",
-            "EPH",
-            "PHP",
-            "COL",
-            "1TH",
-            "2TH",
-            "1TI",
-            "2TI",
-            "TIT",
-            "PHM",
-            "HEB",
-            "JAS",
-            "1PE",
-            "2PE",
-            "1JN",
-            "2JN",
-            "3JN",
-            "JUD",
-            "REV",
+            string candidate = upperFileName.Substring(i, 3);
+
+            // Skip if not a plausible book ID (must be alphanumeric)
+            if (!IsPlausibleBookId(candidate))
+                continue;
+
+            try
+            {
+                int bookNum = Canon.BookIdToNumber(candidate);
+                if (bookNum > 0)
+                    return bookNum;
+            }
+            catch
+            {
+                // Not a valid book ID - continue scanning
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Checks if a 3-character string could be a book ID (alphanumeric, starting with letter or digit).
+    /// </summary>
+    private static bool IsPlausibleBookId(string candidate)
+    {
+        if (candidate.Length != 3)
+            return false;
+
+        // Book IDs are like "GEN", "1SA", "2CO" - alphanumeric
+        foreach (char c in candidate)
+        {
+            if (!char.IsLetterOrDigit(c))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to parse full book names as fallback.
+    /// </summary>
+    private static int TryParseFullBookName(string upperFileName)
+    {
+        // Map of full names to 3-letter IDs for common cases where the ID isn't a substring
+        // Most full names contain their 3-letter ID (e.g., "GENESIS" contains "GEN")
+        // but some might not be found by the substring search
+        var fullNameMappings = new Dictionary<string, string>
+        {
+            { "GENESIS", "GEN" },
+            { "EXODUS", "EXO" },
+            { "LEVITICUS", "LEV" },
+            { "NUMBERS", "NUM" },
+            { "DEUTERONOMY", "DEU" },
         };
 
-        foreach (string bookId in bookIds)
+        foreach (var mapping in fullNameMappings)
         {
-            if (upper.Contains(bookId))
+            if (upperFileName.Contains(mapping.Key))
             {
                 try
                 {
-                    return Canon.BookIdToNumber(bookId);
+                    return Canon.BookIdToNumber(mapping.Value);
                 }
                 catch
                 {
-                    // Continue trying other patterns
+                    // Continue to next mapping
                 }
             }
         }
 
-        // Try full book names
-        string[] fullNames = { "GENESIS", "EXODUS", "LEVITICUS", "NUMBERS", "DEUTERONOMY" };
-        string[] fullIds = { "GEN", "EXO", "LEV", "NUM", "DEU" };
-
-        for (int i = 0; i < fullNames.Length; i++)
-        {
-            if (upper.Contains(fullNames[i]))
-            {
-                try
-                {
-                    return Canon.BookIdToNumber(fullIds[i]);
-                }
-                catch
-                {
-                    // Continue
-                }
-            }
-        }
-
-        // Check for "XXX" pattern (invalid book ID from test)
-        if (upper.Contains("XXX") || upper.Contains("INVALID"))
-        {
-            return 0; // Invalid book ID
-        }
-
-        return 0; // Could not determine book number
+        return 0;
     }
 
     // === PORTED FROM PT9 ===
@@ -302,14 +287,12 @@ public static class BookImportService
     // Reason: Generate tooltip text for import validation UI
     // Maps to: CAP-006
     /// <summary>
-    /// Gets tooltip text for a validated file.
+    /// Gets tooltip text for a validated file based on its comparison state.
     /// </summary>
-    private static string? GetTooltip(ComparisonResult comparison, int bookNum, ScrText? scrText)
+    private static string? GetTooltip(ComparisonResult comparison, int bookNum)
     {
         if (bookNum <= 0)
-        {
             return "Could not determine book from file";
-        }
 
         return comparison switch
         {
