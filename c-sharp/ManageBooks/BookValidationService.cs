@@ -69,18 +69,31 @@ internal static class BookValidationService
         );
     }
 
+    // Canonical books are 1-66, non-canonical are 67+
+    private const int LastCanonicalBookNum = 66;
+
     /// <summary>
     /// Check versification compatibility between target and model projects.
     /// </summary>
     /// <remarks>
-    /// === STUB - TO BE IMPLEMENTED ===
+    /// === PORTED FROM PT9 ===
     /// Source: PT9/Paratext/ToolsMenu/CreateBooksForm.cs:298-316
     /// Method: CreateBooksForm.CheckVersification
     /// Maps to: EXT-004, CAP-018, TS-071, BHV-308
     ///
+    /// EXPLANATION:
     /// This method compares the versification of the target project with the model project.
-    /// If any canonical books are selected and versifications differ, a warning is returned.
-    /// Non-canonical books do not trigger versification checks.
+    /// The algorithm is:
+    /// 1. Get versification names from both projects
+    /// 2. Check if any selected book is canonical (bookNum &lt;= 66)
+    /// 3. If no canonical books are selected, versification is compatible (no comparison needed)
+    /// 4. If canonical books are selected:
+    ///    - Compare versification names
+    ///    - If same: compatible with no warning
+    ///    - If different: not compatible, return warning message
+    ///
+    /// Non-canonical books (67+) do not trigger versification checks because versification
+    /// only defines chapter/verse structure for canonical books.
     /// </remarks>
     /// <param name="targetScrText">Target project to create books in</param>
     /// <param name="modelScrText">Model project to copy from</param>
@@ -92,10 +105,56 @@ internal static class BookValidationService
         BookSet selectedBooks
     )
     {
-        // STUB: NotImplementedException for TDD RED phase
-        // This will be implemented by the tdd-implementer agent
-        throw new NotImplementedException(
-            "CAP-018: CheckVersificationCompatibility not yet implemented"
+        // Get versification names from both projects
+        string sourceVersification = modelScrText.Settings.Versification.Name;
+        string targetVersification = targetScrText.Settings.Versification.Name;
+
+        // Check if any selected book is canonical (book number <= 66)
+        bool hasCanonicalBook = false;
+        foreach (int bookNum in selectedBooks.SelectedBookNumbers)
+        {
+            if (bookNum <= LastCanonicalBookNum)
+            {
+                hasCanonicalBook = true;
+                break;
+            }
+        }
+
+        // If no canonical books selected, versification is compatible (no check needed)
+        if (!hasCanonicalBook)
+        {
+            return new VersificationCheckResult(
+                IsCompatible: true,
+                WarningMessage: null,
+                SourceVersification: sourceVersification,
+                TargetVersification: targetVersification
+            );
+        }
+
+        // Compare versifications for canonical books
+        bool versificationsMatch = sourceVersification == targetVersification;
+
+        if (versificationsMatch)
+        {
+            return new VersificationCheckResult(
+                IsCompatible: true,
+                WarningMessage: null,
+                SourceVersification: sourceVersification,
+                TargetVersification: targetVersification
+            );
+        }
+
+        // Versifications differ - return warning
+        string warningMessage =
+            $"The model project uses {sourceVersification} versification, "
+            + $"but this project uses {targetVersification} versification. "
+            + "This may result in different verse numbering.";
+
+        return new VersificationCheckResult(
+            IsCompatible: false,
+            WarningMessage: warningMessage,
+            SourceVersification: sourceVersification,
+            TargetVersification: targetVersification
         );
     }
 }
