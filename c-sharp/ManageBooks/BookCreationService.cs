@@ -59,6 +59,13 @@ internal static class BookCreationService
         return new PermissionResult(Success: true, ErrorMessage: null, UnauthorizedBooks: []);
     }
 
+    // Book number range: 1-66 canonical, 67-123 non-canonical (deuterocanon and extras)
+    // Note: Canon API only supports book numbers 1-123; 124 causes errors
+    private const int FirstBookNum = 1;
+    private const int LastBookNum = 123;
+    private const int LastCanonicalBookNum = 66;
+    private const int FirstNonCanonicalBookNum = 67;
+
     /// <summary>
     /// Calculate available books for creation (excludes existing books).
     /// </summary>
@@ -68,9 +75,12 @@ internal static class BookCreationService
     /// Method: CreateBooksForm.CreateAvailableBookSet
     /// Maps to: EXT-005, CAP-019, BHV-T015, BHV-T018
     ///
-    /// For SBA projects: returns only non-canonical books (67-124)
-    /// For standard projects: returns all books (1-124)
-    /// Both subtract existing books from project.
+    /// EXPLANATION:
+    /// This algorithm calculates which books are available for creation in a project:
+    /// 1. For SBA (Study Bible Additions) projects: start with non-canonical books only (67-123)
+    /// 2. For standard projects: start with all books (1-123)
+    /// 3. Subtract books already present in the project (LocalBooksPresentSet)
+    /// 4. Return the remaining books as available for creation
     ///
     /// Related: INV-004 (SBA projects cannot create canonical books)
     /// </remarks>
@@ -84,11 +94,26 @@ internal static class BookCreationService
     {
         ArgumentNullException.ThrowIfNull(scrText);
 
-        // RED PHASE STUB: Implementation to be provided by TDD Implementer
-        // This stub exists solely to allow tests to compile and fail properly
-        throw new NotImplementedException(
-            "CAP-019: CreateAvailableBookSet not yet implemented. "
-                + "See extraction-plan.md EXT-005 for implementation details."
-        );
+        // Create a new BookSet to hold available books
+        BookSet availableBooks = new();
+
+        // Determine the starting book number based on project type
+        // SBA projects can only create non-canonical books (INV-004)
+        int startBookNum = isStudyBible ? FirstNonCanonicalBookNum : FirstBookNum;
+
+        // Get books already present in the project
+        BookSet existingBooks = scrText.Settings.LocalBooksPresentSet;
+
+        // Add all books in the appropriate range that don't already exist
+        for (int bookNum = startBookNum; bookNum <= LastBookNum; bookNum++)
+        {
+            // Only add if book doesn't already exist in project
+            if (!existingBooks.IsSelected(bookNum) && !scrText.BookPresent(bookNum))
+            {
+                availableBooks.Add(bookNum);
+            }
+        }
+
+        return availableBooks;
     }
 }
