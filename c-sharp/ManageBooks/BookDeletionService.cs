@@ -315,4 +315,66 @@ internal static class BookDeletionService
         _ = scrText;
         _ = bookNum;
     }
+
+    /// <summary>
+    /// Update project plan after books are deleted.
+    /// Removes the deleted books from the project plan's progress tracking.
+    /// </summary>
+    /// <remarks>
+    /// === PORTED FROM PT9 ===
+    /// Source: PT9/Paratext/ToolsMenu/DeleteBooksForm.cs:139-162
+    /// Method: DeleteBooksForm.cmdOK_Click (project plan update section)
+    /// Maps to: EXT-010, CAP-024, BHV-309
+    ///
+    /// EXPLANATION:
+    /// When books are deleted from a project, the project plan must be updated
+    /// to remove those books from progress tracking. This ensures the project
+    /// plan stays in sync with the actual books present in the project.
+    ///
+    /// PT9 Code Pattern:
+    /// <code>
+    /// ProjectProgressInfo.SetBooksWithProgress(scrText, bookSet =>
+    /// {
+    ///     foreach (int bookNum in deletedBooks.SelectedBookNumbers)
+    ///     {
+    ///         if (bookSet.IsSelected(bookNum))
+    ///             bookSet.Deselect(bookNum);
+    ///     }
+    /// });
+    /// </code>
+    ///
+    /// STUB IMPLEMENTATION:
+    /// The ProjectProgressInfo.SetBooksWithProgress API is not currently exposed
+    /// in ParatextData.dll. This method is a no-op placeholder that will be
+    /// implemented when the API becomes available.
+    ///
+    /// This method is called by CAP-023 (DeleteBooksWithConfirmation) after
+    /// successful book deletion. It is NOT called if deletion fails or user cancels.
+    /// </remarks>
+    /// <param name="scrText">The project containing the project plan</param>
+    /// <param name="deletedBookNumbers">Book numbers that were deleted</param>
+    public static void UpdateProjectPlanAfterDelete(ScrText scrText, int[] deletedBookNumbers)
+    {
+        // Handle null or empty inputs gracefully (no-op)
+        if (scrText == null || deletedBookNumbers == null || deletedBookNumbers.Length == 0)
+        {
+            return;
+        }
+
+        // TODO: Implement when ProjectProgressInfo.SetBooksWithProgress API is available in ParatextData
+        // The PT9 pattern uses:
+        //   ProjectProgressInfo.SetBooksWithProgress(scrText, bookSet => {
+        //       foreach (int bookNum in deletedBookNumbers) {
+        //           if (bookSet.IsSelected(bookNum))
+        //               bookSet.Deselect(bookNum);
+        //       }
+        //   });
+        //
+        // Currently a no-op stub. The method accepts valid parameters and returns silently.
+        // This graceful degradation matches PT9 behavior where project plan errors are ignored.
+
+        // Suppress unused parameter warnings - parameters required for future implementation
+        _ = scrText;
+        _ = deletedBookNumbers;
+    }
 }
