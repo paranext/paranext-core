@@ -25,6 +25,13 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
 {
     private readonly LocalParatextProjects _paratextProjects;
 
+    /// <summary>
+    /// Cached JSON serialization options for PAPI request deserialization.
+    /// Uses PropertyNameCaseInsensitive for robust handling of JSON property casing.
+    /// </summary>
+    private static readonly JsonSerializerOptions s_jsonOptions =
+        new() { PropertyNameCaseInsensitive = true };
+
     public ManageBooksDataProvider(PapiClient papiClient, LocalParatextProjects paratextProjects)
         : base("platformScripture.manageBooks", papiClient)
     {
@@ -64,7 +71,7 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
         {
             CreateBooksRequest? request = JsonSerializer.Deserialize<CreateBooksRequest>(
                 requestElement.GetRawText(),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                s_jsonOptions
             );
 
             return await ExecuteCreateBooksAsync(request);
@@ -124,7 +131,7 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
         {
             CopyBooksRequest? request = JsonSerializer.Deserialize<CopyBooksRequest>(
                 requestElement.GetRawText(),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                s_jsonOptions
             );
 
             return await ExecuteCopyBooksAsync(request);
