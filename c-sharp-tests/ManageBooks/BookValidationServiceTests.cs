@@ -2404,5 +2404,279 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        #region CAP-012: CheckSBABaseProjectOverlap Public API Tests
+
+        /// <summary>
+        /// Acceptance test for CAP-012: CheckSBABaseProjectOverlap public API.
+        /// This is the "done signal" - when this passes, CAP-012 is complete.
+        ///
+        /// The public API:
+        /// - Takes projectId (string) and bookNumbers (int[])
+        /// - Resolves projectId to ScrText via LocalParatextProjects
+        /// - Uses CAP-027 internally to check SBA base project overlap
+        /// - Returns SBAWarningResult
+        ///
+        /// CAP-012 depends on CAP-027 which implements the core logic.
+        /// This test verifies the public API wrapper works correctly.
+        /// </summary>
+        /// <remarks>
+        /// Golden Master: gm-018-sba-base-warning
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-314")]
+        [Property("ExtractionId", "EXT-013")]
+        [Property("GoldenMaster", "gm-018")]
+        [Description("Acceptance test: CheckSBABaseProjectOverlap public API detects books not in base project")]
+        public void CheckSBABaseProjectOverlap_PublicApi_AcceptanceTest()
+        {
+            // Arrange - Create base project with some books
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+            const int MATTHEW = 40;
+
+            var baseScrText = CreateDummyProject();
+            var baseProjectDetails = CreateProjectDetails(baseScrText);
+            ParatextProjects.FakeAddProject(baseProjectDetails, baseScrText);
+
+            baseScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 In the beginning...", null);
+            baseScrText.PutText(MATTHEW, 0, false, @"\id MAT \c 1 \v 1 The genealogy...", null);
+            // Note: Exodus is NOT in the base project
+
+            // Create SBA project linked to base
+            var sbaScrText = CreateDummySBAProject(baseScrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaScrText);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaScrText);
+
+            var sbaProjectId = sbaProjectDetails.Metadata.Id;
+
+            // Select books - Genesis and Matthew exist in base, Exodus does not
+            var bookNumbers = new[] { GENESIS, EXODUS, MATTHEW };
+
+            // Act - Call the public API with project ID string and book numbers array
+            var result = BookValidationService.CheckSBABaseProjectOverlap(sbaProjectId, bookNumbers);
+
+            // Assert - Full outcome verification
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.ShowWarning, Is.True, "Should show warning when books not in base");
+            Assert.That(result.BooksNotInBase, Does.Contain(EXODUS), "Exodus should be in missing books");
+            Assert.That(result.BooksNotInBase, Does.Not.Contain(GENESIS), "Genesis exists in base");
+            Assert.That(result.BooksNotInBase, Does.Not.Contain(MATTHEW), "Matthew exists in base");
+            Assert.That(result.WarningMessage, Is.Not.Null.And.Not.Empty, "Warning message should be provided");
+
+            baseScrText.Dispose();
+            sbaScrText.Dispose();
+        }
+
+        #endregion
+
+        #region CAP-012 Contract Tests - Project ID Resolution
+
+        /// <summary>
+        /// Verifies the public API correctly resolves project ID to ScrText.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-314")]
+        public void CheckSBABaseProjectOverlap_ValidProjectId_ResolvesProjectCorrectly()
+        {
+            // Arrange - Create SBA project with base
+            const int GENESIS = 1;
+            const int EXODUS = 2;
+
+            var baseScrText = CreateDummyProject();
+            var baseProjectDetails = CreateProjectDetails(baseScrText);
+            ParatextProjects.FakeAddProject(baseProjectDetails, baseScrText);
+
+            baseScrText.PutText(GENESIS, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            baseScrText.PutText(EXODUS, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+
+            var sbaScrText = CreateDummySBAProject(baseScrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaScrText);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaScrText);
+
+            var sbaProjectId = sbaProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { GENESIS, EXODUS };
+
+            // Act
+            var result = BookValidationService.CheckSBABaseProjectOverlap(sbaProjectId, bookNumbers);
+
+            // Assert - Should successfully resolve and check
+            Assert.That(result.ShowWarning, Is.False, "All books exist in base - no warning");
+            Assert.That(result.BooksNotInBase, Is.Empty, "No missing books");
+
+            baseScrText.Dispose();
+            sbaScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Verifies the public API handles invalid project ID gracefully.
+        /// For non-existent project, should return no warning (fail silently).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-314")]
+        public void CheckSBABaseProjectOverlap_InvalidProjectId_ReturnsNoWarning()
+        {
+            // Arrange
+            var invalidProjectId = Guid.NewGuid().ToString("N"); // Non-existent project
+            var bookNumbers = new[] { 1, 2 };
+
+            // Act
+            var result = BookValidationService.CheckSBABaseProjectOverlap(invalidProjectId, bookNumbers);
+
+            // Assert - Should return no warning for invalid/non-existent project
+            Assert.That(result.ShowWarning, Is.False, "Should not warn for invalid project ID");
+            Assert.That(result.BooksNotInBase, Is.Empty, "Should return empty list for invalid project");
+        }
+
+        /// <summary>
+        /// Verifies the public API handles non-SBA project correctly.
+        /// Non-SBA projects should never show warning.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-314")]
+        public void CheckSBABaseProjectOverlap_PublicApi_NonSBAProject_ReturnsNoWarning()
+        {
+            // Arrange - Use regular project (not SBA)
+            var projectId = _modelProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 2, 3 };
+
+            // Act
+            var result = BookValidationService.CheckSBABaseProjectOverlap(projectId, bookNumbers);
+
+            // Assert - Non-SBA projects should not show warning
+            Assert.That(result.ShowWarning, Is.False, "Non-SBA project should not show warning");
+            Assert.That(result.BooksNotInBase, Is.Empty);
+        }
+
+        #endregion
+
+        #region CAP-012 Contract Tests - Book Numbers Array Handling
+
+        /// <summary>
+        /// Verifies empty book numbers array returns no warning.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-314")]
+        public void CheckSBABaseProjectOverlap_EmptyBookNumbers_ReturnsNoWarning()
+        {
+            // Arrange - Create SBA project
+            var baseScrText = CreateDummyProject();
+            var baseProjectDetails = CreateProjectDetails(baseScrText);
+            ParatextProjects.FakeAddProject(baseProjectDetails, baseScrText);
+
+            var sbaScrText = CreateDummySBAProject(baseScrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaScrText);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaScrText);
+
+            var sbaProjectId = sbaProjectDetails.Metadata.Id;
+            var bookNumbers = Array.Empty<int>();
+
+            // Act
+            var result = BookValidationService.CheckSBABaseProjectOverlap(sbaProjectId, bookNumbers);
+
+            // Assert
+            Assert.That(result.ShowWarning, Is.False, "Empty selection should not show warning");
+            Assert.That(result.BooksNotInBase, Is.Empty);
+
+            baseScrText.Dispose();
+            sbaScrText.Dispose();
+        }
+
+        /// <summary>
+        /// Verifies all books not in base returns warning for all.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-314")]
+        public void CheckSBABaseProjectOverlap_AllBooksNotInBase_ReturnsWarningForAll()
+        {
+            // Arrange - Create SBA with empty base project
+            var baseScrText = CreateDummyProject();
+            var baseProjectDetails = CreateProjectDetails(baseScrText);
+            ParatextProjects.FakeAddProject(baseProjectDetails, baseScrText);
+            // Note: No books added to base project
+
+            var sbaScrText = CreateDummySBAProject(baseScrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaScrText);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaScrText);
+
+            var sbaProjectId = sbaProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { 1, 2, 3 };
+
+            // Act
+            var result = BookValidationService.CheckSBABaseProjectOverlap(sbaProjectId, bookNumbers);
+
+            // Assert - All books should be in missing list
+            Assert.That(result.ShowWarning, Is.True);
+            Assert.That(result.BooksNotInBase, Is.EquivalentTo(new[] { 1, 2, 3 }));
+
+            baseScrText.Dispose();
+            sbaScrText.Dispose();
+        }
+
+        #endregion
+
+        #region CAP-012 Edge Case Tests
+
+        /// <summary>
+        /// Verifies non-canonical books are handled correctly.
+        /// SBA projects typically work with non-canonical books (67+).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-068")]
+        [Property("BehaviorId", "BHV-T016")]
+        [Property("ExtractionId", "EXT-013")]
+        public void CheckSBABaseProjectOverlap_NonCanonicalBooks_HandledCorrectly()
+        {
+            // Arrange - Base has Tobit (67) but not Judith (68)
+            const int TOBIT = 67;
+            const int JUDITH = 68;
+
+            var baseScrText = CreateDummyProject();
+            var baseProjectDetails = CreateProjectDetails(baseScrText);
+            ParatextProjects.FakeAddProject(baseProjectDetails, baseScrText);
+
+            baseScrText.PutText(TOBIT, 0, false, @"\id TOB \c 1 \v 1 Tobit content", null);
+            // Judith is NOT in base
+
+            var sbaScrText = CreateDummySBAProject(baseScrText);
+            var sbaProjectDetails = CreateProjectDetails(sbaScrText);
+            ParatextProjects.FakeAddProject(sbaProjectDetails, sbaScrText);
+
+            var sbaProjectId = sbaProjectDetails.Metadata.Id;
+            var bookNumbers = new[] { TOBIT, JUDITH };
+
+            // Act
+            var result = BookValidationService.CheckSBABaseProjectOverlap(sbaProjectId, bookNumbers);
+
+            // Assert - Only Judith should be missing
+            Assert.That(result.ShowWarning, Is.True);
+            Assert.That(result.BooksNotInBase, Is.EqualTo(new[] { JUDITH }));
+            Assert.That(result.BooksNotInBase, Does.Not.Contain(TOBIT));
+
+            baseScrText.Dispose();
+            sbaScrText.Dispose();
+        }
+
+        #endregion
     }
 }

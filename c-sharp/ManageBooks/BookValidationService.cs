@@ -508,4 +508,40 @@ internal static class BookValidationService
             WarningMessage: warningMessage
         );
     }
+
+    /// <summary>
+    /// Check if selected books overlap with SBA base project (public API taking project ID).
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: Public API that resolves project ID to ScrText before delegating to CAP-027
+    /// Maps to: CAP-012, TS-068, BHV-314, BHV-T016, EXT-013
+    ///
+    /// EXPLANATION:
+    /// This method is the public API for SBA base project overlap checking. It:
+    /// 1. Handles null/empty project ID by returning no warning
+    /// 2. Handles null/empty book array by returning no warning
+    /// 3. Resolves the project ID string to a ScrText via LocalParatextProjects
+    /// 4. Converts int[] to BookSet
+    /// 5. Delegates to the internal CheckSBABaseProjectOverlap(ScrText, BookSet) method (CAP-027)
+    ///
+    /// This method is used by the delete workflow (Micro-Phase B7) to warn users
+    /// when deleting books in an SBA project.
+    /// </remarks>
+    /// <param name="projectId">Project ID string (GUID format)</param>
+    /// <param name="bookNumbers">Books to check (null treated as empty)</param>
+    /// <returns>Warning result indicating if books are missing from base</returns>
+    public static SBAWarningResult CheckSBABaseProjectOverlap(string projectId, int[] bookNumbers)
+    {
+        // CAP-012: CheckSBABaseProjectOverlap public API not yet implemented.
+        // TDD RED phase - tests should compile but fail.
+        // This method should:
+        // 1. Resolve projectId to ScrText via LocalParatextProjects
+        // 2. Convert int[] to BookSet
+        // 3. Delegate to CheckSBABaseProjectOverlap(ScrText, BookSet) (CAP-027)
+        throw new NotImplementedException(
+            "CAP-012: CheckSBABaseProjectOverlap(string, int[]) not yet implemented. "
+                + "TDD RED phase - tests should compile but fail."
+        );
+    }
 }
