@@ -37,7 +37,7 @@ public static class BookImportService
         }
 
         // Find the project
-        ScrText? scrText = FindScrText(projectId);
+        ScrText? scrText = BookServiceHelpers.FindScrText(projectId);
 
         // Parse files and extract book info
         var validatedFiles = new List<ValidatedFileInfo>();
@@ -79,7 +79,7 @@ public static class BookImportService
             {
                 string file1 = Path.GetFileName(kvp.Value[0]);
                 string file2 = Path.GetFileName(kvp.Value[1]);
-                string bookName = GetBookName(kvp.Key);
+                string bookName = BookServiceHelpers.GetBookName(kvp.Key);
                 return $"{file1} <=> {file2}: Two files contain information for the same book ({bookName})";
             }
         }
@@ -114,7 +114,7 @@ public static class BookImportService
         }
 
         // Get book name
-        string bookName = bookNum > 0 ? GetBookName(bookNum) : "";
+        string bookName = bookNum > 0 ? BookServiceHelpers.GetBookName(bookNum) : "";
 
         // Determine comparison state
         ComparisonResult comparison = GetComparisonState(bookNum, scrText);
@@ -346,57 +346,6 @@ public static class BookImportService
         };
     }
 
-    /// <summary>
-    /// Gets a book name for display.
-    /// </summary>
-    private static string GetBookName(int bookNum)
-    {
-        if (bookNum <= 0)
-            return "";
-
-        try
-        {
-            return Canon.BookNumberToEnglishName(bookNum);
-        }
-        catch
-        {
-            return $"Book {bookNum}";
-        }
-    }
-
-    /// <summary>
-    /// Finds a ScrText by project ID.
-    /// </summary>
-    private static ScrText? FindScrText(string projectId)
-    {
-        if (string.IsNullOrEmpty(projectId))
-        {
-            return null;
-        }
-
-        try
-        {
-            HexId hexId = HexId.FromStr(projectId);
-            return ScrTextCollection.GetById(hexId);
-        }
-        catch
-        {
-            // Project not found
-        }
-
-        // Fallback: try to find by iterating through all projects
-        try
-        {
-            return ScrTextCollection
-                .ScrTexts(IncludeProjects.Everything)
-                .FirstOrDefault(st => st.Guid.ToString() == projectId);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     #region CAP-026: USX Import
 
     // === PORTED FROM PT9 ===
@@ -602,7 +551,7 @@ public static class BookImportService
         }
 
         // Find the project
-        ScrText? scrText = FindScrText(projectId);
+        ScrText? scrText = BookServiceHelpers.FindScrText(projectId);
         if (scrText == null)
         {
             return BookOperationResult.ErrorResult(
