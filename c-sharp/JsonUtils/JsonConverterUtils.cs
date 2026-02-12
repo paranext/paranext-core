@@ -7,27 +7,55 @@ namespace Paranext.DataProvider.JsonUtils;
 /// </summary>
 public static class JsonConverterUtils
 {
-    // Frontend CommentStatus values (TypeScript)
-    internal const string COMMENT_STATUS_RESOLVED = "Resolved";
-    internal const string COMMENT_STATUS_TODO = "Todo";
-    internal const string COMMENT_STATUS_DONE = "Done";
-    internal const string COMMENT_STATUS_UNSPECIFIED = "Unspecified";
+    /// <summary>
+    /// Frontend constants for Comments in Platform. These are used in TypeScript code and passed
+    /// back in JSON.
+    /// </summary>
+    /// <remarks>
+    /// In Paratext 9, Comments are called "Notes".
+    /// </remarks>
+    internal static class PlatformComment
+    {
+        internal class Status
+        {
+            public const string RESOLVED = "Resolved";
+            public const string TO_DO = "Todo";
+            public const string DONE = "Done";
+            public const string UNSPECIFIED = "Unspecified";
+        }
 
-    // Backend NoteStatus values (Paratext internal)
-    internal const string NOTE_STATUS_DELETED = "deleted";
-    internal const string NOTE_STATUS_TODO = "todo";
-    internal const string NOTE_STATUS_DONE = "done";
-    internal const string NOTE_STATUS_EMPTY = "";
+        internal class Type
+        {
+            public const string NORMAL = "Normal";
+            public const string CONFLICT = "Conflict";
+            public const string UNSPECIFIED = "Unspecified";
+        }
+    }
 
-    // Frontend CommentType values (TypeScript)
-    internal const string COMMENT_TYPE_NORMAL = "Normal";
-    internal const string COMMENT_TYPE_CONFLICT = "Conflict";
-    internal const string COMMENT_TYPE_UNSPECIFIED = "Unspecified";
+    /// <summary>
+    /// Backend constants for Notes in ParatextData. These are typically represented as string-based
+    /// quasi-"enums" in Paratext, for backward compatibility and easy serialization.
+    /// </summary>
+    /// <remarks>
+    /// In Platform, Notes are called "Comments".
+    /// </remarks>
+    internal static class ParatextNote
+    {
+        internal class Status
+        {
+            public const string RESOLVED = "deleted";
+            public const string TO_DO = "todo";
+            public const string DONE = "done";
+            public const string UNSPECIFIED = "";
+        }
 
-    // Backend NoteType values (Paratext internal)
-    internal const string NOTE_TYPE_NORMAL = "normal";
-    internal const string NOTE_TYPE_CONFLICT = "conflict";
-    internal const string NOTE_TYPE_EMPTY = "";
+        internal class Type
+        {
+            public const string NORMAL = "normal";
+            public const string CONFLICT = "conflict";
+            public const string UNSPECIFIED = "";
+        }
+    }
 
     /// <summary>
     /// Maps frontend CommentStatus to backend NoteStatus.
@@ -36,11 +64,10 @@ public static class JsonConverterUtils
     {
         return commentStatus switch
         {
-            COMMENT_STATUS_RESOLVED => NOTE_STATUS_DELETED,
-            COMMENT_STATUS_TODO => NOTE_STATUS_TODO,
-            COMMENT_STATUS_DONE => NOTE_STATUS_DONE,
-            COMMENT_STATUS_UNSPECIFIED => NOTE_STATUS_EMPTY,
-            NOTE_STATUS_EMPTY => NOTE_STATUS_EMPTY,
+            PlatformComment.Status.RESOLVED => ParatextNote.Status.RESOLVED,
+            PlatformComment.Status.TO_DO => ParatextNote.Status.TO_DO,
+            PlatformComment.Status.DONE => ParatextNote.Status.DONE,
+            PlatformComment.Status.UNSPECIFIED => ParatextNote.Status.UNSPECIFIED,
             _ => commentStatus.ToLowerInvariant(),
         };
     }
@@ -52,13 +79,13 @@ public static class JsonConverterUtils
     {
         return noteStatus switch
         {
-            NOTE_STATUS_DELETED => COMMENT_STATUS_RESOLVED,
-            NOTE_STATUS_TODO => COMMENT_STATUS_TODO,
-            NOTE_STATUS_DONE => COMMENT_STATUS_DONE,
-            NOTE_STATUS_EMPTY => COMMENT_STATUS_UNSPECIFIED,
+            ParatextNote.Status.RESOLVED => PlatformComment.Status.RESOLVED,
+            ParatextNote.Status.TO_DO => PlatformComment.Status.TO_DO,
+            ParatextNote.Status.DONE => PlatformComment.Status.DONE,
+            ParatextNote.Status.UNSPECIFIED => PlatformComment.Status.UNSPECIFIED,
             _ => noteStatus.Length > 0
                 ? char.ToUpperInvariant(noteStatus[0]) + noteStatus[1..]
-                : COMMENT_STATUS_UNSPECIFIED,
+                : PlatformComment.Status.UNSPECIFIED,
         };
     }
 
@@ -69,10 +96,9 @@ public static class JsonConverterUtils
     {
         return commentType switch
         {
-            COMMENT_TYPE_UNSPECIFIED => NOTE_TYPE_EMPTY,
-            COMMENT_TYPE_NORMAL => NOTE_TYPE_NORMAL,
-            COMMENT_TYPE_CONFLICT => NOTE_TYPE_CONFLICT,
-            NOTE_TYPE_EMPTY => NOTE_TYPE_EMPTY,
+            PlatformComment.Type.UNSPECIFIED => ParatextNote.Type.UNSPECIFIED,
+            PlatformComment.Type.NORMAL => ParatextNote.Type.NORMAL,
+            PlatformComment.Type.CONFLICT => ParatextNote.Type.CONFLICT,
             _ => commentType.ToLowerInvariant(),
         };
     }
@@ -84,12 +110,12 @@ public static class JsonConverterUtils
     {
         return noteType switch
         {
-            NOTE_TYPE_EMPTY => COMMENT_TYPE_UNSPECIFIED,
-            NOTE_TYPE_NORMAL => COMMENT_TYPE_NORMAL,
-            NOTE_TYPE_CONFLICT => COMMENT_TYPE_CONFLICT,
+            ParatextNote.Type.UNSPECIFIED => PlatformComment.Type.UNSPECIFIED,
+            ParatextNote.Type.NORMAL => PlatformComment.Type.NORMAL,
+            ParatextNote.Type.CONFLICT => PlatformComment.Type.CONFLICT,
             _ => noteType.Length > 0
                 ? char.ToUpperInvariant(noteType[0]) + noteType[1..]
-                : COMMENT_TYPE_UNSPECIFIED,
+                : PlatformComment.Type.UNSPECIFIED,
         };
     }
 

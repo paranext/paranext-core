@@ -200,11 +200,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Filter by status
         if (!string.IsNullOrEmpty(selector.Status))
         {
-            // Convert from frontend CommentStatus format (e.g., "Todo") to internal NoteStatus format (e.g., "todo")
-            string noteStatus = JsonConverterUtils.ConvertCommentStatusToNoteStatus(
-                selector.Status
-            );
-            var status = new Enum<NoteStatus>(noteStatus);
+            var status = new Enum<NoteStatus>(selector.Status);
             filteredThreads = filteredThreads.Where(t => t.Status == status);
         }
 

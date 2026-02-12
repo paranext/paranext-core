@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Xml;
 using Paranext.DataProvider.JsonUtils;
+using static Paranext.DataProvider.JsonUtils.JsonConverterUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
@@ -1082,13 +1083,13 @@ namespace TestParanextDataProvider.Projects
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
-            // Verify thread status is Resolved (displayed as 'deleted' internally by ParatextData)
+            // Verify thread status is resolved (displayed as 'deleted' internally by ParatextData)
             var threadAfter = _provider
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
                 .Single();
             Assert.That(
                 threadAfter.Status.ToString().ToLowerInvariant(),
-                Is.EqualTo("deleted"),
+                Is.EqualTo(ParatextNote.Status.RESOLVED),
                 "Thread status should be Resolved (labeled 'deleted' by ParatextData)"
             );
 
@@ -1110,7 +1111,7 @@ namespace TestParanextDataProvider.Projects
             var lastComment = threadAfter.Comments.Last();
             Assert.That(
                 lastComment.Status.ToString().ToLowerInvariant(),
-                Is.EqualTo("deleted"),
+                Is.EqualTo(ParatextNote.Status.RESOLVED),
                 "Last comment should have Resolved status (labeled 'deleted' by ParatextData)"
             );
 
@@ -1152,14 +1153,14 @@ namespace TestParanextDataProvider.Projects
             _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
             ;
 
-            // Verify thread status is Todo
+            // Verify thread status is to-do
             var threadAfterUnresolve = _provider
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
                 .Single();
             Assert.That(
                 threadAfterUnresolve.Status.ToString(),
-                Is.EqualTo("todo"),
-                "Thread status should be todo after unresolving"
+                Is.EqualTo(ParatextNote.Status.TO_DO),
+                "Thread status should be back to to-do after unresolving"
             );
 
             // Verify thread is marked as read
@@ -1176,12 +1177,12 @@ namespace TestParanextDataProvider.Projects
                 "A new comment should be created when unresolving"
             );
 
-            // Verify the new comment has Todo status
+            // Verify the new comment has to-do status
             var lastComment = threadAfterUnresolve.Comments.Last();
             Assert.That(
                 lastComment.Status.ToString(),
-                Is.EqualTo("todo"),
-                "Last comment should have `todo` status"
+                Is.EqualTo(ParatextNote.Status.TO_DO),
+                "Last comment should have a to-do status"
             );
 
             // Verify comment is marked as read
@@ -1208,8 +1209,10 @@ namespace TestParanextDataProvider.Projects
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
             // Assert - Verify it appears in resolved filter
+            // Status uses backend status format since CommentThreadSelectorConverter
+            // handles the conversion from frontend CommentStatus during JSON deserialization
             var resolvedThreads = _provider.GetCommentThreads(
-                new CommentThreadSelector { Status = "Resolved" }
+                new CommentThreadSelector { Status = ParatextNote.Status.RESOLVED }
             );
 
             Assert.That(
@@ -1261,9 +1264,11 @@ namespace TestParanextDataProvider.Projects
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
 
-            // Assert - Verify only the todo thread appears in Todo filter
+            // Assert - Verify only the to-do thread appears in Todo filter
+            // Status uses internal NoteStatus format since CommentThreadSelectorConverter
+            // handles the conversion from frontend CommentStatus during JSON deserialization
             var todoThreads = _provider.GetCommentThreads(
-                new CommentThreadSelector { Status = "Todo" }
+                new CommentThreadSelector { Status = ParatextNote.Status.TO_DO }
             );
 
             Assert.That(

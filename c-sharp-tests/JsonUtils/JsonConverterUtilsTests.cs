@@ -1,5 +1,5 @@
 using NUnit.Framework;
-using Paranext.DataProvider.JsonUtils;
+using static Paranext.DataProvider.JsonUtils.JsonConverterUtils;
 
 namespace ParanextDataProviderTests.JsonUtils;
 
@@ -8,15 +8,15 @@ public class JsonConverterUtilsTests
 {
     #region ConvertCommentStatusToNoteStatus Tests
 
-    [TestCase(JsonConverterUtils.COMMENT_STATUS_RESOLVED, JsonConverterUtils.NOTE_STATUS_DELETED)]
-    [TestCase(JsonConverterUtils.COMMENT_STATUS_TODO, JsonConverterUtils.NOTE_STATUS_TODO)]
-    [TestCase(JsonConverterUtils.COMMENT_STATUS_DONE, JsonConverterUtils.NOTE_STATUS_DONE)]
-    [TestCase(JsonConverterUtils.COMMENT_STATUS_UNSPECIFIED, JsonConverterUtils.NOTE_STATUS_EMPTY)]
-    [TestCase(JsonConverterUtils.NOTE_STATUS_EMPTY, JsonConverterUtils.NOTE_STATUS_EMPTY)]
+    [TestCase(PlatformComment.Status.RESOLVED, ParatextNote.Status.RESOLVED)]
+    [TestCase(PlatformComment.Status.TO_DO, ParatextNote.Status.TO_DO)]
+    [TestCase(PlatformComment.Status.DONE, ParatextNote.Status.DONE)]
+    [TestCase(PlatformComment.Status.UNSPECIFIED, ParatextNote.Status.UNSPECIFIED)]
+    [TestCase(ParatextNote.Status.UNSPECIFIED, ParatextNote.Status.UNSPECIFIED)]
     [TestCase("CustomStatus", "customstatus")]
     public void ConvertCommentStatusToNoteStatus_ReturnsExpectedValue(string input, string expected)
     {
-        string result = JsonConverterUtils.ConvertCommentStatusToNoteStatus(input);
+        string result = ConvertCommentStatusToNoteStatus(input);
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -24,14 +24,14 @@ public class JsonConverterUtilsTests
 
     #region ConvertNoteStatusToCommentStatus Tests
 
-    [TestCase(JsonConverterUtils.NOTE_STATUS_DELETED, JsonConverterUtils.COMMENT_STATUS_RESOLVED)]
-    [TestCase(JsonConverterUtils.NOTE_STATUS_TODO, JsonConverterUtils.COMMENT_STATUS_TODO)]
-    [TestCase(JsonConverterUtils.NOTE_STATUS_DONE, JsonConverterUtils.COMMENT_STATUS_DONE)]
-    [TestCase(JsonConverterUtils.NOTE_STATUS_EMPTY, JsonConverterUtils.COMMENT_STATUS_UNSPECIFIED)]
+    [TestCase(ParatextNote.Status.RESOLVED, PlatformComment.Status.RESOLVED)]
+    [TestCase(ParatextNote.Status.TO_DO, PlatformComment.Status.TO_DO)]
+    [TestCase(ParatextNote.Status.DONE, PlatformComment.Status.DONE)]
+    [TestCase(ParatextNote.Status.UNSPECIFIED, PlatformComment.Status.UNSPECIFIED)]
     [TestCase("customstatus", "Customstatus")]
     public void ConvertNoteStatusToCommentStatus_ReturnsExpectedValue(string input, string expected)
     {
-        string result = JsonConverterUtils.ConvertNoteStatusToCommentStatus(input);
+        string result = ConvertNoteStatusToCommentStatus(input);
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -39,14 +39,14 @@ public class JsonConverterUtilsTests
 
     #region ConvertCommentTypeToNoteType Tests
 
-    [TestCase(JsonConverterUtils.COMMENT_TYPE_UNSPECIFIED, JsonConverterUtils.NOTE_TYPE_EMPTY)]
-    [TestCase(JsonConverterUtils.COMMENT_TYPE_NORMAL, JsonConverterUtils.NOTE_TYPE_NORMAL)]
-    [TestCase(JsonConverterUtils.COMMENT_TYPE_CONFLICT, JsonConverterUtils.NOTE_TYPE_CONFLICT)]
-    [TestCase(JsonConverterUtils.NOTE_TYPE_EMPTY, JsonConverterUtils.NOTE_TYPE_EMPTY)]
+    [TestCase(PlatformComment.Type.UNSPECIFIED, ParatextNote.Type.UNSPECIFIED)]
+    [TestCase(PlatformComment.Type.NORMAL, ParatextNote.Type.NORMAL)]
+    [TestCase(PlatformComment.Type.CONFLICT, ParatextNote.Type.CONFLICT)]
+    [TestCase(ParatextNote.Type.UNSPECIFIED, ParatextNote.Type.UNSPECIFIED)]
     [TestCase("CustomType", "customtype")]
     public void ConvertCommentTypeToNoteType_ReturnsExpectedValue(string input, string expected)
     {
-        string result = JsonConverterUtils.ConvertCommentTypeToNoteType(input);
+        string result = ConvertCommentTypeToNoteType(input);
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -54,13 +54,13 @@ public class JsonConverterUtilsTests
 
     #region ConvertNoteTypeToCommentType Tests
 
-    [TestCase(JsonConverterUtils.NOTE_TYPE_EMPTY, JsonConverterUtils.COMMENT_TYPE_UNSPECIFIED)]
-    [TestCase(JsonConverterUtils.NOTE_TYPE_NORMAL, JsonConverterUtils.COMMENT_TYPE_NORMAL)]
-    [TestCase(JsonConverterUtils.NOTE_TYPE_CONFLICT, JsonConverterUtils.COMMENT_TYPE_CONFLICT)]
+    [TestCase(ParatextNote.Type.UNSPECIFIED, PlatformComment.Type.UNSPECIFIED)]
+    [TestCase(ParatextNote.Type.NORMAL, PlatformComment.Type.NORMAL)]
+    [TestCase(ParatextNote.Type.CONFLICT, PlatformComment.Type.CONFLICT)]
     [TestCase("customtype", "Customtype")]
     public void ConvertNoteTypeToCommentType_ReturnsExpectedValue(string input, string expected)
     {
-        string result = JsonConverterUtils.ConvertNoteTypeToCommentType(input);
+        string result = ConvertNoteTypeToCommentType(input);
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -74,17 +74,17 @@ public class JsonConverterUtilsTests
         // Arrange
         string[] commentStatuses =
         [
-            JsonConverterUtils.COMMENT_STATUS_RESOLVED,
-            JsonConverterUtils.COMMENT_STATUS_TODO,
-            JsonConverterUtils.COMMENT_STATUS_DONE,
-            JsonConverterUtils.COMMENT_STATUS_UNSPECIFIED,
+            PlatformComment.Status.RESOLVED,
+            PlatformComment.Status.TO_DO,
+            PlatformComment.Status.DONE,
+            PlatformComment.Status.UNSPECIFIED,
         ];
 
         foreach (string original in commentStatuses)
         {
             // Act - Convert to NoteStatus and back
-            string noteStatus = JsonConverterUtils.ConvertCommentStatusToNoteStatus(original);
-            string roundTripped = JsonConverterUtils.ConvertNoteStatusToCommentStatus(noteStatus);
+            string noteStatus = ConvertCommentStatusToNoteStatus(original);
+            string roundTripped = ConvertNoteStatusToCommentStatus(noteStatus);
 
             // Assert
             Assert.That(
@@ -101,17 +101,17 @@ public class JsonConverterUtilsTests
         // Arrange
         string[] noteStatuses =
         [
-            JsonConverterUtils.NOTE_STATUS_DELETED,
-            JsonConverterUtils.NOTE_STATUS_TODO,
-            JsonConverterUtils.NOTE_STATUS_DONE,
-            JsonConverterUtils.NOTE_STATUS_EMPTY,
+            ParatextNote.Status.RESOLVED,
+            ParatextNote.Status.TO_DO,
+            ParatextNote.Status.DONE,
+            ParatextNote.Status.UNSPECIFIED,
         ];
 
         foreach (string original in noteStatuses)
         {
             // Act - Convert to CommentStatus and back
-            string commentStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(original);
-            string roundTripped = JsonConverterUtils.ConvertCommentStatusToNoteStatus(commentStatus);
+            string commentStatus = ConvertNoteStatusToCommentStatus(original);
+            string roundTripped = ConvertCommentStatusToNoteStatus(commentStatus);
 
             // Assert
             Assert.That(
@@ -128,16 +128,16 @@ public class JsonConverterUtilsTests
         // Arrange
         string[] commentTypes =
         [
-            JsonConverterUtils.COMMENT_TYPE_UNSPECIFIED,
-            JsonConverterUtils.COMMENT_TYPE_NORMAL,
-            JsonConverterUtils.COMMENT_TYPE_CONFLICT,
+            PlatformComment.Type.UNSPECIFIED,
+            PlatformComment.Type.NORMAL,
+            PlatformComment.Type.CONFLICT,
         ];
 
         foreach (string original in commentTypes)
         {
             // Act - Convert to NoteType and back
-            string noteType = JsonConverterUtils.ConvertCommentTypeToNoteType(original);
-            string roundTripped = JsonConverterUtils.ConvertNoteTypeToCommentType(noteType);
+            string noteType = ConvertCommentTypeToNoteType(original);
+            string roundTripped = ConvertNoteTypeToCommentType(noteType);
 
             // Assert
             Assert.That(
@@ -154,16 +154,16 @@ public class JsonConverterUtilsTests
         // Arrange
         string[] noteTypes =
         [
-            JsonConverterUtils.NOTE_TYPE_EMPTY,
-            JsonConverterUtils.NOTE_TYPE_NORMAL,
-            JsonConverterUtils.NOTE_TYPE_CONFLICT,
+            ParatextNote.Type.UNSPECIFIED,
+            ParatextNote.Type.NORMAL,
+            ParatextNote.Type.CONFLICT,
         ];
 
         foreach (string original in noteTypes)
         {
             // Act - Convert to CommentType and back
-            string commentType = JsonConverterUtils.ConvertNoteTypeToCommentType(original);
-            string roundTripped = JsonConverterUtils.ConvertCommentTypeToNoteType(commentType);
+            string commentType = ConvertNoteTypeToCommentType(original);
+            string roundTripped = ConvertCommentTypeToNoteType(commentType);
 
             // Assert
             Assert.That(
