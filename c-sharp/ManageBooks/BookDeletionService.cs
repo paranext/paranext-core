@@ -110,7 +110,7 @@ internal static class BookDeletionService
     /// <returns>BookOperationResult indicating success or failure with details</returns>
     public static BookOperationResult DeleteBooksWithConfirmation(DeleteBooksRequest request)
     {
-        // Step 1: Validate request is not null
+        // Validate request is not null
         if (request == null)
         {
             return BookOperationResult.ErrorResult(
@@ -119,7 +119,7 @@ internal static class BookDeletionService
             );
         }
 
-        // Step 2: Validate project ID
+        // Validate project ID
         if (string.IsNullOrEmpty(request.ProjectId))
         {
             return BookOperationResult.ErrorResult(
@@ -128,21 +128,7 @@ internal static class BookDeletionService
             );
         }
 
-        // Step 3: Handle empty book list - success with no deletions
-        if (request.BookNumbers == null || request.BookNumbers.Length == 0)
-        {
-            return BookOperationResult.SuccessResult([], 0);
-        }
-
-        // Step 4: Check if user cancelled (Confirmed=false and not skipping confirmation)
-        if (!request.SkipConfirmation && !request.Confirmed)
-        {
-            // User cancelled the operation - return success with no books affected
-            // This is not an error condition, just a cancellation
-            return BookOperationResult.SuccessResult([], 0);
-        }
-
-        // Step 5: Find the project
+        // Find the project
         ScrText? scrText = BookServiceHelpers.FindScrText(request.ProjectId);
         if (scrText == null)
         {
@@ -152,88 +138,13 @@ internal static class BookDeletionService
             );
         }
 
-        // Step 6: Check permissions (INV-001: admin required for S/R projects)
-        bool isShared = IsSharedProject(scrText);
-        if (isShared)
-        {
-            // For shared projects, only administrators can delete books
-            // Note: IsAdmin check is currently stubbed to true since S/R is not fully implemented
-            bool isAdmin = IsAdministrator(scrText);
-            if (!isAdmin)
-            {
-                return BookOperationResult.ErrorResultWithFailedBooks(
-                    BookErrorCode.PermissionDenied,
-                    "Only administrators can delete books in shared projects",
-                    request.BookNumbers
-                );
-            }
-        }
-
-        // Step 7: Validate all books exist in project
-        var missingBooks = new List<int>();
-        foreach (int bookNum in request.BookNumbers)
-        {
-            if (!scrText.BookPresent(bookNum))
-            {
-                missingBooks.Add(bookNum);
-            }
-        }
-
-        if (missingBooks.Count > 0)
-        {
-            return BookOperationResult.ErrorResultWithFailedBooks(
-                BookErrorCode.BookNotFound,
-                $"Books not found in project: {string.Join(", ", missingBooks)}",
-                [.. missingBooks]
-            );
-        }
-
-        // Step 8: Build BookSet from book numbers
-        var booksToDelete = new BookSet();
-        foreach (int bookNum in request.BookNumbers)
-        {
-            booksToDelete.Add(bookNum);
-        }
-
-        // Step 9: Check if this is an SBA project and handle additions
-        bool isSBA = scrText.Settings.IsStudyBibleAdditions;
-
-        // Step 10: Delete books
-        try
-        {
-            // For SBA projects, remove additions before deleting books
-            if (isSBA)
-            {
-                foreach (int bookNum in request.BookNumbers)
-                {
-                    RemoveSBAAdditionsForBook(scrText, bookNum);
-                }
-            }
-
-            // Delete the books from the project
-            scrText.DeleteBooks(booksToDelete);
-
-            // Return success with affected books
-            int lastBookNum = request.BookNumbers.Length > 0 ? request.BookNumbers[^1] : 0;
-
-            return BookOperationResult.SuccessResult(request.BookNumbers, lastBookNum);
-        }
-        catch (Exception ex)
-        {
-            // Handle lock failure or other exceptions
-            if (ex.Message.Contains("lock", StringComparison.OrdinalIgnoreCase))
-            {
-                return BookOperationResult.ErrorResult(
-                    BookErrorCode.LockNotObtained,
-                    $"Could not obtain write lock for project: {ex.Message}"
-                );
-            }
-
-            return BookOperationResult.ErrorResult(
-                BookErrorCode.ValidationFailed,
-                $"Failed to delete books: {ex.Message}"
-            );
-        }
+        // Delegate to ScrText overload which contains the core deletion logic
+        return DeleteBooksWithConfirmation(
+            scrText,
+            request.BookNumbers,
+            request.SkipConfirmation,
+            request.Confirmed
+        );
     }
 
     /// <summary>
@@ -394,21 +305,14 @@ internal static class BookDeletionService
     ///
     /// When deleting from SBA projects, StudyBibleOperations.RemoveAdditionsForBook
     /// should be called to remove the additions before the book is deleted.
+    ///
+    /// TODO: Implement when StudyBibleOperations API is available in PT10.
+    /// Currently a no-op placeholder.
     /// </remarks>
     private static void RemoveSBAAdditionsForBook(ScrText scrText, int bookNum)
     {
-        // TODO: Call StudyBibleOperations.RemoveAdditionsForBook when available
-        // The ParatextData API for this may need to be verified/exposed
-        // For now, this is a no-op placeholder that will be completed when
-        // the SBA operations API is fully available
-        try
-        {
-            // Attempt to call StudyBibleOperations if available
-            // StudyBibleOperations.RemoveAdditionsForBook(scrText, bookNum);
-        }
-        catch
-        {
-            // Silently ignore if SBA operations are not available
-        }
+        // Suppress unused parameter warnings - parameters required for future implementation
+        _ = scrText;
+        _ = bookNum;
     }
 }
