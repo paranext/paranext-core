@@ -418,12 +418,14 @@ describe('ReadWriteLock', () => {
         lock.acquireRead().then((release) => {
           acquired.push(`r${i}`);
           release();
+          return undefined;
         }),
       );
       promises.push(
         lock.acquireWrite().then((release) => {
           acquired.push(`w${i}`);
           release();
+          return undefined;
         }),
       );
     }
@@ -442,6 +444,7 @@ describe('ReadWriteLock', () => {
       });
       completed.push('r1');
       release();
+      return undefined;
     });
 
     const r2Promise = lock.acquireRead().then(async (release) => {
@@ -450,16 +453,19 @@ describe('ReadWriteLock', () => {
       });
       completed.push('r2');
       release();
+      return undefined;
     });
 
     const wPromise = lock.acquireWrite().then(async (release) => {
       completed.push('w1');
       release();
+      return undefined;
     });
 
     const r3Promise = lock.acquireRead().then(async (release) => {
       completed.push('r3');
       release();
+      return undefined;
     });
 
     await Promise.all([r1Promise, r2Promise, wPromise, r3Promise]);

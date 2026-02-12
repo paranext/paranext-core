@@ -6,23 +6,23 @@ import {
 } from './platform-scripture-finder-pdpe.model';
 
 // Simple USFM test data for Matthew chapter 1
-const TEST_BOOK_USFM = `\\id MAT
-\\c 1
-\\p
-\\v 1 The book of the genealogy of Jesus Christ, the son of David, the son of Abraham.
-\\v 2 Abraham was the father of Isaac, and Isaac the father of Jacob.
-\\v 3 And Jacob the father of Judah and his brothers.
-\\c 2
-\\p
-\\v 1 Now after Jesus was born in Bethlehem of Judea in the days of Herod the king.`;
+const TEST_BOOK_USFM = String.raw`\id MAT
+\c 1
+\p
+\v 1 The book of the genealogy of Jesus Christ, the son of David, the son of Abraham.
+\v 2 Abraham was the father of Isaac, and Isaac the father of Jacob.
+\v 3 And Jacob the father of Judah and his brothers.
+\c 2
+\p
+\v 1 Now after Jesus was born in Bethlehem of Judea in the days of Herod the king.`;
 
 // Chapter 1 only USFM
-const TEST_CHAPTER_1_USFM = `\\id MAT
-\\c 1
-\\p
-\\v 1 The book of the genealogy of Jesus Christ, the son of David, the son of Abraham.
-\\v 2 Abraham was the father of Isaac, and Isaac the father of Jacob.
-\\v 3 And Jacob the father of Judah and his brothers.`;
+const TEST_CHAPTER_1_USFM = String.raw`\id MAT
+\c 1
+\p
+\v 1 The book of the genealogy of Jesus Christ, the son of David, the son of Abraham.
+\v 2 Abraham was the father of Isaac, and Isaac the father of Jacob.
+\v 3 And Jacob the father of Judah and his brothers.`;
 
 // Corresponding USX for the test book
 const TEST_BOOK_USX = `<?xml version="1.0" encoding="utf-8"?>
@@ -87,19 +87,17 @@ function patchUsxWithUsfmVerseTexts(usx: string, usfm: string): string {
   let currentBook = '';
   let currentChapter = 0;
 
-  for (const line of usfm.split('\n')) {
+  usfm.split('\n').forEach((line) => {
     const idMatch = line.match(/^\\id\s+(\S+)/);
     if (idMatch) {
       [, currentBook] = idMatch;
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
 
     const cMatch = line.match(/^\\c\s+(\d+)/);
     if (cMatch) {
       currentChapter = parseInt(cMatch[1], 10);
-      // eslint-disable-next-line no-continue
-      continue;
+      return;
     }
 
     const vMatch = line.match(/^\\v\s+(\d+)\s(.*)$/);
@@ -112,7 +110,7 @@ function patchUsxWithUsfmVerseTexts(usx: string, usfm: string): string {
       // Use function replacement to avoid $-backreference issues in verseText
       patched = patched.replace(pattern, (_m, g1, g2) => `${g1}${verseText}${g2}`);
     }
-  }
+  });
   return patched;
 }
 
@@ -127,6 +125,7 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
   ]);
   const bookUSXStore = new Map<string, string>([['MAT', TEST_BOOK_USX]]);
 
+  // We only need this much of the PDPs for these tests
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
     'platformScripture.USX_Book': {
@@ -162,11 +161,11 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
           const currentUSX = bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX;
           bookUSXStore.set(verseRef.book, patchUsxWithUsfmVerseTexts(currentUSX, String(usfm)));
           // Update chapter entries since book content changed
-          for (const [chKey, chUSX] of [...chapterUSXStore.entries()]) {
+          [...chapterUSXStore.entries()].forEach(([chKey, chUSX]) => {
             if (chKey.startsWith(`${verseRef.book}:`)) {
               chapterUSXStore.set(chKey, patchUsxWithUsfmVerseTexts(chUSX, String(usfm)));
             }
-          }
+          });
           return Promise.resolve(true);
         }),
       subscribeBookUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
@@ -256,6 +255,59 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         'Range at index 0 spans multiple books (MAT to MRK). Cross-book replacements are not supported.',
       );
     });
+
+    it('should throw when ranges overlap within the same book', async () => {
+      // Range A covers offsets 5-10, Range B covers offsets 8-15 (overlap at 8-10)
+      const overlappingRanges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 10 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 15 },
+        },
+      ];
+
+      await expect(engine.replace(overlappingRanges, ['AAA', 'BBB'])).rejects.toThrow(
+        /Overlapping ranges detected/,
+      );
+    });
+
+    it('should throw when ranges are fully nested (one range inside another)', async () => {
+      // Outer range covers offsets 5-20, inner range covers offsets 8-12
+      const nestedRanges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 20 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 12 },
+        },
+      ];
+
+      await expect(engine.replace(nestedRanges, ['outer', 'inner'])).rejects.toThrow(
+        /Overlapping ranges detected/,
+      );
+    });
+
+    it('should allow adjacent but non-overlapping ranges', async () => {
+      // Range A ends at offset 9, Range B starts at offset 9 (touching but not overlapping)
+      const adjacentRanges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 9 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 9 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 13 },
+        },
+      ];
+
+      // Should not throw - adjacent ranges are fine
+      await expect(engine.replace(adjacentRanges, ['FIRST', 'SECOND'])).resolves.toBeUndefined();
+    });
   });
 
   describe('exact USFM output verification', () => {
@@ -285,11 +337,11 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // Verify exact replacement: "The" → "REPLACED"
-      expect(writtenUsfm).toContain('\\v 1 REPLACED book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 REPLACED book`);
       // Verify structure is still valid USFM
-      expect(writtenUsfm).toContain('\\id MAT');
-      expect(writtenUsfm).toContain('\\v 2');
-      expect(writtenUsfm).toContain('\\v 3');
+      expect(writtenUsfm).toContain(String.raw`\id MAT`);
+      expect(writtenUsfm).toContain(String.raw`\v 2`);
+      expect(writtenUsfm).toContain(String.raw`\v 3`);
     });
 
     it('should replace "Abraham" in verse 2 with exact output', async () => {
@@ -305,10 +357,10 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // Verify exact replacement: "Abraham" → "PATRIARCH"
-      expect(writtenUsfm).toContain('\\v 2 PATRIARCH was the father');
+      expect(writtenUsfm).toContain(String.raw`\v 2 PATRIARCH was the father`);
       // Verify structure preserved
-      expect(writtenUsfm).toContain('\\v 1');
-      expect(writtenUsfm).toContain('\\v 3');
+      expect(writtenUsfm).toContain(String.raw`\v 1`);
+      expect(writtenUsfm).toContain(String.raw`\v 3`);
     });
 
     it('should delete text when replacing with empty string', async () => {
@@ -324,10 +376,10 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // "The " should be deleted, so "book" comes right after verse marker
-      expect(writtenUsfm).toContain('\\v 1 book of the genealogy');
+      expect(writtenUsfm).toContain(String.raw`\v 1 book of the genealogy`);
       // Structure should still be valid
-      expect(writtenUsfm).toContain('\\v 2');
-      expect(writtenUsfm).toContain('\\v 3');
+      expect(writtenUsfm).toContain(String.raw`\v 2`);
+      expect(writtenUsfm).toContain(String.raw`\v 3`);
     });
 
     it('should handle multiple replacements in same verse with exact output', async () => {
@@ -347,7 +399,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // Verify both replacements: "The" → "FIRST", "book" → "SECOND"
-      expect(writtenUsfm).toContain('\\v 1 FIRST SECOND of the genealogy');
+      expect(writtenUsfm).toContain(String.raw`\v 1 FIRST SECOND of the genealogy`);
     });
 
     it('should handle replacements in different verses with exact output', async () => {
@@ -366,8 +418,8 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, ['AAA', 'BBB']);
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 AAA book');
-      expect(writtenUsfm).toContain('\\v 2 BBB was');
+      expect(writtenUsfm).toContain(String.raw`\v 1 AAA book`);
+      expect(writtenUsfm).toContain(String.raw`\v 2 BBB was`);
     });
 
     it('should handle replacements in different chapters with exact output', async () => {
@@ -386,9 +438,9 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, ['CH1', 'CH2']);
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 CH1 book');
-      expect(writtenUsfm).toContain('\\c 2');
-      expect(writtenUsfm).toContain('\\v 1 CH2 after');
+      expect(writtenUsfm).toContain(String.raw`\v 1 CH1 book`);
+      expect(writtenUsfm).toContain(String.raw`\c 2`);
+      expect(writtenUsfm).toContain(String.raw`\v 1 CH2 after`);
     });
 
     it('should use same replacement string for all ranges when given a single string', async () => {
@@ -408,8 +460,8 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // Both replacements should use "XXX"
-      expect(writtenUsfm).toContain('\\v 1 XXX book');
-      expect(writtenUsfm).toContain('\\v 2 XXX was');
+      expect(writtenUsfm).toContain(String.raw`\v 1 XXX book`);
+      expect(writtenUsfm).toContain(String.raw`\v 2 XXX was`);
     });
   });
 
@@ -417,7 +469,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
     // Tests that verify USFM markers can be inserted via replacement
     // Offsets start at 5 to skip the \v N  marker (5 chars for single-digit verses)
 
-    it('should replace plain text with USFM containing \\nd marker', async () => {
+    it(String.raw`should replace plain text with USFM containing \nd marker`, async () => {
       // Replace "Jesus Christ" with "\nd Jesus Christ\nd*" (without comma)
       // Verse 1: "The book of the genealogy of Jesus Christ, the son..."
       // Counting from offset 5: T(5)h(6)e(7) (8)b(9)o(10)o(11)k(12) (13)o(14)f(15) (16)t(17)h(18)e(19) (20)g(21)e(22)n(23)e(24)a(25)l(26)o(27)g(28)y(29) (30)o(31)f(32) (33)J(34)e(35)s(36)u(37)s(38) (39)C(40)h(41)r(42)i(43)s(44)t(45)
@@ -429,16 +481,16 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         },
       ];
 
-      await engine.replace(ranges, '\\nd Jesus Christ\\nd*');
+      await engine.replace(ranges, String.raw`\nd Jesus Christ\nd*`);
 
       const writtenUsfm = getWrittenUsfm();
       // Verify the USFM marker was inserted with exact output
-      expect(writtenUsfm).toContain('genealogy of \\nd Jesus Christ\\nd*, the son');
+      expect(writtenUsfm).toContain(String.raw`genealogy of \nd Jesus Christ\nd*, the son`);
       // Verify structure is still valid
-      expect(writtenUsfm).toContain('\\v 1');
+      expect(writtenUsfm).toContain(String.raw`\v 1`);
     });
 
-    it('should replace text with USFM containing \\add marker', async () => {
+    it(String.raw`should replace text with USFM containing \add marker`, async () => {
       // Replace "the son of David" with "\add the son of David\add*"
       // Starting after "Jesus Christ, " which is at offset 35+14 = 49
       const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
@@ -448,29 +500,32 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         },
       ];
 
-      await engine.replace(ranges, '\\add the son of David\\add*');
+      await engine.replace(ranges, String.raw`\add the son of David\add*`);
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\add the son of David\\add*');
+      expect(writtenUsfm).toContain(String.raw`\add the son of David\add*`);
     });
 
-    it('should replace text with USFM containing \\wj marker (words of Jesus)', async () => {
-      // Replace "after Jesus" in chapter 2 with "\wj Jesus\wj*"
-      // Chapter 2 verse 1: "Now after Jesus was born..."
-      // "after" starts at offset 5+4 = 9 ("Now " = 4 chars)
-      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
-        {
-          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 9 },
-          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 20 },
-        },
-      ];
+    it(
+      String.raw`should replace text with USFM containing \wj marker (words of Jesus)`,
+      async () => {
+        // Replace "after Jesus" in chapter 2 with "\wj Jesus\wj*"
+        // Chapter 2 verse 1: "Now after Jesus was born..."
+        // "after" starts at offset 5+4 = 9 ("Now " = 4 chars)
+        const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+          {
+            start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 9 },
+            end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 20 },
+          },
+        ];
 
-      await engine.replace(ranges, '\\wj Jesus\\wj*');
+        await engine.replace(ranges, String.raw`\wj Jesus\wj*`);
 
-      const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('Now \\wj Jesus\\wj* was');
-      expect(writtenUsfm).toContain('\\c 2');
-    });
+        const writtenUsfm = getWrittenUsfm();
+        expect(writtenUsfm).toContain(String.raw`Now \wj Jesus\wj* was`);
+        expect(writtenUsfm).toContain(String.raw`\c 2`);
+      },
+    );
 
     it('should replace multiple ranges with different USFM markers', async () => {
       // Replace "Jesus Christ" in verse 1 with \nd and "after Jesus" in chapter 2 with \wj
@@ -485,11 +540,11 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         },
       ];
 
-      await engine.replace(ranges, ['\\nd Jesus Christ\\nd*', '\\wj Jesus\\wj*']);
+      await engine.replace(ranges, [String.raw`\nd Jesus Christ\nd*`, String.raw`\wj Jesus\wj*`]);
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\nd Jesus Christ\\nd*');
-      expect(writtenUsfm).toContain('\\wj Jesus\\wj*');
+      expect(writtenUsfm).toContain(String.raw`\nd Jesus Christ\nd*`);
+      expect(writtenUsfm).toContain(String.raw`\wj Jesus\wj*`);
     });
 
     it('should replace text with USFM containing footnote marker', async () => {
@@ -503,10 +558,10 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         },
       ];
 
-      await engine.replace(ranges, 'David\\f + \\fr 1:1 \\ft King of Israel\\f*');
+      await engine.replace(ranges, String.raw`David\f + \fr 1:1 \ft King of Israel\f*`);
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('David\\f + \\fr 1:1 \\ft King of Israel\\f*');
+      expect(writtenUsfm).toContain(String.raw`David\f + \fr 1:1 \ft King of Israel\f*`);
     });
   });
 
@@ -634,16 +689,16 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       // First write: "The" replaced with "FIRST" in verse 1
       const firstWrittenUsfm = String(chapterMock.mock.calls[0][1]);
-      expect(firstWrittenUsfm).toContain('\\v 1 FIRST book');
+      expect(firstWrittenUsfm).toContain(String.raw`\v 1 FIRST book`);
       // Verse 2 should be unchanged in the first write
-      expect(firstWrittenUsfm).toContain('\\v 2 Abraham was');
+      expect(firstWrittenUsfm).toContain(String.raw`\v 2 Abraham was`);
 
       // Second write: "Abraham" replaced with "SECOND" in verse 2
       // Because the mock feeds the first write's changes back, the second write stacks on top
       const secondWrittenUsfm = String(chapterMock.mock.calls[1][1]);
-      expect(secondWrittenUsfm).toContain('\\v 2 SECOND was the father');
+      expect(secondWrittenUsfm).toContain(String.raw`\v 2 SECOND was the father`);
       // Verse 1 should retain the first write's change (stacking)
-      expect(secondWrittenUsfm).toContain('\\v 1 FIRST book');
+      expect(secondWrittenUsfm).toContain(String.raw`\v 1 FIRST book`);
     });
   });
 
@@ -711,7 +766,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // Verify the written USFM contains the replacement in chapter 2 context
       const writtenUsfm = getWrittenUsfm();
       expect(writtenUsfm).toContain('REPLACED');
-      expect(writtenUsfm).toContain('\\c 2');
+      expect(writtenUsfm).toContain(String.raw`\c 2`);
     });
 
     it('should use single chapter in one book and whole book in another in one replace call', async () => {
@@ -747,13 +802,13 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // Verify MAT book-level USFM
       const bookMock = vi.mocked(mockPdps['platformScripture.USFM_Book'].setBookUSFM);
       const matUsfm = String(bookMock.mock.calls[0][1]);
-      expect(matUsfm).toContain('\\v 1 AAA book');
-      expect(matUsfm).toContain('\\v 1 BBB after');
+      expect(matUsfm).toContain(String.raw`\v 1 AAA book`);
+      expect(matUsfm).toContain(String.raw`\v 1 BBB after`);
 
       // Verify MRK chapter-level USFM
       const chapterMock = vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM);
       const mrkUsfm = String(chapterMock.mock.calls[0][1]);
-      expect(mrkUsfm).toContain('\\v 1 CCC beginning');
+      expect(mrkUsfm).toContain(String.raw`\v 1 CCC beginning`);
     });
   });
 
@@ -771,7 +826,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // Should insert text at position
-      expect(writtenUsfm).toContain('\\v 1 INSERTED The book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 INSERTED The book`);
     });
 
     it('should handle replacement with longer text', async () => {
@@ -786,7 +841,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, 'This is a very long replacement text for');
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 This is a very long replacement text for book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 This is a very long replacement text for book`);
     });
 
     it('should handle replacement with shorter text', async () => {
@@ -801,7 +856,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, 'A');
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 2 A was the father');
+      expect(writtenUsfm).toContain(String.raw`\v 2 A was the father`);
     });
 
     it('should handle special characters in replacement text', async () => {
@@ -816,7 +871,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, '™®©');
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 ™®© book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 ™®© book`);
     });
 
     it('should handle Unicode characters in replacement text', async () => {
@@ -831,7 +886,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, 'Τὸ');
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 Τὸ book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 Τὸ book`);
     });
 
     it('should handle newlines in replacement text', async () => {
@@ -866,7 +921,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       const writtenUsfm = getWrittenUsfm();
       // After replacing "The" → "A" and "book" → "B"
-      expect(writtenUsfm).toContain('\\v 1 A B of');
+      expect(writtenUsfm).toContain(String.raw`\v 1 A B of`);
     });
 
     it('should preserve non-replaced text exactly', async () => {
@@ -885,7 +940,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain('The book of the genealogy of Jesus Christ');
       expect(writtenUsfm).toContain('And Jacob the father of Judah and his brothers');
       // Verify verse 2 has the replacement
-      expect(writtenUsfm).toContain('\\v 2 PATRIARCH was the father of Isaac');
+      expect(writtenUsfm).toContain(String.raw`\v 2 PATRIARCH was the father of Isaac`);
     });
   });
 
@@ -922,6 +977,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         mockPdps['platformScripture.USX_Chapter'].subscribeChapterUSX,
       );
       // The callback is the second argument passed to subscribeChapterUSX
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       return subscribeMock.mock.calls[0][1] as () => void;
     }
 
@@ -946,7 +1002,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, 'RETRIED');
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 RETRIED book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 RETRIED book`);
       // Should have fetched twice: first was invalidated, second succeeded
       expect(callCount).toBe(2);
     });
@@ -972,7 +1028,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, 'OK');
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 OK book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 OK book`);
       // 3 invalidated + 1 successful = 4 total fetches
       expect(callCount).toBe(4);
     });
@@ -1028,7 +1084,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       const writtenUsfm = getWrittenUsfm();
       // Should contain the UPDATED text from the retry, not the original
       expect(writtenUsfm).toContain('UPDATED');
-      expect(writtenUsfm).toContain('\\v 1 A UPDATED book');
+      expect(writtenUsfm).toContain(String.raw`\v 1 A UPDATED book`);
       expect(callCount).toBe(2);
     });
 
@@ -1058,8 +1114,8 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await engine.replace(ranges, ['A', 'B']);
 
       const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain('\\v 1 A book');
-      expect(writtenUsfm).toContain('\\v 1 B after');
+      expect(writtenUsfm).toContain(String.raw`\v 1 A book`);
+      expect(writtenUsfm).toContain(String.raw`\v 1 B after`);
       expect(callCount).toBe(2);
     });
   });
@@ -1138,11 +1194,11 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
           const currentBookUSX = bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX;
           bookUSXStore.set(verseRef.book, patchUsxWithUsfmVerseTexts(currentBookUSX, String(usfm)));
           // Cross-update chapter stores
-          for (const [chKey, chUSX] of [...chapterUSXStore.entries()]) {
+          [...chapterUSXStore.entries()].forEach(([chKey, chUSX]) => {
             if (chKey.startsWith(`${verseRef.book}:`)) {
               chapterUSXStore.set(chKey, patchUsxWithUsfmVerseTexts(chUSX, String(usfm)));
             }
-          }
+          });
           return true;
         },
       );
