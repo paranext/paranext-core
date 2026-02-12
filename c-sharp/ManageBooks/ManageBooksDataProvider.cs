@@ -40,7 +40,7 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Returns registered PAPI functions: createBooks, copyBooks, deleteBooks, getBooksPresent, getAvailableBooks.
+    /// Returns registered PAPI functions: createBooks, copyBooks, deleteBooks, importBooks, getBooksPresent, getAvailableBooks.
     /// </summary>
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
@@ -49,6 +49,7 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
             ("createBooks", HandleCreateBooks),
             ("copyBooks", HandleCopyBooks),
             ("deleteBooks", HandleDeleteBooks),
+            ("importBooks", HandleImportBooks),
             ("getBooksPresent", HandleGetBooksPresent),
             ("getAvailableBooks", HandleGetAvailableBooks),
         ];
@@ -519,6 +520,127 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
 
         return result;
     }
+
+    #region CAP-005: ImportBooks
+
+    /// <summary>
+    /// Handles the importBooks PAPI command (CAP-005).
+    /// Deserializes the request from JSON and delegates to ExecuteImportBooksAsync.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI command pattern for platformScripture.importBooks
+    /// Maps to: CAP-005, BHV-108, BHV-311
+    /// </remarks>
+    private async Task<BookOperationResult> HandleImportBooks(JsonElement requestElement)
+    {
+        try
+        {
+            ImportBooksRequest? request = JsonSerializer.Deserialize<ImportBooksRequest>(
+                requestElement.GetRawText(),
+                s_jsonOptions
+            );
+
+            return await ExecuteImportBooksAsync(request);
+        }
+        catch (JsonException ex)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                $"Invalid request format: {ex.Message}"
+            );
+        }
+        catch (Exception ex)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                $"Unexpected error: {ex.Message}"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Test entry point for importBooks - bypasses JSON deserialization.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: Test entry point for CAP-005 importBooks command
+    /// Maps to: CAP-005
+    /// </remarks>
+    internal Task<BookOperationResult> HandleImportBooksCommand(ImportBooksRequest? request)
+    {
+        return ExecuteImportBooksAsync(request);
+    }
+
+    /// <summary>
+    /// Core implementation for importing books - shared by PAPI handler and test method.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI orchestration for book import
+    /// Maps to: CAP-005, BHV-108, BHV-311
+    ///
+    /// EXPLANATION:
+    /// This orchestration method implements the PAPI import books workflow:
+    /// 1. Validate request parameters (projectId, files)
+    /// 2. Delegate to CAP-025 (BookImportService.ImportBooksWithPermissionCheckAsync)
+    /// 3. On success, fire BooksChangedEvent with ChangeType=Created
+    /// 4. Return BookOperationResult
+    /// </remarks>
+    private async Task<BookOperationResult> ExecuteImportBooksAsync(ImportBooksRequest? request)
+    {
+        // Step 1: Validate request is not null
+        if (request == null)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                "Request cannot be null"
+            );
+        }
+
+        // Step 2: Validate project ID is provided
+        if (string.IsNullOrEmpty(request.ProjectId))
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                "Project ID cannot be empty"
+            );
+        }
+
+        // Step 3: Validate files array is not empty
+        if (request.Files == null || request.Files.Length == 0)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                "At least one file must be specified"
+            );
+        }
+
+        // Step 4: Delegate to CAP-025 for import with permission check
+        BookOperationResult result = await BookImportService.ImportBooksWithPermissionCheckAsync(
+            request.ProjectId,
+            request.Files,
+            request.ReplaceEntireBook
+        );
+
+        // Step 5: On success, fire BooksChangedEvent
+        if (result.Success && result.BooksAffected != null && result.BooksAffected.Length > 0)
+        {
+            // Fire data update event
+            SendDataUpdateEvent("*", "Books imported successfully");
+
+            // Store the event for test verification
+            _lastBooksChangedEvent = new BooksChangedEvent(
+                request.ProjectId,
+                BooksChangeType.Created,
+                result.BooksAffected
+            );
+        }
+
+        return result;
+    }
+
+    #endregion
 
     /// <summary>
     /// Gets delete confirmation information for the specified books.
