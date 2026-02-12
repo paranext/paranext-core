@@ -137,11 +137,17 @@ export class ScriptureFinderProjectDataProviderEngine
    */
   #cacheVersion = 0;
 
-  /** Promise for the book USX subscription unsubscriber */
-  #bookUsxUnsubscriberPromise: Promise<UnsubscriberAsync>;
+  /**
+   * Promise for the book USX subscription unsubscriber. Resolves to `undefined` if the subscription
+   * failed (error is logged in the constructor).
+   */
+  #bookUsxUnsubscriberPromise: Promise<UnsubscriberAsync | undefined>;
 
-  /** Promise for the chapter USX subscription unsubscriber */
-  #chapterUsxUnsubscriberPromise: Promise<UnsubscriberAsync>;
+  /**
+   * Promise for the chapter USX subscription unsubscriber. Resolves to `undefined` if the
+   * subscription failed (error is logged in the constructor).
+   */
+  #chapterUsxUnsubscriberPromise: Promise<UnsubscriberAsync | undefined>;
 
   /**
    * Creates a new ScriptureFinderProjectDataProviderEngine instance.
@@ -163,14 +169,15 @@ export class ScriptureFinderProjectDataProviderEngine
       { whichUpdates: '*', retrieveDataImmediately: false },
     );
 
-    // Synchronously set up an error logger because an IIFE says this.#bookUsxUnsubscriberPromise
-    // is being used before it is defined (most likely because it's a separate function running
-    // inside the constructor)
+    // Synchronously set up an error logger. Store the caught promise back so the
+    // stored promise never rejects unhandled — this way dispose() can safely await it
+    // without throwing on the subscription-failure path.
     // eslint-disable-next-line promise/catch-or-return
-    this.#bookUsxUnsubscriberPromise.catch((e) => {
+    this.#bookUsxUnsubscriberPromise = this.#bookUsxUnsubscriberPromise.catch((e) => {
       logger.error(
         `Scripture Finder PDP failed to subscribe to BookUSX for cache invalidation! ${e}`,
       );
+      return undefined;
     });
 
     // Subscribe to chapter-level USX changes for cache invalidation
@@ -186,14 +193,15 @@ export class ScriptureFinderProjectDataProviderEngine
       { whichUpdates: '*', retrieveDataImmediately: false },
     );
 
-    // Synchronously set up an error logger because an IIFE says this.#chapterUsxUnsubscriberPromise
-    // is being used before it is defined (most likely because it's a separate function running
-    // inside the constructor)
+    // Synchronously set up an error logger. Store the caught promise back so the
+    // stored promise never rejects unhandled — this way dispose() can safely await it
+    // without throwing on the subscription-failure path.
     // eslint-disable-next-line promise/catch-or-return
-    this.#chapterUsxUnsubscriberPromise.catch((e) => {
+    this.#chapterUsxUnsubscriberPromise = this.#chapterUsxUnsubscriberPromise.catch((e) => {
       logger.error(
         `Scripture Finder PDP failed to subscribe to ChapterUSX for cache invalidation! ${e}`,
       );
+      return undefined;
     });
   }
 
@@ -536,10 +544,13 @@ export class ScriptureFinderProjectDataProviderEngine
       'Scripture Finder PDP Engine Overlaid PDP Unsubscribers',
     );
 
-    unsubscriberList.add(
-      await this.#bookUsxUnsubscriberPromise,
-      await this.#chapterUsxUnsubscriberPromise,
-    );
+    // Await each subscription promise individually. They resolve to undefined when
+    // the subscription failed (error was already logged in the constructor), so we
+    // only add the unsubscriber if it exists.
+    const bookUnsub = await this.#bookUsxUnsubscriberPromise;
+    const chapterUnsub = await this.#chapterUsxUnsubscriberPromise;
+    if (bookUnsub) unsubscriberList.add(bookUnsub);
+    if (chapterUnsub) unsubscriberList.add(chapterUnsub);
 
     // Clear caches
     this.#bookCache.clear();
