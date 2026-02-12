@@ -78,9 +78,9 @@ export class ReadWriteLock {
 
     const error = new Error('ReadWriteLock was disposed while waiting to acquire');
     const queue = this.#waitQueue.splice(0);
-    for (const waiter of queue) {
+    queue.forEach((waiter) => {
       waiter.reject(error);
-    }
+    });
   }
 
   /** Wake up the next eligible waiter(s) from the queue. */

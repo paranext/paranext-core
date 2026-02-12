@@ -32,9 +32,9 @@ export class ReadWriteLockMap {
     if (this.#disposed) return;
     this.#disposed = true;
 
-    for (const lock of this.#locks.values()) {
+    this.#locks.forEach((lock) => {
       lock.dispose();
-    }
+    });
     this.#locks.clear();
   }
 }
