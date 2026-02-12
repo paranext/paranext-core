@@ -2,6 +2,7 @@ using System.Text.Json;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
 
@@ -39,7 +40,7 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Returns registered PAPI functions: createBooks, copyBooks, getBooksPresent, getAvailableBooks.
+    /// Returns registered PAPI functions: createBooks, copyBooks, deleteBooks, getBooksPresent, getAvailableBooks.
     /// </summary>
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
@@ -47,6 +48,7 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
         [
             ("createBooks", HandleCreateBooks),
             ("copyBooks", HandleCopyBooks),
+            ("deleteBooks", HandleDeleteBooks),
             ("getBooksPresent", HandleGetBooksPresent),
             ("getAvailableBooks", HandleGetAvailableBooks),
         ];
@@ -382,4 +384,199 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
 
         return result;
     }
+
+    #region CAP-003: DeleteBooks PAPI Command
+
+    /// <summary>
+    /// Handles the deleteBooks PAPI command (CAP-003).
+    /// Deserializes the request from JSON and delegates to ExecuteDeleteBooksAsync.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI command pattern for platformScripture.deleteBooks
+    /// Maps to: CAP-003, BHV-304
+    /// </remarks>
+    private async Task<BookOperationResult> HandleDeleteBooks(JsonElement requestElement)
+    {
+        try
+        {
+            DeleteBooksRequest? request = JsonSerializer.Deserialize<DeleteBooksRequest>(
+                requestElement.GetRawText(),
+                s_jsonOptions
+            );
+
+            return await ExecuteDeleteBooksAsync(request);
+        }
+        catch (JsonException ex)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                $"Invalid request format: {ex.Message}"
+            );
+        }
+        catch (Exception ex)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                $"Unexpected error: {ex.Message}"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Test entry point for deleteBooks - bypasses JSON deserialization.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: Test entry point for CAP-003 deleteBooks command
+    /// Maps to: CAP-003
+    /// </remarks>
+    internal Task<BookOperationResult> HandleDeleteBooksCommand(DeleteBooksRequest? request)
+    {
+        return ExecuteDeleteBooksAsync(request);
+    }
+
+    /// <summary>
+    /// Core implementation for deleting books - shared by PAPI handler and test method.
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI orchestration for book deletion
+    /// Maps to: CAP-003, BHV-304, BHV-305
+    ///
+    /// EXPLANATION:
+    /// This orchestration method implements the PAPI delete books workflow:
+    /// 1. Validate request parameters (projectId, bookNumbers)
+    /// 2. Validate book numbers are in valid range (1-124)
+    /// 3. Delegate to CAP-023 (BookDeletionService.DeleteBooksWithConfirmation)
+    /// 4. On success, call CAP-024 (BookDeletionService.UpdateProjectPlanAfterDelete)
+    /// 5. On success, fire BooksChangedEvent with ChangeType=Deleted
+    /// 6. Return BookOperationResult
+    /// </remarks>
+    private async Task<BookOperationResult> ExecuteDeleteBooksAsync(DeleteBooksRequest? request)
+    {
+        // Step 1: Validate request is not null
+        if (request == null)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                "Request cannot be null"
+            );
+        }
+
+        // Step 2: Validate project ID is provided
+        if (string.IsNullOrEmpty(request.ProjectId))
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                "Project ID cannot be empty"
+            );
+        }
+
+        // Step 3: Validate book numbers array is not empty
+        if (request.BookNumbers == null || request.BookNumbers.Length == 0)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ValidationFailed,
+                "At least one book number must be specified"
+            );
+        }
+
+        // Step 4: Validate book numbers are in valid range (1-124)
+        foreach (int bookNum in request.BookNumbers)
+        {
+            if (bookNum < 1 || bookNum > 124)
+            {
+                return BookOperationResult.ErrorResult(
+                    BookErrorCode.InvalidBookNumber,
+                    $"Book number {bookNum} is not valid (must be 1-124)"
+                );
+            }
+        }
+
+        // Step 5: Delegate to CAP-023 for actual deletion
+        BookOperationResult result = BookDeletionService.DeleteBooksWithConfirmation(request);
+
+        // Step 6: On success, update project plan via CAP-024 and fire event
+        if (result.Success && result.BooksAffected != null && result.BooksAffected.Length > 0)
+        {
+            // Find the project for CAP-024
+            ScrText? scrText = BookServiceHelpers.FindScrText(request.ProjectId);
+            if (scrText != null)
+            {
+                // Update project plan (CAP-024)
+                BookDeletionService.UpdateProjectPlanAfterDelete(scrText, result.BooksAffected);
+            }
+
+            // Fire BooksChangedEvent
+            SendDataUpdateEvent("*", "Books deleted successfully");
+
+            // Store the event for test verification
+            _lastBooksChangedEvent = new BooksChangedEvent(
+                request.ProjectId,
+                BooksChangeType.Deleted,
+                result.BooksAffected
+            );
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gets delete confirmation information for the specified books.
+    /// Delegates to CAP-004 (BookDeletionService.GetDeleteConfirmation).
+    /// </summary>
+    /// <remarks>
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI entry point for getting delete confirmation info
+    /// Maps to: CAP-003, CAP-004, gm-014
+    /// </remarks>
+    /// <param name="projectId">Project ID containing books to delete</param>
+    /// <param name="bookNumbers">Book numbers to delete</param>
+    /// <returns>DeleteConfirmation with message and flags</returns>
+    internal async Task<DeleteConfirmation?> GetDeleteConfirmation(
+        string projectId,
+        int[] bookNumbers
+    )
+    {
+        // Find the project
+        ScrText? scrText = BookServiceHelpers.FindScrText(projectId);
+        if (scrText == null)
+        {
+            return null;
+        }
+
+        // Build BookSet from book numbers
+        var selectedBooks = new SIL.Scripture.BookSet();
+        foreach (int bookNum in bookNumbers)
+        {
+            selectedBooks.Add(bookNum);
+        }
+
+        // Delegate to CAP-004
+        return BookDeletionService.GetDeleteConfirmation(scrText, selectedBooks);
+    }
+
+    /// <summary>
+    /// Last books changed event fired (for test verification).
+    /// </summary>
+    private BooksChangedEvent? _lastBooksChangedEvent;
+
+    /// <summary>
+    /// Gets the last BooksChangedEvent that was fired (for testing).
+    /// </summary>
+    internal BooksChangedEvent? GetLastBooksChangedEvent()
+    {
+        return _lastBooksChangedEvent;
+    }
+
+    /// <summary>
+    /// Clears captured events (for testing).
+    /// </summary>
+    internal void ClearCapturedEvents()
+    {
+        _lastBooksChangedEvent = null;
+    }
+
+    #endregion
 }

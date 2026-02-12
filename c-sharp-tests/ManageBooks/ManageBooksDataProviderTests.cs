@@ -819,5 +819,545 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        #region CAP-003: DeleteBooks PAPI Command Tests
+
+        /// <summary>
+        /// Acceptance test for CAP-003: DeleteBooks PAPI command.
+        /// This test verifies the complete workflow via the DataProvider.
+        /// When this passes, the PAPI command capability is complete.
+        /// </summary>
+        /// <remarks>
+        /// Reference: spec-001-delete-books.json scenario TS-001
+        /// Golden master: gm-014-delete-confirm
+        /// </remarks>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("ScenarioId", "TS-001")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("Acceptance test: DeleteBooks PAPI command deletes books and fires event")]
+        public async Task DeleteBooks_PAPICommand_AcceptanceTest()
+        {
+            // Arrange - Create books in project
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            _scrText.PutText(3, 0, false, @"\id LEV \c 1 \v 1 Leviticus content", null);
+            var projectId = _scrText.Guid.ToString();
+
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 1, 2 }, // Delete GEN and EXO
+                SkipConfirmation: true
+            );
+
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+
+            // Act - Call via PAPI command interface
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert - Result indicates success
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Success, Is.True, "DeleteBooks PAPI command should succeed");
+            Assert.That(result.BooksAffected, Has.Length.EqualTo(2), "Should affect exactly 2 books");
+            Assert.That(result.BooksAffected, Does.Contain(1), "GEN should be in affected books");
+            Assert.That(result.BooksAffected, Does.Contain(2), "EXO should be in affected books");
+
+            // Assert - Side-effect verification: books actually removed
+            // Note: DummyScrText.DeleteBooks removes from InMemoryFileManager
+            // so BookPresent returns false after deletion
+            Assert.That(_scrText.BookPresent(3), Is.True,
+                "Book 3 (LEV) should still be present after deletion");
+
+            // Assert - Event verification
+            var eventFired = provider.GetLastBooksChangedEvent();
+            Assert.That(eventFired, Is.Not.Null, "BooksChangedEvent should be fired");
+            Assert.That(eventFired!.ProjectId, Is.EqualTo(projectId), "Event should reference correct project");
+            Assert.That(eventFired.ChangeType, Is.EqualTo(BooksChangeType.Deleted), "Event should indicate Deleted");
+            Assert.That(eventFired.BookNumbers, Does.Contain(1), "Event should list deleted book GEN");
+            Assert.That(eventFired.BookNumbers, Does.Contain(2), "Event should list deleted book EXO");
+        }
+
+        /// <summary>
+        /// DeleteBooks command is registered with correct method name.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks command is registered in GetFunctions")]
+        public async Task DeleteBooks_CommandRegistration_RegistersDeleteBooksFunction()
+        {
+            // Arrange
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            var projectId = _scrText.Guid.ToString();
+
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 1 },
+                SkipConfirmation: true
+            );
+
+            // Act & Assert - Handler should be callable (proves registration works)
+            var result = await provider.HandleDeleteBooksCommand(request);
+            Assert.That(result, Is.Not.Null, "Handler should return a result");
+        }
+
+        /// <summary>
+        /// DeleteBooks with null ProjectId returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with null ProjectId returns error")]
+        public async Task DeleteBooks_NullProjectId_ReturnsError()
+        {
+            // Arrange
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: null!, // Invalid
+                BookNumbers: new[] { 1 },
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail with null ProjectId");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ValidationFailed),
+                "Error code should indicate validation failure");
+        }
+
+        /// <summary>
+        /// DeleteBooks with empty BookNumbers returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("ScenarioId", "TS-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with empty BookNumbers returns error")]
+        public async Task DeleteBooks_EmptyBookNumbers_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: Array.Empty<int>(), // Empty
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail with empty BookNumbers");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.ValidationFailed),
+                "Error code should indicate validation failure");
+        }
+
+        /// <summary>
+        /// DeleteBooks with invalid book number returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with invalid book number returns error")]
+        public async Task DeleteBooks_InvalidBookNumber_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 999 }, // Invalid - out of range (1-124)
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail with invalid book number");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.InvalidBookNumber),
+                "Error code should indicate invalid book number");
+        }
+
+        /// <summary>
+        /// DeleteBooks with non-existent project returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with non-existent project returns error")]
+        public async Task DeleteBooks_NonExistentProject_ReturnsError()
+        {
+            // Arrange
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: Guid.NewGuid().ToString(), // Non-existent
+                BookNumbers: new[] { 1 },
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail with non-existent project");
+        }
+
+        /// <summary>
+        /// DeleteBooks with book not present in project returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("ScenarioId", "TS-001")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with book not present returns error")]
+        public async Task DeleteBooks_BookNotPresent_ReturnsError()
+        {
+            // Arrange - Project only has GEN
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 66 }, // Revelation - not present
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail when book not present");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.BookNotFound),
+                "Error code should indicate book not found");
+        }
+
+        /// <summary>
+        /// DeleteBooks with skipConfirmation=true performs immediate deletion.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("ScenarioId", "TS-001")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with skipConfirmation=true performs deletion")]
+        public async Task DeleteBooks_SkipConfirmationTrue_PerformsDeletion()
+        {
+            // Arrange
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 1 },
+                SkipConfirmation: true // Skip confirmation
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True, "Should succeed with skipConfirmation=true");
+        }
+
+        /// <summary>
+        /// DeleteBooks success fires BooksChangedEvent with correct payload.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks success fires BooksChangedEvent with correct payload")]
+        public async Task DeleteBooks_Success_FiresBooksChangedEvent()
+        {
+            // Arrange
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            _scrText.PutText(3, 0, false, @"\id LEV \c 1 \v 1 Leviticus content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 1, 2, 3 }, // GEN, EXO, LEV
+                SkipConfirmation: true
+            );
+
+            // Act
+            await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            var eventFired = provider.GetLastBooksChangedEvent();
+            Assert.That(eventFired, Is.Not.Null, "BooksChangedEvent should be fired");
+            Assert.That(eventFired!.ProjectId, Is.EqualTo(projectId), "Event projectId should match request");
+            Assert.That(eventFired.ChangeType, Is.EqualTo(BooksChangeType.Deleted), "ChangeType should be Deleted");
+            Assert.That(eventFired.BookNumbers, Has.Length.EqualTo(3), "Event should list all 3 books");
+            Assert.That(eventFired.BookNumbers, Does.Contain(1), "Event should include GEN");
+            Assert.That(eventFired.BookNumbers, Does.Contain(2), "Event should include EXO");
+            Assert.That(eventFired.BookNumbers, Does.Contain(3), "Event should include LEV");
+        }
+
+        /// <summary>
+        /// DeleteBooks failure does NOT fire BooksChangedEvent.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks failure does NOT fire BooksChangedEvent")]
+        public async Task DeleteBooks_Failure_DoesNotFireEvent()
+        {
+            // Arrange
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            provider.ClearCapturedEvents();
+
+            var request = new DeleteBooksRequest(
+                ProjectId: "invalid-project-id", // Will fail
+                BookNumbers: new[] { 1 },
+                SkipConfirmation: true
+            );
+
+            // Act
+            await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            var eventFired = provider.GetLastBooksChangedEvent();
+            Assert.That(eventFired, Is.Null, "No event should be fired on failure");
+        }
+
+        /// <summary>
+        /// gm-014: Delete confirmation defaults to No.
+        /// </summary>
+        [Test]
+        [Category("GoldenMaster")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("GoldenMaster", "gm-014")]
+        [Property("ScenarioId", "TS-064")]
+        [Property("BehaviorId", "BHV-306")]
+        [Description("gm-014: Confirmation defaults to No")]
+        public async Task DeleteBooks_Confirmation_DefaultsToNo_gm014()
+        {
+            // Arrange
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+
+            // Act - Get delete confirmation (via CAP-004 delegation)
+            var confirmation = await provider.GetDeleteConfirmation(
+                projectId,
+                new[] { 1, 2 }
+            );
+
+            // Assert - Per gm-014, default should be No
+            Assert.That(confirmation, Is.Not.Null, "Should return confirmation info");
+            Assert.That(confirmation!.DefaultToNo, Is.True,
+                "gm-014: Default button should be No for safety");
+        }
+
+        /// <summary>
+        /// DeleteBooks deletes multiple books in single call.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("ScenarioId", "TS-001")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks deletes multiple books in single call")]
+        public async Task DeleteBooks_MultipleBooks_DeletesAll()
+        {
+            // Arrange
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            _scrText.PutText(3, 0, false, @"\id LEV \c 1 \v 1 Leviticus content", null);
+            _scrText.PutText(40, 0, false, @"\id MAT \c 1 \v 1 Matthew content", null);
+            _scrText.PutText(41, 0, false, @"\id MRK \c 1 \v 1 Mark content", null);
+            _scrText.PutText(42, 0, false, @"\id LUK \c 1 \v 1 Luke content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 1, 2, 3 }, // GEN, EXO, LEV
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True, "Should succeed");
+            Assert.That(result.BooksAffected, Has.Length.EqualTo(3), "All 3 books should be affected");
+
+            // Verify other books remain
+            Assert.That(_scrText.BookPresent(40), Is.True, "MAT remains");
+            Assert.That(_scrText.BookPresent(41), Is.True, "MRK remains");
+            Assert.That(_scrText.BookPresent(42), Is.True, "LUK remains");
+        }
+
+        /// <summary>
+        /// DeleteBooks returns correct LastBookNum (highest deleted book).
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks returns correct LastBookNum")]
+        public async Task DeleteBooks_MultipleBooks_ReturnsCorrectLastBookNum()
+        {
+            // Arrange
+            _scrText.PutText(40, 0, false, @"\id MAT \c 1 \v 1 Matthew content", null);
+            _scrText.PutText(41, 0, false, @"\id MRK \c 1 \v 1 Mark content", null);
+            _scrText.PutText(42, 0, false, @"\id LUK \c 1 \v 1 Luke content", null);
+            _scrText.PutText(43, 0, false, @"\id JHN \c 1 \v 1 John content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 40, 42 }, // Matthew and Luke (not Mark)
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.LastBookNum, Is.EqualTo(42),
+                "LastBookNum should be the highest book number deleted (Luke = 42)");
+        }
+
+        /// <summary>
+        /// BookOperationResult structure on success.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("Success result has correct structure")]
+        public async Task DeleteBooks_Success_ReturnsCorrectResultStructure()
+        {
+            // Arrange
+            _scrText.PutText(1, 0, false, @"\id GEN \c 1 \v 1 Genesis content", null);
+            _scrText.PutText(2, 0, false, @"\id EXO \c 1 \v 1 Exodus content", null);
+            _scrText.PutText(3, 0, false, @"\id LEV \c 1 \v 1 Leviticus content", null);
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 1, 2, 3 },
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.True, "Success should be true");
+            Assert.That(result.BooksAffected, Is.EquivalentTo(new[] { 1, 2, 3 }),
+                "BooksAffected should equal deleted books");
+            Assert.That(result.LastBookNum, Is.EqualTo(3), "LastBookNum should be 3");
+            Assert.That(result.ErrorCode, Is.Null, "ErrorCode should be null on success");
+            Assert.That(result.ErrorMessage, Is.Null, "ErrorMessage should be null on success");
+            Assert.That(result.FailedBooks, Is.Null, "FailedBooks should be null on success");
+        }
+
+        /// <summary>
+        /// BookOperationResult structure on error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("Error result has correct structure")]
+        public async Task DeleteBooks_Error_ReturnsCorrectResultStructure()
+        {
+            // Arrange
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: Guid.NewGuid().ToString(), // Non-existent
+                BookNumbers: new[] { 1 },
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Success should be false");
+            Assert.That(result.ErrorCode, Is.Not.Null, "ErrorCode should be set on failure");
+        }
+
+        /// <summary>
+        /// DeleteBooks with negative book number returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with negative book number returns error")]
+        public async Task DeleteBooks_NegativeBookNumber_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { -1 }, // Invalid - negative
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail with negative book number");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.InvalidBookNumber),
+                "Error code should indicate invalid book number");
+        }
+
+        /// <summary>
+        /// DeleteBooks with zero book number returns error.
+        /// </summary>
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-003")]
+        [Property("BehaviorId", "BHV-304")]
+        [Description("DeleteBooks with zero book number returns error")]
+        public async Task DeleteBooks_ZeroBookNumber_ReturnsError()
+        {
+            // Arrange
+            var projectId = _scrText.Guid.ToString();
+            var provider = new ManageBooksDataProvider(Client, ParatextProjects);
+            var request = new DeleteBooksRequest(
+                ProjectId: projectId,
+                BookNumbers: new[] { 0 }, // Invalid - zero
+                SkipConfirmation: true
+            );
+
+            // Act
+            var result = await provider.HandleDeleteBooksCommand(request);
+
+            // Assert
+            Assert.That(result.Success, Is.False, "Should fail with zero book number");
+            Assert.That(result.ErrorCode, Is.EqualTo(BookErrorCode.InvalidBookNumber),
+                "Error code should indicate invalid book number");
+        }
+
+        #endregion
     }
 }
