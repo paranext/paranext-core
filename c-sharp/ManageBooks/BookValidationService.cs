@@ -13,7 +13,8 @@ namespace Paranext.DataProvider.ManageBooks;
 /// - CAP-010: ValidateModelBooks (public API with project ID string)
 /// - CAP-018: VersificationCompatibilityCheck (internal ScrText-based check)
 /// - CAP-011: CheckVersificationCompatibility (public API with project ID strings)
-/// - CAP-027: SBABaseProjectBookWarning
+/// - CAP-027: SBABaseProjectBookWarning (internal ScrText-based check)
+/// - CAP-012: CheckSBABaseProjectOverlap (public API with project ID string)
 ///
 /// Ported from PT9/Paratext/ToolsMenu/CreateBooksForm.cs
 /// </remarks>
