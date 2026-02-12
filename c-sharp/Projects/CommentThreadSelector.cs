@@ -12,6 +12,7 @@ public class CommentThreadSelector
     public string? AssignedTo { get; set; }
     public List<ScriptureRange>? ScriptureRanges { get; set; }
 
+    public bool? IsRead { get; set; }
     public bool IsEmpty =>
         string.IsNullOrEmpty(ThreadId)
         && string.IsNullOrEmpty(Status)
@@ -19,7 +20,8 @@ public class CommentThreadSelector
         && string.IsNullOrEmpty(Author)
         && string.IsNullOrEmpty(AssignedTo)
         && DateFilter == null
-        && (ScriptureRanges == null || ScriptureRanges.Count == 0);
+        && (ScriptureRanges == null || ScriptureRanges.Count == 0)
+        && IsRead == null;
 }
 
 public class DateFilter

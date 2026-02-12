@@ -7,75 +7,89 @@ namespace Paranext.DataProvider.JsonUtils;
 /// </summary>
 public static class JsonConverterUtils
 {
+    // Frontend CommentStatus values (TypeScript)
+    internal const string COMMENT_STATUS_RESOLVED = "Resolved";
+    internal const string COMMENT_STATUS_TODO = "Todo";
+    internal const string COMMENT_STATUS_DONE = "Done";
+    internal const string COMMENT_STATUS_UNSPECIFIED = "Unspecified";
+
+    // Backend NoteStatus values (Paratext internal)
+    internal const string NOTE_STATUS_DELETED = "deleted";
+    internal const string NOTE_STATUS_TODO = "todo";
+    internal const string NOTE_STATUS_DONE = "done";
+    internal const string NOTE_STATUS_EMPTY = "";
+
+    // Frontend CommentType values (TypeScript)
+    internal const string COMMENT_TYPE_NORMAL = "Normal";
+    internal const string COMMENT_TYPE_CONFLICT = "Conflict";
+    internal const string COMMENT_TYPE_UNSPECIFIED = "Unspecified";
+
+    // Backend NoteType values (Paratext internal)
+    internal const string NOTE_TYPE_NORMAL = "normal";
+    internal const string NOTE_TYPE_CONFLICT = "conflict";
+    internal const string NOTE_TYPE_EMPTY = "";
+
     /// <summary>
-    /// Maps TypeScript CommentStatus values to C# NoteStatus internal string representations.
-    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
-    /// C# NoteStatus: "" | "todo" | "done" | "deleted"
+    /// Maps frontend CommentStatus to backend NoteStatus.
     /// </summary>
     public static string ConvertCommentStatusToNoteStatus(string commentStatus)
     {
         return commentStatus switch
         {
-            "Resolved" => "deleted",
-            "Todo" => "todo",
-            "Done" => "done",
-            "Unspecified" => "",
-            "" => "",
+            COMMENT_STATUS_RESOLVED => NOTE_STATUS_DELETED,
+            COMMENT_STATUS_TODO => NOTE_STATUS_TODO,
+            COMMENT_STATUS_DONE => NOTE_STATUS_DONE,
+            COMMENT_STATUS_UNSPECIFIED => NOTE_STATUS_EMPTY,
+            NOTE_STATUS_EMPTY => NOTE_STATUS_EMPTY,
             _ => commentStatus.ToLowerInvariant(),
         };
     }
 
     /// <summary>
-    /// Maps C# NoteStatus internal string representations to TypeScript CommentStatus values.
-    /// C# NoteStatus: "" | "todo" | "done" | "deleted"
-    /// TypeScript: 'Unspecified' | 'Todo' | 'Done' | 'Resolved'
+    /// Maps backend NoteStatus to frontend CommentStatus.
     /// </summary>
     public static string ConvertNoteStatusToCommentStatus(string noteStatus)
     {
         return noteStatus switch
         {
-            "deleted" => "Resolved",
-            "todo" => "Todo",
-            "done" => "Done",
-            "" => "Unspecified",
+            NOTE_STATUS_DELETED => COMMENT_STATUS_RESOLVED,
+            NOTE_STATUS_TODO => COMMENT_STATUS_TODO,
+            NOTE_STATUS_DONE => COMMENT_STATUS_DONE,
+            NOTE_STATUS_EMPTY => COMMENT_STATUS_UNSPECIFIED,
             _ => noteStatus.Length > 0
-                ? char.ToUpperInvariant(noteStatus[0]) + noteStatus.Substring(1)
-                : "Unspecified",
+                ? char.ToUpperInvariant(noteStatus[0]) + noteStatus[1..]
+                : COMMENT_STATUS_UNSPECIFIED,
         };
     }
 
     /// <summary>
-    /// Maps TypeScript CommentType values to C# NoteType internal string representations.
-    /// TypeScript: 'Unspecified' | 'Normal' | 'Conflict'
-    /// C# NoteType: "" | "normal" | "conflict"
+    /// Maps frontend CommentType to backend NoteType.
     /// </summary>
     public static string ConvertCommentTypeToNoteType(string commentType)
     {
         return commentType switch
         {
-            "Unspecified" => "",
-            "Normal" => "normal",
-            "Conflict" => "conflict",
-            "" => "",
+            COMMENT_TYPE_UNSPECIFIED => NOTE_TYPE_EMPTY,
+            COMMENT_TYPE_NORMAL => NOTE_TYPE_NORMAL,
+            COMMENT_TYPE_CONFLICT => NOTE_TYPE_CONFLICT,
+            NOTE_TYPE_EMPTY => NOTE_TYPE_EMPTY,
             _ => commentType.ToLowerInvariant(),
         };
     }
 
     /// <summary>
-    /// Maps C# NoteType internal string representations to TypeScript CommentType values.
-    /// C# NoteType: "" | "normal" | "conflict"
-    /// TypeScript: 'Unspecified' | 'Normal' | 'Conflict'
+    /// Maps backend NoteType to frontend CommentType.
     /// </summary>
     public static string ConvertNoteTypeToCommentType(string noteType)
     {
         return noteType switch
         {
-            "" => "Unspecified",
-            "normal" => "Normal",
-            "conflict" => "Conflict",
+            NOTE_TYPE_EMPTY => COMMENT_TYPE_UNSPECIFIED,
+            NOTE_TYPE_NORMAL => COMMENT_TYPE_NORMAL,
+            NOTE_TYPE_CONFLICT => COMMENT_TYPE_CONFLICT,
             _ => noteType.Length > 0
-                ? char.ToUpperInvariant(noteType[0]) + noteType.Substring(1)
-                : "Unspecified",
+                ? char.ToUpperInvariant(noteType[0]) + noteType[1..]
+                : COMMENT_TYPE_UNSPECIFIED,
         };
     }
 

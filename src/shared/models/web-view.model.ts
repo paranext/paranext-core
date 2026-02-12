@@ -219,6 +219,8 @@ type WebViewDefinitionBase = {
   /**
    * Whether a toolbar should be displayed at the top of the web view. Currently this toolbar cannot
    * be modified and is provided as is. It displays a BookChapterControl and a ScrollGroupSelector.
+   *
+   * @default false
    */
   shouldShowToolbar?: boolean;
 };
