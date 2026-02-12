@@ -39,24 +39,10 @@ function getBookAndChapterFromLocation(location: UsjChapterLocation | UsfmVerseL
   book: string;
   chapterNum: number;
 } {
-  // UsjVerseRefChapterLocation, UsfmVerseRefVerseLocation
-  if ('verseRef' in location)
-    return { book: location.verseRef.book, chapterNum: location.verseRef.chapterNum };
-  // UsfmScrRefVerseLocation (deprecated)
-  if ('scrRef' in location)
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return {
-      book: (location.scrRef as SerializedVerseRef).book,
-      chapterNum: (location.scrRef as SerializedVerseRef).chapterNum,
-    };
-  // UsjFlatChapterLocation, UsjFlatTextChapterLocation, SerializedVerseRef
-  if ('book' in location && 'chapterNum' in location)
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return {
-      book: (location as SerializedVerseRef).book,
-      chapterNum: (location as SerializedVerseRef).chapterNum,
-    };
-  throw new Error(`Cannot determine book and chapter from location: ${JSON.stringify(location)}`);
+  const { verseRef } = UsjReaderWriter.isUsjChapterLocation(location)
+    ? UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(location)
+    : UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(location);
+  return { book: verseRef.book, chapterNum: verseRef.chapterNum };
 }
 
 // This interface doesn't provide any normal data types that PDPs use
@@ -151,10 +137,10 @@ export class ScriptureFinderProjectDataProviderEngine
   #cacheVersion = 0;
 
   /** Promise for the book USX subscription unsubscriber */
-  #bookUSXUnsubscriberPromise: Promise<UnsubscriberAsync>;
+  #bookUsxUnsubscriberPromise: Promise<UnsubscriberAsync>;
 
   /** Promise for the chapter USX subscription unsubscriber */
-  #chapterUSXUnsubscriberPromise: Promise<UnsubscriberAsync>;
+  #chapterUsxUnsubscriberPromise: Promise<UnsubscriberAsync>;
 
   /**
    * Creates a new ScriptureFinderProjectDataProviderEngine instance.
@@ -166,7 +152,7 @@ export class ScriptureFinderProjectDataProviderEngine
     this.#pdps = pdpsToOverlay;
 
     // Subscribe to book-level USX changes for cache invalidation
-    this.#bookUSXUnsubscriberPromise = this.#pdps['platformScripture.USX_Book'].subscribeBookUSX(
+    this.#bookUsxUnsubscriberPromise = this.#pdps['platformScripture.USX_Book'].subscribeBookUSX(
       // Just picked a key for no reason in particular because we don't need anything in particular
       // here because we're listening for all updates
       { book: 'GEN', chapterNum: 1, verseNum: 1 },
@@ -176,18 +162,18 @@ export class ScriptureFinderProjectDataProviderEngine
       { whichUpdates: '*', retrieveDataImmediately: false },
     );
 
-    // Synchronously set up an error logger because an IIFE says this.#bookUSXUnsubscriberPromise
+    // Synchronously set up an error logger because an IIFE says this.#bookUsxUnsubscriberPromise
     // is being used before it is defined (most likely because it's a separate function running
     // inside the constructor)
     // eslint-disable-next-line promise/catch-or-return
-    this.#bookUSXUnsubscriberPromise.catch((e) => {
+    this.#bookUsxUnsubscriberPromise.catch((e) => {
       logger.error(
         `Scripture Finder PDP failed to subscribe to BookUSX for cache invalidation! ${e}`,
       );
     });
 
     // Subscribe to chapter-level USX changes for cache invalidation
-    this.#chapterUSXUnsubscriberPromise = this.#pdps[
+    this.#chapterUsxUnsubscriberPromise = this.#pdps[
       'platformScripture.USX_Chapter'
     ].subscribeChapterUSX(
       // Just picked a key for no reason in particular because we don't need anything in particular
@@ -199,9 +185,11 @@ export class ScriptureFinderProjectDataProviderEngine
       { whichUpdates: '*', retrieveDataImmediately: false },
     );
 
-    // Synchronously set up an error logger
+    // Synchronously set up an error logger because an IIFE says this.#chapterUsxUnsubscriberPromise
+    // is being used before it is defined (most likely because it's a separate function running
+    // inside the constructor)
     // eslint-disable-next-line promise/catch-or-return
-    this.#chapterUSXUnsubscriberPromise.catch((e) => {
+    this.#chapterUsxUnsubscriberPromise.catch((e) => {
       logger.error(
         `Scripture Finder PDP failed to subscribe to ChapterUSX for cache invalidation! ${e}`,
       );
@@ -286,10 +274,12 @@ export class ScriptureFinderProjectDataProviderEngine
    * mutual exclusion with other concurrent replaces for the same book. The USFM write and cache
    * invalidation happen atomically within the mutex.
    *
-   * @param rangesToReplace - Array of scripture ranges to replace
+   * @param rangesToReplace - Array of non-overlapping scripture ranges to replace. Overlapping
+   *   ranges will cause an error.
    * @param usfmToInsert - The USFM content to insert at each range (string or array of strings)
    * @throws Error if usfmToInsert array length doesn't match rangesToReplace length
    * @throws Error if any range spans multiple books
+   * @throws Error if any ranges overlap within the same book
    */
   async replace(
     rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
@@ -384,19 +374,13 @@ export class ScriptureFinderProjectDataProviderEngine
           heldLocks.push({ bookId, singleChapter, releaseBookLock, releaseChapterMutex });
 
           const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, singleChapter);
-          const getChapterReaderWriter = (chapterNum: number) =>
-            this.#getOrCreateCachedReaderWriter(bookId, chapterNum);
 
           // Convert all locations to UsfmVerseRefVerseLocations within the lock
           const convertedRanges = await Promise.all(
             rangeInfos.map(async ({ originalIndex, range }) => {
               const [startLocation, endLocation] = await Promise.all([
-                this.#convertToUsfmVerseRefVerseLocation(range.start, (_bookId, chapterNum) =>
-                  getChapterReaderWriter(chapterNum),
-                ),
-                this.#convertToUsfmVerseRefVerseLocation(range.end, (_bookId, chapterNum) =>
-                  getChapterReaderWriter(chapterNum),
-                ),
+                this.#convertToUsfmVerseRefVerseLocation(range.start),
+                this.#convertToUsfmVerseRefVerseLocation(range.end),
               ]);
               return { originalIndex, startLocation, endLocation };
             }),
@@ -422,6 +406,21 @@ export class ScriptureFinderProjectDataProviderEngine
               endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
             }))
             .sort((a, b) => b.startIndex - a.startIndex);
+
+          // Validate that no ranges overlap. Since ranges are sorted descending by startIndex,
+          // an overlap exists when a range's startIndex is less than the next range's endIndex.
+          for (let i = 0; i < rangesWithIndices.length - 1; i++) {
+            const current = rangesWithIndices[i];
+            const next = rangesWithIndices[i + 1];
+            if (next.endIndex > current.startIndex) {
+              throw new Error(
+                `Overlapping ranges detected in book ${bookId}: range at original index ` +
+                  `${next.originalIndex} (offsets ${next.startIndex}-${next.endIndex}) overlaps ` +
+                  `with range at original index ${current.originalIndex} (offsets ` +
+                  `${current.startIndex}-${current.endIndex}). All ranges must be non-overlapping.`,
+              );
+            }
+          }
 
           // Perform string replacements in reverse index order
           let modifiedUsfm = usjReaderWriter.toUsfm();
@@ -486,8 +485,8 @@ export class ScriptureFinderProjectDataProviderEngine
     );
 
     unsubscriberList.add(
-      await this.#bookUSXUnsubscriberPromise,
-      await this.#chapterUSXUnsubscriberPromise,
+      await this.#bookUsxUnsubscriberPromise,
+      await this.#chapterUsxUnsubscriberPromise,
     );
 
     // Clear caches
@@ -503,19 +502,15 @@ export class ScriptureFinderProjectDataProviderEngine
   /**
    * Converts a UsjChapterLocation or UsfmVerseLocation to a standardized UsfmVerseRefVerseLocation.
    *
-   * For UsjChapterLocation, uses a chapter-level UsjReaderWriter (obtained via the provided getter)
-   * to convert the document location to a UsfmVerseRefVerseLocation.
+   * For UsjChapterLocation, uses a chapter-level UsjReaderWriter to convert the document location
+   * to a UsfmVerseRefVerseLocation.
    *
    * @param location The location to convert
-   * @param getReaderWriter Function to obtain a cached reader writer for a given book and chapter.
-   *   This allows the caller to control how the reader writer is provided (e.g., from within a
-   *   mutex-protected callback).
    * @returns The standardized UsfmVerseRefVerseLocation (contains verseRef with book, chapter,
    *   verse and an offset)
    */
   async #convertToUsfmVerseRefVerseLocation(
     location: UsjChapterLocation | UsfmVerseLocation,
-    getReaderWriter: (bookId: string, chapterNum: number) => Promise<UsjReaderWriter>,
   ): Promise<UsfmVerseRefVerseLocation> {
     // If this is a UsjChapterLocation, convert to USFM verse location
     if (UsjReaderWriter.isUsjChapterLocation(location)) {
@@ -525,7 +520,7 @@ export class ScriptureFinderProjectDataProviderEngine
       const { book: bookId, chapterNum } = chapterLocation.verseRef;
 
       // Get the chapter-level reader writer to convert the document location
-      const usjReaderWriter = await getReaderWriter(bookId, chapterNum);
+      const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, chapterNum);
 
       return usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(
         chapterLocation.documentLocation,
@@ -613,11 +608,10 @@ export class ScriptureFinderProjectDataProviderEngine
     this.#cacheVersion += 1;
     this.#bookCache.delete(bookId);
     // Remove all chapter entries for this book (keys are "bookId:chapter")
-    for (const key of [...this.#chapterCache.keys()]) {
-      if (key.startsWith(`${bookId}:`)) {
-        this.#chapterCache.delete(key);
-      }
-    }
+    const prefix = `${bookId}:`;
+    this.#chapterCache.forEach((_value, key) => {
+      if (key.startsWith(prefix)) this.#chapterCache.delete(key);
+    });
   }
 
   /**

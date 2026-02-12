@@ -676,6 +676,7 @@ declare module 'platform-scripture' {
        * **Important Notes:**
        *
        * - All ranges must be within the same book. Cross-book replacements are not supported.
+       * - Ranges must not overlap. Overlapping ranges will cause an error.
        * - If `usfmToInsert` is an array, its length must match `rangesToReplace` length exactly.
        * - If `usfmToInsert` is a single string, it will be used for all replacements.
        * - Ranges are processed in reverse index order to preserve indices during replacement.
@@ -701,12 +702,14 @@ declare module 'platform-scripture' {
        * );
        * ```
        *
-       * @param rangesToReplace - Array of scripture ranges to replace. Each range has a start and
-       *   end location that can be {@link UsjChapterLocation} or {@link UsfmVerseLocation}.
+       * @param rangesToReplace - Array of non-overlapping scripture ranges to replace. Each range
+       *   has a start and end location that can be {@link UsjChapterLocation} or
+       *   {@link UsfmVerseLocation}. Overlapping ranges will cause an error.
        * @param usfmToInsert - The USFM content to insert at each range. Can be a single string
        *   (used for all ranges) or an array of strings (one per range).
        * @throws Error if `usfmToInsert` array length doesn't match `rangesToReplace` length
        * @throws Error if any range spans multiple books
+       * @throws Error if any ranges overlap
        */
       replace(
         rangesToReplace: ScriptureRangeUsjChapterOrUsfmVerseLocation[],
