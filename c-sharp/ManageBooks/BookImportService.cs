@@ -1,3 +1,5 @@
+using System.Xml.Linq;
+using System.Xml.XPath;
 using Paratext.Data;
 using PtxUtils;
 using SIL.Scripture;
@@ -374,8 +376,139 @@ public static class BookImportService
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(scrText);
 
-        // CAP-026: USXImportWithConfirmation not yet implemented
-        throw new NotImplementedException("CAP-026: ImportUsxFiles not yet implemented");
+        // Handle empty file list - success with no imports
+        if (files.Count == 0)
+        {
+            return new ImportResult(true, new List<int>(), new List<string>());
+        }
+
+        var importedBooks = new List<int>();
+        var errors = new List<string>();
+
+        foreach (string filePath in files)
+        {
+            try
+            {
+                int bookNum = ImportSingleUsxFile(filePath, scrText);
+                if (bookNum > 0)
+                {
+                    importedBooks.Add(bookNum);
+                }
+                else
+                {
+                    errors.Add($"Could not determine book from file: {Path.GetFileName(filePath)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Failed to import {Path.GetFileName(filePath)}: {ex.Message}");
+            }
+        }
+
+        // Success if at least one book imported or no files had errors
+        bool success = errors.Count == 0 || importedBooks.Count > 0;
+        return new ImportResult(success, importedBooks, errors);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/FileMenu/ImportBooksForm.cs:381-416
+    // Method: ImportBooksForm.ImportUsx (single file import logic)
+    // Maps to: EXT-012, BHV-111
+    /// <summary>
+    /// Imports a single USX file into the project.
+    /// </summary>
+    /// <param name="filePath">Path to the USX file.</param>
+    /// <param name="scrText">Target project.</param>
+    /// <returns>Book number that was imported, or 0 if failed.</returns>
+    private static int ImportSingleUsxFile(string filePath, ScrText scrText)
+    {
+        // Check if file exists
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
+
+        // Read and parse USX content
+        string usxContent = File.ReadAllText(filePath);
+
+        // Parse USX XML to extract book code
+        XDocument doc;
+        using (TextReader reader = new StringReader(usxContent))
+        {
+            doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        }
+
+        // Validate USX root element
+        if (doc.Root?.Name != "usx")
+        {
+            throw new InvalidDataException($"Invalid USX: missing <usx> root element");
+        }
+
+        // Extract book code from <book code="XXX"/> element
+        var bookElement = doc.Root.Element("book");
+        if (bookElement == null)
+        {
+            throw new InvalidDataException($"Invalid USX: missing <book> element");
+        }
+
+        string? bookCode = bookElement.Attribute("code")?.Value;
+        if (string.IsNullOrEmpty(bookCode))
+        {
+            throw new InvalidDataException($"Invalid USX: <book> element missing 'code' attribute");
+        }
+
+        // Convert book code to number
+        int bookNum;
+        try
+        {
+            bookNum = Canon.BookIdToNumber(bookCode);
+        }
+        catch
+        {
+            throw new InvalidDataException($"Invalid book code: {bookCode}");
+        }
+
+        if (bookNum <= 0)
+        {
+            throw new InvalidDataException($"Invalid book code: {bookCode}");
+        }
+
+        // Convert USX to USFM using ParatextData's UsxFragmenter
+        string usfm = ConvertUsxToUsfm(scrText, bookNum, usxContent);
+
+        // Write USFM to project
+        scrText.PutText(bookNum, 0, false, usfm, null);
+
+        return bookNum;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: ParatextProjectDataProvider.ConvertUsxToUsfm pattern
+    // Maps to: EXT-012
+    /// <summary>
+    /// Converts USX content to USFM format.
+    /// </summary>
+    /// <param name="scrText">Target project (for stylesheet).</param>
+    /// <param name="bookNum">Book number.</param>
+    /// <param name="usxContent">USX XML content.</param>
+    /// <returns>USFM string.</returns>
+    private static string ConvertUsxToUsfm(ScrText scrText, int bookNum, string usxContent)
+    {
+        XDocument doc;
+        using (TextReader reader = new StringReader(usxContent))
+        {
+            doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        }
+
+        UsxFragmenter.FindFragments(
+            scrText.ScrStylesheet(bookNum),
+            doc.CreateNavigator(),
+            System.Xml.XPath.XPathExpression.Compile("*[false()]"),
+            out string usfm,
+            scrText.Settings.AllowInvisibleChars
+        );
+
+        return UsfmToken.NormalizeUsfm(scrText, bookNum, usfm);
     }
 
     #endregion
