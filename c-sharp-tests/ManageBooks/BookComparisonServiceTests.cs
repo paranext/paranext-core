@@ -911,5 +911,771 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         #endregion
+
+        // ===================================================================
+        // CAP-007: CompareBooks Public API Tests
+        // ===================================================================
+
+        #region CAP-007: CompareBooks(BookComparisonRequest) - Acceptance Test (Outer Loop)
+
+        /// <summary>
+        /// Acceptance test: Standard project comparison returns all books with correct states.
+        /// This is the "done signal" for CAP-007.
+        ///
+        /// Golden Master: gm-003-copy-filter-standard
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-552")]
+        [Property("GoldenMasterId", "gm-003")]
+        [Description("Acceptance test: Standard project comparison via public API")]
+        public void CompareBooks_Request_StandardProjects_AcceptanceTest()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1, 2, 3]); // GEN, EXO, LEV
+            var destProject = CreateStandardProjectWithBooks([1, 2]); // GEN, EXO only
+
+            // Set file modification dates for comparison
+            SetBookModifiedDate(sourceProject, 1, new DateTime(2024, 1, 15)); // GEN newer in source
+            SetBookModifiedDate(destProject, 1, new DateTime(2024, 1, 14));
+            SetBookModifiedDate(sourceProject, 2, new DateTime(2024, 1, 10)); // EXO older in source
+            SetBookModifiedDate(destProject, 2, new DateTime(2024, 1, 12));
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert - Full outcome verification
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Books, Is.Not.Null, "Books list should not be null");
+            Assert.That(result.SourceProject, Is.Not.Null, "Source project info should be present");
+            Assert.That(result.DestProject, Is.Not.Null, "Dest project info should be present");
+
+            // Verify project info
+            Assert.That(
+                result.SourceProject.IsStudyBible,
+                Is.False,
+                "Standard source project should not be marked as study bible"
+            );
+            Assert.That(
+                result.DestProject.IsStudyBible,
+                Is.False,
+                "Standard dest project should not be marked as study bible"
+            );
+
+            // Verify book comparison states
+            var genComparison = result.Books.FirstOrDefault(b => b.BookNum == 1);
+            Assert.That(genComparison, Is.Not.Null, "GEN comparison should exist");
+            Assert.That(
+                genComparison!.Comparison,
+                Is.EqualTo(ComparisonResult.SourceNewer),
+                "GEN should be SourceNewer (source date > dest date)"
+            );
+            Assert.That(
+                genComparison.DefaultSelected,
+                Is.True,
+                "SourceNewer books should be selected by default"
+            );
+
+            var exoComparison = result.Books.FirstOrDefault(b => b.BookNum == 2);
+            Assert.That(exoComparison, Is.Not.Null, "EXO comparison should exist");
+            Assert.That(
+                exoComparison!.Comparison,
+                Is.EqualTo(ComparisonResult.DestNewer),
+                "EXO should be DestNewer (dest date > source date)"
+            );
+
+            var levComparison = result.Books.FirstOrDefault(b => b.BookNum == 3);
+            Assert.That(levComparison, Is.Not.Null, "LEV comparison should exist");
+            Assert.That(
+                levComparison!.Comparison,
+                Is.EqualTo(ComparisonResult.OnlyInSource),
+                "LEV should be OnlyInSource"
+            );
+            Assert.That(
+                levComparison.DefaultSelected,
+                Is.True,
+                "OnlyInSource books should be selected by default"
+            );
+        }
+
+        /// <summary>
+        /// Acceptance test: StudyBible project comparison respects INV-007 restriction.
+        ///
+        /// Golden Master: gm-004-copy-filter-studybible
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-038")]
+        [Property("BehaviorId", "BHV-553")]
+        [Property("GoldenMasterId", "gm-004")]
+        [Description(
+            "Acceptance test: StudyBible projects comparison marks IsStudyBible correctly"
+        )]
+        public void CompareBooks_Request_StudyBibleProjects_AcceptanceTest()
+        {
+            // Arrange
+            var sourceProject = CreateStudyBibleProjectWithBooks([1, 2]); // GEN, EXO
+            var destProject = CreateStudyBibleProjectWithBooks([1]); // GEN only
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(
+                result.SourceProject.IsStudyBible,
+                Is.True,
+                "Source project should be marked as study bible"
+            );
+            Assert.That(
+                result.DestProject.IsStudyBible,
+                Is.True,
+                "Dest project should be marked as study bible"
+            );
+
+            // Verify book comparison
+            Assert.That(
+                result.Books,
+                Has.Length.GreaterThanOrEqualTo(2),
+                "Should have at least 2 books in comparison"
+            );
+        }
+
+        /// <summary>
+        /// Acceptance test: SBA project comparison respects INV-008 restriction.
+        ///
+        /// Golden Master: gm-005-copy-filter-sba
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-039")]
+        [Property("BehaviorId", "BHV-554")]
+        [Property("GoldenMasterId", "gm-005")]
+        [Description("Acceptance test: SBA projects comparison marks IsStudyBible correctly")]
+        public void CompareBooks_Request_SBAProjects_AcceptanceTest()
+        {
+            // Arrange - SBA projects with non-canonical books
+            var sourceProject = CreateSBAProjectWithBooks([67, 68]); // XXA, XXB
+            var destProject = CreateSBAProjectWithBooks([67]); // XXA only
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(
+                result.SourceProject.IsStudyBible,
+                Is.True,
+                "SBA source project should be marked as study bible"
+            );
+            Assert.That(
+                result.DestProject.IsStudyBible,
+                Is.True,
+                "SBA dest project should be marked as study bible"
+            );
+
+            // Verify book comparison for non-canonical books
+            var xxaComparison = result.Books.FirstOrDefault(b => b.BookNum == 67);
+            Assert.That(xxaComparison, Is.Not.Null, "XXA (67) comparison should exist");
+
+            var xxbComparison = result.Books.FirstOrDefault(b => b.BookNum == 68);
+            Assert.That(xxbComparison, Is.Not.Null, "XXB (68) comparison should exist");
+            Assert.That(
+                xxbComparison!.Comparison,
+                Is.EqualTo(ComparisonResult.OnlyInSource),
+                "XXB should be OnlyInSource"
+            );
+        }
+
+        /// <summary>
+        /// Acceptance test: Book comparison determines newer/older/same status correctly.
+        ///
+        /// Golden Master: gm-023-book-comparison
+        /// </summary>
+        [Test]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Property("GoldenMasterId", "gm-023")]
+        [Description("Acceptance test: All comparison states determined correctly via public API")]
+        public void CompareBooks_Request_DeterminesComparisonStates_AcceptanceTest()
+        {
+            // Arrange - Create projects with various comparison scenarios
+            var sourceProject = CreateStandardProjectWithBooks([1, 2, 3, 4]); // GEN, EXO, LEV, NUM
+            var destProject = CreateStandardProjectWithBooks([1, 2, 5]); // GEN, EXO, DEU
+
+            // GEN: Source newer
+            SetBookModifiedDate(sourceProject, 1, new DateTime(2024, 1, 15, 10, 30, 0));
+            SetBookModifiedDate(destProject, 1, new DateTime(2024, 1, 14, 8, 0, 0));
+
+            // EXO: Dest newer
+            SetBookModifiedDate(sourceProject, 2, new DateTime(2024, 1, 10, 0, 0, 0));
+            SetBookModifiedDate(destProject, 2, new DateTime(2024, 1, 12, 0, 0, 0));
+
+            // LEV: Only in source (book 3)
+            // NUM: Only in source (book 4)
+            // DEU: Only in dest (book 5)
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert - All five comparison states
+            var genComparison = result.Books.First(b => b.BookNum == 1);
+            Assert.That(
+                genComparison.Comparison,
+                Is.EqualTo(ComparisonResult.SourceNewer),
+                "GEN: source date 2024-01-15 > dest date 2024-01-14 = SourceNewer"
+            );
+            Assert.That(genComparison.SourceModified, Is.Not.Null);
+            Assert.That(genComparison.DestModified, Is.Not.Null);
+
+            var exoComparison = result.Books.First(b => b.BookNum == 2);
+            Assert.That(
+                exoComparison.Comparison,
+                Is.EqualTo(ComparisonResult.DestNewer),
+                "EXO: dest date 2024-01-12 > source date 2024-01-10 = DestNewer"
+            );
+            Assert.That(
+                exoComparison.DefaultSelected,
+                Is.False,
+                "DestNewer books should NOT be selected by default"
+            );
+
+            var levComparison = result.Books.First(b => b.BookNum == 3);
+            Assert.That(
+                levComparison.Comparison,
+                Is.EqualTo(ComparisonResult.OnlyInSource),
+                "LEV: only in source = OnlyInSource"
+            );
+            Assert.That(
+                levComparison.DestModified,
+                Is.Null,
+                "OnlyInSource should have null DestModified"
+            );
+
+            var numComparison = result.Books.First(b => b.BookNum == 4);
+            Assert.That(
+                numComparison.Comparison,
+                Is.EqualTo(ComparisonResult.OnlyInSource),
+                "NUM: only in source = OnlyInSource"
+            );
+
+            var deuComparison = result.Books.First(b => b.BookNum == 5);
+            Assert.That(
+                deuComparison.Comparison,
+                Is.EqualTo(ComparisonResult.OnlyInDest),
+                "DEU: only in dest = OnlyInDest"
+            );
+            Assert.That(
+                deuComparison.SourceModified,
+                Is.Null,
+                "OnlyInDest should have null SourceModified"
+            );
+            Assert.That(
+                deuComparison.DefaultSelected,
+                Is.False,
+                "OnlyInDest books should NOT be selected by default"
+            );
+        }
+
+        #endregion
+
+        #region CAP-007: CompareBooks(BookComparisonRequest) - Contract Tests
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-066")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("Same modification dates returns Same comparison")]
+        public void CompareBooks_Request_BothHaveSameDate_ReturnsSame()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1]);
+            var destProject = CreateStandardProjectWithBooks([1]);
+
+            var sameDate = new DateTime(2024, 1, 15, 10, 30, 0);
+            SetBookModifiedDate(sourceProject, 1, sameDate);
+            SetBookModifiedDate(destProject, 1, sameDate);
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            var genComparison = result.Books.First(b => b.BookNum == 1);
+            Assert.That(
+                genComparison.Comparison,
+                Is.EqualTo(ComparisonResult.Same),
+                "Same modification dates should return Same comparison"
+            );
+            Assert.That(
+                genComparison.DefaultSelected,
+                Is.False,
+                "Same books should NOT be selected by default (no need to copy)"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("Source newer has DefaultSelected = true")]
+        public void CompareBooks_Request_SourceNewer_DefaultSelectedTrue()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1]);
+            var destProject = CreateStandardProjectWithBooks([1]);
+
+            SetBookModifiedDate(sourceProject, 1, new DateTime(2024, 1, 20)); // Newer
+            SetBookModifiedDate(destProject, 1, new DateTime(2024, 1, 10));
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            var genComparison = result.Books.First(b => b.BookNum == 1);
+            Assert.That(genComparison.Comparison, Is.EqualTo(ComparisonResult.SourceNewer));
+            Assert.That(
+                genComparison.DefaultSelected,
+                Is.True,
+                "SourceNewer books should be selected by default for copying"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("OnlyInSource has DefaultSelected = true")]
+        public void CompareBooks_Request_OnlyInSource_DefaultSelectedTrue()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1, 2]); // GEN, EXO
+            var destProject = CreateStandardProjectWithBooks([1]); // GEN only
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            var exoComparison = result.Books.First(b => b.BookNum == 2);
+            Assert.That(exoComparison.Comparison, Is.EqualTo(ComparisonResult.OnlyInSource));
+            Assert.That(
+                exoComparison.DefaultSelected,
+                Is.True,
+                "OnlyInSource books should be selected by default for copying"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("DestNewer has DefaultSelected = false")]
+        public void CompareBooks_Request_DestNewer_DefaultSelectedFalse()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1]);
+            var destProject = CreateStandardProjectWithBooks([1]);
+
+            SetBookModifiedDate(sourceProject, 1, new DateTime(2024, 1, 10)); // Older
+            SetBookModifiedDate(destProject, 1, new DateTime(2024, 1, 20)); // Newer
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            var genComparison = result.Books.First(b => b.BookNum == 1);
+            Assert.That(genComparison.Comparison, Is.EqualTo(ComparisonResult.DestNewer));
+            Assert.That(
+                genComparison.DefaultSelected,
+                Is.False,
+                "DestNewer books should NOT be selected by default (would overwrite newer)"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("Result includes project info")]
+        public void CompareBooks_Request_ReturnsProjectInfo()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1]);
+            var destProject = CreateStandardProjectWithBooks([1]);
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            Assert.That(
+                result.SourceProject.ProjectId,
+                Is.EqualTo(sourceProject.Guid.ToString())
+            );
+            Assert.That(result.SourceProject.ProjectName, Is.Not.Null.And.Not.Empty);
+            Assert.That(result.SourceProject.ProjectType, Is.Not.Null.And.Not.Empty);
+
+            Assert.That(result.DestProject.ProjectId, Is.EqualTo(destProject.Guid.ToString()));
+            Assert.That(result.DestProject.ProjectName, Is.Not.Null.And.Not.Empty);
+            Assert.That(result.DestProject.ProjectType, Is.Not.Null.And.Not.Empty);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("Result includes book comparison info with all fields")]
+        public void CompareBooks_Request_ReturnsBookComparisonInfo()
+        {
+            // Arrange
+            var sourceProject = CreateStandardProjectWithBooks([1]);
+            var destProject = CreateStandardProjectWithBooks([1]);
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            var genComparison = result.Books.First(b => b.BookNum == 1);
+            Assert.That(genComparison.BookNum, Is.EqualTo(1));
+            Assert.That(
+                genComparison.BookName,
+                Is.Not.Null.And.Not.Empty,
+                "BookName should be populated"
+            );
+            Assert.That(
+                genComparison.SourceModified,
+                Is.Not.Null,
+                "SourceModified should be set when book exists in source"
+            );
+            Assert.That(
+                genComparison.DestModified,
+                Is.Not.Null,
+                "DestModified should be set when book exists in dest"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-076")]
+        [Property("BehaviorId", "BHV-303")]
+        [Description("Result includes union of books from both projects")]
+        public void CompareBooks_Request_IncludesAllBooksFromBothProjects()
+        {
+            // Arrange - Disjoint book sets
+            var sourceProject = CreateStandardProjectWithBooks([1, 3, 5]); // GEN, LEV, DEU
+            var destProject = CreateStandardProjectWithBooks([2, 4, 5]); // EXO, NUM, DEU
+
+            var request = new BookComparisonRequest(
+                sourceProject.Guid.ToString(),
+                destProject.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert - Union of both sets: 1, 2, 3, 4, 5
+            var bookNums = result.Books.Select(b => b.BookNum).OrderBy(n => n).ToList();
+            Assert.That(
+                bookNums,
+                Is.EquivalentTo(new[] { 1, 2, 3, 4, 5 }),
+                "Should include all books from both projects"
+            );
+        }
+
+        #endregion
+
+        #region CAP-007: CompareBooks(BookComparisonRequest) - Invariant Tests
+
+        /// <summary>
+        /// INV-007: StudyBible project comparison marks IsStudyBible correctly.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("InvariantId", "INV-007")]
+        [Property("ScenarioId", "TS-038")]
+        [Property("BehaviorId", "BHV-553")]
+        [Description("INV-007: StudyBible project comparison marks IsStudyBible = true")]
+        public void CompareBooks_Request_StudyBibleProject_MarksIsStudyBibleTrue()
+        {
+            // Arrange
+            var studyBibleSource = CreateStudyBibleProjectWithBooks([1]);
+            var studyBibleDest = CreateStudyBibleProjectWithBooks([1]);
+
+            var request = new BookComparisonRequest(
+                studyBibleSource.Guid.ToString(),
+                studyBibleDest.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert - Both projects should be marked as study bible
+            Assert.That(
+                result.SourceProject.IsStudyBible,
+                Is.True,
+                "INV-007: StudyBible source should have IsStudyBible = true"
+            );
+            Assert.That(
+                result.DestProject.IsStudyBible,
+                Is.True,
+                "INV-007: StudyBible dest should have IsStudyBible = true"
+            );
+        }
+
+        /// <summary>
+        /// INV-008: SBA project comparison marks IsStudyBible correctly.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("InvariantId", "INV-008")]
+        [Property("ScenarioId", "TS-039")]
+        [Property("BehaviorId", "BHV-554")]
+        [Description("INV-008: SBA project comparison marks IsStudyBible = true")]
+        public void CompareBooks_Request_SBAProject_MarksIsStudyBibleTrue()
+        {
+            // Arrange
+            var sbaSource = CreateSBAProjectWithBooks([67]); // XXA
+            var sbaDest = CreateSBAProjectWithBooks([67]);
+
+            var request = new BookComparisonRequest(
+                sbaSource.Guid.ToString(),
+                sbaDest.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert - Both projects should be marked as study bible (SBA is a type of study bible)
+            Assert.That(
+                result.SourceProject.IsStudyBible,
+                Is.True,
+                "INV-008: SBA source should have IsStudyBible = true"
+            );
+            Assert.That(
+                result.DestProject.IsStudyBible,
+                Is.True,
+                "INV-008: SBA dest should have IsStudyBible = true"
+            );
+        }
+
+        /// <summary>
+        /// Verify Standard projects are correctly marked as not study bible.
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("InvariantId", "INV-007")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-552")]
+        [Description("Standard projects should have IsStudyBible = false")]
+        public void CompareBooks_Request_StandardProject_MarksIsStudyBibleFalse()
+        {
+            // Arrange
+            var standardSource = CreateStandardProjectWithBooks([1]);
+            var standardDest = CreateStandardProjectWithBooks([1]);
+
+            var request = new BookComparisonRequest(
+                standardSource.Guid.ToString(),
+                standardDest.Guid.ToString()
+            );
+
+            // Act
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert
+            Assert.That(
+                result.SourceProject.IsStudyBible,
+                Is.False,
+                "Standard source should have IsStudyBible = false"
+            );
+            Assert.That(
+                result.DestProject.IsStudyBible,
+                Is.False,
+                "Standard dest should have IsStudyBible = false"
+            );
+        }
+
+        /// <summary>
+        /// Comparison between mismatched project types should still work
+        /// (validation happens at copy time, not comparison time).
+        /// </summary>
+        [Test]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("InvariantId", "INV-007")]
+        [Property("ScenarioId", "TS-037")]
+        [Property("BehaviorId", "BHV-552")]
+        [Description("Mixed project type comparison still works (filtering is UI responsibility)")]
+        public void CompareBooks_Request_MixedProjectTypes_StillReturnsComparison()
+        {
+            // Arrange - Standard source, StudyBible dest (normally not allowed to copy)
+            var standardSource = CreateStandardProjectWithBooks([1]);
+            var studyBibleDest = CreateStudyBibleProjectWithBooks([1]);
+
+            var request = new BookComparisonRequest(
+                standardSource.Guid.ToString(),
+                studyBibleDest.Guid.ToString()
+            );
+
+            // Act - Comparison should still work
+            var result = BookComparisonService.CompareBooks(request);
+
+            // Assert - Comparison succeeds, but IsStudyBible flags differ
+            Assert.That(result, Is.Not.Null, "Comparison should succeed even for mixed types");
+            Assert.That(result.SourceProject.IsStudyBible, Is.False);
+            Assert.That(result.DestProject.IsStudyBible, Is.True);
+
+            // UI will use these flags to prevent the actual copy operation
+        }
+
+        #endregion
+
+        #region CAP-007: Helper Methods
+
+        /// <summary>
+        /// Creates a standard project with the specified books already present.
+        /// Books are created with a default modification date.
+        /// DummyScrText creates a Standard project type by default.
+        /// </summary>
+        private DummyScrText CreateStandardProjectWithBooks(int[] bookNumbers)
+        {
+            var scrText = CreateDummyProject();
+            // Note: DummyScrText creates Standard type by default (TranslationInfo.Type is readonly)
+
+            // Register project for lookup
+            var details = CreateProjectDetails(scrText);
+            ParatextProjects.FakeAddProject(details, scrText);
+
+            // Add books with default dates
+            var defaultDate = DateTime.Now;
+            foreach (var bookNum in bookNumbers)
+            {
+                scrText.SetBookPresent(bookNum, true, defaultDate);
+            }
+
+            return scrText;
+        }
+
+        /// <summary>
+        /// Creates a StudyBible project with the specified books.
+        /// </summary>
+        private DummyScrText CreateStudyBibleProjectWithBooks(int[] bookNumbers)
+        {
+            var scrText = new DummyStudyBibleScrText();
+
+            // Register project for lookup
+            var details = CreateProjectDetails(scrText);
+            ParatextProjects.FakeAddProject(details, scrText);
+
+            // Add books with default dates
+            var defaultDate = DateTime.Now;
+            foreach (var bookNum in bookNumbers)
+            {
+                scrText.SetBookPresent(bookNum, true, defaultDate);
+            }
+
+            return scrText;
+        }
+
+        /// <summary>
+        /// Creates an SBA (Study Bible Additions) project with the specified books.
+        /// </summary>
+        private DummyScrText CreateSBAProjectWithBooks(int[] bookNumbers)
+        {
+            // SBA requires a base project
+            var baseProject = CreateDummyProject();
+            var baseDetails = CreateProjectDetails(baseProject);
+            ParatextProjects.FakeAddProject(baseDetails, baseProject);
+
+            var scrText = new DummySBAScrText(baseProject);
+
+            // Register project for lookup
+            var details = CreateProjectDetails(scrText);
+            ParatextProjects.FakeAddProject(details, scrText);
+
+            // Add books with default dates
+            var defaultDate = DateTime.Now;
+            foreach (var bookNum in bookNumbers)
+            {
+                scrText.SetBookPresent(bookNum, true, defaultDate);
+            }
+
+            return scrText;
+        }
+
+        /// <summary>
+        /// Sets the modification date for a book in a project.
+        /// This is used to control comparison results in tests.
+        /// </summary>
+        private static void SetBookModifiedDate(DummyScrText scrText, int bookNum, DateTime modifiedDate)
+        {
+            // Use the existing SetBookPresent method which sets the modification date
+            scrText.SetBookPresent(bookNum, true, modifiedDate);
+        }
+
+        #endregion
     }
 }

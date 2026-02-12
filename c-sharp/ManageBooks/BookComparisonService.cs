@@ -7,10 +7,86 @@ namespace Paranext.DataProvider.ManageBooks;
 /// Service for book comparison operations.
 /// Provides functionality for comparing books between projects for copy dialog.
 ///
-/// Contains CAP-021 (CompareBooks), CAP-022 (BookDisplayStyling), and CAP-013 (GetCompatibleCopyTargets).
+/// Contains CAP-007 (CompareBooks public API), CAP-021 (CompareBooks internal),
+/// CAP-022 (BookDisplayStyling), and CAP-013 (GetCompatibleCopyTargets).
 /// </summary>
 internal static class BookComparisonService
 {
+    /// <summary>
+    /// Compare books between source and destination projects using project IDs.
+    /// This is the public PAPI API for book comparison (CAP-007).
+    ///
+    /// === NEW IN PT10 ===
+    /// Reason: PAPI command pattern - public API wrapper for copy books dialog
+    /// Maps to: CAP-007, BHV-303, BHV-552, BHV-553, BHV-554, BHV-555
+    /// Golden Masters: gm-003, gm-004, gm-005, gm-023
+    ///
+    /// This method wraps the internal CompareBooks(ScrText, ScrText) method (CAP-021)
+    /// and adds project info lookup and result packaging for the PAPI wire format.
+    /// </summary>
+    /// <param name="request">Comparison request with source and destination project IDs.</param>
+    /// <returns>Complete comparison result with book info and project metadata.</returns>
+    public static BookComparisonResult CompareBooks(BookComparisonRequest request)
+    {
+        // Look up both projects by ID
+        ScrText? sourceScrText = BookServiceHelpers.FindScrText(request.SourceProjectId);
+        ScrText? destScrText = BookServiceHelpers.FindScrText(request.DestProjectId);
+
+        // Handle missing projects
+        if (sourceScrText == null || destScrText == null)
+        {
+            // Return empty result with minimal project info
+            return new BookComparisonResult(
+                Books: [],
+                SourceProject: CreateProjectInfo(sourceScrText, request.SourceProjectId),
+                DestProject: CreateProjectInfo(destScrText, request.DestProjectId)
+            );
+        }
+
+        // Call the internal comparison method (CAP-021)
+        List<BookComparisonInfo> books = CompareBooks(sourceScrText, destScrText);
+
+        // Create project info for both projects
+        ProjectInfo sourceProjectInfo = CreateProjectInfo(sourceScrText, request.SourceProjectId);
+        ProjectInfo destProjectInfo = CreateProjectInfo(destScrText, request.DestProjectId);
+
+        return new BookComparisonResult(
+            Books: [.. books],
+            SourceProject: sourceProjectInfo,
+            DestProject: destProjectInfo
+        );
+    }
+
+    /// <summary>
+    /// Creates ProjectInfo from a ScrText, or a minimal ProjectInfo if ScrText is null.
+    /// </summary>
+    /// <param name="scrText">The ScrText to extract info from (may be null).</param>
+    /// <param name="projectId">The project ID to use if ScrText is null.</param>
+    /// <returns>ProjectInfo with project metadata.</returns>
+    private static ProjectInfo CreateProjectInfo(ScrText? scrText, string projectId)
+    {
+        if (scrText == null)
+        {
+            return new ProjectInfo(
+                ProjectId: projectId,
+                ProjectName: "Unknown",
+                ProjectType: "Unknown",
+                IsStudyBible: false
+            );
+        }
+
+        var projectType = scrText.Settings.TranslationInfo.Type;
+        bool isStudyBible =
+            projectType == ProjectType.StudyBible || scrText.Settings.IsStudyBibleAdditions;
+
+        return new ProjectInfo(
+            ProjectId: scrText.Guid.ToString(),
+            ProjectName: scrText.Name,
+            ProjectType: projectType.ToString() ?? "Unknown",
+            IsStudyBible: isStudyBible
+        );
+    }
+
     /// <summary>
     /// Get compatible copy target projects for a source project.
     ///
