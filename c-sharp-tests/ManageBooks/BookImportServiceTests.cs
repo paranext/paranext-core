@@ -802,17 +802,39 @@ namespace TestParanextDataProvider.ManageBooks
         [Description("ImportUsxFiles imports single USX file and returns book number")]
         public void ImportUsxFiles_SingleValidFile_ReturnsImportedBookNumber()
         {
-            // Arrange: Single USX file
-            var usxFiles = new List<string> { "/path/to/gen.usx" };
+            // Arrange: Create a real temporary USX file with valid Genesis content
+            string usxFilePath = Path.Combine(FixtureSetup.TestFolderPath, "test-gen.usx");
+            string usxContent = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<usx version=""3.0"">
+  <book code=""GEN"" style=""id"">Genesis</book>
+  <chapter number=""1"" style=""c"" sid=""GEN 1"" />
+  <para style=""p"">
+    <verse number=""1"" style=""v"" sid=""GEN 1:1"" />In the beginning God created the heavens and the earth.<verse eid=""GEN 1:1"" />
+  </para>
+  <chapter eid=""GEN 1"" />
+</usx>";
+            File.WriteAllText(usxFilePath, usxContent);
 
-            // Act
-            var result = BookImportService.ImportUsxFiles(usxFiles, _scrText);
+            try
+            {
+                var usxFiles = new List<string> { usxFilePath };
 
-            // Assert: Per TS-024, should return book number 1 (GEN)
-            Assert.That(result, Is.Not.Null);
-            Assert.That(result.Success, Is.True, "Import should succeed for valid USX file");
-            Assert.That(result.ImportedBooks, Is.Not.Empty, "Should have at least one imported book");
-            Assert.That(result.Errors, Is.Empty, "Should have no errors for valid file");
+                // Act
+                var result = BookImportService.ImportUsxFiles(usxFiles, _scrText);
+
+                // Assert: Per TS-024, should return book number 1 (GEN)
+                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Success, Is.True, "Import should succeed for valid USX file");
+                Assert.That(result.ImportedBooks, Is.Not.Empty, "Should have at least one imported book");
+                Assert.That(result.ImportedBooks, Does.Contain(1), "Should contain Genesis (book 1)");
+                Assert.That(result.Errors, Is.Empty, "Should have no errors for valid file");
+            }
+            finally
+            {
+                // Cleanup
+                if (File.Exists(usxFilePath))
+                    File.Delete(usxFilePath);
+            }
         }
 
         /// <summary>
