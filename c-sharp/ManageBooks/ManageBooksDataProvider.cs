@@ -17,6 +17,8 @@ namespace Paranext.DataProvider.ManageBooks;
 /// This DataProvider registers the following PAPI commands:
 /// - platformScripture.createBooks: Creates books in a project (CAP-001)
 /// - platformScripture.copyBooks: Copies books between projects (CAP-002)
+/// - platformScripture.deleteBooks: Deletes books from a project (CAP-003)
+/// - platformScripture.importBooks: Imports books from external files (CAP-005)
 /// - platformScripture.getBooksPresent: Gets books present in a project (CAP-009)
 /// - platformScripture.getAvailableBooks: Gets available books for creation (CAP-008)
 ///
