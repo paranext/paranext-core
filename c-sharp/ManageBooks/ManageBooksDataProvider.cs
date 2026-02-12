@@ -385,8 +385,6 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
         return result;
     }
 
-    #region CAP-003: DeleteBooks PAPI Command
-
     /// <summary>
     /// Handles the deleteBooks PAPI command (CAP-003).
     /// Deserializes the request from JSON and delegates to ExecuteDeleteBooksAsync.
@@ -577,6 +575,4 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
     {
         _lastBooksChangedEvent = null;
     }
-
-    #endregion
 }
