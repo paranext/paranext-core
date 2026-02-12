@@ -355,4 +355,28 @@ public static class BookImportService
             return null;
         }
     }
+
+    #region CAP-026: USX Import
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/FileMenu/ImportBooksForm.cs:381-416
+    // Method: ImportBooksForm.ImportUsx
+    // Maps to: EXT-012, BHV-111, TS-024
+    /// <summary>
+    /// Import USX files into a project.
+    /// </summary>
+    /// <param name="files">List of USX file paths to import.</param>
+    /// <param name="scrText">Target project.</param>
+    /// <returns>Import result containing imported books and any errors.</returns>
+    /// <exception cref="ArgumentNullException">If files or scrText is null.</exception>
+    public static ImportResult ImportUsxFiles(List<string> files, ScrText scrText)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(scrText);
+
+        // CAP-026: USXImportWithConfirmation not yet implemented
+        throw new NotImplementedException("CAP-026: ImportUsxFiles not yet implemented");
+    }
+
+    #endregion
 }
