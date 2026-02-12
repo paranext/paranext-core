@@ -216,14 +216,13 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
             );
         }
 
-        if (!string.IsNullOrEmpty(status))
-            status = JsonConverterUtils.ConvertCommentStatusToNoteStatus(status);
-        if (!string.IsNullOrEmpty(type))
-            type = JsonConverterUtils.ConvertCommentTypeToNoteType(type);
-
         var conflictTypeEnum = ConvertToEnum<NoteConflictType>(CONFLICT_TYPE, conflictType);
-        var statusEnum = ConvertToEnum<NoteStatus>(STATUS, status);
-        var typeEnum = ConvertToEnum<NoteType>(TYPE, type);
+        Enum<NoteStatus>? statusEnum = !string.IsNullOrEmpty(status)
+            ? JsonConverterUtils.ConvertCommentStatusToNoteStatus(status)
+            : null;
+        Enum<NoteType>? typeEnum = !string.IsNullOrEmpty(type)
+            ? JsonConverterUtils.ConvertCommentTypeToNoteType(type)
+            : null;
 
         Comment comment =
             new(new ParatextUser(user ?? string.Empty, null))
@@ -246,7 +245,7 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
                 TagsAdded = tagAdded?.Split(","),
                 TagsRemoved = tagRemoved?.Split(","),
                 Thread = thread ?? string.Empty,
-                Type = typeEnum ?? NoteType.Unspecified,
+                Type = typeEnum ?? NoteType.Normal, // Same as Unspecified
                 Verse = verse,
                 VerseRefStr = verseRef ?? string.Empty,
             };
@@ -289,18 +288,14 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         JsonConverterUtils.TryWriteString(writer, CONTEXT_AFTER, value.ContextAfter);
         if (value.Status != NoteStatus.Unspecified)
         {
-            string noteStatusValue = value.Status.ToString();
             string commentStatusValue = JsonConverterUtils.ConvertNoteStatusToCommentStatus(
-                noteStatusValue
+                value.Status
             );
             writer.WriteString(STATUS, commentStatusValue);
         }
         if (value.Type != NoteType.Unspecified)
         {
-            string noteTypeValue = value.Type.ToString();
-            string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(
-                noteTypeValue
-            );
+            string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(value.Type);
             writer.WriteString(TYPE, commentTypeValue);
         }
         if (value.ConflictType != NoteConflictType.None)

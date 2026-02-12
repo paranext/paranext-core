@@ -68,7 +68,7 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
         if (
             root.TryGetProperty(TYPE, out JsonElement typeEl)
             && typeEl.GetString() is string typeValue
-            && !string.IsNullOrEmpty(typeValue)
+            && typeValue != null
         )
         {
             selector.Type = JsonConverterUtils.ConvertCommentTypeToNoteType(typeValue);

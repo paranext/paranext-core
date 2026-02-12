@@ -17,6 +17,39 @@ namespace Paranext.DataProvider.JsonUtils;
 public class PlatformCommentWrapper
 {
     /// <summary>
+    /// Frontend constants for comment status values used in TypeScript code and passed in JSON.
+    /// </summary>
+    internal static class Json
+    {
+        internal static class Status
+        {
+            public const string RESOLVED = "Resolved";
+            public const string TO_DO = "Todo";
+            public const string DONE = "Done";
+            public const string UNSPECIFIED = "Unspecified";
+        }
+
+        /// <summary>
+        /// Frontend constants for comment type values used in TypeScript code and passed in JSON.
+        /// </summary>
+        internal static class Type
+        {
+            /// <summary>
+            /// Default type (not a <see cref="CONFLICT"/> note)
+            /// </summary>
+            /// <remarks>
+            /// We used to have another type, "Unspecified", but it got treated identically to this
+            /// type during backend serialization. Originally in legacy Paratext,
+            /// <see cref="NoteType.Unspecified"/> was created use in filtering (unfiltered) but it
+            /// is no longer used for that. Similarly, in the frontend of Platform, if the list is
+            /// not to be filtered by type, the type should simply not be specified in the selector.
+            /// </remarks>
+            public const string NORMAL = "Normal";
+            public const string CONFLICT = "Conflict";
+        }
+    }
+
+    /// <summary>
     /// The underlying Comment object. Note it may have a `Contents` property that is NOT correct.
     /// The correct contents in HTML format is provided by the `ContentsHtml` property.
     ///

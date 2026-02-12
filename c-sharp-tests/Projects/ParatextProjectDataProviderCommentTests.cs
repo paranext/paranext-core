@@ -1088,9 +1088,9 @@ namespace TestParanextDataProvider.Projects
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
                 .Single();
             Assert.That(
-                threadAfter.Status.ToString().ToLowerInvariant(),
-                Is.EqualTo(ParatextNote.Status.RESOLVED),
-                "Thread status should be Resolved (labeled 'deleted' by ParatextData)"
+                threadAfter.Status,
+                Is.EqualTo(NoteStatus.Resolved),
+                "Thread status should be Resolved"
             );
 
             // Verify thread is marked as read
@@ -1110,8 +1110,8 @@ namespace TestParanextDataProvider.Projects
             // Verify the new comment has the correct status
             var lastComment = threadAfter.Comments.Last();
             Assert.That(
-                lastComment.Status.ToString().ToLowerInvariant(),
-                Is.EqualTo(ParatextNote.Status.RESOLVED),
+                lastComment.Status,
+                Is.EqualTo(NoteStatus.Resolved),
                 "Last comment should have Resolved status (labeled 'deleted' by ParatextData)"
             );
 
@@ -1158,8 +1158,8 @@ namespace TestParanextDataProvider.Projects
                 .GetCommentThreads(new CommentThreadSelector { ThreadId = threadId })
                 .Single();
             Assert.That(
-                threadAfterUnresolve.Status.ToString(),
-                Is.EqualTo(ParatextNote.Status.TO_DO),
+                threadAfterUnresolve.Status,
+                Is.EqualTo(NoteStatus.Todo),
                 "Thread status should be back to to-do after unresolving"
             );
 
@@ -1180,8 +1180,8 @@ namespace TestParanextDataProvider.Projects
             // Verify the new comment has to-do status
             var lastComment = threadAfterUnresolve.Comments.Last();
             Assert.That(
-                lastComment.Status.ToString(),
-                Is.EqualTo(ParatextNote.Status.TO_DO),
+                lastComment.Status,
+                Is.EqualTo(NoteStatus.Todo),
                 "Last comment should have a to-do status"
             );
 
@@ -1212,7 +1212,7 @@ namespace TestParanextDataProvider.Projects
             // Status uses backend status format since CommentThreadSelectorConverter
             // handles the conversion from frontend CommentStatus during JSON deserialization
             var resolvedThreads = _provider.GetCommentThreads(
-                new CommentThreadSelector { Status = ParatextNote.Status.RESOLVED }
+                new CommentThreadSelector { Status = NoteStatus.Resolved }
             );
 
             Assert.That(
@@ -1268,7 +1268,7 @@ namespace TestParanextDataProvider.Projects
             // Status uses internal NoteStatus format since CommentThreadSelectorConverter
             // handles the conversion from frontend CommentStatus during JSON deserialization
             var todoThreads = _provider.GetCommentThreads(
-                new CommentThreadSelector { Status = ParatextNote.Status.TO_DO }
+                new CommentThreadSelector { Status = NoteStatus.Todo }
             );
 
             Assert.That(

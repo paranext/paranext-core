@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Paratext.Data.ProjectComments;
+using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -8,115 +10,67 @@ namespace Paranext.DataProvider.JsonUtils;
 public static class JsonConverterUtils
 {
     /// <summary>
-    /// Frontend constants for Comments in Platform. These are used in TypeScript code and passed
-    /// back in JSON.
+    /// Maps frontend comment status string to backend <see cref="Enum{NoteStatus}"/>.
     /// </summary>
-    /// <remarks>
-    /// In Paratext 9, Comments are called "Notes".
-    /// </remarks>
-    internal static class PlatformComment
+    public static Enum<NoteStatus> ConvertCommentStatusToNoteStatus(string commentStatus)
     {
-        internal class Status
+        var noteStatus = commentStatus switch
         {
-            public const string RESOLVED = "Resolved";
-            public const string TO_DO = "Todo";
-            public const string DONE = "Done";
-            public const string UNSPECIFIED = "Unspecified";
-        }
-
-        internal class Type
-        {
-            public const string NORMAL = "Normal";
-            public const string CONFLICT = "Conflict";
-            public const string UNSPECIFIED = "Unspecified";
-        }
-    }
-
-    /// <summary>
-    /// Backend constants for Notes in ParatextData. These are typically represented as string-based
-    /// quasi-"enums" in Paratext, for backward compatibility and easy serialization.
-    /// </summary>
-    /// <remarks>
-    /// In Platform, Notes are called "Comments".
-    /// </remarks>
-    internal static class ParatextNote
-    {
-        internal class Status
-        {
-            public const string RESOLVED = "deleted";
-            public const string TO_DO = "todo";
-            public const string DONE = "done";
-            public const string UNSPECIFIED = "";
-        }
-
-        internal class Type
-        {
-            public const string NORMAL = "normal";
-            public const string CONFLICT = "conflict";
-            public const string UNSPECIFIED = "";
-        }
-    }
-
-    /// <summary>
-    /// Maps frontend CommentStatus to backend NoteStatus.
-    /// </summary>
-    public static string ConvertCommentStatusToNoteStatus(string commentStatus)
-    {
-        return commentStatus switch
-        {
-            PlatformComment.Status.RESOLVED => ParatextNote.Status.RESOLVED,
-            PlatformComment.Status.TO_DO => ParatextNote.Status.TO_DO,
-            PlatformComment.Status.DONE => ParatextNote.Status.DONE,
-            PlatformComment.Status.UNSPECIFIED => ParatextNote.Status.UNSPECIFIED,
-            _ => commentStatus.ToLowerInvariant(),
+            PlatformCommentWrapper.Json.Status.RESOLVED => NoteStatus.Resolved,
+            PlatformCommentWrapper.Json.Status.TO_DO => NoteStatus.Todo,
+            PlatformCommentWrapper.Json.Status.DONE => NoteStatus.Done,
+            PlatformCommentWrapper.Json.Status.UNSPECIFIED => NoteStatus.Unspecified,
+            _ => new Enum<NoteStatus>(commentStatus.ToLowerInvariant()),
         };
+        return noteStatus;
     }
 
     /// <summary>
-    /// Maps backend NoteStatus to frontend CommentStatus.
+    /// Maps backend <see cref="Enum{NoteStatus}"/> to frontend comment status string.
     /// </summary>
-    public static string ConvertNoteStatusToCommentStatus(string noteStatus)
+    public static string ConvertNoteStatusToCommentStatus(Enum<NoteStatus> noteStatusEnum)
     {
-        return noteStatus switch
-        {
-            ParatextNote.Status.RESOLVED => PlatformComment.Status.RESOLVED,
-            ParatextNote.Status.TO_DO => PlatformComment.Status.TO_DO,
-            ParatextNote.Status.DONE => PlatformComment.Status.DONE,
-            ParatextNote.Status.UNSPECIFIED => PlatformComment.Status.UNSPECIFIED,
-            _ => noteStatus.Length > 0
-                ? char.ToUpperInvariant(noteStatus[0]) + noteStatus[1..]
-                : PlatformComment.Status.UNSPECIFIED,
-        };
+        if (noteStatusEnum == NoteStatus.Resolved)
+            return PlatformCommentWrapper.Json.Status.RESOLVED;
+        if (noteStatusEnum == NoteStatus.Todo)
+            return PlatformCommentWrapper.Json.Status.TO_DO;
+        if (noteStatusEnum == NoteStatus.Done)
+            return PlatformCommentWrapper.Json.Status.DONE;
+        if (noteStatusEnum == NoteStatus.Unspecified)
+            return PlatformCommentWrapper.Json.Status.UNSPECIFIED;
+
+        return noteStatusEnum.InternalValue.Length > 0
+            ? char.ToUpperInvariant(noteStatusEnum.InternalValue[0])
+                + noteStatusEnum.InternalValue[1..]
+            : PlatformCommentWrapper.Json.Status.UNSPECIFIED;
     }
 
     /// <summary>
-    /// Maps frontend CommentType to backend NoteType.
+    /// Maps frontend comment type string to backend <see cref="Enum{NoteType}"/>.
     /// </summary>
-    public static string ConvertCommentTypeToNoteType(string commentType)
+    public static Enum<NoteType> ConvertCommentTypeToNoteType(string commentType)
     {
-        return commentType switch
+        var noteType = commentType switch
         {
-            PlatformComment.Type.UNSPECIFIED => ParatextNote.Type.UNSPECIFIED,
-            PlatformComment.Type.NORMAL => ParatextNote.Type.NORMAL,
-            PlatformComment.Type.CONFLICT => ParatextNote.Type.CONFLICT,
-            _ => commentType.ToLowerInvariant(),
+            PlatformCommentWrapper.Json.Type.NORMAL => NoteType.Normal,
+            PlatformCommentWrapper.Json.Type.CONFLICT => NoteType.Conflict,
+            _ => new Enum<NoteType>(commentType.ToLowerInvariant()),
         };
+        return noteType;
     }
 
     /// <summary>
-    /// Maps backend NoteType to frontend CommentType.
+    /// Maps backend <see cref="Enum{NoteType}"/> to frontend comment type string.
     /// </summary>
-    public static string ConvertNoteTypeToCommentType(string noteType)
+    public static string ConvertNoteTypeToCommentType(Enum<NoteType> noteTypeEnum)
     {
-        return noteType switch
-        {
-            ParatextNote.Type.UNSPECIFIED => PlatformComment.Type.UNSPECIFIED,
-            ParatextNote.Type.NORMAL => PlatformComment.Type.NORMAL,
-            ParatextNote.Type.CONFLICT => PlatformComment.Type.CONFLICT,
-            _ => noteType.Length > 0
-                ? char.ToUpperInvariant(noteType[0]) + noteType[1..]
-                : PlatformComment.Type.UNSPECIFIED,
-        };
+        if (noteTypeEnum == NoteType.Normal)
+            return PlatformCommentWrapper.Json.Type.NORMAL;
+        if (noteTypeEnum == NoteType.Conflict)
+            return PlatformCommentWrapper.Json.Type.CONFLICT;
+
+        return char.ToUpperInvariant(noteTypeEnum.InternalValue[0])
+            + noteTypeEnum.InternalValue[1..];
     }
 
     /// <summary>

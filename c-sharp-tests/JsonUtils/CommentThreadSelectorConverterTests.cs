@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
-using static Paranext.DataProvider.JsonUtils.JsonConverterUtils;
+using Paratext.Data.ProjectComments;
+using PtxUtils;
 
 namespace TestParanextDataProvider.JsonUtils;
 
@@ -27,7 +28,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.Status, Is.EqualTo(ParatextNote.Status.RESOLVED));
+        Assert.That(selector!.Status, Is.EqualTo(NoteStatus.Resolved));
     }
 
     [Test]
@@ -41,7 +42,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.Status, Is.EqualTo(ParatextNote.Status.TO_DO));
+        Assert.That(selector!.Status, Is.EqualTo(NoteStatus.Todo));
     }
 
     [Test]
@@ -55,7 +56,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.Status, Is.EqualTo(ParatextNote.Status.DONE));
+        Assert.That(selector!.Status, Is.EqualTo(NoteStatus.Done));
     }
 
     [Test]
@@ -69,7 +70,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.Type, Is.EqualTo(ParatextNote.Type.NORMAL));
+        Assert.That(selector!.Type, Is.EqualTo(NoteType.Normal));
     }
 
     [Test]
@@ -83,11 +84,11 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.Type, Is.EqualTo(ParatextNote.Type.CONFLICT));
+        Assert.That(selector!.Type, Is.EqualTo(NoteType.Conflict));
     }
 
     [Test]
-    public void Deserialize_NoStatusOrType_PropertiesRemainNull()
+    public void Deserialize_NoStatusOrType_PropertiesRemainDefault()
     {
         string json = @"{ ""threadId"": ""abc-123"" }";
 
@@ -98,7 +99,7 @@ internal class CommentThreadSelectorConverterTests
 
         Assert.That(selector, Is.Not.Null);
         Assert.That(selector!.ThreadId, Is.EqualTo("abc-123"));
-        Assert.That(selector.Status, Is.Null);
+        Assert.That(selector.Status, Is.EqualTo(Enum<NoteStatus>.Null));
         Assert.That(selector.Type, Is.Null);
     }
 
@@ -114,8 +115,8 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.Status, Is.EqualTo(ParatextNote.Status.TO_DO));
-        Assert.That(selector.Type, Is.EqualTo(ParatextNote.Type.NORMAL));
+        Assert.That(selector!.Status, Is.EqualTo(NoteStatus.Todo));
+        Assert.That(selector.Type, Is.EqualTo(NoteType.Normal));
         Assert.That(selector.ThreadId, Is.EqualTo("t1"));
         Assert.That(selector.Author, Is.EqualTo("user1"));
         Assert.That(selector.AssignedTo, Is.EqualTo("user2"));

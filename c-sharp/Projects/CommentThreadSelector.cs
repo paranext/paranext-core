@@ -1,11 +1,23 @@
+using Paratext.Data.ProjectComments;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
 
 public class CommentThreadSelector
 {
-    public string? Status { get; set; }
-    public string? Type { get; set; }
+    /// <summary>
+    /// If this is <see cref="Enum{NoteStatus}.Null"/>, then no status filtering will be applied.
+    /// </summary>
+    public Enum<NoteStatus> Status { get; set; } = Enum<NoteStatus>.Null;
+
+    /// <summary>
+    /// If this is null (not set), then no type filtering will be applied. If it is set to any value
+    /// (including <see cref="NoteType.Normal"/>, which is the default type and which P9 treats as
+    /// indistinguishable from <see cref="NoteType.Unspecified"/>), then the selector will only
+    /// match comments with that type.
+    /// </summary>
+    public Enum<NoteType>? Type { get; set; }
     public string? ThreadId { get; set; }
     public DateFilter? DateFilter { get; set; }
     public string? Author { get; set; }
@@ -15,8 +27,8 @@ public class CommentThreadSelector
     public bool? IsRead { get; set; }
     public bool IsEmpty =>
         string.IsNullOrEmpty(ThreadId)
-        && string.IsNullOrEmpty(Status)
-        && string.IsNullOrEmpty(Type)
+        && Status == Enum<NoteStatus>.Null
+        && Type == null
         && string.IsNullOrEmpty(Author)
         && string.IsNullOrEmpty(AssignedTo)
         && DateFilter == null
