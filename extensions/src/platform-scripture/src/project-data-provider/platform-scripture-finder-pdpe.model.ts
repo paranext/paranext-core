@@ -349,97 +349,148 @@ export class ScriptureFinderProjectDataProviderEngine
       modifiedUsfm: string;
     }> = [];
 
+    // Shared early-exit signal: when one parallel book task errors, other tasks that
+    // are still awaiting lock acquisition will release their locks immediately and bail
+    // out instead of proceeding with expensive work (USX fetches, USFM computation).
+    let firstError: unknown;
+
     try {
       // Phase 1: Acquire locks and compute USFM modifications for each book in parallel.
       // Different books can be processed in parallel since they use different locks.
-      await Promise.all(
+      // Use Promise.allSettled (not Promise.all) so that all tasks settle before we
+      // proceed. This guarantees every acquired lock is accounted for — either pushed
+      // into heldLocks or released immediately by an early-exit check — preventing lock
+      // leaks when one task errors while another is still awaiting lock acquisition.
+      await Promise.allSettled(
         [...rangesByBook.entries()].map(async ([bookId, { rangeInfos, chapters }]) => {
+          // Bail out before acquiring any locks if another task already errored
+          if (firstError) return;
+
           const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
 
           // Acquire locks manually so we can hold them across all books until after the
-          // writes complete
-          let releaseBookLock: () => void;
+          // writes complete. After each lock acquisition await, check whether another
+          // task errored while we were waiting — if so, release immediately and bail out.
+          // Track locally-acquired locks so they can be released if something throws
+          // before they are pushed to heldLocks.
+          let releaseBookLock: (() => void) | undefined;
           let releaseChapterMutex: (() => void) | undefined;
 
-          if (singleChapter !== undefined) {
-            // Chapter-level: shared read lock on book + exclusive lock on the specific chapter
-            releaseBookLock = await this.#bookRWLockMap.get(bookId).acquireRead();
-            releaseChapterMutex = await this.#chapterMutexMap
-              .get(`${bookId}:${singleChapter}`)
-              .acquire();
-          } else {
-            // Book-level: exclusive write lock on the book (blocks all chapter and book operations)
-            releaseBookLock = await this.#bookRWLockMap.get(bookId).acquireWrite();
-          }
-
-          heldLocks.push({ bookId, singleChapter, releaseBookLock, releaseChapterMutex });
-
-          const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, singleChapter);
-
-          // Convert all locations to UsfmVerseRefVerseLocations within the lock
-          const convertedRanges = await Promise.all(
-            rangeInfos.map(async ({ originalIndex, range }) => {
-              const [startLocation, endLocation] = await Promise.all([
-                this.#convertToUsfmVerseRefVerseLocation(range.start),
-                this.#convertToUsfmVerseRefVerseLocation(range.end),
-              ]);
-              return { originalIndex, startLocation, endLocation };
-            }),
-          );
-
-          // Filter no-op ranges: same start/end position with a falsy replacement string
-          const activeRanges = convertedRanges.filter(
-            ({ originalIndex, startLocation, endLocation }) =>
-              replacements[originalIndex] ||
-              startLocation.verseRef.book !== endLocation.verseRef.book ||
-              startLocation.verseRef.chapterNum !== endLocation.verseRef.chapterNum ||
-              startLocation.verseRef.verseNum !== endLocation.verseRef.verseNum ||
-              (startLocation.offset ?? 0) !== (endLocation.offset ?? 0),
-          );
-
-          if (activeRanges.length === 0) return;
-
-          // Convert all ranges to USFM indices and sort in descending order
-          const rangesWithIndices = activeRanges
-            .map((rangeInfo) => ({
-              ...rangeInfo,
-              startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.startLocation),
-              endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
-            }))
-            .sort((a, b) => b.startIndex - a.startIndex);
-
-          // Validate that no ranges overlap. Since ranges are sorted descending by startIndex,
-          // an overlap exists when a range's startIndex is less than the next range's endIndex.
-          for (let i = 0; i < rangesWithIndices.length - 1; i++) {
-            const current = rangesWithIndices[i];
-            const next = rangesWithIndices[i + 1];
-            if (next.endIndex > current.startIndex) {
-              throw new Error(
-                `Overlapping ranges detected in book ${bookId}: range at original index ` +
-                  `${next.originalIndex} (offsets ${next.startIndex}-${next.endIndex}) overlaps ` +
-                  `with range at original index ${current.originalIndex} (offsets ` +
-                  `${current.startIndex}-${current.endIndex}). All ranges must be non-overlapping.`,
-              );
+          try {
+            if (singleChapter !== undefined) {
+              // Chapter-level: shared read lock on book + exclusive lock on the specific chapter
+              releaseBookLock = await this.#bookRWLockMap.get(bookId).acquireRead();
+              if (firstError) {
+                releaseBookLock();
+                return;
+              }
+              releaseChapterMutex = await this.#chapterMutexMap
+                .get(`${bookId}:${singleChapter}`)
+                .acquire();
+              if (firstError) {
+                releaseChapterMutex();
+                releaseBookLock();
+                return;
+              }
+            } else {
+              // Book-level: exclusive write lock on the book (blocks all chapter and book
+              // operations)
+              releaseBookLock = await this.#bookRWLockMap.get(bookId).acquireWrite();
+              if (firstError) {
+                releaseBookLock();
+                return;
+              }
             }
-          }
 
-          // Perform string replacements in reverse index order
-          let modifiedUsfm = usjReaderWriter.toUsfm();
-          const originalUsfm = modifiedUsfm;
-          rangesWithIndices.forEach((rangeWithIndex) => {
-            const replacement = replacements[rangeWithIndex.originalIndex];
-            modifiedUsfm =
-              modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
-              replacement +
-              modifiedUsfm.substring(rangeWithIndex.endIndex);
-          });
+            heldLocks.push({ bookId, singleChapter, releaseBookLock, releaseChapterMutex });
 
-          // Collect the pending write if USFM was actually changed
-          if (modifiedUsfm !== originalUsfm) {
-            pendingWrites.push({ bookId, singleChapter, modifiedUsfm });
+            // Clear local references now that heldLocks owns these locks. The finally
+            // block on the outer try will release everything in heldLocks.
+            releaseBookLock = undefined;
+            releaseChapterMutex = undefined;
+
+            const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(
+              bookId,
+              singleChapter,
+            );
+
+            // Convert all locations to UsfmVerseRefVerseLocations within the lock
+            const convertedRanges = await Promise.all(
+              rangeInfos.map(async ({ originalIndex, range }) => {
+                const [startLocation, endLocation] = await Promise.all([
+                  this.#convertToUsfmVerseRefVerseLocation(range.start),
+                  this.#convertToUsfmVerseRefVerseLocation(range.end),
+                ]);
+                return { originalIndex, startLocation, endLocation };
+              }),
+            );
+
+            // Filter no-op ranges: same start/end position with a falsy replacement string
+            const activeRanges = convertedRanges.filter(
+              ({ originalIndex, startLocation, endLocation }) =>
+                replacements[originalIndex] ||
+                startLocation.verseRef.book !== endLocation.verseRef.book ||
+                startLocation.verseRef.chapterNum !== endLocation.verseRef.chapterNum ||
+                startLocation.verseRef.verseNum !== endLocation.verseRef.verseNum ||
+                (startLocation.offset ?? 0) !== (endLocation.offset ?? 0),
+            );
+
+            if (activeRanges.length === 0) return;
+
+            // Convert all ranges to USFM indices and sort in descending order
+            const rangesWithIndices = activeRanges
+              .map((rangeInfo) => ({
+                ...rangeInfo,
+                startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.startLocation),
+                endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
+              }))
+              .sort((a, b) => b.startIndex - a.startIndex);
+
+            // Validate that no ranges overlap. Since ranges are sorted descending by startIndex,
+            // an overlap exists when a range's startIndex is less than the next range's endIndex.
+            for (let i = 0; i < rangesWithIndices.length - 1; i++) {
+              const current = rangesWithIndices[i];
+              const next = rangesWithIndices[i + 1];
+              if (next.endIndex > current.startIndex) {
+                throw new Error(
+                  `Overlapping ranges detected in book ${bookId}: range at original index ` +
+                    `${next.originalIndex} (offsets ${next.startIndex}-${next.endIndex}) overlaps ` +
+                    `with range at original index ${current.originalIndex} (offsets ` +
+                    `${current.startIndex}-${current.endIndex}). All ranges must be non-overlapping.`,
+                );
+              }
+            }
+
+            // Perform string replacements in reverse index order
+            let modifiedUsfm = usjReaderWriter.toUsfm();
+            const originalUsfm = modifiedUsfm;
+            rangesWithIndices.forEach((rangeWithIndex) => {
+              const replacement = replacements[rangeWithIndex.originalIndex];
+              modifiedUsfm =
+                modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
+                replacement +
+                modifiedUsfm.substring(rangeWithIndex.endIndex);
+            });
+
+            // Collect the pending write if USFM was actually changed
+            if (modifiedUsfm !== originalUsfm) {
+              pendingWrites.push({ bookId, singleChapter, modifiedUsfm });
+            }
+          } catch (e) {
+            // Signal other tasks to bail out early
+            firstError ??= e;
+            // Release any locally-held locks that weren't yet pushed to heldLocks
+            // (e.g., if acquireRead succeeded but acquire threw)
+            releaseChapterMutex?.();
+            releaseBookLock?.();
+            throw e;
           }
         }),
       );
+
+      // Re-throw the first error from Phase 1 (if any) now that all tasks have settled
+      // and their locks are accounted for
+      if (firstError) throw firstError;
 
       // Phase 2: Execute all USFM writes together while locks are still held
       await Promise.all(
