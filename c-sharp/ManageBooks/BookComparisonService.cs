@@ -38,52 +38,34 @@ internal static class BookComparisonService
             // Return empty result with minimal project info
             return new BookComparisonResult(
                 Books: [],
-                SourceProject: CreateProjectInfo(sourceScrText, request.SourceProjectId),
-                DestProject: CreateProjectInfo(destScrText, request.DestProjectId)
+                SourceProject: BookServiceHelpers.CreateProjectInfo(
+                    sourceScrText,
+                    request.SourceProjectId
+                ),
+                DestProject: BookServiceHelpers.CreateProjectInfo(
+                    destScrText,
+                    request.DestProjectId
+                )
             );
         }
 
         // Call the internal comparison method (CAP-021)
         List<BookComparisonInfo> books = CompareBooks(sourceScrText, destScrText);
 
-        // Create project info for both projects
-        ProjectInfo sourceProjectInfo = CreateProjectInfo(sourceScrText, request.SourceProjectId);
-        ProjectInfo destProjectInfo = CreateProjectInfo(destScrText, request.DestProjectId);
+        // Create project info for both projects using shared helper
+        ProjectInfo sourceProjectInfo = BookServiceHelpers.CreateProjectInfo(
+            sourceScrText,
+            request.SourceProjectId
+        );
+        ProjectInfo destProjectInfo = BookServiceHelpers.CreateProjectInfo(
+            destScrText,
+            request.DestProjectId
+        );
 
         return new BookComparisonResult(
             Books: [.. books],
             SourceProject: sourceProjectInfo,
             DestProject: destProjectInfo
-        );
-    }
-
-    /// <summary>
-    /// Creates ProjectInfo from a ScrText, or a minimal ProjectInfo if ScrText is null.
-    /// </summary>
-    /// <param name="scrText">The ScrText to extract info from (may be null).</param>
-    /// <param name="projectId">The project ID to use if ScrText is null.</param>
-    /// <returns>ProjectInfo with project metadata.</returns>
-    private static ProjectInfo CreateProjectInfo(ScrText? scrText, string projectId)
-    {
-        if (scrText == null)
-        {
-            return new ProjectInfo(
-                ProjectId: projectId,
-                ProjectName: "Unknown",
-                ProjectType: "Unknown",
-                IsStudyBible: false
-            );
-        }
-
-        var projectType = scrText.Settings.TranslationInfo.Type;
-        bool isStudyBible =
-            projectType == ProjectType.StudyBible || scrText.Settings.IsStudyBibleAdditions;
-
-        return new ProjectInfo(
-            ProjectId: scrText.Guid.ToString(),
-            ProjectName: scrText.Name,
-            ProjectType: projectType.ToString() ?? "Unknown",
-            IsStudyBible: isStudyBible
         );
     }
 
@@ -160,14 +142,9 @@ internal static class BookComparisonService
             // Can copy to most types including StudyBible and SBA per gm-003
             // No additional filtering needed for standard projects
 
-            // Project is compatible - add to results
+            // Project is compatible - add to results using shared helper
             compatibleTargets.Add(
-                new ProjectInfo(
-                    ProjectId: targetScrText.Guid.ToString(),
-                    ProjectName: targetScrText.Name,
-                    ProjectType: targetType.ToString() ?? "Unknown",
-                    IsStudyBible: targetIsStudyBible || targetIsSBA
-                )
+                BookServiceHelpers.CreateProjectInfo(targetScrText, targetScrText.Guid.ToString())
             );
         }
 

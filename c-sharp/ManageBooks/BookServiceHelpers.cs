@@ -89,6 +89,37 @@ internal static class BookServiceHelpers
     }
 
     /// <summary>
+    /// Creates ProjectInfo from a ScrText, or a minimal ProjectInfo if ScrText is null.
+    /// Used by comparison and copy target services to generate project metadata.
+    /// </summary>
+    /// <param name="scrText">The ScrText to extract info from (may be null).</param>
+    /// <param name="projectId">The project ID to use if ScrText is null.</param>
+    /// <returns>ProjectInfo with project metadata.</returns>
+    public static ProjectInfo CreateProjectInfo(ScrText? scrText, string projectId)
+    {
+        if (scrText == null)
+        {
+            return new ProjectInfo(
+                ProjectId: projectId,
+                ProjectName: "Unknown",
+                ProjectType: "Unknown",
+                IsStudyBible: false
+            );
+        }
+
+        var projectType = scrText.Settings.TranslationInfo.Type;
+        bool isStudyBible =
+            projectType == ProjectType.StudyBible || scrText.Settings.IsStudyBibleAdditions;
+
+        return new ProjectInfo(
+            ProjectId: scrText.Guid.ToString(),
+            ProjectName: scrText.Name,
+            ProjectType: projectType.ToString() ?? "Unknown",
+            IsStudyBible: isStudyBible
+        );
+    }
+
+    /// <summary>
     /// Finds a ScrText by project ID.
     /// </summary>
     /// <param name="projectId">Project ID (GUID string or HexId).</param>
