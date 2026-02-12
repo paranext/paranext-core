@@ -161,9 +161,11 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
         .mockImplementation((verseRef: { book: string }, usfm: string | DataView) => {
           const currentUSX = bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX;
           bookUSXStore.set(verseRef.book, patchUsxWithUsfmVerseTexts(currentUSX, String(usfm)));
-          // Invalidate chapter entries since book content changed
-          for (const key of [...chapterUSXStore.keys()]) {
-            if (key.startsWith(`${verseRef.book}:`)) chapterUSXStore.delete(key);
+          // Update chapter entries since book content changed
+          for (const [chKey, chUSX] of [...chapterUSXStore.entries()]) {
+            if (chKey.startsWith(`${verseRef.book}:`)) {
+              chapterUSXStore.set(chKey, patchUsxWithUsfmVerseTexts(chUSX, String(usfm)));
+            }
           }
           return Promise.resolve(true);
         }),
@@ -178,8 +180,12 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
             const key = `${verseRef.book}:${verseRef.chapterNum}`;
             const currentUSX = chapterUSXStore.get(key) ?? TEST_CHAPTER_1_USX;
             chapterUSXStore.set(key, patchUsxWithUsfmVerseTexts(currentUSX, String(usfm)));
-            // Invalidate book entry since chapter content changed
-            bookUSXStore.delete(verseRef.book);
+            // Update book entry since chapter content changed
+            const currentBookUSX = bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX;
+            bookUSXStore.set(
+              verseRef.book,
+              patchUsxWithUsfmVerseTexts(currentBookUSX, String(usfm)),
+            );
             return Promise.resolve(true);
           },
         ),
@@ -1065,32 +1071,87 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         setTimeout(resolve, 0);
       });
 
-    it('should allow concurrent chapter-level replaces on different chapters', async () => {
-      // Track call order to prove concurrency
+    /**
+     * Sets up deferred-promise mocks with mutable USX stores for concurrency testing. Writes
+     * persist through the test: chapter edits update the book store and book edits update chapter
+     * stores. Call each entry in `deferredResolves` (no argument) to resolve the corresponding
+     * `getChapterUSX` / `getBookUSX` promise with the current store value.
+     */
+    function setupDeferredMocks() {
       const callOrder: string[] = [];
-
-      // Use deferred promises so we control when getChapterUSX resolves
-      type DeferredResolve = (value: string) => void;
-      const deferredResolves: DeferredResolve[] = [];
+      const deferredResolves: Array<() => void> = [];
+      const chapterUSXStore = new Map<string, string>([
+        ['MAT:1', TEST_CHAPTER_1_USX],
+        ['MAT:2', TEST_CHAPTER_2_USX],
+      ]);
+      const bookUSXStore = new Map<string, string>([['MAT', TEST_BOOK_USX]]);
+      const writtenChapterUsfms: Array<{ chapterNum: number; usfm: string }> = [];
+      const writtenBookUsfms: string[] = [];
 
       vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(
-        (verseRef: { chapterNum: number }) => {
+        (verseRef: { book: string; chapterNum: number }) => {
+          const key = `${verseRef.book}:${verseRef.chapterNum}`;
           callOrder.push(`getChapterUSX:${verseRef.chapterNum}`);
           return new Promise<string>((resolve) => {
-            deferredResolves.push((usx: string) => {
+            deferredResolves.push(() => {
               callOrder.push(`resolveChapterUSX:${verseRef.chapterNum}`);
-              resolve(usx);
+              const fallback = verseRef.chapterNum === 2 ? TEST_CHAPTER_2_USX : TEST_CHAPTER_1_USX;
+              resolve(chapterUSXStore.get(key) ?? fallback);
+            });
+          });
+        },
+      );
+
+      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(
+        (verseRef: { book: string }) => {
+          callOrder.push('getBookUSX');
+          return new Promise<string>((resolve) => {
+            deferredResolves.push(() => {
+              callOrder.push('resolveBookUSX');
+              resolve(bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX);
             });
           });
         },
       );
 
       vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).mockImplementation(
-        async (verseRef: { chapterNum: number }) => {
+        async (verseRef: { book: string; chapterNum: number }, usfm: string) => {
+          const key = `${verseRef.book}:${verseRef.chapterNum}`;
           callOrder.push(`setChapterUSFM:${verseRef.chapterNum}`);
+          writtenChapterUsfms.push({ chapterNum: verseRef.chapterNum, usfm: String(usfm) });
+          // Update chapter store
+          const fallback = verseRef.chapterNum === 2 ? TEST_CHAPTER_2_USX : TEST_CHAPTER_1_USX;
+          const currentChapterUSX = chapterUSXStore.get(key) ?? fallback;
+          chapterUSXStore.set(key, patchUsxWithUsfmVerseTexts(currentChapterUSX, String(usfm)));
+          // Cross-update book store
+          const currentBookUSX = bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX;
+          bookUSXStore.set(verseRef.book, patchUsxWithUsfmVerseTexts(currentBookUSX, String(usfm)));
           return true;
         },
       );
+
+      vi.mocked(mockPdps['platformScripture.USFM_Book'].setBookUSFM).mockImplementation(
+        async (verseRef: { book: string }, usfm: string) => {
+          callOrder.push('setBookUSFM');
+          writtenBookUsfms.push(String(usfm));
+          // Update book store
+          const currentBookUSX = bookUSXStore.get(verseRef.book) ?? TEST_BOOK_USX;
+          bookUSXStore.set(verseRef.book, patchUsxWithUsfmVerseTexts(currentBookUSX, String(usfm)));
+          // Cross-update chapter stores
+          for (const [chKey, chUSX] of [...chapterUSXStore.entries()]) {
+            if (chKey.startsWith(`${verseRef.book}:`)) {
+              chapterUSXStore.set(chKey, patchUsxWithUsfmVerseTexts(chUSX, String(usfm)));
+            }
+          }
+          return true;
+        },
+      );
+
+      return { callOrder, deferredResolves, writtenChapterUsfms, writtenBookUsfms };
+    }
+
+    it('should allow concurrent chapter-level replaces on different chapters', async () => {
+      const { callOrder, deferredResolves, writtenChapterUsfms } = setupDeferredMocks();
 
       // Start two concurrent replaces on DIFFERENT chapters (ch1 and ch2)
       const replace1 = engine.replace(
@@ -1121,38 +1182,23 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(callOrder).toEqual(['getChapterUSX:1', 'getChapterUSX:2']);
 
       // Resolve both
-      deferredResolves[0](TEST_CHAPTER_1_USX);
-      deferredResolves[1](TEST_CHAPTER_2_USX);
+      deferredResolves[0]();
+      deferredResolves[1]();
       await Promise.all([replace1, replace2]);
 
-      // Both writes should have completed
+      // Both writes should have completed with the correct replacements
       expect(callOrder).toContain('setChapterUSFM:1');
       expect(callOrder).toContain('setChapterUSFM:2');
+      const ch1Usfm = writtenChapterUsfms.find((w) => w.chapterNum === 1)?.usfm;
+      const ch2Usfm = writtenChapterUsfms.find((w) => w.chapterNum === 2)?.usfm;
+      expect(ch1Usfm).toContain('AAA');
+      expect(ch1Usfm).not.toContain('BBB');
+      expect(ch2Usfm).toContain('BBB');
+      expect(ch2Usfm).not.toContain('AAA');
     });
 
     it('should serialize chapter-level replaces on the same chapter', async () => {
-      const callOrder: string[] = [];
-      type DeferredResolve = (value: string) => void;
-      const deferredResolves: DeferredResolve[] = [];
-
-      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(
-        (verseRef: { chapterNum: number }) => {
-          callOrder.push(`getChapterUSX:${verseRef.chapterNum}`);
-          return new Promise<string>((resolve) => {
-            deferredResolves.push((usx: string) => {
-              callOrder.push(`resolveChapterUSX:${verseRef.chapterNum}`);
-              resolve(usx);
-            });
-          });
-        },
-      );
-
-      vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).mockImplementation(
-        async (verseRef: { chapterNum: number }) => {
-          callOrder.push(`setChapterUSFM:${verseRef.chapterNum}`);
-          return true;
-        },
-      );
+      const { callOrder, deferredResolves, writtenChapterUsfms } = setupDeferredMocks();
 
       // Start two concurrent replaces on the SAME chapter
       const replace1 = engine.replace(
@@ -1182,60 +1228,32 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(callOrder).toEqual(['getChapterUSX:1']);
 
       // Resolve the first fetch so the first replace can complete and unblock the second
-      deferredResolves[0](TEST_CHAPTER_1_USX);
+      deferredResolves[0]();
       await flushPromises();
 
       // After the first replace completes (writes + invalidates cache), the second should start
       expect(callOrder).toContain('setChapterUSFM:1');
+      // First write has AAA but not BBB
+      expect(writtenChapterUsfms[0].usfm).toContain('AAA');
+      expect(writtenChapterUsfms[0].usfm).not.toContain('BBB');
       // The second replace should now have called getChapterUSX for a re-fetch
       expect(deferredResolves).toHaveLength(2);
 
-      // Resolve the second fetch
-      deferredResolves[1](TEST_CHAPTER_1_USX);
+      // Resolve the second fetch — reads from the store which has the first write's changes
+      deferredResolves[1]();
       await Promise.all([replace1, replace2]);
 
       // Both writes should have happened sequentially
       const setUSFMCalls = callOrder.filter((c) => c === 'setChapterUSFM:1');
       expect(setUSFMCalls).toHaveLength(2);
+      // Second write should have BOTH AAA (stacked from first write) and BBB (this write)
+      expect(writtenChapterUsfms[1].usfm).toContain('AAA');
+      expect(writtenChapterUsfms[1].usfm).toContain('BBB');
     });
 
     it('should block chapter-level replaces while a book-level replace is running', async () => {
-      const callOrder: string[] = [];
-      type DeferredResolve = (value: string) => void;
-      const deferredResolves: DeferredResolve[] = [];
-
-      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
-        callOrder.push('getBookUSX');
-        return new Promise<string>((resolve) => {
-          deferredResolves.push((usx: string) => {
-            callOrder.push('resolveBookUSX');
-            resolve(usx);
-          });
-        });
-      });
-
-      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(
-        (verseRef: { chapterNum: number }) => {
-          callOrder.push(`getChapterUSX:${verseRef.chapterNum}`);
-          return new Promise<string>((resolve) => {
-            deferredResolves.push((usx: string) => resolve(usx));
-          });
-        },
-      );
-
-      vi.mocked(mockPdps['platformScripture.USFM_Book'].setBookUSFM).mockImplementation(
-        async () => {
-          callOrder.push('setBookUSFM');
-          return true;
-        },
-      );
-
-      vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).mockImplementation(
-        async () => {
-          callOrder.push('setChapterUSFM');
-          return true;
-        },
-      );
+      const { callOrder, deferredResolves, writtenChapterUsfms, writtenBookUsfms } =
+        setupDeferredMocks();
 
       // Start a book-level replace (spans ch1 and ch2 → book-level)
       const bookReplace = engine.replace(
@@ -1257,12 +1275,13 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // Book-level replace should have started
       expect(callOrder).toContain('getBookUSX');
 
-      // Now start a chapter-level replace while the book replace is still pending
+      // Start a chapter-level replace on a DIFFERENT verse so the book write's changes are
+      // visible alongside the chapter write's changes
       const chapterReplace = engine.replace(
         [
           {
-            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
-            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 5 },
+            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
           },
         ],
         'CCC',
@@ -1275,58 +1294,32 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(callOrder).not.toContain('getChapterUSX:1');
 
       // Resolve the book replace
-      deferredResolves[0](TEST_BOOK_USX);
+      deferredResolves[0]();
       await flushPromises();
       await bookReplace;
       expect(callOrder).toContain('setBookUSFM');
+      // Book USFM has AAA and BBB, not yet CCC
+      expect(writtenBookUsfms[0]).toContain('AAA');
+      expect(writtenBookUsfms[0]).toContain('BBB');
+      expect(writtenBookUsfms[0]).not.toContain('CCC');
 
       // Now the chapter replace should proceed
       await flushPromises();
       expect(callOrder).toContain('getChapterUSX:1');
 
-      // Resolve the chapter USX fetch and finish
-      deferredResolves[1](TEST_CHAPTER_1_USX);
+      // Resolve the chapter USX fetch — reads from store which has the book write's changes
+      deferredResolves[1]();
       await chapterReplace;
-      expect(callOrder).toContain('setChapterUSFM');
+      expect(callOrder).toContain('setChapterUSFM:1');
+      // Chapter USFM has AAA (stacked from book write) and CCC (this write), not BBB (ch2 only)
+      expect(writtenChapterUsfms[0].usfm).toContain('AAA');
+      expect(writtenChapterUsfms[0].usfm).toContain('CCC');
+      expect(writtenChapterUsfms[0].usfm).not.toContain('BBB');
     });
 
     it('should block book-level replaces while a chapter-level replace is running', async () => {
-      const callOrder: string[] = [];
-      type DeferredResolve = (value: string) => void;
-      const deferredResolves: DeferredResolve[] = [];
-
-      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(
-        (verseRef: { chapterNum: number }) => {
-          callOrder.push(`getChapterUSX:${verseRef.chapterNum}`);
-          return new Promise<string>((resolve) => {
-            deferredResolves.push((usx: string) => {
-              callOrder.push(`resolveChapterUSX:${verseRef.chapterNum}`);
-              resolve(usx);
-            });
-          });
-        },
-      );
-
-      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
-        callOrder.push('getBookUSX');
-        return new Promise<string>((resolve) => {
-          deferredResolves.push((usx: string) => resolve(usx));
-        });
-      });
-
-      vi.mocked(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).mockImplementation(
-        async () => {
-          callOrder.push('setChapterUSFM');
-          return true;
-        },
-      );
-
-      vi.mocked(mockPdps['platformScripture.USFM_Book'].setBookUSFM).mockImplementation(
-        async () => {
-          callOrder.push('setBookUSFM');
-          return true;
-        },
-      );
+      const { callOrder, deferredResolves, writtenChapterUsfms, writtenBookUsfms } =
+        setupDeferredMocks();
 
       // Start a chapter-level replace first
       const chapterReplace = engine.replace(
@@ -1342,12 +1335,14 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       await flushPromises();
       expect(callOrder).toContain('getChapterUSX:1');
 
-      // Start a book-level replace while the chapter replace is still pending
+      // Start a book-level replace while the chapter replace is still pending.
+      // Ch1 targets a DIFFERENT verse so the chapter write's changes are visible alongside
+      // the book write's changes.
       const bookReplace = engine.replace(
         [
           {
-            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
-            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 5 },
+            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
           },
           {
             start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
@@ -1363,18 +1358,26 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(callOrder).not.toContain('getBookUSX');
 
       // Resolve the chapter USX fetch so the chapter replace can complete
-      deferredResolves[0](TEST_CHAPTER_1_USX);
+      deferredResolves[0]();
       await chapterReplace;
-      expect(callOrder).toContain('setChapterUSFM');
+      expect(callOrder).toContain('setChapterUSFM:1');
+      // Chapter USFM has CCC, not yet AAA or BBB
+      expect(writtenChapterUsfms[0].usfm).toContain('CCC');
+      expect(writtenChapterUsfms[0].usfm).not.toContain('AAA');
+      expect(writtenChapterUsfms[0].usfm).not.toContain('BBB');
 
       // Now the book replace should proceed
       await flushPromises();
       expect(callOrder).toContain('getBookUSX');
 
-      // Resolve the book USX fetch and finish
-      deferredResolves[1](TEST_BOOK_USX);
+      // Resolve the book USX fetch — reads from store which has the chapter write's changes
+      deferredResolves[1]();
       await bookReplace;
       expect(callOrder).toContain('setBookUSFM');
+      // Book USFM has CCC (stacked from chapter write), AAA, and BBB
+      expect(writtenBookUsfms[0]).toContain('CCC');
+      expect(writtenBookUsfms[0]).toContain('AAA');
+      expect(writtenBookUsfms[0]).toContain('BBB');
     });
   });
 });
