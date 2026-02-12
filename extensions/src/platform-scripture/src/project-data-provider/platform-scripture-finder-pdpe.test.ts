@@ -1435,5 +1435,155 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenBookUsfms[0]).toContain('AAA');
       expect(writtenBookUsfms[0]).toContain('BBB');
     });
+
+    it('should not leak a lock when one parallel book task errors while another is waiting to acquire', async () => {
+      // This test reproduces a lock leak bug in replace's Promise.all parallel book processing.
+      //
+      // Bug scenario (before fix):
+      // 1. Call 1 holds MRK's chapter mutex (simulating an in-progress replace on MRK)
+      // 2. Call 2 targets both MAT (overlapping ranges → throws) and MRK (blocks on mutex)
+      // 3. MAT's task throws → Promise.all rejects → finally releases only MAT's lock
+      // 4. Call 1 finishes → MRK mutex released → Call 2's MRK task acquires it (leaked)
+      // 5. Future operations on MRK deadlock because the leaked lock is never released
+      //
+      // Fixed behavior:
+      // - Promise.allSettled ensures all tasks settle before finally runs
+      // - Early-exit signal causes MRK's task to release its lock immediately and bail
+      //   out once it sees MAT's error, skipping expensive work (USX fetch, USFM compute)
+
+      // Set up deferred mocks with MRK support
+      const deferredResolves: Array<() => void> = [];
+      const chapterUSXStore = new Map<string, string>([
+        ['MAT:1', TEST_CHAPTER_1_USX],
+        ['MRK:1', TEST_MRK_CHAPTER_1_USX],
+      ]);
+
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(
+        (verseRef: { book: string; chapterNum: number }) => {
+          const key = `${verseRef.book}:${verseRef.chapterNum}`;
+          return new Promise<string>((resolve) => {
+            deferredResolves.push(() => {
+              resolve(chapterUSXStore.get(key) ?? TEST_CHAPTER_1_USX);
+            });
+          });
+        },
+      );
+
+      // ── Call 1: A normal replace on MRK ch1 that holds the MRK chapter mutex ──
+      const call1 = engine.replace(
+        [
+          {
+            start: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 5 },
+            end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
+          },
+        ],
+        'ZZZ',
+      );
+
+      // Let Call 1 acquire locks and start its getChapterUSX
+      await flushPromises();
+
+      // deferredResolves[0] = Call 1's MRK getChapterUSX (holding the MRK ch1 mutex)
+      expect(deferredResolves).toHaveLength(1);
+
+      // ── Call 2: Replace targeting MAT (with overlapping ranges → will throw) and MRK ch1 ──
+      // MAT has overlapping ranges that will cause an error after data is fetched.
+      // MRK ch1 will block on the chapter mutex held by Call 1.
+      let call2Error: unknown;
+      const call2 = engine
+        .replace(
+          [
+            // Overlapping ranges in MAT
+            {
+              start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+              end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 10 },
+            },
+            {
+              start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+              end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 15 },
+            },
+            // Valid range in MRK — this task will block on the mutex held by Call 1
+            {
+              start: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 5 },
+              end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
+            },
+          ],
+          ['AAA', 'BBB', 'CCC'],
+        )
+        .catch((e) => {
+          call2Error = e;
+        });
+
+      // Let Call 2's MAT task acquire its lock and start getChapterUSX.
+      // Call 2's MRK task is blocked waiting for the MRK ch1 mutex held by Call 1.
+      await flushPromises();
+
+      // deferredResolves[1] = Call 2's MAT getChapterUSX
+      // (MRK's getChapterUSX hasn't been called yet because it's still blocked at the mutex)
+      expect(deferredResolves).toHaveLength(2);
+
+      // Resolve Call 2's MAT data fetch so MAT's task can proceed to the overlapping range
+      // validation and throw an error. This sets the early-exit signal (firstError).
+      deferredResolves[1]();
+      await flushPromises();
+
+      // ── Now resolve Call 1's MRK data fetch so Call 1 can complete and release the mutex ──
+      deferredResolves[0]();
+      await flushPromises();
+
+      // Call 1 should complete successfully
+      await call1;
+
+      // Now Call 2's MRK task can acquire the mutex (Call 1 released it).
+      // With the early-exit fix, MRK's task sees firstError immediately after acquiring
+      // the mutex, releases it, and bails out — no USX fetch occurs for MRK in Call 2.
+      await flushPromises();
+
+      // Call 2 should now be settled (MAT rejected → error re-thrown after allSettled)
+      await call2;
+      expect(call2Error).toBeDefined();
+      expect(String(call2Error)).toMatch(/Overlapping ranges detected/);
+
+      // Verify the early-exit: MRK's task in Call 2 should NOT have fetched USX
+      // (only 2 deferred resolves total — Call 1's MRK and Call 2's MAT)
+      expect(deferredResolves).toHaveLength(2);
+
+      // ── Verify: MRK's lock should not be permanently held (leaked) ──
+      // If the bug exists, this replace on MRK will deadlock because the leaked chapter mutex
+      // is never released. We detect deadlock via a timeout race.
+      let subsequentReplaceCompleted = false;
+      const call3 = engine
+        .replace(
+          [
+            {
+              start: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 5 },
+              end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
+            },
+          ],
+          'DDD',
+        )
+        .then(() => {
+          subsequentReplaceCompleted = true;
+        });
+
+      // Call 3 needs to fetch MRK:1 USX (cache was invalidated by Call 1's write)
+      await flushPromises();
+      if (deferredResolves.length > 2) {
+        deferredResolves[deferredResolves.length - 1]();
+      }
+      await flushPromises();
+
+      // Race against a timeout to detect a deadlock
+      await Promise.race([
+        call3,
+        new Promise((resolve) => {
+          setTimeout(resolve, 500);
+        }),
+      ]);
+
+      // If the bug is present, subsequentReplaceCompleted will be false (deadlock on MRK).
+      // If the bug is fixed, subsequentReplaceCompleted will be true (locks properly released).
+      expect(subsequentReplaceCompleted).toBe(true);
+    });
   });
 });
