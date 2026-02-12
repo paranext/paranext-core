@@ -62,7 +62,7 @@ internal static class BookCopyService
         int lastCopiedBookNum = 0;
 
         // Check if source is Study Bible type (for SBA additions handling)
-        bool isStudyBibleSource = IsStudyBibleProject(sourceScrText);
+        bool isStudyBibleSource = BookServiceHelpers.IsStudyBibleProject(sourceScrText);
 
         foreach (var bookInfo in selectedBooks)
         {
@@ -125,36 +125,12 @@ internal static class BookCopyService
         else if (failedBooks.Count > 0)
         {
             // All failed
-            return new BookCopyResult
-            {
-                Success = false,
-                CopiedBooks = copiedBooks,
-                LastCopiedBookNum = lastCopiedBookNum,
-                FailedBooks = failedBooks,
-                Errors = errors,
-            };
+            return BookCopyResult.FailureResult(failedBooks, errors);
         }
         else
         {
             // All succeeded
             return BookCopyResult.SuccessResult(copiedBooks, lastCopiedBookNum);
-        }
-    }
-
-    /// <summary>
-    /// Checks if a project is a Study Bible or Study Bible Additions project.
-    /// </summary>
-    private static bool IsStudyBibleProject(ScrText scrText)
-    {
-        try
-        {
-            var projectType = scrText.Settings.TranslationInfo.Type;
-            return projectType == ProjectType.StudyBible
-                || projectType == ProjectType.StudyBibleAdditions;
-        }
-        catch
-        {
-            return false;
         }
     }
 

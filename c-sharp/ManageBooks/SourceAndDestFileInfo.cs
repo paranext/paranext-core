@@ -9,11 +9,11 @@ namespace Paranext.DataProvider.ManageBooks;
 /// Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs (internal class SourceAndDestFileInfo)
 /// Maps to: CAP-020, EXT-006
 /// </remarks>
-public class SourceAndDestFileInfo
+public record SourceAndDestFileInfo
 {
     /// <summary>The book number (1-123).</summary>
-    public int BookNum { get; set; }
+    public required int BookNum { get; init; }
 
     /// <summary>Whether to include this book in the copy operation.</summary>
-    public bool IncludeThisFile { get; set; }
+    public required bool IncludeThisFile { get; init; }
 }

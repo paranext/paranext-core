@@ -89,6 +89,26 @@ internal static class BookServiceHelpers
     }
 
     /// <summary>
+    /// Checks if a project is a Study Bible or Study Bible Additions project.
+    /// Used to determine whether SBA-specific operations should be performed.
+    /// </summary>
+    /// <param name="scrText">The project to check.</param>
+    /// <returns>True if the project is StudyBible or StudyBibleAdditions type.</returns>
+    public static bool IsStudyBibleProject(ScrText scrText)
+    {
+        try
+        {
+            var projectType = scrText.Settings.TranslationInfo.Type;
+            return projectType == ProjectType.StudyBible
+                || projectType == ProjectType.StudyBibleAdditions;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Creates ProjectInfo from a ScrText, or a minimal ProjectInfo if ScrText is null.
     /// Used by comparison and copy target services to generate project metadata.
     /// </summary>

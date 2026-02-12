@@ -55,6 +55,8 @@ public record BookCopyResult
 
     /// <summary>
     /// Creates a partial success result with both copied and failed books.
+    /// This represents a scenario where some books copied successfully but others failed.
+    /// Success is always false since there were failures.
     /// </summary>
     public static BookCopyResult PartialResult(
         List<int> copiedBooks,
@@ -65,9 +67,24 @@ public record BookCopyResult
     {
         return new BookCopyResult
         {
-            Success = copiedBooks.Count > 0 && failedBooks.Count == 0,
+            Success = false,
             CopiedBooks = copiedBooks,
             LastCopiedBookNum = lastCopiedBookNum,
+            FailedBooks = failedBooks,
+            Errors = errors,
+        };
+    }
+
+    /// <summary>
+    /// Creates a failure result where all requested books failed to copy.
+    /// </summary>
+    public static BookCopyResult FailureResult(List<int> failedBooks, List<string> errors)
+    {
+        return new BookCopyResult
+        {
+            Success = false,
+            CopiedBooks = [],
+            LastCopiedBookNum = 0,
             FailedBooks = failedBooks,
             Errors = errors,
         };
