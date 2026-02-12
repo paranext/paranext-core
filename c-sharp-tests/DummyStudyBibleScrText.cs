@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
@@ -11,6 +10,9 @@ namespace TestParanextDataProvider
     /// A dummy ScrText configured as a Study Bible project for testing.
     /// This class extends DummyScrText to provide StudyBible-specific settings.
     ///
+    /// StudyBible projects are "derived" projects that require a base project.
+    /// This is the base translation that the Study Bible adds study notes to.
+    ///
     /// === NEW IN PT10 ===
     /// Reason: Test infrastructure needed for CAP-013 GetCompatibleCopyTargets
     /// Maps to: CAP-013 (test infrastructure)
@@ -19,9 +21,10 @@ namespace TestParanextDataProvider
     internal class DummyStudyBibleScrText : DummyScrText
     {
         /// <summary>
-        /// Creates a DummyStudyBibleScrText configured as a StudyBible project.
+        /// Creates a DummyStudyBibleScrText linked to the specified base project.
         /// </summary>
-        public DummyStudyBibleScrText()
+        /// <param name="baseProject">The base project this Study Bible project is linked to.</param>
+        public DummyStudyBibleScrText(ScrText baseProject)
             : base(
                 new ProjectDetails(
                     "DummyStudyBible",
@@ -31,61 +34,23 @@ namespace TestParanextDataProvider
             )
         {
             // Configure as StudyBible project after base construction
-            // Note: TranslationInfo fields are readonly, so we use reflection to set them
-            // This is only for testing purposes
-            ConfigureStudyBibleSettings();
+            // Use the TranslationInfo setter which properly clears the cache
+            ConfigureStudyBibleSettings(baseProject);
         }
 
-        private void ConfigureStudyBibleSettings()
+        private void ConfigureStudyBibleSettings(ScrText baseProject)
         {
-            var translationInfo = Settings.TranslationInfo;
-
-            // Try to find and set the Type field using reflection
-            // Common backing field names: _type, type, Type, m_type
-            var typeField = GetFieldByCommonNames(
-                typeof(TranslationInformation),
-                "Type",
-                "_type",
-                "type",
-                "m_type"
+            // Use the TranslationInfo property setter, which:
+            // 1. Calls SetSetting(Setting.TranslationInfo, value.ToString())
+            // 2. Clears the cachedTranslationInfo
+            // This ensures subsequent reads return the correct type
+            //
+            // StudyBible is a derived type that requires a base project
+            Settings.TranslationInfo = new TranslationInformation(
+                ProjectType.StudyBible,
+                baseProject.Name, // Base project name required for StudyBible
+                baseProject.Guid // Base project GUID required for StudyBible
             );
-
-            if (typeField != null)
-            {
-                typeField.SetValue(translationInfo, ProjectType.StudyBible);
-            }
-            else
-            {
-                // Try setting via property if it has a setter
-                var typeProp = typeof(TranslationInformation).GetProperty(
-                    "Type",
-                    BindingFlags.Public | BindingFlags.Instance
-                );
-                if (typeProp?.CanWrite == true)
-                {
-                    typeProp.SetValue(translationInfo, ProjectType.StudyBible);
-                }
-            }
-        }
-
-        private static FieldInfo? GetFieldByCommonNames(Type type, params string[] fieldNames)
-        {
-            foreach (var name in fieldNames)
-            {
-                // Try private instance fields
-                var field = type.GetField(
-                    name,
-                    BindingFlags.NonPublic | BindingFlags.Instance
-                );
-                if (field != null)
-                    return field;
-
-                // Try public instance fields
-                field = type.GetField(name, BindingFlags.Public | BindingFlags.Instance);
-                if (field != null)
-                    return field;
-            }
-            return null;
         }
     }
 }

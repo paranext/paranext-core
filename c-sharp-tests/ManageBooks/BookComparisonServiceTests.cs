@@ -540,8 +540,12 @@ namespace TestParanextDataProvider.ManageBooks
         public void GetCompatibleCopyTargets_NoCompatibleTargets_ReturnsEmptyArray()
         {
             // Arrange: Create only a StudyBible project with no other StudyBible projects
-            // Uses DummyStudyBibleScrText which sets ProjectType.StudyBible
-            var studyBibleScrText = new DummyStudyBibleScrText();
+            // StudyBible requires a base project
+            var baseProject = CreateDummyProject();
+            var baseDetails = CreateProjectDetails(baseProject);
+            ParatextProjects.FakeAddProject(baseDetails, baseProject);
+
+            var studyBibleScrText = new DummyStudyBibleScrText(baseProject);
             var studyBibleDetails = CreateProjectDetails(studyBibleScrText);
             var studyBibleProjectId = studyBibleDetails.Metadata.Id;
             ParatextProjects.FakeAddProject(studyBibleDetails, studyBibleScrText);
@@ -612,7 +616,11 @@ namespace TestParanextDataProvider.ManageBooks
             ParatextProjects.FakeAddProject(standardDetails, standardScrText);
 
             // StudyBible project 1 - uses DummyStudyBibleScrText with ProjectType.StudyBible
-            var studyBibleScrText = new DummyStudyBibleScrText();
+            // StudyBible requires a base project
+            var studyBibleBaseScrText = CreateDummyProject();
+            var studyBibleBaseDetails = CreateProjectDetails(studyBibleBaseScrText);
+            ParatextProjects.FakeAddProject(studyBibleBaseDetails, studyBibleBaseScrText);
+            var studyBibleScrText = new DummyStudyBibleScrText(studyBibleBaseScrText);
             var studyBibleDetails = CreateProjectDetails(studyBibleScrText);
             _studyBibleProjectId = studyBibleDetails.Metadata.Id;
             ParatextProjects.FakeAddProject(studyBibleDetails, studyBibleScrText);
@@ -628,7 +636,11 @@ namespace TestParanextDataProvider.ManageBooks
             ParatextProjects.FakeAddProject(sbaDetails, sbaScrText);
 
             // Additional StudyBible project 2 (for target testing)
-            var studyBible2ScrText = new DummyStudyBibleScrText();
+            // StudyBible requires a base project
+            var studyBible2BaseScrText = CreateDummyProject();
+            var studyBible2BaseDetails = CreateProjectDetails(studyBible2BaseScrText);
+            ParatextProjects.FakeAddProject(studyBible2BaseDetails, studyBible2BaseScrText);
+            var studyBible2ScrText = new DummyStudyBibleScrText(studyBible2BaseScrText);
             var studyBible2Details = CreateProjectDetails(studyBible2ScrText);
             ParatextProjects.FakeAddProject(studyBible2Details, studyBible2ScrText);
 
@@ -1621,10 +1633,16 @@ namespace TestParanextDataProvider.ManageBooks
 
         /// <summary>
         /// Creates a StudyBible project with the specified books.
+        /// StudyBible is a derived type that requires a base project.
         /// </summary>
         private DummyScrText CreateStudyBibleProjectWithBooks(int[] bookNumbers)
         {
-            var scrText = new DummyStudyBibleScrText();
+            // StudyBible requires a base project
+            var baseProject = CreateDummyProject();
+            var baseDetails = CreateProjectDetails(baseProject);
+            ParatextProjects.FakeAddProject(baseDetails, baseProject);
+
+            var scrText = new DummyStudyBibleScrText(baseProject);
 
             // Register project for lookup
             var details = CreateProjectDetails(scrText);

@@ -489,10 +489,16 @@ internal class BookCopyServiceTests : PapiTestBase
 
     /// <summary>
     /// Creates a StudyBible project with a book present.
+    /// StudyBible is a derived type that requires a base project.
     /// </summary>
     private DummyStudyBibleScrText CreateStudyBibleProjectWithBook(int bookNum)
     {
-        var scrText = new DummyStudyBibleScrText();
+        // StudyBible requires a base project
+        var baseProject = CreateDummyProject();
+        var baseDetails = CreateProjectDetails(baseProject);
+        ParatextProjects.FakeAddProject(baseDetails, baseProject);
+
+        var scrText = new DummyStudyBibleScrText(baseProject);
         var details = CreateProjectDetails(scrText);
         ParatextProjects.FakeAddProject(details, scrText);
         scrText.SetBookPresent(bookNum, true, DateTime.Now);
@@ -501,10 +507,16 @@ internal class BookCopyServiceTests : PapiTestBase
 
     /// <summary>
     /// Creates an empty StudyBible project.
+    /// StudyBible is a derived type that requires a base project.
     /// </summary>
     private DummyStudyBibleScrText CreateStudyBibleProject()
     {
-        var scrText = new DummyStudyBibleScrText();
+        // StudyBible requires a base project
+        var baseProject = CreateDummyProject();
+        var baseDetails = CreateProjectDetails(baseProject);
+        ParatextProjects.FakeAddProject(baseDetails, baseProject);
+
+        var scrText = new DummyStudyBibleScrText(baseProject);
         var details = CreateProjectDetails(scrText);
         ParatextProjects.FakeAddProject(details, scrText);
         return scrText;
