@@ -162,15 +162,54 @@ public static class BookImportService
     /// <summary>
     /// Attempts to parse a book ID by scanning the filename for valid 3-letter codes.
     /// </summary>
+    /// <remarks>
+    /// EXPLANATION:
+    /// This algorithm searches for valid book IDs in a filename with two passes:
+    /// Pass 1: Look for book IDs at word boundaries (start of string, after -, _, digit)
+    ///         This handles "gen.sfm", "01GEN.sfm", "test-gen.sfm" correctly
+    /// Pass 2: If no boundary match found, scan all 3-char sequences (fallback)
+    ///
+    /// This prioritization ensures "test-gen-import.sfm" finds GEN (after hyphen)
+    /// rather than EST (embedded in "test").
+    /// </remarks>
     private static int TryParseBookIdFromFilename(string upperFileName)
     {
-        // Extract all potential 3-character sequences and check if any is a valid book ID
-        // This handles patterns like "gen.sfm", "01GEN.sfm", "genesis.sfm" (contains "GEN")
+        // Pass 1: Look for book IDs at word boundaries
+        // Word boundaries are: start of string, after hyphen, underscore, or digit
+        for (int i = 0; i <= upperFileName.Length - 3; i++)
+        {
+            // Check if this is a word boundary
+            bool isWordBoundary =
+                i == 0
+                || upperFileName[i - 1] == '-'
+                || upperFileName[i - 1] == '_'
+                || char.IsDigit(upperFileName[i - 1]);
+
+            if (!isWordBoundary)
+                continue;
+
+            string candidate = upperFileName.Substring(i, 3);
+
+            if (!IsPlausibleBookId(candidate))
+                continue;
+
+            try
+            {
+                int bookNum = Canon.BookIdToNumber(candidate);
+                if (bookNum > 0)
+                    return bookNum;
+            }
+            catch
+            {
+                // Not a valid book ID - continue scanning
+            }
+        }
+
+        // Pass 2: Fallback - scan all 3-char sequences
         for (int i = 0; i <= upperFileName.Length - 3; i++)
         {
             string candidate = upperFileName.Substring(i, 3);
 
-            // Skip if not a plausible book ID (must be alphanumeric)
             if (!IsPlausibleBookId(candidate))
                 continue;
 
@@ -509,6 +548,245 @@ public static class BookImportService
         );
 
         return UsfmToken.NormalizeUsfm(scrText, bookNum, usfm);
+    }
+
+    #endregion
+
+    #region CAP-025: Import Books with Permission Check
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/FileMenu/ImportBooksForm.cs:200-242
+    // Method: ImportBooksForm.cmdOK_Click
+    // Maps to: EXT-011, CAP-025, BHV-311, INV-005
+    /// <summary>
+    /// Validates permissions and imports books from external files.
+    /// </summary>
+    /// <remarks>
+    /// EXPLANATION:
+    /// This orchestration method coordinates import with permission validation:
+    /// 1. Check permissions first (fail-fast before file I/O) - via CAP-015
+    /// 2. Validate files via CAP-006
+    /// 3. Execute import for permitted files
+    /// 4. Return result with affected books and any failures
+    ///
+    /// Permission check order: Permission is checked BEFORE file validation
+    /// to fail fast and avoid unnecessary I/O operations.
+    ///
+    /// INV-005: Team members need explicit book permission to import.
+    /// </remarks>
+    /// <param name="projectId">Project ID to import into.</param>
+    /// <param name="files">Array of file import information.</param>
+    /// <param name="replaceEntireBook">Whether to replace entire book content.</param>
+    /// <returns>Operation result with imported books.</returns>
+    public static async Task<BookOperationResult> ImportBooksWithPermissionCheckAsync(
+        string projectId,
+        FileImportInfo[] files,
+        bool replaceEntireBook
+    )
+    {
+        // Validate arguments
+        ArgumentNullException.ThrowIfNull(projectId);
+        ArgumentNullException.ThrowIfNull(files);
+
+        // Handle empty file list - success with no imports
+        if (files.Length == 0)
+        {
+            return BookOperationResult.SuccessResult([], 0);
+        }
+
+        // Filter to only files marked for inclusion
+        var filesToImport = files.Where(f => f.Include).ToArray();
+        if (filesToImport.Length == 0)
+        {
+            return BookOperationResult.SuccessResult([], 0);
+        }
+
+        // Find the project
+        ScrText? scrText = FindScrText(projectId);
+        if (scrText == null)
+        {
+            return BookOperationResult.ErrorResult(
+                BookErrorCode.ProjectNotFound,
+                $"Could not find project with ID '{projectId}'"
+            );
+        }
+
+        // Step 1: Check permissions FIRST (fail-fast before file I/O)
+        // Per INV-005: Team members need explicit book permission to import
+        var bookNumbers = GetBookNumbersFromFiles(filesToImport);
+
+        if (bookNumbers.Count == 0)
+        {
+            // No valid books found in files - still need to validate
+            // Proceed to file validation to get proper error
+        }
+        else
+        {
+            // Create BookSet for permission check
+            BookSet selectedBooks = new();
+            foreach (int bookNum in bookNumbers)
+            {
+                if (bookNum > 0)
+                {
+                    selectedBooks.Add(bookNum);
+                }
+            }
+
+            // Check permissions via CAP-015
+            if (selectedBooks.Count > 0)
+            {
+                PermissionResult permissionResult =
+                    BookCreationService.CheckAndGrantBookPermissions(selectedBooks, scrText);
+
+                if (!permissionResult.Success)
+                {
+                    return BookOperationResult.ErrorResultWithFailedBooks(
+                        BookErrorCode.PermissionDenied,
+                        permissionResult.ErrorMessage ?? "Permission denied for import",
+                        permissionResult.UnauthorizedBooks.ToArray()
+                    );
+                }
+            }
+        }
+
+        // Step 2: Validate files via CAP-006
+        var filePaths = filesToImport.Select(f => f.FilePath).ToArray();
+        var validationResult = await ValidateImportFilesAsync(projectId, filePaths);
+
+        if (!validationResult.IsValid)
+        {
+            // Determine error code based on error message
+            BookErrorCode errorCode = BookErrorCode.ValidationFailed;
+            if (
+                validationResult.ErrorMessage != null
+                && validationResult.ErrorMessage.Contains(
+                    "same book",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                errorCode = BookErrorCode.ValidationFailed; // VAL-007 duplicate
+            }
+            else if (
+                validationResult.ErrorMessage != null
+                && validationResult.ErrorMessage.Contains(
+                    "encoding",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                errorCode = BookErrorCode.EncodingError; // VAL-004 encoding
+            }
+
+            return BookOperationResult.ErrorResult(
+                errorCode,
+                validationResult.ErrorMessage ?? "File validation failed"
+            );
+        }
+
+        // Step 3: Execute import for each file
+        List<int> importedBooks = [];
+        List<int> failedBooks = [];
+        List<string> errors = [];
+        int lastBookNum = 0;
+
+        foreach (var fileInfo in filesToImport)
+        {
+            // Determine book number - use validation result or auto-detect
+            int bookNum = fileInfo.TargetBookNum;
+            if (bookNum == 0)
+            {
+                // Auto-detect from validation result
+                var validatedFile = validationResult.Files?.FirstOrDefault(f =>
+                    f.FilePath == fileInfo.FilePath
+                );
+                if (validatedFile != null)
+                {
+                    bookNum = validatedFile.BookNum;
+                }
+            }
+
+            if (bookNum <= 0)
+            {
+                // Could not determine book number
+                errors.Add(
+                    $"Could not determine book from file: {Path.GetFileName(fileInfo.FilePath)}"
+                );
+                continue;
+            }
+
+            try
+            {
+                // Check if file exists
+                if (!File.Exists(fileInfo.FilePath))
+                {
+                    errors.Add($"File not found: {Path.GetFileName(fileInfo.FilePath)}");
+                    failedBooks.Add(bookNum);
+                    continue;
+                }
+
+                // Read file content
+                string fileContent = await File.ReadAllTextAsync(fileInfo.FilePath);
+
+                // Import using PutText
+                scrText.PutText(bookNum, 0, false, fileContent, null);
+                importedBooks.Add(bookNum);
+                lastBookNum = bookNum;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Failed to import {Path.GetFileName(fileInfo.FilePath)}: {ex.Message}");
+                failedBooks.Add(bookNum);
+            }
+        }
+
+        // Return result
+        if (importedBooks.Count == 0 && errors.Count > 0)
+        {
+            return BookOperationResult.ErrorResultWithFailedBooks(
+                BookErrorCode.ValidationFailed,
+                string.Join("; ", errors),
+                failedBooks.ToArray()
+            );
+        }
+
+        if (errors.Count > 0)
+        {
+            return BookOperationResult.SuccessResultWithWarnings(
+                importedBooks.ToArray(),
+                lastBookNum,
+                errors
+            );
+        }
+
+        return BookOperationResult.SuccessResult(importedBooks.ToArray(), lastBookNum);
+    }
+
+    /// <summary>
+    /// Extracts book numbers from file import info array.
+    /// </summary>
+    private static List<int> GetBookNumbersFromFiles(FileImportInfo[] files)
+    {
+        var bookNumbers = new List<int>();
+
+        foreach (var file in files)
+        {
+            int bookNum = file.TargetBookNum;
+
+            // If auto-detect, try to parse from filename
+            if (bookNum == 0)
+            {
+                string fileName = Path.GetFileNameWithoutExtension(file.FilePath);
+                bookNum = ParseBookNumber(fileName);
+            }
+
+            if (bookNum > 0 && !bookNumbers.Contains(bookNum))
+            {
+                bookNumbers.Add(bookNum);
+            }
+        }
+
+        return bookNumbers;
     }
 
     #endregion
