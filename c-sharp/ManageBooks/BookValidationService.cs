@@ -533,15 +533,50 @@ internal static class BookValidationService
     /// <returns>Warning result indicating if books are missing from base</returns>
     public static SBAWarningResult CheckSBABaseProjectOverlap(string projectId, int[] bookNumbers)
     {
-        // CAP-012: CheckSBABaseProjectOverlap public API not yet implemented.
-        // TDD RED phase - tests should compile but fail.
-        // This method should:
-        // 1. Resolve projectId to ScrText via LocalParatextProjects
-        // 2. Convert int[] to BookSet
-        // 3. Delegate to CheckSBABaseProjectOverlap(ScrText, BookSet) (CAP-027)
-        throw new NotImplementedException(
-            "CAP-012: CheckSBABaseProjectOverlap(string, int[]) not yet implemented. "
-                + "TDD RED phase - tests should compile but fail."
-        );
+        // Handle null/empty project ID - return no warning
+        if (string.IsNullOrEmpty(projectId))
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Handle null/empty book array - return no warning
+        if (bookNumbers == null || bookNumbers.Length == 0)
+        {
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Try to resolve the project ID to a ScrText
+        ScrText scrText;
+        try
+        {
+            scrText = LocalParatextProjects.GetParatextProject(projectId);
+        }
+        catch (Exception)
+        {
+            // If we can't resolve the project, return no warning (graceful degradation)
+            return new SBAWarningResult(
+                ShowWarning: false,
+                BooksNotInBase: [],
+                WarningMessage: null
+            );
+        }
+
+        // Convert int[] to BookSet for the internal API
+        var selectedBooks = new BookSet();
+        foreach (var bookNum in bookNumbers)
+        {
+            selectedBooks.Add(bookNum);
+        }
+
+        // Delegate to the internal method (CAP-027)
+        return CheckSBABaseProjectOverlap(scrText, selectedBooks);
     }
 }
