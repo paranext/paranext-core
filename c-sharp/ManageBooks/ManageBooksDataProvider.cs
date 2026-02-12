@@ -296,6 +296,17 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
         if (copyResult.Success)
         {
             SendDataUpdateEvent("*", "Books copied successfully");
+
+            // Store the event for test verification (CAP-014)
+            if (copyResult.CopiedBooks.Count > 0)
+            {
+                _lastBooksChangedEvent = new BooksChangedEvent(
+                    request.DestProjectId,
+                    BooksChangeType.Created,
+                    [.. copyResult.CopiedBooks]
+                );
+            }
+
             return BookOperationResult.SuccessResult(
                 [.. copyResult.CopiedBooks],
                 copyResult.LastCopiedBookNum
@@ -380,9 +391,16 @@ internal sealed class ManageBooksDataProvider : NetworkObjects.DataProvider
 
         BookOperationResult result = await BookCreationService.CreateBooksAsync(request);
 
-        if (result.Success)
+        if (result.Success && result.BooksAffected != null && result.BooksAffected.Length > 0)
         {
             SendDataUpdateEvent("*", "Books created successfully");
+
+            // Store the event for test verification (CAP-014)
+            _lastBooksChangedEvent = new BooksChangedEvent(
+                request.ProjectId,
+                BooksChangeType.Created,
+                result.BooksAffected
+            );
         }
 
         return result;
