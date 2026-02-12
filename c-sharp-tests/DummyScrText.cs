@@ -59,6 +59,27 @@ namespace TestParanextDataProvider
             ) { }
 
         /// <summary>
+        /// Deletes books from this DummyScrText by removing their files from the in-memory file system.
+        /// This method is needed because ScrText.DeleteBooks is not virtual and doesn't work
+        /// properly with InMemoryFileManager.
+        /// </summary>
+        /// <param name="booksToDelete">BookSet containing book numbers to delete</param>
+        public void DeleteBooksFromMemory(BookSet booksToDelete)
+        {
+            if (booksToDelete == null)
+                return;
+
+            foreach (int bookNum in booksToDelete.SelectedBookNumbers)
+            {
+                string bookFilePath = BookFilePath(bookNum);
+                if (FileManager.Exists(bookFilePath))
+                {
+                    FileManager.Delete(bookFilePath);
+                }
+            }
+        }
+
+        /// <summary>
         /// Sets a book as present with a specific modification date.
         /// Used for testing book comparison functionality (CAP-021).
         /// </summary>
