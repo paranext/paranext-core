@@ -26,6 +26,38 @@ import {
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
 } from 'platform-scripture';
 import { correctUsjVersion } from './scripture.util';
+import { ReadWriteLockMap } from './read-write-lock-map';
+
+/**
+ * Extracts the book ID and chapter number from a scripture location without needing a reader
+ * writer. Works for all location type variants (UsjChapterLocation and UsfmVerseLocation).
+ *
+ * @param location The location to extract book and chapter from
+ * @returns The book ID and chapter number
+ */
+function getBookAndChapterFromLocation(location: UsjChapterLocation | UsfmVerseLocation): {
+  book: string;
+  chapterNum: number;
+} {
+  // UsjVerseRefChapterLocation, UsfmVerseRefVerseLocation
+  if ('verseRef' in location)
+    return { book: location.verseRef.book, chapterNum: location.verseRef.chapterNum };
+  // UsfmScrRefVerseLocation (deprecated)
+  if ('scrRef' in location)
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return {
+      book: (location.scrRef as SerializedVerseRef).book,
+      chapterNum: (location.scrRef as SerializedVerseRef).chapterNum,
+    };
+  // UsjFlatChapterLocation, UsjFlatTextChapterLocation, SerializedVerseRef
+  if ('book' in location && 'chapterNum' in location)
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return {
+      book: (location as SerializedVerseRef).book,
+      chapterNum: (location as SerializedVerseRef).chapterNum,
+    };
+  throw new Error(`Cannot determine book and chapter from location: ${JSON.stringify(location)}`);
+}
 
 // This interface doesn't provide any normal data types that PDPs use
 export const SCRIPTURE_FINDER_PROJECT_INTERFACES = [
@@ -97,6 +129,20 @@ export class ScriptureFinderProjectDataProviderEngine
 
   /** Mutex map to prevent concurrent fetches of the same book/chapter data */
   readonly #readerWriterMutexMap = new MutexMap();
+
+  /**
+   * Per-book read-write lock for replace operations.
+   *
+   * - Chapter-level replaces acquire a **read** (shared) lock on the book + an exclusive per-chapter
+   *   mutex. This allows chapter-level replaces on _different_ chapters to run concurrently while
+   *   preventing two replaces from operating on the _same_ chapter simultaneously.
+   * - Book-level replaces acquire a **write** (exclusive) lock on the book. This blocks all
+   *   chapter-level and book-level replaces for the same book.
+   */
+  readonly #bookRWLockMap = new ReadWriteLockMap();
+
+  /** Per-chapter mutex for serializing chapter-level replace operations on the same chapter */
+  readonly #chapterMutexMap = new MutexMap();
 
   /**
    * Monotonically increasing version number incremented on every cache invalidation. Used to detect
@@ -236,6 +282,10 @@ export class ScriptureFinderProjectDataProviderEngine
   /**
    * Replaces text at specified Scripture ranges with new USFM content.
    *
+   * Each book involved in the replacement is processed under its own book-level mutex to ensure
+   * mutual exclusion with other concurrent replaces for the same book. The USFM write and cache
+   * invalidation happen atomically within the mutex.
+   *
    * @param rangesToReplace - Array of scripture ranges to replace
    * @param usfmToInsert - The USFM content to insert at each range (string or array of strings)
    * @throws Error if usfmToInsert array length doesn't match rangesToReplace length
@@ -257,119 +307,120 @@ export class ScriptureFinderProjectDataProviderEngine
       ? usfmToInsert
       : rangesToReplace.map(() => usfmToInsert);
 
-    // Convert locations, validate, and group ranges by book
+    // Group ranges by book and collect chapter info. Book and chapter are extractable from the raw
+    // location types without needing a reader writer.
     const rangesByBook = new Map<
       string,
-      Array<{
-        originalIndex: number;
-        startLocation: UsfmVerseRefVerseLocation;
-        endLocation: UsfmVerseRefVerseLocation;
-      }>
+      {
+        rangeInfos: Array<{
+          originalIndex: number;
+          range: ScriptureRangeUsjChapterOrUsfmVerseLocation;
+        }>;
+        chapters: Set<number>;
+      }
     >();
 
+    rangesToReplace.forEach((range, i) => {
+      const startInfo = getBookAndChapterFromLocation(range.start);
+      const endInfo = getBookAndChapterFromLocation(range.end);
+
+      // Validate both endpoints are in the same book
+      if (startInfo.book !== endInfo.book) {
+        throw new Error(
+          `Range at index ${i} spans multiple books (${startInfo.book} to ${endInfo.book}). Cross-book replacements are not supported.`,
+        );
+      }
+
+      const { book: bookId } = startInfo;
+      if (!rangesByBook.has(bookId)) {
+        rangesByBook.set(bookId, { rangeInfos: [], chapters: new Set() });
+      }
+      // We just set the entry above if it didn't exist
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const entry = rangesByBook.get(bookId)!;
+      entry.rangeInfos.push({ originalIndex: i, range });
+      entry.chapters.add(startInfo.chapterNum);
+      entry.chapters.add(endInfo.chapterNum);
+    });
+
+    // Process each book under its book-level mutex. Different books can be processed in parallel
+    // since they use different mutexes.
     await Promise.all(
-      rangesToReplace.map(async (range, i) => {
-        // Convert both start and end to USFM locations
-        const [startLocation, endLocation] = await Promise.all([
-          this.#convertToUsfmVerseRefVerseLocation(range.start),
-          this.#convertToUsfmVerseRefVerseLocation(range.end),
-        ]);
+      [...rangesByBook.entries()].map(async ([bookId, { rangeInfos, chapters }]) => {
+        const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
 
-        // Skip no-op ranges: same start/end position with a falsy replacement string
-        if (
-          !replacements[i] &&
-          startLocation.verseRef.book === endLocation.verseRef.book &&
-          startLocation.verseRef.chapterNum === endLocation.verseRef.chapterNum &&
-          startLocation.verseRef.verseNum === endLocation.verseRef.verseNum &&
-          (startLocation.offset ?? 0) === (endLocation.offset ?? 0)
-        )
-          return;
+        await this.#withCachedReaderWriter(
+          bookId,
+          singleChapter,
+          async (usjReaderWriter, getChapterReaderWriter) => {
+            // Convert all locations to UsfmVerseRefVerseLocations within the mutex
+            const convertedRanges = await Promise.all(
+              rangeInfos.map(async ({ originalIndex, range }) => {
+                const [startLocation, endLocation] = await Promise.all([
+                  this.#convertToUsfmVerseRefVerseLocation(range.start, (_bookId, chapterNum) =>
+                    getChapterReaderWriter(chapterNum),
+                  ),
+                  this.#convertToUsfmVerseRefVerseLocation(range.end, (_bookId, chapterNum) =>
+                    getChapterReaderWriter(chapterNum),
+                  ),
+                ]);
+                return { originalIndex, startLocation, endLocation };
+              }),
+            );
 
-        // Validate both endpoints are in the same book
-        if (startLocation.verseRef.book !== endLocation.verseRef.book) {
-          throw new Error(
-            `Range at index ${i} spans multiple books (${startLocation.verseRef.book} to ${endLocation.verseRef.book}). Cross-book replacements are not supported.`,
-          );
-        }
+            // Filter no-op ranges: same start/end position with a falsy replacement string
+            const activeRanges = convertedRanges.filter(
+              ({ originalIndex, startLocation, endLocation }) =>
+                replacements[originalIndex] ||
+                startLocation.verseRef.book !== endLocation.verseRef.book ||
+                startLocation.verseRef.chapterNum !== endLocation.verseRef.chapterNum ||
+                startLocation.verseRef.verseNum !== endLocation.verseRef.verseNum ||
+                (startLocation.offset ?? 0) !== (endLocation.offset ?? 0),
+            );
 
-        // Group converted ranges by book
-        const bookId = startLocation.verseRef.book;
-        if (!rangesByBook.has(bookId)) {
-          rangesByBook.set(bookId, []);
-        }
-        // We validated above that bookId exists in the map
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        rangesByBook.get(bookId)!.push({ originalIndex: i, startLocation, endLocation });
-      }),
-    );
+            if (activeRanges.length === 0) return false;
 
-    // Process each book to compute modified USFM, then add the modified USFM to pendingWrites to
-    // write at the end to avoid cache busting inefficiencies
-    const pendingWrites: Array<{
-      verseRef: SerializedVerseRef;
-      modifiedUsfm: string;
-      isChapterLevel: boolean;
-    }> = [];
+            // Convert all ranges to USFM indices and sort in descending order
+            const rangesWithIndices = activeRanges
+              .map((rangeInfo) => ({
+                ...rangeInfo,
+                startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.startLocation),
+                endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
+              }))
+              .sort((a, b) => b.startIndex - a.startIndex);
 
-    await Promise.all(
-      [...rangesByBook.entries()].map(async ([bookId, bookRanges]) => {
-        // Determine if all ranges are within a single chapter
-        const chapterNums = new Set<number>();
-        bookRanges.forEach((rangeInfo) => {
-          chapterNums.add(rangeInfo.startLocation.verseRef.chapterNum);
-          chapterNums.add(rangeInfo.endLocation.verseRef.chapterNum);
-        });
+            // Perform string replacements in reverse index order
+            let modifiedUsfm = usjReaderWriter.toUsfm();
+            const originalUsfm = modifiedUsfm;
+            rangesWithIndices.forEach((rangeWithIndex) => {
+              const replacement = replacements[rangeWithIndex.originalIndex];
+              modifiedUsfm =
+                modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
+                replacement +
+                modifiedUsfm.substring(rangeWithIndex.endIndex);
+            });
 
-        // Use chapter-level reader writer if all ranges are in one chapter
-        const singleChapter = chapterNums.size === 1 ? [...chapterNums][0] : undefined;
-        const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, singleChapter);
+            // Only write and invalidate if the USFM was actually changed
+            if (modifiedUsfm === originalUsfm) return false;
 
-        // Convert all ranges to USFM indices and sort in descending order
-        const rangesWithIndices = bookRanges
-          .map((rangeInfo) => ({
-            ...rangeInfo,
-            startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.startLocation),
-            endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
-          }))
-          .sort((a, b) => b.startIndex - a.startIndex);
+            // Write the modified USFM within the mutex to ensure atomicity with cache
+            // invalidation
+            if (singleChapter !== undefined) {
+              await this.#pdps['platformScripture.USFM_Chapter'].setChapterUSFM(
+                { book: bookId, chapterNum: singleChapter, verseNum: 0 },
+                modifiedUsfm,
+              );
+            } else {
+              await this.#pdps['platformScripture.USFM_Book'].setBookUSFM(
+                { book: bookId, chapterNum: 1, verseNum: 0 },
+                modifiedUsfm,
+              );
+            }
 
-        // Perform string replacements in reverse index order
-        let modifiedUsfm = usjReaderWriter.toUsfm();
-        const originalUsfm = modifiedUsfm;
-        rangesWithIndices.forEach((rangeWithIndex) => {
-          const replacement = replacements[rangeWithIndex.originalIndex];
-          modifiedUsfm =
-            modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
-            replacement +
-            modifiedUsfm.substring(rangeWithIndex.endIndex);
-        });
-
-        // Only write if the USFM was actually changed
-        if (modifiedUsfm === originalUsfm) return;
-
-        // Set up the USFM to be written for this book/chapter
-        pendingWrites.push({
-          verseRef: { book: bookId, chapterNum: singleChapter ?? 1, verseNum: 0 },
-          modifiedUsfm,
-          isChapterLevel: singleChapter !== undefined,
-        });
-      }),
-    );
-
-    // Write all modified USFM together at the end
-    await Promise.all(
-      pendingWrites.map(async (write) => {
-        if (write.isChapterLevel) {
-          await this.#pdps['platformScripture.USFM_Chapter'].setChapterUSFM(
-            write.verseRef,
-            write.modifiedUsfm,
-          );
-        } else {
-          await this.#pdps['platformScripture.USFM_Book'].setBookUSFM(
-            write.verseRef,
-            write.modifiedUsfm,
-          );
-        }
+            // Signal that caches for this book should be invalidated
+            return true;
+          },
+        );
       }),
     );
   }
@@ -393,21 +444,28 @@ export class ScriptureFinderProjectDataProviderEngine
     this.#bookCache.clear();
     this.#chapterCache.clear();
 
+    // Dispose read-write locks to reject any pending waiters
+    this.#bookRWLockMap.dispose();
+
     return unsubscriberList.runAllUnsubscribers();
   }
 
   /**
    * Converts a UsjChapterLocation or UsfmVerseLocation to a standardized UsfmVerseRefVerseLocation.
    *
-   * For UsjChapterLocation, uses the chapter-level UsjReaderWriter to convert the document location
-   * to a UsfmVerseRefVerseLocation.
+   * For UsjChapterLocation, uses a chapter-level UsjReaderWriter (obtained via the provided getter)
+   * to convert the document location to a UsfmVerseRefVerseLocation.
    *
    * @param location The location to convert
+   * @param getReaderWriter Function to obtain a cached reader writer for a given book and chapter.
+   *   This allows the caller to control how the reader writer is provided (e.g., from within a
+   *   mutex-protected callback).
    * @returns The standardized UsfmVerseRefVerseLocation (contains verseRef with book, chapter,
    *   verse and an offset)
    */
   async #convertToUsfmVerseRefVerseLocation(
     location: UsjChapterLocation | UsfmVerseLocation,
+    getReaderWriter: (bookId: string, chapterNum: number) => Promise<UsjReaderWriter>,
   ): Promise<UsfmVerseRefVerseLocation> {
     // If this is a UsjChapterLocation, convert to USFM verse location
     if (UsjReaderWriter.isUsjChapterLocation(location)) {
@@ -417,7 +475,7 @@ export class ScriptureFinderProjectDataProviderEngine
       const { book: bookId, chapterNum } = chapterLocation.verseRef;
 
       // Get the chapter-level reader writer to convert the document location
-      const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, chapterNum);
+      const usjReaderWriter = await getReaderWriter(bookId, chapterNum);
 
       return usjReaderWriter.usjDocumentLocationToUsfmVerseRefVerseLocation(
         chapterLocation.documentLocation,
@@ -486,12 +544,104 @@ export class ScriptureFinderProjectDataProviderEngine
   /**
    * Invalidates all cached reader writers. Clears both caches and increments the version counter so
    * any in-flight USX fetch in {@link #getOrCreateCachedReaderWriter} can detect the invalidation
-   * and retry.
+   * and retry. Called by subscribe callbacks when external changes occur.
    */
   #invalidateCaches(): void {
     this.#cacheVersion += 1;
     this.#bookCache.clear();
     this.#chapterCache.clear();
+  }
+
+  /**
+   * Invalidates cached reader writers for a specific book. Removes the book cache entry and all
+   * chapter cache entries for that book. Increments the version counter so any in-flight USX fetch
+   * can detect the invalidation and retry.
+   *
+   * @param bookId The book ID whose cache entries should be removed
+   */
+  #invalidateCachesForBook(bookId: string): void {
+    this.#cacheVersion += 1;
+    this.#bookCache.delete(bookId);
+    // Remove all chapter entries for this book (keys are "bookId:chapter")
+    for (const key of [...this.#chapterCache.keys()]) {
+      if (key.startsWith(`${bookId}:`)) {
+        this.#chapterCache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Invalidates the cache for a specific chapter within a book. Removes the chapter cache entry and
+   * the book-level cache entry (since the book includes all chapters and is now stale). Other
+   * chapters' caches are unaffected.
+   *
+   * @param bookId The book ID whose chapter was modified
+   * @param chapter The chapter number whose cache entry should be removed
+   */
+  #invalidateCachesForChapter(bookId: string, chapter: number): void {
+    this.#cacheVersion += 1;
+    this.#bookCache.delete(bookId);
+    this.#chapterCache.delete(`${bookId}:${chapter}`);
+  }
+
+  /**
+   * Acquires the appropriate lock(s) for the given scope, gets or creates a cached UsjReaderWriter,
+   * runs the callback, and if it returns `true`, invalidates the relevant cache entries.
+   *
+   * Locking strategy:
+   *
+   * - **Chapter-level** (`chapter` is defined): acquires a shared (read) lock on the book-level
+   *   read-write lock + an exclusive per-chapter mutex. This allows different chapters to be
+   *   replaced concurrently while serializing same-chapter and book-level operations.
+   * - **Book-level** (`chapter` is undefined): acquires an exclusive (write) lock on the book-level
+   *   read-write lock. This blocks all concurrent operations for the same book.
+   *
+   * @param bookId The book ID (e.g., "GEN", "MAT")
+   * @param chapter If provided, gets a chapter-level reader writer; otherwise a book-level one
+   * @param callback Receives the UsjReaderWriter for the specified scope and a helper to get
+   *   chapter-level reader writers for the same book (useful for converting UsjChapterLocations).
+   *   Should return `true` if the underlying data was modified and the relevant cache entries
+   *   should be removed.
+   */
+  async #withCachedReaderWriter(
+    bookId: string,
+    chapter: number | undefined,
+    callback: (
+      usjReaderWriter: UsjReaderWriter,
+      getChapterReaderWriter: (chapterNum: number) => Promise<UsjReaderWriter>,
+    ) => Promise<boolean>,
+  ): Promise<void> {
+    if (chapter !== undefined) {
+      // Chapter-level: shared read lock on book + exclusive lock on the specific chapter
+      const releaseBookRead = await this.#bookRWLockMap.get(bookId).acquireRead();
+      try {
+        await this.#chapterMutexMap.get(`${bookId}:${chapter}`).runExclusive(async () => {
+          const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId, chapter);
+          const modified = await callback(usjReaderWriter, (chapterNum: number) =>
+            this.#getOrCreateCachedReaderWriter(bookId, chapterNum),
+          );
+          if (modified) {
+            this.#invalidateCachesForChapter(bookId, chapter);
+          }
+        });
+      } finally {
+        releaseBookRead();
+      }
+    } else {
+      // Book-level: exclusive write lock on the book (blocks all chapter and book operations)
+      const releaseBookWrite = await this.#bookRWLockMap.get(bookId).acquireWrite();
+      try {
+        const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(bookId);
+        const modified = await callback(usjReaderWriter, (chapterNum: number) =>
+          this.#getOrCreateCachedReaderWriter(bookId, chapterNum),
+        );
+        if (modified) {
+          this.#invalidateCachesForBook(bookId);
+        }
+      } finally {
+        releaseBookWrite();
+      }
+    }
   }
 
   /**
