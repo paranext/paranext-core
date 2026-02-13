@@ -19,7 +19,7 @@ import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
+import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
@@ -898,6 +898,14 @@ type InventoryProps = {
 };
 /** Inventory component that is used to view and control the status of provided project settings */
 export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, onItemSelected, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Generates a responsive column header for inventory columns with tooltip and sorting functionality
+ *
+ * @param column The column received from ColumnDef.header
+ * @param label The label field to display in the header and tooltip
+ * @returns A ReactNode representing the header
+ */
+export declare const getInventoryHeader: (column: Column<InventoryTableData, unknown>, label: string, buttonClassName?: string) => React$1.ReactNode;
 /**
  * Function that creates the item column for inventories
  *
@@ -2253,7 +2261,7 @@ export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProvide
  */
 export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
 /** @inheritdoc Tooltip */
-export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tooltip */
 export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 type Side = "primary" | "secondary";

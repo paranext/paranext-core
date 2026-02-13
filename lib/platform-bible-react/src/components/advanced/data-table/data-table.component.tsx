@@ -98,7 +98,7 @@ export function DataTable<TData, TValue>({
     const rowCount = 10;
     const skeletonRowIds = Array.from({ length: rowCount }).map((_, idx) => `skeleton-row-${idx}`);
     bodyContent = skeletonRowIds.map((rowId) => (
-      <TableRow key={rowId}>
+      <TableRow key={rowId} className="hover:tw-bg-transparent">
         <TableCell colSpan={visibleColumns.length ?? columns.length} className="tw-border-0 tw-p-0">
           <div className="tw-w-full tw-py-2">
             <Skeleton className="tw-h-14 tw-w-full tw-rounded-md" />
@@ -139,7 +139,7 @@ export function DataTable<TData, TValue>({
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
                 return (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="tw-p-0">
                     {header.isPlaceholder
                       ? undefined
                       : flexRender(header.column.columnDef.header, header.getContext())}
