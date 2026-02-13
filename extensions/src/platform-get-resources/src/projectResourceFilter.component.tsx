@@ -1,8 +1,7 @@
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuTrigger,
   ToggleGroup,
   ToggleGroupItem,
@@ -49,29 +48,28 @@ export default function ProjectResourceFilter({
           </ToggleGroupItem>
         </ToggleGroup>
       </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuRadioGroup
-          value={value}
-          onValueChange={(v) => onChange(v as ProjectResourceFilterValue)}
-        >
-          <DropdownMenuRadioItem value="all">
-            <div className="tw-flex tw-items-center tw-gap-2">
-              <Filter className="tw-h-4 tw-w-4" />
-              <span>{localizedAllText}</span>
-            </div>
-          </DropdownMenuRadioItem>
-          {options.map((option) => {
-            const OptionIcon = option.icon;
-            return (
-              <DropdownMenuRadioItem value={option.key} key={option.key}>
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <OptionIcon className="tw-h-4 tw-w-4" />
-                  <span>{option.label}</span>
-                </div>
-              </DropdownMenuRadioItem>
-            );
-          })}
-        </DropdownMenuRadioGroup>
+      <DropdownMenuContent align="start">
+        <DropdownMenuCheckboxItem checked={value === 'all'} onCheckedChange={() => onChange('all')}>
+          <div className="tw-flex tw-items-center tw-gap-2">
+            <Filter className="tw-h-4 tw-w-4" />
+            <span>{localizedAllText}</span>
+          </div>
+        </DropdownMenuCheckboxItem>
+        {options.map((option) => {
+          const OptionIcon = option.icon;
+          return (
+            <DropdownMenuCheckboxItem
+              key={option.key}
+              checked={value === option.key}
+              onCheckedChange={() => onChange(option.key)}
+            >
+              <div className="tw-flex tw-items-center tw-gap-2">
+                <OptionIcon className="tw-h-4 tw-w-4" />
+                <span>{option.label}</span>
+              </div>
+            </DropdownMenuCheckboxItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
