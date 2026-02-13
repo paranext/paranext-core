@@ -14,6 +14,7 @@ import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ColumnDef } from '@tanstack/react-table';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Scope } from '@/components/utils/scripture.util';
+import { escapeStringRegexp } from 'platform-bible-utils';
 import { useState } from 'react';
 
 const localizedStrings = {
@@ -220,7 +221,8 @@ export const RepeatedWords: Story = {
 
 function getDescription(markerDescriptions: string[], marker: string): string | undefined {
   // Search for whole marker surrounded by whitespace or periods or at string boundaries (^ and $)
-  const findMarker = new RegExp(`(^|[\\s.])${marker}([\\s.]|$)`);
+  const escapedMarker = escapeStringRegexp(marker);
+  const findMarker = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
   return markerDescriptions.find((markerDescription) => findMarker.test(markerDescription));
 }
 
