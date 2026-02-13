@@ -444,6 +444,10 @@ export function formatChapterAndVerseWithOptionalParts(
  * Formats a Scripture reference. Empty book, negative chapter or verse results in omitting that
  * part.
  *
+ * TODO: handle positive verse number, when chapter is negative, like `Romans -1:5`
+ *
+ * TODO: handle books without chapters, like `Jude 5`
+ *
  * @param scrRef The Scripture reference to format.
  * @param FormatScrRefOptions Optional FormatScrRefOptions to format the scripture reference
  * @returns The formatted reference. This may be only parts like only book or only chapter or only
