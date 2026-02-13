@@ -7,6 +7,7 @@ import {
   AsyncVariable,
   escapeStringRegexp,
   getErrorMessage,
+  Mutex,
   MutexMap,
   newGuid,
   UnsubscriberAsync,
@@ -27,7 +28,6 @@ import {
 } from 'platform-scripture';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
-import { ReadWriteLockMap } from './read-write-lock-map';
 
 /**
  * Extracts the book ID and chapter number from a scripture location without needing a reader
@@ -117,19 +117,8 @@ export class ScriptureFinderProjectDataProviderEngine
   /** Mutex map to prevent concurrent fetches of the same book/chapter data */
   readonly #readerWriterMutexMap = new MutexMap();
 
-  /**
-   * Per-book read-write lock for replace operations.
-   *
-   * - Chapter-level replaces acquire a **read** (shared) lock on the book + an exclusive per-chapter
-   *   mutex. This allows chapter-level replaces on _different_ chapters to run concurrently while
-   *   preventing two replaces from operating on the _same_ chapter simultaneously.
-   * - Book-level replaces acquire a **write** (exclusive) lock on the book. This blocks all
-   *   chapter-level and book-level replaces for the same book.
-   */
-  readonly #bookRWLockMap = new ReadWriteLockMap();
-
-  /** Per-chapter mutex for serializing chapter-level replace operations on the same chapter */
-  readonly #chapterMutexMap = new MutexMap();
+  /** Single mutex to serialize all replace operations */
+  readonly #replaceMutex = new Mutex();
 
   /**
    * Monotonically increasing version number incremented on every cache invalidation. Used to detect
@@ -279,9 +268,9 @@ export class ScriptureFinderProjectDataProviderEngine
   /**
    * Replaces text at specified Scripture ranges with new USFM content.
    *
-   * Each book involved in the replacement is processed under its own book-level mutex to ensure
-   * mutual exclusion with other concurrent replaces for the same book. The USFM write and cache
-   * invalidation happen atomically within the mutex.
+   * Only one replace operation can execute at a time (serialized by a mutex). The operation
+   * computes all replacements, writes all USFM at once, and then invalidates the cache for modified
+   * books/chapters so subsequent operations get fresh data.
    *
    * @param rangesToReplace - Array of non-overlapping scripture ranges to replace. Overlapping
    *   ranges will cause an error.
@@ -296,133 +285,85 @@ export class ScriptureFinderProjectDataProviderEngine
   ): Promise<void> {
     if (rangesToReplace.length === 0) return;
 
-    // Validate and normalize replacement strings to an array
-    if (Array.isArray(usfmToInsert) && usfmToInsert.length !== rangesToReplace.length) {
-      throw new Error(
-        `usfmToInsert array length (${usfmToInsert.length}) must match rangesToReplace length (${rangesToReplace.length})`,
-      );
-    }
-    const replacements: string[] = Array.isArray(usfmToInsert)
-      ? usfmToInsert
-      : rangesToReplace.map(() => usfmToInsert);
-
-    // Group ranges by book and collect chapter info. Book and chapter are extractable from the raw
-    // location types without needing a reader writer.
-    const rangesByBook = new Map<
-      string,
-      {
-        rangeInfos: Array<{
-          originalIndex: number;
-          range: ScriptureRangeUsjChapterOrUsfmVerseLocation;
-        }>;
-        chapters: Set<number>;
-      }
-    >();
-
-    rangesToReplace.forEach((range, i) => {
-      const startInfo = getBookAndChapterFromLocation(range.start);
-      const endInfo = getBookAndChapterFromLocation(range.end);
-
-      // Validate both endpoints are in the same book
-      if (startInfo.book !== endInfo.book) {
+    // Serialize all replace operations with a single mutex
+    return this.#replaceMutex.runExclusive(async () => {
+      // Validate and normalize replacement strings to an array
+      if (Array.isArray(usfmToInsert) && usfmToInsert.length !== rangesToReplace.length) {
         throw new Error(
-          `Range at index ${i} spans multiple books (${startInfo.book} to ${endInfo.book}). Cross-book replacements are not supported.`,
+          `usfmToInsert array length (${usfmToInsert.length}) must match rangesToReplace length (${rangesToReplace.length})`,
         );
       }
+      const replacements: string[] = Array.isArray(usfmToInsert)
+        ? usfmToInsert
+        : rangesToReplace.map(() => usfmToInsert);
 
-      const { book: bookId } = startInfo;
-      if (!rangesByBook.has(bookId)) {
-        rangesByBook.set(bookId, { rangeInfos: [], chapters: new Set() });
-      }
-      // We just set the entry above if it didn't exist
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const entry = rangesByBook.get(bookId)!;
-      entry.rangeInfos.push({ originalIndex: i, range });
-      entry.chapters.add(startInfo.chapterNum);
-      entry.chapters.add(endInfo.chapterNum);
-    });
+      // Group ranges by book and collect chapter info. Book and chapter are extractable from the raw
+      // location types without needing a reader writer.
+      const rangesByBook = new Map<
+        string,
+        {
+          rangeInfos: Array<{
+            originalIndex: number;
+            range: ScriptureRangeUsjChapterOrUsfmVerseLocation;
+          }>;
+          chapters: Set<number>;
+        }
+      >();
 
-    // Track acquired locks and pending writes so we can execute all USFM writes together at
-    // the end while holding all locks. Locks are kept held until after the writes complete to
-    // ensure atomicity with cache invalidation.
-    const heldLocks: Array<{
-      bookId: string;
-      singleChapter: number | undefined;
-      releaseBookLock: () => void;
-      releaseChapterMutex?: () => void;
-    }> = [];
-    const pendingWrites: Array<{
-      bookId: string;
-      singleChapter: number | undefined;
-      modifiedUsfm: string;
-    }> = [];
+      rangesToReplace.forEach((range, i) => {
+        const startInfo = getBookAndChapterFromLocation(range.start);
+        const endInfo = getBookAndChapterFromLocation(range.end);
 
-    // Shared early-exit signal: when one parallel book task errors, other tasks that
-    // are still awaiting lock acquisition will release their locks immediately and bail
-    // out instead of proceeding with expensive work (USX fetches, USFM computation).
-    let firstError: unknown;
+        // Validate both endpoints are in the same book
+        if (startInfo.book !== endInfo.book) {
+          throw new Error(
+            `Range at index ${i} spans multiple books (${startInfo.book} to ${endInfo.book}). Cross-book replacements are not supported.`,
+          );
+        }
 
-    try {
-      // Phase 1: Acquire locks and compute USFM modifications for each book in parallel.
-      // Different books can be processed in parallel since they use different locks.
+        const { book: bookId } = startInfo;
+        if (!rangesByBook.has(bookId)) {
+          rangesByBook.set(bookId, { rangeInfos: [], chapters: new Set() });
+        }
+        // We just set the entry above if it didn't exist
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const entry = rangesByBook.get(bookId)!;
+        entry.rangeInfos.push({ originalIndex: i, range });
+        entry.chapters.add(startInfo.chapterNum);
+        entry.chapters.add(endInfo.chapterNum);
+      });
+
+      // Track pending writes so we can execute all USFM writes together at the end
+      const pendingWrites: Array<{
+        bookId: string;
+        singleChapter: number | undefined;
+        modifiedUsfm: string;
+      }> = [];
+
+      // Shared early-exit signal: when one parallel book task errors, other tasks can
+      // check this and bail out early instead of proceeding with expensive work.
+      let firstError: unknown;
+
+      // Phase 1: Compute USFM modifications for each book in parallel.
       // Use Promise.allSettled (not Promise.all) so that all tasks settle before we
-      // proceed. This guarantees every acquired lock is accounted for — either pushed
-      // into heldLocks or released immediately by an early-exit check — preventing lock
-      // leaks when one task errors while another is still awaiting lock acquisition.
+      // proceed, ensuring we can properly track and re-throw errors.
       await Promise.allSettled(
         [...rangesByBook.entries()].map(async ([bookId, { rangeInfos, chapters }]) => {
-          // Bail out before acquiring any locks if another task already errored
+          // Bail out early if another task already errored
           if (firstError) return;
 
           const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
 
-          // Acquire locks manually so we can hold them across all books until after the
-          // writes complete. After each lock acquisition await, check whether another
-          // task errored while we were waiting — if so, release immediately and bail out.
-          // Track locally-acquired locks so they can be released if something throws
-          // before they are pushed to heldLocks.
-          let releaseBookLock: (() => void) | undefined;
-          let releaseChapterMutex: (() => void) | undefined;
-
           try {
-            if (singleChapter !== undefined) {
-              // Chapter-level: shared read lock on book + exclusive lock on the specific chapter
-              releaseBookLock = await this.#bookRWLockMap.get(bookId).acquireRead();
-              if (firstError) {
-                releaseBookLock();
-                return;
-              }
-              releaseChapterMutex = await this.#chapterMutexMap
-                .get(`${bookId}:${singleChapter}`)
-                .acquire();
-              if (firstError) {
-                releaseChapterMutex();
-                releaseBookLock();
-                return;
-              }
-            } else {
-              // Book-level: exclusive write lock on the book (blocks all chapter and book
-              // operations)
-              releaseBookLock = await this.#bookRWLockMap.get(bookId).acquireWrite();
-              if (firstError) {
-                releaseBookLock();
-                return;
-              }
-            }
-
-            heldLocks.push({ bookId, singleChapter, releaseBookLock, releaseChapterMutex });
-
-            // Clear local references now that heldLocks owns these locks. The finally
-            // block on the outer try will release everything in heldLocks.
-            releaseBookLock = undefined;
-            releaseChapterMutex = undefined;
-
             const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(
               bookId,
               singleChapter,
             );
 
-            // Convert all locations to UsfmVerseRefVerseLocations within the lock
+            // Check again after the async fetch - another task may have errored while we were waiting
+            if (firstError) return;
+
+            // Convert all locations to UsfmVerseRefVerseLocations
             const convertedRanges = await Promise.all(
               rangeInfos.map(async ({ originalIndex, range }) => {
                 const [startLocation, endLocation] = await Promise.all([
@@ -432,6 +373,9 @@ export class ScriptureFinderProjectDataProviderEngine
                 return { originalIndex, startLocation, endLocation };
               }),
             );
+
+            // Check again after the async range conversion - another task may have errored
+            if (firstError) return;
 
             // Filter no-op ranges: same start/end position with a falsy replacement string
             const activeRanges = convertedRanges.filter(
@@ -487,20 +431,15 @@ export class ScriptureFinderProjectDataProviderEngine
           } catch (e) {
             // Signal other tasks to bail out early
             firstError ??= e;
-            // Release any locally-held locks that weren't yet pushed to heldLocks
-            // (e.g., if acquireRead succeeded but acquire threw)
-            releaseChapterMutex?.();
-            releaseBookLock?.();
             throw e;
           }
         }),
       );
 
       // Re-throw the first error from Phase 1 (if any) now that all tasks have settled
-      // and their locks are accounted for
       if (firstError) throw firstError;
 
-      // Phase 2: Execute all USFM writes together while locks are still held
+      // Phase 2: Execute all USFM writes together
       await Promise.all(
         pendingWrites.map(async ({ bookId, singleChapter, modifiedUsfm }) => {
           if (singleChapter !== undefined) {
@@ -517,7 +456,8 @@ export class ScriptureFinderProjectDataProviderEngine
         }),
       );
 
-      // Phase 3: Invalidate caches for all modified books/chapters
+      // Phase 3: Invalidate caches for all modified books/chapters so subsequent
+      // replace operations get fresh USX data
       pendingWrites.forEach(({ bookId, singleChapter }) => {
         if (singleChapter !== undefined) {
           this.#invalidateCachesForChapter(bookId, singleChapter);
@@ -525,13 +465,7 @@ export class ScriptureFinderProjectDataProviderEngine
           this.#invalidateCachesForBook(bookId);
         }
       });
-    } finally {
-      // Phase 4: Release all locks (always, even if writes fail)
-      heldLocks.forEach(({ releaseBookLock, releaseChapterMutex }) => {
-        releaseChapterMutex?.();
-        releaseBookLock();
-      });
-    }
+    });
   }
 
   /**
@@ -555,9 +489,6 @@ export class ScriptureFinderProjectDataProviderEngine
     // Clear caches
     this.#bookCache.clear();
     this.#chapterCache.clear();
-
-    // Dispose read-write locks to reject any pending waiters
-    this.#bookRWLockMap.dispose();
 
     return unsubscriberList.runAllUnsubscribers();
   }
