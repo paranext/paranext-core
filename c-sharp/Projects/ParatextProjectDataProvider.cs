@@ -198,21 +198,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
         // Filter by status
-        if (!string.IsNullOrEmpty(selector.Status))
+        if (selector.Status != Enum<NoteStatus>.Null)
         {
-            // Convert from frontend CommentStatus format (e.g., "Todo") to internal NoteStatus format (e.g., "todo")
-            string noteStatus = JsonConverterUtils.ConvertCommentStatusToNoteStatus(
-                selector.Status
-            );
-            var status = new Enum<NoteStatus>(noteStatus);
-            filteredThreads = filteredThreads.Where(t => t.Status == status);
+            filteredThreads = filteredThreads.Where(t => t.Status == selector.Status);
         }
 
         // Filter by type
-        if (!string.IsNullOrEmpty(selector.Type))
+        if (selector.Type != null)
         {
-            var type = new Enum<NoteType>(selector.Type);
-            filteredThreads = filteredThreads.Where(t => t.Type == type);
+            filteredThreads = filteredThreads.Where(t => t.Type == selector.Type);
         }
 
         // Filter by user (who created comments in the thread)

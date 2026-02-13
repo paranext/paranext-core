@@ -5403,8 +5403,12 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 }
 /** Possible status of a comment/note as defined in Paratext 9 */
 export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
-/** Possible types of comment/note as defined in Paratext 9 */
-export type CommentType = "Unspecified" | "Normal" | "Conflict";
+/**
+ * Possible types of comment/note as defined in Paratext 9. P9 also defines a "Unspecified" type,
+ * which used to be used for filtering. It now gets treating the same as Normal, so we don't need to
+ * include it here.
+ */
+export type CommentType = "Normal" | "Conflict";
 /**
  * Represents a single comment/note in a scripture text
  *

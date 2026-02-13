@@ -50,12 +50,10 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
         JsonSerializer.Serialize(writer, value.Comments, options);
 
         // Status and Type - convert NoteStatus to CommentStatus for frontend
-        string noteStatusValue = value.Status.ToString();
-        string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(noteStatusValue);
+        string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(value.Status);
         writer.WriteString(STATUS, threadStatus);
 
-        string noteTypeValue = value.Type.ToString();
-        string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(noteTypeValue);
+        string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(value.Type);
         writer.WriteString(TYPE, commentTypeValue);
 
         writer.WriteBoolean(IS_SPELLING_NOTE, value.IsSpellingNote);

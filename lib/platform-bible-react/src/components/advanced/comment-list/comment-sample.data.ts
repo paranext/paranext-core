@@ -69,7 +69,7 @@ export const sampleComments: LegacyCommentThread[] = [
       },
     ],
     status: 'Todo',
-    type: 'Unspecified',
+    type: 'Normal',
     isSpellingNote: false,
     isBTNote: false,
     isConsultantNote: false,

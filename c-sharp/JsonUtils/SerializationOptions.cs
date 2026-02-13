@@ -21,6 +21,7 @@ internal static class SerializationOptions
                 WriteIndented = false, // No need to waste bytes with nice formatting
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
+        options.Converters.Add(new CommentThreadSelectorConverter());
         options.Converters.Add(new PlatformCommentConverter());
         options.Converters.Add(new PlatformCommentThreadConverter());
         options.Converters.Add(new ConcurrentHashSetConverter<string>());
