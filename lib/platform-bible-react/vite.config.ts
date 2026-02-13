@@ -25,6 +25,11 @@ const config = defineConfig({
       insertAt: 'after-all',
     }),
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
   build: {
     sourcemap: true,
     lib: {
