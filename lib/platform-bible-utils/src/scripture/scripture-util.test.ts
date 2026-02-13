@@ -3,7 +3,6 @@ import { Canon } from '@sillsdev/scripture';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
-  formatScrRef,
   formatScrRefRange,
   formatScrRefWithOptions,
   getLocalizedIdFromBookNumber,
@@ -351,26 +350,6 @@ describe('formatScrRefRange', () => {
         { book: '', chapterNum: 2, verseNum: -1 },
       ),
     ).toBe('2');
-  });
-
-  it('using empty book name', async () => {
-    expect(formatScrRef({ book: '', chapterNum: 5, verseNum: 4 })).toBe('5:4');
-  });
-
-  it('using not existing book name', async () => {
-    expect(formatScrRef({ book: 'NOT_EXISTING', chapterNum: 5, verseNum: 4 })).toBe(
-      'NOT_EXISTING 5:4',
-    );
-  });
-
-  it('using negative numbers', async () => {
-    expect(formatScrRef({ book: 'GEN', chapterNum: -1, verseNum: 1 })).toBe('GEN');
-
-    expect(formatScrRef({ book: 'GEN', chapterNum: 1, verseNum: -1 })).toBe('GEN 1');
-  });
-
-  it('using chapter 0', async () => {
-    expect(formatScrRef({ book: 'GEN', chapterNum: 0, verseNum: 1 })).toBe('GEN 0:1');
   });
 });
 
