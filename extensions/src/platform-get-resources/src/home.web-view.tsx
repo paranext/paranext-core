@@ -13,6 +13,7 @@ import {
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
+import { ProjectTypeKey } from './types/project-type';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -220,12 +221,45 @@ globalThis.webViewComponent = function HomeWebView() {
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
           const pdp = await papi.projectDataProviders.get('platform.base', data.id);
+          const isEditable = await pdp.getSetting('platform.isEditable');
+          const isResource = await pdp.getSetting('platform.isResource');
+          const name = await pdp.getSetting('platform.name');
+          const fullName = await pdp.getSetting('platform.fullName');
+
+          // Determine project type based on Paratext metadata
+          let type: ProjectTypeKey;
+          if (isResource) {
+            // It's a Paratext resource - check if it's a dictionary or media resource
+            const lowerName = name.toLowerCase();
+            const lowerFullName = fullName.toLowerCase();
+
+            if (lowerName.includes('dictionary') || lowerFullName.includes('dictionary')) {
+              type = 'dictionary';
+            } else if (
+              lowerName.includes('video') ||
+              lowerName.includes('audio') ||
+              lowerName.includes('film') ||
+              lowerFullName.includes('media')
+            ) {
+              type = 'media';
+            } else {
+              type = 'resource';
+            }
+          } else if (isEditable) {
+            type = 'project';
+          } else {
+            // Non-resource, non-editable (e.g., archived or read-only projects)
+            // Treat as resources for filtering purposes
+            type = 'resource';
+          }
+
           return {
             projectId: data.id,
-            isEditable: await pdp.getSetting('platform.isEditable'),
-            fullName: await pdp.getSetting('platform.fullName'),
-            name: await pdp.getSetting('platform.name'),
+            isEditable,
+            fullName,
+            name,
             language: await pdp.getSetting('platform.language'),
+            type,
           };
         }),
       );

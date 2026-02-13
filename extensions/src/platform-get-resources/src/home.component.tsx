@@ -19,9 +19,14 @@ import {
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan } from 'platform-bible-utils';
-import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
+import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
+import { LocalProjectInfo, MergedProjectInfo } from './types/project-type';
+import { ProjectTypes } from './types/project-types';
+import ProjectResourceFilter, {
+  ProjectResourceFilterValue,
+} from './projectResourceFilter.component';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -31,7 +36,9 @@ import { HomeItemDropdownMenu } from './home-item-menu';
 export const HOME_STRING_KEYS = Object.freeze([
   '%resources_action%',
   '%resources_activity%',
+  '%resources_clearFilters%',
   '%resources_clearSearch%',
+  '%resources_filter_all%',
   '%resources_filterInput%',
   '%resources_shortNameText%',
   '%resources_fullName%',
@@ -44,9 +51,14 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
+  '%resources_noTypeFound%',
   '%resources_open%',
   '%resources_searchedFor%',
   '%resources_sync%',
+  '%resources_type_projects%',
+  '%resources_type_resources%',
+  '%resources_type_dictionaries%',
+  '%resources_type_media%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -57,26 +69,6 @@ type HomeLocalizedStrings = {
 export type SortConfig = {
   key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
-};
-
-export type LocalProjectInfo = {
-  projectId: string;
-  isEditable: boolean;
-  fullName: string;
-  name: string;
-  language: string;
-};
-
-export type MergedProjectInfo = {
-  projectId: string;
-  name: string;
-  fullName: string;
-  language: string;
-  isEditable: boolean;
-  isSendReceivable: boolean;
-  isLocallyAvailable?: boolean;
-  editedStatus?: EditedStatus;
-  lastSendReceiveDate?: string;
 };
 
 export type HomeProps = {
@@ -176,7 +168,9 @@ export function Home({
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
+  const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
+  const filterAllText: string = getLocalizedString('%resources_filter_all%');
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
   const shortNameText: string = getLocalizedString('%resources_shortNameText%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
@@ -191,9 +185,14 @@ export function Home({
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
+  const noTypeFoundText: string = getLocalizedString('%resources_noTypeFound%');
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
+  const typeProjectsText: string = getLocalizedString('%resources_type_projects%');
+  const typeResourcesText: string = getLocalizedString('%resources_type_resources%');
+  const typeDictionariesText: string = getLocalizedString('%resources_type_dictionaries%');
+  const typeMediaText: string = getLocalizedString('%resources_type_media%');
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -209,6 +208,7 @@ export function Home({
           isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
+          type: 'project', // Shared projects are always editable projects
         });
       });
     }
@@ -224,6 +224,7 @@ export function Home({
           isEditable: project.isEditable,
           isSendReceivable: false,
           isLocallyAvailable: true,
+          type: project.type,
         });
       }
     });
@@ -238,14 +239,45 @@ export function Home({
     direction: 'ascending',
   });
 
+  const [projectResourceFilter, setProjectResourceFilter] =
+    useState<ProjectResourceFilterValue>('all');
+
+  // Create localized project types
+  const localizedProjectTypes = useMemo(() => {
+    return Object.values(ProjectTypes).map((type) => {
+      let localizedName = type.localizedName;
+      switch (type.key) {
+        case 'project':
+          localizedName = typeProjectsText;
+          break;
+        case 'resource':
+          localizedName = typeResourcesText;
+          break;
+        case 'dictionary':
+          localizedName = typeDictionariesText;
+          break;
+        case 'media':
+          localizedName = typeMediaText;
+          break;
+        default:
+          break;
+      }
+      return { ...type, localizedName };
+    });
+  }, [typeProjectsText, typeResourcesText, typeDictionariesText, typeMediaText]);
+
   const filteredAndSortedProjects = useMemo(() => {
     if (!mergedProjectInfo) return [];
     const textFilteredProjects = mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
+      const showInTypeFilter =
+        projectResourceFilter === 'all' || projectResourceFilter === project.type;
+
       return (
-        project.fullName.toLowerCase().includes(filter) ||
-        project.name.toLowerCase().includes(filter) ||
-        project.language.toLowerCase().includes(filter)
+        showInTypeFilter &&
+        (project.fullName.toLowerCase().includes(filter) ||
+          project.name.toLowerCase().includes(filter) ||
+          project.language.toLowerCase().includes(filter))
       );
     });
 
@@ -293,7 +325,7 @@ export function Home({
           return 0;
       }
     });
-  }, [mergedProjectInfo, textFilter, sortConfig]);
+  }, [mergedProjectInfo, textFilter, sortConfig, projectResourceFilter]);
 
   const handleSort = (key: SortConfig['key']) => {
     const newSortConfig: SortConfig = { key, direction: 'ascending' };
@@ -374,7 +406,19 @@ export function Home({
             <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden max-[300px]:!tw-hidden">
               {headerContent}
             </div>
-            <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
+            <div className="tw-flex tw-gap-2 tw-items-center">
+              <SearchBar
+                value={textFilter}
+                onSearch={setTextFilter}
+                placeholder={filterInputText}
+              />
+              <ProjectResourceFilter
+                value={projectResourceFilter}
+                onChange={setProjectResourceFilter}
+                types={localizedProjectTypes}
+                localizedAllText={filterAllText}
+              />
+            </div>
           </div>
           {showGetResourcesButton && (
             <div className="tw-self-end">
@@ -410,18 +454,32 @@ export function Home({
               <div className="tw-flex-grow tw-h-full">
                 {filteredAndSortedProjects.length === 0 ? (
                   <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                    <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
-                    <Label className="tw-text-muted-foreground tw-font-normal">
-                      {`${searchedForText} "${textFilter}".`}
+                    <Label className="tw-text-muted-foreground">
+                      {textFilter
+                        ? noSearchResultsText
+                        : projectResourceFilter !== 'all'
+                          ? noTypeFoundText.replace(
+                              '{0}',
+                              localizedProjectTypes
+                                .find((type) => type.key === projectResourceFilter)
+                                ?.localizedName.toLowerCase() || '',
+                            )
+                          : noSearchResultsText}
                     </Label>
+                    {textFilter && (
+                      <Label className="tw-text-muted-foreground tw-font-normal">
+                        {`${searchedForText} "${textFilter}".`}
+                      </Label>
+                    )}
                     <div className="tw-flex tw-gap-1  tw-mt-4">
                       <Button
                         variant="ghost"
                         onClick={() => {
                           setTextFilter('');
+                          setProjectResourceFilter('all');
                         }}
                       >
-                        {clearSearchText}
+                        {projectResourceFilter !== 'all' ? clearFiltersText : clearSearchText}
                       </Button>
                       {showGetResourcesButton && (
                         <Button
@@ -476,11 +534,10 @@ export function Home({
                                 {project.editedStatus === 'edited' && (
                                   <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
                                 )}
-                                {project.isEditable ? (
-                                  <ScrollText className="tw-pr-0" size={18} />
-                                ) : (
-                                  <BookOpen className="tw-pr-0" size={18} />
-                                )}
+                                {(() => {
+                                  const Icon = ProjectTypes[project.type].icon;
+                                  return <Icon className="tw-h-4 tw-w-4" />;
+                                })()}
                               </div>
 
                               <div className="tw-whitespace-nowrap tw-cursor-default">

@@ -1,0 +1,58 @@
+import type { Meta, StoryObj } from '@storybook/react';
+
+import { ReactElement } from 'react';
+import { Ear, Earth, Rss } from 'lucide-react';
+import ProjectResourceFilter, {
+  ProjectResourceFilterProps,
+} from '../projectResourceFilter.component';
+import { ProjectType } from '../types/project-type';
+
+const types: ProjectType[] = [
+  {
+    key: 'project',
+    localizedName: 'Earth',
+    icon: Earth,
+    actions: [],
+  },
+  {
+    key: 'resource',
+    localizedName: 'Radio-signal',
+    icon: Rss,
+    actions: [],
+  },
+  {
+    key: 'dictionary',
+    localizedName: 'Audio',
+    icon: Ear,
+    actions: [],
+  },
+];
+
+function ProjectResourceFilterDecorator(
+  Story: (update?: { args: Partial<ProjectResourceFilterProps> }) => ReactElement,
+) {
+  return (
+    <Story
+      args={{
+        types,
+        onChange: () => {},
+        localizedAllText: 'All',
+      }}
+    />
+  );
+}
+
+const meta: Meta<typeof ProjectResourceFilter> = {
+  title: 'Bundled Extensions/platform-get-resources/ProjectResourceTypeFilter',
+  component: ProjectResourceFilter,
+  tags: ['autodocs'],
+  argTypes: {},
+  decorators: [ProjectResourceFilterDecorator],
+};
+export default meta;
+
+type Story = StoryObj<typeof ProjectResourceFilter>;
+
+export const Default: Story = {
+  args: {},
+};
