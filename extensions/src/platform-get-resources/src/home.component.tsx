@@ -27,28 +27,6 @@ import ProjectResourceFilter, {
   ProjectResourceFilterValue,
 } from './projectResourceFilter.component';
 
-export type LocalProjectInfo = {
-  projectId: string;
-  isEditable: boolean;
-  fullName: string;
-  name: string;
-  language: string;
-  isResource: boolean;
-};
-
-export type MergedProjectInfo = {
-  projectId: string;
-  name: string;
-  fullName: string;
-  language: string;
-  isEditable: boolean;
-  isSendReceivable: boolean;
-  isLocallyAvailable?: boolean;
-  editedStatus?: EditedStatus;
-  lastSendReceiveDate?: string;
-  isResource: boolean;
-};
-
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -76,13 +54,35 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_open%',
   '%resources_searchedFor%',
   '%resources_sync%',
-  '%resources_type_paratextProjects%',
-  '%resources_type_resources%',
+  '%resources_paratextProjects_label%',
+  '%resources_resources_label%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
 type HomeLocalizedStrings = {
   [localizedHomeKey in HomeLocalizedStringKey]?: LocalizedStringValue;
+};
+
+export type LocalProjectInfo = {
+  projectId: string;
+  isEditable: boolean;
+  fullName: string;
+  name: string;
+  language: string;
+  isResource: boolean;
+};
+
+export type MergedProjectInfo = {
+  projectId: string;
+  name: string;
+  fullName: string;
+  language: string;
+  isEditable: boolean;
+  isSendReceivable: boolean;
+  isLocallyAvailable?: boolean;
+  editedStatus?: EditedStatus;
+  lastSendReceiveDate?: string;
+  isResource: boolean;
 };
 
 export type SortConfig = {
@@ -208,8 +208,8 @@ export function Home({
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
-  const typeParatextProjectsText: string = getLocalizedString('%resources_type_paratextProjects%');
-  const typeResourcesText: string = getLocalizedString('%resources_type_resources%');
+  const paratextProjectsText: string = getLocalizedString('%resources_paratextProjects_label%');
+  const resourcesText: string = getLocalizedString('%resources_resources_label%');
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -261,10 +261,10 @@ export function Home({
 
   const filterOptions: FilterOption[] = useMemo(
     () => [
-      { key: 'paratextProject', label: typeParatextProjectsText, icon: ScrollText },
-      { key: 'resource', label: typeResourcesText, icon: BookOpen },
+      { key: 'paratextProject', label: paratextProjectsText, icon: ScrollText },
+      { key: 'resource', label: resourcesText, icon: BookOpen },
     ],
-    [typeParatextProjectsText, typeResourcesText],
+    [paratextProjectsText, resourcesText],
   );
 
   const filteredAndSortedProjects = useMemo(() => {
