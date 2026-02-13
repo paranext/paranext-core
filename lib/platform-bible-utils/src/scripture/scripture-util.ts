@@ -415,7 +415,7 @@ export function formatScrRef(
   chapterVerseSeparator?: string,
   bookChapterSeparator?: string,
 ): string {
-  return formatScrRefWithOptionalParts(scrRef, {
+  return formatScrRefWithOptions(scrRef, {
     optionOrLocalizedBookName,
     chapterVerseSeparator,
     bookChapterSeparator,
