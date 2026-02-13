@@ -23,8 +23,6 @@ export function formatTimeSpan(
   since: Date,
   to = new Date(),
 ) {
-  if (Number.isNaN(since.valueOf())) return '';
-
   const spanSeconds = Math.floor((since.getTime() - to.getTime()) / MILLISECONDS_PER_SECOND);
 
   const totalDays = Math.round(spanSeconds / SECONDS_PER_DAY);
