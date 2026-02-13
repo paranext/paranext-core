@@ -42,8 +42,8 @@ export function execInDevPackage(folder: string, cmd: string): void {
     ...process.env,
     // Allow volta to run pnpm commands
     VOLTA_FEATURE_PNPM: '1',
-    // Disable Nx Cloud telemetry since it is not configured and would cause warnings
-    NX_CLOUD_ACCESS_TOKEN: '',
+    // Disable Nx Cloud completely since it is not configured and would cause errors
+    NX_NO_CLOUD: 'true',
     // Disable npm registry authentication since it is not needed and would cause warnings
     NODE_AUTH_TOKEN: '',
   };
