@@ -1,6 +1,7 @@
 import './index.css';
 
 // Components and Types
+// advanced
 export { default as BookChapterControl } from './components/advanced/book-chapter-control/book-chapter-control.component';
 export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export {
@@ -148,6 +149,7 @@ export {
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
 
+// basics
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export { default as Checklist } from './components/basics/checklist.component';
@@ -162,6 +164,10 @@ export type {
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
+export { default as LinkedScrRefDisplay } from './components/basics/linked-scr-ref-display.component';
+export type { LinkedScrRefDisplayProps } from './components/basics/linked-scr-ref-display.component';
+export { getLocalizedBookName } from 'platform-bible-utils';
+export type { LocalizedBookNames } from 'platform-bible-utils';
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
@@ -169,6 +175,14 @@ export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
+export {
+  VerticalTabs,
+  VerticalTabsList,
+  VerticalTabsContent,
+  VerticalTabsTrigger,
+} from './components/basics/tabs-vertical';
+
+// shadcn
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
 export { Avatar, AvatarFallback, AvatarImage } from './components/shadcn-ui/avatar';
 export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
@@ -208,12 +222,6 @@ export { Slider } from './components/shadcn-ui/slider';
 export { Switch } from './components/shadcn-ui/switch';
 export * from './components/shadcn-ui/table';
 export { Tabs, TabsList, TabsContent, TabsTrigger } from './components/shadcn-ui/tabs';
-export {
-  VerticalTabs,
-  VerticalTabsList,
-  VerticalTabsContent,
-  VerticalTabsTrigger,
-} from './components/basics/tabs-vertical';
 export { Textarea } from './components/shadcn-ui/textarea';
 export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-group';
 export {

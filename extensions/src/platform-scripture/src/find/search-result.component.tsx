@@ -1,7 +1,13 @@
 import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
-import { DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import {
+  DropdownMenuItem,
+  getLocalizedBookName,
+  LinkedScrRefDisplayProps,
+  ResultsCard,
+} from 'platform-bible-react';
+import {
+  collapseMiddleWords,
   getErrorMessage,
   LocalizedStringValue,
   LocalizeKey,
@@ -38,6 +44,8 @@ interface SearchResultProps {
   localizedBookData: Map<string, { localizedId: string }>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when the user double clicks on this search result */
+  onResultDoubleClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
   localizedStrings: {
@@ -76,6 +84,7 @@ export default function SearchResult({
   usjReaderWriter,
   localizedBookData,
   onResultClick,
+  onResultDoubleClick,
   onHideResult,
   localizedStrings,
 }: SearchResultProps) {
@@ -184,15 +193,23 @@ export default function SearchResult({
     </>
   );
 
-  const cardContent = (
-    <div className="tw-text-xs tw-font-medium">
-      {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-        searchResult.start.verseRef.book}{' '}
-      {searchResult.start.verseRef.chapterNum}:
-      {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-      <span className="scripture-font">{searchResult.text ?? ''}</span>
-    </div>
-  );
+  const linkedScrRef: LinkedScrRefDisplayProps = useMemo(() => {
+    return {
+      startRef: searchResult.start.verseRef,
+      endRef: searchResult.end.verseRef,
+      scriptureTextPart: collapseMiddleWords(searchResult.text, 7),
+      scrRefFormattingOptions: {
+        optionOrLocalizedBookName: getLocalizedBookName(
+          searchResult.start.verseRef,
+          localizedBookData,
+        ),
+        endRefOptionOrLocalizedBookName: getLocalizedBookName(
+          searchResult.end.verseRef,
+          localizedBookData,
+        ),
+      },
+    };
+  }, [searchResult, localizedBookData]);
 
   const additionalSelectedContent = (
     <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
@@ -205,16 +222,18 @@ export default function SearchResult({
       cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
         searchResult.start.verseRef.verseNum
       }${searchResult.text}${globalResultsIndex}`}
+      linkedScrRef={linkedScrRef}
       isHidden={searchResult.isHidden}
       isSelected={isSelected}
       onSelect={() => {
         setShouldGetVerseText(true);
         onResultClick(searchResult, globalResultsIndex);
       }}
+      onDoubleClick={() => {
+        onResultDoubleClick(searchResult, globalResultsIndex);
+      }}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
-    >
-      {cardContent}
-    </ResultsCard>
+    />
   );
 }
