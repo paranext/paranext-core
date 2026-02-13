@@ -2,7 +2,7 @@ import React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
 import { cn } from '@/utils/shadcn-ui.util';
-import { ButtonProps, buttonVariants } from './button';
+import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 
 /** @inheritdoc Tooltip */
 const TooltipProvider = TooltipPrimitive.Provider;

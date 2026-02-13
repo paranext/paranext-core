@@ -139,7 +139,6 @@ export function DataTable<TData, TValue>({
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
                 return (
-                  /* CUSTOM: tw-p-0, let consumers define padding on their own */
                   <TableHead key={header.id} className="tw-p-0">
                     {header.isPlaceholder
                       ? undefined
