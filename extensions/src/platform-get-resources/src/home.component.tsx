@@ -25,7 +25,7 @@ import { HomeItemDropdownMenu } from './home-item-menu';
 import ProjectResourceFilter, {
   FilterOption,
   ProjectResourceFilterValue,
-} from './projectResourceFilter.component';
+} from './project-resource-filter.component';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this

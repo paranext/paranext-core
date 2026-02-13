@@ -56,6 +56,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Resource 1',
     name: 'Res1',
     language: 'myLanguage',
+    isResource: true,
   },
   {
     projectId: '2',
@@ -63,6 +64,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Resource 2',
     name: 'Res2',
     language: 'English',
+    isResource: true,
   },
   {
     projectId: '13',
@@ -70,6 +72,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Project 4 - editable',
     name: 'Pr4',
     language: '2ndLanguage',
+    isResource: false,
   },
   {
     projectId: '14',
@@ -78,6 +81,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
     language: '2ndLanguage',
+    isResource: false,
   },
   {
     projectId: '25',
@@ -85,6 +89,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Project 5 - editable',
     name: 'Pr5',
     language: 'German',
+    isResource: false,
   },
   {
     projectId: '26',
@@ -92,6 +97,7 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'SDBH/SDBG',
     name: 'SdDict',
     language: 'Hebrew/Greek',
+    isResource: true,
   },
 ];
 
@@ -154,6 +160,26 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
             '%resources_sync%': 'Sync',
             '%resources_get%': 'Get',
             '%resources_shortNameText%': 'Name',
+            '%resources_filter_all%': 'All',
+            '%resources_paratextProjects_label%': 'Paratext Projects',
+            '%resources_resources_label%': 'Resources',
+            '%resources_noItemsFound%': 'No {0} found.',
+            '%resources_items%': 'items',
+            '%resources_language%': 'Language',
+            '%resources_filterInput%': 'Search by name, language',
+            '%resources_noSearchResults%': 'Nothing found.',
+            '%resources_noProjects%': 'Nothing here.',
+            '%resources_noProjectsInstruction%':
+              'To get started, ask a teammate to add you to a project, or get resources.',
+            '%resources_getStarted%': 'Get started',
+            '%resources_getStartedDescription%': 'Expecting more items?',
+            '%resources_getResources%': 'Get resources',
+            '%resources_searchedFor%': 'Searched for',
+            '%resources_clearSearch%': 'Clear Search',
+            '%resources_clearFilters%': 'Clear Filters',
+            '%resources_activity%': 'Activity',
+            '%resources_action%': 'Action',
+            '%resources_fullName%': 'Full Name',
           },
           false,
         ],
@@ -198,6 +224,7 @@ function OnlyWebProjectDecorator(Story: (update?: { args: HomeProps }) => ReactE
       fullName: 'The WEB project',
       name: 'WEB',
       language: 'myLanguage',
+      isResource: true,
     },
   ];
 
