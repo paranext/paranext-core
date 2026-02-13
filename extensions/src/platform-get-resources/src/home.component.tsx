@@ -19,14 +19,35 @@ import {
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan } from 'platform-bible-utils';
-import type { SharedProjectsInfo } from 'platform-scripture';
+import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
-import { LocalProjectInfo, MergedProjectInfo } from './types/project-type';
-import { ProjectTypes } from './types/project-types';
 import ProjectResourceFilter, {
+  FilterOption,
   ProjectResourceFilterValue,
 } from './projectResourceFilter.component';
+
+export type LocalProjectInfo = {
+  projectId: string;
+  isEditable: boolean;
+  fullName: string;
+  name: string;
+  language: string;
+  isResource: boolean;
+};
+
+export type MergedProjectInfo = {
+  projectId: string;
+  name: string;
+  fullName: string;
+  language: string;
+  isEditable: boolean;
+  isSendReceivable: boolean;
+  isLocallyAvailable?: boolean;
+  editedStatus?: EditedStatus;
+  lastSendReceiveDate?: string;
+  isResource: boolean;
+};
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -51,14 +72,12 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
-  '%resources_noTypeFound%',
+  '%resources_noItemsFound%',
   '%resources_open%',
   '%resources_searchedFor%',
   '%resources_sync%',
-  '%resources_type_projects%',
+  '%resources_type_paratextProjects%',
   '%resources_type_resources%',
-  '%resources_type_dictionaries%',
-  '%resources_type_media%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -185,14 +204,12 @@ export function Home({
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
-  const noTypeFoundText: string = getLocalizedString('%resources_noTypeFound%');
+  const noItemsFoundText: string = getLocalizedString('%resources_noItemsFound%');
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
-  const typeProjectsText: string = getLocalizedString('%resources_type_projects%');
+  const typeParatextProjectsText: string = getLocalizedString('%resources_type_paratextProjects%');
   const typeResourcesText: string = getLocalizedString('%resources_type_resources%');
-  const typeDictionariesText: string = getLocalizedString('%resources_type_dictionaries%');
-  const typeMediaText: string = getLocalizedString('%resources_type_media%');
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -208,7 +225,7 @@ export function Home({
           isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
-          type: 'project', // Shared projects are always editable projects
+          isResource: false, // Shared projects are always Paratext projects
         });
       });
     }
@@ -224,7 +241,7 @@ export function Home({
           isEditable: project.isEditable,
           isSendReceivable: false,
           isLocallyAvailable: true,
-          type: project.type,
+          isResource: project.isResource,
         });
       }
     });
@@ -242,39 +259,24 @@ export function Home({
   const [projectResourceFilter, setProjectResourceFilter] =
     useState<ProjectResourceFilterValue>('all');
 
-  // Create localized project types
-  const localizedProjectTypes = useMemo(() => {
-    return Object.values(ProjectTypes).map((type) => {
-      let localizedName = type.localizedName;
-      switch (type.key) {
-        case 'project':
-          localizedName = typeProjectsText;
-          break;
-        case 'resource':
-          localizedName = typeResourcesText;
-          break;
-        case 'dictionary':
-          localizedName = typeDictionariesText;
-          break;
-        case 'media':
-          localizedName = typeMediaText;
-          break;
-        default:
-          break;
-      }
-      return { ...type, localizedName };
-    });
-  }, [typeProjectsText, typeResourcesText, typeDictionariesText, typeMediaText]);
+  const filterOptions: FilterOption[] = useMemo(
+    () => [
+      { key: 'paratextProject', label: typeParatextProjectsText, icon: ScrollText },
+      { key: 'resource', label: typeResourcesText, icon: BookOpen },
+    ],
+    [typeParatextProjectsText, typeResourcesText],
+  );
 
   const filteredAndSortedProjects = useMemo(() => {
     if (!mergedProjectInfo) return [];
     const textFilteredProjects = mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
-      const showInTypeFilter =
-        projectResourceFilter === 'all' || projectResourceFilter === project.type;
+      const showInFilter =
+        projectResourceFilter === 'all' ||
+        (projectResourceFilter === 'resource') === project.isResource;
 
       return (
-        showInTypeFilter &&
+        showInFilter &&
         (project.fullName.toLowerCase().includes(filter) ||
           project.name.toLowerCase().includes(filter) ||
           project.language.toLowerCase().includes(filter))
@@ -415,7 +417,7 @@ export function Home({
               <ProjectResourceFilter
                 value={projectResourceFilter}
                 onChange={setProjectResourceFilter}
-                types={localizedProjectTypes}
+                options={filterOptions}
                 localizedAllText={filterAllText}
               />
             </div>
@@ -458,11 +460,11 @@ export function Home({
                       {textFilter
                         ? noSearchResultsText
                         : projectResourceFilter !== 'all'
-                          ? noTypeFoundText.replace(
+                          ? noItemsFoundText.replace(
                               '{0}',
-                              localizedProjectTypes
-                                .find((type) => type.key === projectResourceFilter)
-                                ?.localizedName.toLowerCase() || '',
+                              filterOptions
+                                .find((opt) => opt.key === projectResourceFilter)
+                                ?.label.toLowerCase() || '',
                             )
                           : noSearchResultsText}
                     </Label>
@@ -535,7 +537,7 @@ export function Home({
                                   <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
                                 )}
                                 {(() => {
-                                  const Icon = ProjectTypes[project.type].icon;
+                                  const Icon = project.isResource ? BookOpen : ScrollText;
                                   return <Icon className="tw-h-4 tw-w-4" />;
                                 })()}
                               </div>
