@@ -336,6 +336,11 @@ export declare class MutexMap {
 	 * @returns The Mutex associated with the provided ID
 	 */
 	get(mutexID: string): Mutex;
+	/**
+	 * Disposes of this MutexMap by canceling all pending operations on all mutexes and clearing the
+	 * map. After disposal, the MutexMap should not be used.
+	 */
+	dispose(): void;
 }
 export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
 	constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);

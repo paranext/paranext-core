@@ -74,6 +74,12 @@ export type ScriptureFinderOverlayPDPs = {
 /** The maximum number of results that can be returned in a single find job */
 export const SCRIPTURE_FIND_MAX_RESULTS_PER_JOB = 1000;
 
+/**
+ * Maximum number of retries when cache is invalidated during an operation. Used by both
+ * {@link #getOrCreateCachedReaderWriter} and {@link replace} to handle concurrent external changes.
+ */
+const MAX_CACHE_INVALIDATION_RETRIES = 3;
+
 // Internal type for tracking find jobs
 type FindJob = {
   jobId: string;
@@ -125,6 +131,9 @@ export class ScriptureFinderProjectDataProviderEngine
    * when the cache was cleared during an in-flight USX fetch.
    */
   #cacheVersion = 0;
+
+  /** Flag tracking whether this PDPE has been disposed */
+  #isDisposed = false;
 
   /**
    * Promise for the book USX subscription unsubscriber. Resolves to `undefined` if the subscription
@@ -333,138 +342,183 @@ export class ScriptureFinderProjectDataProviderEngine
         entry.chapters.add(endInfo.chapterNum);
       });
 
-      // Track pending writes so we can execute all USFM writes together at the end
-      const pendingWrites: Array<{
-        bookId: string;
-        singleChapter: number | undefined;
-        modifiedUsfm: string;
-      }> = [];
+      // Retry Phase 1 if the cache is invalidated during computation. Similar to the retry logic
+      // in #getOrCreateCachedReaderWriter, this handles race conditions where external changes
+      // occur while we're computing replacements.
+      // We intentionally await inside this loop to retry Phase 1 when needed. The loop is sequential
+      // by design.
+      /* eslint-disable no-await-in-loop */
+      for (let attempt = 0; attempt <= MAX_CACHE_INVALIDATION_RETRIES; attempt++) {
+        const versionBeforePhase1 = this.#cacheVersion;
 
-      // Shared early-exit signal: when one parallel book task errors, other tasks can
-      // check this and bail out early instead of proceeding with expensive work.
-      let firstError: unknown;
+        // Track pending writes so we can execute all USFM writes together at the end
+        const pendingWrites: Array<{
+          bookId: string;
+          singleChapter: number | undefined;
+          modifiedUsfm: string;
+        }> = [];
 
-      // Phase 1: Compute USFM modifications for each book in parallel.
-      // Use Promise.allSettled (not Promise.all) so that all tasks settle before we
-      // proceed, ensuring we can properly track and re-throw errors.
-      await Promise.allSettled(
-        [...rangesByBook.entries()].map(async ([bookId, { rangeInfos, chapters }]) => {
-          // Bail out early if another task already errored
-          if (firstError) return;
+        // Shared early-exit signal: when one parallel book task errors, other tasks can
+        // check this and bail out early instead of proceeding with expensive work.
+        let firstError: unknown;
 
-          const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
-
-          try {
-            const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(
-              bookId,
-              singleChapter,
-            );
-
-            // Check again after the async fetch - another task may have errored while we were waiting
+        // Phase 1: Compute USFM modifications for each book in parallel.
+        // Use Promise.allSettled (not Promise.all) so that all tasks settle before we
+        // proceed, ensuring we can properly track and re-throw errors.
+        await Promise.allSettled(
+          [...rangesByBook.entries()].map(async ([bookId, { rangeInfos, chapters }]) => {
+            // Bail out early if another task already errored
             if (firstError) return;
 
-            // Convert all locations to UsfmVerseRefVerseLocations
-            const convertedRanges = await Promise.all(
-              rangeInfos.map(async ({ originalIndex, range }) => {
-                const [startLocation, endLocation] = await Promise.all([
-                  this.#convertToUsfmVerseRefVerseLocation(range.start),
-                  this.#convertToUsfmVerseRefVerseLocation(range.end),
-                ]);
-                return { originalIndex, startLocation, endLocation };
-              }),
-            );
+            const singleChapter = chapters.size === 1 ? [...chapters][0] : undefined;
 
-            // Check again after the async range conversion - another task may have errored
-            if (firstError) return;
+            try {
+              const usjReaderWriter = await this.#getOrCreateCachedReaderWriter(
+                bookId,
+                singleChapter,
+              );
 
-            // Filter no-op ranges: same start/end position with a falsy replacement string
-            const activeRanges = convertedRanges.filter(
-              ({ originalIndex, startLocation, endLocation }) =>
-                replacements[originalIndex] ||
-                startLocation.verseRef.book !== endLocation.verseRef.book ||
-                startLocation.verseRef.chapterNum !== endLocation.verseRef.chapterNum ||
-                startLocation.verseRef.verseNum !== endLocation.verseRef.verseNum ||
-                (startLocation.offset ?? 0) !== (endLocation.offset ?? 0),
-            );
+              // Check again after the async fetch - another task may have errored while we were waiting
+              if (firstError) return;
 
-            if (activeRanges.length === 0) return;
+              // Convert all locations to UsfmVerseRefVerseLocations
+              const convertedRanges = await Promise.all(
+                rangeInfos.map(async ({ originalIndex, range }) => {
+                  const [startLocation, endLocation] = await Promise.all([
+                    this.#convertToUsfmVerseRefVerseLocation(range.start),
+                    this.#convertToUsfmVerseRefVerseLocation(range.end),
+                  ]);
+                  return { originalIndex, startLocation, endLocation };
+                }),
+              );
 
-            // Convert all ranges to USFM indices and sort in descending order
-            const rangesWithIndices = activeRanges
-              .map((rangeInfo) => ({
-                ...rangeInfo,
-                startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.startLocation),
-                endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
-              }))
-              .sort((a, b) => b.startIndex - a.startIndex);
+              // Check again after the async range conversion - another task may have errored
+              if (firstError) return;
 
-            // Validate that no ranges overlap. Since ranges are sorted descending by startIndex,
-            // an overlap exists when a range's startIndex is less than the next range's endIndex.
-            for (let i = 0; i < rangesWithIndices.length - 1; i++) {
-              const current = rangesWithIndices[i];
-              const next = rangesWithIndices[i + 1];
-              if (next.endIndex > current.startIndex) {
-                throw new Error(
-                  `Overlapping ranges detected in book ${bookId}: range at original index ` +
-                    `${next.originalIndex} (offsets ${next.startIndex}-${next.endIndex}) overlaps ` +
-                    `with range at original index ${current.originalIndex} (offsets ` +
-                    `${current.startIndex}-${current.endIndex}). All ranges must be non-overlapping.`,
-                );
+              // Filter no-op ranges: same start/end position with a falsy replacement string
+              const activeRanges = convertedRanges.filter(
+                ({ originalIndex, startLocation, endLocation }) =>
+                  replacements[originalIndex] ||
+                  startLocation.verseRef.book !== endLocation.verseRef.book ||
+                  startLocation.verseRef.chapterNum !== endLocation.verseRef.chapterNum ||
+                  startLocation.verseRef.verseNum !== endLocation.verseRef.verseNum ||
+                  (startLocation.offset ?? 0) !== (endLocation.offset ?? 0),
+              );
+
+              if (activeRanges.length === 0) return;
+
+              // Convert all ranges to USFM indices and sort in descending order
+              const rangesWithIndices = activeRanges
+                .map((rangeInfo) => ({
+                  ...rangeInfo,
+                  startIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(
+                    rangeInfo.startLocation,
+                  ),
+                  endIndex: usjReaderWriter.usfmVerseLocationToIndexInUsfm(rangeInfo.endLocation),
+                }))
+                .sort((a, b) => b.startIndex - a.startIndex);
+
+              // Validate that no ranges overlap. Since ranges are sorted descending by startIndex,
+              // an overlap exists when a range's startIndex is less than the next range's endIndex.
+              for (let i = 0; i < rangesWithIndices.length - 1; i++) {
+                const current = rangesWithIndices[i];
+                const next = rangesWithIndices[i + 1];
+                if (next.endIndex > current.startIndex) {
+                  throw new Error(
+                    `Overlapping ranges detected in book ${bookId}: range at original index ` +
+                      `${next.originalIndex} (offsets ${next.startIndex}-${next.endIndex}) overlaps ` +
+                      `with range at original index ${current.originalIndex} (offsets ` +
+                      `${current.startIndex}-${current.endIndex}). All ranges must be non-overlapping.`,
+                  );
+                }
               }
+
+              // Perform string replacements in reverse index order
+              let modifiedUsfm = usjReaderWriter.toUsfm();
+              const originalUsfm = modifiedUsfm;
+              rangesWithIndices.forEach((rangeWithIndex) => {
+                const replacement = replacements[rangeWithIndex.originalIndex];
+                modifiedUsfm =
+                  modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
+                  replacement +
+                  modifiedUsfm.substring(rangeWithIndex.endIndex);
+              });
+
+              // Collect the pending write if USFM was actually changed
+              if (modifiedUsfm !== originalUsfm) {
+                pendingWrites.push({ bookId, singleChapter, modifiedUsfm });
+              }
+            } catch (e) {
+              // Signal other tasks to bail out early
+              firstError ??= e;
+              throw e;
             }
+          }),
+        );
 
-            // Perform string replacements in reverse index order
-            let modifiedUsfm = usjReaderWriter.toUsfm();
-            const originalUsfm = modifiedUsfm;
-            rangesWithIndices.forEach((rangeWithIndex) => {
-              const replacement = replacements[rangeWithIndex.originalIndex];
-              modifiedUsfm =
-                modifiedUsfm.substring(0, rangeWithIndex.startIndex) +
-                replacement +
-                modifiedUsfm.substring(rangeWithIndex.endIndex);
-            });
+        // Re-throw the first error from Phase 1 (if any) now that all tasks have settled
+        if (firstError) throw firstError;
 
-            // Collect the pending write if USFM was actually changed
-            if (modifiedUsfm !== originalUsfm) {
-              pendingWrites.push({ bookId, singleChapter, modifiedUsfm });
-            }
-          } catch (e) {
-            // Signal other tasks to bail out early
-            firstError ??= e;
-            throw e;
-          }
-        }),
-      );
-
-      // Re-throw the first error from Phase 1 (if any) now that all tasks have settled
-      if (firstError) throw firstError;
-
-      // Phase 2: Execute all USFM writes together
-      await Promise.all(
-        pendingWrites.map(async ({ bookId, singleChapter, modifiedUsfm }) => {
-          if (singleChapter !== undefined) {
-            await this.#pdps['platformScripture.USFM_Chapter'].setChapterUSFM(
-              { book: bookId, chapterNum: singleChapter, verseNum: 0 },
-              modifiedUsfm,
-            );
-          } else {
-            await this.#pdps['platformScripture.USFM_Book'].setBookUSFM(
-              { book: bookId, chapterNum: 1, verseNum: 0 },
-              modifiedUsfm,
+        // Check if the cache was invalidated during Phase 1 (after computing replacements but
+        // before writing). If so, the computed modifications are based on stale data and would
+        // overwrite any external changes that occurred during Phase 1. Retry Phase 1 to get
+        // fresh data and re-compute the modifications.
+        if (this.#cacheVersion !== versionBeforePhase1) {
+          if (attempt === MAX_CACHE_INVALIDATION_RETRIES) {
+            throw new Error(
+              `Cache was invalidated ${MAX_CACHE_INVALIDATION_RETRIES + 1} times during replace operation. ` +
+                `The computed modifications are known to be out-of-date, but retrying ` +
+                'indefinitely could cause an infinite loop. Consider improving the retry strategy.',
             );
           }
-        }),
-      );
-
-      // Phase 3: Invalidate caches for all modified books/chapters so subsequent
-      // replace operations get fresh USX data
-      pendingWrites.forEach(({ bookId, singleChapter }) => {
-        if (singleChapter !== undefined) {
-          this.#invalidateCachesForChapter(bookId, singleChapter);
-        } else {
-          this.#invalidateCachesForBook(bookId);
+          // Retry Phase 1 with fresh data
+          // eslint-disable-next-line no-continue
+          continue;
         }
-      });
+        /* eslint-enable no-await-in-loop */
+
+        // Cache version is stable, proceed to Phase 2 and Phase 3
+
+        // Check if the PDPE was disposed before writing
+        if (this.#isDisposed) {
+          throw new Error(
+            'Cannot complete replace operation: Scripture Finder PDPE has been disposed',
+          );
+        }
+
+        // Phase 2: Execute all USFM writes together
+        await Promise.all(
+          pendingWrites.map(async ({ bookId, singleChapter, modifiedUsfm }) => {
+            if (singleChapter !== undefined) {
+              await this.#pdps['platformScripture.USFM_Chapter'].setChapterUSFM(
+                { book: bookId, chapterNum: singleChapter, verseNum: 0 },
+                modifiedUsfm,
+              );
+            } else {
+              await this.#pdps['platformScripture.USFM_Book'].setBookUSFM(
+                { book: bookId, chapterNum: 1, verseNum: 0 },
+                modifiedUsfm,
+              );
+            }
+          }),
+        );
+
+        // Phase 3: Invalidate caches for all modified books/chapters so subsequent
+        // replace operations get fresh USX data
+        pendingWrites.forEach(({ bookId, singleChapter }) => {
+          if (singleChapter !== undefined) {
+            this.#invalidateCachesForChapter(bookId, singleChapter);
+          } else {
+            this.#invalidateCachesForBook(bookId);
+          }
+        });
+
+        // Success - exit the retry loop
+        return;
+      }
+
+      // Unreachable: the loop always returns or throws, but TypeScript needs a return
+      throw new Error('Unexpected: retry loop exited without returning or throwing');
     });
   }
 
@@ -474,6 +528,9 @@ export class ScriptureFinderProjectDataProviderEngine
    * @returns `true` if successfully unsubscribed
    */
   async dispose(): Promise<boolean> {
+    // Mark as disposed to prevent new operations
+    this.#isDisposed = true;
+
     const unsubscriberList = new UnsubscriberAsyncList(
       'Scripture Finder PDP Engine Overlaid PDP Unsubscribers',
     );
@@ -489,6 +546,12 @@ export class ScriptureFinderProjectDataProviderEngine
     // Clear caches
     this.#bookCache.clear();
     this.#chapterCache.clear();
+
+    // Dispose of the mutex map to cancel any pending operations
+    this.#readerWriterMutexMap.dispose();
+
+    // Cancel the replace mutex to cancel any pending replace operations
+    this.#replaceMutex.cancel();
 
     return unsubscriberList.runAllUnsubscribers();
   }
@@ -645,11 +708,6 @@ export class ScriptureFinderProjectDataProviderEngine
     const isChapterLevel = chapter !== undefined;
     const cacheKey = isChapterLevel ? `${bookId}:${chapter}` : bookId;
 
-    // If the cache is invalidated while we're fetching USX, retry up to this many times.
-    // The retried USX is known to be out-of-date when the cache is cleared during the final
-    // retry, but retrying indefinitely could cause an infinite loop. We can improve later.
-    const MAX_RETRIES = 3;
-
     return this.#readerWriterMutexMap.get(cacheKey).runExclusive(async () => {
       const cache = isChapterLevel ? this.#chapterCache : this.#bookCache;
 
@@ -667,7 +725,7 @@ export class ScriptureFinderProjectDataProviderEngine
       // We intentionally await inside this loop to retry fetching USX when the cache is
       // invalidated during a fetch. The loop is sequential by design.
       /* eslint-disable no-await-in-loop */
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      for (let attempt = 0; attempt <= MAX_CACHE_INVALIDATION_RETRIES; attempt++) {
         const versionBeforeFetch = this.#cacheVersion;
 
         // Must ask USX PDPs for the data for now then transform to USJ ourselves instead of
@@ -685,9 +743,9 @@ export class ScriptureFinderProjectDataProviderEngine
         // The retried USX is known to be out-of-date when this happens on the final retry, but
         // retrying indefinitely could cause an infinite loop. We can improve later.
         if (this.#cacheVersion !== versionBeforeFetch) {
-          if (attempt === MAX_RETRIES)
+          if (attempt === MAX_CACHE_INVALIDATION_RETRIES)
             throw new Error(
-              `Cache was invalidated ${MAX_RETRIES + 1} times while fetching USX for ` +
+              `Cache was invalidated ${MAX_CACHE_INVALIDATION_RETRIES + 1} times while fetching USX for ` +
                 `${cacheKey}. The fetched data is known to be out-of-date, but retrying ` +
                 'indefinitely could cause an infinite loop. Consider improving the retry strategy.',
             );
