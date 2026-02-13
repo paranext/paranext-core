@@ -38,6 +38,9 @@ public sealed class ProjectSettingsNames
     public const string PB_NONREPEATABLE_WORDS = "platformScripture.nonRepeatableWords";
     public const string PT_NONREPEATABLE_WORDS = "NonRepeatableWords";
 
+    public const string PB_IS_RESOURCE = "platform.isResource";
+    public const string PT_IS_RESOURCE = "IsResource";
+
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
@@ -65,6 +68,7 @@ public sealed class ProjectSettingsNames
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
             { PB_REPEATABLE_WORDS, PT_REPEATABLE_WORDS },
             { PB_NONREPEATABLE_WORDS, PT_NONREPEATABLE_WORDS },
+            { PB_IS_RESOURCE, PT_IS_RESOURCE },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
