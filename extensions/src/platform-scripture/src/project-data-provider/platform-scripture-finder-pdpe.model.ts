@@ -474,7 +474,6 @@ export class ScriptureFinderProjectDataProviderEngine
           // eslint-disable-next-line no-continue
           continue;
         }
-        /* eslint-enable no-await-in-loop */
 
         // Cache version is stable, proceed to Phase 2 and Phase 3
 
@@ -514,6 +513,7 @@ export class ScriptureFinderProjectDataProviderEngine
 
         // Success - exit the retry loop
         return;
+        /* eslint-enable no-await-in-loop */
       }
 
       // Unreachable: the loop always returns or throws, but TypeScript needs a return
