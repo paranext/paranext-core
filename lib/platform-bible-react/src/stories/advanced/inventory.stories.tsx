@@ -262,30 +262,46 @@ const createMarkerColumns = (
 
 export const MarkersInventory: Story = {
   render: () => {
-    const markersItems: InventoryItem[] = [
+    const markersItems: InventorySummaryItem[] = [
       {
-        inventoryText: ['xt', 'p'],
-        verse: 'In the beginning God created the heavens and the earth.',
-        verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        offset: 7,
+        key: ['xt', 'p'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+            text: 'In the beginning God created the heavens and the earth.',
+          },
+        ],
       },
       {
-        inventoryText: ['f', 'v'],
-        verse: 'And God said, "Let there be light," and there was light.',
-        verseRef: { book: 'GEN', chapterNum: 1, verseNum: 3 },
-        offset: 4,
+        key: ['f', 'v'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 3 },
+            text: 'And God said, "Let there be light," and there was light.',
+          },
+        ],
       },
       {
-        inventoryText: ['toc2', 'c'],
-        verse: 'The LORD is good and upright; therefore he instructs sinners in his ways.',
-        verseRef: { book: 'PSA', chapterNum: 25, verseNum: 8 },
-        offset: 4,
+        key: ['toc2', 'c'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'PSA', chapterNum: 25, verseNum: 8 },
+            text: 'The LORD is good and upright; therefore he instructs sinners in his ways.',
+          },
+        ],
       },
       {
-        inventoryText: ['fig', 'p'],
-        verse: 'God blessed them and said to them, "Be fruitful and increase in number."',
-        verseRef: { book: 'GEN', chapterNum: 1, verseNum: 28 },
-        offset: 4,
+        key: ['fig', 'p'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 28 },
+            text: 'God blessed them and said to them, "Be fruitful and increase in number."',
+          },
+        ],
       },
     ];
 
