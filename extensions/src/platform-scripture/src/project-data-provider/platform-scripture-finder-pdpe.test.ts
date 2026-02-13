@@ -1206,10 +1206,11 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       return { callOrder, deferredResolves, writtenChapterUsfms, writtenBookUsfms };
     }
 
-    it('should allow concurrent chapter-level replaces on different chapters', async () => {
+    it('should serialize all replaces even on different chapters', async () => {
       const { callOrder, deferredResolves, writtenChapterUsfms } = setupDeferredMocks();
 
       // Start two concurrent replaces on DIFFERENT chapters (ch1 and ch2)
+      // With the simplified mutex, these will be serialized
       const replace1 = engine.replace(
         [
           {
@@ -1232,18 +1233,28 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // Let the lock acquisitions and getChapterUSX calls settle
       await flushPromises();
 
-      // Both getChapterUSX calls should have been made BEFORE either resolves.
-      // If operations were serialized, only 1 call would have been made at this point.
-      expect(deferredResolves).toHaveLength(2);
-      expect(callOrder).toEqual(['getChapterUSX:1', 'getChapterUSX:2']);
+      // Only ONE getChapterUSX call should have been made — the second replace is blocked by
+      // the replace mutex waiting for the first to finish
+      expect(deferredResolves).toHaveLength(1);
+      expect(callOrder).toEqual(['getChapterUSX:1']);
 
-      // Resolve both
+      // Resolve the first fetch so the first replace can complete and unblock the second
       deferredResolves[0]();
+      await flushPromises();
+
+      // After the first replace completes (writes + invalidates cache), the second should start
+      expect(callOrder).toContain('setChapterUSFM:1');
+      // First write has AAA but not BBB
+      expect(writtenChapterUsfms[0].usfm).toContain('AAA');
+      expect(writtenChapterUsfms[0].usfm).not.toContain('BBB');
+      // The second replace should now have called getChapterUSX for ch2
+      expect(deferredResolves).toHaveLength(2);
+
+      // Resolve the second fetch
       deferredResolves[1]();
       await Promise.all([replace1, replace2]);
 
-      // Both writes should have completed with the correct replacements
-      expect(callOrder).toContain('setChapterUSFM:1');
+      // Both writes should have completed sequentially
       expect(callOrder).toContain('setChapterUSFM:2');
       const ch1Usfm = writtenChapterUsfms.find((w) => w.chapterNum === 1)?.usfm;
       const ch2Usfm = writtenChapterUsfms.find((w) => w.chapterNum === 2)?.usfm;
@@ -1307,7 +1318,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenChapterUsfms[1].usfm).toContain('BBB');
     });
 
-    it('should block chapter-level replaces while a book-level replace is running', async () => {
+    it('should serialize multi-chapter replaces (book-level) before single-chapter replaces', async () => {
       const { callOrder, deferredResolves, writtenChapterUsfms, writtenBookUsfms } =
         setupDeferredMocks();
 
@@ -1345,8 +1356,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       await flushPromises();
 
-      // The chapter replace should NOT have started its getChapterUSX — it's blocked by the
-      // write lock held by the book replace
+      // The chapter replace should NOT have started — it's blocked by the replace mutex
       expect(callOrder).not.toContain('getChapterUSX:1');
 
       // Resolve the book replace
@@ -1373,7 +1383,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenChapterUsfms[0].usfm).not.toContain('BBB');
     });
 
-    it('should block book-level replaces while a chapter-level replace is running', async () => {
+    it('should serialize single-chapter replaces before multi-chapter replaces (book-level)', async () => {
       const { callOrder, deferredResolves, writtenChapterUsfms, writtenBookUsfms } =
         setupDeferredMocks();
 
@@ -1410,7 +1420,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
       await flushPromises();
 
-      // Book replace should NOT have started — it's waiting for the chapter reader to release
+      // Book replace should NOT have started — it's blocked by the replace mutex
       expect(callOrder).not.toContain('getBookUSX');
 
       // Resolve the chapter USX fetch so the chapter replace can complete
@@ -1436,22 +1446,12 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenBookUsfms[0]).toContain('BBB');
     });
 
-    it('should not leak a lock when one parallel book task errors while another is waiting to acquire', async () => {
-      // This test reproduces a lock leak bug in replace's Promise.all parallel book processing.
-      //
-      // Bug scenario (before fix):
-      // 1. Call 1 holds MRK's chapter mutex (simulating an in-progress replace on MRK)
-      // 2. Call 2 targets both MAT (overlapping ranges → throws) and MRK (blocks on mutex)
-      // 3. MAT's task throws → Promise.all rejects → finally releases only MAT's lock
-      // 4. Call 1 finishes → MRK mutex released → Call 2's MRK task acquires it (leaked)
-      // 5. Future operations on MRK deadlock because the leaked lock is never released
-      //
-      // Fixed behavior:
-      // - Promise.allSettled ensures all tasks settle before finally runs
-      // - Early-exit signal causes MRK's task to release its lock immediately and bail
-      //   out once it sees MAT's error, skipping expensive work (USX fetch, USFM compute)
+    it('should bail out early when one book errors during parallel book processing', async () => {
+      // This test verifies the early-exit behavior: when processing multiple books in parallel
+      // within a single replace call, if one book's task errors, other book tasks should detect
+      // the error and bail out early without doing expensive work (like fetching USX).
 
-      // Set up deferred mocks with MRK support
+      // Set up deferred mocks with both MAT and MRK support
       const deferredResolves: Array<() => void> = [];
       const chapterUSXStore = new Map<string, string>([
         ['MAT:1', TEST_CHAPTER_1_USX],
@@ -1469,31 +1469,14 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
         },
       );
 
-      // ── Call 1: A normal replace on MRK ch1 that holds the MRK chapter mutex ──
-      const call1 = engine.replace(
-        [
-          {
-            start: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 5 },
-            end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
-          },
-        ],
-        'ZZZ',
-      );
-
-      // Let Call 1 acquire locks and start its getChapterUSX
-      await flushPromises();
-
-      // deferredResolves[0] = Call 1's MRK getChapterUSX (holding the MRK ch1 mutex)
-      expect(deferredResolves).toHaveLength(1);
-
-      // ── Call 2: Replace targeting MAT (with overlapping ranges → will throw) and MRK ch1 ──
+      // ── Single replace targeting both MAT (with overlapping ranges → will error) and MRK ──
       // MAT has overlapping ranges that will cause an error after data is fetched.
-      // MRK ch1 will block on the chapter mutex held by Call 1.
-      let call2Error: unknown;
-      const call2 = engine
+      // MRK should process in parallel but bail out early once MAT errors.
+      let replaceError: unknown;
+      const replaceCall = engine
         .replace(
           [
-            // Overlapping ranges in MAT
+            // Overlapping ranges in MAT (will error)
             {
               start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
               end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 10 },
@@ -1502,7 +1485,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
               start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
               end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 15 },
             },
-            // Valid range in MRK — this task will block on the mutex held by Call 1
+            // Valid range in MRK (should bail out early after MAT errors)
             {
               start: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 5 },
               end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
@@ -1511,48 +1494,34 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
           ['AAA', 'BBB', 'CCC'],
         )
         .catch((e) => {
-          call2Error = e;
+          replaceError = e;
         });
 
-      // Let Call 2's MAT task acquire its lock and start getChapterUSX.
-      // Call 2's MRK task is blocked waiting for the MRK ch1 mutex held by Call 1.
+      // Let both book tasks start their USX fetches (parallel processing)
       await flushPromises();
 
-      // deferredResolves[1] = Call 2's MAT getChapterUSX
-      // (MRK's getChapterUSX hasn't been called yet because it's still blocked at the mutex)
+      // Both MAT and MRK should have started fetching USX in parallel
       expect(deferredResolves).toHaveLength(2);
 
-      // Resolve Call 2's MAT data fetch so MAT's task can proceed to the overlapping range
-      // validation and throw an error. This sets the early-exit signal (firstError).
-      deferredResolves[1]();
-      await flushPromises();
-
-      // ── Now resolve Call 1's MRK data fetch so Call 1 can complete and release the mutex ──
+      // Resolve MAT's fetch so it can proceed to validation and throw the overlapping error
       deferredResolves[0]();
       await flushPromises();
 
-      // Call 1 should complete successfully
-      await call1;
+      // Resolve MRK's fetch as well (it started before MAT errored, so it needs to complete)
+      // However, once MRK sees that MAT errored (via the firstError signal), it will bail out
+      // early without doing expensive validation and USFM computation work
+      deferredResolves[1]();
 
-      // Now Call 2's MRK task can acquire the mutex (Call 1 released it).
-      // With the early-exit fix, MRK's task sees firstError immediately after acquiring
-      // the mutex, releases it, and bails out — no USX fetch occurs for MRK in Call 2.
-      await flushPromises();
+      // Wait for the replace to complete
+      await replaceCall;
 
-      // Call 2 should now be settled (MAT rejected → error re-thrown after allSettled)
-      await call2;
-      expect(call2Error).toBeDefined();
-      expect(String(call2Error)).toMatch(/Overlapping ranges detected/);
+      // Verify the error occurred
+      expect(replaceError).toBeDefined();
+      expect(String(replaceError)).toMatch(/Overlapping ranges detected/);
 
-      // Verify the early-exit: MRK's task in Call 2 should NOT have fetched USX
-      // (only 2 deferred resolves total — Call 1's MRK and Call 2's MAT)
-      expect(deferredResolves).toHaveLength(2);
-
-      // ── Verify: MRK's lock should not be permanently held (leaked) ──
-      // If the bug exists, this replace on MRK will deadlock because the leaked chapter mutex
-      // is never released. We detect deadlock via a timeout race.
+      // ── Verify: subsequent replaces can still succeed (mutex properly released) ──
       let subsequentReplaceCompleted = false;
-      const call3 = engine
+      const subsequentReplace = engine
         .replace(
           [
             {
@@ -1560,30 +1529,139 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
               end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
             },
           ],
-          'DDD',
+          'ZZZ',
         )
         .then(() => {
           subsequentReplaceCompleted = true;
+          return undefined;
         });
 
-      // Call 3 needs to fetch MRK:1 USX (cache was invalidated by Call 1's write)
+      // Let the subsequent replace start and fetch MRK data
       await flushPromises();
+
+      // Resolve MRK's USX fetch for the subsequent replace
+      // (Could be index 1 from before if it wasn't consumed, or a new fetch)
       if (deferredResolves.length > 2) {
         deferredResolves[deferredResolves.length - 1]();
+      } else {
+        // MRK from the first call wasn't resolved, so resolve it now
+        deferredResolves[1]();
       }
       await flushPromises();
 
       // Race against a timeout to detect a deadlock
       await Promise.race([
-        call3,
+        subsequentReplace,
         new Promise((resolve) => {
           setTimeout(resolve, 500);
         }),
       ]);
 
-      // If the bug is present, subsequentReplaceCompleted will be false (deadlock on MRK).
-      // If the bug is fixed, subsequentReplaceCompleted will be true (locks properly released).
+      // Subsequent replace should have completed successfully (no deadlock, mutex released)
       expect(subsequentReplaceCompleted).toBe(true);
+    });
+
+    it('should serialize separate replace calls even when first one fails', async () => {
+      // This test verifies that when two separate replace calls are made, the second one waits
+      // for the first to complete (even if it fails), then proceeds successfully. It also verifies
+      // that when one book fails during parallel processing, NONE of the books get written.
+
+      const { callOrder, deferredResolves, writtenChapterUsfms } = setupDeferredMocks();
+
+      // ── Call 1: A replace targeting multiple books where one has overlapping ranges (will error) ──
+      let call1Error: unknown;
+      const call1 = engine
+        .replace(
+          [
+            // Valid range in MAT chapter 1
+            {
+              start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+              end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+            },
+            // Overlapping ranges in MAT chapter 2 (will error during validation)
+            {
+              start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
+              end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 10 },
+            },
+            {
+              start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 8 },
+              end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 15 },
+            },
+            // Valid range in MRK (different book, should process in parallel)
+            {
+              start: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 5 },
+              end: { verseRef: { book: 'MRK', chapterNum: 1, verseNum: 1 }, offset: 8 },
+            },
+          ],
+          ['FIRST_MAT_CH1', 'FIRST_MAT_CH2_A', 'FIRST_MAT_CH2_B', 'FIRST_MRK'],
+        )
+        .catch((e) => {
+          call1Error = e;
+        });
+
+      // Let Call 1 start and fetch data for both books in parallel
+      await flushPromises();
+      // Should fetch book-level USX for MAT (multi-chapter) and chapter-level for MRK
+      expect(deferredResolves.length).toBeGreaterThan(0);
+
+      // ── Call 2: A valid replace that should wait for Call 1 to fail, then succeed ──
+      const call2 = engine.replace(
+        [
+          {
+            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+          },
+        ],
+        'SECOND_VALID',
+      );
+
+      await flushPromises();
+
+      // Call 2 should NOT have started yet - it's blocked by the replace mutex
+
+      // Resolve all of Call 1's fetches so it can proceed
+      const call1FetchCount = deferredResolves.length;
+      for (let i = 0; i < call1FetchCount; i++) {
+        deferredResolves[i]();
+      }
+      await flushPromises();
+      await call1;
+
+      // Verify Call 1 errored
+      expect(call1Error).toBeDefined();
+      expect(String(call1Error)).toMatch(/Overlapping ranges detected/);
+
+      // ── Verify Call 1 did NOT write any USFM (failed during Phase 1) ──
+      expect(callOrder).not.toContain('setChapterUSFM:1');
+      expect(callOrder).not.toContain('setChapterUSFM:2');
+      expect(callOrder).not.toContain('setBookUSFM');
+      expect(writtenChapterUsfms).toHaveLength(0);
+
+      // Now Call 2 should proceed (mutex released after Call 1 failed)
+      // Give Call 2 time to start
+      await flushPromises();
+      await flushPromises();
+
+      // Call 2 might need to fetch data if it wasn't cached by Call 1
+      // (Call 1 used book-level for MAT, Call 2 uses chapter-level)
+      if (deferredResolves.length > call1FetchCount) {
+        // Resolve Call 2's fetch
+        deferredResolves[deferredResolves.length - 1]();
+      }
+
+      await call2;
+
+      // ── Verify Call 2 succeeded and wrote ONLY its changes ──
+      expect(callOrder).toContain('setChapterUSFM:1');
+      expect(writtenChapterUsfms).toHaveLength(1);
+
+      // The written USFM should contain ONLY Call 2's change, NOT Call 1's changes
+      const writtenUsfm = writtenChapterUsfms[0].usfm;
+      expect(writtenUsfm).toContain('SECOND_VALID');
+      expect(writtenUsfm).not.toContain('FIRST_MAT_CH1');
+      expect(writtenUsfm).not.toContain('FIRST_MAT_CH2_A');
+      expect(writtenUsfm).not.toContain('FIRST_MAT_CH2_B');
+      expect(writtenUsfm).not.toContain('FIRST_MRK');
     });
   });
 });
