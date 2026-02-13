@@ -19,6 +19,20 @@ export class MutexMap {
     this.mutexesByID.set(mutexID, retVal);
     return retVal;
   }
+
+  /**
+   * Disposes of this MutexMap by canceling all pending operations on all mutexes and clearing the
+   * map. After disposal, the MutexMap should not be used.
+   */
+  dispose(): void {
+    // Cancel all pending operations on all mutexes
+    this.mutexesByID.forEach((mutex) => {
+      mutex.cancel();
+    });
+
+    // Clear the map
+    this.mutexesByID.clear();
+  }
 }
 
 export default MutexMap;
