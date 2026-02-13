@@ -8,25 +8,31 @@ import {
   ToggleGroupItem,
 } from 'platform-bible-react';
 import { ChevronDown, Filter } from 'lucide-react';
-import { ProjectType, ProjectTypeKey } from './types/project-type';
+import { ComponentType, SVGProps } from 'react';
 
-export type ProjectResourceFilterValue = ProjectTypeKey | 'all';
+export type FilterOption = {
+  key: 'paratextProject' | 'resource';
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+};
+
+export type ProjectResourceFilterValue = FilterOption['key'] | 'all';
 export type ProjectResourceFilterProps = {
   value?: ProjectResourceFilterValue;
   onChange: (value: ProjectResourceFilterValue) => void;
-  types: ProjectType[];
+  options: FilterOption[];
   localizedAllText: string;
 };
 
 export default function ProjectResourceFilter({
   value = 'all',
   onChange,
-  types,
+  options,
   localizedAllText,
 }: ProjectResourceFilterProps) {
   const isFiltered = value !== 'all';
-  const selectedType = isFiltered ? types.find((type) => type.key === value) : null;
-  const Icon = selectedType ? selectedType.icon : Filter;
+  const selectedOption = isFiltered ? options.find((opt) => opt.key === value) : null;
+  const Icon = selectedOption ? selectedOption.icon : Filter;
 
   return (
     <DropdownMenu>
@@ -54,13 +60,13 @@ export default function ProjectResourceFilter({
               <span>{localizedAllText}</span>
             </div>
           </DropdownMenuRadioItem>
-          {types.map((type: ProjectType) => {
-            const TypeIcon = type.icon;
+          {options.map((option) => {
+            const OptionIcon = option.icon;
             return (
-              <DropdownMenuRadioItem value={type.key} key={type.key}>
+              <DropdownMenuRadioItem value={option.key} key={option.key}>
                 <div className="tw-flex tw-items-center tw-gap-2">
-                  <TypeIcon className="tw-h-4 tw-w-4" />
-                  <span>{type.localizedName}</span>
+                  <OptionIcon className="tw-h-4 tw-w-4" />
+                  <span>{option.label}</span>
                 </div>
               </DropdownMenuRadioItem>
             );

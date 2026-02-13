@@ -1,30 +1,22 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { ReactElement } from 'react';
-import { Ear, Earth, Rss } from 'lucide-react';
+import { BookOpen, ScrollText } from 'lucide-react';
 import ProjectResourceFilter, {
+  FilterOption,
   ProjectResourceFilterProps,
 } from '../projectResourceFilter.component';
-import { ProjectType } from '../types/project-type';
 
-const types: ProjectType[] = [
+const options: FilterOption[] = [
   {
-    key: 'project',
-    localizedName: 'Earth',
-    icon: Earth,
-    actions: [],
+    key: 'paratextProject',
+    label: 'Paratext Projects',
+    icon: ScrollText,
   },
   {
     key: 'resource',
-    localizedName: 'Radio-signal',
-    icon: Rss,
-    actions: [],
-  },
-  {
-    key: 'dictionary',
-    localizedName: 'Audio',
-    icon: Ear,
-    actions: [],
+    label: 'Resources',
+    icon: BookOpen,
   },
 ];
 
@@ -34,7 +26,7 @@ function ProjectResourceFilterDecorator(
   return (
     <Story
       args={{
-        types,
+        options,
         onChange: () => {},
         localizedAllText: 'All',
       }}
@@ -43,7 +35,7 @@ function ProjectResourceFilterDecorator(
 }
 
 const meta: Meta<typeof ProjectResourceFilter> = {
-  title: 'Bundled Extensions/platform-get-resources/ProjectResourceTypeFilter',
+  title: 'Bundled Extensions/platform-get-resources/ProjectResourceFilter',
   component: ProjectResourceFilter,
   tags: ['autodocs'],
   argTypes: {},
