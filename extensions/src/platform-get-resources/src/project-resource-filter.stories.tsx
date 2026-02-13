@@ -5,7 +5,7 @@ import { BookOpen, ScrollText } from 'lucide-react';
 import ProjectResourceFilter, {
   FilterOption,
   ProjectResourceFilterProps,
-} from '../projectResourceFilter.component';
+} from './project-resource-filter.component';
 
 const options: FilterOption[] = [
   {
