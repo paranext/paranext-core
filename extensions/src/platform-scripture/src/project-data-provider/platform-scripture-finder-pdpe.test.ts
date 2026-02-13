@@ -1120,6 +1120,172 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
     });
   });
 
+  describe('race condition with external changes', () => {
+    /** Flush all pending microtasks so lock acquisitions and async operations settle */
+    const flushPromises = () =>
+      new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+
+    /**
+     * Gets the subscribe callback captured by the mock `subscribeChapterUSX`. The constructor
+     * passes this callback when subscribing for chapter-level USX change notifications. Calling it
+     * simulates an incoming data-changed notification that triggers `#invalidateCaches()`.
+     */
+    function getCapturedChapterSubscribeCallback(): () => void {
+      const subscribeMock = vi.mocked(
+        mockPdps['platformScripture.USX_Chapter'].subscribeChapterUSX,
+      );
+      // The callback is the second argument passed to subscribeChapterUSX
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return subscribeMock.mock.calls[0][1] as () => void;
+    }
+
+    it('should not overwrite external changes that occur during replace operation', async () => {
+      // This test demonstrates the race condition:
+      // 1. Replace fetches cached data
+      // 2. External change occurs → cache invalidated
+      // 3. Replace continues with stale data
+      // 4. Replace writes based on stale data → overwrites external change
+
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let fetchCount = 0;
+      const deferredResolves: Array<() => void> = [];
+
+      // Track when the USX data changes externally. Use a same-length replacement to avoid
+      // shifting offsets (which would make the replace target the wrong location).
+      const ORIGINAL_USX = TEST_CHAPTER_1_USX;
+      // Replace "The " (4 chars) with "XXX " (4 chars) - same length, no offset shift
+      const EXTERNAL_CHANGE_USX = TEST_CHAPTER_1_USX.replace(
+        '<verse number="1" style="v" sid="MAT 1:1"/>The book',
+        '<verse number="1" style="v" sid="MAT 1:1"/>XXX book',
+      );
+
+      // Mock getChapterUSX with deferred promises so we can control timing
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(() => {
+        fetchCount += 1;
+        return new Promise<string>((resolve) => {
+          deferredResolves.push(() => {
+            if (fetchCount === 1) {
+              // First fetch returns original data
+              resolve(ORIGINAL_USX);
+            } else {
+              // Subsequent fetches return the externally modified data
+              resolve(EXTERNAL_CHANGE_USX);
+            }
+          });
+        });
+      });
+
+      // Start a replace operation that will replace "book" with "REPLACED"
+      const replacePromise = engine.replace(
+        [
+          {
+            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 9 },
+            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 13 },
+          },
+        ],
+        'REPLACED',
+      );
+
+      // Wait for Phase 1 to start and call getChapterUSX
+      await flushPromises();
+      expect(deferredResolves).toHaveLength(1);
+
+      // Simulate external change BEFORE resolving the first fetch
+      // This ensures the cache version changes while Phase 1 is still in progress
+      invalidateCache();
+
+      // Now resolve the first fetch - Phase 1 will continue with this data
+      deferredResolves[0]();
+
+      // Wait for Phase 1 to complete and detect the cache invalidation
+      await flushPromises();
+      await flushPromises();
+
+      // Phase 1 should have detected invalidation and started a retry
+      expect(deferredResolves).toHaveLength(2);
+
+      // Resolve the second fetch (retry with fresh data)
+      deferredResolves[1]();
+
+      // Complete the replace operation
+      await replacePromise;
+
+      // Get what was written
+      const writtenUsfm = getWrittenUsfm();
+
+      // Verify that the replace operation retried and fetched data twice
+      // (once initially, once after detecting cache invalidation)
+      expect(fetchCount).toBe(2);
+
+      // The test expects that:
+      // 1. The external change ("XXX") should be preserved
+      // 2. The replace operation's change ("REPLACED") should also be applied
+      // This requires the replace to detect the cache invalidation and re-fetch before writing.
+
+      // With the fix, the replace will:
+      // - Detect cache was invalidated during Phase 1
+      // - Retry Phase 1 with fresh data (containing "XXX")
+      // - Apply the replacement to the fresh data
+      // - Result: "XXX REPLACED" (both changes preserved)
+      expect(writtenUsfm).toContain('XXX');
+      expect(writtenUsfm).toContain('REPLACED');
+
+      // The written USFM should have both the external change and the replace change:
+      // "\v 1 XXX REPLACED of the genealogy..."
+      expect(writtenUsfm).toContain(String.raw`\v 1 XXX REPLACED`);
+    });
+
+    it('should throw if disposed before writing (Phase 2)', async () => {
+      // This test verifies that replace operations fail gracefully if the PDPE is disposed
+      // after Phase 1 (computation) but before Phase 2 (writing)
+
+      const deferredResolves: Array<() => void> = [];
+
+      // Mock getChapterUSX with deferred promises so we can control timing
+      vi.mocked(mockPdps['platformScripture.USX_Chapter'].getChapterUSX).mockImplementation(() => {
+        return new Promise<string>((resolve) => {
+          deferredResolves.push(() => {
+            resolve(TEST_CHAPTER_1_USX);
+          });
+        });
+      });
+
+      // Start a replace operation
+      const replacePromise = engine.replace(
+        [
+          {
+            start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 9 },
+            end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 13 },
+          },
+        ],
+        'REPLACED',
+      );
+
+      // Wait for Phase 1 to start and call getChapterUSX
+      await flushPromises();
+      expect(deferredResolves).toHaveLength(1);
+
+      // Dispose the engine BEFORE resolving the fetch
+      // This ensures #isDisposed = true is set before Phase 1 completes
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      engine.dispose();
+
+      // Now resolve the fetch - Phase 1 will complete and check isDisposed
+      deferredResolves[0]();
+
+      // The replace should fail with a disposal error
+      await expect(replacePromise).rejects.toThrow(
+        'Cannot complete replace operation: Scripture Finder PDPE has been disposed',
+      );
+
+      // Verify that no USFM was written (setChapterUSFM should not have been called)
+      expect(mockPdps['platformScripture.USFM_Chapter'].setChapterUSFM).not.toHaveBeenCalled();
+      expect(mockPdps['platformScripture.USFM_Book'].setBookUSFM).not.toHaveBeenCalled();
+    });
+  });
+
   describe('concurrency', () => {
     /** Flush all pending microtasks so lock acquisitions and async operations settle */
     const flushPromises = () =>
