@@ -3647,6 +3647,12 @@ declare module 'papi-shared-types' {
      */
     'platform.isEditable': boolean;
     /**
+     * Whether this is a resource project (as identified by Paratext). Resources are distinct from
+     * regular projects and cannot have settings changed. This property is read-only and reflects
+     * the IsResourceProject property from Paratext.
+     */
+    'platform.isResource': boolean;
+    /**
      * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
      * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
      * generally derived from the language definition for the project's language code. Note that
