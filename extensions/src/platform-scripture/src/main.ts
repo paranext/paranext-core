@@ -8,6 +8,10 @@ import {
 } from './checks-side-panel.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
+  CreateBooksWebViewProvider,
+  CREATE_BOOKS_WEB_VIEW_TYPE,
+} from './manage-books/create-books.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -240,6 +244,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
+  const createBooksWebViewProvider = new CreateBooksWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -418,6 +423,51 @@ export async function activate(context: ExecutionActivationContext) {
     findWebViewProvider,
   );
 
+  const createBooksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    CREATE_BOOKS_WEB_VIEW_TYPE,
+    createBooksWebViewProvider,
+  );
+
+  const openCreateBooksPromise = papi.commands.registerCommand(
+    'platformScripture.openCreateBooks',
+    async (webViewId: string | undefined): Promise<string | undefined> => {
+      let projectId: string | undefined;
+
+      if (webViewId) {
+        const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+        projectId = webViewDefinition?.projectId;
+      }
+
+      if (!projectId) {
+        return undefined;
+      }
+
+      return papi.webViews.openWebView(
+        CREATE_BOOKS_WEB_VIEW_TYPE,
+        { type: 'float', floatSize: { width: 500, height: 450 } },
+        { projectId },
+      );
+    },
+    {
+      method: {
+        summary: 'Open the Create Books dialog',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Create Books web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const invalidateResultsPromise = papi.commands.registerCommand(
     'platformScripture.invalidateCheckResults',
     async (details: CheckResultsInvalidated) => {
@@ -473,6 +523,8 @@ export async function activate(context: ExecutionActivationContext) {
     await showChecksSidePanelWebViewProviderPromise,
     await openFindPromise,
     await openFindWebViewProviderPromise,
+    await createBooksWebViewProviderPromise,
+    await openCreateBooksPromise,
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
