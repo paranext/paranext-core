@@ -415,6 +415,7 @@ global.webViewComponent = function FindWebView({
     scope,
     scrollGroupId,
     searchTerm,
+    searchTextType,
     selectedBookIds,
     shouldMatchCase,
     verseRefSetting,
