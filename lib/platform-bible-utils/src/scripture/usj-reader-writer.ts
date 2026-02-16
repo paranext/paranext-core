@@ -1518,7 +1518,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  search(regex: RegExp): UsjSearchResult[] {
+  search(regex: RegExp, includeOnlyMarkerTypes?: Set<string>): UsjSearchResult[] {
     const retVal: UsjSearchResult[] = [];
     if (this.usj.content.length === 0) return retVal;
 
@@ -1549,6 +1549,31 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // eslint-disable-next-line no-loop-func
         (node, workingStack) => {
           if (typeof node !== 'string') return false;
+
+          // If filtering by marker type, check if any ancestor marker is NOT in the allowed set
+          if (includeOnlyMarkerTypes) {
+            // Traverse the entire working stack to check all ancestors
+            // Check if any ancestor has a marker/style that's not in the verse text markers set
+            const hasExcludedAncestor = workingStack.some((stackItem) => {
+              const ancestor = stackItem.parent;
+              if (!ancestor) return false;
+
+              // Get the marker type from either 'style' or 'marker' property
+              let markerType: string | undefined;
+              if ('style' in ancestor && typeof ancestor.style === 'string') {
+                markerType = ancestor.style;
+              } else if ('marker' in ancestor && typeof ancestor.marker === 'string') {
+                markerType = ancestor.marker;
+              }
+
+              // If this ancestor has a marker type that's not in the allowed set, exclude this text
+              return markerType !== undefined && !includeOnlyMarkerTypes.has(markerType);
+            });
+
+            if (hasExcludedAncestor) {
+              return false; // Skip this text node - an ancestor marker is not in verse text markers
+            }
+          }
 
           textChunks.push(node);
           fullTextIndexMap.set(currentIndex, {

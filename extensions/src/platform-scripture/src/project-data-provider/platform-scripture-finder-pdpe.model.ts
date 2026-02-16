@@ -18,6 +18,7 @@ import {
   FindResult,
   FindScope,
 } from 'platform-scripture';
+import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
 
 // This interface doesn't provide any normal data types that PDPs use
@@ -202,7 +203,15 @@ export class ScriptureFinderProjectDataProviderEngine
     const regexString = job.options.useRegex
       ? job.options.searchString
       : escapeStringRegexp(job.options.searchString);
-    const matches = usj.search(new RegExp(regexString, job.options.caseInsensitive ? 'ig' : 'g'));
+
+    const includeOnlyMarkerTypes = job.options.verseTextOnly
+      ? USFM_VERSE_TEXT_MARKERS_SET
+      : undefined;
+
+    const matches = usj.search(
+      new RegExp(regexString, job.options.caseInsensitive ? 'ig' : 'g'),
+      includeOnlyMarkerTypes,
+    );
 
     return matches.map((match) => {
       return {
