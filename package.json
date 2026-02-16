@@ -104,6 +104,7 @@
     "typecheck:papi-dts": "cd lib/papi-dts && npm run typecheck",
     "typecheck:platform-bible-react": "cd lib/platform-bible-react && npm run typecheck",
     "typecheck:platform-bible-utils": "cd lib/platform-bible-utils && npm run typecheck",
+    "validate:utility-registry": "node .context/scripts/validate-utility-registry.mjs",
     "unlink-dev-packages": "ts-node .erb/scripts/unlink-dev-packages.ts",
     "utils:link": "yalc link @eten-tech-foundation/scripture-utilities --no-pure",
     "utils:unlink": "yalc remove @eten-tech-foundation/scripture-utilities && npm i --ignore-scripts"

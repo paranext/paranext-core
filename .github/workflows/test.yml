@@ -151,6 +151,10 @@ jobs:
           npm run build:main
           npm run typecheck
 
+      - name: Validate utility registry
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run validate:utility-registry
+
       - name: Build
         run: npm run build
 
