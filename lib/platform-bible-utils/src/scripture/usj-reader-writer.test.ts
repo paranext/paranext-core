@@ -1850,7 +1850,6 @@ describe('Find USJ details for text searches', () => {
       expect(jsonPath).not.toContain('"marker":"fe"');
     });
   });
-
 });
 
 describe('findAllNotes', () => {
