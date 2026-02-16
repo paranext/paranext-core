@@ -754,7 +754,7 @@ global.webViewComponent = function FindWebView({
                 <Label>{localizedStrings['%webView_find_matchContentIn%']}</Label>
                 <RadioGroup
                   value={searchTextType}
-                  onValueChange={(value) => setSearchTextType(value as 'all' | 'verseOnly')}
+                  onValueChange={(value: 'all' | 'verseOnly') => setSearchTextType(value)}
                 >
                   <div className="tw-flex tw-items-center tw-space-x-2">
                     <RadioGroupItem value="all" id="text-type-all" />
