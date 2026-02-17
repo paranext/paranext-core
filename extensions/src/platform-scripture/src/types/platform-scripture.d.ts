@@ -693,6 +693,11 @@ declare module 'platform-scripture' {
      * sensitive.
      */
     caseInsensitive?: boolean;
+    /**
+     * If true, search only in USFM markers with TextType VerseText. If false or undefined, search
+     * all text content including notes, figures, sidebars, tables, etc.
+     */
+    verseTextOnly?: boolean;
   };
 
   /** Represents a single result from a find operation. */

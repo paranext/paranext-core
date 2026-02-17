@@ -724,9 +724,13 @@ export interface IUsjReaderWriter {
    * Search for matches of a regular expression within this USJ's text data
    *
    * @param regex Regular expression to search for. Specify the global flag to find all matches.
+   * @param markerStylesToInclude Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include
+   *   in the search. When provided, only text within markers whose style is in this set will be
+   *   searched. Text inside markers not in this set (e.g., footnotes, cross-references) will be
+   *   excluded. When omitted, all text is searched.
    * @returns Array of `UsjSearchResult` objects that match the given regular expression
    */
-  search(regex: RegExp): UsjSearchResult[];
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
   /** Transforms the USJ document into USFM */
   toUsfm(): string;
   /**

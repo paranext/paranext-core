@@ -1518,7 +1518,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  search(regex: RegExp): UsjSearchResult[] {
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[] {
     const retVal: UsjSearchResult[] = [];
     if (this.usj.content.length === 0) return retVal;
 
@@ -1549,6 +1549,34 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // eslint-disable-next-line no-loop-func
         (node, workingStack) => {
           if (typeof node !== 'string') return false;
+
+          // If filtering by marker style, check if any para/note ancestor is NOT in the allowed set.
+          // Only check 'para' and 'note' type ancestors — 'char' type ancestors (e.g., \it, \bd,
+          // \sc) are inline formatting within verse text and should not affect filtering.
+          if (markerStylesToInclude) {
+            const hasExcludedAncestor = workingStack.some((stackItem) => {
+              const ancestor = stackItem.parent;
+              if (!ancestor || !('type' in ancestor)) return false;
+
+              // Skip char-type ancestors — they are inline formatting, not structural markers
+              if (ancestor.type === 'char') return false;
+
+              // Get the marker style from either 'style' or 'marker' property
+              let markerStyle: string | undefined;
+              if ('style' in ancestor && typeof ancestor.style === 'string') {
+                markerStyle = ancestor.style;
+              } else if ('marker' in ancestor && typeof ancestor.marker === 'string') {
+                markerStyle = ancestor.marker;
+              }
+
+              // If this ancestor has a style that's not in the allowed set, exclude this text
+              return markerStyle !== undefined && !markerStylesToInclude.has(markerStyle);
+            });
+
+            if (hasExcludedAncestor) {
+              return false; // Skip this text node - an ancestor's style is not in the allowed set
+            }
+          }
 
           textChunks.push(node);
           fullTextIndexMap.set(currentIndex, {

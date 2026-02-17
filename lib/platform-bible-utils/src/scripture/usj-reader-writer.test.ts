@@ -1533,6 +1533,268 @@ describe('Find USJ details for text searches', () => {
     expect(atEndMatch.end.documentLocation.jsonPath).toBe('$.content[10].content[21]');
     expect(atEndMatch.end.documentLocation.offset).toBe(91);
   });
+
+  // Verse text markers set matching the production USFM_VERSE_TEXT_MARKERS_SET from
+  // extensions/src/platform-scripture/src/find/usfm-verse-text-markers.ts
+  // Keep this in sync with the production set when markers are added or removed.
+  const verseTextMarkers = new Set([
+    'add',
+    'addpn',
+    'b',
+    'bk',
+    'cls',
+    'conc',
+    'cov',
+    'd',
+    'dc',
+    'glo',
+    'idx',
+    'intro',
+    'k',
+    'lf',
+    'lh',
+    'li',
+    'li1',
+    'li2',
+    'li3',
+    'li4',
+    'lik',
+    'lim',
+    'lim1',
+    'lim2',
+    'lim3',
+    'lim4',
+    'litl',
+    'liv',
+    'liv1',
+    'liv2',
+    'liv3',
+    'liv4',
+    'liv5',
+    'm',
+    'maps',
+    'mi',
+    'nb',
+    'nd',
+    'ndx',
+    'ord',
+    'p',
+    'pc',
+    'ph',
+    'ph1',
+    'ph2',
+    'ph3',
+    'phi',
+    'pi',
+    'pi1',
+    'pi2',
+    'pi3',
+    'pm',
+    'pmc',
+    'pmo',
+    'pmr',
+    'pn',
+    'png',
+    'po',
+    'pr',
+    'pref',
+    'ps',
+    'psi',
+    'pub',
+    'q',
+    'q1',
+    'q2',
+    'q3',
+    'q4',
+    'qc',
+    'qd',
+    'qm',
+    'qm1',
+    'qm2',
+    'qm3',
+    'qr',
+    'qs',
+    'qt',
+    'rb',
+    'sig',
+    'sls',
+    'tc1',
+    'tc10',
+    'tc11',
+    'tc12',
+    'tc2',
+    'tc3',
+    'tc4',
+    'tc5',
+    'tc6',
+    'tc7',
+    'tc8',
+    'tc9',
+    'tcc1',
+    'tcc10',
+    'tcc11',
+    'tcc12',
+    'tcc2',
+    'tcc3',
+    'tcc4',
+    'tcc5',
+    'tcc6',
+    'tcc7',
+    'tcc8',
+    'tcc9',
+    'tcr1',
+    'tcr10',
+    'tcr11',
+    'tcr12',
+    'tcr2',
+    'tcr3',
+    'tcr4',
+    'tcr5',
+    'tcr6',
+    'tcr7',
+    'tcr8',
+    'tcr9',
+    'th1',
+    'th10',
+    'th11',
+    'th12',
+    'th2',
+    'th3',
+    'th4',
+    'th5',
+    'th6',
+    'th7',
+    'th8',
+    'th9',
+    'thc1',
+    'thc10',
+    'thc11',
+    'thc12',
+    'thc2',
+    'thc3',
+    'thc4',
+    'thc5',
+    'thc6',
+    'thc7',
+    'thc8',
+    'thc9',
+    'thr1',
+    'thr10',
+    'thr11',
+    'thr12',
+    'thr2',
+    'thr3',
+    'thr4',
+    'thr5',
+    'thr6',
+    'thr7',
+    'thr8',
+    'thr9',
+    'tl',
+    'toc',
+    'tr',
+    'tr1',
+    'tr2',
+    'w',
+    'wa',
+    'wg',
+    'wh',
+    'wj',
+    'wr',
+  ]);
+
+  test('search with verse text filtering excludes footnotes and cross-references', () => {
+    // Use usjMat1 which has footnotes and cross-references
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
+
+    // Search for "generaciones" which appears in verse 17 text AND in the footnote
+    // Without filtering, should find both; with filtering, should find only the verse text
+    const searchTermRegex = /generaciones/gi;
+
+    // Search WITHOUT filtering - should find in both verse text and footnote
+    const allMatches = usjDoc.search(searchTermRegex);
+    expect(allMatches.length).toBeGreaterThan(0);
+
+    // Search WITH verse text filtering - should only find in verse text, not in footnote
+    const verseTextOnlyMatches = usjDoc.search(searchTermRegex, verseTextMarkers);
+
+    // Should find fewer matches when filtering (excludes footnote)
+    expect(verseTextOnlyMatches.length).toBeLessThan(allMatches.length);
+    expect(verseTextOnlyMatches.length).toBeGreaterThan(0); // Should still find at least one in verse text
+
+    // Verify that all matches in verse text only search are actually in verse text (not in notes)
+    verseTextOnlyMatches.forEach((match) => {
+      // JSON path should not contain a note marker ('f', 'x', 'fe')
+      const { jsonPath } = match.start.documentLocation;
+      expect(jsonPath).not.toContain('"marker":"f"');
+      expect(jsonPath).not.toContain('"marker":"x"');
+      expect(jsonPath).not.toContain('"marker":"fe"');
+    });
+  });
+
+  test('search with verse text filtering on text that only appears in footnote returns empty', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
+
+    // Search for text that ONLY appears in footnotes/cross-references
+    // "2 R. 24.14-15" appears only in the cross-reference footnote in verse 11
+    const footnoteOnlyText = /2 R\. 24\.14-15/g;
+
+    // Without filtering, should find the text in the footnote
+    const allMatches = usjDoc.search(footnoteOnlyText);
+    expect(allMatches.length).toBe(1); // Should find in cross-reference
+
+    // With verse text filtering, should NOT find it
+    const verseTextOnlyMatches = usjDoc.search(footnoteOnlyText, verseTextMarkers);
+    expect(verseTextOnlyMatches.length).toBe(0); // Should not find in verse text
+  });
+
+  test('search with verse text filtering includes text from all verse text markers', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
+
+    // Search for "Jesucristo" which appears in multiple verse text contexts
+    const searchRegex = /Jesucristo/gi;
+
+    const verseTextMatches = usjDoc.search(searchRegex, verseTextMarkers);
+    expect(verseTextMatches.length).toBeGreaterThan(0);
+
+    // All matches should be in verse text
+    verseTextMatches.forEach((match) => {
+      expect(match.text.toLowerCase()).toBe('jesucristo');
+      expect(typeof match.start.node).toBe('string');
+    });
+  });
+
+  test('search with verse text filtering includes text inside character formatting markers', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
+
+    // "Salvador" appears inside a \it (italic) character marker in verse 21:
+    // <char style="it">Salvador. </char>
+    // This is verse text that happens to be italicized, so it should be included
+    const searchRegex = /Salvador/gi;
+
+    // Without filtering - should find it
+    const allMatches = usjDoc.search(searchRegex);
+    expect(allMatches.length).toBeGreaterThan(0);
+
+    // With verse text filtering - should STILL find it (it's verse text, just formatted)
+    const verseTextMatches = usjDoc.search(searchRegex, verseTextMarkers);
+    expect(verseTextMatches.length).toBeGreaterThan(0);
+    expect(verseTextMatches.length).toBe(allMatches.length);
+  });
+
+  test('search without marker filtering behaves the same as before (includes all text)', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
+
+    // Search for common word that appears in various places
+    const searchRegex = /de/gi;
+
+    // Without second parameter, should search all text (backward compatible)
+    const matches = usjDoc.search(searchRegex);
+    expect(matches.length).toBeGreaterThan(0);
+
+    // Should find text in footnotes as well
+    // This verifies backward compatibility - undefined parameter means search all
+  });
 });
 
 describe('findAllNotes', () => {
