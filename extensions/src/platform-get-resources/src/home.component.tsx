@@ -46,6 +46,7 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getStartedDescription%',
   '%resources_getResources%',
   '%resources_items%',
+  '%resources_itemsFiltered%',
   '%resources_language%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
@@ -200,6 +201,7 @@ export function Home({
   const itemsText: string = isLocalizedStringsLoading
     ? ''
     : getLocalizedString('%resources_items%');
+  const itemsFilteredText: string = getLocalizedString('%resources_itemsFiltered%');
   const languageText: string = getLocalizedString('%resources_language%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
@@ -615,7 +617,13 @@ export function Home({
         </CardContent>
       )}
       <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:32rem)]:!tw-hidden">
-        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
+        <Label>
+          {filteredAndSortedProjects.length !== mergedProjectInfo.length
+            ? itemsFilteredText
+                .replace('{0}', String(filteredAndSortedProjects.length))
+                .replace('{1}', String(mergedProjectInfo.length))
+            : `${filteredAndSortedProjects.length} ${itemsText}`}
+        </Label>
       </CardFooter>
     </Card>
   );

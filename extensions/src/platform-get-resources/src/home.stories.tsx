@@ -165,6 +165,7 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
             '%resources_resources_label%': 'Resources',
             '%resources_noItemsFound%': 'No {0} found.',
             '%resources_items%': 'items',
+            '%resources_itemsFiltered%': '{0} out of {1} items',
             '%resources_language%': 'Language',
             '%resources_filterInput%': 'Search by name, language',
             '%resources_noSearchResults%': 'Nothing found.',
