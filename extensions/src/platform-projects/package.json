@@ -1,9 +1,9 @@
 {
-  "name": "paranext-extension-template",
+  "name": "platform-projects",
   "private": true,
   "version": "0.0.1",
   "main": "src/main.js",
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/platform-projects.d.ts",
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
@@ -18,7 +18,7 @@
     "zip": "zip-build dist release --template '%NAME%_%VERSION%.%EXT%' --override",
     "package": "npm run build:production && npm run zip",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
-    "start:core": "cd ../paranext-core && npm run start",
+    "start:core": "cd ../../.. && npm run start",
     "start": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch\" \"npm:start:core\"",
     "start:production": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch:production\" \"npm:start:core\"",
     "lint": "npm run lint:scripts && npm run lint:styles",
@@ -26,7 +26,8 @@
     "lint:styles": "stylelint **/*.{css,scss} --allow-empty-input",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
-    "bump-versions": "ts-node ./lib/bump-versions.ts"
+    "bump-versions": "ts-node ./lib/bump-versions.ts",
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -35,7 +36,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.2",
-    "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
+    "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
     "@swc/core": "1.13.3",
@@ -66,8 +67,8 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "glob": "^10.5.0",
     "lucide-react": "^0.475.0",
-    "papi-dts": "file:../paranext-core/lib/papi-dts",
-    "platform-bible-react": "file:../paranext-core/lib/platform-bible-react",
+    "papi-dts": "file:../../../lib/papi-dts",
+    "platform-bible-react": "file:../../../lib/platform-bible-react",
     "postcss": "^8.5.3",
     "postcss-loader": "^8.1.1",
     "prettier": "^3.5.2",
