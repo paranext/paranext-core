@@ -204,13 +204,13 @@ export class ScriptureFinderProjectDataProviderEngine
       ? job.options.searchString
       : escapeStringRegexp(job.options.searchString);
 
-    const includeOnlyMarkerTypes = job.options.verseTextOnly
+    const markerStylesToInclude = job.options.verseTextOnly
       ? USFM_VERSE_TEXT_MARKERS_SET
       : undefined;
 
     const matches = usj.search(
       new RegExp(regexString, job.options.caseInsensitive ? 'ig' : 'g'),
-      includeOnlyMarkerTypes,
+      markerStylesToInclude,
     );
 
     return matches.map((match) => {

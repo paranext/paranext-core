@@ -3,7 +3,7 @@
  * usfm_sb.sty stylesheet (version 3.0.11). These markers represent actual verse text content that
  * can be searched in scripture.
  */
-export const USFM_VERSE_TEXT_MARKERS: readonly string[] = [
+const USFM_VERSE_TEXT_MARKERS: readonly string[] = [
   'add',
   'addpn',
   'b',
@@ -169,18 +169,9 @@ export const USFM_VERSE_TEXT_MARKERS: readonly string[] = [
   'wr',
 ] as const;
 
-/** Type representing valid USFM verse text marker values */
-export type UsfmVerseTextMarker = (typeof USFM_VERSE_TEXT_MARKERS)[number];
-
-/** Set of USFM verse text markers for efficient lookup */
-export const USFM_VERSE_TEXT_MARKERS_SET = new Set<string>(USFM_VERSE_TEXT_MARKERS);
-
 /**
- * Check if a given marker is a USFM verse text marker
- *
- * @param marker - The marker to check
- * @returns True if the marker is a verse text marker
+ * Set of USFM verse text markers for efficient lookup. This list contains all the unique USFM
+ * markers that have TextType VerseText according to the usfm_sb.sty stylesheet (version 3.0.11).
+ * These markers represent actual verse text content that can be searched in scripture.
  */
-export function isUsfmVerseTextMarker(marker: string): marker is UsfmVerseTextMarker {
-  return USFM_VERSE_TEXT_MARKERS_SET.has(marker);
-}
+export const USFM_VERSE_TEXT_MARKERS_SET = new Set<string>(USFM_VERSE_TEXT_MARKERS);

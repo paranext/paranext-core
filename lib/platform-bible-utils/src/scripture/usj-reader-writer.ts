@@ -1518,7 +1518,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  search(regex: RegExp, includeOnlyMarkerTypes?: Set<string>): UsjSearchResult[] {
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[] {
     const retVal: UsjSearchResult[] = [];
     if (this.usj.content.length === 0) return retVal;
 
@@ -1550,28 +1550,31 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         (node, workingStack) => {
           if (typeof node !== 'string') return false;
 
-          // If filtering by marker type, check if any ancestor marker is NOT in the allowed set
-          if (includeOnlyMarkerTypes) {
-            // Traverse the entire working stack to check all ancestors
-            // Check if any ancestor has a marker/style that's not in the verse text markers set
+          // If filtering by marker style, check if any para/note ancestor is NOT in the allowed set.
+          // Only check 'para' and 'note' type ancestors — 'char' type ancestors (e.g., \it, \bd,
+          // \sc) are inline formatting within verse text and should not affect filtering.
+          if (markerStylesToInclude) {
             const hasExcludedAncestor = workingStack.some((stackItem) => {
               const ancestor = stackItem.parent;
-              if (!ancestor) return false;
+              if (!ancestor || !('type' in ancestor)) return false;
 
-              // Get the marker type from either 'style' or 'marker' property
-              let markerType: string | undefined;
+              // Skip char-type ancestors — they are inline formatting, not structural markers
+              if (ancestor.type === 'char') return false;
+
+              // Get the marker style from either 'style' or 'marker' property
+              let markerStyle: string | undefined;
               if ('style' in ancestor && typeof ancestor.style === 'string') {
-                markerType = ancestor.style;
+                markerStyle = ancestor.style;
               } else if ('marker' in ancestor && typeof ancestor.marker === 'string') {
-                markerType = ancestor.marker;
+                markerStyle = ancestor.marker;
               }
 
-              // If this ancestor has a marker type that's not in the allowed set, exclude this text
-              return markerType !== undefined && !includeOnlyMarkerTypes.has(markerType);
+              // If this ancestor has a style that's not in the allowed set, exclude this text
+              return markerStyle !== undefined && !markerStylesToInclude.has(markerStyle);
             });
 
             if (hasExcludedAncestor) {
-              return false; // Skip this text node - an ancestor marker is not in verse text markers
+              return false; // Skip this text node - an ancestor's style is not in the allowed set
             }
           }
 

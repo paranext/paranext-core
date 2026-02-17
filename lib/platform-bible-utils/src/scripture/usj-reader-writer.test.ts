@@ -1764,6 +1764,24 @@ describe('Find USJ details for text searches', () => {
     });
   });
 
+  test('search with verse text filtering includes text inside character formatting markers', () => {
+    const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
+
+    // "Salvador" appears inside a \it (italic) character marker in verse 21:
+    // <char style="it">Salvador. </char>
+    // This is verse text that happens to be italicized, so it should be included
+    const searchRegex = /Salvador/gi;
+
+    // Without filtering - should find it
+    const allMatches = usjDoc.search(searchRegex);
+    expect(allMatches.length).toBeGreaterThan(0);
+
+    // With verse text filtering - should STILL find it (it's verse text, just formatted)
+    const verseTextMatches = usjDoc.search(searchRegex, verseTextMarkers);
+    expect(verseTextMatches.length).toBeGreaterThan(0);
+    expect(verseTextMatches.length).toBe(allMatches.length);
+  });
+
   test('search without marker filtering behaves the same as before (includes all text)', () => {
     const usjDoc = new UsjReaderWriter(usjMat1, usjReaderWriterOptions3_1);
 
