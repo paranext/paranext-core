@@ -168,7 +168,7 @@ global.webViewComponent = function EditFilingPatternWebView(_webViewProps: WebVi
             aria-describedby={!isValid ? 'pattern-error' : undefined}
           />
           {!isValid && validationError ? (
-            <p id="pattern-error" className="tw-text-sm tw-text-red-600">
+            <p id="pattern-error" className="tw-text-sm tw-text-destructive">
               {validationError}
             </p>
           ) : undefined}

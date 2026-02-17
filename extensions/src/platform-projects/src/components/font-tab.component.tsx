@@ -179,6 +179,8 @@ function FontTab({
         <Label>{l('%platformProjects_languageSettings_sampleLabel%', 'Sample:')}</Label>
         <div
           className="tw-border tw-rounded tw-p-3 tw-min-h-[60px] tw-bg-muted/30"
+          // ADR exception: inline styles required for runtime-dynamic font preview
+          // (fontFamily, fontSize, direction are user-selected values that Tailwind cannot express)
           style={{
             fontFamily: fontName || 'inherit',
             fontSize: `${fontSize}px`,

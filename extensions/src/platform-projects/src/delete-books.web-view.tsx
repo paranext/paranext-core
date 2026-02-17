@@ -203,8 +203,8 @@ global.webViewComponent = function DeleteBooksWebView(_webViewProps: WebViewProp
 
       {/* Confirmation Dialog Overlay */}
       {formState.showConfirmation ? (
-        <div className="tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-bg-black/50">
-          <div className="tw-bg-background tw-rounded-lg tw-shadow-lg tw-p-6 tw-max-w-md tw-w-full tw-mx-4">
+        <div className="tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-bg-foreground/50">
+          <div className="tw-bg-background tw-rounded-lg tw-border tw-p-6 tw-max-w-md tw-w-full tw-mx-4">
             {/* Confirmation Title */}
             <h3 className="tw-text-lg tw-font-semibold tw-mb-4">
               {l('%platformProjects_deleteBooks_confirmTitle%', 'Confirm Deletion')}
