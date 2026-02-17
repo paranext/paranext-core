@@ -20,5 +20,8 @@ declare module 'papi-shared-types' {
 
     /** Open the Copy Books dialog to copy book files between projects */
     'platformProjects.openCopyBooks': () => Promise<string | undefined>;
+
+    /** Open the Delete Books dialog to permanently delete book files from a project */
+    'platformProjects.openDeleteBooks': () => Promise<string | undefined>;
   }
 }

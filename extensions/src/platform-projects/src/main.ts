@@ -21,6 +21,10 @@ import {
   editFilingPatternWebViewType,
 } from './edit-filing-pattern.web-view-provider';
 import { CopyBooksWebViewProvider, copyBooksWebViewType } from './copy-books.web-view-provider';
+import {
+  DeleteBooksWebViewProvider,
+  deleteBooksWebViewType,
+} from './delete-books.web-view-provider';
 
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platform-projects is activating!');
@@ -208,6 +212,37 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  // Delete Books Form
+  const deleteBooksWebViewProvider = new DeleteBooksWebViewProvider();
+
+  const deleteBooksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    deleteBooksWebViewType,
+    deleteBooksWebViewProvider,
+  );
+
+  const openDeleteBooksPromise = papi.commands.registerCommand(
+    'platformProjects.openDeleteBooks',
+    async () => {
+      const webViewId = await papi.webViews.openWebView(
+        deleteBooksWebViewType,
+        { type: 'float', floatSize: { width: 900, height: 700 } },
+        { existingId: '?' },
+      );
+      return webViewId;
+    },
+    {
+      method: {
+        summary: 'Open the Delete Books dialog to permanently delete book files from a project',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened delete books web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   context.registrations.add(
     await projectPropertiesWebViewProviderPromise,
     await openProjectPropertiesPromise,
@@ -221,6 +256,8 @@ export async function activate(context: ExecutionActivationContext) {
     await openEditFilingPatternPromise,
     await copyBooksWebViewProviderPromise,
     await openCopyBooksPromise,
+    await deleteBooksWebViewProviderPromise,
+    await openDeleteBooksPromise,
   );
 
   logger.debug('platform-projects is activated!');

@@ -125,7 +125,20 @@
       "%platformProjects_copyBooks_statusPresentOlder%": "Present (older)",
       "%platformProjects_copyBooks_statusPresentNewer%": "Present (newer)",
       "%platformProjects_copyBooks_statusPresentSame%": "Present (same)",
-      "%platformProjects_mainMenu_copyBooks%": "Copy Books..."
+      "%platformProjects_mainMenu_copyBooks%": "Copy Books...",
+      "%platformProjects_deleteBooks_title%": "Delete Books",
+      "%platformProjects_deleteBooks_warning%": "WARNING: This action cannot be undone!",
+      "%platformProjects_deleteBooks_selectLabel%": "Select books to delete from {0}:",
+      "%platformProjects_deleteBooks_columnBook%": "Book",
+      "%platformProjects_deleteBooks_columnChapters%": "Chapters",
+      "%platformProjects_deleteBooks_columnVerses%": "Verses",
+      "%platformProjects_deleteBooks_selectColumn%": "Select",
+      "%platformProjects_deleteBooks_selectBook%": "Select",
+      "%platformProjects_deleteBooks_deleteButton%": "Delete",
+      "%platformProjects_deleteBooks_confirmTitle%": "Confirm Deletion",
+      "%platformProjects_deleteBooks_confirmMessage%": "Are you sure you want to permanently delete {0} book(s)? This action cannot be undone.",
+      "%platformProjects_deleteBooks_confirmDelete%": "Delete {0} Book(s)",
+      "%platformProjects_mainMenu_deleteBooks%": "Delete Books..."
     }
   }
 }
