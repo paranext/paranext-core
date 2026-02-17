@@ -20,6 +20,7 @@ import {
   EditFilingPatternWebViewProvider,
   editFilingPatternWebViewType,
 } from './edit-filing-pattern.web-view-provider';
+import { CopyBooksWebViewProvider, copyBooksWebViewType } from './copy-books.web-view-provider';
 
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platform-projects is activating!');
@@ -176,6 +177,37 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  // Copy Books Form
+  const copyBooksWebViewProvider = new CopyBooksWebViewProvider();
+
+  const copyBooksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    copyBooksWebViewType,
+    copyBooksWebViewProvider,
+  );
+
+  const openCopyBooksPromise = papi.commands.registerCommand(
+    'platformProjects.openCopyBooks',
+    async () => {
+      const webViewId = await papi.webViews.openWebView(
+        copyBooksWebViewType,
+        { type: 'float', floatSize: { width: 900, height: 700 } },
+        { existingId: '?' },
+      );
+      return webViewId;
+    },
+    {
+      method: {
+        summary: 'Open the Copy Books dialog to copy book files between projects',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened copy books web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   context.registrations.add(
     await projectPropertiesWebViewProviderPromise,
     await openProjectPropertiesPromise,
@@ -187,6 +219,8 @@ export async function activate(context: ExecutionActivationContext) {
     await openChooseEncodingPromise,
     await editFilingPatternWebViewProviderPromise,
     await openEditFilingPatternPromise,
+    await copyBooksWebViewProviderPromise,
+    await openCopyBooksPromise,
   );
 
   logger.debug('platform-projects is activated!');

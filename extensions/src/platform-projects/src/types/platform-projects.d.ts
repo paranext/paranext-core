@@ -17,5 +17,8 @@ declare module 'papi-shared-types' {
 
     /** Open the Edit Filing Pattern dialog to customize book file naming */
     'platformProjects.openEditFilingPattern': () => Promise<string | undefined>;
+
+    /** Open the Copy Books dialog to copy book files between projects */
+    'platformProjects.openCopyBooks': () => Promise<string | undefined>;
   }
 }

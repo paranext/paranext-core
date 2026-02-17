@@ -107,7 +107,25 @@
       "%platformProjects_editFilingPattern_legendProject%": "Project short name",
       "%platformProjects_editFilingPattern_errorRequired%": "Pattern is required",
       "%platformProjects_editFilingPattern_errorNoPtx%": "Pattern cannot end with .ptx extension",
-      "%platformProjects_editFilingPattern_errorInvalidChars%": "Pattern contains invalid filename characters"
+      "%platformProjects_editFilingPattern_errorInvalidChars%": "Pattern contains invalid filename characters",
+      "%platformProjects_copyBooks_title%": "Copy Books",
+      "%platformProjects_copyBooks_fromLabel%": "From:",
+      "%platformProjects_copyBooks_toLabel%": "To:",
+      "%platformProjects_copyBooks_selectProject%": "Select project...",
+      "%platformProjects_copyBooks_warningSelectProjects%": "Select source and destination projects to compare books",
+      "%platformProjects_copyBooks_warningNoBooks%": "Source project has no books",
+      "%platformProjects_copyBooks_warningSameProject%": "Cannot copy to the same project",
+      "%platformProjects_copyBooks_columnBook%": "Book",
+      "%platformProjects_copyBooks_columnSourceStatus%": "Source Status",
+      "%platformProjects_copyBooks_columnDestStatus%": "Destination Status",
+      "%platformProjects_copyBooks_selectColumn%": "Select",
+      "%platformProjects_copyBooks_selectBook%": "Select",
+      "%platformProjects_copyBooks_statusPresent%": "Present",
+      "%platformProjects_copyBooks_statusNotPresent%": "Not Present",
+      "%platformProjects_copyBooks_statusPresentOlder%": "Present (older)",
+      "%platformProjects_copyBooks_statusPresentNewer%": "Present (newer)",
+      "%platformProjects_copyBooks_statusPresentSame%": "Present (same)",
+      "%platformProjects_mainMenu_copyBooks%": "Copy Books..."
     }
   }
 }
