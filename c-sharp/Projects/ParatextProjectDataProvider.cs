@@ -978,6 +978,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 "Cannot set BooksPresent this way. Must add or delete books in the project"
             );
 
+        // IsResource is read-only
+        if (paratextSettingName == ProjectSettingsNames.PT_IS_RESOURCE)
+            throw new Exception(
+                "Cannot set IsResource. This is determined by Paratext based on the presence of certain files in the project folder, not by a setting value"
+            );
+
         // Now actually write the setting
         string? errorMessage = null;
 
