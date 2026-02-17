@@ -898,6 +898,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
 
+        // Expose whether this is a resource project (as identified by Paratext)
+        if (paratextSettingName == ProjectSettingsNames.PT_IS_RESOURCE)
+            return scrText.IsResourceProject;
+
         // BooksPresent in Settings.xml isn't always 123 characters, but this way of getting it is always
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
             return scrText.BooksPresentSet.Books;
@@ -972,6 +976,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
             throw new Exception(
                 "Cannot set BooksPresent this way. Must add or delete books in the project"
+            );
+
+        // IsResource is read-only
+        if (paratextSettingName == ProjectSettingsNames.PT_IS_RESOURCE)
+            throw new Exception(
+                "Cannot set IsResource. This is determined by Paratext based on the presence of certain files in the project folder, not by a setting value"
             );
 
         // Now actually write the setting
