@@ -30,7 +30,7 @@ export default function ProjectResourceFilter({
   localizedAllText,
 }: ProjectResourceFilterProps) {
   const isFiltered = value !== 'all';
-  const selectedOption = isFiltered ? options.find((opt) => opt.key === value) : null;
+  const selectedOption = isFiltered ? options.find((opt) => opt.key === value) : undefined;
   const Icon = selectedOption ? selectedOption.icon : Filter;
 
   return (
