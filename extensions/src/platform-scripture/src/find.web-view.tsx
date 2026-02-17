@@ -75,6 +75,9 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_verseTextOnly%',
 ];
 
+/** The type of text content to search in */
+type SearchTextType = 'all' | 'verseOnly';
+
 const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
@@ -108,10 +111,8 @@ global.webViewComponent = function FindWebView({
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
   const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
-  const [searchTextType, setSearchTextType] = useState<'all' | 'verseOnly'>('all');
-  const [submittedSearchTextType, setSubmittedSearchTextType] = useState<'all' | 'verseOnly'>(
-    'all',
-  );
+  const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
+  const [submittedSearchTextType, setSubmittedSearchTextType] = useState<SearchTextType>('all');
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -754,7 +755,7 @@ global.webViewComponent = function FindWebView({
                 <Label>{localizedStrings['%webView_find_matchContentIn%']}</Label>
                 <RadioGroup
                   value={searchTextType}
-                  onValueChange={(value: 'all' | 'verseOnly') => setSearchTextType(value)}
+                  onValueChange={(value: SearchTextType) => setSearchTextType(value)}
                 >
                   <div className="tw-flex tw-items-center tw-space-x-2">
                     <RadioGroupItem value="all" id="text-type-all" />
