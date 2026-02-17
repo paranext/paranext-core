@@ -470,7 +470,7 @@ global.webViewComponent = function FindWebView({
           verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
       (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
       (scope === 'selectedBooks' &&
-        selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
+        [...selectedBookIds].sort().join(',') !== [...submittedBookIds].sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
       isRegexAllowed !== submittedIsRegexAllowed ||
       searchTextType !== submittedSearchTextType
