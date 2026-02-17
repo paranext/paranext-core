@@ -1571,10 +1571,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             });
 
             if (hasExcludedAncestor) {
-              // Insert a null character as a boundary so that adjacent included text chunks
-              // are not concatenated directly, which would create false cross-boundary matches
-              textChunks.push('\0');
-              currentIndex += 1;
               return false; // Skip this text node - an ancestor marker is not in verse text markers
             }
           }
