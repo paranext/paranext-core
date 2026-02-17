@@ -57,7 +57,7 @@ export function LinkedScrRefDisplay({
   includeInLink = 'onlyScrRef',
 }: LinkedScrRefDisplayProps) {
   return (
-    <div className={cn('tw-overflow-hidden tw-truncate tw-p-1 tw-text-start tw-leading-none')}>
+    <div className="tw-overflow-hidden tw-truncate tw-p-1 tw-text-start tw-leading-none">
       <Button
         variant="link"
         aria-label="Submit reference change"

@@ -77,8 +77,6 @@ export type CheckCardProps = {
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
   handleDenyCheck: (result: CheckRunResult) => Promise<boolean>;
-  /** Scripture reference of the check result */
-  scrRef: SerializedVerseRef;
   /** A brief description of the check result. Optional. */
   checkCardDescription?: string;
   /** Callback function triggered to open the configure checks webview */
@@ -109,7 +107,6 @@ export function CheckCard({
   showBadge = false,
   checkName,
   isCheckSetup = true,
-  scrRef,
 }: CheckCardProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
@@ -212,7 +209,7 @@ export function CheckCard({
     <ResultsCard
       cardKey={checkId}
       isSelected={isSelected}
-      linkedScrRef={{ startRef: scrRef, scriptureTextPart: checkResult.itemText }}
+      linkedScrRef={{ startRef: checkResult.verseRef, scriptureTextPart: checkResult.itemText }}
       badges={badges() ?? undefined}
       onSelect={() => handleSelectCheck(checkId)}
       onDoubleClick={() => handleDoubleClick(checkId)}
