@@ -8,5 +8,14 @@ declare module 'papi-shared-types' {
 
     /** Open the Project Name form to edit project identification fields */
     'platformProjects.openProjectName': () => Promise<string | undefined>;
+
+    /** Open the Language Settings dialog to configure language-specific settings */
+    'platformProjects.openLanguageSettings': () => Promise<string | undefined>;
+
+    /** Open the Choose Encoding dialog to select an encoding converter */
+    'platformProjects.openChooseEncoding': () => Promise<string | undefined>;
+
+    /** Open the Edit Filing Pattern dialog to customize book file naming */
+    'platformProjects.openEditFilingPattern': () => Promise<string | undefined>;
   }
 }
