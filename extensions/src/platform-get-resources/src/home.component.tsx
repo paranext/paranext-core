@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, ScrollText } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Scroll, ScrollText } from 'lucide-react';
 import {
   Button,
   Card,
@@ -11,6 +11,10 @@ import {
   SearchBar,
   Spinner,
   Table,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   TableBody,
   TableCell,
   TableHead,
@@ -56,6 +60,10 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_searchedFor%',
   '%resources_sync%',
   '%resources_paratextProjects_label%',
+  '%resources_paratextProject_tooltip%',
+  '%resources_resource_tooltip%',
+  '%resources_editable%',
+  '%resources_readOnly%',
   '%resources_resources_label%',
 ] as const);
 
@@ -211,6 +219,12 @@ export function Home({
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
   const paratextProjectsText: string = getLocalizedString('%resources_paratextProjects_label%');
+  const paratextProjectTooltipText: string = getLocalizedString(
+    '%resources_paratextProject_tooltip%',
+  );
+  const resourceTooltipText: string = getLocalizedString('%resources_resource_tooltip%');
+  const editableText: string = getLocalizedString('%resources_editable%');
+  const readOnlyText: string = getLocalizedString('%resources_readOnly%');
   const resourcesText: string = getLocalizedString('%resources_resources_label%');
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
@@ -528,43 +542,62 @@ export function Home({
                           <TableCell
                             className={cn({ 'tw-ps-2': project.editedStatus === 'edited' })}
                           >
-                            <div
-                              className={cn(
-                                'tw-flex tw-flex-row tw-items-center tw-gap-4 tw-ps-2',
-                                { 'tw-ps-0': project.editedStatus === 'edited' },
-                              )}
-                            >
-                              <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
-                                {project.editedStatus === 'edited' && (
-                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
-                                )}
-                                {(() => {
-                                  const Icon = project.isResource ? BookOpen : ScrollText;
-                                  return <Icon className="tw-h-4 tw-w-4" />;
-                                })()}
-                              </div>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div
+                                    className={cn(
+                                      'tw-flex tw-flex-row tw-items-center tw-gap-4 tw-ps-2',
+                                      { 'tw-ps-0': project.editedStatus === 'edited' },
+                                    )}
+                                  >
+                                    <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
+                                      {project.editedStatus === 'edited' && (
+                                        <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
+                                      )}
+                                      {(() => {
+                                        let Icon = ScrollText;
+                                        if (project.isResource) Icon = BookOpen;
+                                        else if (!project.isEditable) Icon = Scroll;
+                                        return <Icon className="tw-h-4 tw-w-4" />;
+                                      })()}
+                                    </div>
 
-                              <div className="tw-whitespace-nowrap tw-cursor-default">
-                                {project.name}
-                              </div>
+                                    <div className="tw-whitespace-nowrap tw-cursor-default">
+                                      {project.name}
+                                    </div>
 
-                              <div className="tw-grow tw-hidden max-[300px]:!tw-flex">
-                                <div className="tw-grow" />
-                                <HomeItemDropdownMenu ellipsisButtonClassName="tw-h-6">
-                                  {(!project.isLocallyAvailable ||
-                                    project.editedStatus === 'edited') && (
-                                    <DropdownMenuItem asChild>
-                                      {syncOrGetButton(project, true)}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {project.isLocallyAvailable && (
-                                    <DropdownMenuItem asChild>
-                                      {openButton(project, true)}
-                                    </DropdownMenuItem>
-                                  )}
-                                </HomeItemDropdownMenu>
-                              </div>
-                            </div>
+                                    <div className="tw-grow tw-hidden max-[300px]:!tw-flex">
+                                      <div className="tw-grow" />
+                                      <HomeItemDropdownMenu ellipsisButtonClassName="tw-h-6">
+                                        {(!project.isLocallyAvailable ||
+                                          project.editedStatus === 'edited') && (
+                                          <DropdownMenuItem asChild>
+                                            {syncOrGetButton(project, true)}
+                                          </DropdownMenuItem>
+                                        )}
+                                        {project.isLocallyAvailable && (
+                                          <DropdownMenuItem asChild>
+                                            {openButton(project, true)}
+                                          </DropdownMenuItem>
+                                        )}
+                                      </HomeItemDropdownMenu>
+                                    </div>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div>{project.fullName}</div>
+                                  <div>
+                                    {project.isResource
+                                      ? resourceTooltipText
+                                      : paratextProjectTooltipText.replace(
+                                          '{0}',
+                                          project.isEditable ? editableText : readOnlyText,
+                                        )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </TableCell>
                           <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default tw-break-all">
                             {project.fullName}
