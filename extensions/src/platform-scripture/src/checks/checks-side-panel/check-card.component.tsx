@@ -1,6 +1,8 @@
+import { useLocalizedStrings } from '@papi/frontend/react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Check, Settings, X } from 'lucide-react';
 import {
   Badge,
-  cn,
   DropdownMenuItem,
   ResultsCard,
   Tooltip,
@@ -8,11 +10,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { Check, Settings, X } from 'lucide-react';
-import { useMemo } from 'react';
 import { CheckRunResult } from 'platform-scripture';
-import { useLocalizedStrings } from '@papi/frontend/react';
-import { formatScrRef } from 'platform-bible-utils';
+import { useMemo } from 'react';
 
 /** Enum representing the possible states of a check */
 export enum CheckStates {
@@ -72,6 +71,8 @@ export type CheckCardProps = {
   checkState: CheckStates;
   /** Callback function triggered when the check is selected */
   handleSelectCheck: (checkTitle: string) => void;
+  /** Callback function triggered when the check is double-clicked */
+  handleDoubleClick: (checkTitle: string) => void;
   /** Callback for denying a check */
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
@@ -86,8 +87,6 @@ export type CheckCardProps = {
   checkName: string;
   /** Whether the check is fully set up or not */
   isCheckSetup?: boolean;
-  /** Additional class names for custom styling */
-  className?: string;
 };
 
 /**
@@ -100,6 +99,7 @@ export function CheckCard({
   isSelected,
   checkState,
   handleSelectCheck,
+  handleDoubleClick,
   handleAllowCheck,
   handleDenyCheck,
   checkCardDescription,
@@ -107,7 +107,6 @@ export function CheckCard({
   showBadge = false,
   checkName,
   isCheckSetup = true,
-  className,
 }: CheckCardProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
@@ -180,54 +179,45 @@ export function CheckCard({
     [checkName],
   );
 
-  const cardContent = (
-    <div className={cn('tw-flex tw-flex-col tw-gap-2', className)}>
-      <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-        <span className="tw-shrink-0 tw-text-nowrap tw-text-xs tw-font-medium">
-          {formatScrRef(checkResult.verseRef)}{' '}
-          <span className="scripture-font">{checkResult.itemText}</span>
-        </span>
-        {showBadge &&
-          (checkState === CheckStates.Fixed ||
-            checkState === CheckStates.Denied ||
-            checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />}
-        {!isCheckSetup && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  key={`${checkId}-requires-setup-badge`}
-                  className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
-                  variant="secondary"
-                >
-                  {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">
-                  {localizedStrings['%webView_checksSidePanel_checkRequiresSetup_tooltip%']}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-      </div>
-      <span className="tw-font-regular tw-overflow-hidden tw-text-ellipsis tw-text-xs tw-text-muted-foreground">
-        {checkCardDescription}
-      </span>
-    </div>
-  );
+  const badges = () => [
+    showBadge &&
+      (checkState === CheckStates.Fixed ||
+        checkState === CheckStates.Denied ||
+        checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />,
+    !isCheckSetup && (
+      <TooltipProvider key={`${checkId}-requires-setup-badge`}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
+              variant="secondary"
+            >
+              {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="tw-font-light">
+              {localizedStrings['%webView_checksSidePanel_checkRequiresSetup_tooltip%']}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    ),
+  ];
 
   return (
     <ResultsCard
       cardKey={checkId}
       isSelected={isSelected}
+      linkedScrRef={{ startRef: checkResult.verseRef, scriptureTextPart: checkResult.itemText }}
+      badges={badges() ?? undefined}
       onSelect={() => handleSelectCheck(checkId)}
+      onDoubleClick={() => handleDoubleClick(checkId)}
       isDenied={isFixedOrDenied}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
     >
-      {cardContent}
+      {checkCardDescription}
     </ResultsCard>
   );
 }

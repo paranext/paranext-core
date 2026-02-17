@@ -441,6 +441,37 @@ export function formatChapterAndVerseWithOptionalParts(
 }
 
 /**
+ * Map type for localized book names. The map key is the book ID (e.g., 'GEN', 'EXO') and the value
+ * can be either:
+ *
+ * - A string containing the localized book name directly
+ * - An object with a `localizedId` property containing the localized book name (used when returned
+ *   from localization functions like useLocalizedStrings)
+ */
+export type LocalizedBookNames = Map<string, string | { localizedId: string }>;
+
+/**
+ * Retrieves the localized book name from a map of localized book names.
+ *
+ * @param scrRef A SerializedVerseRef containing the book ID
+ * @param localizedBookNames A map of localization key to string or localization key to an object
+ *   with localizedId holding the localized book name (e.g., as returned by papi function
+ *   useLocalizedStrings)
+ * @returns The localized book name if found, otherwise undefined
+ */
+export function getLocalizedBookName(
+  scrRef: SerializedVerseRef,
+  localizedBookNames?: LocalizedBookNames,
+): string | undefined {
+  const bookNameOrObject = localizedBookNames?.get(scrRef.book);
+  return typeof bookNameOrObject === 'object' &&
+    bookNameOrObject !== undefined &&
+    'localizedId' in bookNameOrObject
+    ? bookNameOrObject?.localizedId
+    : bookNameOrObject;
+}
+
+/**
  * Formats a Scripture reference. Empty book, negative chapter or verse results in omitting that
  * part.
  *
@@ -449,7 +480,7 @@ export function formatChapterAndVerseWithOptionalParts(
  * TODO: handle books without chapters, like `Jude 5`
  *
  * @param scrRef The Scripture reference to format.
- * @param FormatScrRefOptions Optional FormatScrRefOptions to format the scripture reference
+ * @param options Optional FormatScrRefOptions to format the scripture reference
  * @returns The formatted reference. This may be only parts like only book or only chapter or only
  *   verse or a combination.
  */

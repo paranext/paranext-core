@@ -828,8 +828,11 @@ global.webViewComponent = function FindWebView({
               focusedResultIndex={bookResults.findIndex(
                 ({ originalIndex }) => originalIndex === focusedResultIndex,
               )}
-              onResultClick={(result, indexInBookResults) =>
+              onResultDoubleClick={(result, indexInBookResults) =>
                 handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+              }
+              onResultClick={(_, indexInBookResults) =>
+                setFocusedResultIndex(bookResults[indexInBookResults].originalIndex)
               }
               onHideResult={(indexInBookResults) =>
                 handleHideResult(bookResults[indexInBookResults].originalIndex)
