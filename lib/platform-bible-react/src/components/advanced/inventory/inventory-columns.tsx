@@ -1,15 +1,21 @@
 import { ColumnDef, SortDirection } from '@/components/advanced/data-table/data-table.component';
-import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import { Column } from '@tanstack/react-table';
+import {
   ArrowDownIcon,
-  ArrowUpDownIcon,
   ArrowUpIcon,
   CircleCheckIcon,
   CircleHelpIcon,
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
+import { cn } from '@/utils/shadcn-ui.util';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**
@@ -21,12 +27,43 @@ import { InventoryTableData, Status } from './inventory-utils';
  */
 const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+    return <ArrowUpIcon className="tw-h-4 tw-w-4" />;
   }
   if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+    return <ArrowDownIcon className="tw-h-4 tw-w-4" />;
   }
-  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+  return undefined;
+};
+
+/**
+ * Generates a responsive column header for inventory columns with tooltip and sorting functionality
+ *
+ * @param column The column received from ColumnDef.header
+ * @param label The label field to display in the header and tooltip
+ * @returns A ReactNode representing the header
+ */
+export const getInventoryHeader = (
+  column: Column<InventoryTableData, unknown>,
+  label: string,
+  buttonClassName?: string,
+): ReactNode => {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger
+          className={cn('tw-flex tw-w-full tw-justify-start', buttonClassName)}
+          variant="ghost"
+          onClick={() => column.toggleSorting(undefined)}
+        >
+          <span className="tw-w-6 tw-max-w-fit tw-flex-1 tw-overflow-hidden tw-text-ellipsis">
+            {label}
+          </span>
+          {getSortingIcon(column.getIsSorted())}
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 };
 
 /**
@@ -39,12 +76,7 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTable
   return {
     accessorKey: 'item',
     accessorFn: (row: InventoryTableData) => row.items[0],
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-        {itemLabel}
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
-    ),
+    header: ({ column }) => getInventoryHeader(column, itemLabel),
   };
 };
 
@@ -65,12 +97,7 @@ export const inventoryAdditionalItemColumn = (
   return {
     accessorKey: `item${additionalItemIndex}`,
     accessorFn: (row: InventoryTableData) => row.items[additionalItemIndex],
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-        {additionalItemLabel}
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
-    ),
+    header: ({ column }) => getInventoryHeader(column, additionalItemLabel),
   };
 };
 
@@ -84,15 +111,10 @@ export const inventoryAdditionalItemColumn = (
 export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'count',
-    header: ({ column }) => (
-      <div className="tw-flex tw-justify-end tw-tabular-nums">
-        <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-          {countLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      </div>
+    header: ({ column }) => getInventoryHeader(column, countLabel, 'tw-justify-end'),
+    cell: ({ row }) => (
+      <div className="tw-flex tw-justify-end tw-tabular-nums">{row.getValue('count')}</div>
     ),
-    cell: ({ row }) => <div className="tw-flex tw-justify-end">{row.getValue('count')}</div>,
   };
 };
 
@@ -160,21 +182,12 @@ export const inventoryStatusColumn = (
 ): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
-    header: ({ column }) => {
-      return (
-        <div className="tw-flex tw-justify-center">
-          <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-            {statusLabel}
-            {getSortingIcon(column.getIsSorted())}
-          </Button>
-        </div>
-      );
-    },
+    header: ({ column }) => getInventoryHeader(column, statusLabel, 'tw-justify-center'),
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <ToggleGroup value={status} variant="outline" type="single">
+        <ToggleGroup value={status} variant="outline" type="single" className="tw-gap-0">
           <ToggleGroupItem
             onClick={(event) => {
               event.stopPropagation();
@@ -188,6 +201,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="approved"
+            className="tw-rounded-e-none tw-border-e-0"
           >
             <CircleCheckIcon />
           </ToggleGroupItem>
@@ -204,6 +218,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="unapproved"
+            className="tw-rounded-none"
           >
             <CircleXIcon />
           </ToggleGroupItem>
@@ -220,6 +235,7 @@ export const inventoryStatusColumn = (
               );
             }}
             value="unknown"
+            className="tw-rounded-s-none tw-border-s-0"
           >
             <CircleHelpIcon />
           </ToggleGroupItem>

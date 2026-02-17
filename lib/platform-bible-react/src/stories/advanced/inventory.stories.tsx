@@ -4,6 +4,7 @@ import {
   InventorySummaryItem,
 } from '@/components/advanced/inventory/inventory.component';
 import {
+  getInventoryHeader,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
@@ -13,6 +14,7 @@ import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ColumnDef } from '@tanstack/react-table';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Scope } from '@/components/utils/scripture.util';
+import { escapeStringRegexp } from 'platform-bible-utils';
 import { useState } from 'react';
 
 const localizedStrings = {
@@ -212,6 +214,126 @@ export const RepeatedWords: Story = {
     docs: {
       description: {
         story: 'Inventory component specifically configured for repeated words checking.',
+      },
+    },
+  },
+};
+
+function getDescription(markerDescriptions: string[], marker: string): string | undefined {
+  // Search for whole marker surrounded by whitespace or periods or at string boundaries (^ and $)
+  const escapedMarker = escapeStringRegexp(marker);
+  const findMarker = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
+  return markerDescriptions.find((markerDescription) => findMarker.test(markerDescription));
+}
+
+const markerNames: string[] = [
+  'xt - Cross Reference - Target References',
+  'toc2 - File - Short Table of Contents Text',
+  'fig - Auxiliary - Figure/Illustration/Map',
+  'f - Footnote',
+  'fq - Footnote - Footnote Translation Quotation',
+];
+
+const createMarkerColumns = (
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
+): ColumnDef<InventoryTableData>[] => [
+  inventoryItemColumn('Marker'),
+  inventoryCountColumn('Count'),
+  {
+    accessorKey: 'styleName',
+    accessorFn: (row) => getDescription(markerNames, row.items[0]) || 'unknownMarkerLabel',
+    header: ({ column }) => getInventoryHeader(column, 'Style Name'),
+    cell: ({ row }) => {
+      const marker: string = row.getValue('item');
+      return getDescription(markerNames, marker) || 'unknownMarkerLabel';
+    },
+  },
+  inventoryStatusColumn(
+    'Status',
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
+];
+
+export const MarkersInventory: Story = {
+  render: () => {
+    const markersItems: InventorySummaryItem[] = [
+      {
+        key: ['xt', 'p'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+            text: 'In the beginning God created the heavens and the earth.',
+          },
+        ],
+      },
+      {
+        key: ['f', 'v'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 3 },
+            text: 'And God said, "Let there be light," and there was light.',
+          },
+        ],
+      },
+      {
+        key: ['toc2', 'c'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'PSA', chapterNum: 25, verseNum: 8 },
+            text: 'The LORD is good and upright; therefore he instructs sinners in his ways.',
+          },
+        ],
+      },
+      {
+        key: ['fig', 'p'],
+        count: 1,
+        occurrences: [
+          {
+            reference: { book: 'GEN', chapterNum: 1, verseNum: 28 },
+            text: 'God blessed them and said to them, "Be fruitful and increase in number."',
+          },
+        ],
+      },
+    ];
+
+    const [approvedItems, setApprovedItems] = useState<string[]>(['xt']);
+    const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['f']);
+
+    return (
+      <Inventory
+        inventoryItems={markersItems}
+        setVerseRef={(ref: SerializedVerseRef) => console.log('Set verse ref:', ref)}
+        localizedStrings={localizedStrings}
+        approvedItems={approvedItems}
+        unapprovedItems={unapprovedItems}
+        additionalItemsLabels={{
+          checkboxText: 'Show Preceding Markers',
+          tableHeaders: ['Preceding Markers'],
+        }}
+        scope="chapter"
+        onScopeChange={(scope: Scope) => console.log('Scope changed:', scope)}
+        columns={createMarkerColumns(
+          approvedItems,
+          setApprovedItems,
+          unapprovedItems,
+          setUnapprovedItems,
+        )}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Inventory component for checking markers.',
       },
     },
   },
