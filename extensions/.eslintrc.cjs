@@ -15,7 +15,7 @@ module.exports = {
 
   rules: {
     // Some rules in this following shared region are not applied since they are overridden in subsequent regions
-    // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js except certain overrides
+    // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js
 
     // #region ERB rules
 
@@ -117,6 +117,17 @@ module.exports = {
     globalThis: 'readonly',
   },
   overrides: [
+    {
+      files: ['*.ts', '*.tsx'],
+      rules: {
+        // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js
+
+        // These are already handled by TypeScript
+        'no-dupe-class-members': 'off',
+
+        // #endregion
+      },
+    },
     {
       // Allow this file to have overrides to rules from paranext-core
       files: ['.eslintrc.*js'],
