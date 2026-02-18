@@ -202,6 +202,12 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
     engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
   });
 
+  /** Flush all pending microtasks so lock acquisitions and async operations settle */
+  const flushPromises = () =>
+    new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
   /**
    * Helper to get the USFM that was written to the mock (checks chapter-level first, then
    * book-level)
@@ -1121,12 +1127,6 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
   });
 
   describe('race condition with external changes', () => {
-    /** Flush all pending microtasks so lock acquisitions and async operations settle */
-    const flushPromises = () =>
-      new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-
     /**
      * Gets the subscribe callback captured by the mock `subscribeChapterUSX`. The constructor
      * passes this callback when subscribing for chapter-level USX change notifications. Calling it
@@ -1229,8 +1229,6 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       // - Retry Phase 1 with fresh data (containing "XXX")
       // - Apply the replacement to the fresh data
       // - Result: "XXX REPLACED" (both changes preserved)
-      expect(writtenUsfm).toContain('XXX');
-      expect(writtenUsfm).toContain('REPLACED');
 
       // The written USFM should have both the external change and the replace change:
       // "\v 1 XXX REPLACED of the genealogy..."
@@ -1287,12 +1285,6 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
   });
 
   describe('concurrency', () => {
-    /** Flush all pending microtasks so lock acquisitions and async operations settle */
-    const flushPromises = () =>
-      new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
-
     /**
      * Sets up deferred-promise mocks with mutable USX stores for concurrency testing. Writes
      * persist through the test: chapter edits update the book store and book edits update chapter
