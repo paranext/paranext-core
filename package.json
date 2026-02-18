@@ -34,7 +34,7 @@
     "react-dom": ">=18.3.1"
   },
   "dependencies": {
-    "@sillsdev/scripture": "^2.0.2",
+    "@sillsdev/scripture": "^2.0.3",
     "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
   },
   "devDependencies": {
@@ -85,7 +85,7 @@
     "tsconfig-paths": "^4.2.0",
     "tsconfig-paths-webpack-plugin": "^4.2.0",
     "typescript": "^5.4.5",
-    "webpack": "^5.97.1",
+    "webpack": "^5.105.2",
     "webpack-cli": "^5.1.4",
     "webpack-merge": "^6.0.1",
     "zip-build": "^1.8.0"
