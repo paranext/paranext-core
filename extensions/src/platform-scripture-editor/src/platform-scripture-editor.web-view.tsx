@@ -1367,7 +1367,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 recentSearches={recentScriptureRefs}
                 onAddRecentSearch={addRecentScriptureRef}
               />
-              {!isReadOnly && (
+              {!isReadOnlyEffective && (
                 <>
                   <Button
                     aria-label="Undo"
