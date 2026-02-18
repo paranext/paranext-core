@@ -336,6 +336,11 @@ export declare class MutexMap {
 	 * @returns The Mutex associated with the provided ID
 	 */
 	get(mutexID: string): Mutex;
+	/**
+	 * Disposes of this MutexMap by canceling all pending operations on all mutexes and clearing the
+	 * map. After disposal, the MutexMap should not be used.
+	 */
+	dispose(): void;
 }
 export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
 	constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
@@ -2967,9 +2972,13 @@ export interface IUsjReaderWriter {
 	 * Search for matches of a regular expression within this USJ's text data
 	 *
 	 * @param regex Regular expression to search for. Specify the global flag to find all matches.
+	 * @param markerStylesToInclude Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include
+	 *   in the search. When provided, only text within markers whose style is in this set will be
+	 *   searched. Text inside markers not in this set (e.g., footnotes, cross-references) will be
+	 *   excluded. When omitted, all text is searched.
 	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
 	 */
-	search(regex: RegExp): UsjSearchResult[];
+	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
 	/** Transforms the USJ document into USFM */
 	toUsfm(): string;
 	/**
@@ -5169,6 +5178,14 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 		offset: number;
 	};
 	/**
+	 * Type guard to check if a location is a {@link UsjChapterLocation} rather than a
+	 * {@link UsjBookLocation} or {@link UsfmVerseLocation}.
+	 *
+	 * @param location The location to check
+	 * @returns `true` if the location is a {@link UsjChapterLocation}
+	 */
+	static isUsjChapterLocation(location: UsjLocation | UsfmVerseLocation): location is UsjChapterLocation;
+	/**
 	 * Transforms a USJ chapter-based location into a single standardized format of USJ chapter-based
 	 * location for ease of accessing the location's properties
 	 *
@@ -5208,9 +5225,26 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @returns `true` if the location is for text content; `false` otherwise
 	 */
 	static isUsjDocumentLocationForTextContent(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * Determine if the USJ document location is pointing to a node (text or start of marker) content
+	 * location instead of some location related to a marker's closing marker, property, or attribute
+	 *
+	 * @param usjDocumentLocation USJ document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForNode(usjDocumentLocation: UsjDocumentLocation): usjDocumentLocation is UsjMarkerLocation | UsjTextContentLocation;
+	/**
+	 * Determine if the USJ document location in this node and document location is pointing to a node
+	 * (text or start of marker) content location instead of some location related to a marker's
+	 * closing marker, property, or attribute
+	 *
+	 * @param usjNodeAndDocumentLocation USJ node and document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForNode(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	usfmVerseLocationToNextTextLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 	findNextLocationOfMatchingText(startingPoint: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch?: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
-	search(regex: RegExp, includeOnlyMarkerTypes?: Set<string>): UsjSearchResult[];
+	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
 	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;
