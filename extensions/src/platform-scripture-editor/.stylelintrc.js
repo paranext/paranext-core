@@ -34,5 +34,10 @@ module.exports = {
     ],
     'selector-max-compound-selectors': 4,
     'selector-max-id': 1,
+
+    // #endregion
+
+    // only -webkit-mask-... rules are working, not the ones without -webkit
+    'property-no-vendor-prefix': [true, { ignoreProperties: [/mask-.*/] }],
   },
 };
