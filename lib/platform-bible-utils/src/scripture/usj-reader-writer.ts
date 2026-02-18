@@ -2509,7 +2509,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let markerUsfmOutput;
     let markerFragmentsInfo: UsjFragmentInfoMinimal[];
 
-    const { markerNameOriginal, markerType, markerTypeInfo } = this.getInfoForMarker(
+    const { markerType, markerTypeInfo } = this.getInfoForMarker(
       'isClosingMarker' in marker ? marker.forMarker : marker,
     );
 
@@ -2568,26 +2568,6 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // If there's supposed to be a newline before the marker, it should eat the last space if
         // there is one (that last space gets turned into the newline in this format)
         usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
-      }
-    }
-
-    // Special case: `ca` after chapter marker needs a newline and space before in Paratext USFM for
-    // some reason
-    // Note that there is not a newline and space before `ca` after importing from USX in Paratext,
-    // so maybe we should just remove the newline and space in the PDP
-    if (this.markersMap.isSpaceAfterAttributeMarkersContent && markerNameOriginal === 'ca') {
-      // Find the last marker in the current USFM output
-      const lastMarkerBackslashIndex = usfmOutput.lastIndexOf('\\');
-      if (lastMarkerBackslashIndex >= 0) {
-        // We just want to know if it's a chapter marker, so we can just get two characters, c and space
-        const lastMarker = usfm.substring(
-          lastMarkerBackslashIndex + 1,
-          lastMarkerBackslashIndex + 3,
-        );
-        if (lastMarker === 'c ') {
-          usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
-          usfmOutput += '\n ';
-        }
       }
     }
 
