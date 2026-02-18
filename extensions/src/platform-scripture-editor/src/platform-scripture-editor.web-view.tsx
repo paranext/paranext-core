@@ -72,7 +72,7 @@ import {
   ScriptureEditorViewType,
   ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import { Redo, Undo } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
@@ -1312,7 +1312,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     if (!bookExists) {
       return (
-        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-pt-[54px] tw-px-4">
           {workaround}
           {isReadOnly
             ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
@@ -1352,79 +1352,81 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   return (
     <>
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
-      <TabToolbar
-        onSelectProjectMenuItem={menuCommandHandler}
-        onSelectViewInfoMenuItem={menuCommandHandler}
-        projectMenuData={webViewMenu.topMenu}
-        className="scripture-editor-tab-nav"
-        startAreaChildren={
-          <>
-            <BookChapterControl
-              scrRef={scrRef}
-              handleSubmit={setScrRefWithScroll}
-              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-              recentSearches={recentScriptureRefs}
-              onAddRecentSearch={addRecentScriptureRef}
+      <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-white">
+        <TabToolbar
+          onSelectProjectMenuItem={menuCommandHandler}
+          onSelectViewInfoMenuItem={menuCommandHandler}
+          projectMenuData={webViewMenu.topMenu}
+          className="scripture-editor-tab-nav tw-block"
+          startAreaChildren={
+            <>
+              <BookChapterControl
+                scrRef={scrRef}
+                handleSubmit={setScrRefWithScroll}
+                getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+                recentSearches={recentScriptureRefs}
+                onAddRecentSearch={addRecentScriptureRef}
+              />
+              {!isReadOnly && (
+                <>
+                  <Button
+                    aria-label="Undo"
+                    title="Undo"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => editorRef.current?.undo()}
+                    disabled={!canUndo}
+                  >
+                    <Undo />
+                  </Button>
+                  <Button
+                    aria-label="Redo"
+                    title="Redo"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => editorRef.current?.redo()}
+                    disabled={!canRedo}
+                  >
+                    <Redo />
+                  </Button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        className="tw-h-8"
+                        aria-label="Paragraph Selection"
+                        title="Paragraph Selection"
+                        variant="outline"
+                      >
+                        {blockMarker ? `${blockMarker} - ` : ''}
+                        {blockMarker &&
+                        Object.entries(blockMarkerToBlockNames).find(
+                          ([marker]) => marker === blockMarker,
+                        )
+                          ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                          : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="tw-p-0 tw-w-96">
+                      <MarkerMenu
+                        localizedStrings={localizedStrings}
+                        markerMenuItems={paragraphSwitcherMenuItems}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </>
+              )}
+            </>
+          }
+          endAreaChildren={
+            <ScrollGroupSelector
+              availableScrollGroupIds={availableScrollGroupIds}
+              scrollGroupId={scrollGroupId}
+              onChangeScrollGroupId={setScrollGroupId}
+              localizedStrings={scrollGroupLocalizedStrings}
             />
-            {!isReadOnly && (
-              <>
-                <Button
-                  aria-label="Undo"
-                  title="Undo"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => editorRef.current?.undo()}
-                  disabled={!canUndo}
-                >
-                  <Undo />
-                </Button>
-                <Button
-                  aria-label="Redo"
-                  title="Redo"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => editorRef.current?.redo()}
-                  disabled={!canRedo}
-                >
-                  <Redo />
-                </Button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      className="tw-h-8"
-                      aria-label="Paragraph Selection"
-                      title="Paragraph Selection"
-                      variant="outline"
-                    >
-                      {blockMarker ? `${blockMarker} - ` : ''}
-                      {blockMarker &&
-                      Object.entries(blockMarkerToBlockNames).find(
-                        ([marker]) => marker === blockMarker,
-                      )
-                        ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-                        : localizedStrings['%paragraphMenu_misc_markerDescription%']}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="tw-p-0 tw-w-96">
-                    <MarkerMenu
-                      localizedStrings={localizedStrings}
-                      markerMenuItems={paragraphSwitcherMenuItems}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </>
-            )}
-          </>
-        }
-        endAreaChildren={
-          <ScrollGroupSelector
-            availableScrollGroupIds={availableScrollGroupIds}
-            scrollGroupId={scrollGroupId}
-            onChangeScrollGroupId={setScrollGroupId}
-            localizedStrings={scrollGroupLocalizedStrings}
-          />
-        }
-      />
+          }
+        />
+      </div>
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-screen tw-w-screen" dir={options.textDirection}>
         {/* Containers */}
