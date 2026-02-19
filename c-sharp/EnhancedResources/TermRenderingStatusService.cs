@@ -20,11 +20,86 @@ internal static class TermRenderingStatusService
     /// <param name="currentStatus">The current combined status of the display item.</param>
     /// <param name="newStatus">The new per-verse status to merge in.</param>
     /// <returns>The combined status code after applying state machine rules.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/DictionaryTab.cs:1378-1419
+    // Method: DictionaryDisplayItem.CombineTermStatusCodes()
+    // Maps to: EXT-051, BHV-304, CAP-008
+    //
+    // EXPLANATION:
+    // This state machine merges per-verse rendering status codes into a combined
+    // display-item status. The rules are:
+    // 1. Global override codes (NotTermInProject, NoDictionaryEntry, NoRenderingsEntered,
+    //    NoTrackedProject) always replace the current status immediately.
+    // 2. If the current status is NotDefined (initial state), any new status is accepted.
+    // 3. RenderingMissingInVerse: if current is Found/Guessed/SomeRenderingsFound, the
+    //    result is SomeRenderingsFound; otherwise Missing replaces current.
+    // 4. RenderingFound/GuessedRendingFound: if current is NotDefined/Denied/NoVerseText,
+    //    the new status replaces current. If current is RenderingMissingInVerse, the result
+    //    is SomeRenderingsFound (some verses found, some missing).
+    // 5. RenderingDeniedInVerse/NoVerseText/NotInVerse: only replace NotDefined.
+    // 6. All other combinations leave the current status unchanged.
     public static TermRenderingStatusCode CombineTermStatusCodes(
         TermRenderingStatusCode currentStatus,
         TermRenderingStatusCode newStatus
     )
     {
-        throw new NotImplementedException();
+        // Global override codes always replace current status
+        if (
+            newStatus == TermRenderingStatusCode.NotTermInProject
+            || newStatus == TermRenderingStatusCode.NoDictionaryEntry
+            || newStatus == TermRenderingStatusCode.NoRenderingsEntered
+            || newStatus == TermRenderingStatusCode.NoTrackedProject
+        )
+        {
+            return newStatus;
+        }
+
+        // NotDefined (initial state) accepts any new status
+        if (currentStatus == TermRenderingStatusCode.NotDefined)
+        {
+            return newStatus;
+        }
+
+        // RenderingMissingInVerse: combine with existing positive statuses
+        if (newStatus == TermRenderingStatusCode.RenderingMissingInVerse)
+        {
+            if (
+                currentStatus == TermRenderingStatusCode.RenderingFound
+                || currentStatus == TermRenderingStatusCode.GuessedRendingFound
+                || currentStatus == TermRenderingStatusCode.SomeRenderingsFound
+            )
+            {
+                return TermRenderingStatusCode.SomeRenderingsFound;
+            }
+
+            return TermRenderingStatusCode.RenderingMissingInVerse;
+        }
+
+        // RenderingFound or GuessedRendingFound: override low-priority current statuses
+        if (
+            newStatus == TermRenderingStatusCode.RenderingFound
+            || newStatus == TermRenderingStatusCode.GuessedRendingFound
+        )
+        {
+            if (
+                currentStatus == TermRenderingStatusCode.RenderingDeniedInVerse
+                || currentStatus == TermRenderingStatusCode.NoVerseText
+            )
+            {
+                return newStatus;
+            }
+
+            // If current is Missing and new is Found/Guessed, some are found some are missing
+            if (currentStatus == TermRenderingStatusCode.RenderingMissingInVerse)
+            {
+                return TermRenderingStatusCode.SomeRenderingsFound;
+            }
+
+            return currentStatus;
+        }
+
+        // RenderingDeniedInVerse, NoVerseText, NotInVerse: only override NotDefined
+        // (already handled above), otherwise keep current
+        return currentStatus;
     }
 }
