@@ -1350,45 +1350,45 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }
 
   return (
-    <>
-      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
-      <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-background">
-        <TabToolbar
-          onSelectProjectMenuItem={menuCommandHandler}
-          onSelectViewInfoMenuItem={menuCommandHandler}
-          projectMenuData={webViewMenu.topMenu}
-          className="scripture-editor-tab-nav tw-block"
-          startAreaChildren={
-            <>
-              <BookChapterControl
-                scrRef={scrRef}
-                handleSubmit={setScrRefWithScroll}
-                getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-                recentSearches={recentScriptureRefs}
-                onAddRecentSearch={addRecentScriptureRef}
-              />
-              {!isReadOnlyEffective && (
-                <>
-                  <Button
-                    aria-label="Undo"
-                    title="Undo"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => editorRef.current?.undo()}
-                    disabled={!canUndo}
-                  >
-                    <Undo />
-                  </Button>
-                  <Button
-                    aria-label="Redo"
-                    title="Redo"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => editorRef.current?.redo()}
-                    disabled={!canRedo}
-                  >
-                    <Redo />
-                  </Button>
+    <div className="tw-flex tw-flex-col tw-h-screen">
+      {/* <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-background"> */}
+      <TabToolbar
+        onSelectProjectMenuItem={menuCommandHandler}
+        onSelectViewInfoMenuItem={menuCommandHandler}
+        projectMenuData={webViewMenu.topMenu}
+        className="scripture-editor-tab-nav tw-block"
+        startAreaChildren={
+          <>
+            <BookChapterControl
+              scrRef={scrRef}
+              handleSubmit={setScrRefWithScroll}
+              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+              recentSearches={recentScriptureRefs}
+              onAddRecentSearch={addRecentScriptureRef}
+            />
+            {!isReadOnlyEffective && (
+              <>
+                <Button
+                  aria-label="Undo"
+                  title="Undo"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => editorRef.current?.undo()}
+                  disabled={!canUndo}
+                >
+                  <Undo />
+                </Button>
+                <Button
+                  aria-label="Redo"
+                  title="Redo"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => editorRef.current?.redo()}
+                  disabled={!canRedo}
+                >
+                  <Redo />
+                </Button>
+                {blockMarker !== undefined && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -1413,22 +1413,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       />
                     </PopoverContent>
                   </Popover>
-                </>
-              )}
-            </>
-          }
-          endAreaChildren={
-            <ScrollGroupSelector
-              availableScrollGroupIds={availableScrollGroupIds}
-              scrollGroupId={scrollGroupId}
-              onChangeScrollGroupId={setScrollGroupId}
-              localizedStrings={scrollGroupLocalizedStrings}
-            />
-          }
-        />
-      </div>
+                )}
+              </>
+            )}
+          </>
+        }
+        endAreaChildren={
+          <ScrollGroupSelector
+            availableScrollGroupIds={availableScrollGroupIds}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            localizedStrings={scrollGroupLocalizedStrings}
+          />
+        }
+      />
+      {/* </div> */}
+      {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
-      <div className="tw-h-screen tw-w-screen" dir={options.textDirection}>
+      <div className="tw-h-auto tw-overflow-auto" dir={options.textDirection}>
         {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
@@ -1546,6 +1548,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           />
         </PopoverContent>
       </Popover>
-    </>
+    </div>
   );
 };

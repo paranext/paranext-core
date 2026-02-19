@@ -287,9 +287,24 @@ export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
 
-const commonBlockMarkerToBlockNames: Record<string, LocalizeKey> = {
+// This list is incomplete.
+export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
+  cl: '%paragraphMenu_cl_markerDescription%',
+  h: '%paragraphMenu_h_markerDescription%',
+  h1: '%paragraphMenu_h1_markerDescription%',
+  h2: '%paragraphMenu_h2_markerDescription%',
+  h3: '%paragraphMenu_h3_markerDescription%',
+  ide: '%paragraphMenu_ide_markerDescription%',
   m: '%paragraphMenu_m_markerDescription%',
   ms: '%paragraphMenu_ms_markerDescription%',
+  ms1: '%paragraphMenu_ms1_markerDescription%',
+  ms2: '%paragraphMenu_ms2_markerDescription%',
+  ms3: '%paragraphMenu_ms3_markerDescription%',
+  mt: '%paragraphMenu_mt_markerDescription%',
+  mt1: '%paragraphMenu_mt1_markerDescription%',
+  mt2: '%paragraphMenu_mt2_markerDescription%',
+  mt3: '%paragraphMenu_mt3_markerDescription%',
+  mt4: '%paragraphMenu_mt4_markerDescription%',
   nb: '%paragraphMenu_nb_markerDescription%',
   p: '%paragraphMenu_p_markerDescription%',
   pi: '%paragraphMenu_pi_markerDescription%',
@@ -297,30 +312,9 @@ const commonBlockMarkerToBlockNames: Record<string, LocalizeKey> = {
   q2: '%paragraphMenu_q2_markerDescription%',
   r: '%paragraphMenu_r_markerDescription%',
   s: '%paragraphMenu_s_markerDescription%',
-  // do not allow `b - Poetry - Stanza Break (Blank Line)` here to avoid a USFM validity issue.
-};
-
-// This list is incomplete.
-export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
-  ...commonBlockMarkerToBlockNames,
-  ide: '%paragraphMenu_ide_markerDescription%',
-  h: '%paragraphMenu_h_markerDescription%',
-  h1: '%paragraphMenu_h1_markerDescription%',
-  h2: '%paragraphMenu_h2_markerDescription%',
-  h3: '%paragraphMenu_h3_markerDescription%',
   toc1: '%paragraphMenu_toc1_markerDescription%',
   toc2: '%paragraphMenu_toc2_markerDescription%',
   toc3: '%paragraphMenu_toc3_markerDescription%',
-  cl: '%paragraphMenu_cl_markerDescription%',
-  mt: '%paragraphMenu_mt_markerDescription%',
-  mt1: '%paragraphMenu_mt1_markerDescription%',
-  mt2: '%paragraphMenu_mt2_markerDescription%',
-  mt3: '%paragraphMenu_mt3_markerDescription%',
-  mt4: '%paragraphMenu_mt4_markerDescription%',
-  ms1: '%paragraphMenu_ms1_markerDescription%',
-  ms2: '%paragraphMenu_ms2_markerDescription%',
-  ms3: '%paragraphMenu_ms3_markerDescription%',
-  b: '%paragraphMenu_b_markerDescription%',
 };
 
 /**
