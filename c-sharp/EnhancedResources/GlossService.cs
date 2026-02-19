@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Paranext.DataProvider.EnhancedResources;
 
 // === PORTED FROM PT9 ===
@@ -20,6 +22,10 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class GlossService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:2747-2777
+    // Method: MarbleForm.RemoveBraces()
+    // Maps to: EXT-007, CAP-015
     /// <summary>
     /// Strips content within curly braces (metadata markers) from gloss text.
     /// Content between { and } inclusive is removed. Remaining text is returned
@@ -27,5 +33,6 @@ internal static class GlossService
     /// </summary>
     /// <param name="rawGloss">The raw gloss text potentially containing {metadata} markers.</param>
     /// <returns>The gloss text with all {content} removed.</returns>
-    public static string FilterGlossBraces(string rawGloss) => throw new NotImplementedException();
+    public static string FilterGlossBraces(string rawGloss) =>
+        Regex.Replace(rawGloss, @"\{.*?\}", string.Empty);
 }
