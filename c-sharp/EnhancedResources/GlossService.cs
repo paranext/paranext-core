@@ -20,12 +20,14 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// Service for gloss text processing, including brace metadata filtering
 /// and localized gloss lookup.
 /// </summary>
-internal static class GlossService
+internal static partial class GlossService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleForm.cs:2747-2777
-    // Method: MarbleForm.RemoveBraces()
-    // Maps to: EXT-007, CAP-015
+    /// <summary>
+    /// Pre-compiled regex matching content within curly braces using lazy quantifier.
+    /// </summary>
+    [GeneratedRegex(@"\{.*?\}")]
+    private static partial Regex BraceContentRegex();
+
     /// <summary>
     /// Strips content within curly braces (metadata markers) from gloss text.
     /// Content between { and } inclusive is removed. Remaining text is returned
@@ -34,5 +36,5 @@ internal static class GlossService
     /// <param name="rawGloss">The raw gloss text potentially containing {metadata} markers.</param>
     /// <returns>The gloss text with all {content} removed.</returns>
     public static string FilterGlossBraces(string rawGloss) =>
-        Regex.Replace(rawGloss, @"\{.*?\}", string.Empty);
+        BraceContentRegex().Replace(rawGloss, string.Empty);
 }
