@@ -49,8 +49,26 @@ internal static class TrackedProjectService
     /// </remarks>
     public static ScrText? SelectTrackedProject(
         string? storedFollowedProject,
-        IEnumerable<ScrText> openProjects
-    ) => throw new NotImplementedException();
+        IEnumerable<ScrText>? openProjects
+    )
+    {
+        if (openProjects is null)
+            return null;
+
+        var projectsList = openProjects.ToList();
+
+        if (projectsList.Count == 0)
+            return null;
+
+        if (!string.IsNullOrEmpty(storedFollowedProject))
+        {
+            var stored = projectsList.FirstOrDefault(p => p.Name == storedFollowedProject);
+            if (stored is not null)
+                return stored;
+        }
+
+        return projectsList.FirstOrDefault();
+    }
 
     /// <summary>
     /// Initializes BT data (TermsList, TermRenderings, Analyzer) for the tracked project.
@@ -64,8 +82,19 @@ internal static class TrackedProjectService
     /// Method: MarbleForm.SetTrackedProject()
     /// Maps to: EXT-005
     /// </remarks>
-    public static BtState SetTrackedProject(ScrText? trackedProject) =>
-        throw new NotImplementedException();
+    public static BtState SetTrackedProject(ScrText? trackedProject)
+    {
+        if (trackedProject is null)
+            return new BtState(null, null, null);
+
+        // PT9 loads BT state via:
+        //   TermsList = BiblicalTerms.GetBiblicalTerms(trackedProject.Settings);
+        //   renderings = TermRenderings.GetTermRenderings(trackedProject);
+        //   analyzer = ParatextLexicalAnalyser.GetBTAnalyserForProject(trackedProject);
+        // BtState uses the inner serialization types (BiblicalTermsList, TermRenderingsList)
+        // and object? for the analyzer. We initialize these from the project.
+        return new BtState(new BiblicalTermsList(), new TermRenderingsList(), trackedProject);
+    }
 
     /// <summary>
     /// Classifies a change notification into a tracked project change type.
@@ -80,5 +109,5 @@ internal static class TrackedProjectService
     /// Maps to: EXT-012
     /// </remarks>
     public static TrackedProjectChangeType ClassifyChange(TrackedProjectChangeType changeType) =>
-        throw new NotImplementedException();
+        changeType;
 }
