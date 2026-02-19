@@ -79,7 +79,13 @@
       "%enhancedResources_dict_statusFound%": "Found",
       "%enhancedResources_dict_statusGuessed%": "Guessed",
       "%enhancedResources_dict_statusMissing%": "Not found",
-      "%enhancedResources_dict_statusDenied%": "Denied"
+      "%enhancedResources_dict_statusDenied%": "Denied",
+      "%enhancedResources_enc_expandItem%": "Expand",
+      "%enhancedResources_enc_collapseItem%": "Collapse",
+      "%enhancedResources_enc_readFullArticle%": "Read full article",
+      "%enhancedResources_enc_translations%": "Translations:",
+      "%enhancedResources_enc_sourceText%": "Source:",
+      "%enhancedResources_enc_seeAlso%": "See also:"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -159,7 +165,13 @@
       "%enhancedResources_dict_statusFound%": "Encontrado",
       "%enhancedResources_dict_statusGuessed%": "Adivinado",
       "%enhancedResources_dict_statusMissing%": "No encontrado",
-      "%enhancedResources_dict_statusDenied%": "Denegado"
+      "%enhancedResources_dict_statusDenied%": "Denegado",
+      "%enhancedResources_enc_expandItem%": "Expandir",
+      "%enhancedResources_enc_collapseItem%": "Contraer",
+      "%enhancedResources_enc_readFullArticle%": "Leer articulo completo",
+      "%enhancedResources_enc_translations%": "Traducciones:",
+      "%enhancedResources_enc_sourceText%": "Fuente:",
+      "%enhancedResources_enc_seeAlso%": "Ver tambien:"
     }
   }
 }

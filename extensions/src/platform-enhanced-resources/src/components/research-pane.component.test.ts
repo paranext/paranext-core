@@ -22,6 +22,9 @@ const DEFAULT_DICTIONARY_PROPS = {
   onSemanticDomainClick: () => {},
   onDictionaryAssessmentChange: () => {},
   dictionaryAssessments: {},
+  encyclopediaItems: [],
+  onEncyclopediaToggleExpand: () => {},
+  onEncyclopediaReadArticle: () => {},
 };
 
 describe('research-pane.component', () => {

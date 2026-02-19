@@ -17,6 +17,10 @@ import type {
   DictionaryDisplayItem,
   DictionarySortField,
 } from '../components/dictionary-tab.component';
+import type {
+  EncyclopediaDisplayItem,
+  EncyclopediaEntry,
+} from '../components/encyclopedia-tab.component';
 
 // --- Types ---
 
@@ -110,6 +114,9 @@ const DEFAULT_DICTIONARY_ITEMS: DictionaryDisplayItem[] = [];
 /** Default dictionary assessments */
 const DEFAULT_DICTIONARY_ASSESSMENTS: Record<string, boolean | undefined> = {};
 
+/** Default empty encyclopedia items (will be populated by backend integration) */
+const DEFAULT_ENCYCLOPEDIA_ITEMS: EncyclopediaDisplayItem[] = [];
+
 // --- Component ---
 
 global.webViewComponent = function EnhancedResourceWebView({
@@ -186,6 +193,19 @@ global.webViewComponent = function EnhancedResourceWebView({
 
   // Dictionary expanded state: track which terms are expanded
   const [expandedTerms, setExpandedTerms] = useWebViewState<string[]>('expandedTerms', []);
+
+  // --- Encyclopedia tab state ---
+  // Encyclopedia items will be populated by backend integration (platformEnhancedResources.loadEncyclopediaTab)
+  const [encyclopediaItems] = useWebViewState<EncyclopediaDisplayItem[]>(
+    'encyclopediaItems',
+    DEFAULT_ENCYCLOPEDIA_ITEMS,
+  );
+
+  // Encyclopedia expanded state: track which entry IDs are expanded
+  const [expandedEncyclopediaEntries, setExpandedEncyclopediaEntries] = useWebViewState<string[]>(
+    'expandedEncyclopediaEntries',
+    [],
+  );
 
   // Keep a ref to the current banners for use in callbacks
   const bannersRef = useRef(banners);
@@ -348,6 +368,41 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setDictionaryAssessments],
   );
 
+  // --- Encyclopedia tab handlers ---
+
+  // Keep a ref to the current expanded encyclopedia entries for use in callbacks
+  const expandedEncyclopediaEntriesRef = useRef(expandedEncyclopediaEntries);
+  useEffect(() => {
+    expandedEncyclopediaEntriesRef.current = expandedEncyclopediaEntries;
+  }, [expandedEncyclopediaEntries]);
+
+  const handleEncyclopediaToggleExpand = useCallback(
+    (id: string) => {
+      const prev = expandedEncyclopediaEntriesRef.current;
+      if (prev.includes(id)) {
+        setExpandedEncyclopediaEntries(prev.filter((e: string) => e !== id));
+      } else {
+        setExpandedEncyclopediaEntries([...prev, id]);
+      }
+    },
+    [setExpandedEncyclopediaEntries],
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleEncyclopediaReadArticle = useCallback((_entry: EncyclopediaEntry) => {
+    // Article viewer overlay will be wired in UI-PKG-010
+  }, []);
+
+  // Compute encyclopedia items with expanded state applied
+  const encyclopediaItemsWithExpanded = useMemo(
+    () =>
+      encyclopediaItems.map((item) => ({
+        ...item,
+        expanded: expandedEncyclopediaEntries.includes(item.id),
+      })),
+    [encyclopediaItems, expandedEncyclopediaEntries],
+  );
+
   // Compute dictionary items with expanded state applied
   const dictionaryItemsWithExpanded = useMemo(
     () =>
@@ -454,6 +509,9 @@ global.webViewComponent = function EnhancedResourceWebView({
             onSemanticDomainClick={handleSemanticDomainClick}
             onDictionaryAssessmentChange={handleDictionaryAssessmentChange}
             dictionaryAssessments={dictionaryAssessments}
+            encyclopediaItems={encyclopediaItemsWithExpanded}
+            onEncyclopediaToggleExpand={handleEncyclopediaToggleExpand}
+            onEncyclopediaReadArticle={handleEncyclopediaReadArticle}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

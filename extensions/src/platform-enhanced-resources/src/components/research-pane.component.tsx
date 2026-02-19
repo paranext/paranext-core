@@ -17,6 +17,8 @@ import { X } from 'lucide-react';
 import type { WordFilterData } from './scripture-pane.component';
 import DictionaryTab from './dictionary-tab.component';
 import type { DictionaryDisplayItem, DictionarySortField } from './dictionary-tab.component';
+import EncyclopediaTab from './encyclopedia-tab.component';
+import type { EncyclopediaDisplayItem, EncyclopediaEntry } from './encyclopedia-tab.component';
 
 // --- Types ---
 
@@ -66,6 +68,14 @@ export interface ResearchPaneProps {
   onDictionaryAssessmentChange: (term: string, isHelpful: boolean) => void;
   /** Map of term -> assessment value in dictionary */
   dictionaryAssessments: Record<string, boolean | undefined>;
+
+  // --- Encyclopedia Tab Props ---
+  /** Encyclopedia items to display in the encyclopedia tab */
+  encyclopediaItems: EncyclopediaDisplayItem[];
+  /** Callback when an encyclopedia item is expanded/collapsed */
+  onEncyclopediaToggleExpand: (id: string) => void;
+  /** Callback when "Read full article" is clicked in encyclopedia */
+  onEncyclopediaReadArticle: (entry: EncyclopediaEntry) => void;
 }
 
 // --- Constants ---
@@ -127,6 +137,9 @@ export default function ResearchPane({
   onSemanticDomainClick,
   onDictionaryAssessmentChange,
   dictionaryAssessments,
+  encyclopediaItems,
+  onEncyclopediaToggleExpand,
+  onEncyclopediaReadArticle,
 }: ResearchPaneProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
 
@@ -262,12 +275,12 @@ export default function ResearchPane({
           />
         </TabsContent>
 
-        <TabsContent value="encyclopedia" className="tw-flex-1 tw-overflow-auto tw-min-h-0">
-          <div data-testid="encyclopedia-tab-content" className="tw-p-4">
-            <p className="tw-text-muted-foreground tw-text-sm">
-              {localizedStrings['%enhancedResources_emptyState%']}
-            </p>
-          </div>
+        <TabsContent value="encyclopedia" className="tw-flex-1 tw-overflow-hidden tw-min-h-0">
+          <EncyclopediaTab
+            items={encyclopediaItems}
+            onToggleExpand={onEncyclopediaToggleExpand}
+            onReadArticle={onEncyclopediaReadArticle}
+          />
         </TabsContent>
 
         <TabsContent value="media" className="tw-flex-1 tw-overflow-auto tw-min-h-0">
