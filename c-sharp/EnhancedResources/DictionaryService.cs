@@ -14,23 +14,12 @@ public record DictionaryTabContent(IReadOnlyList<DictionaryDisplayItem> Items, s
 /// </summary>
 internal static class DictionaryService
 {
+    private const string LexicalLinksType = "lexical_links";
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs:722-793
     // Method: DictionaryTab.LoadResources() orchestration
     // Maps to: EXT-070, CAP-009
-    //
-    // EXPLANATION:
-    // This method orchestrates the full dictionary tab pipeline:
-    // 1. Validate resource and book availability
-    // 2. Get tokens for book from MarbleDataAccess
-    // 3. Filter TextLink tokens by scope via GetLinksInScope
-    // 4. Optionally filter by word filter via GetMatchingTokens
-    // 5. For each token: parse lexical links, look up dictionary entry,
-    //    build DictionaryDisplayItem with POS, gloss, definitions
-    // 6. Deduplicate via TryMerge (INV-015)
-    // 7. Calculate rendering status per item
-    // 8. Sort by requested field and direction
-    // 9. Return DictionaryTabContent
     /// <summary>
     /// Loads the dictionary tab content for a given resource, verse, and scope.
     /// Orchestrates all sub-pipelines: scope filtering (CAP-003), lexical link parsing (CAP-005),
@@ -38,15 +27,6 @@ internal static class DictionaryService
     /// dictionary data models (CAP-024), token filtering (CAP-025),
     /// deduplication (CAP-026), and data access (CAP-028).
     /// </summary>
-    /// <param name="dataAccess">The MarbleDataAccess instance providing resource data.</param>
-    /// <param name="resourceId">The Enhanced Resource identifier (e.g., "ESV16UK+").</param>
-    /// <param name="verseRef">The current verse reference for scope calculation.</param>
-    /// <param name="scope">The scope filter (CurrentVerse, CurrentSection, CurrentChapter).</param>
-    /// <param name="trackedProjectId">The tracked project ID for rendering status, or null.</param>
-    /// <param name="wordFilter">Optional word filter to restrict results, or null.</param>
-    /// <param name="sortField">Which field to sort items by.</param>
-    /// <param name="sortAscending">True for ascending sort, false for descending.</param>
-    /// <returns>DictionaryTabContent with sorted, deduplicated items and header HTML.</returns>
     public static Task<DictionaryTabContent> LoadDictionaryTabAsync(
         MarbleDataAccess dataAccess,
         string resourceId,
@@ -58,7 +38,34 @@ internal static class DictionaryService
         bool sortAscending
     )
     {
-        // Step 1: Get tokens for the book
+        var tokens = ValidateAndGetBookTokens(dataAccess, resourceId, verseRef);
+        var linksInScope = GetLinksInScope(tokens, verseRef, scope);
+        linksInScope = ApplyWordFilter(linksInScope, wordFilter);
+
+        string dictionaryName = MarbleDataAccess.GetDictionaryNameForBook(verseRef.Book);
+        var items = BuildDisplayItems(
+            linksInScope,
+            dataAccess,
+            dictionaryName,
+            verseRef,
+            trackedProjectId
+        );
+
+        var sortedItems = SortItems(items, sortField, sortAscending);
+        var result = new DictionaryTabContent(sortedItems, HeaderHtml: "");
+        return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Validates that the resource and book exist, returning the book's tokens.
+    /// Throws RESOURCE_NOT_FOUND or BOOK_NOT_FOUND on failure.
+    /// </summary>
+    private static IReadOnlyList<MarbleToken> ValidateAndGetBookTokens(
+        MarbleDataAccess dataAccess,
+        string resourceId,
+        VerseReference verseRef
+    )
+    {
         var tokens = dataAccess.GetBookTokens(resourceId, verseRef.Book);
         if (tokens == null)
             throw new Exception($"RESOURCE_NOT_FOUND: Resource '{resourceId}' not found");
@@ -68,7 +75,6 @@ internal static class DictionaryService
                 $"BOOK_NOT_FOUND: Book {verseRef.Book} not available in resource '{resourceId}'"
             );
 
-        // Check if the tokens actually belong to the requested book
         bool hasMatchingBook = tokens.Any(t =>
             t.VerseRef != null && t.VerseRef.Book == verseRef.Book
         );
@@ -77,47 +83,67 @@ internal static class DictionaryService
                 $"BOOK_NOT_FOUND: Book {verseRef.Book} not available in resource '{resourceId}'"
             );
 
-        // Step 2: Get TextLink tokens in scope
-        // Use GetLinksInScope for scope filtering; if tokens have verse info in
-        // VerseRef rather than Text (as test data does), fall back to VerseRef-based filtering.
-        IReadOnlyList<MarbleToken> linksInScope;
+        return tokens;
+    }
 
-        // First try GetLinksInScope which parses verse from token.Text
+    /// <summary>
+    /// Filters TextLink tokens by scope using GetLinksInScope, with a VerseRef-based fallback
+    /// for tokens that carry verse info on the VerseRef property rather than in Text.
+    /// </summary>
+    private static IReadOnlyList<MarbleToken> GetLinksInScope(
+        IReadOnlyList<MarbleToken> tokens,
+        VerseReference verseRef,
+        ScopeFilter scope
+    )
+    {
         var scopeResult = MarbleDataParser.GetLinksInScope(
             tokens,
             verseRef,
             scope,
-            "lexical_links",
+            LexicalLinksType,
             null,
             null
         );
 
         if (scopeResult.Count > 0 || scope == ScopeFilter.CurrentChapter)
-        {
-            linksInScope = scopeResult;
-        }
-        else
-        {
-            // Fall back to VerseRef-based filtering for tokens that have VerseRef set
-            linksInScope = FilterTextLinksByVerseRef(tokens, verseRef, scope);
-        }
+            return scopeResult;
 
-        // Step 3: Optionally filter by word filter
-        if (wordFilter != null && linksInScope.Count > 0)
-        {
-            linksInScope = MarbleDataParser.GetMatchingTokens(
-                linksInScope,
-                wordFilter,
-                wordFilter.SourcePane == WordFilterSource.Scripture
-            );
-        }
+        return FilterTextLinksByVerseRef(tokens, verseRef, scope);
+    }
 
-        // Step 4: Build display items from tokens
-        string dictionaryName = MarbleDataAccess.GetDictionaryNameForBook(verseRef.Book);
+    /// <summary>
+    /// Applies the optional word filter to restrict tokens to those matching the filter.
+    /// Returns the input list unchanged when no filter is specified.
+    /// </summary>
+    private static IReadOnlyList<MarbleToken> ApplyWordFilter(
+        IReadOnlyList<MarbleToken> linksInScope,
+        WordFilter? wordFilter
+    )
+    {
+        if (wordFilter == null || linksInScope.Count == 0)
+            return linksInScope;
+
+        return MarbleDataParser.GetMatchingTokens(
+            linksInScope,
+            wordFilter,
+            wordFilter.SourcePane == WordFilterSource.Scripture
+        );
+    }
+
+    /// <summary>
+    /// Builds deduplicated display items from the filtered token list.
+    /// For each TextLink token: parses lexical links, looks up dictionary data,
+    /// calculates rendering status, and deduplicates via TryMerge (INV-015).
+    /// </summary>
+    private static List<DictionaryDisplayItem> BuildDisplayItems(
+        IReadOnlyList<MarbleToken> linksInScope,
+        MarbleDataAccess dataAccess,
+        string dictionaryName,
+        VerseReference verseRef,
+        string? trackedProjectId
+    )
+    {
         var items = new List<DictionaryDisplayItem>();
-
-        // Track current verse from token iteration for occurrence references
-        int currentVerse = verseRef.Verse;
 
         foreach (var token in linksInScope)
         {
@@ -129,164 +155,204 @@ internal static class DictionaryService
                 continue;
 
             var primaryLink = parsedLinks[0];
-            string lemma = primaryLink.Lemma;
-
-            // Determine occurrence verse reference
             var occurrenceRef =
-                token.VerseRef ?? new VerseReference(verseRef.Book, verseRef.Chapter, currentVerse);
+                token.VerseRef
+                ?? new VerseReference(verseRef.Book, verseRef.Chapter, verseRef.Verse);
+            var entry = LookUpDictionaryEntry(dataAccess, primaryLink);
 
-            // Look up dictionary entry for definitions, POS, gloss
-            string entryKey =
-                $"{primaryLink.Dictionary}:{primaryLink.Lemma}:{primaryLink.BaseFormIndex}";
-            var entry = dataAccess.GetDictionaryEntry(entryKey);
-
-            // Extract fields from dictionary entry
-            string transliteration = "";
-            string partOfSpeech = "";
-            string partOfSpeechShort = "";
-            string gloss = "";
-            var translations = Array.Empty<string>();
-            var definitions = new List<DictionarySenseDefinition>();
-
-            if (entry != null)
-            {
-                // Get the base form for POS
-                if (
-                    int.TryParse(primaryLink.BaseFormIndex, out int bfIdx)
-                    && entry.BaseForms != null
-                    && bfIdx < entry.BaseForms.Count
-                )
-                {
-                    var baseForm = entry.BaseForms[bfIdx];
-                    if (baseForm?.PartsOfSpeech != null && baseForm.PartsOfSpeech.Count > 0)
-                    {
-                        string rawPos = baseForm.PartsOfSpeech[0];
-                        partOfSpeech = PartOfSpeechTranslator.Translate(
-                            dictionaryName,
-                            rawPos,
-                            false
-                        );
-                        partOfSpeechShort = PartOfSpeechTranslator.Translate(
-                            dictionaryName,
-                            rawPos,
-                            true
-                        );
-                    }
-                }
-
-                // Get gloss from entry
-                if (entry.BaseForms != null)
-                {
-                    foreach (var bf in entry.BaseForms)
-                    {
-                        if (bf?.LEXMeanings == null)
-                            continue;
-                        foreach (var meaning in bf.LEXMeanings)
-                        {
-                            if (meaning.LEXSenses == null)
-                                continue;
-                            foreach (var sense in meaning.LEXSenses)
-                            {
-                                if (
-                                    sense.Glosses != null
-                                    && sense.Glosses.Count > 0
-                                    && string.IsNullOrEmpty(gloss)
-                                )
-                                {
-                                    gloss = GlossService.FilterGlossBraces(
-                                        string.Join("; ", sense.Glosses)
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Build definitions list
-                if (entry.BaseForms != null)
-                {
-                    int senseIdx = 0;
-                    foreach (var bf in entry.BaseForms)
-                    {
-                        if (bf?.LEXMeanings == null)
-                            continue;
-                        foreach (var meaning in bf.LEXMeanings)
-                        {
-                            if (meaning.LEXSenses == null)
-                                continue;
-                            foreach (var sense in meaning.LEXSenses)
-                            {
-                                senseIdx++;
-                                string defHtml =
-                                    sense.DefinitionShort ?? sense.DefinitionLong ?? "";
-                                string senseGloss =
-                                    sense.Glosses != null
-                                        ? GlossService.FilterGlossBraces(
-                                            string.Join("; ", sense.Glosses)
-                                        )
-                                        : "";
-
-                                definitions.Add(
-                                    new DictionarySenseDefinition(
-                                        SenseNumber: senseIdx.ToString(),
-                                        GlossText: senseGloss,
-                                        DefinitionHtml: defHtml,
-                                        IsRelevantToContext: false,
-                                        SemanticDomain: null,
-                                        SemanticDomainCode: null
-                                    )
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Calculate rendering status
-            var renderingStatusCode = TermRenderingStatusCode.NoTrackedProject;
-            if (trackedProjectId != null)
-            {
-                // Without a real BT state setup, CalculateRenderingStatus with null btState
-                // returns NoTrackedProject. In production, BtState would be resolved from
-                // TrackedProjectService. For now, pass null which yields NoTrackedProject.
-                var renderingResult = TermRenderingStatusService.CalculateRenderingStatus(
-                    null,
-                    primaryLink,
-                    occurrenceRef
-                );
-                renderingStatusCode = renderingResult.StatusCode;
-            }
-
-            var item = new DictionaryDisplayItem(
-                Id: $"dict-{lemma}-{token.LexicalLinks}",
-                Lemma: lemma,
-                Transliteration: transliteration,
-                SurfaceForm: token.Text ?? "",
-                SourceText: token.Text ?? "",
-                LexicalLinks: token.LexicalLinks ?? "",
-                PartOfSpeech: partOfSpeech,
-                PartOfSpeechShort: partOfSpeechShort,
-                Gloss: gloss,
-                Translations: translations,
-                Definitions: definitions,
-                OccurrenceCount: 1,
-                OccurrenceReferences: new List<VerseReference> { occurrenceRef },
-                RenderingStatus: renderingStatusCode,
-                Expanded: false
+            var item = BuildDisplayItem(
+                token,
+                primaryLink,
+                occurrenceRef,
+                entry,
+                dictionaryName,
+                trackedProjectId
             );
 
-            // Step 5: Deduplicate via TryMerge (INV-015)
             TryMerge(item, items);
         }
 
-        // Step 6: Sort items
-        var sortedItems = SortItems(items, sortField, sortAscending);
+        return items;
+    }
 
-        // Step 7: Build header HTML
-        string headerHtml = "";
+    /// <summary>
+    /// Looks up a dictionary entry by constructing the key from the lexical link.
+    /// </summary>
+    private static Lexicon_Entry? LookUpDictionaryEntry(
+        MarbleDataAccess dataAccess,
+        ParsedLexicalLink link
+    )
+    {
+        string entryKey = $"{link.Dictionary}:{link.Lemma}:{link.BaseFormIndex}";
+        return dataAccess.GetDictionaryEntry(entryKey);
+    }
 
-        var result = new DictionaryTabContent(sortedItems, headerHtml);
-        return Task.FromResult(result);
+    /// <summary>
+    /// Builds a single DictionaryDisplayItem from a token, its primary lexical link,
+    /// and the corresponding dictionary entry (if found).
+    /// </summary>
+    private static DictionaryDisplayItem BuildDisplayItem(
+        MarbleToken token,
+        ParsedLexicalLink primaryLink,
+        VerseReference occurrenceRef,
+        Lexicon_Entry? entry,
+        string dictionaryName,
+        string? trackedProjectId
+    )
+    {
+        var (partOfSpeech, partOfSpeechShort) = ExtractPartOfSpeech(
+            entry,
+            primaryLink.BaseFormIndex,
+            dictionaryName
+        );
+        string gloss = ExtractFirstGloss(entry);
+        var definitions = BuildDefinitionsList(entry);
+        var renderingStatus = CalculateItemRenderingStatus(
+            trackedProjectId,
+            primaryLink,
+            occurrenceRef
+        );
+
+        return new DictionaryDisplayItem(
+            Id: $"dict-{primaryLink.Lemma}-{token.LexicalLinks}",
+            Lemma: primaryLink.Lemma,
+            Transliteration: "",
+            SurfaceForm: token.Text ?? "",
+            SourceText: token.Text ?? "",
+            LexicalLinks: token.LexicalLinks ?? "",
+            PartOfSpeech: partOfSpeech,
+            PartOfSpeechShort: partOfSpeechShort,
+            Gloss: gloss,
+            Translations: Array.Empty<string>(),
+            Definitions: definitions,
+            OccurrenceCount: 1,
+            OccurrenceReferences: new List<VerseReference> { occurrenceRef },
+            RenderingStatus: renderingStatus,
+            Expanded: false
+        );
+    }
+
+    /// <summary>
+    /// Extracts the part of speech (long and short forms) from a dictionary entry's base form.
+    /// Returns empty strings if the entry has no POS data.
+    /// </summary>
+    private static (string Long, string Short) ExtractPartOfSpeech(
+        Lexicon_Entry? entry,
+        string baseFormIndex,
+        string dictionaryName
+    )
+    {
+        if (entry?.BaseForms == null)
+            return ("", "");
+
+        if (!int.TryParse(baseFormIndex, out int bfIdx) || bfIdx >= entry.BaseForms.Count)
+            return ("", "");
+
+        var baseForm = entry.BaseForms[bfIdx];
+        if (baseForm?.PartsOfSpeech == null || baseForm.PartsOfSpeech.Count == 0)
+            return ("", "");
+
+        string rawPos = baseForm.PartsOfSpeech[0];
+        return (
+            PartOfSpeechTranslator.Translate(dictionaryName, rawPos, false),
+            PartOfSpeechTranslator.Translate(dictionaryName, rawPos, true)
+        );
+    }
+
+    /// <summary>
+    /// Extracts the first non-empty gloss from a dictionary entry, with brace filtering applied.
+    /// Returns an empty string if no glosses are found.
+    /// </summary>
+    private static string ExtractFirstGloss(Lexicon_Entry? entry)
+    {
+        foreach (var sense in FlattenSenses(entry))
+        {
+            if (sense.Glosses != null && sense.Glosses.Count > 0)
+                return GlossService.FilterGlossBraces(string.Join("; ", sense.Glosses));
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Builds the list of sense definitions from a dictionary entry.
+    /// Each sense is numbered sequentially across all base forms.
+    /// </summary>
+    private static List<DictionarySenseDefinition> BuildDefinitionsList(Lexicon_Entry? entry)
+    {
+        var definitions = new List<DictionarySenseDefinition>();
+        int senseIdx = 0;
+
+        foreach (var sense in FlattenSenses(entry))
+        {
+            senseIdx++;
+            string defHtml = sense.DefinitionShort ?? sense.DefinitionLong ?? "";
+            string senseGloss =
+                sense.Glosses != null
+                    ? GlossService.FilterGlossBraces(string.Join("; ", sense.Glosses))
+                    : "";
+
+            definitions.Add(
+                new DictionarySenseDefinition(
+                    SenseNumber: senseIdx.ToString(),
+                    GlossText: senseGloss,
+                    DefinitionHtml: defHtml,
+                    IsRelevantToContext: false,
+                    SemanticDomain: null,
+                    SemanticDomainCode: null
+                )
+            );
+        }
+
+        return definitions;
+    }
+
+    /// <summary>
+    /// Flattens the nested BaseForms > LEXMeanings > LEXSenses hierarchy into a single sequence.
+    /// Eliminates the triple-nested loop pattern that was duplicated across gloss and definition extraction.
+    /// </summary>
+    private static IEnumerable<Sense> FlattenSenses(Lexicon_Entry? entry)
+    {
+        if (entry?.BaseForms == null)
+            yield break;
+
+        foreach (var baseForm in entry.BaseForms)
+        {
+            if (baseForm?.LEXMeanings == null)
+                continue;
+
+            foreach (var meaning in baseForm.LEXMeanings)
+            {
+                if (meaning.LEXSenses == null)
+                    continue;
+
+                foreach (var sense in meaning.LEXSenses)
+                    yield return sense;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculates the rendering status for a dictionary item.
+    /// Returns NoTrackedProject when no tracked project is specified.
+    /// </summary>
+    private static TermRenderingStatusCode CalculateItemRenderingStatus(
+        string? trackedProjectId,
+        ParsedLexicalLink primaryLink,
+        VerseReference occurrenceRef
+    )
+    {
+        if (trackedProjectId == null)
+            return TermRenderingStatusCode.NoTrackedProject;
+
+        // In production, BtState would be resolved from TrackedProjectService.
+        // Passing null btState yields NoTrackedProject as the default.
+        var renderingResult = TermRenderingStatusService.CalculateRenderingStatus(
+            null,
+            primaryLink,
+            occurrenceRef
+        );
+        return renderingResult.StatusCode;
     }
 
     /// <summary>
