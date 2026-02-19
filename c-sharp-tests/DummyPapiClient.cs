@@ -59,5 +59,37 @@ namespace TestParanextDataProvider
         }
 
         #endregion
+
+        #region Test helper methods
+
+        /// <summary>
+        /// Checks whether a request handler has been registered for the given request type.
+        /// Used by NetworkObjectRegistrationTests to verify command registration.
+        /// </summary>
+        public bool IsRequestHandlerRegistered(string requestType)
+        {
+            return _localMethods.ContainsKey(requestType);
+        }
+
+        /// <summary>
+        /// Returns all registered request type keys.
+        /// Used by NetworkObjectRegistrationTests to verify registration counts.
+        /// </summary>
+        public IReadOnlyCollection<string> GetRegisteredRequestTypes()
+        {
+            return _localMethods.Keys.ToList().AsReadOnly();
+        }
+
+        /// <summary>
+        /// Returns the delegate registered for the given request type, or null if not found.
+        /// Used by NetworkObjectRegistrationTests to verify handler parameter counts.
+        /// </summary>
+        public Delegate? GetRegisteredHandler(string requestType)
+        {
+            _localMethods.TryGetValue(requestType, out var handler);
+            return handler;
+        }
+
+        #endregion
     }
 }
