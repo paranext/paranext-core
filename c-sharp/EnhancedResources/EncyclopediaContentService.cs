@@ -25,6 +25,15 @@ internal static class EncyclopediaContentService
     private static readonly Regex s_scriptureRefPattern =
         new(@"\{S:(\d{9,14})\}", RegexOptions.Compiled);
 
+    /// <summary>Regex pattern to strip HTML tags from article text for teaser generation.</summary>
+    private static readonly Regex s_htmlTagPattern = new("<[^>]+>", RegexOptions.Compiled);
+
+    /// <summary>Regex pattern to collapse consecutive whitespace into a single space.</summary>
+    private static readonly Regex s_whitespacePattern = new(@"\s+", RegexOptions.Compiled);
+
+    /// <summary>Maximum character length for teaser text before truncation.</summary>
+    private const int TeaserMaxLength = 150;
+
     /// <summary>Length of an extended BBBCCCVVVWWWWW reference string (with word offset).</summary>
     private const int BcvWithWordOffsetLength = 14;
 
@@ -351,8 +360,7 @@ internal static class EncyclopediaContentService
             if (articleKey == null)
                 continue;
 
-            // Deduplicate by article key
-            string entryId = $"{EncyclopediaLinkPrefix.TrimEnd(':')}" + ":" + articleKey;
+            string entryId = EncyclopediaLinkPrefix + articleKey;
             if (!seenKeys.Add(entryId))
                 continue;
 
@@ -403,7 +411,7 @@ internal static class EncyclopediaContentService
         string title = entry.Title ?? entryId;
         string fullArticleHtml = RenderArticleHtml(entry);
         string teaserHtml = GenerateTeaser(fullArticleHtml);
-        bool hasImages = entry.BibleImages != null && entry.BibleImages.Length > 0;
+        bool hasImages = entry.BibleImages is { Length: > 0 };
 
         var (sourceText, transliteration) = ExtractLanguageSetData(entry);
         var scriptureRefs = ExtractScriptureReferences(entry);
@@ -431,7 +439,7 @@ internal static class EncyclopediaContentService
     // Maps to: EXT-063, CAP-010
     private static string RenderArticleHtml(Thematic_LexiconThemLex_Entry entry)
     {
-        if (entry.Sections == null || entry.Sections.Length == 0)
+        if (entry.Sections is not { Length: > 0 })
             return "";
 
         var sb = new StringBuilder();
@@ -444,15 +452,11 @@ internal static class EncyclopediaContentService
             if (section.Paragraphs != null)
             {
                 foreach (var para in section.Paragraphs)
-                {
-                    string resolved = ResolveScriptureRefs(para);
-                    sb.Append($"<p>{resolved}</p>");
-                }
+                    sb.Append($"<p>{ResolveScriptureRefs(para)}</p>");
             }
             else if (!string.IsNullOrEmpty(section.Content))
             {
-                string resolved = ResolveScriptureRefs(section.Content);
-                sb.Append($"<p>{resolved}</p>");
+                sb.Append($"<p>{ResolveScriptureRefs(section.Content)}</p>");
             }
         }
 
@@ -491,15 +495,12 @@ internal static class EncyclopediaContentService
         if (string.IsNullOrEmpty(fullArticleHtml))
             return "";
 
-        // Strip HTML tags for teaser text
-        string plainText = Regex.Replace(fullArticleHtml, "<[^>]+>", " ").Trim();
-        // Collapse whitespace
-        plainText = Regex.Replace(plainText, @"\s+", " ");
+        string plainText = s_htmlTagPattern.Replace(fullArticleHtml, " ").Trim();
+        plainText = s_whitespacePattern.Replace(plainText, " ");
 
-        if (plainText.Length <= 150)
-            return plainText;
-
-        return plainText.Substring(0, 150) + "...";
+        return plainText.Length <= TeaserMaxLength
+            ? plainText
+            : plainText[..TeaserMaxLength] + "...";
     }
 
     /// <summary>
@@ -509,12 +510,12 @@ internal static class EncyclopediaContentService
         Thematic_LexiconThemLex_Entry entry
     )
     {
-        if (entry.Sections == null)
+        if (entry.Sections is null)
             return ("", "");
 
         foreach (var section in entry.Sections)
         {
-            if (section.LanguageSets == null || section.LanguageSets.Length == 0)
+            if (section.LanguageSets is not { Length: > 0 })
                 continue;
 
             var ls = section.LanguageSets[0];
@@ -532,24 +533,23 @@ internal static class EncyclopediaContentService
         Thematic_LexiconThemLex_Entry entry
     )
     {
-        var refs = new List<VerseReference>();
+        if (entry.Sections is null)
+            return Array.Empty<VerseReference>();
 
-        if (entry.Sections == null)
-            return refs;
+        var refs = new List<VerseReference>();
 
         foreach (var section in entry.Sections)
         {
-            if (section.LanguageSets == null)
+            if (section.LanguageSets is null)
                 continue;
 
             foreach (var ls in section.LanguageSets)
             {
-                if (ls.References == null)
+                if (ls.References is null)
                     continue;
 
                 foreach (var refVal in ls.References)
                 {
-                    // References are in BBBCCCVVV or BBBCCCVVVWWWWW format as ulong
                     int bcv = (int)(refVal % 1000000000UL);
                     int book = bcv / 1000000;
                     int chapter = (bcv % 1000000) / 1000;
