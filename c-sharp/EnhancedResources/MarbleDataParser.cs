@@ -405,4 +405,33 @@ internal static class MarbleDataParser
             )
             .ToList();
     }
+
+    // === STUB: CAP-003 GetLinksInScope ===
+    // Source: PT9/Paratext/Marble/MarbleDataParser.cs:425-503
+    // Method: MarbleBookTokens.GetLinksInScope()
+    // Maps to: EXT-052, CAP-003, BHV-600, BHV-302
+    /// <summary>
+    /// Returns TextLink tokens within the specified scope (verse/section/chapter),
+    /// optionally filtered by link type and text content.
+    /// Foundational retrieval for all 4 research tabs.
+    /// </summary>
+    /// <param name="tokens">The parsed token list for a chapter.</param>
+    /// <param name="verseRef">The current verse reference for scope calculation.</param>
+    /// <param name="scope">The scope filter (CurrentVerse, CurrentSection, CurrentChapter).</param>
+    /// <param name="linkType">Link type filter (e.g., "lexical_links"). Null = all links.</param>
+    /// <param name="filterText">Text content filter (case-insensitive substring). Null = no filter.</param>
+    /// <param name="filterLinks">Parsed lexical links for word filter matching. Null = no filter.</param>
+    /// <returns>Filtered TextLink tokens within the specified scope. Empty list if no matches.</returns>
+    public static IReadOnlyList<MarbleToken> GetLinksInScope(
+        IReadOnlyList<MarbleToken>? tokens,
+        VerseReference verseRef,
+        ScopeFilter scope,
+        string? linkType,
+        string? filterText,
+        IEnumerable<ParsedLexicalLink>? filterLinks
+    )
+    {
+        // RED PHASE STUB: Not yet implemented. Will be completed by TDD Implementer.
+        throw new NotImplementedException("CAP-003 GetLinksInScope: awaiting implementation");
+    }
 }
