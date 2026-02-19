@@ -4,23 +4,6 @@ using Paratext.Data.Terms;
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
-/// Change type classifications for tracked project notifications.
-/// PT9 Source: MarbleForm.cs:971-1017 (three change types in ChangeListener)
-/// Contract: extraction-plan.md EXT-012
-/// </summary>
-public enum TrackedProjectChangeType
-{
-    /// <summary>Rendering data changed in the tracked project.</summary>
-    Rendering,
-
-    /// <summary>Scripture text changed in the tracked project.</summary>
-    Text,
-
-    /// <summary>Biblical Terms list changed in the tracked project.</summary>
-    BiblicalTermsList,
-}
-
-/// <summary>
 /// Manages the tracked project lifecycle for BT (Biblical Terms) integration
 /// in Enhanced Resources. Handles auto-selection logic, BT state initialization,
 /// and change notification classification.
@@ -87,12 +70,8 @@ internal static class TrackedProjectService
         if (trackedProject is null)
             return new BtState(null, null, null);
 
-        // PT9 loads BT state via:
-        //   TermsList = BiblicalTerms.GetBiblicalTerms(trackedProject.Settings);
-        //   renderings = TermRenderings.GetTermRenderings(trackedProject);
-        //   analyzer = ParatextLexicalAnalyser.GetBTAnalyserForProject(trackedProject);
-        // BtState uses the inner serialization types (BiblicalTermsList, TermRenderingsList)
-        // and object? for the analyzer. We initialize these from the project.
+        // Initialize BT state with empty term containers and the project reference.
+        // CAP-007 (CalculateRenderingStatus) will load actual term data as needed.
         return new BtState(new BiblicalTermsList(), new TermRenderingsList(), trackedProject);
     }
 
