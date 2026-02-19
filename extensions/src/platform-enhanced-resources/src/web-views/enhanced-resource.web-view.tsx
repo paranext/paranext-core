@@ -10,6 +10,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from 'platform-bible-react';
+import ERToolbar, { TrackedProjectOption } from '../components/er-toolbar.component';
 
 // --- Types ---
 
@@ -28,6 +29,13 @@ interface WarningBannerStates {
   copyrightWarning: BannerState;
   updateRequired: BannerState;
   updateAvailable: BannerState;
+}
+
+/** Highlight toggle state for the toolbar */
+interface HighlightState {
+  researchTerms: boolean;
+  found: boolean;
+  missing: boolean;
 }
 
 // --- Default values ---
@@ -49,13 +57,18 @@ const DEFAULT_BANNERS: WarningBannerStates = {
   updateAvailable: { ...DEFAULT_BANNER_STATE },
 };
 
+const DEFAULT_HIGHLIGHTS: HighlightState = {
+  researchTerms: true,
+  found: false,
+  missing: false,
+};
+
 // --- Localization keys ---
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%enhancedResources_title%',
   '%enhancedResources_scripturePanePlaceholder%',
   '%enhancedResources_researchPanePlaceholder%',
-  '%enhancedResources_toolbarPlaceholder%',
   '%enhancedResources_dismiss%',
 ];
 
@@ -77,6 +90,9 @@ const BANNER_DISPLAY_ORDER: (keyof WarningBannerStates)[] = [
   'updateAvailable',
 ];
 
+/** Default empty project list (will be populated by backend integration) */
+const DEFAULT_AVAILABLE_PROJECTS: TrackedProjectOption[] = [];
+
 // --- Component ---
 
 global.webViewComponent = function EnhancedResourceWebView({
@@ -87,7 +103,8 @@ global.webViewComponent = function EnhancedResourceWebView({
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
 
   // --- Scroll group verse synchronization ---
-  const [scrRef] = useWebViewScrollGroupScrRef();
+  // scrRef will be used by scripture pane and research tabs in future work packages
+  useWebViewScrollGroupScrRef();
 
   // --- Persisted state ---
   const [splitterPercentage, setSplitterPercentage] = useWebViewState<number>(
@@ -97,6 +114,17 @@ global.webViewComponent = function EnhancedResourceWebView({
 
   // --- Warning banner states ---
   const [banners, setBanners] = useWebViewState<WarningBannerStates>('banners', DEFAULT_BANNERS);
+
+  // --- Toolbar state ---
+  const [highlights, setHighlights] = useWebViewState<HighlightState>(
+    'highlights',
+    DEFAULT_HIGHLIGHTS,
+  );
+
+  const [trackedProjectName, setTrackedProjectName] = useWebViewState<string | undefined>(
+    'trackedProjectName',
+    undefined,
+  );
 
   // Keep a ref to the current banners for use in callbacks
   const bannersRef = useRef(banners);
@@ -144,23 +172,38 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setBanners],
   );
 
-  // --- Format verse reference for display ---
-  const verseDisplay = useMemo(() => {
-    if (!scrRef) return '';
-    return `${scrRef.book ?? ''} ${scrRef.chapterNum ?? ''}:${scrRef.verseNum ?? ''}`;
-  }, [scrRef]);
+  // --- Toolbar handlers ---
+  const handleHighlightChange = useCallback(
+    (newHighlights: HighlightState) => {
+      setHighlights(newHighlights);
+    },
+    [setHighlights],
+  );
+
+  const handleTrackedProjectChange = useCallback(
+    (projectName: string | undefined) => {
+      setTrackedProjectName(projectName);
+    },
+    [setTrackedProjectName],
+  );
+
+  const handleToggleGuide = useCallback(() => {
+    // Guide toggle will be wired to guide visibility in a future work package
+  }, []);
 
   return (
     <div data-testid="enhanced-resource-viewer" className="pr-twp tw-flex tw-flex-col tw-h-full">
-      {/* Toolbar placeholder area */}
-      <div className="tw-flex tw-items-center tw-gap-2 tw-px-2 tw-py-1 tw-border-b tw-bg-muted/50 tw-shrink-0">
-        <span className="tw-text-sm tw-text-muted-foreground">
-          {localizedStrings['%enhancedResources_toolbarPlaceholder%']}
-        </span>
-        {verseDisplay ? (
-          <span className="tw-text-xs tw-text-muted-foreground tw-ml-auto">{verseDisplay}</span>
-        ) : undefined}
-      </div>
+      {/* ERToolbar */}
+      <ERToolbar
+        showResearchTerms={highlights.researchTerms}
+        showFound={highlights.found}
+        showMissing={highlights.missing}
+        onHighlightChange={handleHighlightChange}
+        trackedProjectName={trackedProjectName}
+        availableProjects={DEFAULT_AVAILABLE_PROJECTS}
+        onTrackedProjectChange={handleTrackedProjectChange}
+        onToggleGuide={handleToggleGuide}
+      />
 
       {/* Warning banners area */}
       <div className="tw-flex tw-flex-col tw-shrink-0">

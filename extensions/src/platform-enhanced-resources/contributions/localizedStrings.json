@@ -9,7 +9,19 @@
       "%enhancedResources_scripturePanePlaceholder%": "Scripture content will appear here",
       "%enhancedResources_researchPanePlaceholder%": "Research content will appear here",
       "%enhancedResources_toolbarPlaceholder%": "Toolbar",
-      "%enhancedResources_dismiss%": "Dismiss"
+      "%enhancedResources_dismiss%": "Dismiss",
+      "%enhancedResources_researchTerms%": "Research Terms",
+      "%enhancedResources_found%": "Found",
+      "%enhancedResources_missing%": "Missing",
+      "%enhancedResources_noProject%": "No project",
+      "%enhancedResources_btToolButton%": "Biblical Terms",
+      "%enhancedResources_btToolButton_notAvailable%": "Biblical Terms tool is not yet available",
+      "%enhancedResources_biblicalTermsLabel%": "Biblical Terms:",
+      "%enhancedResources_toolbar_researchTermsAbbrev%": "RT",
+      "%enhancedResources_toolbar_foundAbbrev%": "F",
+      "%enhancedResources_toolbar_missingAbbrev%": "M",
+      "%enhancedResources_toolbar_infoButton%": "Getting Started Guide",
+      "%enhancedResources_toolbar_trackProject%": "Track project"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -19,7 +31,19 @@
       "%enhancedResources_scripturePanePlaceholder%": "El contenido de las Escrituras aparecerá aquí",
       "%enhancedResources_researchPanePlaceholder%": "El contenido de investigación aparecerá aquí",
       "%enhancedResources_toolbarPlaceholder%": "Barra de herramientas",
-      "%enhancedResources_dismiss%": "Descartar"
+      "%enhancedResources_dismiss%": "Descartar",
+      "%enhancedResources_researchTerms%": "Terminos de investigacion",
+      "%enhancedResources_found%": "Encontrado",
+      "%enhancedResources_missing%": "Faltante",
+      "%enhancedResources_noProject%": "Sin proyecto",
+      "%enhancedResources_btToolButton%": "Terminos Biblicos",
+      "%enhancedResources_btToolButton_notAvailable%": "La herramienta de Terminos Biblicos aun no esta disponible",
+      "%enhancedResources_biblicalTermsLabel%": "Terminos Biblicos:",
+      "%enhancedResources_toolbar_researchTermsAbbrev%": "TI",
+      "%enhancedResources_toolbar_foundAbbrev%": "E",
+      "%enhancedResources_toolbar_missingAbbrev%": "F",
+      "%enhancedResources_toolbar_infoButton%": "Guia de inicio",
+      "%enhancedResources_toolbar_trackProject%": "Seguir proyecto"
     }
   }
 }
