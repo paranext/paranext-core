@@ -62,34 +62,37 @@ internal static class DictionaryService
         for (int i = 0; i < existing.Count; i++)
         {
             var current = existing[i];
-            if (
-                current.Lemma == newItem.Lemma
-                && current.SourceText == newItem.SourceText
-                && current.LexicalLinks == newItem.LexicalLinks
-            )
+            if (!HasSameMergeKey(current, newItem))
+                continue;
+
+            var combinedStatus = TermRenderingStatusService.CombineTermStatusCodes(
+                current.RenderingStatus,
+                newItem.RenderingStatus
+            );
+            var combinedRefs = current
+                .OccurrenceReferences.Concat(newItem.OccurrenceReferences)
+                .ToList();
+
+            existing[i] = current with
             {
-                var combinedStatus = TermRenderingStatusService.CombineTermStatusCodes(
-                    current.RenderingStatus,
-                    newItem.RenderingStatus
-                );
-                var combinedRefs = current
-                    .OccurrenceReferences.Concat(newItem.OccurrenceReferences)
-                    .ToList();
+                OccurrenceCount = current.OccurrenceCount + newItem.OccurrenceCount,
+                OccurrenceReferences = combinedRefs,
+                RenderingStatus = combinedStatus,
+            };
 
-                existing[i] = current with
-                {
-                    OccurrenceCount = current.OccurrenceCount + newItem.OccurrenceCount,
-                    OccurrenceReferences = combinedRefs,
-                    RenderingStatus = combinedStatus,
-                };
-
-                return true;
-            }
+            return true;
         }
 
         existing.Add(newItem);
         return false;
     }
+
+    /// <summary>
+    /// INV-015: Two dictionary items share the same merge key when their
+    /// (Lemma, SourceText, LexicalLinks) 3-tuple is identical (case-sensitive).
+    /// </summary>
+    private static bool HasSameMergeKey(DictionaryDisplayItem a, DictionaryDisplayItem b) =>
+        a.Lemma == b.Lemma && a.SourceText == b.SourceText && a.LexicalLinks == b.LexicalLinks;
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3163
