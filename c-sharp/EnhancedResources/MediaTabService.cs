@@ -68,12 +68,26 @@ internal static class MediaTabService
         // Filter images that match the scope range
         var scopedImages = FilterImagesForScope(allBookImages, verseRef, scopeRange);
 
-        // INV-012: Exclude Satellite Bible Atlas
-        // === PORTED FROM PT9 ===
-        // Source: PT9/Paratext/Marble/MediaTab.cs:555-565
-        // Method: MediaTab.InvalidImageForTab()
-        // Maps to: EXT-066, INV-012
-        var filteredImages = scopedImages
+        // INV-012: Exclude Satellite Bible Atlas items from media tab
+        var filteredImages = ExcludeAtlasImages(scopedImages);
+
+        var items = filteredImages.Select(ToDisplayItem).ToList();
+
+        var result = new MediaTabContent(items, HeaderHtml: "");
+        return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Excludes images with the "Satellite Bible Atlas" collection name (INV-012).
+    /// Maps tab content uses inverted logic to include only atlas images.
+    ///
+    /// === PORTED FROM PT9 ===
+    /// Source: PT9/Paratext/Marble/MediaTab.cs:555-565
+    /// Method: MediaTab.InvalidImageForTab()
+    /// Maps to: EXT-066, INV-012
+    /// </summary>
+    private static List<ImageEntry> ExcludeAtlasImages(List<ImageEntry> images) =>
+        images
             .Where(img =>
                 !string.Equals(
                     img.CollectionName,
@@ -83,22 +97,17 @@ internal static class MediaTabService
             )
             .ToList();
 
-        // Build display items
-        var items = filteredImages
-            .Select(img => new MediaDisplayItem(
-                Id: img.ImageId,
-                CollectionName: img.CollectionName,
-                ReferenceRange: img.StartRef == img.EndRef
-                    ? img.StartRef
-                    : $"{img.StartRef}-{img.EndRef}",
-                FilePath: img.FilePath,
-                Expanded: false
-            ))
-            .ToList();
-
-        var result = new MediaTabContent(items, HeaderHtml: "");
-        return Task.FromResult(result);
-    }
+    /// <summary>
+    /// Converts an ImageEntry to a MediaDisplayItem for display in the media tab.
+    /// </summary>
+    private static MediaDisplayItem ToDisplayItem(ImageEntry img) =>
+        new(
+            Id: img.ImageId,
+            CollectionName: img.CollectionName,
+            ReferenceRange: BuildRefRangeString(img),
+            FilePath: img.FilePath,
+            Expanded: false
+        );
 
     /// <summary>
     /// Validates that the resource and book exist, returning the book's tokens.
@@ -167,7 +176,7 @@ internal static class MediaTabService
         VerseReference verseRef
     )
     {
-        // First try GetSectionBoundaries (works when tokens have Text fields)
+        // Primary path: use GetSectionBoundaries when tokens have Text fields
         var boundaries = MarbleDataParser.GetSectionBoundaries(tokens);
         if (boundaries.Count > 0)
         {
@@ -178,7 +187,20 @@ internal static class MediaTabService
                 return (section.StartVerse.Verse, section.EndVerse.Verse);
         }
 
-        // Fallback: compute sections from VerseRef fields on tokens
+        // Fallback: detect sections from VerseRef fields on tokens
+        return ComputeSectionRangeFromVerseRefs(tokens, verseRef);
+    }
+
+    /// <summary>
+    /// Fallback section boundary detection using VerseRef fields on tokens.
+    /// Scans tokens to find section heading markers (ParagraphStart with "s" style),
+    /// then finds which section range contains the target verse.
+    /// </summary>
+    private static (int StartVerse, int EndVerse) ComputeSectionRangeFromVerseRefs(
+        IReadOnlyList<MarbleToken> tokens,
+        VerseReference verseRef
+    )
+    {
         int currentVerse = 0;
         int lastVerse = 0;
         var sectionStarts = new List<int>();
@@ -191,13 +213,8 @@ internal static class MediaTabService
                 if (currentVerse > lastVerse)
                     lastVerse = currentVerse;
             }
-            else if (
-                token.Type == MarbleTokenType.ParagraphStart
-                && !string.IsNullOrEmpty(token.Style)
-                && token.Style.StartsWith("s", StringComparison.OrdinalIgnoreCase)
-            )
+            else if (IsSectionHeading(token))
             {
-                // Use VerseRef on the token if available, else use tracked verse
                 int headingVerse = token.VerseRef?.Verse ?? currentVerse;
                 sectionStarts.Add(headingVerse);
             }
@@ -209,18 +226,38 @@ internal static class MediaTabService
         if (sectionStarts.Count == 0)
             return (1, lastVerse);
 
-        // Build section ranges: content before first heading + each heading section
+        return FindSectionContainingVerse(sectionStarts, lastVerse, verseRef.Verse);
+    }
+
+    /// <summary>
+    /// Determines whether a token is a section heading (ParagraphStart with "s" style).
+    /// </summary>
+    private static bool IsSectionHeading(MarbleToken token) =>
+        token.Type == MarbleTokenType.ParagraphStart
+        && !string.IsNullOrEmpty(token.Style)
+        && token.Style.StartsWith("s", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Finds the section range that contains the specified verse number.
+    /// Sections are delimited by heading start verses, with the first section
+    /// starting at verse 1 and the last section ending at the last verse in the chapter.
+    /// </summary>
+    private static (int StartVerse, int EndVerse) FindSectionContainingVerse(
+        List<int> sectionStarts,
+        int lastVerse,
+        int targetVerse
+    )
+    {
         // Pre-heading section: [1, firstHeading - 1]
-        if (verseRef.Verse < sectionStarts[0])
+        if (targetVerse < sectionStarts[0])
             return (1, sectionStarts[0] - 1);
 
-        // Section heading sections
         for (int i = 0; i < sectionStarts.Count; i++)
         {
             int startV = sectionStarts[i];
             int endV = i < sectionStarts.Count - 1 ? sectionStarts[i + 1] - 1 : lastVerse;
 
-            if (verseRef.Verse >= startV && verseRef.Verse <= endV)
+            if (targetVerse >= startV && targetVerse <= endV)
                 return (startV, endV);
         }
 
@@ -241,60 +278,45 @@ internal static class MediaTabService
         (int StartVerse, int EndVerse) scopeRange
     )
     {
-        var result = new List<ImageEntry>();
+        return allImages.Where(img => ImageOverlapsScopeRange(img, verseRef, scopeRange)).ToList();
+    }
 
-        foreach (var image in allImages)
+    /// <summary>
+    /// Checks whether a single image entry overlaps any verse in the specified scope range.
+    /// For single-verse scope (start == end), performs one check.
+    /// For broader scopes, iterates through the verse range capped at 200.
+    /// </summary>
+    private static bool ImageOverlapsScopeRange(
+        ImageEntry image,
+        VerseReference verseRef,
+        (int StartVerse, int EndVerse) scopeRange
+    )
+    {
+        var refRange = BuildRefRangeString(image);
+
+        if (scopeRange.StartVerse == scopeRange.EndVerse)
         {
-            bool matches = false;
-
-            // For each verse in the scope range, check if the image matches.
-            // Optimization: for verse scope (start == end), only one check.
-            // For chapter/section scope, iterate the verse range but cap at reasonable bounds.
-            if (scopeRange.StartVerse == scopeRange.EndVerse)
-            {
-                // Single verse check
-                var refRange =
-                    image.StartRef == image.EndRef
-                        ? image.StartRef
-                        : $"{image.StartRef}-{image.EndRef}";
-                matches = ImageMatchesVerseRange(
-                    refRange,
-                    new VerseReference(verseRef.Book, verseRef.Chapter, scopeRange.StartVerse)
-                );
-            }
-            else
-            {
-                // Range check: iterate verses in scope
-                int endVerse = Math.Min(scopeRange.EndVerse, 200);
-                int startVerse = Math.Max(scopeRange.StartVerse, 0);
-                if (startVerse == 0)
-                    startVerse = 1;
-
-                var refRange =
-                    image.StartRef == image.EndRef
-                        ? image.StartRef
-                        : $"{image.StartRef}-{image.EndRef}";
-
-                for (int v = startVerse; v <= endVerse; v++)
-                {
-                    if (
-                        ImageMatchesVerseRange(
-                            refRange,
-                            new VerseReference(verseRef.Book, verseRef.Chapter, v)
-                        )
-                    )
-                    {
-                        matches = true;
-                        break;
-                    }
-                }
-            }
-
-            if (matches)
-                result.Add(image);
+            return ImageMatchesVerseRange(
+                refRange,
+                new VerseReference(verseRef.Book, verseRef.Chapter, scopeRange.StartVerse)
+            );
         }
 
-        return result;
+        int startVerse = Math.Max(scopeRange.StartVerse, 1);
+        int endVerse = Math.Min(scopeRange.EndVerse, 200);
+
+        for (int v = startVerse; v <= endVerse; v++)
+        {
+            if (
+                ImageMatchesVerseRange(
+                    refRange,
+                    new VerseReference(verseRef.Book, verseRef.Chapter, v)
+                )
+            )
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -346,6 +368,13 @@ internal static class MediaTabService
         // Spanning range or single verse: numeric overlap
         return queryBBBCCCVVV >= bbbcccvvvStart && queryBBBCCCVVV <= bbbcccvvvEnd;
     }
+
+    /// <summary>
+    /// Builds a reference range string from an image entry's start and end references.
+    /// Returns the start ref alone when equal to end ref, otherwise "start-end".
+    /// </summary>
+    private static string BuildRefRangeString(ImageEntry image) =>
+        image.StartRef == image.EndRef ? image.StartRef : $"{image.StartRef}-{image.EndRef}";
 
     /// <summary>
     /// Parses a reference string to a BBBCCCVVV integer.
