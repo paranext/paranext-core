@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Text;
 using System.Xml;
-using System.Xml.Serialization;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using Paratext.Data.ProjectFileAccess;
@@ -29,6 +28,8 @@ namespace Paranext.DataProvider.EnhancedResources;
 // Maps to: CAP-019
 internal static class ResourceInstallService
 {
+    private static readonly string s_testTempRoot = Path.Combine(Path.GetTempPath(), "ER_Tests");
+
     // Cache for zip integrity check results, keyed by path + last-write-time
     private static readonly ConcurrentDictionary<string, bool> s_integrityCache = new();
 
@@ -44,7 +45,7 @@ internal static class ResourceInstallService
     // === NEW IN PT10 ===
     // Reason: PAPI command pattern wrapping ParatextData install workflow
     // Maps to: CAP-019
-    public static async Task<ResourceInstallResult> InstallResourceAsync(
+    public static Task<ResourceInstallResult> InstallResourceAsync(
         ResourceInstallRequest request,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default
@@ -53,11 +54,13 @@ internal static class ResourceInstallService
         // Check cancellation first
         if (cancellationToken.IsCancellationRequested)
         {
-            return new ResourceInstallResult(
-                Success: false,
-                ResourceName: request.ResourceName,
-                ErrorMessage: "Resource installation was cancelled",
-                ErrorCode: "OPERATION_CANCELLED"
+            return Task.FromResult(
+                new ResourceInstallResult(
+                    Success: false,
+                    ResourceName: request.ResourceName,
+                    ErrorMessage: "Resource installation was cancelled",
+                    ErrorCode: "OPERATION_CANCELLED"
+                )
             );
         }
 
@@ -66,11 +69,13 @@ internal static class ResourceInstallService
         // Validate local path
         if (string.IsNullOrEmpty(request.LocalPath))
         {
-            return new ResourceInstallResult(
-                Success: false,
-                ResourceName: request.ResourceName,
-                ErrorMessage: "No local path provided",
-                ErrorCode: "INVALID_REQUEST"
+            return Task.FromResult(
+                new ResourceInstallResult(
+                    Success: false,
+                    ResourceName: request.ResourceName,
+                    ErrorMessage: "No local path provided",
+                    ErrorCode: "INVALID_REQUEST"
+                )
             );
         }
 
@@ -79,72 +84,56 @@ internal static class ResourceInstallService
         // INV-004: Verify integrity before copy
         if (!CheckResourceIntegrity(request.LocalPath))
         {
-            return new ResourceInstallResult(
-                Success: false,
-                ResourceName: request.ResourceName,
-                ErrorMessage: "Resource file failed integrity check",
-                ErrorCode: "RESOURCE_CORRUPT"
+            return Task.FromResult(
+                new ResourceInstallResult(
+                    Success: false,
+                    ResourceName: request.ResourceName,
+                    ErrorMessage: "Resource file failed integrity check",
+                    ErrorCode: "RESOURCE_CORRUPT"
+                )
             );
         }
 
         progress?.Report(0.3);
 
-        // Check for existing resource with same DBLEntryUid but different name (INV-010)
-        // Remove old project if renaming
+        // INV-010: Remove old project if renaming (same DBLEntryUid, different name)
         if (!string.IsNullOrEmpty(request.DblEntryUid))
         {
-            var existingProjects = ScrTextCollection.ScrTexts(IncludeProjects.Everything).ToList();
-
-            foreach (var existing in existingProjects)
-            {
-                if (
-                    existing.Name != request.ResourceName
-                    && s_installedDblIds.TryGetValue(existing.Name, out string? existingDblId)
-                    && existingDblId == request.DblEntryUid
-                )
-                {
-                    ScrTextCollection.Remove(existing, false);
-                }
-            }
-
-            // Register the DBL ID for the new resource name
+            RemoveRenamedProjects(request.ResourceName, request.DblEntryUid);
             s_installedDblIds[request.ResourceName] = request.DblEntryUid;
         }
 
         progress?.Report(0.5);
 
-        // Create and register the resource ScrText
-        await Task.CompletedTask; // Satisfy async signature
-
         try
         {
             var scrText = CreateResourceScrTextInternal(request.ResourceName);
 
-            // ResourceScrText with isMarbleRsource=true already sets MarbleResource type
             if (!string.IsNullOrEmpty(request.Version))
-            {
                 s_installedVersions[request.ResourceName] = request.Version;
-            }
 
-            // Add to ScrTextCollection
             ScrTextCollection.Add(scrText, false);
 
             progress?.Report(1.0);
 
-            return new ResourceInstallResult(
-                Success: true,
-                ResourceName: request.ResourceName,
-                ErrorMessage: null,
-                ErrorCode: null
+            return Task.FromResult(
+                new ResourceInstallResult(
+                    Success: true,
+                    ResourceName: request.ResourceName,
+                    ErrorMessage: null,
+                    ErrorCode: null
+                )
             );
         }
         catch (Exception ex)
         {
-            return new ResourceInstallResult(
-                Success: false,
-                ResourceName: request.ResourceName,
-                ErrorMessage: ex.Message,
-                ErrorCode: "INSTALL_FAILED"
+            return Task.FromResult(
+                new ResourceInstallResult(
+                    Success: false,
+                    ResourceName: request.ResourceName,
+                    ErrorMessage: ex.Message,
+                    ErrorCode: "INSTALL_FAILED"
+                )
             );
         }
     }
@@ -252,14 +241,11 @@ internal static class ResourceInstallService
     public static ResourceDetectionInfo DetectResourceType(string zipPath)
     {
         // For testing purposes, detect based on path naming convention
-        bool isMarble = zipPath.Contains("+") || zipPath.Contains("Marble");
-        bool hasResearchData = isMarble;
-        string version = isMarble ? "2.0" : "";
-
+        bool isMarble = zipPath.Contains('+') || zipPath.Contains("Marble");
         return new ResourceDetectionInfo(
             IsMarbleResource: isMarble,
-            HasResearchData: hasResearchData,
-            Version: version
+            HasResearchData: isMarble,
+            Version: isMarble ? "2.0" : ""
         );
     }
 
@@ -294,24 +280,12 @@ internal static class ResourceInstallService
     // Maps to: BHV-504
     public static ScrText? FindExistingResource(string dblId, string name)
     {
-        // Search by DBLId first
-        foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-        {
-            if (s_installedDblIds.TryGetValue(scrText.Name, out string? existingDblId))
-            {
-                if (existingDblId == dblId)
-                    return scrText;
-            }
-        }
+        var allProjects = ScrTextCollection.ScrTexts(IncludeProjects.Everything).ToList();
 
-        // Fall back to search by name
-        foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-        {
-            if (scrText.Name.Contains(name))
-                return scrText;
-        }
-
-        return null;
+        // Search by DBLId first, fall back to name
+        return allProjects.FirstOrDefault(s =>
+                s_installedDblIds.TryGetValue(s.Name, out string? id) && id == dblId
+            ) ?? allProjects.FirstOrDefault(s => s.Name.Contains(name));
     }
 
     /// <summary>
@@ -363,7 +337,7 @@ internal static class ResourceInstallService
     // Maps to: CAP-019
     public static string CreateTestResourceZip(string name, bool corrupt)
     {
-        string tempDir = Path.Combine(Path.GetTempPath(), "ER_Tests", Guid.NewGuid().ToString());
+        string tempDir = Path.Combine(s_testTempRoot, Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
 
         string zipPath = Path.Combine(tempDir, $"{name}.zip");
@@ -395,7 +369,7 @@ internal static class ResourceInstallService
     // Maps to: CAP-019
     public static string CreateTestCorruptXmlResource(string name)
     {
-        string tempDir = Path.Combine(Path.GetTempPath(), "ER_Tests", Guid.NewGuid().ToString());
+        string tempDir = Path.Combine(s_testTempRoot, Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
 
         string xmlPath = Path.Combine(tempDir, $"{name}.xml");
@@ -438,6 +412,28 @@ internal static class ResourceInstallService
     }
 
     /// <summary>
+    /// Removes existing projects that have the same DBLEntryUid but a different name.
+    /// This handles the rename scenario (INV-010) where a resource is re-published
+    /// under a new name but retains the same DBL identity.
+    /// </summary>
+    private static void RemoveRenamedProjects(string newResourceName, string dblEntryUid)
+    {
+        foreach (
+            var existing in ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .Where(s =>
+                    s.Name != newResourceName
+                    && s_installedDblIds.TryGetValue(s.Name, out string? id)
+                    && id == dblEntryUid
+                )
+                .ToList()
+        )
+        {
+            ScrTextCollection.Remove(existing, false);
+        }
+    }
+
+    /// <summary>
     /// Creates a ResourceScrText configured as a Marble resource (non-editable).
     /// Uses a TestableResourceScrText subclass that overrides CreateFileManager()
     /// with an in-memory implementation, avoiding filesystem dependencies while
@@ -445,7 +441,7 @@ internal static class ResourceInstallService
     /// </summary>
     private static ScrText CreateResourceScrTextInternal(string name)
     {
-        string tempDir = Path.Combine(Path.GetTempPath(), "ER_Tests", name);
+        string tempDir = Path.Combine(s_testTempRoot, name);
         Directory.CreateDirectory(tempDir);
         var projectName = new ProjectName { ShortName = name, ProjectPath = tempDir };
         var scrText = new TestableResourceScrText(projectName);
@@ -658,11 +654,3 @@ internal static class ResourceInstallService
         ) => new(languageIdLDML, null, null, null);
     }
 }
-
-/// <summary>
-/// Information about a detected resource type from a zip file.
-/// </summary>
-// === NEW IN PT10 ===
-// Reason: Return type for DetectResourceType method
-// Maps to: CAP-019
-public record ResourceDetectionInfo(bool IsMarbleResource, bool HasResearchData, string Version);
