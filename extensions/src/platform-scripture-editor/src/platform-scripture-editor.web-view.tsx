@@ -1430,7 +1430,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/* </div> */}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
-      <div className="tw-h-auto tw-overflow-auto" dir={options.textDirection}>
+      <div className="tw-h-auto tw-flex-1 tw-min-h-0 tw-overflow-auto" dir={options.textDirection}>
         {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
