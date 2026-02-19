@@ -1,9 +1,6 @@
 namespace Paranext.DataProvider.EnhancedResources;
 
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexicalLink.cs:1-119
-// Method: MarbleLexicalLink (full class)
-// Maps to: EXT-009, BHV-600
+// Ported from PT9: Paratext/Marble/MarbleLexicalLink.cs (EXT-009, CAP-005)
 
 /// <summary>
 /// Service for parsing Marble lexical link strings.
@@ -44,24 +41,8 @@ internal static class LexicalLinkService
             string lemma = parts[1];
             string numbers = parts[2];
 
-            string baseFormIndex;
-            string meaningIndex;
-
-            if (numbers.Length >= 6)
-            {
-                baseFormIndex = numbers.Substring(0, 3);
-                meaningIndex = numbers.Substring(3, 3);
-            }
-            else if (numbers.Length >= 3)
-            {
-                baseFormIndex = numbers.Substring(0, 3);
-                meaningIndex = "";
-            }
-            else
-            {
-                baseFormIndex = numbers;
-                meaningIndex = "";
-            }
+            string baseFormIndex = numbers.Length >= 3 ? numbers.Substring(0, 3) : numbers;
+            string meaningIndex = numbers.Length >= 6 ? numbers.Substring(3, 3) : "";
 
             results.Add(
                 new ParsedLexicalLink(dictionary, lemma, baseFormIndex, meaningIndex, segment)
@@ -82,13 +63,6 @@ internal static class LexicalLinkService
         if (string.IsNullOrWhiteSpace(links))
             return false;
 
-        var parsedLinks = ParseLexicalLinks(links);
-        foreach (var link in parsedLinks)
-        {
-            if (link.Lemma == lemma)
-                return true;
-        }
-
-        return false;
+        return ParseLexicalLinks(links).Any(link => link.Lemma == lemma);
     }
 }

@@ -1,20 +1,17 @@
 namespace Paranext.DataProvider.EnhancedResources;
 
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexicalLink.cs:1-119
-// Method: MarbleLexicalLink (class properties + MatchesFilter + GetLemmaString)
-// Maps to: EXT-009, BHV-600
+// Ported from PT9: Paratext/Marble/MarbleLexicalLink.cs (EXT-009, CAP-005)
 
 /// <summary>
 /// A parsed lexical link with its constituent parts.
 /// Format: Dictionary:Lemma:BBBMMM where BBB=base form index, MMM=meaning index.
 /// </summary>
 public record ParsedLexicalLink(
-    string Dictionary, // "SDBG" or "SDBH"
+    string Dictionary,
     string Lemma,
-    string BaseFormIndex, // 3-digit padded (e.g., "001")
-    string MeaningIndex, // 3-digit padded (e.g., "001")
-    string FullLink // Original link string for exact matching
+    string BaseFormIndex,
+    string MeaningIndex,
+    string FullLink
 )
 {
     /// <summary>
