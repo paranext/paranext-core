@@ -66,48 +66,15 @@ internal static class ScriptureContentService
         var tokens = dataAccess.GetBookTokens(resourceId, verseRef.Book);
 
         // Step 3: Handle missing book (return content with MissingBook banner)
-        var banners = new List<WarningBanner>();
         if (tokens == null || tokens.Count == 0)
-        {
-            banners.Add(
-                new WarningBanner(
-                    WarningBannerType.MissingBook,
-                    $"Book {verseRef.Book} is not available in resource '{resourceId}'",
-                    Dismissible: false
-                )
-            );
-            var emptyResult = new ScriptureContent(
-                BodyHtml: "",
-                FootnoteHtml: "",
-                Tokens: tokens ?? (IReadOnlyList<MarbleToken>)Array.Empty<MarbleToken>(),
-                ActiveBanners: banners,
-                CopyrightHtml: null
-            );
-            return Task.FromResult(emptyResult);
-        }
+            return Task.FromResult(CreateMissingBookResult(verseRef, resourceId, tokens));
 
         // Check if tokens actually have content for this book
         bool hasMatchingBook = tokens.Any(t =>
             t.VerseRef != null && t.VerseRef.Book == verseRef.Book
         );
         if (!hasMatchingBook)
-        {
-            banners.Add(
-                new WarningBanner(
-                    WarningBannerType.MissingBook,
-                    $"Book {verseRef.Book} is not available in resource '{resourceId}'",
-                    Dismissible: false
-                )
-            );
-            var emptyResult = new ScriptureContent(
-                BodyHtml: "",
-                FootnoteHtml: "",
-                Tokens: tokens,
-                ActiveBanners: banners,
-                CopyrightHtml: null
-            );
-            return Task.FromResult(emptyResult);
-        }
+            return Task.FromResult(CreateMissingBookResult(verseRef, resourceId, tokens));
 
         // Step 4: Build body HTML
         string bodyHtml = BuildBodyHtml(tokens, trackedProjectId);
@@ -120,10 +87,37 @@ internal static class ScriptureContentService
             BodyHtml: bodyHtml,
             FootnoteHtml: footnoteHtml,
             Tokens: tokens,
-            ActiveBanners: banners,
+            ActiveBanners: Array.Empty<WarningBanner>(),
             CopyrightHtml: null
         );
         return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Creates a ScriptureContent result indicating the requested book is missing from the resource.
+    /// Used when tokens are null/empty or when no tokens match the requested book number.
+    /// </summary>
+    // === NEW IN PT10 ===
+    // Reason: Extracted to eliminate duplicate missing-book result construction
+    // Maps to: CAP-013, BHV-310
+    private static ScriptureContent CreateMissingBookResult(
+        VerseReference verseRef,
+        string resourceId,
+        IReadOnlyList<MarbleToken>? tokens
+    )
+    {
+        var banner = new WarningBanner(
+            WarningBannerType.MissingBook,
+            $"Book {verseRef.Book} is not available in resource '{resourceId}'",
+            Dismissible: false
+        );
+        return new ScriptureContent(
+            BodyHtml: "",
+            FootnoteHtml: "",
+            Tokens: tokens ?? (IReadOnlyList<MarbleToken>)Array.Empty<MarbleToken>(),
+            ActiveBanners: new[] { banner },
+            CopyrightHtml: null
+        );
     }
 
     // === PORTED FROM PT9 ===
@@ -168,18 +162,26 @@ internal static class ScriptureContentService
                 case MarbleTokenType.Verse:
                     if (token.VerseRef != null && token.VerseRef.Verse > 0)
                     {
-                        sb.Append($"<span class=\"verse-num\">{token.VerseRef.Verse}</span>");
+                        sb.Append("<span class=\"verse-num\">")
+                            .Append(token.VerseRef.Verse)
+                            .Append("</span>");
                     }
                     break;
 
                 case MarbleTokenType.TextLink:
-                    string wordText = token.Text ?? "";
-                    // PTX-23179: Strip trailing ']' brackets from Greek text
-                    wordText = StripGreekBrackets(wordText);
-                    string lemmaClass = !string.IsNullOrEmpty(token.LexicalLinks)
-                        ? $" class=\"lemma\" data-lemma=\"{token.LexicalLinks}\""
-                        : "";
-                    sb.Append($"<span{lemmaClass}>{wordText}</span>");
+                    string wordText = StripGreekBrackets(token.Text ?? "");
+                    if (!string.IsNullOrEmpty(token.LexicalLinks))
+                    {
+                        sb.Append("<span class=\"lemma\" data-lemma=\"")
+                            .Append(token.LexicalLinks)
+                            .Append("\">")
+                            .Append(wordText)
+                            .Append("</span>");
+                    }
+                    else
+                    {
+                        sb.Append("<span>").Append(wordText).Append("</span>");
+                    }
                     break;
 
                 case MarbleTokenType.Text:
@@ -220,7 +222,7 @@ internal static class ScriptureContentService
 
         // Detect old-format footnotes: if any note has plain text without XML structure
         // and does not have TargetLinks (cross-ref) or a standard style
-        bool hasOldFormat = DetectOldFormatFootnotes(notes, resourceId);
+        bool hasOldFormat = DetectOldFormatFootnotes(notes);
         if (hasOldFormat)
         {
             string shortName = resourceId.TrimEnd('+');
@@ -232,23 +234,26 @@ internal static class ScriptureContentService
 
         foreach (var note in notes)
         {
+            sb.Append("<div class=\"footnote\"><span class=\"caller\">")
+                .Append(caller)
+                .Append("</span> ");
+
             if (note.Style == "x" && !string.IsNullOrEmpty(note.TargetLinks))
             {
                 // Cross-reference note: generate quickref links
-                string quickrefLink = $"quickref:{note.TargetLinks}";
-                sb.Append(
-                    $"<div class=\"footnote\"><span class=\"caller\">{caller}</span> "
-                        + $"<a href=\"{quickrefLink}\">{note.TargetLinks}</a></div>"
-                );
+                sb.Append("<a href=\"quickref:")
+                    .Append(note.TargetLinks)
+                    .Append("\">")
+                    .Append(note.TargetLinks)
+                    .Append("</a>");
             }
             else
             {
                 // Regular footnote
-                string text = note.Text ?? "";
-                sb.Append(
-                    $"<div class=\"footnote\"><span class=\"caller\">{caller}</span> {text}</div>"
-                );
+                sb.Append(note.Text ?? "");
             }
+
+            sb.Append("</div>");
 
             if (caller < 'z')
                 caller++;
@@ -270,10 +275,7 @@ internal static class ScriptureContentService
     // typical length of a structured XML-parsed footnote. Modern XML-parsed footnotes
     // produce short text like "Or land" or "Some manuscripts..." while old-format
     // footnotes dump the entire raw text as a single long string.
-    private static bool DetectOldFormatFootnotes(
-        IReadOnlyList<MarbleToken> notes,
-        string resourceId
-    )
+    private static bool DetectOldFormatFootnotes(IReadOnlyList<MarbleToken> notes)
     {
         const int OldFormatTextThreshold = 30;
 
@@ -296,8 +298,5 @@ internal static class ScriptureContentService
     // Strips trailing ']' bracket characters from Greek text tokens.
     // Per PTX-23179/PTX-23229, brackets in Greek manuscripts are editorial marks
     // that should not appear in the Enhanced Resource display.
-    private static string StripGreekBrackets(string text)
-    {
-        return text.Replace("]", "");
-    }
+    private static string StripGreekBrackets(string text) => text.Replace("]", "");
 }
