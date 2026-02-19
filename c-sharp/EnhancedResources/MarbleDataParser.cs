@@ -406,7 +406,7 @@ internal static class MarbleDataParser
             .ToList();
     }
 
-    // === STUB: CAP-003 GetLinksInScope ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleDataParser.cs:425-503
     // Method: MarbleBookTokens.GetLinksInScope()
     // Maps to: EXT-052, CAP-003, BHV-600, BHV-302
@@ -431,7 +431,63 @@ internal static class MarbleDataParser
         IEnumerable<ParsedLexicalLink>? filterLinks
     )
     {
-        // RED PHASE STUB: Not yet implemented. Will be completed by TDD Implementer.
-        throw new NotImplementedException("CAP-003 GetLinksInScope: awaiting implementation");
+        if (tokens == null || tokens.Count == 0)
+            return Array.Empty<MarbleToken>();
+
+        // For CurrentSection scope, determine the verse range from section boundaries
+        int startVerse = 0;
+        int endVerse = int.MaxValue;
+
+        if (scope == ScopeFilter.CurrentVerse)
+        {
+            startVerse = verseRef.Verse;
+            endVerse = verseRef.Verse;
+        }
+        else if (scope == ScopeFilter.CurrentSection)
+        {
+            var boundaries = GetSectionBoundaries(tokens);
+            var section = boundaries.FirstOrDefault(b =>
+                verseRef.Verse >= b.StartVerse.Verse && verseRef.Verse <= b.EndVerse.Verse
+            );
+            if (section == null)
+                return Array.Empty<MarbleToken>();
+
+            startVerse = section.StartVerse.Verse;
+            endVerse = section.EndVerse.Verse;
+        }
+        // CurrentChapter: startVerse=0, endVerse=MaxValue => all verses included
+
+        // Iterate tokens, tracking current verse, collecting matching TextLink tokens
+        int currentVerse = 0;
+        var result = new List<MarbleToken>();
+
+        foreach (var token in tokens)
+        {
+            if (token.Type == MarbleTokenType.Verse)
+            {
+                if (!string.IsNullOrEmpty(token.Text) && int.TryParse(token.Text, out int v))
+                    currentVerse = v;
+                continue;
+            }
+
+            if (token.Type != MarbleTokenType.TextLink)
+                continue;
+
+            // Check verse scope
+            if (currentVerse < startVerse || currentVerse > endVerse)
+                continue;
+
+            // Apply link type filter
+            if (!Matches(token, linkType, filterText, filterLinks))
+                continue;
+
+            // Apply text filter
+            if (!MatchesTextFilter(token, filterText))
+                continue;
+
+            result.Add(token);
+        }
+
+        return result;
     }
 }
