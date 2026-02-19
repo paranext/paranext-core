@@ -2,24 +2,21 @@ using System.Collections.Concurrent;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1-1998
-// Method: MarbleDataAccess (full class)
-// Maps to: EXT-014, CAP-028
-
 /// <summary>
 /// Central data access layer for Enhanced Resources.
 /// Provides resource enumeration, token caching, dictionary/encyclopedia data access,
 /// image metadata access, gloss lookup, and resource update management.
 /// Thread-safe via ConcurrentDictionary-based caching.
 /// </summary>
-public class MarbleDataAccess
+/// <remarks>
+/// Ported from PT9 Paratext/Marble/MarbleDataAccess.cs (EXT-014, CAP-028).
+/// PT9 used a singleton via DependencyLookup; PT10 uses explicit initialization
+/// and constructor injection. Image overlap logic ported from
+/// PT9 Paratext/Marble/MarbleImageData.cs:95-150 (EXT-064).
+/// </remarks>
+internal class MarbleDataAccess
 {
-    #region Constants - File Extensions
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (file extension constants)
-    // Maps to: EXT-014
+    // File extension constants (matching PT9 resource file types)
     public const string MarbleBibleExtensionV1 = ".mbv1z";
     public const string MarbleBibleExtensionV2 = ".mbv2z";
     public const string MarbleDictionaryExtension = ".mdv1z";
@@ -29,13 +26,7 @@ public class MarbleDataAccess
     public const string MarbleImageIndexExtension = ".mxv1z";
     public const string MarbleEncyclopediaExtension = ".mev1z";
 
-    #endregion
-
-    #region Constants - Project Names
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (project name constants)
-    // Maps to: EXT-014
+    // Project name constants
     public const string GreekDictionary = "SDBG";
     public const string HebrewDictionary = "SDBH";
     public const string DeuteroDictionary = "DCLEX";
@@ -44,13 +35,7 @@ public class MarbleDataAccess
     public const string EncyclopediaName = "MBL_ENC";
     public const string ImageIndexName = "IMG_INDX";
 
-    #endregion
-
-    #region Constants - Required and Optional Data Projects
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (required/optional project lists)
-    // Maps to: EXT-014
+    // Required and optional data project lists
     private static readonly string[] s_requiredDataProjects =
     {
         EncyclopediaName,
@@ -67,13 +52,7 @@ public class MarbleDataAccess
     public static IReadOnlyList<string> RequiredDataProjects => s_requiredDataProjects;
     public static IReadOnlyList<string> OptionalDataProjects => s_optionalDataProjects;
 
-    #endregion
-
-    #region Constants - Name-to-Extension Mapping
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (nameToExtension dictionary)
-    // Maps to: EXT-014
+    // Name-to-extension mapping for resource file lookup
     private static readonly Dictionary<string, string> s_nameToExtension =
         new()
         {
@@ -88,10 +67,7 @@ public class MarbleDataAccess
             { "LXXDC", MarbleSourceLanguageExtension },
         };
 
-    #endregion
-
-    #region Instance Fields
-
+    // Instance fields for resource data storage
     private readonly ConcurrentDictionary<string, Func<int, IReadOnlyList<MarbleToken>>> _bibles =
         new();
 
@@ -101,70 +77,49 @@ public class MarbleDataAccess
     > _tokenCache = new();
 
     private readonly ConcurrentDictionary<string, bool> _researchData = new();
-
     private readonly ConcurrentDictionary<string, Version> _researchDataVersions = new();
-
-    // Key: "dictionary:lemma", Value: Lexicon_Entry
     private readonly ConcurrentDictionary<string, Lexicon_Entry> _dictionaryEntries = new();
-
-    // Key: "type:key", Value: Thematic_Lexicon
     private readonly ConcurrentDictionary<string, Thematic_Lexicon> _encyclopediaData = new();
 
     private readonly List<ImageEntry> _imageIndex = new();
     private readonly object _imageIndexLock = new();
 
-    // Key: "term:language", Value: glosses
     private readonly ConcurrentDictionary<string, List<string>> _glossData = new();
-
     private readonly SortedDictionary<string, bool> _glossLanguages = new();
     private readonly object _glossLanguagesLock = new();
 
     private bool _initialized;
 
-    #endregion
-
-    #region Initialize
-
-    // === NEW IN PT10 ===
-    // Reason: PT9 used DependencyLookup/singleton; PT10 uses explicit initialization
-    // Maps to: CAP-028
+    /// <summary>
+    /// Marks the data access layer as initialized. After initialization,
+    /// <see cref="GetBookTokens"/> returns empty lists for unknown resources
+    /// instead of null.
+    /// </summary>
     public void Initialize()
     {
         _initialized = true;
     }
 
-    #endregion
+    /// <summary>
+    /// Whether all required marble data is available (at least one bible
+    /// and all required research data projects present).
+    /// </summary>
+    public bool HaveMarbleData => _bibles.Count > 0 && s_requiredDataProjects.All(HasResearchData);
 
-    #region HaveMarbleData
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (HaveMarbleData property)
-    // Maps to: EXT-014
-    public bool HaveMarbleData =>
-        _bibles.Count > 0 && s_requiredDataProjects.All(name => HasResearchData(name));
-
-    #endregion
-
-    #region AvailableBibles
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (AvailableBibles property)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Returns the IDs of all registered bible resources.
+    /// </summary>
     public IReadOnlyCollection<string> AvailableBibles => _bibles.Keys.ToList().AsReadOnly();
 
-    #endregion
-
-    #region GetBookTokens - Token Caching
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (token caching via ConcurrentDictionary)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Returns cached tokens for the specified resource and book number.
+    /// Tokens are cached per (resourceId, bookNum) key via ConcurrentDictionary.
+    /// Returns null before initialization when the resource is not registered.
+    /// </summary>
     public IReadOnlyList<MarbleToken>? GetBookTokens(string resourceId, int bookNum)
     {
         if (_bibles.TryGetValue(resourceId, out var tokenProvider))
-        {
             return _tokenCache.GetOrAdd((resourceId, bookNum), _ => tokenProvider(bookNum));
-        }
 
         // After Initialize, return a new (cacheable) empty list for any resource
         if (_initialized)
@@ -178,72 +133,53 @@ public class MarbleDataAccess
         return null;
     }
 
-    #endregion
-
-    #region AddBible
-
-    // === NEW IN PT10 ===
-    // Reason: In-memory registration for testing; PT9 loaded from filesystem
-    // Maps to: CAP-028
+    /// <summary>
+    /// Registers a bible resource with a token provider function.
+    /// </summary>
     public void AddBible(string resourceId, Func<int, IReadOnlyList<MarbleToken>> tokenProvider)
     {
         _bibles[resourceId] = tokenProvider;
     }
 
-    #endregion
-
-    #region AddResearchData
-
-    // === NEW IN PT10 ===
-    // Reason: In-memory registration for testing; PT9 loaded from filesystem
-    // Maps to: CAP-028
+    /// <summary>
+    /// Registers a research data project as available. Adding "SDBG" also
+    /// registers the "LN" alias for backward compatibility with PT9.
+    /// </summary>
     public void AddResearchData(string projectName)
     {
         _researchData[projectName] = true;
 
-        // PT9: marbleResearchData["LN"] = marbleResearchData["SDBG"]
         if (projectName == GreekDictionary)
             _researchData["LN"] = true;
     }
 
+    /// <summary>
+    /// Registers a research data project with its installed version.
+    /// </summary>
     public void AddResearchDataWithVersion(string projectName, Version version)
     {
         AddResearchData(projectName);
         _researchDataVersions[projectName] = version;
     }
 
-    #endregion
+    /// <summary>
+    /// Returns whether the specified research data project is available.
+    /// </summary>
+    public bool HasResearchData(string projectName) => _researchData.ContainsKey(projectName);
 
-    #region HasResearchData
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (research data lookup)
-    // Maps to: EXT-014
-    public bool HasResearchData(string projectName)
-    {
-        return _researchData.ContainsKey(projectName);
-    }
-
-    #endregion
-
-    #region AddDictionaryEntry
-
-    // === NEW IN PT10 ===
-    // Reason: In-memory registration for testing
-    // Maps to: CAP-028
+    /// <summary>
+    /// Registers a dictionary entry keyed by its <see cref="Lexicon_Entry.MainId"/>.
+    /// </summary>
     public void AddDictionaryEntry(string dictionary, string lemma, Lexicon_Entry entry)
     {
         if (entry.MainId != null)
             _dictionaryEntries[entry.MainId] = entry;
     }
 
-    #endregion
-
-    #region GetDictionaryEntry
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (dictionary entry lookup)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Retrieves a lexicon entry by its full key (e.g. "SDBG:logos:001").
+    /// Returns null for null/empty keys or when no matching entry exists.
+    /// </summary>
     public Lexicon_Entry? GetDictionaryEntry(string entryId)
     {
         if (string.IsNullOrEmpty(entryId))
@@ -253,32 +189,25 @@ public class MarbleDataAccess
         return entry;
     }
 
-    #endregion
-
-    #region AddEncyclopediaData
-
-    // === NEW IN PT10 ===
-    // Reason: In-memory registration for testing
-    // Maps to: CAP-028
+    /// <summary>
+    /// Registers encyclopedia data keyed by "type:key" (e.g. "Flora:olive").
+    /// </summary>
     public void AddEncyclopediaData(string type, string key, Thematic_Lexicon data)
     {
         _encyclopediaData[$"{type}:{key}"] = data;
     }
 
-    #endregion
-
-    #region GetEncyclopediaEntries
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (encyclopedia entry lookup)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Retrieves encyclopedia entries for the specified "type:key" entry ID.
+    /// Returns empty when the entry ID format is invalid (missing colon separator
+    /// or colon at position 0).
+    /// </summary>
     public IReadOnlyList<Thematic_LexiconThemLex_Entry> GetEncyclopediaEntries(
         string entryId,
         string language
     )
     {
-        var separatorIndex = entryId.IndexOf(':');
-        if (separatorIndex <= 0)
+        if (entryId.IndexOf(':') <= 0)
             return Array.Empty<Thematic_LexiconThemLex_Entry>();
 
         if (_encyclopediaData.TryGetValue(entryId, out var data))
@@ -287,13 +216,11 @@ public class MarbleDataAccess
         return Array.Empty<Thematic_LexiconThemLex_Entry>();
     }
 
-    #endregion
-
-    #region LoadImageIndex
-
-    // === NEW IN PT10 ===
-    // Reason: In-memory image index loading for testing
-    // Maps to: CAP-028
+    /// <summary>
+    /// Loads image metadata entries into the index. Uses dynamic property
+    /// access to avoid cross-namespace type coupling with test-defined types.
+    /// Thread-safe via lock on <see cref="_imageIndexLock"/>.
+    /// </summary>
     public void LoadImageIndex(System.Collections.IList entries)
     {
         lock (_imageIndexLock)
@@ -314,14 +241,10 @@ public class MarbleDataAccess
         }
     }
 
-    #endregion
-
-    #region GetImageMetadata
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleImageData.cs:95-150
-    // Method: BibleImages.GetForReferenceRange
-    // Maps to: EXT-064, CAP-028
+    /// <summary>
+    /// Returns image metadata entries whose reference range overlaps the
+    /// specified verse range. Thread-safe via lock on <see cref="_imageIndexLock"/>.
+    /// </summary>
     public IReadOnlyList<ImageEntry> GetImageMetadata(
         VerseReference startRef,
         VerseReference endRef
@@ -339,47 +262,10 @@ public class MarbleDataAccess
         }
     }
 
-    private static bool ImageOverlapsRange(
-        ImageEntry image,
-        VerseReference startRef,
-        VerseReference endRef
-    )
-    {
-        // Parse image reference strings (BBBCCCVVV format)
-        if (!TryParseBcv(image.StartRef, out var imgStart))
-            return false;
-        if (!TryParseBcv(image.EndRef, out var imgEnd))
-            return false;
-
-        // Check for overlap between [imgStart, imgEnd] and [startRef, endRef]
-        var refStartVal = BcvToInt(startRef);
-        var refEndVal = BcvToInt(endRef);
-        var imgStartVal = imgStart;
-        var imgEndVal = imgEnd;
-
-        return imgStartVal <= refEndVal && imgEndVal >= refStartVal;
-    }
-
-    private static bool TryParseBcv(string bcvString, out int value)
-    {
-        value = 0;
-        if (bcvString.Length != 9)
-            return false;
-        return int.TryParse(bcvString, out value);
-    }
-
-    private static int BcvToInt(VerseReference vref)
-    {
-        return vref.Book * 1000000 + vref.Chapter * 1000 + vref.Verse;
-    }
-
-    #endregion
-
-    #region AddGlossData
-
-    // === NEW IN PT10 ===
-    // Reason: In-memory gloss data registration for testing
-    // Maps to: CAP-028
+    /// <summary>
+    /// Registers gloss data for the specified term and language.
+    /// Thread-safe: gloss language set is protected by <see cref="_glossLanguagesLock"/>.
+    /// </summary>
     public void AddGlossData(string term, string language, List<string> glosses)
     {
         _glossData[$"{term}:{language}"] = glosses;
@@ -390,13 +276,10 @@ public class MarbleDataAccess
         }
     }
 
-    #endregion
-
-    #region FindLocalizedGlossesForTerm (BHV-109)
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (FindLocalizedGlossesForTerm)
-    // Maps to: EXT-014, BHV-109
+    /// <summary>
+    /// Returns localized glosses for the specified term and language.
+    /// Returns empty when the term or language is not found.
+    /// </summary>
     public IReadOnlyList<string> FindLocalizedGlossesForTerm(string term, string language)
     {
         if (_glossData.TryGetValue($"{term}:{language}", out var glosses))
@@ -405,13 +288,10 @@ public class MarbleDataAccess
         return Array.Empty<string>();
     }
 
-    #endregion
-
-    #region AvailableGlossLanguages
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (supportedGlossLanguages SortedDictionary)
-    // Maps to: EXT-014, BHV-115
+    /// <summary>
+    /// Returns the sorted list of available gloss language codes.
+    /// Thread-safe via lock on <see cref="_glossLanguagesLock"/>.
+    /// </summary>
     public IReadOnlyList<string> AvailableGlossLanguages
     {
         get
@@ -423,43 +303,29 @@ public class MarbleDataAccess
         }
     }
 
-    #endregion
-
-    #region UpdateResource - Cache Invalidation
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (cache invalidation on resource update)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Invalidates the token cache for the specified resource, forcing
+    /// re-parsing on the next <see cref="GetBookTokens"/> call.
+    /// </summary>
     public void UpdateResource(string resourceId)
     {
-        // Remove all cached tokens for this resource
         var keysToRemove = _tokenCache.Keys.Where(k => k.ResourceId == resourceId).ToList();
 
         foreach (var key in keysToRemove)
             _tokenCache.TryRemove(key, out _);
     }
 
-    #endregion
+    /// <summary>
+    /// Returns the dictionary name for the given book number.
+    /// OT books (1-39) map to Hebrew; NT books (40+) map to Greek.
+    /// </summary>
+    public static string GetDictionaryNameForBook(int bookNum) =>
+        bookNum <= 39 ? HebrewDictionary : GreekDictionary;
 
-    #region GetDictionaryNameForBook
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (book-to-dictionary mapping)
-    // Maps to: EXT-014
-    public static string GetDictionaryNameForBook(int bookNum)
-    {
-        // OT books: 1-39 (Genesis to Malachi) -> Hebrew dictionary
-        // NT books: 40-66 (Matthew to Revelation) -> Greek dictionary
-        return bookNum <= 39 ? HebrewDictionary : GreekDictionary;
-    }
-
-    #endregion
-
-    #region GetResourceFileName
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (name-to-extension mapping)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Returns the full resource filename (name + extension) for a known project name.
+    /// Returns the project name unchanged for unknown projects.
+    /// </summary>
     public static string GetResourceFileName(string projectName)
     {
         if (s_nameToExtension.TryGetValue(projectName, out var extension))
@@ -468,55 +334,53 @@ public class MarbleDataAccess
         return projectName;
     }
 
-    #endregion
+    /// <summary>
+    /// Returns whether the project name is in the required or optional data project lists.
+    /// </summary>
+    public bool IsRequiredOrOptionalProject(string projectName) =>
+        s_requiredDataProjects.Contains(projectName)
+        || s_optionalDataProjects.Contains(projectName);
 
-    #region IsRequiredOrOptionalProject
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (project classification)
-    // Maps to: EXT-014
-    public bool IsRequiredOrOptionalProject(string projectName)
-    {
-        return s_requiredDataProjects.Contains(projectName)
-            || s_optionalDataProjects.Contains(projectName);
-    }
-
-    #endregion
-
-    #region MissingRequiredProjects
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (missing project detection)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Returns the names of required data projects that are not yet available.
+    /// </summary>
     public IEnumerable<string> MissingRequiredProjects =>
         s_requiredDataProjects.Where(name => !HasResearchData(name));
 
-    #endregion
-
-    #region WantResourceProject
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (version comparison for resource updates)
-    // Maps to: EXT-014
+    /// <summary>
+    /// Returns whether the offered version is newer than the installed version.
+    /// Returns true for resources that are not yet installed.
+    /// </summary>
     public bool WantResourceProject(string projectName, Version offeredVersion)
     {
         if (!_researchDataVersions.TryGetValue(projectName, out var existingVersion))
-            return true; // New resource, not installed yet
+            return true;
 
         return offeredVersion > existingVersion;
     }
 
-    #endregion
-}
+    private static bool ImageOverlapsRange(
+        ImageEntry image,
+        VerseReference startRef,
+        VerseReference endRef
+    )
+    {
+        if (!TryParseBcv(image.StartRef, out var imgStart))
+            return false;
+        if (!TryParseBcv(image.EndRef, out var imgEnd))
+            return false;
 
-/// <summary>
-/// Internal data class for image metadata entries.
-/// Simplified version of the PT9 BibleImages.BibleImage structure.
-/// </summary>
-public record ImageEntry(
-    string ImageId,
-    string StartRef,
-    string EndRef,
-    string CollectionName,
-    string FilePath
-);
+        return imgStart <= BcvToInt(endRef) && imgEnd >= BcvToInt(startRef);
+    }
+
+    private static bool TryParseBcv(string bcvString, out int value)
+    {
+        value = 0;
+        if (bcvString.Length != 9)
+            return false;
+        return int.TryParse(bcvString, out value);
+    }
+
+    private static int BcvToInt(VerseReference vref) =>
+        vref.Book * 1000000 + vref.Chapter * 1000 + vref.Verse;
+}
