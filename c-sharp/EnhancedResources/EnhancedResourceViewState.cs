@@ -1,4 +1,6 @@
-// CAP-022 stub: EnhancedResourceViewState record and supporting enums
+// === NEW IN PT10 ===
+// Reason: PAPI command pattern - view state data model for ER windows
+// Maps to: CAP-022
 // PT9 Source: MarbleForm.cs:2996-3026 (MarbleFormMemento), XmlResourceWindow.cs:1693 (ResourceEditorMemento)
 // Contract: data-contracts.md EnhancedResourceViewState
 namespace Paranext.DataProvider.EnhancedResources;
