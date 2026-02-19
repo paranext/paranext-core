@@ -1,8 +1,56 @@
 // PT9 Provenance: Paratext/Marble/DictionaryTab.cs:1378-1419 (CombineTermStatusCodes)
 // Extraction: EXT-051
-// Also contains: EXT-001 (CalculateRenderingStatus) -- to be added by CAP-007
+// Also contains: EXT-001 (CalculateRenderingStatus) -- added by CAP-007
 
 namespace Paranext.DataProvider.EnhancedResources;
+
+/// <summary>
+/// Abstraction for Biblical Terms lookup operations used by CalculateRenderingStatus.
+/// Enables testability by decoupling from ParatextData concrete classes.
+/// In production, implemented by a wrapper around ParatextData APIs.
+/// In tests, implemented by simple test doubles.
+/// </summary>
+// === NEW IN PT10 ===
+// Reason: PAPI testability pattern - ParatextData BT APIs cannot be easily mocked
+// Maps to: CAP-007
+internal interface IBtLookup
+{
+    /// <summary>
+    /// Looks up whether the given dbKey (lemma) exists in the dictionary.
+    /// Returns the lemma string if found, null otherwise.
+    /// </summary>
+    string? GetLemma(string dbKey);
+
+    /// <summary>
+    /// Finds a matching Biblical Term for the given lemma at the given verse.
+    /// Returns (termId, isAtThisVerse) where:
+    /// - termId is the term identifier if found in project (non-null), or null if not in project.
+    /// - isAtThisVerse indicates whether the term occurs at this specific verse.
+    /// When termId is non-null but isAtThisVerse is false, the term exists elsewhere
+    /// in the project but not at this verse.
+    /// </summary>
+    (string? TermId, bool IsAtThisVerse) GetMatchingTerm(string lemma, VerseReference verseRef);
+
+    /// <summary>
+    /// Returns alternate lemma forms for the given dbKey, or null if no dictionary entry.
+    /// </summary>
+    IReadOnlyList<string>? GetAlternateLemmas(string dbKey);
+
+    /// <summary>
+    /// Gets the verse text for the given reference in the tracked project.
+    /// Returns null or empty if no text available.
+    /// </summary>
+    string? GetVerseText(VerseReference verseRef);
+
+    /// <summary>
+    /// Gets the rendering status for a term at a specific verse.
+    /// Returns (hasRenderings, isDenied, isGuess, foundRendering).
+    /// </summary>
+    (bool HasRenderings, bool IsDenied, bool IsGuess, string? FoundRendering) GetRenderingStatus(
+        string termId,
+        VerseReference verseRef
+    );
+}
 
 /// <summary>
 /// Service for rendering status calculation and combination.
@@ -123,19 +171,165 @@ internal static class TermRenderingStatusService
     /// TermRenderingStatus with the status code and supporting data
     /// (FoundRenderings, MissingInVerses, TermId).
     /// </returns>
-    // === STUB for CAP-007 (TDD RED phase) ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3163
     // Method: MarbleForm.TermRenderingStatus
     // Maps to: EXT-001, BHV-304, CAP-007
+    //
+    // EXPLANATION:
+    // This algorithm evaluates 12 rendering status codes in strict sequential order.
+    // Each step checks a condition and returns early if matched:
+    //  1. btState == null -> NoTrackedProject
+    //  2. lexicalLink == null or Lemma empty -> NoLink
+    //  3. GetLemma(dbKey) returns null -> NoDictionaryEntry
+    //  4. GetMatchingTerm returns no term and no alternate -> NotTermInProject
+    //     GetMatchingTerm returns foundTermAnywhere but not at this verse -> NotInVerse
+    //  5. GetVerseText returns empty -> NoVerseText
+    //  6. GetRenderingStatus has no renderings -> NoRenderingsEntered (or Denied)
+    //  7-11. Based on rendering match: Missing/Denied/Guessed/Found
     public static TermRenderingStatus CalculateRenderingStatus(
         BtState? btState,
         ParsedLexicalLink? lexicalLink,
         VerseReference verseRef
     )
     {
-        throw new NotImplementedException(
-            "CAP-007: CalculateRenderingStatus not yet implemented. "
-                + "This stub exists for TDD RED phase compilation."
+        // Step 1: No tracked project
+        if (btState is null)
+        {
+            return new TermRenderingStatus(
+                TermRenderingStatusCode.NoTrackedProject,
+                null,
+                null,
+                null
+            );
+        }
+
+        // Step 2: No link or empty lemma
+        if (lexicalLink is null || string.IsNullOrEmpty(lexicalLink.Lemma))
+        {
+            return new TermRenderingStatus(TermRenderingStatusCode.NoLink, null, null, null);
+        }
+
+        // Get the lookup interface from Analyzer field
+        var lookup = btState.Analyzer as IBtLookup;
+        if (lookup is null)
+        {
+            // No lookup available - return NoDictionaryEntry as safe default
+            return new TermRenderingStatus(
+                TermRenderingStatusCode.NoDictionaryEntry,
+                null,
+                null,
+                null
+            );
+        }
+
+        // Step 3: Check if lemma exists in dictionary
+        string dbKey = lexicalLink.Lemma;
+        string? lemma = lookup.GetLemma(dbKey);
+        if (lemma is null)
+        {
+            return new TermRenderingStatus(
+                TermRenderingStatusCode.NoDictionaryEntry,
+                null,
+                null,
+                null
+            );
+        }
+
+        // Step 4: Find matching Biblical Term
+        var (termId, isAtThisVerse) = lookup.GetMatchingTerm(lemma, verseRef);
+
+        // If primary lookup fails, try alternate lemmas
+        if (termId is null)
+        {
+            var alternates = lookup.GetAlternateLemmas(dbKey);
+            if (alternates is not null)
+            {
+                foreach (string alternate in alternates)
+                {
+                    var (altTermId, altIsAtVerse) = lookup.GetMatchingTerm(alternate, verseRef);
+                    if (altTermId is not null)
+                    {
+                        termId = altTermId;
+                        isAtThisVerse = altIsAtVerse;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // No term found in project at all
+        if (termId is null)
+        {
+            return new TermRenderingStatus(
+                TermRenderingStatusCode.NotTermInProject,
+                null,
+                null,
+                null
+            );
+        }
+
+        // Term found in project but not at this verse
+        if (!isAtThisVerse)
+        {
+            return new TermRenderingStatus(TermRenderingStatusCode.NotInVerse, null, null, termId);
+        }
+
+        // Step 5: Check verse text
+        string? verseText = lookup.GetVerseText(verseRef);
+        if (string.IsNullOrEmpty(verseText))
+        {
+            return new TermRenderingStatus(TermRenderingStatusCode.NoVerseText, null, null, termId);
+        }
+
+        // Steps 6-11: Check renderings
+        var (hasRenderings, isDenied, isGuess, foundRendering) = lookup.GetRenderingStatus(
+            termId,
+            verseRef
+        );
+
+        if (!hasRenderings)
+        {
+            return new TermRenderingStatus(
+                isDenied
+                    ? TermRenderingStatusCode.RenderingDeniedInVerse
+                    : TermRenderingStatusCode.NoRenderingsEntered,
+                null,
+                null,
+                termId
+            );
+        }
+
+        // Has renderings - check if found in verse
+        if (!string.IsNullOrEmpty(foundRendering))
+        {
+            var renderings = new List<string> { foundRendering };
+            return new TermRenderingStatus(
+                isGuess
+                    ? TermRenderingStatusCode.GuessedRendingFound
+                    : TermRenderingStatusCode.RenderingFound,
+                renderings,
+                null,
+                termId
+            );
+        }
+
+        // Rendering defined but not found in verse
+        if (isDenied)
+        {
+            return new TermRenderingStatus(
+                TermRenderingStatusCode.RenderingDeniedInVerse,
+                null,
+                null,
+                termId
+            );
+        }
+
+        return new TermRenderingStatus(
+            TermRenderingStatusCode.RenderingMissingInVerse,
+            null,
+            null,
+            termId
         );
     }
 }

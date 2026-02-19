@@ -2060,32 +2060,30 @@ public class CalculateRenderingStatusTests
     }
 
     /// <summary>
+    /// Helper to create a BtState with a specific IBtLookup test double.
+    /// </summary>
+    private static BtState CreateBtState(IBtLookup lookup)
+    {
+        return new BtState(null, null, lookup);
+    }
+
+    /// <summary>
     /// Creates a minimal BtState representing a tracked project with BT state initialized.
-    /// The TermsList and TermRenderings are non-null but contain no data.
+    /// Uses a minimal lookup where all lookups return null/default values.
     /// </summary>
     private static BtState CreateMinimalBtState()
     {
-        // BtState with non-null TermsList and TermRenderings indicates a tracked project exists
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null // Analyzer can be null for early exit tests
-        );
+        // Minimal lookup - returns null for everything, triggering early exits
+        return CreateBtState(new TestBtLookup());
     }
 
     /// <summary>
     /// Creates a BtState where GetLemma() will return null for any lookup.
     /// This simulates a lemma not found in the dictionary (TRS-04).
-    /// The implementer will need to make TermsList look up lemmas that fail.
     /// </summary>
     private static BtState CreateBtStateWithNoLemma()
     {
-        // BtState where the dictionary has no entry for the requested lemma
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null
-        );
+        return CreateBtState(new TestBtLookup { LemmaResult = null });
     }
 
     /// <summary>
@@ -2095,22 +2093,28 @@ public class CalculateRenderingStatusTests
     /// </summary>
     private static BtState CreateBtStateWithNoMatchingTerm()
     {
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null
+        return CreateBtState(
+            new TestBtLookup
+            {
+                LemmaResult = "logos",
+                MatchingTermResult = (null, false),
+                AlternateLemmasResult = null,
+            }
         );
     }
 
     /// <summary>
-    /// Creates a BtState where the term exists but does not reference the test verse.
+    /// Creates a BtState where the term exists in the project but does not reference
+    /// the test verse. termId="G3056" (found), isAtThisVerse=false.
     /// </summary>
     private static BtState CreateBtStateWithTermNotInVerse()
     {
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null
+        return CreateBtState(
+            new TestBtLookup
+            {
+                LemmaResult = "logos",
+                MatchingTermResult = ("G3056", false),
+            }
         );
     }
 
@@ -2119,10 +2123,13 @@ public class CalculateRenderingStatusTests
     /// </summary>
     private static BtState CreateBtStateWithEmptyVerseText()
     {
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null
+        return CreateBtState(
+            new TestBtLookup
+            {
+                LemmaResult = "logos",
+                MatchingTermResult = ("G3056", true),
+                VerseTextResult = "",
+            }
         );
     }
 
@@ -2131,31 +2138,39 @@ public class CalculateRenderingStatusTests
     /// </summary>
     private static BtState CreateBtStateWithNoRenderings()
     {
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null
+        return CreateBtState(
+            new TestBtLookup
+            {
+                LemmaResult = "logos",
+                MatchingTermResult = ("G3056", true),
+                VerseTextResult = "In the beginning was the Word",
+                RenderingResult = (false, false, false, null),
+            }
         );
     }
 
     /// <summary>
     /// Creates a BtState configured to return the specified StatusInVerse.
-    /// The implementer will need to adapt this to properly set up the
-    /// TermsList, TermRenderings, and Analyzer to produce the expected status.
     /// </summary>
     private static BtState CreateBtStateWithStatus(string status)
     {
-        // For now, all BtState helper methods return minimal state.
-        // The implementer will need to:
-        // 1. Properly configure TermsList with terms that match the test link
-        // 2. Configure TermRenderings with renderings for those terms
-        // 3. Configure Analyzer to return the expected status
-        // The test still verifies the correct status code mapping.
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null // Analyzer -- implementer provides a mock or test double
-        );
+        var lookup = new TestBtLookup
+        {
+            LemmaResult = "logos",
+            MatchingTermResult = ("G3056", true),
+            VerseTextResult = "In the beginning was the Word",
+        };
+
+        lookup.RenderingResult = status switch
+        {
+            "Found" => (true, false, false, "Word"),
+            "Guessed" => (true, false, true, "Word"),
+            "Missing" => (true, false, false, null),
+            "Denied" => (true, true, false, null),
+            _ => (false, false, false, null),
+        };
+
+        return CreateBtState(lookup);
     }
 
     /// <summary>
@@ -2165,11 +2180,73 @@ public class CalculateRenderingStatusTests
     /// </summary>
     private static BtState CreateBtStateWithAlternateLemmaOnly()
     {
-        return new BtState(
-            new Paratext.Data.Terms.BiblicalTermsList(),
-            new Paratext.Data.Terms.TermRenderingsList(),
-            null
+        return CreateBtState(
+            new TestBtLookupWithAlternate
+            {
+                LemmaResult = "logos",
+                AlternateLemmasResult = new List<string> { "logos-alt" },
+                VerseTextResult = "In the beginning was the Word",
+                RenderingResult = (true, false, false, "Word"),
+            }
         );
+    }
+
+    /// <summary>
+    /// Simple test double for IBtLookup. All properties can be set to control behavior.
+    /// MatchingTermResult uses (TermId, IsAtThisVerse) where:
+    /// - TermId non-null = term found in project
+    /// - IsAtThisVerse = true if the term occurs at the given verse
+    /// </summary>
+    private class TestBtLookup : IBtLookup
+    {
+        public string? LemmaResult { get; set; }
+        public (string? TermId, bool IsAtThisVerse) MatchingTermResult { get; set; } =
+            (null, false);
+        public IReadOnlyList<string>? AlternateLemmasResult { get; set; }
+        public string? VerseTextResult { get; set; }
+        public (
+            bool HasRenderings,
+            bool IsDenied,
+            bool IsGuess,
+            string? FoundRendering
+        ) RenderingResult { get; set; } = (false, false, false, null);
+
+        public virtual string? GetLemma(string dbKey) => LemmaResult;
+
+        public virtual (string? TermId, bool IsAtThisVerse) GetMatchingTerm(
+            string lemma,
+            VerseReference verseRef
+        ) => MatchingTermResult;
+
+        public virtual IReadOnlyList<string>? GetAlternateLemmas(string dbKey) =>
+            AlternateLemmasResult;
+
+        public virtual string? GetVerseText(VerseReference verseRef) => VerseTextResult;
+
+        public virtual (
+            bool HasRenderings,
+            bool IsDenied,
+            bool IsGuess,
+            string? FoundRendering
+        ) GetRenderingStatus(string termId, VerseReference verseRef) => RenderingResult;
+    }
+
+    /// <summary>
+    /// Test double where primary lemma lookup fails but alternate succeeds.
+    /// GetMatchingTerm returns null for primary lemma, non-null for alternate.
+    /// </summary>
+    private class TestBtLookupWithAlternate : TestBtLookup
+    {
+        public override (string? TermId, bool IsAtThisVerse) GetMatchingTerm(
+            string lemma,
+            VerseReference verseRef
+        )
+        {
+            // Primary lemma "logos" returns no match; alternate "logos-alt" returns a match
+            if (AlternateLemmasResult != null && AlternateLemmasResult.Contains(lemma))
+                return ("G3056-alt", true);
+            return (null, false);
+        }
     }
 
     #endregion
