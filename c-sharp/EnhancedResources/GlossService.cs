@@ -76,10 +76,10 @@ internal static partial class GlossService
         return Task.FromResult<GlossResult?>(new GlossResult(glosses, language));
     }
 
-    // === TDD STUB: CAP-017 ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/BiblicalTerms/AdditionalGlossesHelper.cs:22-121
+    // Method: AdditionalGlossesHelper (language dropdown population)
     // Maps to: BHV-109, BHV-115, CAP-017
-    // Contract: data-contracts.md Method 17
     /// <summary>
     /// Enumerates available gloss languages from installed Marble dictionaries.
     /// Returns sorted list of language codes. Returns empty list when no Marble data
@@ -93,8 +93,11 @@ internal static partial class GlossService
         CancellationToken cancellationToken = default
     )
     {
-        throw new NotImplementedException(
-            "CAP-017: GetAvailableGlossLanguagesAsync not yet implemented"
-        );
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!dataAccess.HaveMarbleData)
+            return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+
+        return Task.FromResult(dataAccess.AvailableGlossLanguages);
     }
 }
