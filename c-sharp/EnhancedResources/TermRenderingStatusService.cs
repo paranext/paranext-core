@@ -195,94 +195,97 @@ internal static class TermRenderingStatusService
     {
         // Step 1: No tracked project
         if (btState is null)
-        {
-            return new TermRenderingStatus(
-                TermRenderingStatusCode.NoTrackedProject,
-                null,
-                null,
-                null
-            );
-        }
+            return StatusWithoutTerm(TermRenderingStatusCode.NoTrackedProject);
 
         // Step 2: No link or empty lemma
         if (lexicalLink is null || string.IsNullOrEmpty(lexicalLink.Lemma))
-        {
-            return new TermRenderingStatus(TermRenderingStatusCode.NoLink, null, null, null);
-        }
+            return StatusWithoutTerm(TermRenderingStatusCode.NoLink);
 
         // Get the lookup interface from Analyzer field
-        var lookup = btState.Analyzer as IBtLookup;
-        if (lookup is null)
-        {
-            // No lookup available - return NoDictionaryEntry as safe default
-            return new TermRenderingStatus(
-                TermRenderingStatusCode.NoDictionaryEntry,
-                null,
-                null,
-                null
-            );
-        }
+        if (btState.Analyzer is not IBtLookup lookup)
+            return StatusWithoutTerm(TermRenderingStatusCode.NoDictionaryEntry);
 
         // Step 3: Check if lemma exists in dictionary
         string dbKey = lexicalLink.Lemma;
         string? lemma = lookup.GetLemma(dbKey);
         if (lemma is null)
-        {
-            return new TermRenderingStatus(
-                TermRenderingStatusCode.NoDictionaryEntry,
-                null,
-                null,
-                null
-            );
-        }
+            return StatusWithoutTerm(TermRenderingStatusCode.NoDictionaryEntry);
 
-        // Step 4: Find matching Biblical Term
-        var (termId, isAtThisVerse) = lookup.GetMatchingTerm(lemma, verseRef);
+        // Step 4: Find matching Biblical Term (primary, then alternate lemmas)
+        var (termId, isAtThisVerse) = ResolveMatchingTerm(lookup, lemma, dbKey, verseRef);
 
-        // If primary lookup fails, try alternate lemmas
         if (termId is null)
-        {
-            var alternates = lookup.GetAlternateLemmas(dbKey);
-            if (alternates is not null)
-            {
-                foreach (string alternate in alternates)
-                {
-                    var (altTermId, altIsAtVerse) = lookup.GetMatchingTerm(alternate, verseRef);
-                    if (altTermId is not null)
-                    {
-                        termId = altTermId;
-                        isAtThisVerse = altIsAtVerse;
-                        break;
-                    }
-                }
-            }
-        }
+            return StatusWithoutTerm(TermRenderingStatusCode.NotTermInProject);
 
-        // No term found in project at all
-        if (termId is null)
-        {
-            return new TermRenderingStatus(
-                TermRenderingStatusCode.NotTermInProject,
-                null,
-                null,
-                null
-            );
-        }
-
-        // Term found in project but not at this verse
         if (!isAtThisVerse)
-        {
-            return new TermRenderingStatus(TermRenderingStatusCode.NotInVerse, null, null, termId);
-        }
+            return StatusWithTerm(TermRenderingStatusCode.NotInVerse, termId);
 
         // Step 5: Check verse text
         string? verseText = lookup.GetVerseText(verseRef);
         if (string.IsNullOrEmpty(verseText))
-        {
-            return new TermRenderingStatus(TermRenderingStatusCode.NoVerseText, null, null, termId);
-        }
+            return StatusWithTerm(TermRenderingStatusCode.NoVerseText, termId);
 
         // Steps 6-11: Check renderings
+        return EvaluateRenderingStatus(lookup, termId, verseRef);
+    }
+
+    /// <summary>
+    /// Creates a TermRenderingStatus for early-exit codes where no term was resolved.
+    /// Used for codes 1-4 (NoTrackedProject, NoLink, NoDictionaryEntry, NotTermInProject).
+    /// </summary>
+    private static TermRenderingStatus StatusWithoutTerm(TermRenderingStatusCode code) =>
+        new(code, null, null, null);
+
+    /// <summary>
+    /// Creates a TermRenderingStatus for codes where a term was resolved but no renderings data.
+    /// Used for codes 5-6 and 8-9 (NotInVerse, NoVerseText, RenderingMissingInVerse, etc.).
+    /// </summary>
+    private static TermRenderingStatus StatusWithTerm(
+        TermRenderingStatusCode code,
+        string termId
+    ) => new(code, null, null, termId);
+
+    /// <summary>
+    /// Resolves the matching Biblical Term for a lemma, trying alternate lemmas if the
+    /// primary lookup fails. Returns (termId, isAtThisVerse) where termId is null if
+    /// no match is found via either path.
+    /// </summary>
+    private static (string? TermId, bool IsAtThisVerse) ResolveMatchingTerm(
+        IBtLookup lookup,
+        string lemma,
+        string dbKey,
+        VerseReference verseRef
+    )
+    {
+        var (termId, isAtThisVerse) = lookup.GetMatchingTerm(lemma, verseRef);
+        if (termId is not null)
+            return (termId, isAtThisVerse);
+
+        // Primary lookup failed - try alternate lemmas
+        var alternates = lookup.GetAlternateLemmas(dbKey);
+        if (alternates is null)
+            return (null, false);
+
+        foreach (string alternate in alternates)
+        {
+            var (altTermId, altIsAtVerse) = lookup.GetMatchingTerm(alternate, verseRef);
+            if (altTermId is not null)
+                return (altTermId, altIsAtVerse);
+        }
+
+        return (null, false);
+    }
+
+    /// <summary>
+    /// Evaluates rendering status for a term that is confirmed to be at this verse
+    /// with non-empty verse text. Handles steps 6-11 of the evaluation pipeline.
+    /// </summary>
+    private static TermRenderingStatus EvaluateRenderingStatus(
+        IBtLookup lookup,
+        string termId,
+        VerseReference verseRef
+    )
+    {
         var (hasRenderings, isDenied, isGuess, foundRendering) = lookup.GetRenderingStatus(
             termId,
             verseRef
@@ -290,12 +293,10 @@ internal static class TermRenderingStatusService
 
         if (!hasRenderings)
         {
-            return new TermRenderingStatus(
+            return StatusWithTerm(
                 isDenied
                     ? TermRenderingStatusCode.RenderingDeniedInVerse
                     : TermRenderingStatusCode.NoRenderingsEntered,
-                null,
-                null,
                 termId
             );
         }
@@ -303,32 +304,21 @@ internal static class TermRenderingStatusService
         // Has renderings - check if found in verse
         if (!string.IsNullOrEmpty(foundRendering))
         {
-            var renderings = new List<string> { foundRendering };
             return new TermRenderingStatus(
                 isGuess
                     ? TermRenderingStatusCode.GuessedRendingFound
                     : TermRenderingStatusCode.RenderingFound,
-                renderings,
+                [foundRendering],
                 null,
                 termId
             );
         }
 
         // Rendering defined but not found in verse
-        if (isDenied)
-        {
-            return new TermRenderingStatus(
-                TermRenderingStatusCode.RenderingDeniedInVerse,
-                null,
-                null,
-                termId
-            );
-        }
-
-        return new TermRenderingStatus(
-            TermRenderingStatusCode.RenderingMissingInVerse,
-            null,
-            null,
+        return StatusWithTerm(
+            isDenied
+                ? TermRenderingStatusCode.RenderingDeniedInVerse
+                : TermRenderingStatusCode.RenderingMissingInVerse,
             termId
         );
     }
