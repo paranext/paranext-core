@@ -30,8 +30,8 @@ internal class ResourceUpdateService
     private readonly IInternetAccessChecker _internetAccessChecker;
     private readonly IManifestProvider _manifestProvider;
 
-    // BHV-510: Thread-safe update status tracking
-    private readonly object _updateStatusLock = new();
+    // BHV-510: Guards _updateStatus and _v2Upgrades for thread-safe access
+    private readonly object _stateLock = new();
     private readonly Dictionary<string, bool> _updateStatus = new();
 
     // BHV-507: V2 upgrade tracking
@@ -85,7 +85,7 @@ internal class ResourceUpdateService
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                "Failed to download resource manifest: " + ex.Message,
+                $"Failed to download resource manifest: {ex.Message}",
                 ex
             );
         }
@@ -98,52 +98,10 @@ internal class ResourceUpdateService
             ScrTextCollection.ScrTexts(IncludeProjects.Everything).Select(s => s.Name)
         );
 
-        var updatesAvailable = new List<EnhancedResourceInfo>();
-
-        lock (_updateStatusLock)
-        {
-            _updateStatus.Clear();
-            _v2Upgrades.Clear();
-
-            foreach (var entry in manifest)
-            {
-                string resourceName = entry.Key;
-                string remoteVersion = entry.Value;
-
-                // Only check resources that are actually installed
-                if (!installedNames.Contains(resourceName))
-                    continue;
-
-                bool isNewer = ResourceInstallService.IsNewerVersionAvailable(
-                    resourceName,
-                    remoteVersion
-                );
-
-                _updateStatus[resourceName] = isNewer;
-
-                // BHV-507: Check for V2 upgrade
-                if (_manifestProvider.HasV2Upgrade(resourceName))
-                {
-                    _v2Upgrades.Add(resourceName);
-                }
-
-                if (isNewer)
-                {
-                    updatesAvailable.Add(
-                        new EnhancedResourceInfo(
-                            Id: resourceName,
-                            Name: resourceName,
-                            ShortName: resourceName,
-                            Language: "",
-                            Version: remoteVersion,
-                            HasResearchData: false,
-                            IsInstalled: true,
-                            HasUpdate: true
-                        )
-                    );
-                }
-            }
-        }
+        List<EnhancedResourceInfo> updatesAvailable = CompareManifestVersions(
+            manifest,
+            installedNames
+        );
 
         return Task.FromResult<IReadOnlyList<EnhancedResourceInfo>>(updatesAvailable);
     }
@@ -157,7 +115,7 @@ internal class ResourceUpdateService
     // Maps to: CAP-020, BHV-510
     public bool ResourceHasUpdates(string resourceName)
     {
-        lock (_updateStatusLock)
+        lock (_stateLock)
         {
             return _updateStatus.TryGetValue(resourceName, out bool hasUpdate) && hasUpdate;
         }
@@ -226,10 +184,8 @@ internal class ResourceUpdateService
     // === NEW IN PT10 ===
     // Reason: Test helper to control cache age without waiting real time
     // Maps to: CAP-020
-    public void SetManifestCacheAge(TimeSpan age)
-    {
+    public void SetManifestCacheAge(TimeSpan age) =>
         _manifestCacheTimestamp = DateTime.UtcNow - age;
-    }
 
     /// <summary>
     /// Returns the manifest cache TTL in seconds.
@@ -237,10 +193,7 @@ internal class ResourceUpdateService
     // === NEW IN PT10 ===
     // Reason: Exposes TTL constant for verification
     // Maps to: INV-013
-    public int GetManifestCacheTtlSeconds()
-    {
-        return ManifestCacheTtlSeconds;
-    }
+    public int GetManifestCacheTtlSeconds() => ManifestCacheTtlSeconds;
 
     /// <summary>
     /// Persists the update schedule type preference.
@@ -249,10 +202,8 @@ internal class ResourceUpdateService
     // Source: PT9/Paratext/Marble/InstallResourcesScheduleManager.cs:200-220
     // Method: InstallResourcesScheduleManager.SaveScheduleType()
     // Maps to: BHV-525
-    public void SaveScheduleType(UpdateScheduleType scheduleType)
-    {
+    public void SaveScheduleType(UpdateScheduleType scheduleType) =>
         _savedScheduleType = scheduleType;
-    }
 
     /// <summary>
     /// Loads the persisted schedule type preference. Defaults to Never.
@@ -261,9 +212,66 @@ internal class ResourceUpdateService
     // Source: PT9/Paratext/Marble/InstallResourcesScheduleManager.cs:222-240
     // Method: InstallResourcesScheduleManager.LoadScheduleType()
     // Maps to: BHV-525
-    public UpdateScheduleType LoadScheduleType()
+    public UpdateScheduleType LoadScheduleType() => _savedScheduleType ?? UpdateScheduleType.Never;
+
+    /// <summary>
+    /// Compares manifest versions against installed versions, updating internal state
+    /// and returning resources that have newer versions available.
+    /// Thread-safe: acquires <see cref="_stateLock"/> during execution.
+    /// </summary>
+    private List<EnhancedResourceInfo> CompareManifestVersions(
+        Dictionary<string, string> manifest,
+        HashSet<string> installedNames
+    )
     {
-        return _savedScheduleType ?? UpdateScheduleType.Never;
+        var updatesAvailable = new List<EnhancedResourceInfo>();
+
+        lock (_stateLock)
+        {
+            _updateStatus.Clear();
+            _v2Upgrades.Clear();
+
+            foreach (var entry in manifest)
+            {
+                string resourceName = entry.Key;
+                string remoteVersion = entry.Value;
+
+                // Only check resources that are actually installed
+                if (!installedNames.Contains(resourceName))
+                    continue;
+
+                bool isNewer = ResourceInstallService.IsNewerVersionAvailable(
+                    resourceName,
+                    remoteVersion
+                );
+
+                _updateStatus[resourceName] = isNewer;
+
+                // BHV-507: Check for V2 upgrade
+                if (_manifestProvider.HasV2Upgrade(resourceName))
+                {
+                    _v2Upgrades.Add(resourceName);
+                }
+
+                if (isNewer)
+                {
+                    updatesAvailable.Add(
+                        new EnhancedResourceInfo(
+                            Id: resourceName,
+                            Name: resourceName,
+                            ShortName: resourceName,
+                            Language: "",
+                            Version: remoteVersion,
+                            HasResearchData: false,
+                            IsInstalled: true,
+                            HasUpdate: true
+                        )
+                    );
+                }
+            }
+        }
+
+        return updatesAvailable;
     }
 
     /// <summary>
@@ -275,7 +283,7 @@ internal class ResourceUpdateService
     // Maps to: BHV-507
     public bool HasV2UpgradeAvailable(string resourceName)
     {
-        lock (_updateStatusLock)
+        lock (_stateLock)
         {
             return _v2Upgrades.Contains(resourceName);
         }
