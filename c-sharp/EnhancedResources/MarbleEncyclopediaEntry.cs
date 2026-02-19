@@ -2,14 +2,11 @@ using System.Xml.Linq;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
+// Ported from PT9: Paratext/Marble/MarbleEncyclopediaEntry.cs (EXT-067, CAP-029)
+
 /// <summary>
 /// V2 encyclopedia entry data model with XML parser.
 /// Represents the root element of the Thematic Lexicon XML format.
-///
-/// === PORTED FROM PT9 ===
-/// Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:1-476
-/// Method: Thematic_Lexicon and related data model classes
-/// Maps to: EXT-067, BHV-414
 /// </summary>
 public class Thematic_Lexicon
 {
@@ -25,48 +22,30 @@ public class Thematic_Lexicon
     /// </summary>
     /// <param name="encyclopediaXml">V2 encyclopedia XML string</param>
     /// <returns>Parsed Thematic_Lexicon with populated entry array</returns>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:35-47
-    // Method: Thematic_Lexicon.ParseXml()
-    // Maps to: EXT-067
     public static Thematic_Lexicon ParseXml(string encyclopediaXml)
     {
         var doc = XDocument.Parse(encyclopediaXml);
 
-        var entries = new List<Thematic_LexiconThemLex_Entry>();
-        foreach (var entry in doc.Descendants("ThemLex_Entry"))
-            entries.Add(ParseEntry(entry));
-
-        var result = new Thematic_Lexicon();
-        result.ThemLex_Entry = entries.ToArray();
-
-        return result;
+        return new Thematic_Lexicon
+        {
+            ThemLex_Entry = doc.Descendants("ThemLex_Entry").Select(ParseEntry).ToArray(),
+        };
     }
 
-    #region private helper methods
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:53-66
-    // Method: Thematic_Lexicon.ParseEntry()
-    // Maps to: EXT-067
     private static Thematic_LexiconThemLex_Entry ParseEntry(XElement entry)
     {
-        var result = new Thematic_LexiconThemLex_Entry();
         var bibleImages = new List<BibleImage>();
 
-        result.Key = entry.Attribute("Key")?.Value;
-        result.Title = entry.Element("Title")?.Value;
-        result.Index = ParseIndex(entry);
-        result.Sections = ParseSections(entry, bibleImages);
-        result.BibleImages = bibleImages.ToArray();
-
-        return result;
+        return new Thematic_LexiconThemLex_Entry
+        {
+            Key = entry.Attribute("Key")?.Value,
+            Title = entry.Element("Title")?.Value,
+            Index = ParseIndex(entry),
+            Sections = ParseSections(entry, bibleImages),
+            BibleImages = bibleImages.ToArray(),
+        };
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:68-83
-    // Method: Thematic_Lexicon.ParseIndex()
-    // Maps to: EXT-067
     private static Thematic_LexiconThemLex_EntryIndexItem[] ParseIndex(XElement entry)
     {
         var indexItems = new List<Thematic_LexiconThemLex_EntryIndexItem>();
@@ -84,10 +63,6 @@ public class Thematic_Lexicon
         return indexItems.ToArray();
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:85-114
-    // Method: Thematic_Lexicon.ParseSections()
-    // Maps to: EXT-067
     private static Thematic_LexiconThemLex_EntrySection[] ParseSections(
         XElement entry,
         List<BibleImage> bibleImages
@@ -97,99 +72,84 @@ public class Thematic_Lexicon
 
         foreach (var sectionElem in entry.Descendants("Section"))
         {
-            var section = new Thematic_LexiconThemLex_EntrySection();
-            section.Type = sectionElem.Attribute("Type")?.Value;
-            section.Content = sectionElem.Attribute("Content")?.Value ?? "";
             var headingElem = sectionElem.Element("Heading");
-            section.Heading =
-                headingElem != null
-                    ? string.Join("", headingElem.Nodes().Select(n => n.ToString()))
-                    : "";
 
-            var paragraphs = new List<string>();
-            foreach (var paragraphElem in sectionElem.Descendants("Paragraph"))
-            {
-                // can't just take the value since there are sub-elements for formatting
-                paragraphs.Add(string.Join("", paragraphElem.Nodes().Select(n => n.ToString())));
-            }
-
-            section.Paragraphs = paragraphs.ToArray();
-
-            section.LanguageSets = ParseLanguageSets(sectionElem);
+            sections.Add(
+                new Thematic_LexiconThemLex_EntrySection
+                {
+                    Type = sectionElem.Attribute("Type")?.Value,
+                    Content = sectionElem.Attribute("Content")?.Value ?? "",
+                    Heading =
+                        headingElem != null
+                            ? string.Join("", headingElem.Nodes().Select(n => n.ToString()))
+                            : "",
+                    Paragraphs = sectionElem
+                        .Descendants("Paragraph")
+                        .Select(p => string.Join("", p.Nodes().Select(n => n.ToString())))
+                        .ToArray(),
+                    LanguageSets = ParseLanguageSets(sectionElem),
+                }
+            );
 
             ParseBibleImages(sectionElem, bibleImages);
-
-            sections.Add(section);
         }
 
         return sections.ToArray();
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:116-139
-    // Method: Thematic_Lexicon.ParseLanguageSets()
-    // Maps to: EXT-067
-    // EXPLANATION:
-    // PT9 uses Memento.FromXmlString<T>() to deserialize each LanguageSet element.
-    // In PT10 we use manual LINQ parsing instead since Memento is not available.
+    // PT9 used Memento.FromXmlString<T>() for deserialization; we use manual LINQ instead.
     // LanguageSets with null Language attribute are filtered out (PT9 behavior).
     private static Thematic_LexiconThemLex_EntrySectionLanguageSet[] ParseLanguageSets(
         XElement sectionElem
     )
     {
         var languageSets = new List<Thematic_LexiconThemLex_EntrySectionLanguageSet>();
-        foreach (var languageSetElem in sectionElem.Descendants("LanguageSet"))
-        {
-            var languageSet = new Thematic_LexiconThemLex_EntrySectionLanguageSet();
-            languageSet.Language = languageSetElem.Attribute("Language")?.Value;
 
-            // PT9 behavior: skip sets without a Language attribute
-            if (languageSet.Language == null)
+        foreach (var elem in sectionElem.Descendants("LanguageSet"))
+        {
+            string? language = elem.Attribute("Language")?.Value;
+            if (language == null)
                 continue;
 
-            languageSet.Lemma = languageSetElem.Element("Lemma")?.Value;
-            languageSet.Transliteration = languageSetElem.Element("Transliteration")?.Value;
-
-            var references = new List<ulong>();
-            foreach (var refElem in languageSetElem.Descendants("Reference"))
-            {
-                if (ulong.TryParse(refElem.Value, out var refValue))
-                    references.Add(refValue);
-            }
-            languageSet.References = references.ToArray();
-
-            languageSets.Add(languageSet);
+            languageSets.Add(
+                new Thematic_LexiconThemLex_EntrySectionLanguageSet
+                {
+                    Language = language,
+                    Lemma = elem.Element("Lemma")?.Value,
+                    Transliteration = elem.Element("Transliteration")?.Value,
+                    References = elem.Descendants("Reference")
+                        .Select(r => ulong.TryParse(r.Value, out var v) ? (ulong?)v : null)
+                        .Where(v => v.HasValue)
+                        .Select(v => v!.Value)
+                        .ToArray(),
+                }
+            );
         }
 
         return languageSets.ToArray();
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:141-148
-    // Method: Thematic_Lexicon.ParseBibleImages()
-    // Maps to: EXT-067
-    // EXPLANATION:
-    // PT9 uses Memento.FromXmlString<BibleImage>() to deserialize each BibleImage element.
-    // In PT10 we use manual LINQ parsing instead since Memento is not available.
+    // PT9 used Memento.FromXmlString<BibleImage>(); we use manual LINQ instead.
     // Images are collected from all sections and placed on the entry.
     private static void ParseBibleImages(XElement sectionElem, List<BibleImage> bibleImages)
     {
         foreach (var imageElem in sectionElem.Descendants("BibleImage"))
         {
-            var image = new BibleImage();
-            image.Id = imageElem.Attribute("Id")?.Value;
-            image.MediaType = imageElem.Attribute("Type")?.Value;
-            image.Collection = imageElem.Element("Collection")?.Value;
-            image.Path = imageElem.Element("Path")?.Value;
-            image.FileName = imageElem.Element("FileName")?.Value;
-            image.Copyright = imageElem.Element("Copyright")?.Value;
-            image.Caption = imageElem.Element("Caption")?.Value;
-            image.Description = imageElem.Element("Description")?.Value;
-            bibleImages.Add(image);
+            bibleImages.Add(
+                new BibleImage
+                {
+                    Id = imageElem.Attribute("Id")?.Value,
+                    MediaType = imageElem.Attribute("Type")?.Value,
+                    Collection = imageElem.Element("Collection")?.Value,
+                    Path = imageElem.Element("Path")?.Value,
+                    FileName = imageElem.Element("FileName")?.Value,
+                    Copyright = imageElem.Element("Copyright")?.Value,
+                    Caption = imageElem.Element("Caption")?.Value,
+                    Description = imageElem.Element("Description")?.Value,
+                }
+            );
         }
     }
-
-    #endregion
 }
 
 /// <summary>
