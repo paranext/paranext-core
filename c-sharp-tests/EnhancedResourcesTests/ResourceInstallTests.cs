@@ -59,7 +59,7 @@ internal class ResourceInstallTests : PapiTestBase
             Version: "2.0.0.0",
             HasResearchData: true,
             SourceUrl: null,
-            LocalPath: "/test/resources/ESV16UK+.zip"
+            LocalPath: CreateValidResourceZip("ESV16UK+")
         );
 
         // Act: Install the resource, then verify immutability of the result
@@ -72,11 +72,10 @@ internal class ResourceInstallTests : PapiTestBase
         {
             Assert.That(installResult.Success, Is.True, "Resource installs successfully");
 
-            // TS-013: Editable getter returns false
-            ScrText installed = ScrTextCollection.FindById(
-                HexId.FromStr(installResult.ResourceName),
-                installResult.ResourceName
-            );
+            // TS-013: Editable getter returns false - find by name in ScrTextCollection
+            ScrText? installed = ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .FirstOrDefault(s => s.Name == installResult.ResourceName);
             Assert.That(installed, Is.Not.Null, "Installed resource is findable");
             Assert.That(
                 installed!.Settings.Editable,
@@ -159,7 +158,7 @@ internal class ResourceInstallTests : PapiTestBase
             Version: "2.0.0.0",
             HasResearchData: true,
             SourceUrl: null,
-            LocalPath: "/test/resources/ESV16UK+.zip"
+            LocalPath: CreateValidResourceZip("ESV16UK+")
         );
 
         // Act
@@ -373,7 +372,7 @@ internal class ResourceInstallTests : PapiTestBase
         Assert.Multiple(() =>
         {
             Assert.That(
-                ex!.UnsupportedReason,
+                ex!.Reason,
                 Is.EqualTo(UnsupportedReason.Corrupted),
                 "INV-003: Exception has Corrupted reason"
             );
@@ -661,7 +660,8 @@ internal class ResourceInstallTests : PapiTestBase
             Version: "2.1.0.0",
             HasResearchData: true,
             SourceUrl: null,
-            LocalPath: CreateValidResourceZip("ESV16UK+v2")
+            LocalPath: CreateValidResourceZip("ESV16UK+v2"),
+            DblEntryUid: dblUid
         );
 
         // Act
@@ -878,7 +878,9 @@ internal class ResourceInstallTests : PapiTestBase
             LocalPath: CreateValidResourceZip("ESV16UK+")
         );
         var progressValues = new List<double>();
-        var progress = new Progress<double>(p => progressValues.Add(p));
+        // Use a synchronous IProgress<T> implementation instead of Progress<T>
+        // which posts callbacks asynchronously via SynchronizationContext
+        var progress = new SynchronousProgress<double>(p => progressValues.Add(p));
 
         // Act
         ResourceInstallResult result = ResourceInstallService.InstallResourceAsync(
@@ -1067,4 +1069,24 @@ internal class ResourceInstallTests : PapiTestBase
     }
 
     #endregion
+
+    /// <summary>
+    /// Synchronous IProgress implementation for testing.
+    /// Unlike Progress&lt;T&gt;, this invokes the callback synchronously
+    /// so progress values are available immediately for assertions.
+    /// </summary>
+    private sealed class SynchronousProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _handler;
+
+        public SynchronousProgress(Action<T> handler)
+        {
+            _handler = handler;
+        }
+
+        public void Report(T value)
+        {
+            _handler(value);
+        }
+    }
 }
