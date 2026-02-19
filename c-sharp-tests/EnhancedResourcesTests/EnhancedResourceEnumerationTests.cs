@@ -688,16 +688,29 @@ internal class EnhancedResourceEnumerationTests : PapiTestBase
     private void SetupMarbleResource(EnhancedResourceInfoTestData data)
     {
         // Use a valid HexId for the project metadata (required by DummyScrText)
-        // The data.id (e.g. "ESV16UK+") is the logical resource identifier;
-        // the service maps from ScrText.Name or ShortName to this ID.
         var hexId = HexId.CreateNew().ToString();
         var details = CreateProjectDetails(hexId, data.id);
 
         // Add to ScrTextCollection via DummyLocalParatextProjects
         var scrText = new DummyScrText(details);
 
-        // Set the FullName for metadata lookup by the service
+        // Set TranslationInfo.Type to MarbleResource so the service can filter correctly.
+        // DummyScrText defaults to Standard type; we need to override it.
+        scrText.Settings.TranslationInfo =
+            new Paratext.Data.ProjectSettingsAccess.TranslationInformation(
+                ProjectType.MarbleResource
+            );
+
+        // Set metadata fields the service reads via ProjectSettings:
+        // FullName: the display name (e.g. "ESV with Marble Data")
         scrText.Settings.FullName = data.name;
+        // Id and other metadata stored via SetSetting for custom project settings.
+        // The service reads these to populate EnhancedResourceInfo fields.
+        scrText.Settings.SetSetting("ResourceId", data.id);
+        scrText.Settings.SetSetting("ResourceShortName", data.shortName);
+        scrText.Settings.SetSetting("ResourceLanguage", data.language);
+        scrText.Settings.SetSetting("MarbleVersion", data.version);
+        scrText.Settings.SetSetting("MarbleResearchData", data.hasResearchData ? "T" : "F");
 
         ParatextProjects.FakeAddProject(details, scrText);
     }

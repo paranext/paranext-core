@@ -1,3 +1,5 @@
+using Paratext.Data;
+
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
@@ -10,12 +12,13 @@ namespace Paranext.DataProvider.EnhancedResources;
 ///             IEnhancedResourceProvider.cs:5-10 (AvailableBibles).
 /// Contract: data-contracts.md Method 1.
 /// CAP-001: GetAvailableEnhancedResources.
-///
-/// TDD RED state stub: All methods throw NotImplementedException.
-/// The implementer will replace these with real implementations.
 /// </remarks>
 internal static class EnhancedResourceEnumerationService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/Plugins/Host.cs:52-63
+    // Method: Host.AllEnhancedResources (iterates AvailableBibles, filters MarbleResource)
+    // Maps to: CAP-001
     /// <summary>
     /// Returns metadata for all installed Enhanced Resources (MarbleResource projects).
     /// Only MarbleResource projects are returned (INV-006).
@@ -27,9 +30,35 @@ internal static class EnhancedResourceEnumerationService
     /// </returns>
     public static IReadOnlyList<EnhancedResourceInfo> GetAvailableEnhancedResources()
     {
-        // TDD RED state: Implementation pending
-        throw new NotImplementedException(
-            "CAP-001: GetAvailableEnhancedResources not yet implemented"
-        );
+        var result = new List<EnhancedResourceInfo>();
+
+        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
+        {
+            if (scrText.Settings.TranslationInfo.Type != ProjectType.MarbleResource)
+                continue;
+
+            string id = scrText.Settings.GetSetting("ResourceId") ?? "";
+            string name = scrText.Settings.FullName ?? "";
+            string shortName = scrText.Settings.GetSetting("ResourceShortName") ?? "";
+            string language = scrText.Settings.GetSetting("ResourceLanguage") ?? "";
+            string version = scrText.Settings.GetSetting("MarbleVersion") ?? "";
+            string researchDataFlag = scrText.Settings.GetSetting("MarbleResearchData") ?? "F";
+            bool hasResearchData = researchDataFlag == "T";
+
+            result.Add(
+                new EnhancedResourceInfo(
+                    Id: id,
+                    Name: name,
+                    ShortName: shortName,
+                    Language: language,
+                    Version: version,
+                    HasResearchData: hasResearchData,
+                    IsInstalled: true,
+                    HasUpdate: false
+                )
+            );
+        }
+
+        return result;
     }
 }
