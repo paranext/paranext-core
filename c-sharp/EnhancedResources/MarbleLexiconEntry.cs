@@ -2,17 +2,8 @@ using System.Xml.Serialization;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:1-436
-// Method: MarbleLexiconEntry (full file -- data models)
-// Maps to: EXT-015, CAP-024
+// Ported from PT9: Paratext/Marble/MarbleLexiconEntry.cs (EXT-015, CAP-024)
 
-#region LexEntryKey class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:11-28
-// Method: LexEntryKey constructor
-// Maps to: EXT-015
 /// <summary>
 /// Parses a lexicon entry ID in the format "Dictionary:Lemma:Index".
 /// </summary>
@@ -37,33 +28,15 @@ public class LexEntryKey
     }
 }
 
-#endregion
-
-#region Lexicon_Main class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:34-38
-// Method: Lexicon_Main class
-// Maps to: EXT-015
 /// <summary>
 /// Root element for SDBH (Hebrew) lexicon XML. Extends List of Lexicon_Entry.
 /// </summary>
-[Serializable]
 [XmlRoot("Lexicon")]
 public class Lexicon_Main : List<Lexicon_Entry> { }
 
-#endregion
-
-#region Lexicon_Entry class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:42-87
-// Method: Lexicon_Entry class
-// Maps to: EXT-015
 /// <summary>
 /// A single SDBH lexicon entry.
 /// </summary>
-[Serializable]
 public class Lexicon_Entry
 {
     [XmlAttribute("Id")]
@@ -111,14 +84,6 @@ public class Lexicon_Entry
     }
 }
 
-#endregion
-
-#region Lexicon_Localization class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:91-98
-// Method: Lexicon_Localization class
-// Maps to: EXT-015
 /// <summary>
 /// Localization metadata for a lexicon entry.
 /// </summary>
@@ -131,14 +96,6 @@ public class Lexicon_Localization
     public string? DateTime;
 }
 
-#endregion
-
-#region Lexicon_MeaningOfName class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:101-109
-// Method: Lexicon_MeaningOfName class
-// Maps to: EXT-015
 /// <summary>
 /// Meaning-of-name data for a lexicon entry.
 /// </summary>
@@ -151,14 +108,6 @@ public class Lexicon_MeaningOfName
     public string? Meaning;
 }
 
-#endregion
-
-#region Lexicon_Note class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:113-127
-// Method: Lexicon_Note class
-// Maps to: EXT-015
 /// <summary>
 /// A note attached to a lexicon entry (SDBH format).
 /// </summary>
@@ -177,14 +126,6 @@ public class Lexicon_Note
     public string? Content;
 }
 
-#endregion
-
-#region Lexicon_BaseForm class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:130-162
-// Method: Lexicon_BaseForm class
-// Maps to: EXT-015
 /// <summary>
 /// A base form within a lexicon entry.
 /// </summary>
@@ -222,14 +163,6 @@ public class Lexicon_BaseForm
     }
 }
 
-#endregion
-
-#region Lexicon_RelatedWord class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:165-169
-// Method: Lexicon_RelatedWord class
-// Maps to: EXT-015
 /// <summary>
 /// A related word reference.
 /// </summary>
@@ -238,14 +171,6 @@ public class Lexicon_RelatedWord
     public string? Word;
 }
 
-#endregion
-
-#region Lexicon_LexicalMeaning class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:173-233
-// Method: Lexicon_LexicalMeaning class
-// Maps to: EXT-015
 /// <summary>
 /// A lexical meaning within a base form.
 /// </summary>
@@ -307,14 +232,6 @@ public class Lexicon_LexicalMeaning
     public List<Lexicon_ContextualMeaning>? CONMeanings;
 }
 
-#endregion
-
-#region Lexicon_ContextualMeaning class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:237-274
-// Method: Lexicon_ContextualMeaning class
-// Maps to: EXT-015
 /// <summary>
 /// A contextual meaning within a lexical meaning.
 /// </summary>
@@ -357,14 +274,6 @@ public class Lexicon_ContextualMeaning
     public List<string>? CONReferences;
 }
 
-#endregion
-
-#region Link class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:278-283
-// Method: Link class
-// Maps to: EXT-015
 /// <summary>
 /// A cross-reference or resource link.
 /// </summary>
@@ -374,14 +283,6 @@ public class Link
     public string? TargetResource;
 }
 
-#endregion
-
-#region Sense class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:286-302
-// Method: Sense class
-// Maps to: EXT-015
 /// <summary>
 /// A language-specific sense with definitions and glosses.
 /// </summary>
@@ -403,18 +304,9 @@ public class Sense
     public string? Comments;
 }
 
-#endregion
-
-#region Lexicon_Entry_Index class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:305-317
-// Method: Lexicon_Entry_Index class
-// Maps to: EXT-015
 /// <summary>
 /// Index entry for lemma lookup.
 /// </summary>
-[Serializable]
 public class Lexicon_Entry_Index
 {
     [XmlAttribute("Lemma")]
@@ -427,18 +319,9 @@ public class Lexicon_Entry_Index
     public List<string>? EntryLinks;
 }
 
-#endregion
-
-#region Lexicon_Domain_Index class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:320-329
-// Method: Lexicon_Domain_Index class
-// Maps to: EXT-015
 /// <summary>
 /// Index entry for domain lookup.
 /// </summary>
-[Serializable]
 public class Lexicon_Domain_Index
 {
     [XmlAttribute("DomainCode")]
@@ -448,35 +331,17 @@ public class Lexicon_Domain_Index
     public List<string>? EntryLink;
 }
 
-#endregion
-
 // === SDBG (Greek / Louw-Nida) Types ===
 
-#region SDBG_Main class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:335-339
-// Method: SDBG_Main class
-// Maps to: EXT-015
 /// <summary>
 /// Root element for SDBG (Greek) lexicon XML.
 /// </summary>
-[Serializable]
 [XmlRoot("LN_Lexicon")]
 public class SDBG_Main : List<SDBG_Entry> { }
 
-#endregion
-
-#region SDBG_Entry class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:342-360
-// Method: SDBG_Entry class
-// Maps to: EXT-015
 /// <summary>
 /// A single SDBG entry.
 /// </summary>
-[Serializable]
 public class SDBG_Entry
 {
     [XmlAttribute("Id")]
@@ -495,14 +360,6 @@ public class SDBG_Entry
     public List<LN_Note>? Notes;
 }
 
-#endregion
-
-#region LN_Subentry class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:363-398
-// Method: LN_Subentry class
-// Maps to: EXT-015
 /// <summary>
 /// A Louw-Nida sub-entry within a SDBG entry.
 /// </summary>
@@ -542,14 +399,6 @@ public class LN_Subentry
     public List<string>? References;
 }
 
-#endregion
-
-#region LN_Additional class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:401-409
-// Method: LN_Additional class
-// Maps to: EXT-015
 /// <summary>
 /// Additional text data within a sub-entry.
 /// </summary>
@@ -562,14 +411,6 @@ public class LN_Additional
     public string? Text;
 }
 
-#endregion
-
-#region LN_Included class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:412-420
-// Method: LN_Included class
-// Maps to: EXT-015
 /// <summary>
 /// Included lemma data within a sub-entry.
 /// </summary>
@@ -582,14 +423,6 @@ public class LN_Included
     public string? IncludedPartOfSpeech;
 }
 
-#endregion
-
-#region LN_Note class
-
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:423-434
-// Method: LN_Note class
-// Maps to: EXT-015
 /// <summary>
 /// A note within a SDBG entry.
 /// Note: PT9 has a typo -- property is named 'Calle' instead of 'Caller'.
@@ -606,5 +439,3 @@ public class LN_Note
     [XmlElement("Content")]
     public string? Content;
 }
-
-#endregion
