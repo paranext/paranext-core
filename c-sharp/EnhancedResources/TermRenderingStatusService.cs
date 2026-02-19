@@ -45,10 +45,11 @@ internal static class TermRenderingStatusService
     {
         // Global override codes always replace current status
         if (
-            newStatus == TermRenderingStatusCode.NotTermInProject
-            || newStatus == TermRenderingStatusCode.NoDictionaryEntry
-            || newStatus == TermRenderingStatusCode.NoRenderingsEntered
-            || newStatus == TermRenderingStatusCode.NoTrackedProject
+            newStatus
+            is TermRenderingStatusCode.NotTermInProject
+                or TermRenderingStatusCode.NoDictionaryEntry
+                or TermRenderingStatusCode.NoRenderingsEntered
+                or TermRenderingStatusCode.NoTrackedProject
         )
         {
             return newStatus;
@@ -64,9 +65,10 @@ internal static class TermRenderingStatusService
         if (newStatus == TermRenderingStatusCode.RenderingMissingInVerse)
         {
             if (
-                currentStatus == TermRenderingStatusCode.RenderingFound
-                || currentStatus == TermRenderingStatusCode.GuessedRendingFound
-                || currentStatus == TermRenderingStatusCode.SomeRenderingsFound
+                currentStatus
+                is TermRenderingStatusCode.RenderingFound
+                    or TermRenderingStatusCode.GuessedRendingFound
+                    or TermRenderingStatusCode.SomeRenderingsFound
             )
             {
                 return TermRenderingStatusCode.SomeRenderingsFound;
@@ -77,13 +79,15 @@ internal static class TermRenderingStatusService
 
         // RenderingFound or GuessedRendingFound: override low-priority current statuses
         if (
-            newStatus == TermRenderingStatusCode.RenderingFound
-            || newStatus == TermRenderingStatusCode.GuessedRendingFound
+            newStatus
+            is TermRenderingStatusCode.RenderingFound
+                or TermRenderingStatusCode.GuessedRendingFound
         )
         {
             if (
-                currentStatus == TermRenderingStatusCode.RenderingDeniedInVerse
-                || currentStatus == TermRenderingStatusCode.NoVerseText
+                currentStatus
+                is TermRenderingStatusCode.RenderingDeniedInVerse
+                    or TermRenderingStatusCode.NoVerseText
             )
             {
                 return newStatus;
