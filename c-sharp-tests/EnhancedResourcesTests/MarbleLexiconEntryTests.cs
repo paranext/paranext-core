@@ -1224,8 +1224,13 @@ public class MarbleLexiconEntryTests
         var lexicon = DeserializeXml<Lexicon_Main>(xml);
         var entry = lexicon[0];
 
-        // BaseForms should be null when element is absent
-        Assert.That(entry.BaseForms, Is.Null);
+        // BaseForms should be null or empty when element is absent.
+        // .NET Framework returns null; .NET 8 XmlSerializer may return empty list.
+        Assert.That(
+            entry.BaseForms == null || entry.BaseForms.Count == 0,
+            Is.True,
+            "BaseForms should be null or empty when element is absent"
+        );
     }
 
     [Test]
