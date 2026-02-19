@@ -52,30 +52,7 @@ internal static class MediaTabService
         VerseReference verseRef,
         ScopeFilter scope,
         WordFilter? wordFilter
-    )
-    {
-        var tokens = ValidateAndGetBookTokens(dataAccess, resourceId, verseRef);
-
-        // Compute the verse range from scope
-        var scopeRange = ComputeScopeRange(tokens, verseRef, scope);
-
-        // Get all image metadata for the entire book range
-        var allBookImages = dataAccess.GetImageMetadata(
-            new VerseReference(verseRef.Book, 0, 0),
-            new VerseReference(verseRef.Book, 999, 999)
-        );
-
-        // Filter images that match the scope range
-        var scopedImages = FilterImagesForScope(allBookImages, verseRef, scopeRange);
-
-        // INV-012: Exclude Satellite Bible Atlas items from media tab
-        var filteredImages = ExcludeAtlasImages(scopedImages);
-
-        var items = filteredImages.Select(ToDisplayItem).ToList();
-
-        var result = new MediaTabContent(items, HeaderHtml: "");
-        return Task.FromResult(result);
-    }
+    ) => LoadImageTabCoreAsync(dataAccess, resourceId, verseRef, scope, ExcludeAtlasImages);
 
     /// <summary>
     /// Excludes images with the "Satellite Bible Atlas" collection name (INV-012).
@@ -96,6 +73,42 @@ internal static class MediaTabService
                 )
             )
             .ToList();
+
+    /// <summary>
+    /// Core pipeline shared by <see cref="LoadMediaTabAsync"/> and <see cref="LoadMapsTabAsync"/>.
+    /// Validates the resource, computes scope range, fetches image metadata,
+    /// filters by scope and atlas collection, then builds display items.
+    /// The <paramref name="atlasFilter"/> parameter controls INV-012 filtering:
+    /// <see cref="ExcludeAtlasImages"/> for the Media tab, <see cref="IncludeOnlyAtlasImages"/> for the Maps tab.
+    /// </summary>
+    // === NEW IN PT10 ===
+    // Reason: Extracted shared pipeline to eliminate duplication between LoadMediaTabAsync and LoadMapsTabAsync
+    // Maps to: CAP-011, CAP-012
+    private static Task<MediaTabContent> LoadImageTabCoreAsync(
+        MarbleDataAccess dataAccess,
+        string resourceId,
+        VerseReference verseRef,
+        ScopeFilter scope,
+        Func<List<ImageEntry>, List<ImageEntry>> atlasFilter
+    )
+    {
+        var tokens = ValidateAndGetBookTokens(dataAccess, resourceId, verseRef);
+
+        var scopeRange = ComputeScopeRange(tokens, verseRef, scope);
+
+        var allBookImages = dataAccess.GetImageMetadata(
+            new VerseReference(verseRef.Book, 0, 0),
+            new VerseReference(verseRef.Book, 999, 999)
+        );
+
+        var scopedImages = FilterImagesForScope(allBookImages, verseRef, scopeRange);
+
+        var filteredImages = atlasFilter(scopedImages);
+
+        var items = filteredImages.Select(ToDisplayItem).ToList();
+
+        return Task.FromResult(new MediaTabContent(items, HeaderHtml: ""));
+    }
 
     /// <summary>
     /// Converts an ImageEntry to a MediaDisplayItem for display in the media tab.
@@ -423,30 +436,7 @@ internal static class MediaTabService
         VerseReference verseRef,
         ScopeFilter scope,
         WordFilter? wordFilter
-    )
-    {
-        var tokens = ValidateAndGetBookTokens(dataAccess, resourceId, verseRef);
-
-        // Compute the verse range from scope
-        var scopeRange = ComputeScopeRange(tokens, verseRef, scope);
-
-        // Get all image metadata for the entire book range
-        var allBookImages = dataAccess.GetImageMetadata(
-            new VerseReference(verseRef.Book, 0, 0),
-            new VerseReference(verseRef.Book, 999, 999)
-        );
-
-        // Filter images that match the scope range
-        var scopedImages = FilterImagesForScope(allBookImages, verseRef, scopeRange);
-
-        // INV-012 (inverted): Include ONLY Satellite Bible Atlas items
-        var filteredImages = IncludeOnlyAtlasImages(scopedImages);
-
-        var items = filteredImages.Select(ToDisplayItem).ToList();
-
-        var result = new MediaTabContent(items, HeaderHtml: "");
-        return Task.FromResult(result);
-    }
+    ) => LoadImageTabCoreAsync(dataAccess, resourceId, verseRef, scope, IncludeOnlyAtlasImages);
 
     /// <summary>
     /// Includes ONLY images with the "Satellite Bible Atlas" collection name (INV-012 inverted).
