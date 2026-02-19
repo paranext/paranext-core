@@ -434,28 +434,11 @@ internal static class MarbleDataParser
         if (tokens == null || tokens.Count == 0)
             return Array.Empty<MarbleToken>();
 
-        // For CurrentSection scope, determine the verse range from section boundaries
-        int startVerse = 0;
-        int endVerse = int.MaxValue;
+        var verseRange = ComputeVerseRange(tokens, verseRef, scope);
+        if (verseRange == null)
+            return Array.Empty<MarbleToken>();
 
-        if (scope == ScopeFilter.CurrentVerse)
-        {
-            startVerse = verseRef.Verse;
-            endVerse = verseRef.Verse;
-        }
-        else if (scope == ScopeFilter.CurrentSection)
-        {
-            var boundaries = GetSectionBoundaries(tokens);
-            var section = boundaries.FirstOrDefault(b =>
-                verseRef.Verse >= b.StartVerse.Verse && verseRef.Verse <= b.EndVerse.Verse
-            );
-            if (section == null)
-                return Array.Empty<MarbleToken>();
-
-            startVerse = section.StartVerse.Verse;
-            endVerse = section.EndVerse.Verse;
-        }
-        // CurrentChapter: startVerse=0, endVerse=MaxValue => all verses included
+        var (startVerse, endVerse) = verseRange.Value;
 
         // Iterate tokens, tracking current verse, collecting matching TextLink tokens
         int currentVerse = 0;
@@ -465,23 +448,20 @@ internal static class MarbleDataParser
         {
             if (token.Type == MarbleTokenType.Verse)
             {
-                if (!string.IsNullOrEmpty(token.Text) && int.TryParse(token.Text, out int v))
-                    currentVerse = v;
+                if (!string.IsNullOrEmpty(token.Text) && int.TryParse(token.Text, out int verse))
+                    currentVerse = verse;
                 continue;
             }
 
             if (token.Type != MarbleTokenType.TextLink)
                 continue;
 
-            // Check verse scope
             if (currentVerse < startVerse || currentVerse > endVerse)
                 continue;
 
-            // Apply link type filter
             if (!Matches(token, linkType, filterText, filterLinks))
                 continue;
 
-            // Apply text filter
             if (!MatchesTextFilter(token, filterText))
                 continue;
 
@@ -489,5 +469,41 @@ internal static class MarbleDataParser
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Computes the verse range for the specified scope filter.
+    /// Returns null when the scope cannot be resolved (e.g., section not found).
+    /// </summary>
+    private static (int Start, int End)? ComputeVerseRange(
+        IReadOnlyList<MarbleToken> tokens,
+        VerseReference verseRef,
+        ScopeFilter scope
+    )
+    {
+        return scope switch
+        {
+            ScopeFilter.CurrentVerse => (verseRef.Verse, verseRef.Verse),
+            ScopeFilter.CurrentSection => ComputeSectionVerseRange(tokens, verseRef),
+            // CurrentChapter: include all verses (0..MaxValue)
+            _ => (0, int.MaxValue),
+        };
+    }
+
+    /// <summary>
+    /// Finds the section containing the given verse and returns its verse range.
+    /// Returns null when no matching section is found.
+    /// </summary>
+    private static (int Start, int End)? ComputeSectionVerseRange(
+        IReadOnlyList<MarbleToken> tokens,
+        VerseReference verseRef
+    )
+    {
+        var boundaries = GetSectionBoundaries(tokens);
+        var section = boundaries.FirstOrDefault(b =>
+            verseRef.Verse >= b.StartVerse.Verse && verseRef.Verse <= b.EndVerse.Verse
+        );
+
+        return section != null ? (section.StartVerse.Verse, section.EndVerse.Verse) : null;
     }
 }
