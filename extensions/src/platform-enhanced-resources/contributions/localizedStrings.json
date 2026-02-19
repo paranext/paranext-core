@@ -40,7 +40,12 @@
       "%enhancedResources_toolbar_foundAbbrev%": "F",
       "%enhancedResources_toolbar_missingAbbrev%": "M",
       "%enhancedResources_toolbar_infoButton%": "Getting Started Guide",
-      "%enhancedResources_toolbar_trackProject%": "Track project"
+      "%enhancedResources_toolbar_trackProject%": "Track project",
+      "%enhancedResources_scripturePane_zoomIn%": "Zoom in",
+      "%enhancedResources_scripturePane_zoomOut%": "Zoom out",
+      "%enhancedResources_scripturePane_footnoteToggle%": "Toggle footnotes (F7)",
+      "%enhancedResources_scripturePane_contextMenuSelect%": "Select",
+      "%enhancedResources_scripturePane_noContent%": "No scripture content available"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -81,7 +86,12 @@
       "%enhancedResources_toolbar_foundAbbrev%": "E",
       "%enhancedResources_toolbar_missingAbbrev%": "F",
       "%enhancedResources_toolbar_infoButton%": "Guia de inicio",
-      "%enhancedResources_toolbar_trackProject%": "Seguir proyecto"
+      "%enhancedResources_toolbar_trackProject%": "Seguir proyecto",
+      "%enhancedResources_scripturePane_zoomIn%": "Acercar",
+      "%enhancedResources_scripturePane_zoomOut%": "Alejar",
+      "%enhancedResources_scripturePane_footnoteToggle%": "Alternar notas al pie (F7)",
+      "%enhancedResources_scripturePane_contextMenuSelect%": "Seleccionar",
+      "%enhancedResources_scripturePane_noContent%": "No hay contenido de Escritura disponible"
     }
   }
 }

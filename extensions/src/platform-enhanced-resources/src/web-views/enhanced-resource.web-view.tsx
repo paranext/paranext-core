@@ -11,6 +11,7 @@ import {
   ResizablePanelGroup,
 } from 'platform-bible-react';
 import ERToolbar, { TrackedProjectOption } from '../components/er-toolbar.component';
+import ScripturePane, { WordFilterData } from '../components/scripture-pane.component';
 
 // --- Types ---
 
@@ -41,6 +42,7 @@ interface HighlightState {
 // --- Default values ---
 
 const DEFAULT_SPLITTER_PERCENTAGE = 50;
+const DEFAULT_ZOOM_LEVEL = 100;
 
 const DEFAULT_BANNER_STATE: BannerState = {
   visible: false,
@@ -93,6 +95,10 @@ const BANNER_DISPLAY_ORDER: (keyof WarningBannerStates)[] = [
 /** Default empty project list (will be populated by backend integration) */
 const DEFAULT_AVAILABLE_PROJECTS: TrackedProjectOption[] = [];
 
+/** Default empty scripture content (will be populated by backend integration) */
+const DEFAULT_SCRIPTURE_HTML = '';
+const DEFAULT_FOOTNOTE_HTML = '';
+
 // --- Component ---
 
 global.webViewComponent = function EnhancedResourceWebView({
@@ -125,6 +131,18 @@ global.webViewComponent = function EnhancedResourceWebView({
     'trackedProjectName',
     undefined,
   );
+
+  // --- Scripture pane state ---
+  const [showFootnotes, setShowFootnotes] = useWebViewState<boolean>('showFootnotes', false);
+  const [zoomLevel, setZoomLevel] = useWebViewState<number>('zoomLevel', DEFAULT_ZOOM_LEVEL);
+  // Word filter state: setter is used by handleWordClick. The getter will be consumed by the
+  // research pane component in UI-PKG-004. Using array destructuring to only extract the setter.
+  const wordFilterState = useWebViewState<WordFilterData | undefined>('wordFilter', undefined);
+  const setWordFilter = wordFilterState[1];
+
+  // Scripture content will be populated by backend integration (platformEnhancedResources.getScriptureContent)
+  const [scriptureHtml] = useWebViewState<string>('scriptureHtml', DEFAULT_SCRIPTURE_HTML);
+  const [footnoteHtml] = useWebViewState<string>('footnoteHtml', DEFAULT_FOOTNOTE_HTML);
 
   // Keep a ref to the current banners for use in callbacks
   const bannersRef = useRef(banners);
@@ -191,6 +209,28 @@ global.webViewComponent = function EnhancedResourceWebView({
     // Guide toggle will be wired to guide visibility in a future work package
   }, []);
 
+  // --- Scripture pane handlers ---
+  const handleShowFootnotesChange = useCallback(
+    (show: boolean) => {
+      setShowFootnotes(show);
+    },
+    [setShowFootnotes],
+  );
+
+  const handleZoomChange = useCallback(
+    (zoom: number) => {
+      setZoomLevel(zoom);
+    },
+    [setZoomLevel],
+  );
+
+  const handleWordClick = useCallback(
+    (wordFilterData: WordFilterData) => {
+      setWordFilter(wordFilterData);
+    },
+    [setWordFilter],
+  );
+
   return (
     <div data-testid="enhanced-resource-viewer" className="pr-twp tw-flex tw-flex-col tw-h-full">
       {/* ERToolbar */}
@@ -250,11 +290,16 @@ global.webViewComponent = function EnhancedResourceWebView({
           minSize={15}
           className="tw-flex tw-flex-col tw-min-h-0"
         >
-          <div className="tw-flex-1 tw-overflow-auto tw-p-4">
-            <p className="tw-text-muted-foreground tw-text-sm">
-              {localizedStrings['%enhancedResources_scripturePanePlaceholder%']}
-            </p>
-          </div>
+          <ScripturePane
+            scriptureHtml={scriptureHtml}
+            footnoteHtml={footnoteHtml}
+            showFootnotes={showFootnotes}
+            onShowFootnotesChange={handleShowFootnotesChange}
+            zoomLevel={zoomLevel}
+            onZoomChange={handleZoomChange}
+            onWordClick={handleWordClick}
+            highlightState={highlights}
+          />
         </ResizablePanel>
 
         <ResizableHandle withHandle />
