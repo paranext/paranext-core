@@ -397,4 +397,34 @@ internal static class MediaTabService
 
         return (int)raw;
     }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MediaTab.cs:375-565
+    // Method: MediaTab.LoadResources() + MediaTab.InvalidImageForTab()
+    // Maps to: EXT-066, EXT-072, CAP-012
+    //
+    // EXPLANATION:
+    // Same pipeline as LoadMediaTabAsync but with inverted INV-012 filter:
+    // Includes ONLY items where collectionName equals "Satellite Bible Atlas" (case-insensitive).
+    /// <summary>
+    /// Loads the maps tab content for a given resource, verse, and scope.
+    /// Same pipeline as <see cref="LoadMediaTabAsync"/> but with inverted INV-012 filter:
+    /// includes ONLY "Satellite Bible Atlas" items instead of excluding them.
+    /// </summary>
+    /// <param name="dataAccess">The data access layer (CAP-028).</param>
+    /// <param name="resourceId">The resource ID to load images for.</param>
+    /// <param name="verseRef">The current verse reference for scope calculation.</param>
+    /// <param name="scope">The scope filter (verse/section/chapter).</param>
+    /// <param name="wordFilter">Optional word filter to restrict images to matching tokens.</param>
+    /// <returns>MediaTabContent with only Satellite Bible Atlas image items.</returns>
+    public static Task<MediaTabContent> LoadMapsTabAsync(
+        MarbleDataAccess dataAccess,
+        string resourceId,
+        VerseReference verseRef,
+        ScopeFilter scope,
+        WordFilter? wordFilter
+    )
+    {
+        throw new NotImplementedException("CAP-012: LoadMapsTabAsync not yet implemented");
+    }
 }
