@@ -213,7 +213,112 @@ internal static class MarbleDataParser
     /// <returns>Ordered list of section boundaries. Empty if tokens is null/empty or has no verses.</returns>
     public static IReadOnlyList<SectionBoundary> GetSectionBoundaries(
         IReadOnlyList<MarbleToken>? tokens
-    ) => throw new NotImplementedException();
+    )
+    {
+        if (tokens == null || tokens.Count == 0)
+            return Array.Empty<SectionBoundary>();
+
+        int currentBook = 0;
+        int currentChapter = 0;
+        int currentVerse = 0;
+        int lastVerse = 0;
+
+        // First pass: collect section heading positions and track max verse
+        var headings = new List<(int Book, int Chapter, int Verse)>();
+
+        foreach (var token in tokens)
+        {
+            switch (token.Type)
+            {
+                case MarbleTokenType.Book:
+                    if (!string.IsNullOrEmpty(token.Text))
+                        currentBook = Canon.BookIdToNumber(token.Text);
+                    break;
+
+                case MarbleTokenType.Chapter:
+                    if (!string.IsNullOrEmpty(token.Text) && int.TryParse(token.Text, out int ch))
+                        currentChapter = ch;
+                    break;
+
+                case MarbleTokenType.Verse:
+                    if (!string.IsNullOrEmpty(token.Text) && int.TryParse(token.Text, out int v))
+                    {
+                        currentVerse = v;
+                        if (v > lastVerse)
+                            lastVerse = v;
+                    }
+                    break;
+
+                case MarbleTokenType.ParagraphStart:
+                    if (
+                        !string.IsNullOrEmpty(token.Style)
+                        && token.Style.StartsWith("s", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        headings.Add((currentBook, currentChapter, currentVerse));
+                    }
+                    break;
+            }
+        }
+
+        // No verses found: return empty
+        if (lastVerse == 0)
+            return Array.Empty<SectionBoundary>();
+
+        // No section headings: return one section covering the entire chapter
+        if (headings.Count == 0)
+        {
+            return new List<SectionBoundary>
+            {
+                new SectionBoundary(
+                    new VerseReference(currentBook, currentChapter, 1),
+                    new VerseReference(currentBook, currentChapter, lastVerse),
+                    0
+                ),
+            };
+        }
+
+        // Build boundaries from headings
+        var boundaries = new List<SectionBoundary>();
+        for (int i = 0; i < headings.Count; i++)
+        {
+            var heading = headings[i];
+            int startVerse;
+
+            if (i == 0)
+            {
+                // First section starts at verse 1
+                startVerse = 1;
+            }
+            else
+            {
+                // Subsequent sections start at heading verse + 1
+                startVerse = heading.Verse + 1;
+            }
+
+            int endVerse;
+            if (i < headings.Count - 1)
+            {
+                // End at the verse where the next heading appears
+                endVerse = headings[i + 1].Verse;
+            }
+            else
+            {
+                // Last section ends at the last verse in the chapter
+                endVerse = lastVerse;
+            }
+
+            boundaries.Add(
+                new SectionBoundary(
+                    new VerseReference(heading.Book, heading.Chapter, startVerse),
+                    new VerseReference(heading.Book, heading.Chapter, endVerse),
+                    i
+                )
+            );
+        }
+
+        return boundaries;
+    }
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleDataParser.cs:296-378
