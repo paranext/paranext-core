@@ -19,10 +19,12 @@ import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-util
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
+  useData,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useRecentScriptureRefs,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { CommandHandlers, CommandNames } from 'papi-shared-types';
@@ -30,16 +32,23 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  BookChapterControl,
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
+  MARKER_MENU_STRING_KEYS,
+  MarkerMenu,
   Popover,
   PopoverAnchor,
   PopoverContent,
+  PopoverTrigger,
+  ScrollGroupSelector,
+  SelectMenuItemHandler,
   Spinner,
+  TabToolbar,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -47,6 +56,7 @@ import {
   compareScrRefs,
   formatReplacementString,
   getErrorMessage,
+  getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   isString,
   LocalizeKey,
@@ -64,6 +74,7 @@ import {
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
+import { Redo, Undo } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
@@ -73,9 +84,13 @@ import {
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
+  availableScrollGroupIds,
+  blockMarkerToBlockNames,
   deepEqualAcrossIframes,
   formatEditorTitle,
+  generateMarkerMenuListItems,
   openCommentListAndSelectThreadSafe,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 
 /**
@@ -90,6 +105,9 @@ const EDITOR_LOAD_DELAY_TIME = 200;
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
+  ...MARKER_MENU_STRING_KEYS,
+  ...Object.values(blockMarkerToBlockNames),
+  '%paragraphMenu_misc_markerDescription%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -105,6 +123,16 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
+
+const BOOKS_PRESENT_DEFAULT = '';
+
+const DEFAULT_WEBVIEW_MENU = {
+  topMenu: undefined,
+  includeDefaults: true,
+  contextMenu: undefined,
+};
+
+const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
 /**
  * Extracts scripture text snippets from a selection range.
@@ -175,6 +203,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   updateWebViewDefinition,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
+  const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   // These control the placement of the footnote editor popover by setting the location of the anchor
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
@@ -235,7 +264,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     NO_UPDATE_TITLE,
   );
 
-  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRefWithScroll, scrollGroupId, setScrollGroupId] =
+    useWebViewScrollGroupScrRef();
 
   const [projectNamePossiblyError] = useProjectSetting(
     projectId,
@@ -363,6 +393,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       textDirection: textDirectionEffective,
       markerMenuTrigger: '\\',
       view: viewOptions,
+      hasExternalUI: true,
     }),
     [isReadOnlyEffective, textDirectionEffective, nodeOptions, viewOptions],
   );
@@ -411,6 +442,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         },
       }),
     [],
+  );
+
+  const paragraphSwitcherMenuItems = useMemo(
+    () => generateMarkerMenuListItems(editorRef, localizedStrings),
+    [localizedStrings],
   );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
@@ -1209,6 +1245,64 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [bookExists, usjFromPdp]);
 
+  const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    DEFAULT_WEBVIEW_MENU,
+  );
+
+  const webViewMenu = useMemo(() => {
+    if (isPlatformError(webViewMenuPossiblyError)) {
+      logger.warn(
+        `Failed to load web view menu for ${SCRIPTURE_EDITOR_WEBVIEW_TYPE}`,
+        webViewMenuPossiblyError,
+      );
+      return DEFAULT_WEBVIEW_MENU;
+    }
+    return webViewMenuPossiblyError;
+  }, [webViewMenuPossiblyError]);
+
+  const [booksPresentPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.booksPresent',
+    BOOKS_PRESENT_DEFAULT,
+  );
+
+  const booksPresent = useMemo(() => {
+    if (isPlatformError(booksPresentPossiblyError)) {
+      logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
+      return BOOKS_PRESENT_DEFAULT;
+    }
+    return booksPresentPossiblyError;
+  }, [booksPresentPossiblyError]);
+
+  const fetchActiveBooks = useCallback(() => {
+    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
+      if (char === '1') {
+        ids.push(Canon.bookNumberToId(index + 1));
+      }
+
+      return ids;
+    }, []);
+  }, [booksPresent]);
+
+  const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
+
+  const menuCommandHandler = useCallback<SelectMenuItemHandler>(
+    (projectMenuCommand) => {
+      // Assuming that the project menu command is one of the registered command handlers in papi
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
+    },
+    [webViewId],
+  );
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [canUndo, setCanUndo] = useState(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [canRedo, setCanRedo] = useState(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [blockMarker, setBlockMarker] = useState<string | undefined>();
+
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
@@ -1245,16 +1339,98 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           logger={logger}
           onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
           onSelectionChange={handleSelectionChange}
+          onStateChange={(state) => {
+            setCanUndo(state.canUndo);
+            setCanRedo(state.canRedo);
+            setBlockMarker(state.blockMarker);
+          }}
         />
       </>
     );
   }
 
   return (
-    <>
+    <div className="tw-flex tw-flex-col tw-h-screen">
+      {/* <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-background"> */}
+      <TabToolbar
+        onSelectProjectMenuItem={menuCommandHandler}
+        onSelectViewInfoMenuItem={menuCommandHandler}
+        projectMenuData={webViewMenu.topMenu}
+        className="scripture-editor-tab-nav tw-block"
+        startAreaChildren={
+          <>
+            <BookChapterControl
+              scrRef={scrRef}
+              handleSubmit={setScrRefWithScroll}
+              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+              recentSearches={recentScriptureRefs}
+              onAddRecentSearch={addRecentScriptureRef}
+            />
+            {!isReadOnlyEffective && (
+              <>
+                <Button
+                  aria-label="Undo"
+                  title="Undo"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => editorRef.current?.undo()}
+                  disabled={!canUndo}
+                >
+                  <Undo />
+                </Button>
+                <Button
+                  aria-label="Redo"
+                  title="Redo"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => editorRef.current?.redo()}
+                  disabled={!canRedo}
+                >
+                  <Redo />
+                </Button>
+                {blockMarker !== undefined && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        className="tw-h-8"
+                        aria-label="Paragraph Selection"
+                        title="Paragraph Selection"
+                        variant="outline"
+                      >
+                        {blockMarker ? `${blockMarker} - ` : ''}
+                        {blockMarker &&
+                        Object.entries(blockMarkerToBlockNames).find(
+                          ([marker]) => marker === blockMarker,
+                        )
+                          ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                          : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="tw-p-0 tw-w-96">
+                      <MarkerMenu
+                        localizedStrings={localizedStrings}
+                        markerMenuItems={paragraphSwitcherMenuItems}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </>
+            )}
+          </>
+        }
+        endAreaChildren={
+          <ScrollGroupSelector
+            availableScrollGroupIds={availableScrollGroupIds}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            localizedStrings={scrollGroupLocalizedStrings}
+          />
+        }
+      />
+      {/* </div> */}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
-      <div className="tw-h-screen tw-w-screen" dir={options.textDirection}>
+      <div className="tw-h-auto tw-overflow-auto" dir={options.textDirection}>
         {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
@@ -1372,6 +1548,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           />
         </PopoverContent>
       </Popover>
-    </>
+    </div>
   );
 };

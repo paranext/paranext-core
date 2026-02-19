@@ -8,6 +8,7 @@ import {
   getErrorMessage,
   isLocalizeKey,
   LanguageStrings,
+  LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjDocumentLocation,
@@ -15,6 +16,9 @@ import {
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureRange } from 'platform-scripture-editor';
+import { MutableRefObject } from 'react';
+import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { MarkerMenuItem } from 'platform-bible-react';
 
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
@@ -273,3 +277,67 @@ export async function convertScriptureRangeToEditorRange(
 }
 
 // #endregion USJ location conversion helper functions
+
+/**
+ * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+ * placeholder and will be refactored significantly in
+ * https://github.com/paranext/paranext-core/issues/788
+ */
+export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
+
+export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
+
+// This list is incomplete.
+export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
+  cl: '%paragraphMenu_cl_markerDescription%',
+  h: '%paragraphMenu_h_markerDescription%',
+  h1: '%paragraphMenu_h1_markerDescription%',
+  h2: '%paragraphMenu_h2_markerDescription%',
+  h3: '%paragraphMenu_h3_markerDescription%',
+  ide: '%paragraphMenu_ide_markerDescription%',
+  m: '%paragraphMenu_m_markerDescription%',
+  ms: '%paragraphMenu_ms_markerDescription%',
+  ms1: '%paragraphMenu_ms1_markerDescription%',
+  ms2: '%paragraphMenu_ms2_markerDescription%',
+  ms3: '%paragraphMenu_ms3_markerDescription%',
+  mt: '%paragraphMenu_mt_markerDescription%',
+  mt1: '%paragraphMenu_mt1_markerDescription%',
+  mt2: '%paragraphMenu_mt2_markerDescription%',
+  mt3: '%paragraphMenu_mt3_markerDescription%',
+  mt4: '%paragraphMenu_mt4_markerDescription%',
+  nb: '%paragraphMenu_nb_markerDescription%',
+  p: '%paragraphMenu_p_markerDescription%',
+  pi: '%paragraphMenu_pi_markerDescription%',
+  q1: '%paragraphMenu_q1_markerDescription%',
+  q2: '%paragraphMenu_q2_markerDescription%',
+  r: '%paragraphMenu_r_markerDescription%',
+  s: '%paragraphMenu_s_markerDescription%',
+  toc1: '%paragraphMenu_toc1_markerDescription%',
+  toc2: '%paragraphMenu_toc2_markerDescription%',
+  toc3: '%paragraphMenu_toc3_markerDescription%',
+};
+
+/**
+ * Generates the marker menu list items specifically inserting appropriate action functions using
+ * the provided `editorRef` parameter and localizes the marker titles with the provided
+ * `localizedStrings` parameter
+ *
+ * @param editorRef Provided ref for the editor component
+ * @param localizedStrings The localized strings to use to localize the marker titles
+ * @returns List of marker menu items to be used for the paragraph menu
+ */
+export function generateMarkerMenuListItems(
+  editorRef: MutableRefObject<EditorRef | null>,
+  localizedStrings: LanguageStrings,
+): MarkerMenuItem[] {
+  return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
+    const markerMenuItem: MarkerMenuItem = {
+      marker,
+      title: localizedStrings[title],
+      action: () => {
+        editorRef.current?.formatPara(marker);
+      },
+    };
+    return markerMenuItem;
+  });
+}
