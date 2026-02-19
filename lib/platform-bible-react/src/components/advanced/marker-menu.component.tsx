@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { FC, useMemo, useState } from 'react';
 import { Ban, LucideIcon } from 'lucide-react';
 import {
   Command,
@@ -35,7 +35,7 @@ export interface MarkerMenuItem {
   /** An optional subtitle for the marker */
   subtitle?: string;
   /** Optional name of icon to use instead of the marker */
-  icon?: LucideIcon;
+  icon?: FC;
   /** Whether the command/marker is deprecated */
   isDeprecated?: boolean;
   /** Whether the command/marker is disallowed for this project */
@@ -56,7 +56,7 @@ export interface MarkerMenuProps {
 }
 
 /** Function to format the marker menu icon and size it accordingly */
-function MenuMarkerIcon({ icon, className }: { icon?: LucideIcon; className?: string }) {
+function MenuMarkerIcon({ icon, className }: { icon?: FC; className?: string }) {
   const IconComponent = icon ?? Ban;
   return <IconComponent className={className} size={16} />;
 }
