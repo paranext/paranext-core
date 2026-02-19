@@ -106,4 +106,36 @@ internal static class TermRenderingStatusService
         // (already handled above), otherwise keep current
         return currentStatus;
     }
+
+    /// <summary>
+    /// Evaluates the rendering status for a token in a given verse.
+    /// INV-014: 12 distinct codes evaluated in strict sequential order.
+    /// </summary>
+    /// <param name="btState">
+    /// BT state for the tracked project (TermsList, TermRenderings, Analyzer).
+    /// Null means no tracked project is set.
+    /// </param>
+    /// <param name="lexicalLink">
+    /// The parsed lexical link from the token. Null means no link on this token.
+    /// </param>
+    /// <param name="verseRef">The verse reference for the current context.</param>
+    /// <returns>
+    /// TermRenderingStatus with the status code and supporting data
+    /// (FoundRenderings, MissingInVerses, TermId).
+    /// </returns>
+    // === STUB for CAP-007 (TDD RED phase) ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3163
+    // Method: MarbleForm.TermRenderingStatus
+    // Maps to: EXT-001, BHV-304, CAP-007
+    public static TermRenderingStatus CalculateRenderingStatus(
+        BtState? btState,
+        ParsedLexicalLink? lexicalLink,
+        VerseReference verseRef
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-007: CalculateRenderingStatus not yet implemented. "
+                + "This stub exists for TDD RED phase compilation."
+        );
+    }
 }
