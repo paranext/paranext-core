@@ -201,6 +201,21 @@ internal static class MarbleDataParser
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 
     // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataParser.cs:505-550
+    // Method: MarbleBookTokens.GetSectionBoundaries()
+    // Maps to: EXT-053, CAP-004, INV-011
+    /// <summary>
+    /// Finds section boundaries for the given token list.
+    /// INV-011: Sections defined by ParagraphStart tokens with style starting 's' (case-insensitive).
+    /// When sectionIndex > 0, start verse incremented by 1 to exclude heading.
+    /// </summary>
+    /// <param name="tokens">The parsed token list for a chapter.</param>
+    /// <returns>Ordered list of section boundaries. Empty if tokens is null/empty or has no verses.</returns>
+    public static IReadOnlyList<SectionBoundary> GetSectionBoundaries(
+        IReadOnlyList<MarbleToken>? tokens
+    ) => throw new NotImplementedException();
+
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleDataParser.cs:296-378
     // Method: MarbleToken.Matches() + MarbleToken.MatchesTextFilter()
     // Maps to: EXT-054, CAP-025, BHV-600
