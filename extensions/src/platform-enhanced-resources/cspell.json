@@ -53,7 +53,14 @@
     "unsubscribers",
     "usfm",
     "verseref",
-    "versification"
+    "versification",
+    "arche",
+    "homograph",
+    "lemma",
+    "lemmas",
+    "logos",
+    "pneuma",
+    "transliterated"
   ],
   "ignoreWords": [],
   "import": []

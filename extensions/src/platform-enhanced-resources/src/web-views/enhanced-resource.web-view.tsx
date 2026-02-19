@@ -13,6 +13,10 @@ import {
 import ERToolbar, { TrackedProjectOption } from '../components/er-toolbar.component';
 import ScripturePane, { WordFilterData } from '../components/scripture-pane.component';
 import ResearchPane, { ResearchTab, ScopeFilterValue } from '../components/research-pane.component';
+import type {
+  DictionaryDisplayItem,
+  DictionarySortField,
+} from '../components/dictionary-tab.component';
 
 // --- Types ---
 
@@ -100,6 +104,12 @@ const DEFAULT_AVAILABLE_PROJECTS: TrackedProjectOption[] = [];
 const DEFAULT_SCRIPTURE_HTML = '';
 const DEFAULT_FOOTNOTE_HTML = '';
 
+/** Default empty dictionary items (will be populated by backend integration) */
+const DEFAULT_DICTIONARY_ITEMS: DictionaryDisplayItem[] = [];
+
+/** Default dictionary assessments */
+const DEFAULT_DICTIONARY_ASSESSMENTS: Record<string, boolean | undefined> = {};
+
 // --- Component ---
 
 global.webViewComponent = function EnhancedResourceWebView({
@@ -152,6 +162,30 @@ global.webViewComponent = function EnhancedResourceWebView({
   // Scripture content will be populated by backend integration (platformEnhancedResources.getScriptureContent)
   const [scriptureHtml] = useWebViewState<string>('scriptureHtml', DEFAULT_SCRIPTURE_HTML);
   const [footnoteHtml] = useWebViewState<string>('footnoteHtml', DEFAULT_FOOTNOTE_HTML);
+
+  // --- Dictionary tab state ---
+  // Dictionary items will be populated by backend integration (platformEnhancedResources.loadDictionaryTab)
+  const [dictionaryItems] = useWebViewState<DictionaryDisplayItem[]>(
+    'dictionaryItems',
+    DEFAULT_DICTIONARY_ITEMS,
+  );
+  const [dictionarySortColumn, setDictionarySortColumn] = useWebViewState<
+    DictionarySortField | undefined
+  >('dictionarySortColumn', undefined);
+  const [dictionarySortAscending, setDictionarySortAscending] = useWebViewState<boolean>(
+    'dictionarySortAscending',
+    true,
+  );
+  const [hideIrrelevantMeanings, setHideIrrelevantMeanings] = useWebViewState<boolean>(
+    'hideIrrelevantMeanings',
+    false,
+  );
+  const [dictionaryAssessments, setDictionaryAssessments] = useWebViewState<
+    Record<string, boolean | undefined>
+  >('dictionaryAssessments', DEFAULT_DICTIONARY_ASSESSMENTS);
+
+  // Dictionary expanded state: track which terms are expanded
+  const [expandedTerms, setExpandedTerms] = useWebViewState<string[]>('expandedTerms', []);
 
   // Keep a ref to the current banners for use in callbacks
   const bannersRef = useRef(banners);
@@ -259,6 +293,71 @@ global.webViewComponent = function EnhancedResourceWebView({
     setWordFilter(undefined);
   }, [setWordFilter]);
 
+  // --- Dictionary tab handlers ---
+  const handleDictionarySortChange = useCallback(
+    (column: DictionarySortField, ascending: boolean) => {
+      setDictionarySortColumn(column);
+      setDictionarySortAscending(ascending);
+    },
+    [setDictionarySortColumn, setDictionarySortAscending],
+  );
+
+  // Keep a ref to the current expanded terms for use in callbacks
+  const expandedTermsRef = useRef(expandedTerms);
+  useEffect(() => {
+    expandedTermsRef.current = expandedTerms;
+  }, [expandedTerms]);
+
+  const handleDictionaryToggleExpand = useCallback(
+    (term: string) => {
+      const prev = expandedTermsRef.current;
+      if (prev.includes(term)) {
+        setExpandedTerms(prev.filter((t: string) => t !== term));
+      } else {
+        setExpandedTerms([...prev, term]);
+      }
+    },
+    [setExpandedTerms],
+  );
+
+  const handleHideIrrelevantChange = useCallback(
+    (value: boolean) => {
+      setHideIrrelevantMeanings(value);
+    },
+    [setHideIrrelevantMeanings],
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSemanticDomainClick = useCallback((_domainNumber: string) => {
+    // Semantic domain viewer will be wired in UI-PKG-012
+  }, []);
+
+  // Keep a ref to the current assessments for use in callbacks
+  const dictionaryAssessmentsRef = useRef(dictionaryAssessments);
+  useEffect(() => {
+    dictionaryAssessmentsRef.current = dictionaryAssessments;
+  }, [dictionaryAssessments]);
+
+  const handleDictionaryAssessmentChange = useCallback(
+    (term: string, isHelpful: boolean) => {
+      setDictionaryAssessments({
+        ...dictionaryAssessmentsRef.current,
+        [term]: isHelpful,
+      });
+    },
+    [setDictionaryAssessments],
+  );
+
+  // Compute dictionary items with expanded state applied
+  const dictionaryItemsWithExpanded = useMemo(
+    () =>
+      dictionaryItems.map((item) => ({
+        ...item,
+        expanded: expandedTerms.includes(item.term),
+      })),
+    [dictionaryItems, expandedTerms],
+  );
+
   return (
     <div data-testid="enhanced-resource-viewer" className="pr-twp tw-flex tw-flex-col tw-h-screen">
       {/* ERToolbar */}
@@ -345,6 +444,16 @@ global.webViewComponent = function EnhancedResourceWebView({
             onScopeFilterChange={handleScopeFilterChange}
             wordFilter={wordFilter}
             onClearWordFilter={handleClearWordFilter}
+            dictionaryItems={dictionaryItemsWithExpanded}
+            dictionarySortColumn={dictionarySortColumn}
+            dictionarySortAscending={dictionarySortAscending}
+            onDictionarySortChange={handleDictionarySortChange}
+            onDictionaryToggleExpand={handleDictionaryToggleExpand}
+            hideIrrelevantMeanings={hideIrrelevantMeanings}
+            onHideIrrelevantChange={handleHideIrrelevantChange}
+            onSemanticDomainClick={handleSemanticDomainClick}
+            onDictionaryAssessmentChange={handleDictionaryAssessmentChange}
+            dictionaryAssessments={dictionaryAssessments}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

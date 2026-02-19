@@ -15,6 +15,8 @@ import {
 } from 'platform-bible-react';
 import { X } from 'lucide-react';
 import type { WordFilterData } from './scripture-pane.component';
+import DictionaryTab from './dictionary-tab.component';
+import type { DictionaryDisplayItem, DictionarySortField } from './dictionary-tab.component';
 
 // --- Types ---
 
@@ -42,6 +44,28 @@ export interface ResearchPaneProps {
   wordFilter?: WordFilterData;
   /** Callback to clear the word filter */
   onClearWordFilter: () => void;
+
+  // --- Dictionary Tab Props ---
+  /** Dictionary items to display in the dictionary tab */
+  dictionaryItems: DictionaryDisplayItem[];
+  /** Current dictionary sort column */
+  dictionarySortColumn: DictionarySortField | undefined;
+  /** Whether dictionary sort is ascending */
+  dictionarySortAscending: boolean;
+  /** Callback when dictionary sort changes */
+  onDictionarySortChange: (column: DictionarySortField, ascending: boolean) => void;
+  /** Callback when a dictionary item is expanded/collapsed */
+  onDictionaryToggleExpand: (term: string) => void;
+  /** Whether to hide irrelevant meanings in the dictionary */
+  hideIrrelevantMeanings: boolean;
+  /** Callback when hide irrelevant meanings toggle changes */
+  onHideIrrelevantChange: (value: boolean) => void;
+  /** Callback when a semantic domain link is clicked in dictionary */
+  onSemanticDomainClick: (domainNumber: string) => void;
+  /** Callback when "Was this helpful?" assessment changes in dictionary */
+  onDictionaryAssessmentChange: (term: string, isHelpful: boolean) => void;
+  /** Map of term -> assessment value in dictionary */
+  dictionaryAssessments: Record<string, boolean | undefined>;
 }
 
 // --- Constants ---
@@ -93,6 +117,16 @@ export default function ResearchPane({
   onScopeFilterChange,
   wordFilter,
   onClearWordFilter,
+  dictionaryItems,
+  dictionarySortColumn,
+  dictionarySortAscending,
+  onDictionarySortChange,
+  onDictionaryToggleExpand,
+  hideIrrelevantMeanings,
+  onHideIrrelevantChange,
+  onSemanticDomainClick,
+  onDictionaryAssessmentChange,
+  dictionaryAssessments,
 }: ResearchPaneProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
 
@@ -211,13 +245,21 @@ export default function ResearchPane({
           ))}
         </TabsList>
 
-        {/* Tab content panels - placeholder content for now; will be replaced in UI-PKG-005 through UI-PKG-008 */}
-        <TabsContent value="dictionary" className="tw-flex-1 tw-overflow-auto tw-min-h-0">
-          <div data-testid="dictionary-tab-content" className="tw-p-4">
-            <p className="tw-text-muted-foreground tw-text-sm">
-              {localizedStrings['%enhancedResources_emptyState%']}
-            </p>
-          </div>
+        {/* Tab content panels */}
+        <TabsContent value="dictionary" className="tw-flex-1 tw-overflow-hidden tw-min-h-0">
+          <DictionaryTab
+            items={dictionaryItems}
+            sortColumn={dictionarySortColumn}
+            sortAscending={dictionarySortAscending}
+            onSortChange={onDictionarySortChange}
+            onToggleExpand={onDictionaryToggleExpand}
+            isWordFilterActive={!!wordFilter}
+            hideIrrelevantMeanings={hideIrrelevantMeanings}
+            onHideIrrelevantChange={onHideIrrelevantChange}
+            onSemanticDomainClick={onSemanticDomainClick}
+            onAssessmentChange={onDictionaryAssessmentChange}
+            assessments={dictionaryAssessments}
+          />
         </TabsContent>
 
         <TabsContent value="encyclopedia" className="tw-flex-1 tw-overflow-auto tw-min-h-0">

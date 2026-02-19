@@ -10,6 +10,20 @@ import type { WordFilterData } from './scripture-pane.component';
  * callback behavior.
  */
 
+/** Default dictionary-related props for creating ResearchPaneProps in tests */
+const DEFAULT_DICTIONARY_PROPS = {
+  dictionaryItems: [],
+  dictionarySortColumn: undefined as undefined,
+  dictionarySortAscending: true,
+  onDictionarySortChange: () => {},
+  onDictionaryToggleExpand: () => {},
+  hideIrrelevantMeanings: false,
+  onHideIrrelevantChange: () => {},
+  onSemanticDomainClick: () => {},
+  onDictionaryAssessmentChange: () => {},
+  dictionaryAssessments: {},
+};
+
 describe('research-pane.component', () => {
   // --- Render / Type Tests ---
 
@@ -21,6 +35,7 @@ describe('research-pane.component', () => {
       onScopeFilterChange: () => {},
       wordFilter: undefined,
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     expect(props.activeTab).toBe('dictionary');
@@ -38,6 +53,7 @@ describe('research-pane.component', () => {
         scopeFilter: 'current-verse',
         onScopeFilterChange: () => {},
         onClearWordFilter: () => {},
+        ...DEFAULT_DICTIONARY_PROPS,
       };
       expect(props.activeTab).toBe(tab);
     });
@@ -58,6 +74,7 @@ describe('research-pane.component', () => {
         scopeFilter: scope,
         onScopeFilterChange: () => {},
         onClearWordFilter: () => {},
+        ...DEFAULT_DICTIONARY_PROPS,
       };
       expect(props.scopeFilter).toBe(scope);
     });
@@ -74,6 +91,7 @@ describe('research-pane.component', () => {
       scopeFilter: 'current-verse',
       onScopeFilterChange: () => {},
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     // Simulate tab switch to encyclopedia
@@ -103,6 +121,7 @@ describe('research-pane.component', () => {
       scopeFilter: 'current-verse',
       onScopeFilterChange,
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     // Simulate scope change to current-section
@@ -129,6 +148,7 @@ describe('research-pane.component', () => {
         sourcePane: 'scripture',
       },
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     expect(props.scopeFilter).toBe('current-sense');
@@ -152,6 +172,7 @@ describe('research-pane.component', () => {
       onScopeFilterChange: () => {},
       wordFilter: scriptureWordFilter,
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     expect(props.wordFilter).toBeDefined();
@@ -176,6 +197,7 @@ describe('research-pane.component', () => {
       onScopeFilterChange: () => {},
       wordFilter: dictionaryWordFilter,
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     expect(props.wordFilter?.sourcePane).toBe('dictionary');
@@ -196,6 +218,7 @@ describe('research-pane.component', () => {
         sourcePane: 'scripture',
       },
       onClearWordFilter,
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     // Simulate clearing the word filter
@@ -211,6 +234,7 @@ describe('research-pane.component', () => {
       onScopeFilterChange: () => {},
       wordFilter: undefined,
       onClearWordFilter: () => {},
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     expect(props.wordFilter).toBeUndefined();
@@ -232,6 +256,7 @@ describe('research-pane.component', () => {
       onScopeFilterChange: vi.fn(),
       wordFilter,
       onClearWordFilter: vi.fn(),
+      ...DEFAULT_DICTIONARY_PROPS,
     };
 
     expect(props).toBeDefined();
