@@ -45,7 +45,19 @@
       "%enhancedResources_scripturePane_zoomOut%": "Zoom out",
       "%enhancedResources_scripturePane_footnoteToggle%": "Toggle footnotes (F7)",
       "%enhancedResources_scripturePane_contextMenuSelect%": "Select",
-      "%enhancedResources_scripturePane_noContent%": "No scripture content available"
+      "%enhancedResources_scripturePane_noContent%": "No scripture content available",
+      "%enhancedResources_dictionaryTab%": "Dictionary",
+      "%enhancedResources_encyclopediaTab%": "Encyclopedia",
+      "%enhancedResources_mediaTab%": "Media",
+      "%enhancedResources_mapsTab%": "Maps",
+      "%enhancedResources_currentVerse%": "Current Verse",
+      "%enhancedResources_currentSection%": "Current Section",
+      "%enhancedResources_currentChapter%": "Current Chapter",
+      "%enhancedResources_currentSense%": "Current Sense",
+      "%enhancedResources_clearFilter%": "Clear filter",
+      "%enhancedResources_scopeFilter%": "Scope",
+      "%enhancedResources_emptyState%": "No results for the current scope",
+      "%enhancedResources_wordFilterLabel%": "Filtered by word"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -91,7 +103,19 @@
       "%enhancedResources_scripturePane_zoomOut%": "Alejar",
       "%enhancedResources_scripturePane_footnoteToggle%": "Alternar notas al pie (F7)",
       "%enhancedResources_scripturePane_contextMenuSelect%": "Seleccionar",
-      "%enhancedResources_scripturePane_noContent%": "No hay contenido de Escritura disponible"
+      "%enhancedResources_scripturePane_noContent%": "No hay contenido de Escritura disponible",
+      "%enhancedResources_dictionaryTab%": "Diccionario",
+      "%enhancedResources_encyclopediaTab%": "Enciclopedia",
+      "%enhancedResources_mediaTab%": "Medios",
+      "%enhancedResources_mapsTab%": "Mapas",
+      "%enhancedResources_currentVerse%": "Versiculo actual",
+      "%enhancedResources_currentSection%": "Seccion actual",
+      "%enhancedResources_currentChapter%": "Capitulo actual",
+      "%enhancedResources_currentSense%": "Sentido actual",
+      "%enhancedResources_clearFilter%": "Borrar filtro",
+      "%enhancedResources_scopeFilter%": "Alcance",
+      "%enhancedResources_emptyState%": "Sin resultados para el alcance actual",
+      "%enhancedResources_wordFilterLabel%": "Filtrado por palabra"
     }
   }
 }

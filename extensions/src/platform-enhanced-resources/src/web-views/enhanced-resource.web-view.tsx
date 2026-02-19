@@ -12,6 +12,7 @@ import {
 } from 'platform-bible-react';
 import ERToolbar, { TrackedProjectOption } from '../components/er-toolbar.component';
 import ScripturePane, { WordFilterData } from '../components/scripture-pane.component';
+import ResearchPane, { ResearchTab, ScopeFilterValue } from '../components/research-pane.component';
 
 // --- Types ---
 
@@ -135,10 +136,18 @@ global.webViewComponent = function EnhancedResourceWebView({
   // --- Scripture pane state ---
   const [showFootnotes, setShowFootnotes] = useWebViewState<boolean>('showFootnotes', false);
   const [zoomLevel, setZoomLevel] = useWebViewState<number>('zoomLevel', DEFAULT_ZOOM_LEVEL);
-  // Word filter state: setter is used by handleWordClick. The getter will be consumed by the
-  // research pane component in UI-PKG-004. Using array destructuring to only extract the setter.
-  const wordFilterState = useWebViewState<WordFilterData | undefined>('wordFilter', undefined);
-  const setWordFilter = wordFilterState[1];
+  // Word filter state: used by both scripture pane (setter) and research pane (getter + clear)
+  const [wordFilter, setWordFilter] = useWebViewState<WordFilterData | undefined>(
+    'wordFilter',
+    undefined,
+  );
+
+  // --- Research pane state ---
+  const [activeTab, setActiveTab] = useWebViewState<ResearchTab>('activeTab', 'dictionary');
+  const [scopeFilter, setScopeFilter] = useWebViewState<ScopeFilterValue>(
+    'scopeFilter',
+    'current-verse',
+  );
 
   // Scripture content will be populated by backend integration (platformEnhancedResources.getScriptureContent)
   const [scriptureHtml] = useWebViewState<string>('scriptureHtml', DEFAULT_SCRIPTURE_HTML);
@@ -231,8 +240,27 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setWordFilter],
   );
 
+  // --- Research pane handlers ---
+  const handleTabChange = useCallback(
+    (tab: ResearchTab) => {
+      setActiveTab(tab);
+    },
+    [setActiveTab],
+  );
+
+  const handleScopeFilterChange = useCallback(
+    (scope: ScopeFilterValue) => {
+      setScopeFilter(scope);
+    },
+    [setScopeFilter],
+  );
+
+  const handleClearWordFilter = useCallback(() => {
+    setWordFilter(undefined);
+  }, [setWordFilter]);
+
   return (
-    <div data-testid="enhanced-resource-viewer" className="pr-twp tw-flex tw-flex-col tw-h-full">
+    <div data-testid="enhanced-resource-viewer" className="pr-twp tw-flex tw-flex-col tw-h-screen">
       {/* ERToolbar */}
       <ERToolbar
         showResearchTerms={highlights.researchTerms}
@@ -310,11 +338,14 @@ global.webViewComponent = function EnhancedResourceWebView({
           minSize={15}
           className="tw-flex tw-flex-col tw-min-h-0"
         >
-          <div className="tw-flex-1 tw-overflow-auto tw-p-4">
-            <p className="tw-text-muted-foreground tw-text-sm">
-              {localizedStrings['%enhancedResources_researchPanePlaceholder%']}
-            </p>
-          </div>
+          <ResearchPane
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            scopeFilter={scopeFilter}
+            onScopeFilterChange={handleScopeFilterChange}
+            wordFilter={wordFilter}
+            onClearWordFilter={handleClearWordFilter}
+          />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
