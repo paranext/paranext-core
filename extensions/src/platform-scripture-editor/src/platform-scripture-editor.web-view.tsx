@@ -1312,7 +1312,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     if (!bookExists) {
       return (
-        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-pt-[54px] tw-px-4">
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
           {workaround}
           {isReadOnly
             ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
