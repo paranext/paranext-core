@@ -26,14 +26,16 @@ internal static class TokenFilterService
     /// <param name="filter">The word filter criteria including lemma, lexical links, and source pane.</param>
     /// <param name="exactMatch">True for ScripturePane (exact link match); false for DictionaryTab (base form match).</param>
     /// <returns>Tokens matching the filter. Empty list when no matches. Never null.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/DictionaryTab.cs GetMatchingTokens logic
+    // Method: DictionaryTab.GetMatchingTokens() -> delegates to MarbleDataParser.GetMatchingTokens
+    // Maps to: EXT-054, CAP-021
     public static IReadOnlyList<MarbleToken> GetMatchingTokens(
         IReadOnlyList<MarbleToken> tokens,
         WordFilter filter,
         bool exactMatch
     )
     {
-        throw new NotImplementedException(
-            "CAP-021: TokenFilterService.GetMatchingTokens not yet implemented"
-        );
+        return MarbleDataParser.GetMatchingTokens(tokens, filter, exactMatch);
     }
 }
