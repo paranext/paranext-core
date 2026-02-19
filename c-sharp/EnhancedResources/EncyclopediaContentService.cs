@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Paratext.Data;
 using SIL.Scripture;
 
@@ -16,6 +17,13 @@ internal static class EncyclopediaContentService
 {
     /// <summary>Length of a standard BBBCCCVVV reference string.</summary>
     private const int BcvLength = 9;
+
+    /// <summary>Prefix for encyclopedia-type links in LexicalLinks field.</summary>
+    private const string EncyclopediaLinkPrefix = "MBL_ENC:";
+
+    /// <summary>Regex pattern to match {S:BBBCCCVVV} scripture reference markers in article text.</summary>
+    private static readonly Regex s_scriptureRefPattern =
+        new(@"\{S:(\d{9,14})\}", RegexOptions.Compiled);
 
     /// <summary>Length of an extended BBBCCCVVVWWWWW reference string (with word offset).</summary>
     private const int BcvWithWordOffsetLength = 14;
@@ -166,5 +174,393 @@ internal static class EncyclopediaContentService
             // Invalid range end -- format start ref without range
             return "";
         }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:180-310
+    // Method: EncyclopediaTab.LoadResources() orchestration
+    // Maps to: EXT-061, EXT-063, EXT-071, CAP-010
+    //
+    // EXPLANATION:
+    // This method orchestrates encyclopedia tab loading:
+    // 1. Validate resource and book exist (same pattern as DictionaryService)
+    // 2. Get scoped TextLink tokens that have MBL_ENC: prefixed LexicalLinks
+    // 3. Apply optional word filter
+    // 4. For each unique encyclopedia key, look up Thematic_Lexicon entry
+    // 5. Render article HTML from sections/paragraphs
+    // 6. Resolve {S:BBBCCCVVV} scripture references in article text
+    // 7. Extract SourceText, Transliteration, ScriptureReferences from LanguageSets
+    // 8. Deduplicate by article key
+    // 9. Return EncyclopediaTabContent
+    /// <summary>
+    /// Loads the encyclopedia tab content for a given resource, verse, and scope.
+    /// Orchestrates scope filtering (CAP-003), data access (CAP-028),
+    /// V2 encyclopedia parsing (CAP-029), and scripture reference formatting (CAP-030).
+    /// </summary>
+    public static Task<EncyclopediaTabContent> LoadEncyclopediaTabAsync(
+        MarbleDataAccess dataAccess,
+        string resourceId,
+        VerseReference verseRef,
+        ScopeFilter scope,
+        WordFilter? wordFilter
+    )
+    {
+        var tokens = ValidateAndGetBookTokens(dataAccess, resourceId, verseRef);
+        var linksInScope = GetEncyclopediaLinksInScope(tokens, verseRef, scope);
+        linksInScope = ApplyWordFilter(linksInScope, wordFilter);
+
+        var items = BuildEncyclopediaItems(linksInScope, dataAccess);
+        var result = new EncyclopediaTabContent(items, HeaderHtml: "");
+        return Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Validates that the resource and book exist, returning the book's tokens.
+    /// Throws RESOURCE_NOT_FOUND or BOOK_NOT_FOUND on failure.
+    /// </summary>
+    // === NEW IN PT10 ===
+    // Reason: Shared validation pattern for tab loading methods
+    // Maps to: CAP-010
+    private static IReadOnlyList<MarbleToken> ValidateAndGetBookTokens(
+        MarbleDataAccess dataAccess,
+        string resourceId,
+        VerseReference verseRef
+    )
+    {
+        // Check if the resource is a known bible resource
+        if (!dataAccess.AvailableBibles.Contains(resourceId))
+            throw new Exception($"RESOURCE_NOT_FOUND: Resource '{resourceId}' not found");
+
+        var tokens = dataAccess.GetBookTokens(resourceId, verseRef.Book);
+        if (tokens == null || tokens.Count == 0)
+            throw new Exception(
+                $"BOOK_NOT_FOUND: Book {verseRef.Book} not available in resource '{resourceId}'"
+            );
+
+        bool hasMatchingBook = tokens.Any(t =>
+            t.VerseRef != null && t.VerseRef.Book == verseRef.Book
+        );
+        if (!hasMatchingBook)
+            throw new Exception(
+                $"BOOK_NOT_FOUND: Book {verseRef.Book} not available in resource '{resourceId}'"
+            );
+
+        return tokens;
+    }
+
+    /// <summary>
+    /// Gets encyclopedia-type TextLink tokens in scope.
+    /// Filters for tokens that have LexicalLinks starting with MBL_ENC: prefix.
+    /// Uses VerseRef-based filtering since test tokens carry VerseRef on the token.
+    /// </summary>
+    // === NEW IN PT10 ===
+    // Reason: Encyclopedia-specific scope filtering with MBL_ENC prefix check
+    // Maps to: CAP-010
+    private static IReadOnlyList<MarbleToken> GetEncyclopediaLinksInScope(
+        IReadOnlyList<MarbleToken> tokens,
+        VerseReference verseRef,
+        ScopeFilter scope
+    )
+    {
+        var result = new List<MarbleToken>();
+        VerseReference? lastVerseRef = null;
+
+        foreach (var token in tokens)
+        {
+            if (token.Type == MarbleTokenType.Verse && token.VerseRef != null)
+            {
+                lastVerseRef = token.VerseRef;
+                continue;
+            }
+
+            if (token.Type != MarbleTokenType.TextLink)
+                continue;
+
+            if (
+                string.IsNullOrEmpty(token.LexicalLinks)
+                || !token.LexicalLinks.StartsWith(EncyclopediaLinkPrefix, StringComparison.Ordinal)
+            )
+                continue;
+
+            var tokenVerse = token.VerseRef ?? lastVerseRef;
+            if (tokenVerse == null)
+                continue;
+
+            bool inScope = scope switch
+            {
+                ScopeFilter.CurrentVerse => tokenVerse.Book == verseRef.Book
+                    && tokenVerse.Chapter == verseRef.Chapter
+                    && tokenVerse.Verse == verseRef.Verse,
+                ScopeFilter.CurrentSection => tokenVerse.Book == verseRef.Book
+                    && tokenVerse.Chapter == verseRef.Chapter,
+                _ => tokenVerse.Book == verseRef.Book && tokenVerse.Chapter == verseRef.Chapter,
+            };
+
+            if (inScope)
+                result.Add(token);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Applies the optional word filter to restrict tokens to those matching the filter.
+    /// Returns the input list unchanged when no filter is specified.
+    /// </summary>
+    // === NEW IN PT10 ===
+    // Reason: Word filter support for encyclopedia tab
+    // Maps to: CAP-010
+    private static IReadOnlyList<MarbleToken> ApplyWordFilter(
+        IReadOnlyList<MarbleToken> linksInScope,
+        WordFilter? wordFilter
+    )
+    {
+        if (wordFilter == null || linksInScope.Count == 0)
+            return linksInScope;
+
+        return MarbleDataParser.GetMatchingTokens(
+            linksInScope,
+            wordFilter,
+            wordFilter.SourcePane == WordFilterSource.Scripture
+        );
+    }
+
+    /// <summary>
+    /// Builds deduplicated encyclopedia display items from the filtered token list.
+    /// For each token with MBL_ENC: links, extracts the article key, looks up the
+    /// encyclopedia entry, renders article HTML, and deduplicates by key.
+    /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:220-310
+    // Method: EncyclopediaTab.LoadResources() (item building portion)
+    // Maps to: EXT-061, CAP-010
+    private static IReadOnlyList<EncyclopediaDisplayItem> BuildEncyclopediaItems(
+        IReadOnlyList<MarbleToken> linksInScope,
+        MarbleDataAccess dataAccess
+    )
+    {
+        var items = new List<EncyclopediaDisplayItem>();
+        var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var token in linksInScope)
+        {
+            if (string.IsNullOrEmpty(token.LexicalLinks))
+                continue;
+
+            var articleKey = ExtractArticleKey(token.LexicalLinks);
+            if (articleKey == null)
+                continue;
+
+            // Deduplicate by article key
+            string entryId = $"{EncyclopediaLinkPrefix.TrimEnd(':')}" + ":" + articleKey;
+            if (!seenKeys.Add(entryId))
+                continue;
+
+            var entries = dataAccess.GetEncyclopediaEntries(entryId, "");
+            if (entries.Count == 0)
+                continue;
+
+            var entry = entries[0];
+            var item = BuildDisplayItem(entry, entryId);
+            items.Add(item);
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// Extracts the article key from a MBL_ENC:KEY:BBBMMM link string.
+    /// Returns the KEY portion.
+    /// </summary>
+    private static string? ExtractArticleKey(string lexicalLinks)
+    {
+        if (!lexicalLinks.StartsWith(EncyclopediaLinkPrefix, StringComparison.Ordinal))
+            return null;
+
+        // Format: MBL_ENC:KEY:BBBMMM
+        var afterPrefix = lexicalLinks.Substring(EncyclopediaLinkPrefix.Length);
+        var colonIdx = afterPrefix.IndexOf(':');
+        if (colonIdx > 0)
+            return afterPrefix.Substring(0, colonIdx);
+
+        return afterPrefix;
+    }
+
+    /// <summary>
+    /// Builds a single EncyclopediaDisplayItem from a Thematic_Lexicon entry.
+    /// Renders article HTML from sections, extracts language set data,
+    /// and resolves scripture references.
+    /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:340-420
+    // Method: EncyclopediaTab.GetArticleText() + FormatParagraph()
+    // Maps to: EXT-063, CAP-010
+    private static EncyclopediaDisplayItem BuildDisplayItem(
+        Thematic_LexiconThemLex_Entry entry,
+        string entryId
+    )
+    {
+        string title = entry.Title ?? entryId;
+        string fullArticleHtml = RenderArticleHtml(entry);
+        string teaserHtml = GenerateTeaser(fullArticleHtml);
+        bool hasImages = entry.BibleImages != null && entry.BibleImages.Length > 0;
+
+        var (sourceText, transliteration) = ExtractLanguageSetData(entry);
+        var scriptureRefs = ExtractScriptureReferences(entry);
+
+        return new EncyclopediaDisplayItem(
+            Id: $"enc-{entryId}",
+            Title: title,
+            Transliteration: transliteration,
+            SourceText: sourceText,
+            TeaserHtml: teaserHtml,
+            FullArticleHtml: fullArticleHtml,
+            ScriptureReferences: scriptureRefs,
+            HasImages: hasImages,
+            Expanded: false
+        );
+    }
+
+    /// <summary>
+    /// Renders the full article HTML from the entry's sections and paragraphs.
+    /// Resolves {S:BBBCCCVVV} scripture reference patterns in text.
+    /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:340-380
+    // Method: EncyclopediaTab.GetArticleText()
+    // Maps to: EXT-063, CAP-010
+    private static string RenderArticleHtml(Thematic_LexiconThemLex_Entry entry)
+    {
+        if (entry.Sections == null || entry.Sections.Length == 0)
+            return "";
+
+        var sb = new StringBuilder();
+
+        foreach (var section in entry.Sections)
+        {
+            if (!string.IsNullOrEmpty(section.Heading))
+                sb.Append($"<h3>{section.Heading}</h3>");
+
+            if (section.Paragraphs != null)
+            {
+                foreach (var para in section.Paragraphs)
+                {
+                    string resolved = ResolveScriptureRefs(para);
+                    sb.Append($"<p>{resolved}</p>");
+                }
+            }
+            else if (!string.IsNullOrEmpty(section.Content))
+            {
+                string resolved = ResolveScriptureRefs(section.Content);
+                sb.Append($"<p>{resolved}</p>");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Resolves {S:BBBCCCVVV} patterns in article text to clickable scripture links
+    /// using FormatBCVRefs (CAP-030).
+    /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:400-420
+    // Method: EncyclopediaTab.FormatParagraph() (scripture ref portion)
+    // Maps to: EXT-063, CAP-010
+    private static string ResolveScriptureRefs(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        return s_scriptureRefPattern.Replace(
+            text,
+            match =>
+            {
+                string bcvStr = match.Groups[1].Value;
+                string formatted = FormatBCVRefs(bcvStr, ScrVers.Original);
+                return string.IsNullOrEmpty(formatted) ? match.Value : formatted;
+            }
+        );
+    }
+
+    /// <summary>
+    /// Generates a short teaser HTML from the full article HTML for expand/collapse preview.
+    /// </summary>
+    private static string GenerateTeaser(string fullArticleHtml)
+    {
+        if (string.IsNullOrEmpty(fullArticleHtml))
+            return "";
+
+        // Strip HTML tags for teaser text
+        string plainText = Regex.Replace(fullArticleHtml, "<[^>]+>", " ").Trim();
+        // Collapse whitespace
+        plainText = Regex.Replace(plainText, @"\s+", " ");
+
+        if (plainText.Length <= 150)
+            return plainText;
+
+        return plainText.Substring(0, 150) + "...";
+    }
+
+    /// <summary>
+    /// Extracts source text (Lemma) and transliteration from the first language set.
+    /// </summary>
+    private static (string SourceText, string Transliteration) ExtractLanguageSetData(
+        Thematic_LexiconThemLex_Entry entry
+    )
+    {
+        if (entry.Sections == null)
+            return ("", "");
+
+        foreach (var section in entry.Sections)
+        {
+            if (section.LanguageSets == null || section.LanguageSets.Length == 0)
+                continue;
+
+            var ls = section.LanguageSets[0];
+            return (ls.Lemma ?? "", ls.Transliteration ?? "");
+        }
+
+        return ("", "");
+    }
+
+    /// <summary>
+    /// Extracts scripture references from all language sets across all sections.
+    /// Converts ulong references to VerseReference objects.
+    /// </summary>
+    private static IReadOnlyList<VerseReference> ExtractScriptureReferences(
+        Thematic_LexiconThemLex_Entry entry
+    )
+    {
+        var refs = new List<VerseReference>();
+
+        if (entry.Sections == null)
+            return refs;
+
+        foreach (var section in entry.Sections)
+        {
+            if (section.LanguageSets == null)
+                continue;
+
+            foreach (var ls in section.LanguageSets)
+            {
+                if (ls.References == null)
+                    continue;
+
+                foreach (var refVal in ls.References)
+                {
+                    // References are in BBBCCCVVV or BBBCCCVVVWWWWW format as ulong
+                    int bcv = (int)(refVal % 1000000000UL);
+                    int book = bcv / 1000000;
+                    int chapter = (bcv % 1000000) / 1000;
+                    int verse = bcv % 1000;
+
+                    if (book > 0 && chapter > 0)
+                        refs.Add(new VerseReference(book, chapter, verse));
+                }
+            }
+        }
+
+        return refs;
     }
 }
