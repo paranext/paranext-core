@@ -1,0 +1,70 @@
+name: Auto-approve dist-only changes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/platform-bible-react/**'
+      - '!lib/platform-bible-react/dist/**'
+      - 'lib/platform-bible-utils/**'
+      - '!lib/platform-bible-utils/dist/**'
+
+jobs:
+  build-dist:
+    runs-on: ubuntu-latest
+    # To avoid race conditions, prevent concurrent builds
+    concurrency:
+      group: auto-build-dist
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm ci
+
+      # Build both libraries
+      - name: Build platform-bible-react
+        run: npm run build:platform-bible-react
+
+      - name: Build platform-bible-utils
+        run: npm run build:platform-bible-utils
+
+      # Check if only dist folders changed
+      - name: Check for dist-only changes
+        id: check-dist
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+          # Stage the dist folders
+          git add lib/platform-bible-react/dist lib/platform-bible-utils/dist
+
+          # Check if there are non-dist changes
+          NON_DIST_CHANGED=$(git diff --name-only | grep -v '^lib/platform-bible-react/dist/' | grep -v '^lib/platform-bible-utils/dist/' || true)
+
+          if [ -z "$NON_DIST_CHANGED" ] && [ -n "$(git diff --cached --name-only)" ]; then
+            echo "dist_only=true" >> $GITHUB_OUTPUT
+          else
+            echo "dist_only=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Commit dist changes if only dist changed
+      - name: Commit dist changes
+        if: steps.check-dist.outputs.dist_only == 'true'
+        run: |
+          git commit -m "chore: update dist [skip ci]"
+          git push
+
+      # Auto-approve PR if only dist changed
+      - name: Auto-approve dist-only PRs
+        if: steps.check-dist.outputs.dist_only == 'true'
+        uses: hmarr/auto-approve-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -144,6 +144,13 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      # Ensure the `dist` files are updated before running tests.
+      - name: Build platform-bible-utils
+        run: npm run build:platform-bible-utils
+
+      - name: Build platform-bible-react
+        run: npm run build:platform-bible-react
+
       # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
       - name: type checking
         if: ${{ matrix.os == env.OS_LINUX }}
@@ -157,6 +164,10 @@ jobs:
       - name: Verify no files changed after build
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v20
+        with:
+          files_ignore: |
+            lib/platform-bible-react/dist/**
+            lib/platform-bible-utils/dist/**
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
@@ -281,3 +292,50 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+
+      # --- Generate and upload index.d.ts diffs for PRs ---
+      # Ideally this could be a separate job, but probably not worht the overhead.
+      - name: Download base branch index.d.ts files
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/base/utils artifacts/base/react
+
+          # platform-bible-utils
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+               -H "Accept: application/vnd.github.v3.raw" \
+               -o artifacts/base/utils/index.d.ts \
+               "https://api.github.com/repos/${{ github.repository }}/contents/lib/platform-bible-utils/dist/index.d.ts?ref=${{ github.base_ref }}" \
+               || echo "⚠️ Skipped: lib/platform-bible-utils/dist/index.d.ts not found on base branch"
+
+          # platform-bible-react
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+               -H "Accept: application/vnd.github.v3.raw" \
+               -o artifacts/base/react/index.d.ts \
+               "https://api.github.com/repos/${{ github.repository }}/contents/lib/platform-bible-react/dist/index.d.ts?ref=${{ github.base_ref }}" \
+               || echo "⚠️ Skipped: lib/platform-bible-react/dist/index.d.ts not found on base branch"
+
+      - name: Generate type diffs
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/diff
+
+          # Utils diff
+          if [ -f artifacts/base/utils/index.d.ts ] && [ -f lib/platform-bible-utils/dist/index.d.ts ]; then
+            diff -u artifacts/base/utils/index.d.ts lib/platform-bible-utils/dist/index.d.ts > artifacts/diff/platform-bible-utils-index.diff || true
+          else
+            echo "No Utils index.d.ts to compare." > artifacts/diff/platform-bible-utils-index.diff
+          fi
+
+          # React diff
+          if [ -f artifacts/base/react/index.d.ts ] && [ -f lib/platform-bible-react/dist/index.d.ts ]; then
+            diff -u artifacts/base/react/index.d.ts lib/platform-bible-react/dist/index.d.ts > artifacts/diff/platform-bible-react-index.diff || true
+          else
+            echo "No React index.d.ts to compare." > artifacts/diff/platform-bible-react-index.diff
+          fi
+
+      - name: Upload type diffs
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-type-diffs
+          path: artifacts/diff/
