@@ -38,6 +38,10 @@ internal static partial class GlossService
     public static string FilterGlossBraces(string rawGloss) =>
         BraceContentRegex().Replace(rawGloss, string.Empty);
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:387-430
+    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm
+    // Maps to: EXT-014, CAP-016
     /// <summary>
     /// Looks up localized glosses for a Biblical Term from Marble dictionaries.
     /// Delegates to MarbleDataAccess.FindLocalizedGlossesForTerm for the actual lookup.
@@ -56,9 +60,19 @@ internal static partial class GlossService
         CancellationToken cancellationToken = default
     )
     {
-        // CAP-016: Stub for TDD RED phase -- implementation pending
-        throw new NotImplementedException(
-            "CAP-016: FindLocalizedGlossesForTermAsync not yet implemented"
-        );
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!dataAccess.HaveMarbleData)
+            throw new InvalidOperationException("No Marble dictionary data available");
+
+        if (string.IsNullOrEmpty(termId) || string.IsNullOrEmpty(language))
+            return Task.FromResult<GlossResult?>(null);
+
+        var glosses = dataAccess.FindLocalizedGlossesForTerm(termId, language);
+
+        if (glosses.Count == 0)
+            return Task.FromResult<GlossResult?>(null);
+
+        return Task.FromResult<GlossResult?>(new GlossResult(glosses, language));
     }
 }
