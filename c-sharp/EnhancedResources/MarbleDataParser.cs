@@ -199,4 +199,65 @@ internal static class MarbleDataParser
         element.Attribute(name)?.Value ?? "";
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+
+    // === STUBS FOR CAP-025: TokenFilterMatching (EXT-054) ===
+    // These stubs allow tests to compile. Implementation will replace them.
+
+    /// <summary>
+    /// Determines if a token matches the current filter criteria based on link type and filter links.
+    /// </summary>
+    /// <param name="token">The token to check.</param>
+    /// <param name="linkType">Which link attribute to check (e.g., "lexical_links", "thematic_links"). Null = match all.</param>
+    /// <param name="filterText">Text to match against surface text (unused in link-based matching).</param>
+    /// <param name="filterLinks">Parsed links to match against. Null = presence check only.</param>
+    /// <returns>True if the token matches the filter criteria.</returns>
+    /// <remarks>
+    /// Stub for EXT-054, CAP-025, BHV-600.
+    /// PT9 Source: Paratext/Marble/MarbleDataParser.cs:296-378
+    /// </remarks>
+    public static bool Matches(
+        MarbleToken token,
+        string? linkType,
+        string? filterText,
+        IEnumerable<ParsedLexicalLink>? filterLinks
+    )
+    {
+        throw new NotImplementedException("CAP-025: Matches() not yet implemented");
+    }
+
+    /// <summary>
+    /// Determines if a token matches a text-based filter (case-insensitive substring).
+    /// </summary>
+    /// <param name="token">The token to check.</param>
+    /// <param name="filterText">Text to search for (case-insensitive). Null/empty = match all.</param>
+    /// <returns>True if the token text contains the filter text.</returns>
+    /// <remarks>
+    /// Stub for EXT-054, CAP-025, BHV-600.
+    /// PT9 Source: Paratext/Marble/MarbleDataParser.cs:296-378
+    /// </remarks>
+    public static bool MatchesTextFilter(MarbleToken token, string? filterText)
+    {
+        throw new NotImplementedException("CAP-025: MatchesTextFilter() not yet implemented");
+    }
+
+    /// <summary>
+    /// Match tokens against a word filter (used by dictionary tab for scope + word filtering).
+    /// Public API wrapping Matches() logic.
+    /// </summary>
+    /// <param name="tokens">The tokens to filter (must be TextLink tokens).</param>
+    /// <param name="filter">The word filter criteria.</param>
+    /// <param name="exactMatch">True for ScripturePane (exact link match); false for DictionaryTab (base form match).</param>
+    /// <returns>Tokens matching the filter. Empty list when no matches.</returns>
+    /// <remarks>
+    /// Stub for EXT-054, CAP-025, BHV-600, Method 21.
+    /// PT9 Source: Paratext/Marble/MarbleDataParser.cs:296-378
+    /// </remarks>
+    public static IReadOnlyList<MarbleToken> GetMatchingTokens(
+        IReadOnlyList<MarbleToken> tokens,
+        WordFilter filter,
+        bool exactMatch
+    )
+    {
+        throw new NotImplementedException("CAP-025: GetMatchingTokens() not yet implemented");
+    }
 }
