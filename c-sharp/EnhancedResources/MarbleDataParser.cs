@@ -224,7 +224,7 @@ internal static class MarbleDataParser
         int lastVerse = 0;
 
         // First pass: collect section heading positions and track max verse
-        var headings = new List<(int Book, int Chapter, int Verse)>();
+        var headings = new List<VerseReference>();
 
         foreach (var token in tokens)
         {
@@ -255,7 +255,7 @@ internal static class MarbleDataParser
                         && token.Style.StartsWith("s", StringComparison.OrdinalIgnoreCase)
                     )
                     {
-                        headings.Add((currentBook, currentChapter, currentVerse));
+                        headings.Add(new VerseReference(currentBook, currentChapter, currentVerse));
                     }
                     break;
             }
@@ -283,35 +283,13 @@ internal static class MarbleDataParser
         for (int i = 0; i < headings.Count; i++)
         {
             var heading = headings[i];
-            int startVerse;
-
-            if (i == 0)
-            {
-                // First section starts at verse 1
-                startVerse = 1;
-            }
-            else
-            {
-                // Subsequent sections start at heading verse + 1
-                startVerse = heading.Verse + 1;
-            }
-
-            int endVerse;
-            if (i < headings.Count - 1)
-            {
-                // End at the verse where the next heading appears
-                endVerse = headings[i + 1].Verse;
-            }
-            else
-            {
-                // Last section ends at the last verse in the chapter
-                endVerse = lastVerse;
-            }
+            int startV = i == 0 ? 1 : heading.Verse + 1;
+            int endV = i < headings.Count - 1 ? headings[i + 1].Verse : lastVerse;
 
             boundaries.Add(
                 new SectionBoundary(
-                    new VerseReference(heading.Book, heading.Chapter, startVerse),
-                    new VerseReference(heading.Book, heading.Chapter, endVerse),
+                    new VerseReference(heading.Book, heading.Chapter, startV),
+                    new VerseReference(heading.Book, heading.Chapter, endV),
                     i
                 )
             );
