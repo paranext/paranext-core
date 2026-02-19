@@ -1,6 +1,17 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%enhancedResources_title%": "Enhanced Resources",
+      "%enhancedResources_guide_title%": "Getting Started with Enhanced Resources",
+      "%mainMenu_openEnhancedResource%": "Enhanced Resource",
+      "%mainMenu_openGuide%": "Enhanced Resources Guide"
+    },
+    "es": {
+      "%enhancedResources_title%": "Recursos mejorados",
+      "%enhancedResources_guide_title%": "Primeros pasos con recursos mejorados",
+      "%mainMenu_openEnhancedResource%": "Recurso mejorado",
+      "%mainMenu_openGuide%": "Guía de recursos mejorados"
+    }
   }
 }
