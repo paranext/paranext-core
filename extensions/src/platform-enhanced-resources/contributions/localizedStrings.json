@@ -5,13 +5,21 @@
       "%enhancedResources_title%": "Enhanced Resources",
       "%enhancedResources_guide_title%": "Getting Started with Enhanced Resources",
       "%mainMenu_openEnhancedResource%": "Enhanced Resource",
-      "%mainMenu_openGuide%": "Enhanced Resources Guide"
+      "%mainMenu_openGuide%": "Enhanced Resources Guide",
+      "%enhancedResources_scripturePanePlaceholder%": "Scripture content will appear here",
+      "%enhancedResources_researchPanePlaceholder%": "Research content will appear here",
+      "%enhancedResources_toolbarPlaceholder%": "Toolbar",
+      "%enhancedResources_dismiss%": "Dismiss"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
       "%enhancedResources_guide_title%": "Primeros pasos con recursos mejorados",
       "%mainMenu_openEnhancedResource%": "Recurso mejorado",
-      "%mainMenu_openGuide%": "Guía de recursos mejorados"
+      "%mainMenu_openGuide%": "Guía de recursos mejorados",
+      "%enhancedResources_scripturePanePlaceholder%": "El contenido de las Escrituras aparecerá aquí",
+      "%enhancedResources_researchPanePlaceholder%": "El contenido de investigación aparecerá aquí",
+      "%enhancedResources_toolbarPlaceholder%": "Barra de herramientas",
+      "%enhancedResources_dismiss%": "Descartar"
     }
   }
 }
