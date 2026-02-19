@@ -200,21 +200,21 @@ internal static class MarbleDataParser
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 
-    // === STUBS FOR CAP-025: TokenFilterMatching (EXT-054) ===
-    // These stubs allow tests to compile. Implementation will replace them.
-
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataParser.cs:296-378
+    // Method: MarbleToken.Matches() + MarbleToken.MatchesTextFilter()
+    // Maps to: EXT-054, CAP-025, BHV-600
     /// <summary>
     /// Determines if a token matches the current filter criteria based on link type and filter links.
+    /// When linkType is null/empty, all tokens match (no filter applied).
+    /// When linkType is specified, checks that the token has the corresponding link attribute populated.
+    /// For lexical_links with filterLinks provided, additionally checks that parsed links match.
     /// </summary>
     /// <param name="token">The token to check.</param>
     /// <param name="linkType">Which link attribute to check (e.g., "lexical_links", "thematic_links"). Null = match all.</param>
     /// <param name="filterText">Text to match against surface text (unused in link-based matching).</param>
     /// <param name="filterLinks">Parsed links to match against. Null = presence check only.</param>
     /// <returns>True if the token matches the filter criteria.</returns>
-    /// <remarks>
-    /// Stub for EXT-054, CAP-025, BHV-600.
-    /// PT9 Source: Paratext/Marble/MarbleDataParser.cs:296-378
-    /// </remarks>
     public static bool Matches(
         MarbleToken token,
         string? linkType,
@@ -222,42 +222,119 @@ internal static class MarbleDataParser
         IEnumerable<ParsedLexicalLink>? filterLinks
     )
     {
-        throw new NotImplementedException("CAP-025: Matches() not yet implemented");
+        if (string.IsNullOrEmpty(linkType))
+            return true;
+
+        string? linkValue = linkType switch
+        {
+            "lexical_links" => token.LexicalLinks,
+            "thematic_links" => token.ThematicLinks,
+            "textual_links" => token.TextualLinks,
+            "image_links" => token.ImageLinks,
+            "map_links" => token.MapLinks,
+            _ => null,
+        };
+
+        if (string.IsNullOrEmpty(linkValue))
+            return false;
+
+        if (linkType == "lexical_links" && filterLinks != null)
+        {
+            var tokenLinks = LexicalLinkService.ParseLexicalLinks(linkValue);
+            var filterLinkList =
+                filterLinks as IReadOnlyList<ParsedLexicalLink> ?? filterLinks.ToList();
+
+            foreach (var tokenLink in tokenLinks)
+            {
+                foreach (var filter in filterLinkList)
+                {
+                    if (tokenLink.FullLink == filter.FullLink)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        return true;
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataParser.cs:338-344
+    // Method: MarbleToken.MatchesTextFilter() (text portion)
+    // Maps to: EXT-054, CAP-025, BHV-600
     /// <summary>
     /// Determines if a token matches a text-based filter (case-insensitive substring).
     /// </summary>
     /// <param name="token">The token to check.</param>
     /// <param name="filterText">Text to search for (case-insensitive). Null/empty = match all.</param>
     /// <returns>True if the token text contains the filter text.</returns>
-    /// <remarks>
-    /// Stub for EXT-054, CAP-025, BHV-600.
-    /// PT9 Source: Paratext/Marble/MarbleDataParser.cs:296-378
-    /// </remarks>
     public static bool MatchesTextFilter(MarbleToken token, string? filterText)
     {
-        throw new NotImplementedException("CAP-025: MatchesTextFilter() not yet implemented");
+        if (string.IsNullOrEmpty(filterText))
+            return true;
+
+        if (token.Text == null)
+            return false;
+
+        return token.Text.Contains(filterText, StringComparison.OrdinalIgnoreCase);
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataParser.cs:296-378
+    // Method: MarbleToken.Matches() (wrapping logic for public API)
+    // Maps to: EXT-054, CAP-025, BHV-600, Method 21
     /// <summary>
     /// Match tokens against a word filter (used by dictionary tab for scope + word filtering).
-    /// Public API wrapping Matches() logic.
+    /// Public API wrapping Matches() logic with ParsedLexicalLink.MatchesFilter().
+    /// exactMatch=true maps to FilterOrigin.ScripturePane (exact full link match).
+    /// exactMatch=false maps to FilterOrigin.DictionaryTab (partial match ignoring meaning index).
     /// </summary>
-    /// <param name="tokens">The tokens to filter (must be TextLink tokens).</param>
+    /// <param name="tokens">The tokens to filter.</param>
     /// <param name="filter">The word filter criteria.</param>
     /// <param name="exactMatch">True for ScripturePane (exact link match); false for DictionaryTab (base form match).</param>
     /// <returns>Tokens matching the filter. Empty list when no matches.</returns>
-    /// <remarks>
-    /// Stub for EXT-054, CAP-025, BHV-600, Method 21.
-    /// PT9 Source: Paratext/Marble/MarbleDataParser.cs:296-378
-    /// </remarks>
     public static IReadOnlyList<MarbleToken> GetMatchingTokens(
         IReadOnlyList<MarbleToken> tokens,
         WordFilter filter,
         bool exactMatch
     )
     {
-        throw new NotImplementedException("CAP-025: GetMatchingTokens() not yet implemented");
+        var filterLinks = new List<ParsedLexicalLink>();
+        foreach (var rawLink in filter.LexicalLinks)
+        {
+            var parsed = LexicalLinkService.ParseLexicalLinks(rawLink);
+            filterLinks.AddRange(parsed);
+        }
+
+        var origin = exactMatch ? FilterOrigin.ScripturePane : FilterOrigin.DictionaryTab;
+        var result = new List<MarbleToken>();
+
+        foreach (var token in tokens)
+        {
+            if (string.IsNullOrEmpty(token.LexicalLinks))
+                continue;
+
+            var tokenLinks = LexicalLinkService.ParseLexicalLinks(token.LexicalLinks);
+            bool matched = false;
+
+            foreach (var tokenLink in tokenLinks)
+            {
+                foreach (var filterLink in filterLinks)
+                {
+                    if (tokenLink.MatchesFilter(filterLink, origin))
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (matched)
+                    break;
+            }
+
+            if (matched)
+                result.Add(token);
+        }
+
+        return result;
     }
 }
