@@ -3,20 +3,26 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources;
 
 /// <summary>
-/// Tests for CAP-015: FilterGlossBraces.
-/// Validates stripping of curly brace metadata from gloss text before display.
+/// Tests for CAP-015: FilterGlossBraces and CAP-016: FindLocalizedGlosses.
+///
+/// CAP-015 validates stripping of curly brace metadata from gloss text before display.
 /// MARBLE dictionary glosses contain metadata in {braces} that is not intended
 /// for user display. The filter removes all {content} using lazy regex matching,
 /// preserving surrounding text and whitespace (no collapsing of double spaces).
 ///
-/// PT9 Source: Paratext/Marble/MarbleForm.cs:2747-2777
-/// Golden Master: gm-012-gloss-brace-filtering
-/// Extraction: EXT-007
+/// CAP-016 validates localized gloss lookup for Biblical Terms from Marble dictionaries.
+/// The service wraps MarbleDataAccess.FindLocalizedGlossesForTerm and returns a
+/// GlossResult record containing the glosses list and language code.
+///
+/// PT9 Source: Paratext/Marble/MarbleForm.cs:2747-2792 (GetGloss, RemoveBraces)
+/// PT9 Source: Paratext/Marble/MarbleDataAccess.cs:387-430 (FindLocalizedGlossesForTerm)
+/// Golden Master: gm-012-gloss-brace-filtering (CAP-015 only)
+/// Extraction: EXT-007 (CAP-015), EXT-014 (CAP-016 via MarbleDataAccess)
 /// </summary>
 [TestFixture]
 public class GlossServiceTests
 {
-    #region Acceptance Test
+    #region CAP-015 Acceptance Test
 
     /// <summary>
     /// Outer acceptance test for CAP-015.
@@ -80,7 +86,7 @@ public class GlossServiceTests
 
     #endregion
 
-    #region Contract Tests - Happy Path
+    #region CAP-015 Contract Tests - Happy Path
 
     /// <summary>
     /// Contract: FilterGlossBraces with text containing single brace pair
@@ -148,7 +154,7 @@ public class GlossServiceTests
 
     #endregion
 
-    #region Golden Master Tests
+    #region CAP-015 Golden Master Tests
 
     /// <summary>
     /// Golden master test: GBF-01 from gm-012.
@@ -236,7 +242,7 @@ public class GlossServiceTests
 
     #endregion
 
-    #region Edge Case Tests
+    #region CAP-015 Edge Case Tests
 
     /// <summary>
     /// Edge case: Empty string input should return empty string.
@@ -446,6 +452,452 @@ public class GlossServiceTests
     {
         var result = GlossService.FilterGlossBraces("{a} x {b} y {c}");
         Assert.That(result, Is.EqualTo(" x  y "));
+    }
+
+    #endregion
+
+    #region CAP-016 Acceptance Test
+
+    /// <summary>
+    /// Outer acceptance test for CAP-016: FindLocalizedGlosses.
+    /// Verifies the complete happy path: set up MarbleDataAccess with gloss data,
+    /// call FindLocalizedGlossesForTermAsync, and verify the returned GlossResult
+    /// contains the correct glosses and language.
+    ///
+    /// When this test passes, CAP-016 is complete.
+    ///
+    /// Contract: data-contracts.md Method 16
+    /// Behavior: BHV-109 (IMarbleDataAccess interface for gloss lookup)
+    /// Scenario: TS-022 (IMarbleDataAccess has three required members)
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description(
+        "Acceptance test: Localized glosses returned for known term with correct language"
+    )]
+    public async Task FindLocalizedGlossesForTermAsync_KnownTerm_ReturnsGlossResult()
+    {
+        // Arrange: Set up MarbleDataAccess with gloss data
+        var dataAccess = new MarbleDataAccess();
+        dataAccess.AddBible("TestBible", _ => new List<MarbleToken>().AsReadOnly());
+        foreach (var project in MarbleDataAccess.RequiredDataProjects)
+            dataAccess.AddResearchData(project);
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word", "saying", "reason" });
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "logos",
+            "en"
+        );
+
+        // Assert
+        Assert.That(result, Is.Not.Null, "Result must not be null for a known term");
+        Assert.That(
+            result!.Glosses,
+            Is.EqualTo(new[] { "word", "saying", "reason" }),
+            "Glosses must match the registered data"
+        );
+        Assert.That(
+            result.Language,
+            Is.EqualTo("en"),
+            "Language must match the requested language"
+        );
+    }
+
+    #endregion
+
+    #region CAP-016 Contract Tests - Happy Path
+
+    /// <summary>
+    /// Contract: When a term has glosses registered in the data access layer,
+    /// FindLocalizedGlossesForTermAsync returns a GlossResult with those glosses
+    /// and the requested language.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Term with single gloss returns GlossResult with one entry")]
+    public async Task FindLocalizedGlossesForTermAsync_SingleGloss_ReturnsGlossResult()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("agape", "en", new List<string> { "love" });
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "agape",
+            "en"
+        );
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Glosses, Has.Count.EqualTo(1));
+        Assert.That(result.Glosses[0], Is.EqualTo("love"));
+        Assert.That(result.Language, Is.EqualTo("en"));
+    }
+
+    /// <summary>
+    /// Contract: When a term has multiple glosses, all are returned in the GlossResult.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Term with multiple glosses returns all in GlossResult")]
+    public async Task FindLocalizedGlossesForTermAsync_MultipleGlosses_ReturnsAll()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData(
+            "pneuma",
+            "en",
+            new List<string> { "spirit", "wind", "breath" }
+        );
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "pneuma",
+            "en"
+        );
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Glosses, Has.Count.EqualTo(3));
+        Assert.That(
+            result.Glosses,
+            Is.EqualTo(new[] { "spirit", "wind", "breath" })
+        );
+    }
+
+    /// <summary>
+    /// Contract: The language field in GlossResult matches the requested language parameter.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("GlossResult language field matches the requested language")]
+    public async Task FindLocalizedGlossesForTermAsync_LanguageField_MatchesRequest()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("theos", "fr", new List<string> { "dieu" });
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "theos",
+            "fr"
+        );
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Language, Is.EqualTo("fr"));
+    }
+
+    /// <summary>
+    /// Contract: Same term can return different glosses for different languages.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Same term returns language-specific glosses")]
+    public async Task FindLocalizedGlossesForTermAsync_DifferentLanguages_ReturnsDifferentGlosses()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("theos", "en", new List<string> { "God", "god" });
+        dataAccess.AddGlossData("theos", "fr", new List<string> { "Dieu", "dieu" });
+
+        // Act
+        var resultEn = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "theos",
+            "en"
+        );
+        var resultFr = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "theos",
+            "fr"
+        );
+
+        // Assert
+        Assert.That(resultEn, Is.Not.Null);
+        Assert.That(resultFr, Is.Not.Null);
+        Assert.That(resultEn!.Glosses, Is.EqualTo(new[] { "God", "god" }));
+        Assert.That(resultFr!.Glosses, Is.EqualTo(new[] { "Dieu", "dieu" }));
+    }
+
+    #endregion
+
+    #region CAP-016 Contract Tests - Error Cases
+
+    /// <summary>
+    /// Contract: When HaveMarbleData is false, the method throws an
+    /// InvalidOperationException with NO_DATA error.
+    /// Per data-contracts.md Method 16 error conditions.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("No Marble data available throws InvalidOperationException")]
+    public void FindLocalizedGlossesForTermAsync_NoMarbleData_ThrowsInvalidOperation()
+    {
+        // Arrange: MarbleDataAccess with no data registered (HaveMarbleData == false)
+        var dataAccess = new MarbleDataAccess();
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await GlossService.FindLocalizedGlossesForTermAsync(dataAccess, "logos", "en")
+        );
+
+        Assert.That(
+            ex!.Message,
+            Does.Contain("No Marble dictionary data"),
+            "Error message must indicate missing Marble data"
+        );
+    }
+
+    #endregion
+
+    #region CAP-016 Edge Case Tests
+
+    /// <summary>
+    /// Edge case: Term not found in dictionary data returns null.
+    /// Per data-contracts.md: "Returns null if term not found."
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Unknown term returns null")]
+    public async Task FindLocalizedGlossesForTermAsync_UnknownTerm_ReturnsNull()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        // No gloss data registered for "nonexistent"
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "nonexistent",
+            "en"
+        );
+
+        // Assert
+        Assert.That(result, Is.Null, "Unknown term must return null");
+    }
+
+    /// <summary>
+    /// Edge case: Term exists in one language but not the requested language.
+    /// Should return null because there are no glosses in the requested language.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Term exists in different language returns null")]
+    public async Task FindLocalizedGlossesForTermAsync_WrongLanguage_ReturnsNull()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+
+        // Act: Request French glosses but only English is available
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "logos",
+            "fr"
+        );
+
+        // Assert
+        Assert.That(
+            result,
+            Is.Null,
+            "Term not available in requested language must return null"
+        );
+    }
+
+    /// <summary>
+    /// Edge case: Empty termId returns null.
+    /// MarbleDataAccess.FindLocalizedGlossesForTerm will return empty for an empty key.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Empty termId returns null")]
+    public async Task FindLocalizedGlossesForTermAsync_EmptyTermId_ReturnsNull()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "",
+            "en"
+        );
+
+        // Assert
+        Assert.That(result, Is.Null, "Empty termId must return null");
+    }
+
+    /// <summary>
+    /// Edge case: Empty language returns null.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Empty language returns null")]
+    public async Task FindLocalizedGlossesForTermAsync_EmptyLanguage_ReturnsNull()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "logos",
+            ""
+        );
+
+        // Assert
+        Assert.That(result, Is.Null, "Empty language must return null");
+    }
+
+    /// <summary>
+    /// Edge case: Term with empty gloss list. When MarbleDataAccess returns
+    /// empty glosses, the service should return null (no meaningful result).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Term with empty gloss list returns null")]
+    public async Task FindLocalizedGlossesForTermAsync_EmptyGlossList_ReturnsNull()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("emptyterm", "en", new List<string>());
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "emptyterm",
+            "en"
+        );
+
+        // Assert: Empty glosses mean no meaningful result
+        Assert.That(result, Is.Null, "Term with empty gloss list must return null");
+    }
+
+    /// <summary>
+    /// Edge case: Glosses with brace metadata. The raw glosses from MarbleDataAccess
+    /// may contain {metadata} markers. FindLocalizedGlossesForTermAsync should return
+    /// the raw glosses; filtering is done separately by FilterGlossBraces (CAP-015).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Raw glosses returned without brace filtering (filtering is separate concern)")]
+    public async Task FindLocalizedGlossesForTermAsync_GlossesWithBraces_ReturnsRawGlosses()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData(
+            "logos",
+            "en",
+            new List<string> { "word {figurative}", "reason {abstract}" }
+        );
+
+        // Act
+        var result = await GlossService.FindLocalizedGlossesForTermAsync(
+            dataAccess,
+            "logos",
+            "en"
+        );
+
+        // Assert: Glosses returned as-is (brace filtering is CAP-015's concern)
+        Assert.That(result, Is.Not.Null);
+        Assert.That(
+            result!.Glosses,
+            Is.EqualTo(new[] { "word {figurative}", "reason {abstract}" }),
+            "Raw glosses must be returned without brace filtering"
+        );
+    }
+
+    /// <summary>
+    /// Edge case: CancellationToken is respected. When the token is cancelled
+    /// before execution, the method should throw OperationCanceledException
+    /// or TaskCanceledException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-016")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Cancelled token throws OperationCanceledException")]
+    public void FindLocalizedGlossesForTermAsync_CancelledToken_ThrowsCancellation()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Act & Assert
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await GlossService.FindLocalizedGlossesForTermAsync(
+                dataAccess,
+                "logos",
+                "en",
+                cts.Token
+            )
+        );
+    }
+
+    #endregion
+
+    #region CAP-016 Helper Methods
+
+    /// <summary>
+    /// Creates a MarbleDataAccess instance with HaveMarbleData == true.
+    /// Registers a bible and all required research data projects.
+    /// </summary>
+    private static MarbleDataAccess CreateInitializedDataAccess()
+    {
+        var dataAccess = new MarbleDataAccess();
+        dataAccess.AddBible(
+            "TestBible",
+            _ => new List<MarbleToken>().AsReadOnly()
+        );
+        foreach (var project in MarbleDataAccess.RequiredDataProjects)
+            dataAccess.AddResearchData(project);
+        return dataAccess;
     }
 
     #endregion

@@ -37,4 +37,28 @@ internal static partial class GlossService
     /// <returns>The gloss text with all {content} removed.</returns>
     public static string FilterGlossBraces(string rawGloss) =>
         BraceContentRegex().Replace(rawGloss, string.Empty);
+
+    /// <summary>
+    /// Looks up localized glosses for a Biblical Term from Marble dictionaries.
+    /// Delegates to MarbleDataAccess.FindLocalizedGlossesForTerm for the actual lookup.
+    /// Returns null if the term is not found in the dictionary data.
+    /// </summary>
+    /// <param name="dataAccess">The MarbleDataAccess instance providing dictionary data.</param>
+    /// <param name="termId">The term identifier to look up.</param>
+    /// <param name="language">The language code for localized glosses.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A GlossResult containing glosses and language, or null if term not found.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no Marble data is available (NO_DATA).</exception>
+    public static Task<GlossResult?> FindLocalizedGlossesForTermAsync(
+        MarbleDataAccess dataAccess,
+        string termId,
+        string language,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // CAP-016: Stub for TDD RED phase -- implementation pending
+        throw new NotImplementedException(
+            "CAP-016: FindLocalizedGlossesForTermAsync not yet implemented"
+        );
+    }
 }
