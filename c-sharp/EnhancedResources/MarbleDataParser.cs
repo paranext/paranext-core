@@ -241,18 +241,9 @@ internal static class MarbleDataParser
         if (linkType == "lexical_links" && filterLinks != null)
         {
             var tokenLinks = LexicalLinkService.ParseLexicalLinks(linkValue);
-            var filterLinkList =
-                filterLinks as IReadOnlyList<ParsedLexicalLink> ?? filterLinks.ToList();
-
-            foreach (var tokenLink in tokenLinks)
-            {
-                foreach (var filter in filterLinkList)
-                {
-                    if (tokenLink.FullLink == filter.FullLink)
-                        return true;
-                }
-            }
-            return false;
+            return tokenLinks.Any(tokenLink =>
+                filterLinks.Any(f => tokenLink.FullLink == f.FullLink)
+            );
         }
 
         return true;
@@ -299,42 +290,21 @@ internal static class MarbleDataParser
         bool exactMatch
     )
     {
-        var filterLinks = new List<ParsedLexicalLink>();
-        foreach (var rawLink in filter.LexicalLinks)
-        {
-            var parsed = LexicalLinkService.ParseLexicalLinks(rawLink);
-            filterLinks.AddRange(parsed);
-        }
+        var filterLinks = filter
+            .LexicalLinks.SelectMany(LexicalLinkService.ParseLexicalLinks)
+            .ToList();
 
         var origin = exactMatch ? FilterOrigin.ScripturePane : FilterOrigin.DictionaryTab;
-        var result = new List<MarbleToken>();
 
-        foreach (var token in tokens)
-        {
-            if (string.IsNullOrEmpty(token.LexicalLinks))
-                continue;
-
-            var tokenLinks = LexicalLinkService.ParseLexicalLinks(token.LexicalLinks);
-            bool matched = false;
-
-            foreach (var tokenLink in tokenLinks)
-            {
-                foreach (var filterLink in filterLinks)
-                {
-                    if (tokenLink.MatchesFilter(filterLink, origin))
-                    {
-                        matched = true;
-                        break;
-                    }
-                }
-                if (matched)
-                    break;
-            }
-
-            if (matched)
-                result.Add(token);
-        }
-
-        return result;
+        return tokens
+            .Where(token =>
+                !string.IsNullOrEmpty(token.LexicalLinks)
+                && LexicalLinkService
+                    .ParseLexicalLinks(token.LexicalLinks)
+                    .Any(tokenLink =>
+                        filterLinks.Any(filterLink => tokenLink.MatchesFilter(filterLink, origin))
+                    )
+            )
+            .ToList();
     }
 }
