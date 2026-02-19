@@ -22,9 +22,6 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
     private readonly MarbleDataAccess _dataAccess;
     private readonly ResourceUpdateService _resourceUpdateService;
 
-    // === NEW IN PT10 ===
-    // Reason: Constructor accepts PapiClient and creates internal service instances
-    // Maps to: CAP-031
     public EnhancedResourcesNetworkObject(PapiClient papiClient)
         : base(papiClient)
     {
@@ -35,19 +32,11 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
         );
     }
 
-    // === NEW IN PT10 ===
-    // Reason: PAPI registration of all 22 commands and 3 NetworkObject functions
-    // Maps to: CAP-031
-    //
-    // EXPLANATION:
-    // This method registers 25 total handlers (22 commands + 3 NO functions) plus
-    // the base object handler (total 26 registrations). Each command handler is a
-    // delegate with parameter count matching the wire contract in backend-alignment.md.
-    // Service methods that require MarbleDataAccess or other internal dependencies
-    // are wrapped in lambdas that capture those dependencies, exposing only the
-    // wire contract parameters to the PAPI framework.
     /// <summary>
-    /// Registers all commands and NetworkObject functions on the PAPI network.
+    /// Registers all 22 commands and 3 NetworkObject functions on the PAPI network.
+    /// Each command handler delegate has a parameter count matching the wire contract
+    /// in backend-alignment.md. Service methods requiring internal dependencies are
+    /// wrapped in instance methods that capture those dependencies.
     /// </summary>
     public async Task RegisterAsync()
     {
@@ -241,15 +230,9 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
 
     #region NetworkObject Function Handlers
 
-    // === NEW IN PT10 ===
-    // Reason: NetworkObject function - delegates to EnhancedResourceEnumerationService
-    // Maps to: CAP-001
     private IReadOnlyList<EnhancedResourceInfo> GetAvailableResources() =>
         EnhancedResourceEnumerationService.GetAvailableEnhancedResources();
 
-    // === NEW IN PT10 ===
-    // Reason: NetworkObject function - delegates to ScriptureContentService
-    // Maps to: CAP-013
     private Task<ScriptureContent> GetScriptureContent(
         string resourceId,
         VerseReference verseRef,
@@ -272,9 +255,6 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
             sourceWordDisplay
         );
 
-    // === NEW IN PT10 ===
-    // Reason: NetworkObject function - delegates to GlossService
-    // Maps to: CAP-017
     private Task<IReadOnlyList<string>> GetAvailableGlossLanguages() =>
         GlossService.GetAvailableGlossLanguagesAsync(_dataAccess);
 
@@ -284,11 +264,8 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
 
     // Wrappers that capture _dataAccess and expose only wire contract parameters.
 
-    private IReadOnlyList<MarbleToken> ParseScriptureTokens(string resourceId, int bookNumber)
-    {
-        var tokens = _dataAccess.GetBookTokens(resourceId, bookNumber);
-        return tokens ?? Array.Empty<MarbleToken>();
-    }
+    private IReadOnlyList<MarbleToken> ParseScriptureTokens(string resourceId, int bookNumber) =>
+        _dataAccess.GetBookTokens(resourceId, bookNumber) ?? Array.Empty<MarbleToken>();
 
     private IReadOnlyList<MarbleToken> GetLinksInScope(
         string resourceId,
@@ -315,13 +292,12 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
         VerseReference verseRef
     )
     {
-        BtState? btState = null;
-        if (trackedProjectId != null)
-        {
-            var trackedProject = TrackedProjectService.SelectTrackedProject(trackedProjectId, null);
-            if (trackedProject != null)
-                btState = TrackedProjectService.SetTrackedProject(trackedProject);
-        }
+        var trackedProject =
+            trackedProjectId != null
+                ? TrackedProjectService.SelectTrackedProject(trackedProjectId, null)
+                : null;
+        var btState =
+            trackedProject != null ? TrackedProjectService.SetTrackedProject(trackedProject) : null;
         var link =
             token.LexicalLinks != null
                 ? LexicalLinkService.ParseLexicalLinks(token.LexicalLinks).FirstOrDefault()
@@ -406,22 +382,4 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
         ResourceInstallService.InstallResourceAsync(request);
 
     #endregion
-}
-
-/// <summary>
-/// Default implementation of IInternetAccessChecker that assumes internet is available.
-/// </summary>
-internal sealed class DefaultInternetAccessChecker : IInternetAccessChecker
-{
-    public bool IsInternetAvailable() => true;
-}
-
-/// <summary>
-/// Default implementation of IManifestProvider that returns an empty manifest.
-/// </summary>
-internal sealed class DefaultManifestProvider : IManifestProvider
-{
-    public Dictionary<string, string> FetchManifest() => new();
-
-    public bool HasV2Upgrade(string resourceName) => false;
 }

@@ -26,3 +26,13 @@ public interface IManifestProvider
     /// </summary>
     bool HasV2Upgrade(string resourceName);
 }
+
+/// <summary>
+/// Default implementation of IManifestProvider that returns an empty manifest.
+/// </summary>
+internal sealed class DefaultManifestProvider : IManifestProvider
+{
+    public Dictionary<string, string> FetchManifest() => new();
+
+    public bool HasV2Upgrade(string resourceName) => false;
+}

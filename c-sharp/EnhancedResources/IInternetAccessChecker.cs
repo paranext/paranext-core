@@ -19,3 +19,11 @@ public interface IInternetAccessChecker
     /// </summary>
     bool IsInternetAvailable();
 }
+
+/// <summary>
+/// Default implementation of IInternetAccessChecker that assumes internet is available.
+/// </summary>
+internal sealed class DefaultInternetAccessChecker : IInternetAccessChecker
+{
+    public bool IsInternetAvailable() => true;
+}
