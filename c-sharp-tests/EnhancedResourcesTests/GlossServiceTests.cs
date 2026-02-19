@@ -3,7 +3,8 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources;
 
 /// <summary>
-/// Tests for CAP-015: FilterGlossBraces and CAP-016: FindLocalizedGlosses.
+/// Tests for CAP-015: FilterGlossBraces, CAP-016: FindLocalizedGlosses,
+/// and CAP-017: GetAvailableGlossLanguages.
 ///
 /// CAP-015 validates stripping of curly brace metadata from gloss text before display.
 /// MARBLE dictionary glosses contain metadata in {braces} that is not intended
@@ -14,10 +15,15 @@ namespace TestParanextDataProvider.EnhancedResources;
 /// The service wraps MarbleDataAccess.FindLocalizedGlossesForTerm and returns a
 /// GlossResult record containing the glosses list and language code.
 ///
+/// CAP-017 validates enumeration of available gloss languages from installed Marble
+/// dictionaries. Returns sorted list of language codes with default language first.
+/// Returns empty list when no Marble data is available.
+///
 /// PT9 Source: Paratext/Marble/MarbleForm.cs:2747-2792 (GetGloss, RemoveBraces)
 /// PT9 Source: Paratext/Marble/MarbleDataAccess.cs:387-430 (FindLocalizedGlossesForTerm)
+/// PT9 Source: BiblicalTerms/AdditionalGlossesHelper.cs:22-121 (language dropdown population)
 /// Golden Master: gm-012-gloss-brace-filtering (CAP-015 only)
-/// Extraction: EXT-007 (CAP-015), EXT-014 (CAP-016 via MarbleDataAccess)
+/// Extraction: EXT-007 (CAP-015), EXT-014 (CAP-016, CAP-017 via MarbleDataAccess)
 /// </summary>
 [TestFixture]
 public class GlossServiceTests
@@ -882,7 +888,350 @@ public class GlossServiceTests
 
     #endregion
 
-    #region CAP-016 Helper Methods
+    #region CAP-017 Acceptance Test
+
+    /// <summary>
+    /// Outer acceptance test for CAP-017: GetAvailableGlossLanguages.
+    /// Verifies the complete happy path: register multiple gloss languages,
+    /// call GetAvailableGlossLanguagesAsync, and verify the returned list
+    /// is sorted and contains all registered languages.
+    ///
+    /// When this test passes, CAP-017 is complete.
+    ///
+    /// Contract: data-contracts.md Method 17
+    /// Behavior: BHV-109 (IMarbleDataAccess interface), BHV-115 (language dropdown population)
+    /// Scenario: TS-030 (Additional glosses populates language dropdown sorted)
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-030")]
+    [Description(
+        "Acceptance test: Available gloss languages returned sorted from installed dictionaries"
+    )]
+    public async Task GetAvailableGlossLanguagesAsync_MultipleLanguages_ReturnsSortedList()
+    {
+        // Arrange: Set up MarbleDataAccess with gloss data in multiple languages
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "fr", new List<string> { "parole" });
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+        dataAccess.AddGlossData("logos", "es", new List<string> { "palabra" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Is.Not.Null, "Result must not be null");
+        Assert.That(result, Has.Count.EqualTo(3), "Must return all 3 registered languages");
+        Assert.That(
+            result,
+            Is.EqualTo(new[] { "en", "es", "fr" }),
+            "Languages must be sorted alphabetically"
+        );
+    }
+
+    #endregion
+
+    #region CAP-017 Contract Tests - Happy Path
+
+    /// <summary>
+    /// Contract: GetAvailableGlossLanguagesAsync with a single registered language
+    /// returns a list containing just that language.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Single language registered returns list with one entry")]
+    public async Task GetAvailableGlossLanguagesAsync_SingleLanguage_ReturnsSingleEntry()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Is.EqualTo("en"));
+    }
+
+    /// <summary>
+    /// Contract: Languages are deduplicated -- adding glosses for the same language
+    /// with different terms does not create duplicate language entries.
+    /// MarbleDataAccess.AddGlossData registers each language only once in its
+    /// SortedDictionary.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-115")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Same language registered multiple times appears once")]
+    public async Task GetAvailableGlossLanguagesAsync_DuplicateLanguage_AppersOnce()
+    {
+        // Arrange: Two terms in the same language
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+        dataAccess.AddGlossData("agape", "en", new List<string> { "love" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1), "Language must appear only once");
+        Assert.That(result[0], Is.EqualTo("en"));
+    }
+
+    /// <summary>
+    /// Contract: The returned list preserves sorted order as defined by the
+    /// MarbleDataAccess.AvailableGlossLanguages property (SortedDictionary ordering).
+    /// Per data-contracts.md Method 17 postcondition: "Languages sorted by display name."
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-115")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Languages returned in sorted order")]
+    public async Task GetAvailableGlossLanguagesAsync_UnsortedRegistration_ReturnsSorted()
+    {
+        // Arrange: Register languages out of alphabetical order
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "zh", new List<string> { "word_zh" });
+        dataAccess.AddGlossData("logos", "ar", new List<string> { "word_ar" });
+        dataAccess.AddGlossData("logos", "de", new List<string> { "word_de" });
+        dataAccess.AddGlossData("logos", "fr", new List<string> { "word_fr" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(
+            result,
+            Is.EqualTo(new[] { "ar", "de", "fr", "zh" }),
+            "Languages must be sorted alphabetically"
+        );
+    }
+
+    /// <summary>
+    /// Contract: The return type is IReadOnlyList, consistent with data-contracts.md
+    /// Method 17 signature.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("Return type is IReadOnlyList<string>")]
+    public async Task GetAvailableGlossLanguagesAsync_ReturnType_IsReadOnlyList()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<IReadOnlyList<string>>());
+    }
+
+    #endregion
+
+    #region CAP-017 Contract Tests - Error/Empty Cases
+
+    /// <summary>
+    /// Contract: When no Marble data is available, the method returns an empty list.
+    /// Per data-contracts.md Method 17: "Returns empty list if no Marble data is available."
+    /// Note: This is different from CAP-016 which throws InvalidOperationException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-022")]
+    [Description("No Marble data available returns empty list")]
+    public async Task GetAvailableGlossLanguagesAsync_NoMarbleData_ReturnsEmptyList()
+    {
+        // Arrange: MarbleDataAccess with no data registered (HaveMarbleData == false)
+        var dataAccess = new MarbleDataAccess();
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Is.Not.Null, "Must return a list, not null");
+        Assert.That(result, Is.Empty, "Empty list when no Marble data available");
+    }
+
+    /// <summary>
+    /// Contract: When Marble data exists (HaveMarbleData is true) but no gloss
+    /// languages have been registered, returns an empty list.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Marble data exists but no glosses registered returns empty list")]
+    public async Task GetAvailableGlossLanguagesAsync_NoGlossesRegistered_ReturnsEmptyList()
+    {
+        // Arrange: Have marble data but no gloss data
+        var dataAccess = CreateInitializedDataAccess();
+        // No AddGlossData calls
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Is.Not.Null, "Must return a list, not null");
+        Assert.That(result, Is.Empty, "Empty list when no glosses registered");
+    }
+
+    #endregion
+
+    #region CAP-017 Edge Case Tests
+
+    /// <summary>
+    /// Edge case: CancellationToken is respected. When the token is cancelled
+    /// before execution, the method should throw OperationCanceledException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Cancelled token throws OperationCanceledException")]
+    public void GetAvailableGlossLanguagesAsync_CancelledToken_ThrowsCancellation()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Act & Assert
+        Assert.ThrowsAsync<OperationCanceledException>(
+            async () =>
+                await GlossService.GetAvailableGlossLanguagesAsync(dataAccess, cts.Token)
+        );
+    }
+
+    /// <summary>
+    /// Edge case: Many languages registered. The system should handle a large
+    /// number of language codes without issues. Tests that the sorted order
+    /// is correct across many entries.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-115")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Many languages registered returns all in sorted order")]
+    public async Task GetAvailableGlossLanguagesAsync_ManyLanguages_AllReturnedSorted()
+    {
+        // Arrange: Register many languages in reverse order
+        var dataAccess = CreateInitializedDataAccess();
+        var languages = new[]
+        {
+            "zh",
+            "tr",
+            "sw",
+            "ru",
+            "pt",
+            "ko",
+            "ja",
+            "it",
+            "hi",
+            "fr",
+            "es",
+            "en",
+            "de",
+            "ar",
+        };
+        foreach (var lang in languages)
+            dataAccess.AddGlossData("logos", lang, new List<string> { $"word_{lang}" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(14));
+        var expected = languages.OrderBy(l => l).ToArray();
+        Assert.That(
+            result,
+            Is.EqualTo(expected),
+            "All languages must be returned in sorted order"
+        );
+    }
+
+    /// <summary>
+    /// Edge case: Language codes with mixed case. SortedDictionary uses
+    /// default string comparison (ordinal), so "En" and "en" are different keys.
+    /// The test verifies that the actual codes are preserved as registered.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-115")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Language codes preserved as registered (case-sensitive)")]
+    public async Task GetAvailableGlossLanguagesAsync_CaseSensitiveCodes_PreservedAsRegistered()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+        dataAccess.AddGlossData("logos", "EN", new List<string> { "WORD" });
+
+        // Act
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+
+        // Assert: "EN" and "en" are different keys in SortedDictionary (default comparer)
+        Assert.That(
+            result,
+            Has.Count.EqualTo(2),
+            "Case-sensitive: 'EN' and 'en' are different entries"
+        );
+        Assert.That(result, Does.Contain("en"));
+        Assert.That(result, Does.Contain("EN"));
+    }
+
+    /// <summary>
+    /// Edge case: Returned list is a snapshot -- modifications to the data access
+    /// after calling GetAvailableGlossLanguagesAsync do not affect the returned list.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-017")]
+    [Property("BehaviorId", "BHV-109")]
+    [Property("ScenarioId", "TS-030")]
+    [Description("Returned list is a snapshot, not affected by later data changes")]
+    public async Task GetAvailableGlossLanguagesAsync_ReturnedList_IsSnapshot()
+    {
+        // Arrange
+        var dataAccess = CreateInitializedDataAccess();
+        dataAccess.AddGlossData("logos", "en", new List<string> { "word" });
+
+        // Act: get the list, then add more data
+        var result = await GlossService.GetAvailableGlossLanguagesAsync(dataAccess);
+        dataAccess.AddGlossData("logos", "fr", new List<string> { "parole" });
+
+        // Assert: the already-returned list should still have only "en"
+        Assert.That(
+            result,
+            Has.Count.EqualTo(1),
+            "Returned list must be a snapshot, not affected by later changes"
+        );
+        Assert.That(result[0], Is.EqualTo("en"));
+    }
+
+    #endregion
+
+    #region Helper Methods
 
     /// <summary>
     /// Creates a MarbleDataAccess instance with HaveMarbleData == true.
