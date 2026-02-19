@@ -3,9 +3,6 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// <summary>
 /// Service for dictionary tab operations including homonym grouping, deduplication,
 /// and display item creation.
-///
-/// STUB: This file contains method stubs for TDD RED phase.
-/// The implementer agent will provide the actual implementation.
 /// </summary>
 internal static class DictionaryService
 {
@@ -15,7 +12,7 @@ internal static class DictionaryService
     /// lemma (the part before the last -N).
     ///
     /// PORTED FROM PT9: BiblicalTerms matching logic (MarbleForm.cs:3060-3163)
-    /// Maps to: EXT-001 (homonym grouping subset), data-contracts.md Method 23
+    /// Maps to: CAP-023, data-contracts.md Method 23
     /// </summary>
     /// <param name="termIds">List of term IDs, some of which may have -N homonym suffixes.</param>
     /// <returns>Dictionary keyed by base lemma, with values being the full term IDs.</returns>
@@ -27,22 +24,23 @@ internal static class DictionaryService
         IReadOnlyList<string> termIds
     )
     {
-        var groups = new Dictionary<string, List<string>>();
+        var groups = new Dictionary<string, IReadOnlyList<string>>();
 
         foreach (var termId in termIds)
         {
             var baseLemma = GetBaseLemma(termId);
 
-            if (!groups.TryGetValue(baseLemma, out var list))
+            if (groups.TryGetValue(baseLemma, out var existing))
             {
-                list = new List<string>();
-                groups[baseLemma] = list;
+                ((List<string>)existing).Add(termId);
             }
-
-            list.Add(termId);
+            else
+            {
+                groups[baseLemma] = new List<string> { termId };
+            }
         }
 
-        return groups.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<string>)kvp.Value);
+        return groups;
     }
 
     // === PORTED FROM PT9 ===
@@ -56,10 +54,10 @@ internal static class DictionaryService
         if (lastHyphen <= 0)
             return termId;
 
-        var suffix = termId.Substring(lastHyphen + 1);
+        var suffix = termId[(lastHyphen + 1)..];
 
         if (suffix.Length > 0 && suffix.All(char.IsDigit))
-            return termId.Substring(0, lastHyphen);
+            return termId[..lastHyphen];
 
         return termId;
     }
