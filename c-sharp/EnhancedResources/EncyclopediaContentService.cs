@@ -14,6 +14,12 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class EncyclopediaContentService
 {
+    /// <summary>Length of a standard BBBCCCVVV reference string.</summary>
+    private const int BcvLength = 9;
+
+    /// <summary>Length of an extended BBBCCCVVVWWWWW reference string (with word offset).</summary>
+    private const int BcvWithWordOffsetLength = 14;
+
     /// <summary>
     /// Converts BBBCCCVVV reference strings to clickable verse links.
     /// Input is a space-separated string of BBBCCCVVV references (9 or 14 chars each).
@@ -43,72 +49,122 @@ internal static class EncyclopediaContentService
     /// <returns>HTML string with clickable verse links, or empty string if no valid refs.</returns>
     public static string FormatBCVRefs(string bbbcccvvv, ScrVers versification)
     {
-        string[] bcvArr = bbbcccvvv.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        StringBuilder refstr = new StringBuilder();
-        foreach (string s in bcvArr.Where(s => s.Length >= 9))
+        string[] bcvArr = bbbcccvvv.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        StringBuilder result = new StringBuilder();
+
+        foreach (string s in bcvArr.Where(s => s.Length >= BcvLength))
         {
-            string verseStr = !char.IsDigit(s[0]) && s.Length > 9 ? s.Substring(1) : s;
-            int hyphenIndex = verseStr.IndexOf('-');
-            string? rangeRefStr = null;
-            if (hyphenIndex > 0)
-            {
-                rangeRefStr = verseStr.Substring(hyphenIndex + 1);
-                if (rangeRefStr.Length > 0 && !char.IsDigit(rangeRefStr[0]))
-                    rangeRefStr = rangeRefStr.Substring(1);
-                verseStr = verseStr.Substring(0, hyphenIndex);
-            }
+            string verseStr = StripLeadingNonDigit(s);
+            string? rangeRefStr = SplitRange(ref verseStr);
 
-            if (
-                (verseStr.Length != 9 && verseStr.Length != 14)
-                || !int.TryParse(verseStr.Substring(0, 9), out var bcv)
-            )
+            if (!TryCreateVerseRef(verseStr, versification, out VerseRef vref))
                 continue;
 
-            VerseRef vref;
-            try
-            {
-                vref = new VerseRef(bcv, ScrVers.Original);
-            }
-            catch (VerseRefException)
-            {
-                continue;
-            }
-            vref.ChangeVersification(versification);
-            string longref =
-                CanonX.BookNumberToName(vref.BookNum) + " " + vref.Chapter + ":" + vref.Verse;
-            string displayref = longref;
-            if (rangeRefStr != null && (rangeRefStr.Length == 9 || rangeRefStr.Length == 14))
-            {
-                if (int.TryParse(rangeRefStr.Substring(0, 9), out var rangebcv))
-                {
-                    try
-                    {
-                        VerseRef rangeRef = new VerseRef(rangebcv, ScrVers.Original);
-                        rangeRef.ChangeVersification(versification);
-                        if (rangeRef.ChapterNum == vref.ChapterNum)
-                            displayref += $"-{rangeRef.VerseNum}";
-                        else
-                            displayref += $"-{rangeRef.ChapterNum}:{rangeRef.VerseNum}";
-                    }
-                    catch (VerseRefException)
-                    {
-                        // Invalid range end -- format start ref without range
-                    }
-                }
-            }
-            string link = string.Format(
-                "<a href='{0}' title='{1}'>{2}</a>",
-                "goto:" + vref.Text,
-                "Go To " + longref,
-                displayref
-            );
-            refstr.Append(link + " ");
+            string longref = $"{CanonX.BookNumberToName(vref.BookNum)} {vref.Chapter}:{vref.Verse}";
+            string displayref = longref + FormatRangeSuffix(rangeRefStr, vref, versification);
+
+            result
+                .Append($"<a href='goto:{vref.Text}' title='Go To {longref}'>{displayref}</a>")
+                .Append(' ');
         }
 
-        if (refstr.Length == 0)
+        if (result.Length == 0)
             return "";
 
-        refstr.Length -= 1; // remove last space
-        return refstr.ToString();
+        result.Length -= 1; // remove trailing space
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Strips a leading non-digit character from the reference string when the string
+    /// is longer than the standard BCV length. This handles encyclopedia markup prefixes
+    /// like punctuation before references.
+    /// </summary>
+    private static string StripLeadingNonDigit(string s) =>
+        !char.IsDigit(s[0]) && s.Length > BcvLength ? s.Substring(1) : s;
+
+    /// <summary>
+    /// Splits a verse string at the hyphen separator to extract the range end reference.
+    /// Modifies <paramref name="verseStr"/> in place to contain only the start reference.
+    /// Strips a leading non-digit from the range end if present.
+    /// </summary>
+    /// <returns>The range end reference string, or null if no range.</returns>
+    private static string? SplitRange(ref string verseStr)
+    {
+        int hyphenIndex = verseStr.IndexOf('-');
+        if (hyphenIndex <= 0)
+            return null;
+
+        string rangeRefStr = verseStr.Substring(hyphenIndex + 1);
+        if (rangeRefStr.Length > 0 && !char.IsDigit(rangeRefStr[0]))
+            rangeRefStr = rangeRefStr.Substring(1);
+        verseStr = verseStr.Substring(0, hyphenIndex);
+        return rangeRefStr;
+    }
+
+    /// <summary>
+    /// Attempts to create a <see cref="VerseRef"/> from a BCV string.
+    /// Validates the string length (9 or 14 chars), parses the first 9 chars as a BCV integer,
+    /// creates the VerseRef, and maps it through the specified versification.
+    /// </summary>
+    /// <returns>True if a valid VerseRef was created; false if the string should be skipped.</returns>
+    private static bool TryCreateVerseRef(string verseStr, ScrVers versification, out VerseRef vref)
+    {
+        vref = default;
+
+        if (
+            (verseStr.Length != BcvLength && verseStr.Length != BcvWithWordOffsetLength)
+            || !int.TryParse(verseStr.Substring(0, BcvLength), out var bcv)
+        )
+            return false;
+
+        try
+        {
+            vref = new VerseRef(bcv, ScrVers.Original);
+        }
+        catch (VerseRefException)
+        {
+            return false;
+        }
+
+        vref.ChangeVersification(versification);
+        return true;
+    }
+
+    /// <summary>
+    /// Computes the range display suffix for a verse reference.
+    /// For within-chapter ranges, returns "-{endVerse}".
+    /// For cross-chapter ranges, returns "-{endChapter}:{endVerse}".
+    /// Returns empty string if no valid range end exists.
+    /// </summary>
+    private static string FormatRangeSuffix(
+        string? rangeRefStr,
+        VerseRef startRef,
+        ScrVers versification
+    )
+    {
+        if (
+            rangeRefStr == null
+            || (rangeRefStr.Length != BcvLength && rangeRefStr.Length != BcvWithWordOffsetLength)
+        )
+            return "";
+
+        if (!int.TryParse(rangeRefStr.Substring(0, BcvLength), out var rangebcv))
+            return "";
+
+        try
+        {
+            VerseRef rangeRef = new VerseRef(rangebcv, ScrVers.Original);
+            rangeRef.ChangeVersification(versification);
+
+            return rangeRef.ChapterNum == startRef.ChapterNum
+                ? $"-{rangeRef.VerseNum}"
+                : $"-{rangeRef.ChapterNum}:{rangeRef.VerseNum}";
+        }
+        catch (VerseRefException)
+        {
+            // Invalid range end -- format start ref without range
+            return "";
+        }
     }
 }
