@@ -10,6 +10,12 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class MediaTabService
 {
+    // BBBCCCVVV field extraction constants
+    private const int BookMultiplier = 1_000_000; // BBB occupies digits 7-9
+    private const int ChapterMultiplier = 1_000; // CCC occupies digits 4-6
+    private const long MaxBbbcccvvv = 999_999_999L; // Threshold for 9-digit vs 14-digit format
+    private const long WordSuffixDivisor = 100_000L; // Strips WWWWW suffix from 14-digit format
+
     /// <summary>
     /// Checks if an image reference range matches a query verse.
     /// Handles whole-book (CCC=000), whole-chapter (VVV=000), and spanning ranges.
@@ -33,29 +39,28 @@ internal static class MediaTabService
         if (bbbcccvvvStart < 0)
             return false;
 
-        int bbbcccvvvEnd = ParseBBBCCCVVV(rangeParts[rangeParts.Length > 1 ? 1 : 0]);
+        string endPart = rangeParts.Length > 1 ? rangeParts[1] : rangeParts[0];
+        int bbbcccvvvEnd = ParseBBBCCCVVV(endPart);
         if (bbbcccvvvEnd < 0)
             return false;
 
         int queryBBBCCCVVV =
-            queryVerse.Book * 1000000 + queryVerse.Chapter * 1000 + queryVerse.Verse;
+            queryVerse.Book * BookMultiplier
+            + queryVerse.Chapter * ChapterMultiplier
+            + queryVerse.Verse;
+
+        // Extract fields from the start reference once
+        int imageBook = bbbcccvvvStart / BookMultiplier;
+        int imageChapter = (bbbcccvvvStart / ChapterMultiplier) % ChapterMultiplier;
+        int imageVerse = bbbcccvvvStart % ChapterMultiplier;
 
         // Whole-book sentinel: chapter = 000 means entire book
-        int startChapter = (bbbcccvvvStart / 1000) % 1000;
-        if (startChapter == 0)
-        {
-            int imageBook = bbbcccvvvStart / 1000000;
+        if (imageChapter == 0)
             return queryVerse.Book == imageBook;
-        }
 
-        // Whole-chapter sentinel: verse = 000 means entire chapter
-        int startVerse = bbbcccvvvStart % 1000;
-        if (startVerse == 0 && rangeParts.Length == 1)
-        {
-            int imageBook = bbbcccvvvStart / 1000000;
-            int imageChapter = (bbbcccvvvStart / 1000) % 1000;
+        // Whole-chapter sentinel: verse = 000 means entire chapter (single ref only)
+        if (imageVerse == 0 && rangeParts.Length == 1)
             return queryVerse.Book == imageBook && queryVerse.Chapter == imageChapter;
-        }
 
         // Spanning range or single verse: numeric overlap
         return queryBBBCCCVVV >= bbbcccvvvStart && queryBBBCCCVVV <= bbbcccvvvEnd;
@@ -77,8 +82,8 @@ internal static class MediaTabService
 
         // PT9 uses: (int)(long.Parse(part) / 100000L) to strip WWWWW suffix
         // For 9-digit input the value is already BBBCCCVVV (max ~066176176)
-        if (raw > 999999999L)
-            return (int)(raw / 100000L);
+        if (raw > MaxBbbcccvvv)
+            return (int)(raw / WordSuffixDivisor);
 
         return (int)raw;
     }
