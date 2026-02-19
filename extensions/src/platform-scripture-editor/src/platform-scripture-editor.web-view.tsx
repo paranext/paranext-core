@@ -1352,7 +1352,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   return (
     <>
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
-      <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-white">
+      <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-background">
         <TabToolbar
           onSelectProjectMenuItem={menuCommandHandler}
           onSelectViewInfoMenuItem={menuCommandHandler}
