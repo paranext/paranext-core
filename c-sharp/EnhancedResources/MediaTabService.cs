@@ -425,6 +425,46 @@ internal static class MediaTabService
         WordFilter? wordFilter
     )
     {
-        throw new NotImplementedException("CAP-012: LoadMapsTabAsync not yet implemented");
+        var tokens = ValidateAndGetBookTokens(dataAccess, resourceId, verseRef);
+
+        // Compute the verse range from scope
+        var scopeRange = ComputeScopeRange(tokens, verseRef, scope);
+
+        // Get all image metadata for the entire book range
+        var allBookImages = dataAccess.GetImageMetadata(
+            new VerseReference(verseRef.Book, 0, 0),
+            new VerseReference(verseRef.Book, 999, 999)
+        );
+
+        // Filter images that match the scope range
+        var scopedImages = FilterImagesForScope(allBookImages, verseRef, scopeRange);
+
+        // INV-012 (inverted): Include ONLY Satellite Bible Atlas items
+        var filteredImages = IncludeOnlyAtlasImages(scopedImages);
+
+        var items = filteredImages.Select(ToDisplayItem).ToList();
+
+        var result = new MediaTabContent(items, HeaderHtml: "");
+        return Task.FromResult(result);
     }
+
+    /// <summary>
+    /// Includes ONLY images with the "Satellite Bible Atlas" collection name (INV-012 inverted).
+    /// This is the mirror of <see cref="ExcludeAtlasImages"/> used by LoadMediaTab (CAP-011).
+    ///
+    /// === PORTED FROM PT9 ===
+    /// Source: PT9/Paratext/Marble/MediaTab.cs:555-565
+    /// Method: MediaTab.InvalidImageForTab() (inverted logic for Maps tab)
+    /// Maps to: EXT-066, INV-012
+    /// </summary>
+    private static List<ImageEntry> IncludeOnlyAtlasImages(List<ImageEntry> images) =>
+        images
+            .Where(img =>
+                string.Equals(
+                    img.CollectionName,
+                    SatelliteBibleAtlasCollection,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            .ToList();
 }
