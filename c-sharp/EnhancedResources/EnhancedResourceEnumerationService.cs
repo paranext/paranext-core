@@ -15,10 +15,6 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </remarks>
 internal static class EnhancedResourceEnumerationService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextData/Plugins/Host.cs:52-63
-    // Method: Host.AllEnhancedResources (iterates AvailableBibles, filters MarbleResource)
-    // Maps to: CAP-001
     /// <summary>
     /// Returns metadata for all installed Enhanced Resources (MarbleResource projects).
     /// Only MarbleResource projects are returned (INV-006).
@@ -28,37 +24,19 @@ internal static class EnhancedResourceEnumerationService
     /// List of <see cref="EnhancedResourceInfo"/> for each installed ER.
     /// Returns empty list (not null) when no ERs are installed.
     /// </returns>
-    public static IReadOnlyList<EnhancedResourceInfo> GetAvailableEnhancedResources()
-    {
-        var result = new List<EnhancedResourceInfo>();
-
-        foreach (ScrText scrText in ScrTextCollection.ScrTexts(IncludeProjects.Everything))
-        {
-            if (scrText.Settings.TranslationInfo.Type != ProjectType.MarbleResource)
-                continue;
-
-            string id = scrText.Settings.GetSetting("ResourceId") ?? "";
-            string name = scrText.Settings.FullName ?? "";
-            string shortName = scrText.Settings.GetSetting("ResourceShortName") ?? "";
-            string language = scrText.Settings.GetSetting("ResourceLanguage") ?? "";
-            string version = scrText.Settings.GetSetting("MarbleVersion") ?? "";
-            string researchDataFlag = scrText.Settings.GetSetting("MarbleResearchData") ?? "F";
-            bool hasResearchData = researchDataFlag == "T";
-
-            result.Add(
-                new EnhancedResourceInfo(
-                    Id: id,
-                    Name: name,
-                    ShortName: shortName,
-                    Language: language,
-                    Version: version,
-                    HasResearchData: hasResearchData,
-                    IsInstalled: true,
-                    HasUpdate: false
-                )
-            );
-        }
-
-        return result;
-    }
+    public static IReadOnlyList<EnhancedResourceInfo> GetAvailableEnhancedResources() =>
+        ScrTextCollection
+            .ScrTexts(IncludeProjects.Everything)
+            .Where(s => s.Settings.TranslationInfo.Type == ProjectType.MarbleResource)
+            .Select(s => new EnhancedResourceInfo(
+                Id: s.Settings.GetSetting("ResourceId") ?? "",
+                Name: s.Settings.FullName ?? "",
+                ShortName: s.Settings.GetSetting("ResourceShortName") ?? "",
+                Language: s.Settings.GetSetting("ResourceLanguage") ?? "",
+                Version: s.Settings.GetSetting("MarbleVersion") ?? "",
+                HasResearchData: (s.Settings.GetSetting("MarbleResearchData") ?? "F") == "T",
+                IsInstalled: true,
+                HasUpdate: false
+            ))
+            .ToList();
 }
