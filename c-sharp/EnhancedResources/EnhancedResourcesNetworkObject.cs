@@ -228,6 +228,36 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
         await Task.WhenAll(registrations);
     }
 
+    #region Event Publishing
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI event publishing for resource install/update notifications
+    // Maps to: CAP-033
+    // Contract: backend-alignment.md (Events section)
+    // Event: platformEnhancedResources.enhancedResources:onDidUpdate
+
+    /// <summary>
+    /// Publishes a resource update event via PapiClient.SendEventAsync.
+    /// Called after a resource is installed or updated so that all Enhanced Resource
+    /// windows can refresh their resource lists.
+    /// </summary>
+    /// <param name="resourceId">The short name / ID of the installed resource</param>
+    /// <param name="resourceName">The human-readable name of the resource</param>
+    /// <param name="version">The version string in System.Version format</param>
+    /// <param name="isUpdate">True if this is an update; false for fresh install</param>
+    public async Task NotifyResourceUpdatedAsync(
+        string resourceId,
+        string resourceName,
+        string version,
+        bool isUpdate
+    )
+    {
+        var payload = new ResourceInstalledEvent(resourceId, resourceName, version, isUpdate);
+        await PapiClient.SendEventAsync($"{NetworkObjectName}:onDidUpdate", payload);
+    }
+
+    #endregion
+
     #region NetworkObject Function Handlers
 
     private IReadOnlyList<EnhancedResourceInfo> GetAvailableResources() =>
