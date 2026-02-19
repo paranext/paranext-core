@@ -1,5 +1,5 @@
 import { FC, useMemo, useState } from 'react';
-import { Ban, LucideIcon } from 'lucide-react';
+import { Ban } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
