@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace Paranext.DataProvider.EnhancedResources;
@@ -78,23 +77,16 @@ internal static class PartOfSpeechTranslator
         if (string.IsNullOrEmpty(partOfSpeech))
             return partOfSpeech ?? "";
 
-        List<string>? standardForm;
-        if (sourceDictionary == "SDBH")
-        {
-            standardForm = TranslateToStandardForm(
-                partOfSpeech.TrimEnd('H'),
-                s_hebrewTagStructure.RootElement,
-                s_hebrewTagTranslations.RootElement
-            );
-        }
-        else
-        {
-            standardForm = TranslateToStandardForm(
-                partOfSpeech,
-                s_greekTagStructure.RootElement,
-                s_greekTagTranslations.RootElement
-            );
-        }
+        bool isHebrew = sourceDictionary == "SDBH";
+        string code = isHebrew ? partOfSpeech.TrimEnd('H') : partOfSpeech;
+        JsonElement tagStructure = isHebrew
+            ? s_hebrewTagStructure.RootElement
+            : s_greekTagStructure.RootElement;
+        JsonElement tagTranslations = isHebrew
+            ? s_hebrewTagTranslations.RootElement
+            : s_greekTagTranslations.RootElement;
+
+        List<string>? standardForm = TranslateToStandardForm(code, tagStructure, tagTranslations);
 
         return standardForm != null
             ? LocalizeStandardForm(standardForm, shortFormat)
@@ -109,22 +101,16 @@ internal static class PartOfSpeechTranslator
     // Maps to: EXT-010
     private static string LocalizeStandardForm(List<string> standardForm, bool shortFormat)
     {
-        StringBuilder result = new StringBuilder();
-        foreach (string word in standardForm)
-        {
-            string defaultForm = word;
-            if (shortFormat)
-            {
-                defaultForm = s_longToShortTranslations.TryGetValue(word, out string? shortVal)
+        string result = string.Join(
+            ' ',
+            standardForm.Select(word =>
+                shortFormat && s_longToShortTranslations.TryGetValue(word, out string? shortVal)
                     ? shortVal
-                    : word;
-            }
+                    : word
+            )
+        );
 
-            result.Append(defaultForm);
-            result.Append(' ');
-        }
-
-        return result.ToString().Trim('-', ' ');
+        return result.Trim('-', ' ');
     }
 
     // === PORTED FROM PT9 ===
@@ -144,7 +130,7 @@ internal static class PartOfSpeechTranslator
         if (FindOption(rootOptions, ref curValue, out string? rootOption))
         {
             string rootValue = rootOption!;
-            List<string> result = new List<string>();
+            List<string> result = [];
 
             string rootTranslationKey = "part_of_speech-" + rootValue;
             JsonElement engLong = tagTranslations.GetProperty("eng-long");
@@ -216,13 +202,20 @@ internal static class PartOfSpeechTranslator
     // Maps to: EXT-010
     private static bool Matches(string compareValue, ref string curValue)
     {
-        if (curValue.StartsWith(compareValue, StringComparison.Ordinal))
-        {
-            curValue = curValue.Substring(compareValue.Length);
-            return true;
-        }
-        return false;
+        if (!curValue.StartsWith(compareValue, StringComparison.Ordinal))
+            return false;
+
+        curValue = curValue[compareValue.Length..];
+        return true;
     }
+
+    /// <summary>
+    /// Returns true if the property name is a category heading in the translation JSON,
+    /// e.g. "case-", "gender-", "tense-". These have a single trailing dash and no
+    /// internal dashes. They are section labels, not actual translation values.
+    /// </summary>
+    private static bool IsCategoryHeading(string propertyName) =>
+        propertyName.Length > 1 && propertyName[^1] == '-' && !propertyName[..^1].Contains('-');
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:1085-1116
@@ -230,20 +223,11 @@ internal static class PartOfSpeechTranslator
     // Maps to: EXT-010
     private static Dictionary<string, string> BuildLongToShortValues()
     {
-        Dictionary<string, string> result = new Dictionary<string, string>();
+        var allTranslations = GetLongAndShortTranslations(s_hebrewTagTranslations.RootElement)
+            .Concat(GetLongAndShortTranslations(s_greekTagTranslations.RootElement));
 
-        foreach (
-            var (longVal, shortVal) in GetLongAndShortTranslations(
-                s_hebrewTagTranslations.RootElement
-            )
-        )
-            result[longVal] = shortVal;
-
-        foreach (
-            var (longVal, shortVal) in GetLongAndShortTranslations(
-                s_greekTagTranslations.RootElement
-            )
-        )
+        Dictionary<string, string> result = new();
+        foreach (var (longVal, shortVal) in allTranslations)
             result[longVal] = shortVal;
 
         return result;
@@ -263,14 +247,10 @@ internal static class PartOfSpeechTranslator
                 continue;
 
             string propertyName = prop.Name;
-            // skip category heading items: "case-": "Case" (name ends with single dash,
-            // trimmed name has no dash)
-            string trimmedName = propertyName.Trim('-');
-            if (
-                propertyName.Length > 0
-                && propertyName.Substring(0, propertyName.Length - 1) == trimmedName
-                && !trimmedName.Contains('-')
-            )
+            // Skip category heading entries like "case-": "Case" -- these are section
+            // labels in the JSON, not actual translation values. A category heading has
+            // exactly one trailing dash and no internal dashes (e.g., "case-", "gender-").
+            if (IsCategoryHeading(propertyName))
                 continue;
 
             if (engShort.TryGetProperty(propertyName, out JsonElement shortElement))
