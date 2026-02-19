@@ -19,12 +19,48 @@ internal static class DictionaryService
     /// </summary>
     /// <param name="termIds">List of term IDs, some of which may have -N homonym suffixes.</param>
     /// <returns>Dictionary keyed by base lemma, with values being the full term IDs.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3163
+    // Method: MarbleForm.TermRenderingStatus (homonym grouping subset)
+    // Maps to: CAP-023, data-contracts.md Method 23
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> GetHomonymGroups(
         IReadOnlyList<string> termIds
     )
     {
-        throw new NotImplementedException(
-            "CAP-023: GetHomonymGroups not yet implemented. Awaiting TDD GREEN phase."
-        );
+        var groups = new Dictionary<string, List<string>>();
+
+        foreach (var termId in termIds)
+        {
+            var baseLemma = GetBaseLemma(termId);
+
+            if (!groups.TryGetValue(baseLemma, out var list))
+            {
+                list = new List<string>();
+                groups[baseLemma] = list;
+            }
+
+            list.Add(termId);
+        }
+
+        return groups.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<string>)kvp.Value);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3163
+    // Method: MarbleForm.TermRenderingStatus (suffix stripping logic)
+    // Maps to: CAP-023
+    private static string GetBaseLemma(string termId)
+    {
+        var lastHyphen = termId.LastIndexOf('-');
+
+        if (lastHyphen <= 0)
+            return termId;
+
+        var suffix = termId.Substring(lastHyphen + 1);
+
+        if (suffix.Length > 0 && suffix.All(char.IsDigit))
+            return termId.Substring(0, lastHyphen);
+
+        return termId;
     }
 }
