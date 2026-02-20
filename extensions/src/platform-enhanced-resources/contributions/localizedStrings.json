@@ -100,7 +100,13 @@
       "%enhancedResources_articleViewer_close%": "Close article",
       "%enhancedResources_articleViewer_prevArticle%": "Previous article",
       "%enhancedResources_articleViewer_nextArticle%": "Next article",
-      "%enhancedResources_articleViewer_depthLimitReached%": "Maximum article nesting depth reached. Close an article to open another."
+      "%enhancedResources_articleViewer_depthLimitReached%": "Maximum article nesting depth reached. Close an article to open another.",
+      "%enhancedResources_imageViewer_close%": "Close image overlay",
+      "%enhancedResources_imageViewer_prevImage%": "Previous image",
+      "%enhancedResources_imageViewer_nextImage%": "Next image",
+      "%enhancedResources_imageViewer_zoomIn%": "Zoom in",
+      "%enhancedResources_imageViewer_zoomOut%": "Zoom out",
+      "%enhancedResources_imageViewer_title%": "Image Viewer"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -201,7 +207,13 @@
       "%enhancedResources_articleViewer_close%": "Cerrar articulo",
       "%enhancedResources_articleViewer_prevArticle%": "Articulo anterior",
       "%enhancedResources_articleViewer_nextArticle%": "Articulo siguiente",
-      "%enhancedResources_articleViewer_depthLimitReached%": "Se alcanzo la profundidad maxima de anidamiento de articulos. Cierre un articulo para abrir otro."
+      "%enhancedResources_articleViewer_depthLimitReached%": "Se alcanzo la profundidad maxima de anidamiento de articulos. Cierre un articulo para abrir otro.",
+      "%enhancedResources_imageViewer_close%": "Cerrar visor de imagen",
+      "%enhancedResources_imageViewer_prevImage%": "Imagen anterior",
+      "%enhancedResources_imageViewer_nextImage%": "Imagen siguiente",
+      "%enhancedResources_imageViewer_zoomIn%": "Acercar",
+      "%enhancedResources_imageViewer_zoomOut%": "Alejar",
+      "%enhancedResources_imageViewer_title%": "Visor de imagen"
     }
   }
 }

@@ -24,6 +24,8 @@ import type {
 import type { MediaDisplayItem, BibleImage } from '../components/media-tab.component';
 import ArticleViewer from '../components/article-viewer.component';
 import type { OverlayStackEntry } from '../components/article-viewer.component';
+import ImageViewer from '../components/image-viewer.component';
+import type { MediaViewerInput } from '../components/image-viewer.component';
 
 // --- Types ---
 
@@ -134,6 +136,9 @@ const DEFAULT_MAPS_ITEMS: MediaDisplayItem[] = [];
 
 /** Default empty article viewer overlay stack */
 const DEFAULT_ARTICLE_OVERLAY_STACK: OverlayStackEntry[] = [];
+
+/** Default media viewer overlay input (null = closed) */
+const DEFAULT_MEDIA_VIEWER_INPUT: MediaViewerInput | undefined = undefined;
 
 /** Maximum depth for nested article overlays */
 const MAX_OVERLAY_DEPTH = 10;
@@ -252,6 +257,12 @@ global.webViewComponent = function EnhancedResourceWebView({
   const [articleOverlayStack, setArticleOverlayStack] = useWebViewState<OverlayStackEntry[]>(
     'articleOverlayStack',
     DEFAULT_ARTICLE_OVERLAY_STACK,
+  );
+
+  // --- Media viewer overlay state ---
+  const [mediaViewerInput, setMediaViewerInput] = useWebViewState<MediaViewerInput | undefined>(
+    'mediaViewerInput',
+    DEFAULT_MEDIA_VIEWER_INPUT,
   );
 
   // Keep a ref to the current banners for use in callbacks
@@ -506,10 +517,36 @@ global.webViewComponent = function EnhancedResourceWebView({
   );
 
   // Open an image from article content (for MediaViewer overlay)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleArticleOpenImage = useCallback((_imageId: string) => {
-    // MediaViewer overlay will be wired in UI-PKG-011
-  }, []);
+  const handleArticleOpenImage = useCallback(
+    (openImageId: string) => {
+      // Create a minimal media viewer input for a single image from article content
+      const singleDisplayItem: MediaDisplayItem = {
+        id: `article-image-${openImageId}`,
+        groupType: 'word-linked',
+        groupHeader: '',
+        images: [
+          {
+            id: openImageId,
+            title: openImageId,
+            description: '',
+            filename: '',
+            copyright: '',
+            isVideo: false,
+            caption: openImageId,
+            thumbnailUrl: '',
+          },
+        ],
+      };
+      setMediaViewerInput({
+        imageId: openImageId,
+        displayIndex: 0,
+        showControls: false,
+        parentTabType: 'encyclopedia',
+        displayItems: [singleDisplayItem],
+      });
+    },
+    [setMediaViewerInput],
+  );
 
   // Navigate to the previous article in the display list
   const handleArticleNavigatePrev = useCallback(() => {
@@ -575,10 +612,22 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setMediaExpandedGroups],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleMediaItemClick = useCallback((_image: BibleImage) => {
-    // MediaViewer overlay will be wired in UI-PKG-011
-  }, []);
+  const handleMediaItemClick = useCallback(
+    (image: BibleImage) => {
+      // Find the display index containing this image
+      const displayIdx = mediaItems.findIndex((item) =>
+        item.images.some((img) => img.id === image.id),
+      );
+      setMediaViewerInput({
+        imageId: image.id,
+        displayIndex: displayIdx >= 0 ? displayIdx : 0,
+        showControls: true,
+        parentTabType: 'media',
+        displayItems: mediaItems,
+      });
+    },
+    [mediaItems, setMediaViewerInput],
+  );
 
   // --- Maps tab handlers ---
 
@@ -600,10 +649,27 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setMapsExpandedGroups],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleMapItemClick = useCallback((_image: BibleImage) => {
-    // MediaViewer overlay will be wired in UI-PKG-011
-  }, []);
+  const handleMapItemClick = useCallback(
+    (image: BibleImage) => {
+      // Find the display index containing this image
+      const displayIdx = mapsItems.findIndex((item) =>
+        item.images.some((img) => img.id === image.id),
+      );
+      setMediaViewerInput({
+        imageId: image.id,
+        displayIndex: displayIdx >= 0 ? displayIdx : 0,
+        showControls: true,
+        parentTabType: 'maps',
+        displayItems: mapsItems,
+      });
+    },
+    [mapsItems, setMediaViewerInput],
+  );
+
+  // --- Media viewer overlay close handler ---
+  const handleMediaViewerClose = useCallback(() => {
+    setMediaViewerInput(undefined);
+  }, [setMediaViewerInput]);
 
   // Compute dictionary items with expanded state applied
   const dictionaryItemsWithExpanded = useMemo(
@@ -734,6 +800,18 @@ global.webViewComponent = function EnhancedResourceWebView({
               onOpenImage={handleArticleOpenImage}
               onNavigatePrev={handleArticleNavigatePrev}
               onNavigateNext={handleArticleNavigateNext}
+            />
+          ) : undefined}
+
+          {/* Media Viewer overlay - renders above research pane content */}
+          {mediaViewerInput ? (
+            <ImageViewer
+              imageId={mediaViewerInput.imageId}
+              displayIndex={mediaViewerInput.displayIndex}
+              showControls={mediaViewerInput.showControls}
+              parentTabType={mediaViewerInput.parentTabType}
+              displayItems={mediaViewerInput.displayItems}
+              onClose={handleMediaViewerClose}
             />
           ) : undefined}
         </ResizablePanel>
