@@ -1,8 +1,9 @@
-// === TEST FILE: CAP-001 FilterEligibleTexts ===
+// === TEST FILE: CAP-001 FilterEligibleTexts, CAP-002 AreEquivalent ===
 // TDD Phase: RED (tests should fail -- implementation does not exist yet)
-// Capability: CAP-001 (FilterEligibleTexts)
+// Capabilities: CAP-001 (FilterEligibleTexts), CAP-002 (AreEquivalent)
 // Micro-Phase: BE-1 (Foundation: Simple Predicates)
-// Source: EXT-003 (PT9/Paratext/TextCollectionForm.cs:364-380)
+// Sources: EXT-003 (PT9/Paratext/TextCollectionForm.cs:364-380),
+//          EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449)
 
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
@@ -12,19 +13,17 @@ using Paratext.Data;
 namespace TestParanextDataProvider.TextCollection;
 
 /// <summary>
-/// Tests for TextCollectionService.FilterEligibleTexts (CAP-001).
+/// Tests for TextCollectionService (CAP-001: FilterEligibleTexts, CAP-002: AreEquivalent).
 ///
-/// FilterEligibleTexts takes a list of project IDs (GUIDs) and returns a
+/// CAP-001: FilterEligibleTexts takes a list of project IDs (GUIDs) and returns a
 /// TextFilterResult separating accepted texts from rejected texts with reasons.
-///
-/// Rejection criteria (VAL-009):
-///   - IsMarbleResource == true
-///   - IsDictionary == true
-///   - IsXmlResource == true
-///   - Settings.IsStudyBibleAdditions == true
-///   - Settings.TranslationInfo.Type.IsNoteType() == true
-///
+/// Rejection criteria (VAL-009): IsMarbleResource, IsDictionary, IsXmlResource,
+/// IsStudyBibleAdditions, IsNoteType.
 /// Source: EXT-003 (PT9/Paratext/TextCollectionForm.cs:364-380)
+///
+/// CAP-002: AreEquivalent compares two ordered lists of project IDs using
+/// order-sensitive SequenceEqual semantics (INV-009).
+/// Source: EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449)
 /// </summary>
 [TestFixture]
 [ExcludeFromCodeCoverage]
@@ -71,21 +70,12 @@ internal class TextCollectionServiceTests : PapiTestBase
 
         // Assert: Accepted contains only eligible texts
         Assert.That(result.Accepted, Has.Count.GreaterThanOrEqualTo(2));
-        Assert.That(
-            result.Accepted.Select(a => a.ScrTextId),
-            Does.Contain(standardId)
-        );
-        Assert.That(
-            result.Accepted.Select(a => a.ScrTextId),
-            Does.Contain(secondId)
-        );
+        Assert.That(result.Accepted.Select(a => a.ScrTextId), Does.Contain(standardId));
+        Assert.That(result.Accepted.Select(a => a.ScrTextId), Does.Contain(secondId));
 
         // Assert: Rejected contains ineligible texts with reasons
         Assert.That(result.Rejected, Has.Count.GreaterThanOrEqualTo(1));
-        Assert.That(
-            result.Rejected.Select(r => r.ScrTextId),
-            Does.Contain(unresolvableId)
-        );
+        Assert.That(result.Rejected.Select(r => r.ScrTextId), Does.Contain(unresolvableId));
 
         // Assert: Each rejected text has a non-empty reason
         foreach (RejectedText rejected in result.Rejected)
@@ -547,6 +537,466 @@ internal class TextCollectionServiceTests : PapiTestBase
         Assert.That(result.Accepted[0].ScrTextId, Is.EqualTo(validId));
         Assert.That(result.Rejected, Has.Count.EqualTo(1));
         Assert.That(result.Rejected[0].ScrTextId, Is.EqualTo(invalidId));
+    }
+
+    #endregion
+
+    // =========================================================================
+    // CAP-002: AreEquivalent
+    // Source: EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449)
+    // AreEquivalent determines if two ordered lists of project IDs are identical
+    // using order-sensitive SequenceEqual semantics (INV-009).
+    // =========================================================================
+
+    #region CAP-002 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: Verifies all 6 golden master scenarios from gm-002.
+    /// Given pairs of text ID lists, AreEquivalent returns true only when lists
+    /// have the same length and identical elements in the same order.
+    ///
+    /// This is the "done signal" for CAP-002. When this passes, the capability is complete.
+    ///
+    /// Golden master scenarios:
+    ///   same-order:      [A,B,C] vs [A,B,C]     => true
+    ///   different-order: [A,B,C] vs [C,A,B]     => false
+    ///   different-set:   [A,B,C] vs [A,B,D]     => false
+    ///   subset:          [A,B,C] vs [A,B]       => false
+    ///   superset:        [A,B]   vs [A,B,C]     => false
+    ///   empty:           [A,B]   vs []           => false
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("GoldenMasterId", "gm-002")]
+    [Property("ScenarioId", "TS-033,TS-034,TS-035")]
+    [Property("BehaviorId", "EXT-002,BHV-501,INV-009")]
+    public void AreEquivalent_GoldenMasterScenarios_MatchExpectedResults()
+    {
+        // gm-002 scenario: same-order => true
+        Assert.That(
+            TextCollectionService.AreEquivalent(
+                new List<string> { "A", "B", "C" },
+                new List<string> { "A", "B", "C" }
+            ),
+            Is.True,
+            "same-order: identical lists in same order must be equivalent"
+        );
+
+        // gm-002 scenario: different-order => false
+        Assert.That(
+            TextCollectionService.AreEquivalent(
+                new List<string> { "A", "B", "C" },
+                new List<string> { "C", "A", "B" }
+            ),
+            Is.False,
+            "different-order: same texts in different order must NOT be equivalent (INV-009)"
+        );
+
+        // gm-002 scenario: different-set => false
+        Assert.That(
+            TextCollectionService.AreEquivalent(
+                new List<string> { "A", "B", "C" },
+                new List<string> { "A", "B", "D" }
+            ),
+            Is.False,
+            "different-set: different texts must NOT be equivalent"
+        );
+
+        // gm-002 scenario: subset => false
+        Assert.That(
+            TextCollectionService.AreEquivalent(
+                new List<string> { "A", "B", "C" },
+                new List<string> { "A", "B" }
+            ),
+            Is.False,
+            "subset: fewer texts must NOT be equivalent"
+        );
+
+        // gm-002 scenario: superset => false
+        Assert.That(
+            TextCollectionService.AreEquivalent(
+                new List<string> { "A", "B" },
+                new List<string> { "A", "B", "C" }
+            ),
+            Is.False,
+            "superset: more texts must NOT be equivalent"
+        );
+
+        // gm-002 scenario: empty => false
+        Assert.That(
+            TextCollectionService.AreEquivalent(new List<string> { "A", "B" }, new List<string>()),
+            Is.False,
+            "empty: non-empty vs empty must NOT be equivalent"
+        );
+    }
+
+    #endregion
+
+    #region CAP-002 Contract Tests - Happy Path
+
+    /// <summary>
+    /// Two lists with the same elements in the same order are equivalent.
+    /// This is the primary happy-path contract test.
+    /// PT9 source: TextCollectionForm.Equivalent uses SequenceEqual.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "EXT-002,BHV-501")]
+    public void AreEquivalent_SameTextsSameOrder_ReturnsTrue()
+    {
+        // Arrange
+        var current = new List<string> { "id-alpha", "id-beta", "id-gamma" };
+        var proposed = new List<string> { "id-alpha", "id-beta", "id-gamma" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.True, "Same IDs in same order should be equivalent");
+    }
+
+    /// <summary>
+    /// Two lists with different elements in corresponding positions are NOT equivalent.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-035")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_DifferentTexts_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "id-alpha", "id-beta", "id-gamma" };
+        var proposed = new List<string> { "id-alpha", "id-beta", "id-delta" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.False, "Different IDs should not be equivalent");
+    }
+
+    /// <summary>
+    /// Same texts in different order must NOT be equivalent (INV-009).
+    /// This confirms that a new TC is created when the user reorders texts,
+    /// rather than reusing an existing one (BHV-T010).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-034")]
+    [Property("BehaviorId", "EXT-002,BHV-T010,INV-009")]
+    public void AreEquivalent_SameTextsDifferentOrder_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "id-alpha", "id-beta", "id-gamma" };
+        var proposed = new List<string> { "id-gamma", "id-alpha", "id-beta" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(
+            result,
+            Is.False,
+            "INV-009: Order-sensitive -- same texts in different order is NOT equivalent"
+        );
+    }
+
+    #endregion
+
+    #region CAP-002 Contract Tests - Length Mismatch
+
+    /// <summary>
+    /// A subset (fewer proposed) must NOT be equivalent.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-035")]
+    [Property("BehaviorId", "EXT-002,INV-009")]
+    public void AreEquivalent_ProposedIsSubset_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "id-a", "id-b", "id-c" };
+        var proposed = new List<string> { "id-a", "id-b" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.False, "Subset (fewer texts) should not be equivalent");
+    }
+
+    /// <summary>
+    /// A superset (more proposed) must NOT be equivalent.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-035")]
+    [Property("BehaviorId", "EXT-002,INV-009")]
+    public void AreEquivalent_ProposedIsSuperset_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "id-a", "id-b" };
+        var proposed = new List<string> { "id-a", "id-b", "id-c" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.False, "Superset (more texts) should not be equivalent");
+    }
+
+    /// <summary>
+    /// Non-empty current vs empty proposed must NOT be equivalent.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-035")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_ProposedEmpty_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "id-a", "id-b" };
+        var proposed = new List<string>();
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.False, "Non-empty vs empty should not be equivalent");
+    }
+
+    #endregion
+
+    #region CAP-002 Invariant Tests (INV-009)
+
+    /// <summary>
+    /// INV-009 reflexive property: AreEquivalent(a, a) must always be true.
+    /// A list compared to itself must be equivalent.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "INV-009")]
+    [Property("InvariantId", "INV-009")]
+    public void AreEquivalent_Reflexive_SameListReturnsTrue()
+    {
+        // Arrange
+        var list = new List<string> { "id-x", "id-y", "id-z" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(list, list);
+
+        // Assert
+        Assert.That(result, Is.True, "INV-009: Reflexive -- a list is equivalent to itself");
+    }
+
+    /// <summary>
+    /// INV-009 non-commutativity: For distinct elements,
+    /// AreEquivalent([x,y], [y,x]) must be false.
+    /// This proves order-sensitivity is strictly enforced.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-034")]
+    [Property("BehaviorId", "INV-009")]
+    [Property("InvariantId", "INV-009")]
+    public void AreEquivalent_NonCommutative_SwappedReturnsFalse()
+    {
+        // Arrange
+        var listAB = new List<string> { "id-x", "id-y" };
+        var listBA = new List<string> { "id-y", "id-x" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(listAB, listBA);
+
+        // Assert
+        Assert.That(
+            result,
+            Is.False,
+            "INV-009: Non-commutative -- [x,y] is not equivalent to [y,x]"
+        );
+    }
+
+    /// <summary>
+    /// INV-009 formal definition: AreEquivalent(a, b) is true if and only if
+    /// a.length == b.length AND for all i: a[i] == b[i].
+    /// Test with matching lengths but one differing element.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-035")]
+    [Property("BehaviorId", "INV-009")]
+    [Property("InvariantId", "INV-009")]
+    public void AreEquivalent_OneDifferingElement_ReturnsFalse()
+    {
+        // Arrange: Same length, differ at position 1
+        var listA = new List<string> { "same", "differs-here", "same" };
+        var listB = new List<string> { "same", "other-value", "same" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(listA, listB);
+
+        // Assert
+        Assert.That(
+            result,
+            Is.False,
+            "INV-009: Same length but one differing element => not equivalent"
+        );
+    }
+
+    #endregion
+
+    #region CAP-002 Edge Case Tests
+
+    /// <summary>
+    /// Both lists empty should be equivalent (vacuously true SequenceEqual).
+    /// Two empty text collections have the same texts in the same order.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_BothEmpty_ReturnsTrue()
+    {
+        // Arrange
+        var current = new List<string>();
+        var proposed = new List<string>();
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.True, "Two empty lists should be equivalent");
+    }
+
+    /// <summary>
+    /// Single-element lists with the same value should be equivalent.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_SingleElementSame_ReturnsTrue()
+    {
+        // Arrange
+        var current = new List<string> { "only-one" };
+        var proposed = new List<string> { "only-one" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.True, "Single identical element should be equivalent");
+    }
+
+    /// <summary>
+    /// Single-element lists with different values should NOT be equivalent.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-035")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_SingleElementDifferent_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "text-a" };
+        var proposed = new List<string> { "text-b" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(result, Is.False, "Different single elements should not be equivalent");
+    }
+
+    /// <summary>
+    /// Null first argument should throw or return false per error condition
+    /// INVALID_STATE from data-contracts.md M-002.
+    /// "Text lists must not be null".
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_NullCurrentList_ThrowsOrReturnsFalse()
+    {
+        // Arrange
+        IList<string>? current = null;
+        var proposed = new List<string> { "id-a" };
+
+        // Act & Assert: Per data-contracts.md M-002 error condition,
+        // null list should throw ArgumentNullException or equivalent.
+        // The implementation must not silently succeed.
+        Assert.That(
+            () => TextCollectionService.AreEquivalent(current!, proposed),
+            Throws.Exception,
+            "Null current list should throw per M-002 error condition (INVALID_STATE)"
+        );
+    }
+
+    /// <summary>
+    /// Null second argument should throw or return false per error condition
+    /// INVALID_STATE from data-contracts.md M-002.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_NullProposedList_ThrowsOrReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "id-a" };
+        IList<string>? proposed = null;
+
+        // Act & Assert
+        Assert.That(
+            () => TextCollectionService.AreEquivalent(current, proposed!),
+            Throws.Exception,
+            "Null proposed list should throw per M-002 error condition (INVALID_STATE)"
+        );
+    }
+
+    /// <summary>
+    /// Comparison must be case-sensitive (GUIDs are hex strings, case matters).
+    /// "abc" and "ABC" should NOT match even though they might represent the
+    /// same hex value, because GUID string comparison is exact.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-002")]
+    [Property("ScenarioId", "TS-033")]
+    [Property("BehaviorId", "EXT-002")]
+    public void AreEquivalent_CaseDifference_ReturnsFalse()
+    {
+        // Arrange
+        var current = new List<string> { "abcdef1234567890abcdef1234567890abcdef12" };
+        var proposed = new List<string> { "ABCDEF1234567890ABCDEF1234567890ABCDEF12" };
+
+        // Act
+        bool result = TextCollectionService.AreEquivalent(current, proposed);
+
+        // Assert
+        Assert.That(
+            result,
+            Is.False,
+            "String comparison should be case-sensitive (GUID hex strings)"
+        );
     }
 
     #endregion
