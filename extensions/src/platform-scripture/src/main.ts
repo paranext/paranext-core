@@ -12,6 +12,11 @@ import {
   selectTextsWebViewType,
 } from './select-texts.web-view-provider';
 import {
+  OpenTextsWebViewOptions,
+  OpenTextsWebViewProvider,
+  openTextsWebViewType,
+} from './open-texts.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -217,6 +222,15 @@ async function openSelectTexts(): Promise<string | undefined> {
   );
 }
 
+async function openOpenTextsDialog(): Promise<string | undefined> {
+  const options: OpenTextsWebViewOptions = { showOpenModeSelector: true };
+  return papi.webViews.openWebView(
+    openTextsWebViewType,
+    { type: 'float', floatSize: { width: 900, height: 700 } },
+    options,
+  );
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is activating!');
 
@@ -253,6 +267,7 @@ export async function activate(context: ExecutionActivationContext) {
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
   const selectTextsWebViewProvider = new SelectTextsWebViewProvider();
+  const openTextsWebViewProvider = new OpenTextsWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -478,6 +493,26 @@ export async function activate(context: ExecutionActivationContext) {
     selectTextsWebViewProvider,
   );
 
+  const openOpenTextsDialogPromise = papi.commands.registerCommand(
+    'platformScripture.openOpenTextsDialog',
+    openOpenTextsDialog,
+    {
+      method: {
+        summary: 'Open the Open Texts dialog (general-purpose project selection)',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const openTextsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    openTextsWebViewType,
+    openTextsWebViewProvider,
+  );
+
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
@@ -509,6 +544,8 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidateResultsPromise,
     await openSelectTextsPromise,
     await selectTextsWebViewProviderPromise,
+    await openOpenTextsDialogPromise,
+    await openTextsWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
