@@ -22,6 +22,8 @@ import type {
   EncyclopediaEntry,
 } from '../components/encyclopedia-tab.component';
 import type { MediaDisplayItem, BibleImage } from '../components/media-tab.component';
+import ArticleViewer from '../components/article-viewer.component';
+import type { OverlayStackEntry } from '../components/article-viewer.component';
 
 // --- Types ---
 
@@ -129,6 +131,12 @@ const DEFAULT_MEDIA_ITEMS: MediaDisplayItem[] = [];
  * platformEnhancedResources.loadMapsTab / CAP-012)
  */
 const DEFAULT_MAPS_ITEMS: MediaDisplayItem[] = [];
+
+/** Default empty article viewer overlay stack */
+const DEFAULT_ARTICLE_OVERLAY_STACK: OverlayStackEntry[] = [];
+
+/** Maximum depth for nested article overlays */
+const MAX_OVERLAY_DEPTH = 10;
 
 // --- Component ---
 
@@ -238,6 +246,12 @@ global.webViewComponent = function EnhancedResourceWebView({
   const [mapsExpandedGroups, setMapsExpandedGroups] = useWebViewState<string[]>(
     'mapsExpandedGroups',
     [],
+  );
+
+  // --- Article viewer overlay stack state ---
+  const [articleOverlayStack, setArticleOverlayStack] = useWebViewState<OverlayStackEntry[]>(
+    'articleOverlayStack',
+    DEFAULT_ARTICLE_OVERLAY_STACK,
   );
 
   // Keep a ref to the current banners for use in callbacks
@@ -421,10 +435,125 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setExpandedEncyclopediaEntries],
   );
 
+  // Compute encyclopedia items with expanded state applied
+  // (moved above article overlay handlers that reference it)
+  const encyclopediaItemsWithExpanded = useMemo(
+    () =>
+      encyclopediaItems.map((item) => ({
+        ...item,
+        expanded: expandedEncyclopediaEntries.includes(item.id),
+      })),
+    [encyclopediaItems, expandedEncyclopediaEntries],
+  );
+
+  // Keep a ref to the current article overlay stack for use in callbacks
+  const articleOverlayStackRef = useRef(articleOverlayStack);
+  useEffect(() => {
+    articleOverlayStackRef.current = articleOverlayStack;
+  }, [articleOverlayStack]);
+
+  // Open article viewer when "Read full article" is clicked in encyclopedia tab
+  const handleEncyclopediaReadArticle = useCallback(
+    (entry: EncyclopediaEntry) => {
+      const currentStack = articleOverlayStackRef.current;
+      if (currentStack.length >= MAX_OVERLAY_DEPTH) return;
+
+      // Find the display index of the entry in the encyclopedia items list
+      const displayIndex = encyclopediaItemsWithExpanded.findIndex(
+        (item) => item.entry.id === entry.id,
+      );
+
+      const newEntry: OverlayStackEntry = {
+        entry,
+        displayIndex: displayIndex >= 0 ? displayIndex : 0,
+        totalItems: encyclopediaItemsWithExpanded.length,
+      };
+
+      setArticleOverlayStack([...currentStack, newEntry]);
+    },
+    [encyclopediaItemsWithExpanded, setArticleOverlayStack],
+  );
+
+  // Close the topmost article overlay (pop from stack)
+  const handleArticleOverlayClose = useCallback(() => {
+    const currentStack = articleOverlayStackRef.current;
+    if (currentStack.length === 0) return;
+    setArticleOverlayStack(currentStack.slice(0, -1));
+  }, [setArticleOverlayStack]);
+
+  // Navigate to a scripture verse reference from article content
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleEncyclopediaReadArticle = useCallback((_entry: EncyclopediaEntry) => {
-    // Article viewer overlay will be wired in UI-PKG-010
+  const handleArticleNavigateVerse = useCallback((_verseRef: string) => {
+    // Verse navigation will be fully wired during backend integration.
+    // This callback receives the verse reference string from article links.
   }, []);
+
+  // Open a linked article (see-also cross-reference) - push onto overlay stack
+  const handleArticleOpenArticle = useCallback(
+    (entry: EncyclopediaEntry) => {
+      const currentStack = articleOverlayStackRef.current;
+      if (currentStack.length >= MAX_OVERLAY_DEPTH) return;
+
+      const newEntry: OverlayStackEntry = {
+        entry,
+        displayIndex: 0,
+        totalItems: 1,
+      };
+
+      setArticleOverlayStack([...currentStack, newEntry]);
+    },
+    [setArticleOverlayStack],
+  );
+
+  // Open an image from article content (for MediaViewer overlay)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleArticleOpenImage = useCallback((_imageId: string) => {
+    // MediaViewer overlay will be wired in UI-PKG-011
+  }, []);
+
+  // Navigate to the previous article in the display list
+  const handleArticleNavigatePrev = useCallback(() => {
+    const currentStack = articleOverlayStackRef.current;
+    if (currentStack.length === 0) return;
+
+    const topEntry = currentStack[currentStack.length - 1];
+    if (topEntry.displayIndex <= 0) return;
+
+    const prevIndex = topEntry.displayIndex - 1;
+    const prevItem = encyclopediaItemsWithExpanded[prevIndex];
+    if (!prevItem) return;
+
+    const updatedStack = [...currentStack.slice(0, -1)];
+    updatedStack.push({
+      entry: prevItem.entry,
+      displayIndex: prevIndex,
+      totalItems: topEntry.totalItems,
+    });
+
+    setArticleOverlayStack(updatedStack);
+  }, [encyclopediaItemsWithExpanded, setArticleOverlayStack]);
+
+  // Navigate to the next article in the display list
+  const handleArticleNavigateNext = useCallback(() => {
+    const currentStack = articleOverlayStackRef.current;
+    if (currentStack.length === 0) return;
+
+    const topEntry = currentStack[currentStack.length - 1];
+    if (topEntry.displayIndex >= topEntry.totalItems - 1) return;
+
+    const nextIndex = topEntry.displayIndex + 1;
+    const nextItem = encyclopediaItemsWithExpanded[nextIndex];
+    if (!nextItem) return;
+
+    const updatedStack = [...currentStack.slice(0, -1)];
+    updatedStack.push({
+      entry: nextItem.entry,
+      displayIndex: nextIndex,
+      totalItems: topEntry.totalItems,
+    });
+
+    setArticleOverlayStack(updatedStack);
+  }, [encyclopediaItemsWithExpanded, setArticleOverlayStack]);
 
   // --- Media tab handlers ---
 
@@ -475,16 +604,6 @@ global.webViewComponent = function EnhancedResourceWebView({
   const handleMapItemClick = useCallback((_image: BibleImage) => {
     // MediaViewer overlay will be wired in UI-PKG-011
   }, []);
-
-  // Compute encyclopedia items with expanded state applied
-  const encyclopediaItemsWithExpanded = useMemo(
-    () =>
-      encyclopediaItems.map((item) => ({
-        ...item,
-        expanded: expandedEncyclopediaEntries.includes(item.id),
-      })),
-    [encyclopediaItems, expandedEncyclopediaEntries],
-  );
 
   // Compute dictionary items with expanded state applied
   const dictionaryItemsWithExpanded = useMemo(
@@ -569,11 +688,11 @@ global.webViewComponent = function EnhancedResourceWebView({
 
         <ResizableHandle withHandle />
 
-        {/* Research Pane */}
+        {/* Research Pane (with overlay container for ArticleViewer) */}
         <ResizablePanel
           defaultSize={100 - splitterPercentage}
           minSize={15}
-          className="tw-flex tw-flex-col tw-min-h-0"
+          className="tw-flex tw-flex-col tw-min-h-0 tw-relative"
         >
           <ResearchPane
             activeTab={activeTab}
@@ -604,6 +723,19 @@ global.webViewComponent = function EnhancedResourceWebView({
             onMapsToggleGroup={handleMapsToggleGroup}
             onMapItemClick={handleMapItemClick}
           />
+
+          {/* Article Viewer overlay - renders above research pane content */}
+          {articleOverlayStack.length > 0 ? (
+            <ArticleViewer
+              overlayStack={articleOverlayStack}
+              onClose={handleArticleOverlayClose}
+              onNavigateVerse={handleArticleNavigateVerse}
+              onOpenArticle={handleArticleOpenArticle}
+              onOpenImage={handleArticleOpenImage}
+              onNavigatePrev={handleArticleNavigatePrev}
+              onNavigateNext={handleArticleNavigateNext}
+            />
+          ) : undefined}
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

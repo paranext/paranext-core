@@ -96,7 +96,11 @@
       "%enhancedResources_maps_wordLinkedGroup%": "Word-Linked",
       "%enhancedResources_maps_verseRangeGroup%": "Verse Range",
       "%enhancedResources_maps_expandGroup%": "Expand",
-      "%enhancedResources_maps_collapseGroup%": "Collapse"
+      "%enhancedResources_maps_collapseGroup%": "Collapse",
+      "%enhancedResources_articleViewer_close%": "Close article",
+      "%enhancedResources_articleViewer_prevArticle%": "Previous article",
+      "%enhancedResources_articleViewer_nextArticle%": "Next article",
+      "%enhancedResources_articleViewer_depthLimitReached%": "Maximum article nesting depth reached. Close an article to open another."
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -193,7 +197,11 @@
       "%enhancedResources_maps_wordLinkedGroup%": "Vinculado a palabra",
       "%enhancedResources_maps_verseRangeGroup%": "Rango de versiculos",
       "%enhancedResources_maps_expandGroup%": "Expandir",
-      "%enhancedResources_maps_collapseGroup%": "Contraer"
+      "%enhancedResources_maps_collapseGroup%": "Contraer",
+      "%enhancedResources_articleViewer_close%": "Cerrar articulo",
+      "%enhancedResources_articleViewer_prevArticle%": "Articulo anterior",
+      "%enhancedResources_articleViewer_nextArticle%": "Articulo siguiente",
+      "%enhancedResources_articleViewer_depthLimitReached%": "Se alcanzo la profundidad maxima de anidamiento de articulos. Cierre un articulo para abrir otro."
     }
   }
 }
