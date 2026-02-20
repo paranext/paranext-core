@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button } from 'platform-bible-react';
@@ -134,62 +134,7 @@ const TC_STRING_KEYS: LocalizeKey[] = [
 
 // #endregion
 
-// #region Sample Data
-
-const SAMPLE_TEXTS: TextCollectionItem[] = [
-  {
-    name: 'zzz3',
-    id: 'proj-001',
-    fullName: 'Test Project 3',
-    language: 'English',
-    languageId: 'en',
-    fontName: 'Charis SIL',
-    baseFontSize: 12,
-    isRTL: false,
-    zoom: 1.0,
-    verseText: 'In the beginning God created the heavens and the earth.',
-  },
-  {
-    name: 'NIV84',
-    id: 'res-001',
-    fullName: 'NIV 1984',
-    language: 'English',
-    languageId: 'en',
-    fontName: 'Charis SIL',
-    baseFontSize: 12,
-    isRTL: false,
-    zoom: 1.0,
-    verseText: 'In the beginning God created the heavens and the earth.',
-  },
-  {
-    name: 'CEVUK',
-    id: 'res-002',
-    fullName: 'Contemporary English Version',
-    language: 'English',
-    languageId: 'en',
-    fontName: 'Charis SIL',
-    baseFontSize: 12,
-    isRTL: false,
-    zoom: 1.0,
-    verseText:
-      'In the beginning God created the heavens and the earth. / The earth was barren, with no form of life.',
-  },
-  {
-    name: 'HEBOT',
-    id: 'res-003',
-    fullName: 'Hebrew Old Testament',
-    language: 'Hebrew',
-    languageId: 'he',
-    fontName: 'Ezra SIL',
-    baseFontSize: 14,
-    isRTL: true,
-    zoom: 1.0,
-    verseText:
-      '\u05D1\u05B0\u05BC\u05E8\u05B5\u05D0\u05E9\u05C1\u05B4\u05D9\u05EA \u05D1\u05B8\u05BC\u05E8\u05B8\u05D0 \u05D0\u05B1\u05DC\u05B9\u05D4\u05B4\u05D9\u05DD \u05D0\u05B5\u05EA \u05D4\u05B7\u05E9\u05C1\u05B8\u05BC\u05DE\u05B7\u05D9\u05B4\u05DD \u05D5\u05B0\u05D0\u05B5\u05EA \u05D4\u05B8\u05D0\u05B8\u05E8\u05B6\u05E5\u05F7',
-  },
-];
-
-// #endregion
+// No sample data - items are loaded from PAPI at runtime
 
 // #region Helpers
 
@@ -433,10 +378,10 @@ function tcReducer(state: TCState, action: TCAction): TCState {
 }
 
 const initialState: TCState = {
-  items: SAMPLE_TEXTS,
+  items: [],
   curItem: 0,
   multiShown: true,
-  singleShown: true,
+  singleShown: false,
   splitterProportion: 0.6,
   viewName: 'Preview',
   multiPaneZoom: 1.0,
@@ -445,7 +390,7 @@ const initialState: TCState = {
   highlightBiblicalTerms: false,
   highlightGuessedRenderings: false,
   focusedPane: 'multi',
-  setupComplete: true,
+  setupComplete: false,
   missingProjects: [],
 };
 
@@ -585,15 +530,70 @@ globalThis.webViewComponent = function TextCollectionWebView({
 
   const [state, dispatch] = useReducer(tcReducer, initialState);
 
-  // Restore state from saved memento on first mount (GAP-009)
+  // Load items from PAPI on first mount
   const hasRestored = useRef(false);
   useEffect(() => {
-    if (savedMemento && !hasRestored.current) {
-      hasRestored.current = true;
-      const restoredState = restoreFromMemento(savedMemento, SAMPLE_TEXTS);
-      dispatch({ type: 'RESTORE_STATE', state: restoredState });
-      logger.debug('Text collection: restored state from memento');
-    }
+    if (hasRestored.current) return;
+
+    const loadItems = async () => {
+      try {
+        // Get all projects from the platform
+        const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+          includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        });
+
+        // Fetch enriched project info for each project
+        const enrichedItems: TextCollectionItem[] = await Promise.all(
+          projectMetadata.map(async (data) => {
+            const pdp = await papi.projectDataProviders.get('platform.base', data.id);
+            const name = (await pdp.getSetting('platform.name')) ?? data.id;
+            const fullName = (await pdp.getSetting('platform.fullName')) ?? name;
+            const language = (await pdp.getSetting('platform.language')) ?? '';
+
+            return {
+              name,
+              id: data.id,
+              fullName,
+              language,
+              languageId: language.toLowerCase().substring(0, 2),
+              fontName: 'Charis SIL',
+              baseFontSize: 12,
+              isRTL: false,
+              zoom: 1.0,
+              verseText: '',
+            };
+          }),
+        );
+
+        hasRestored.current = true;
+
+        // If we have a saved memento, restore from it using real project data
+        if (savedMemento) {
+          const restoredState = restoreFromMemento(savedMemento, enrichedItems);
+          dispatch({ type: 'RESTORE_STATE', state: restoredState });
+          logger.debug('Text collection: restored state from memento with PAPI data');
+        } else if (enrichedItems.length >= 2) {
+          // No memento - initialize with first few available projects
+          dispatch({
+            type: 'RESTORE_STATE',
+            state: { items: enrichedItems.slice(0, 4) },
+          });
+          logger.debug(
+            `Text collection: initialized with ${Math.min(4, enrichedItems.length)} projects from PAPI`,
+          );
+        } else {
+          // Not enough projects available
+          dispatch({ type: 'RESTORE_STATE', state: { items: enrichedItems } });
+          logger.debug('Text collection: fewer than 2 projects available');
+        }
+      } catch (error) {
+        logger.warn(`Text collection: failed to load projects from PAPI: ${error}`);
+        hasRestored.current = true;
+        dispatch({ type: 'RESTORE_STATE', state: { items: [] } });
+      }
+    };
+
+    loadItems();
   }, [savedMemento]);
 
   // Debounced memento save on state changes (GAP-009)
@@ -951,15 +951,32 @@ globalThis.webViewComponent = function TextCollectionWebView({
 
       {/* Content area */}
       <div className="text-collection-content">
-        <SplitterPanel
-          leftContent={multiPaneContent}
-          rightContent={singlePaneContent}
-          initialProportion={state.splitterProportion}
-          onProportionChange={handleSplitterChange}
-          leftVisible={state.multiShown}
-          rightVisible={state.singleShown}
-          ariaLabel={localizedStrings['%textCollection_splitterLabel%'] || 'Resize panes'}
-        />
+        {!state.setupComplete ? (
+          <div
+            className="tw-flex tw-items-center tw-justify-center tw-h-full tw-text-muted-foreground"
+            data-testid="tc-loading"
+          >
+            Loading texts from PAPI...
+          </div>
+        ) : state.items.length === 0 ? (
+          <div
+            className="tw-flex tw-items-center tw-justify-center tw-h-full tw-text-muted-foreground"
+            data-testid="tc-no-texts"
+          >
+            {localizedStrings['%textCollection_noTextsMessage%'] ||
+              'No texts available. Use the Select Texts dialog to add texts to this collection.'}
+          </div>
+        ) : (
+          <SplitterPanel
+            leftContent={multiPaneContent}
+            rightContent={singlePaneContent}
+            initialProportion={state.splitterProportion}
+            onProportionChange={handleSplitterChange}
+            leftVisible={state.multiShown}
+            rightVisible={state.singleShown}
+            ariaLabel={localizedStrings['%textCollection_splitterLabel%'] || 'Resize panes'}
+          />
+        )}
       </div>
 
       {/* Context menu */}

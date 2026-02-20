@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { Button } from 'platform-bible-react';
@@ -61,71 +61,7 @@ const SELECT_TEXTS_STRING_KEYS: LocalizeKey[] = [
 
 // #endregion
 
-// #region Sample Data (will be replaced by PAPI calls when backend is available)
-// NOTE: These represent the data shape. In production, data comes from PAPI commands.
-// The web view provider will populate initial state from PAPI.
-
-const SAMPLE_AVAILABLE_TEXTS: ScrTextInfo[] = [
-  {
-    name: 'zzz3',
-    id: 'proj-001',
-    fullName: 'Test Project 3',
-    language: 'English',
-    projectType: 'Project',
-    isSecondaryText: false,
-  },
-  {
-    name: 'NIV84',
-    id: 'res-001',
-    fullName: 'NIV 1984',
-    language: 'English',
-    projectType: 'Resource',
-    isSecondaryText: false,
-  },
-  {
-    name: 'CEVUK',
-    id: 'res-002',
-    fullName: 'CEV UK Edition',
-    language: 'English',
-    projectType: 'Resource',
-    isSecondaryText: false,
-  },
-  {
-    name: 'FRA',
-    id: 'proj-002',
-    fullName: 'Francais Standard',
-    language: 'French',
-    projectType: 'Project',
-    isSecondaryText: false,
-  },
-  {
-    name: 'GNTD',
-    id: 'res-003',
-    fullName: 'Good News Today',
-    language: 'English',
-    projectType: 'Resource',
-    isSecondaryText: false,
-  },
-  {
-    name: 'HBOGNT',
-    id: 'res-004',
-    fullName: 'Hebrew/Greek Original',
-    language: 'Hebrew',
-    projectType: 'Resource',
-    isSecondaryText: true,
-  },
-];
-
-const SAMPLE_SAVED_COLLECTIONS: SavedScrTextList[] = [
-  {
-    name: 'English Resources',
-    scrTextNames: ['NIV84', 'CEVUK', 'GNTD'],
-    scrProjectIndex: -1,
-    hebGrkIndex: -1,
-  },
-];
-
-// #endregion
+// No sample data - items are loaded from PAPI at runtime
 
 globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: WebViewProps) {
   // Localized strings
@@ -150,16 +86,89 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
   const okLabel = localizedStrings['%common_ok%'] || 'OK';
   const cancelLabel = localizedStrings['%common_cancel%'] || 'Cancel';
 
-  // State
-  const [leftItems, setLeftItems] = useState<ScrTextInfo[]>(() =>
-    SAMPLE_AVAILABLE_TEXTS.filter((t) => !t.isSecondaryText),
-  );
+  // State - initialized empty, loaded from PAPI
+  const [leftItems, setLeftItems] = useState<ScrTextInfo[]>([]);
   const [rightItems, setRightItems] = useState<ScrTextInfo[]>([]);
   const [leftSelection, setLeftSelection] = useState<Set<string>>(new Set());
   const [rightSelection, setRightSelection] = useState<string | undefined>(undefined);
   const [requiredIds] = useState<Set<string>>(new Set());
-  const [savedCollections, setSavedCollections] =
-    useState<SavedScrTextList[]>(SAMPLE_SAVED_COLLECTIONS);
+  const [savedCollections, setSavedCollections] = useState<SavedScrTextList[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load available texts and saved collections from PAPI on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Get all scripture projects from the platform
+        const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+          includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        });
+
+        // Enrich project metadata with display info
+        const enrichedTexts: ScrTextInfo[] = await Promise.all(
+          projectMetadata.map(async (data) => {
+            const pdp = await papi.projectDataProviders.get('platform.base', data.id);
+            const name = (await pdp.getSetting('platform.name')) ?? data.id;
+            const fullName = (await pdp.getSetting('platform.fullName')) ?? name;
+            const language = (await pdp.getSetting('platform.language')) ?? '';
+            const isEditable = (await pdp.getSetting('platform.isEditable')) ?? false;
+
+            return {
+              name,
+              id: data.id,
+              fullName,
+              language,
+              projectType: isEditable ? 'Project' : 'Resource',
+              isSecondaryText: false,
+            };
+          }),
+        );
+
+        // Filter out secondary texts for the left list
+        setLeftItems(enrichedTexts.filter((t) => !t.isSecondaryText));
+
+        // Load saved collections via PAPI command
+        try {
+          type TcProvider = {
+            getSavedLists(): Promise<
+              { name: string; textNames: string[]; hebGrkIndex: number; scrProjectIndex: number }[]
+            >;
+          };
+          const tcProvider = (await papi.dataProviders.get(
+            'platformScripture.textCollection' as never,
+          )) as unknown as TcProvider;
+          const lists = await tcProvider.getSavedLists();
+          if (Array.isArray(lists)) {
+            setSavedCollections(
+              lists.map(
+                (list: {
+                  name: string;
+                  textNames: string[];
+                  hebGrkIndex?: number;
+                  scrProjectIndex?: number;
+                }) => ({
+                  name: list.name,
+                  scrTextNames: list.textNames,
+                  scrProjectIndex: list.scrProjectIndex ?? -1,
+                  hebGrkIndex: list.hebGrkIndex ?? -1,
+                }),
+              ),
+            );
+          }
+        } catch (listError) {
+          logger.debug(`SelectTexts: saved collections not available: ${listError}`);
+        }
+
+        logger.debug(`SelectTexts: loaded ${enrichedTexts.length} texts from PAPI`);
+      } catch (error) {
+        logger.warn(`SelectTexts: failed to load texts from PAPI: ${error}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   // Sorting state for left list
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -316,17 +325,30 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
 
   const handleSaveCollection = useCallback(
     (name: string) => {
+      const textNames = rightItems.map((item) => item.name);
       const newCollection: SavedScrTextList = {
         name,
-        scrTextNames: rightItems.map((item) => item.name),
+        scrTextNames: textNames,
         scrProjectIndex: -1,
         hebGrkIndex: -1,
       };
+
+      // Update local state
       setSavedCollections((prev) => {
         const filtered = prev.filter((c) => c.name.toLowerCase() !== name.toLowerCase());
         return [...filtered, newCollection];
       });
-      logger.debug(`Saved collection: ${name}`);
+
+      // Persist via PAPI command (M-016: SaveList)
+      papi.commands
+        .sendCommand('platformScripture.textCollection.saveTextList', name, textNames, -1, -1)
+        .then(() => {
+          logger.debug(`SelectTexts: saved collection '${name}' via PAPI`);
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.warn(`SelectTexts: failed to save collection via PAPI: ${error}`);
+        });
     },
     [rightItems],
   );
@@ -335,23 +357,38 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
     setSavedCollections((prev) =>
       prev.filter((c) => c.name.toLowerCase() !== collection.name.toLowerCase()),
     );
-    logger.debug(`Deleted collection: ${collection.name}`);
+
+    // Delete via PAPI command (M-016: DeleteList)
+    papi.commands
+      .sendCommand('platformScripture.textCollection.deleteTextList', collection.name)
+      .then(() => {
+        logger.debug(`SelectTexts: deleted collection '${collection.name}' via PAPI`);
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        logger.warn(`SelectTexts: failed to delete collection via PAPI: ${error}`);
+      });
   }, []);
 
-  // OK / Cancel handlers
+  // OK / Cancel handlers - wire results to web view state for caller retrieval
+  const [, setDialogResult] = useWebViewState<
+    | {
+        action: 'ok' | 'cancel';
+        selections?: ScrTextInfo[];
+      }
+    | undefined
+  >('dialogResult', undefined);
+
   const handleOk = useCallback(() => {
-    const output = {
-      action: 'ok' as const,
-      selections: rightItems.filter((item) => !requiredIds.has(item.id)),
-    };
-    logger.debug(`SelectTexts OK: ${JSON.stringify(output)}`);
-    // In production, this would use the dialog return mechanism
-  }, [rightItems, requiredIds]);
+    const selections = rightItems.filter((item) => !requiredIds.has(item.id));
+    setDialogResult({ action: 'ok', selections });
+    logger.debug(`SelectTexts OK: returning ${selections.length} selections via web view state`);
+  }, [rightItems, requiredIds, setDialogResult]);
 
   const handleCancel = useCallback(() => {
+    setDialogResult({ action: 'cancel' });
     logger.debug('SelectTexts Cancel');
-    // In production, this would use the dialog return mechanism
-  }, []);
+  }, [setDialogResult]);
 
   // Keyboard handler
   const handleKeyDown = useCallback(
@@ -409,6 +446,16 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
       data-testid="select-texts-dialog"
       onKeyDown={handleKeyDown}
     >
+      {/* Loading indicator */}
+      {isLoading && (
+        <div
+          className="tw-flex tw-items-center tw-justify-center tw-p-4 tw-text-muted-foreground"
+          data-testid="select-texts-loading"
+        >
+          Loading available texts from PAPI...
+        </div>
+      )}
+
       {/* Main content area: Left list + transfer buttons + Right list + reorder buttons */}
       <div className="select-texts-content">
         {/* Left panel: All available texts */}
