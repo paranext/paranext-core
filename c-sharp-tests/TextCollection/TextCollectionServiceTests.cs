@@ -1377,4 +1377,703 @@ internal class TextCollectionServiceTests : PapiTestBase
     }
 
     #endregion
+
+    // =========================================================================
+    // CAP-004: GenerateTitle
+    // Source: EXT-005 (PT9/Paratext/TextCollectionForm.cs:291-330)
+    // GenerateTitle produces a window title string based on item count using
+    // four distinct patterns. It also generates a tooltip string that includes
+    // the "Text Collection" label and per-item project names.
+    //
+    // Title patterns (from data-contracts.md M-004 and gm-003):
+    //   0 items: "(Text Collection ({ref}))"
+    //   1 item:  "{name}: (Text Collection ({ref}))"
+    //   2 items: "{name1}, {name2}: (Text Collection ({ref}))"
+    //   3+ items:"{first}, ...{last}: (Text Collection ({ref}))"
+    //
+    // PT9 source: TextCollectionForm.UpdateWindowTitle at lines 291-330
+    // =========================================================================
+
+    #region CAP-004 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: Verifies all 4 title patterns from gm-003.
+    /// Given items lists of various sizes (0, 1, 2, 3+), GenerateTitle returns
+    /// the correct title pattern for each case.
+    ///
+    /// This is the "done signal" for CAP-004. When this passes, the capability is complete.
+    ///
+    /// Golden master scenarios from gm-003:
+    ///   zero-items:        0 items => "(Text Collection (MAT 1:1))"
+    ///   one-item:          1 item  => "NIV84: (Text Collection (MAT 1:1))"
+    ///   two-items:         2 items => "zzz3, NIV84: (Text Collection (MAT 1:1))"
+    ///   three-plus-items:  4 items => "zzz3, ...CEVUK: (Text Collection (MAT 2:1))"
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("GoldenMasterId", "gm-003")]
+    [Property("ScenarioId", "TS-036,TS-037,TS-038,TS-039")]
+    [Property("BehaviorId", "EXT-005,BHV-T001")]
+    public void GenerateTitle_GoldenMasterScenarios_MatchExpectedTitlePatterns()
+    {
+        // Scenario: zero-items (TS-036)
+        {
+            var emptyItems = new List<TextCollectionItem>();
+            TitleResult result = TextCollectionService.GenerateTitle(emptyItems, 0, "MAT 1:1");
+
+            Assert.That(
+                result.Title,
+                Does.Contain("Text Collection"),
+                "zero-items: title must contain 'Text Collection'"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("MAT 1:1"),
+                "zero-items: title must contain the reference"
+            );
+            // Zero items: no project name prefix (no colon separator)
+            // The title should not have the "name:" prefix pattern
+            Assert.That(
+                result.Title,
+                Does.Not.Match(@"^\w+.*:"),
+                "zero-items: no project name prefix before '(Text Collection)'"
+            );
+        }
+
+        // Scenario: one-item (TS-037)
+        {
+            var oneItem = new List<TextCollectionItem>
+            {
+                new("NIV84", "id-niv84", 1.0),
+            };
+            TitleResult result = TextCollectionService.GenerateTitle(oneItem, 0, "MAT 1:1");
+
+            Assert.That(
+                result.Title,
+                Does.StartWith("NIV84"),
+                "one-item: title must start with the single project name"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("Text Collection"),
+                "one-item: title must contain 'Text Collection'"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("MAT 1:1"),
+                "one-item: title must contain the reference"
+            );
+        }
+
+        // Scenario: two-items (TS-038)
+        {
+            var twoItems = new List<TextCollectionItem>
+            {
+                new("zzz3", "id-zzz3", 1.0),
+                new("NIV84", "id-niv84", 1.0),
+            };
+            TitleResult result = TextCollectionService.GenerateTitle(twoItems, 0, "MAT 1:1");
+
+            Assert.That(
+                result.Title,
+                Does.Contain("zzz3"),
+                "two-items: title must contain first project name"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("NIV84"),
+                "two-items: title must contain second project name"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain(","),
+                "two-items: title must use comma separator between names"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("Text Collection"),
+                "two-items: title must contain 'Text Collection'"
+            );
+        }
+
+        // Scenario: three-plus-items (TS-039)
+        {
+            var fourItems = new List<TextCollectionItem>
+            {
+                new("zzz3", "id-zzz3", 1.0),
+                new("zzz6", "id-zzz6", 1.0),
+                new("NIV84", "id-niv84", 1.0),
+                new("CEVUK", "id-cevuk", 1.0),
+            };
+            TitleResult result = TextCollectionService.GenerateTitle(fourItems, 0, "MAT 2:1");
+
+            Assert.That(
+                result.Title,
+                Does.Contain("zzz3"),
+                "three-plus: title must contain the first project name"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("CEVUK"),
+                "three-plus: title must contain the last project name"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("..."),
+                "three-plus: title must contain ellipsis between first and last"
+            );
+            Assert.That(
+                result.Title,
+                Does.Not.Contain("zzz6"),
+                "three-plus: middle items must be omitted from title"
+            );
+            Assert.That(
+                result.Title,
+                Does.Not.Contain("NIV84"),
+                "three-plus: middle items must be omitted from title"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("Text Collection"),
+                "three-plus: title must contain 'Text Collection'"
+            );
+            Assert.That(
+                result.Title,
+                Does.Contain("MAT 2:1"),
+                "three-plus: title must contain the reference"
+            );
+        }
+    }
+
+    #endregion
+
+    #region CAP-004 Contract Tests - Title Patterns
+
+    /// <summary>
+    /// Zero items: Title should be "(Text Collection ({ref}))".
+    /// TS-036: Window title for 0 items shows reference only.
+    /// PT9 source: When captionItem is null (no items), text = Reference.ToLocalizedString().
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-036")]
+    [Property("BehaviorId", "EXT-005")]
+    [Property("GoldenMasterId", "gm-003")]
+    public void GenerateTitle_ZeroItems_ReturnsTitleWithReferenceOnly()
+    {
+        // Arrange
+        var emptyItems = new List<TextCollectionItem>();
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(emptyItems, 0, "MAT 1:1");
+
+        // Assert: Pattern is "(Text Collection ({ref}))"
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.Not.Null.And.Not.Empty);
+        Assert.That(
+            result.Title,
+            Does.Contain("Text Collection"),
+            "TS-036: Zero items title must contain 'Text Collection'"
+        );
+        Assert.That(
+            result.Title,
+            Does.Contain("MAT 1:1"),
+            "TS-036: Zero items title must contain the reference"
+        );
+    }
+
+    /// <summary>
+    /// One item: Title should be "{name}: (Text Collection ({ref}))".
+    /// TS-037: Window title for 1 item shows single project name.
+    /// PT9 source: captionItem.ScrText.Name + ": " + ref + " (Text Collection)"
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-037")]
+    [Property("BehaviorId", "EXT-005")]
+    [Property("GoldenMasterId", "gm-003")]
+    public void GenerateTitle_OneItem_ReturnsTitleWithSingleName()
+    {
+        // Arrange
+        var oneItem = new List<TextCollectionItem>
+        {
+            new("NIV84", "id-niv84", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(oneItem, 0, "MAT 1:1");
+
+        // Assert: Pattern is "{name}: (Text Collection ({ref}))"
+        Assert.That(result.Title, Does.Contain("NIV84"), "TS-037: Title must contain the project name");
+        Assert.That(
+            result.Title,
+            Does.Contain("Text Collection"),
+            "TS-037: Title must contain 'Text Collection'"
+        );
+        Assert.That(
+            result.Title,
+            Does.Contain("MAT 1:1"),
+            "TS-037: Title must contain the reference"
+        );
+        // Verify the name appears before "Text Collection" (name prefix pattern)
+        int nameIdx = result.Title.IndexOf("NIV84", StringComparison.Ordinal);
+        int tcIdx = result.Title.IndexOf("Text Collection", StringComparison.Ordinal);
+        Assert.That(
+            nameIdx,
+            Is.LessThan(tcIdx),
+            "TS-037: Project name must appear before 'Text Collection' suffix"
+        );
+    }
+
+    /// <summary>
+    /// Two items: Title should be "{name1}, {name2}: (Text Collection ({ref}))".
+    /// TS-038: Window title for 2 items shows both names.
+    /// PT9 source: captionItem.Name + ", " + lastItem.Name + ": " + ref + " (TC)"
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    [Property("GoldenMasterId", "gm-003")]
+    public void GenerateTitle_TwoItems_ReturnsTitleWithBothNames()
+    {
+        // Arrange
+        var twoItems = new List<TextCollectionItem>
+        {
+            new("zzz3", "id-zzz3", 1.0),
+            new("NIV84", "id-niv84", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(twoItems, 0, "MAT 1:1");
+
+        // Assert: Pattern is "{name1}, {name2}: (Text Collection ({ref}))"
+        Assert.That(result.Title, Does.Contain("zzz3"), "TS-038: Title must contain first name");
+        Assert.That(result.Title, Does.Contain("NIV84"), "TS-038: Title must contain second name");
+        Assert.That(
+            result.Title,
+            Does.Contain("Text Collection"),
+            "TS-038: Title must contain 'Text Collection'"
+        );
+
+        // Verify order: first name before second name
+        int firstIdx = result.Title.IndexOf("zzz3", StringComparison.Ordinal);
+        int secondIdx = result.Title.IndexOf("NIV84", StringComparison.Ordinal);
+        Assert.That(
+            firstIdx,
+            Is.LessThan(secondIdx),
+            "TS-038: First project name must appear before second"
+        );
+    }
+
+    /// <summary>
+    /// Three+ items: Title should be "{first}, ...{last}: (Text Collection ({ref}))".
+    /// TS-039: Window title for 3+ items shows first, ellipsis, last.
+    /// PT9 source: captionItem.Name + ", ... " + lastItem.Name + ": " + ref + " (TC)"
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-039")]
+    [Property("BehaviorId", "EXT-005,BHV-T001")]
+    [Property("GoldenMasterId", "gm-003")]
+    public void GenerateTitle_ThreePlusItems_ReturnsTitleWithFirstEllipsisLast()
+    {
+        // Arrange: 4 items matching gm-003 "three-plus-items" scenario
+        var fourItems = new List<TextCollectionItem>
+        {
+            new("zzz3", "id-zzz3", 1.0),
+            new("zzz6", "id-zzz6", 1.0),
+            new("NIV84", "id-niv84", 1.0),
+            new("CEVUK", "id-cevuk", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(fourItems, 0, "MAT 2:1");
+
+        // Assert: Pattern is "{first}, ...{last}: (Text Collection ({ref}))"
+        Assert.That(result.Title, Does.Contain("zzz3"), "TS-039: Title must contain the first name");
+        Assert.That(
+            result.Title,
+            Does.Contain("CEVUK"),
+            "TS-039: Title must contain the last name"
+        );
+        Assert.That(
+            result.Title,
+            Does.Contain("..."),
+            "TS-039: Title must contain ellipsis for omitted middle items"
+        );
+        Assert.That(
+            result.Title,
+            Does.Not.Contain("zzz6"),
+            "TS-039: Middle items should not appear in title"
+        );
+        Assert.That(
+            result.Title,
+            Does.Not.Contain("NIV84"),
+            "TS-039: Middle items should not appear in title"
+        );
+    }
+
+    /// <summary>
+    /// Exactly 3 items should use the 3+ pattern (first, ...last).
+    /// Boundary test at the transition from 2-item to 3+ pattern.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-039")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_ExactlyThreeItems_UsesEllipsisPattern()
+    {
+        // Arrange: 3 items (boundary for 3+ pattern)
+        var threeItems = new List<TextCollectionItem>
+        {
+            new("Alpha", "id-alpha", 1.0),
+            new("Beta", "id-beta", 1.0),
+            new("Gamma", "id-gamma", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(threeItems, 0, "GEN 1:1");
+
+        // Assert: Should use 3+ pattern with ellipsis
+        Assert.That(
+            result.Title,
+            Does.Contain("Alpha"),
+            "Three items: title must contain first name"
+        );
+        Assert.That(
+            result.Title,
+            Does.Contain("Gamma"),
+            "Three items: title must contain last name"
+        );
+        Assert.That(
+            result.Title,
+            Does.Contain("..."),
+            "Three items: title must use ellipsis pattern (3+ items)"
+        );
+        Assert.That(
+            result.Title,
+            Does.Not.Contain("Beta"),
+            "Three items: middle item should not appear in title"
+        );
+    }
+
+    #endregion
+
+    #region CAP-004 Contract Tests - TitleResult Structure
+
+    /// <summary>
+    /// The TitleResult must contain both a non-null, non-empty Title and Tooltip.
+    /// This verifies the return type contract from data-contracts.md M-004.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-037")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_ReturnsNonNullTitleAndTooltip()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("TestProject", "id-test", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(items, 0, "MAT 1:1");
+
+        // Assert
+        Assert.That(result, Is.Not.Null, "TitleResult must not be null");
+        Assert.That(result.Title, Is.Not.Null.And.Not.Empty, "Title must not be null or empty");
+        Assert.That(result.Tooltip, Is.Not.Null.And.Not.Empty, "Tooltip must not be null or empty");
+    }
+
+    /// <summary>
+    /// The tooltip must contain the "Text Collection" label per PT9 behavior.
+    /// PT9 source line 329: DockHandler.ToolTipText = $"{title} ({Reference}){items}"
+    /// where title = Localizer.Str("Text Collection").
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-037")]
+    [Property("BehaviorId", "EXT-005,BHV-T001")]
+    public void GenerateTitle_TooltipContainsTextCollectionLabel()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("NIV84", "id-niv84", 1.0),
+            new("ESV", "id-esv", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(items, 0, "MAT 1:1");
+
+        // Assert
+        Assert.That(
+            result.Tooltip,
+            Does.Contain("Text Collection"),
+            "Tooltip must contain 'Text Collection' label"
+        );
+    }
+
+    /// <summary>
+    /// The tooltip must include all project names from the items list.
+    /// PT9 source line 320-321: foreach item, tooltip += "\n" + item.ScrText.Name.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_TooltipContainsAllItemNames()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("NIV84", "id-niv84", 1.0),
+            new("ESV", "id-esv", 1.0),
+            new("KJV", "id-kjv", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(items, 0, "MAT 1:1");
+
+        // Assert: All item names must appear in the tooltip
+        Assert.That(
+            result.Tooltip,
+            Does.Contain("NIV84"),
+            "Tooltip must contain first item name"
+        );
+        Assert.That(
+            result.Tooltip,
+            Does.Contain("ESV"),
+            "Tooltip must contain second item name"
+        );
+        Assert.That(
+            result.Tooltip,
+            Does.Contain("KJV"),
+            "Tooltip must contain third item name"
+        );
+    }
+
+    /// <summary>
+    /// The tooltip must include the verse reference.
+    /// PT9 source line 329: tooltip includes Reference.ToLocalizedString().
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-037")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_TooltipContainsReference()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("TestProject", "id-test", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(items, 0, "REV 22:21");
+
+        // Assert
+        Assert.That(
+            result.Tooltip,
+            Does.Contain("REV 22:21"),
+            "Tooltip must contain the verse reference"
+        );
+    }
+
+    #endregion
+
+    #region CAP-004 Contract Tests - Reference in Title
+
+    /// <summary>
+    /// The title must include the verse reference string for all non-empty item counts.
+    /// data-contracts M-004: All patterns include ({ref}) in the title.
+    /// </summary>
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(5)]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-037,TS-038,TS-039")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_TitleIncludesReference(int itemCount)
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>();
+        for (int i = 0; i < itemCount; i++)
+        {
+            items.Add(new TextCollectionItem($"Proj{i}", $"id-{i}", 1.0));
+        }
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(items, 0, "PSA 23:1");
+
+        // Assert
+        Assert.That(
+            result.Title,
+            Does.Contain("PSA 23:1"),
+            $"Title with {itemCount} items must contain the reference"
+        );
+    }
+
+    #endregion
+
+    #region CAP-004 Edge Case Tests
+
+    /// <summary>
+    /// When curItem is out of range (negative), the method should handle it
+    /// gracefully. Per data-contracts M-004 error condition: "curItem index out
+    /// of bounds" => INVALID_STATE.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-036")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_CurItemNegative_ThrowsOrHandlesGracefully()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("NIV84", "id-niv84", 1.0),
+        };
+
+        // Act & Assert: Per M-004 error condition, curItem out of range
+        // should throw or return a graceful result (not crash).
+        // The implementation may throw ArgumentOutOfRangeException.
+        Assert.That(
+            () => TextCollectionService.GenerateTitle(items, -1, "MAT 1:1"),
+            Throws.Exception,
+            "curItem=-1 is out of range when items is non-empty; should throw per INVALID_STATE"
+        );
+    }
+
+    /// <summary>
+    /// When curItem exceeds the items count, the method should throw per
+    /// data-contracts M-004 error condition: "curItem index out of bounds".
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-036")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_CurItemExceedsCount_ThrowsOrHandlesGracefully()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("NIV84", "id-niv84", 1.0),
+        };
+
+        // Act & Assert: curItem=1 is out of range for a 1-element list (valid range: 0)
+        Assert.That(
+            () => TextCollectionService.GenerateTitle(items, 1, "MAT 1:1"),
+            Throws.Exception,
+            "curItem=1 exceeds items.Count=1; should throw per INVALID_STATE"
+        );
+    }
+
+    /// <summary>
+    /// When curItem is 0 with empty items, the method should succeed.
+    /// Per data-contracts M-004: curItem is 0 when items is empty.
+    /// This matches the zero-items scenario in gm-003.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-036")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_EmptyItemsWithCurItemZero_Succeeds()
+    {
+        // Arrange
+        var emptyItems = new List<TextCollectionItem>();
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(emptyItems, 0, "MAT 1:1");
+
+        // Assert: Should not throw; should return a valid result
+        Assert.That(result, Is.Not.Null, "Empty items with curItem=0 should succeed");
+        Assert.That(result.Title, Is.Not.Null.And.Not.Empty);
+    }
+
+    /// <summary>
+    /// Title generation with different references for the same items should
+    /// produce titles that differ in the reference portion.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-037")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_DifferentReferences_ProduceDifferentTitles()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>
+        {
+            new("NIV84", "id-niv84", 1.0),
+        };
+
+        // Act
+        TitleResult result1 = TextCollectionService.GenerateTitle(items, 0, "MAT 1:1");
+        TitleResult result2 = TextCollectionService.GenerateTitle(items, 0, "GEN 50:26");
+
+        // Assert: Titles should differ because references differ
+        Assert.That(
+            result1.Title,
+            Is.Not.EqualTo(result2.Title),
+            "Different references should produce different titles"
+        );
+        Assert.That(result1.Title, Does.Contain("MAT 1:1"));
+        Assert.That(result2.Title, Does.Contain("GEN 50:26"));
+    }
+
+    /// <summary>
+    /// When curItem points to a specific item in a multi-item list, the title
+    /// should still use the first item for the name prefix (per PT9 behavior).
+    /// PT9: captionItem is Items[CurItem] if SingleShown, else Items[0].
+    /// In the stateless PT10 API, the first item is always used for title names.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-004")]
+    [Property("ScenarioId", "TS-038")]
+    [Property("BehaviorId", "EXT-005")]
+    public void GenerateTitle_CurItemNonZero_TitleStillUsesFirstAndLastNames()
+    {
+        // Arrange: 3 items, curItem=2
+        var items = new List<TextCollectionItem>
+        {
+            new("Alpha", "id-alpha", 1.0),
+            new("Beta", "id-beta", 1.0),
+            new("Gamma", "id-gamma", 1.0),
+        };
+
+        // Act
+        TitleResult result = TextCollectionService.GenerateTitle(items, 2, "MAT 1:1");
+
+        // Assert: The title pattern uses first and last item names
+        Assert.That(
+            result.Title,
+            Does.Contain("Alpha"),
+            "Title should contain the first item name regardless of curItem"
+        );
+        Assert.That(
+            result.Title,
+            Does.Contain("Gamma"),
+            "Title should contain the last item name"
+        );
+    }
+
+    #endregion
 }
