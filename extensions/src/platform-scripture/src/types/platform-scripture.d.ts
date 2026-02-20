@@ -1624,6 +1624,9 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    /** Open the Select Texts dialog to choose texts for a text collection */
+    'platformScripture.openSelectTexts': () => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {

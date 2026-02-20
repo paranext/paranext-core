@@ -1,8 +1,21 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {},
-    "items": []
+    "groups": {
+      "platformScripture.textCollection": {
+        "column": "platform.paratext",
+        "order": 3
+      }
+    },
+    "items": [
+      {
+        "label": "%mainMenu_textCollection_selectTexts%",
+        "localizeNotes": "Application main menu > Paratext > Open text collection...",
+        "command": "platformScripture.openSelectTexts",
+        "group": "platformScripture.textCollection",
+        "order": 1
+      }
+    ]
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
@@ -31,6 +44,7 @@
     "platformScripture.characterInventory": {},
     "platformScripture.repeatedWordsInventory": {},
     "platformScripture.punctuationInventory": {},
-    "platformScripture.markersInventory": {}
+    "platformScripture.markersInventory": {},
+    "platformScripture.selectTexts": {}
   }
 }
