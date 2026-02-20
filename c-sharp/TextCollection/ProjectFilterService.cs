@@ -13,22 +13,30 @@ namespace Paranext.DataProvider.TextCollection;
 /// </summary>
 internal static class ProjectFilterService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:717-730
+    // Method: SelectScrTextsForm.GetProjectType()
+    // Maps to: EXT-013
     /// <summary>
     /// Returns user-visible type string: "Dictionary", "Source Language Text",
     /// resource type, or "Project ({type})".
-    /// SIMPLE: Priority chain of type checks using ParatextData properties.
-    /// Source: EXT-013 (PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:717-730)
+    /// Priority chain of type checks using ParatextData properties.
     /// </summary>
     /// <param name="projectId">Project GUID (HexId string).</param>
     /// <returns>User-visible type category string.</returns>
     public static string GetProjectType(string projectId)
     {
-        // TDD stub: throws NotImplementedException to ensure RED state.
-        // The implementer will fill in the priority chain:
-        //   if (IsDictionary) return "Dictionary";
-        //   if (IsSourceLanguageText) return "Source Language Text";
-        //   if (IsResourceProject) return resource type string;
-        //   else return "Project ({type})";
-        throw new NotImplementedException("CAP-012: GetProjectType not yet implemented");
+        ScrText scrText = ScrTextCollection.GetById(HexId.FromStr(projectId));
+
+        if (scrText.IsDictionary || (scrText.IsXmlResourceDictionary && scrText.IsResourceProject))
+            return "Dictionary";
+
+        if (scrText.IsSourceLanguageText)
+            return "Source Language Text";
+
+        if (scrText.IsResourceProject)
+            return scrText.Settings.TranslationInfo.Type.LocalizedString(scrText);
+
+        return $"Project ({scrText.Settings.TranslationInfo.Type.LocalizedString(scrText)})";
     }
 }
