@@ -201,11 +201,15 @@ internal static class TextCollectionService
         return null;
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/WindowCollection.cs:518-528 (single-text fallback),
-    //         PT9/Paratext/WindowCollection.cs:910-917 (duplicate detection)
-    // Method: WindowCollection.OpenTextCollection() orchestration
-    // Maps to: CAP-003, BHV-500, BHV-501, BHV-606
+    /// <summary>
+    /// Checks whether any existing collection has the same texts in the same order.
+    /// Source: PT9/Paratext/WindowCollection.cs:910-917 (duplicate detection loop)
+    /// </summary>
+    private static bool HasEquivalentCollection(
+        IList<string> acceptedIds,
+        IList<IList<string>> existingCollectionIds
+    ) => existingCollectionIds.Any(existingIds => AreEquivalent(existingIds, acceptedIds));
+
     /// <summary>
     /// Creates or activates an existing text collection. Orchestrates CAP-001 (filter)
     /// and CAP-002 (equivalence) to determine the correct outcome:
@@ -217,6 +221,11 @@ internal static class TextCollectionService
     /// 6. Duplicate found: returns reused result (BHV-501)
     /// 7. No duplicate: returns new TC creation result (BHV-500)
     /// </summary>
+    /// <remarks>
+    /// Ported from PT9/Paratext/WindowCollection.cs:518-528 (single-text fallback),
+    /// PT9/Paratext/WindowCollection.cs:910-917 (duplicate detection).
+    /// Maps to: CAP-003, BHV-500, BHV-501, BHV-606.
+    /// </remarks>
     /// <param name="request">The creation request with project IDs and scroll group.</param>
     /// <param name="existingCollectionIds">Lists of text IDs for already-open TCs (for duplicate detection).</param>
     /// <returns>TextCollectionCreateResult indicating success, error, or fallback.</returns>
@@ -271,13 +280,8 @@ internal static class TextCollectionService
         // 2+ texts: check for duplicate TC (BHV-501, INV-009)
         IList<string> acceptedIds = filterResult.Accepted.Select(item => item.ScrTextId).ToList();
 
-        foreach (IList<string> existingIds in existingCollectionIds)
-        {
-            if (AreEquivalent(existingIds, acceptedIds))
-            {
-                return new TextCollectionCreateResult { Success = true, Reused = true };
-            }
-        }
+        if (HasEquivalentCollection(acceptedIds, existingCollectionIds))
+            return new TextCollectionCreateResult { Success = true, Reused = true };
 
         // No duplicate: create new TC (BHV-500)
         return new TextCollectionCreateResult { Success = true, Items = filterResult.Accepted };
