@@ -27,6 +27,34 @@ interface TextCollectionItem {
   verseText: string;
 }
 
+/** Serializable memento for full state persistence (GAP-009) */
+interface TextCollectionMemento {
+  /** Ordered list of item IDs in the collection */
+  itemIds: string[];
+  /** Per-item zoom levels keyed by item ID */
+  itemZooms: Record<string, number>;
+  /** Index of the currently selected item */
+  curItem: number;
+  /** Splitter proportion between multi-pane and single-pane */
+  splitterProportion: number;
+  /** Current view mode */
+  viewName: ViewMode;
+  /** Overall multi-pane zoom level */
+  multiPaneZoom: number;
+  /** Single-pane zoom level */
+  singlePaneZoom: number;
+  /** Whether multi-pane is visible */
+  multiShown: boolean;
+  /** Whether single-pane is visible */
+  singleShown: boolean;
+  /** Whether footnotes are shown in single pane */
+  singleFootnoteShown: boolean;
+  /** Whether biblical terms highlighting is enabled */
+  highlightBiblicalTerms: boolean;
+  /** Whether guessed renderings highlighting is enabled */
+  highlightGuessedRenderings: boolean;
+}
+
 interface ContextMenuState {
   visible: boolean;
   x: number;
@@ -170,6 +198,84 @@ function computeCurItemAfterMove(curItem: number, movedIndex: number, targetInde
   if (curItem === movedIndex) return targetIndex;
   if (curItem === targetIndex) return movedIndex;
   return curItem;
+}
+
+/** Debounce delay for saving memento state (in milliseconds) */
+const MEMENTO_DEBOUNCE_MS = 500;
+
+/**
+ * Create a serializable memento from the current state (GAP-009). Captures: item IDs and their
+ * order, per-item zoom levels, curItem index, splitter proportion, view mode, zoom levels, and pane
+ * visibility.
+ */
+function createMemento(state: TCState): TextCollectionMemento {
+  const itemZooms: Record<string, number> = {};
+  state.items.forEach((item) => {
+    itemZooms[item.id] = item.zoom;
+  });
+
+  return {
+    itemIds: state.items.map((item) => item.id),
+    itemZooms,
+    curItem: state.curItem,
+    splitterProportion: state.splitterProportion,
+    viewName: state.viewName,
+    multiPaneZoom: state.multiPaneZoom,
+    singlePaneZoom: state.singlePaneZoom,
+    multiShown: state.multiShown,
+    singleShown: state.singleShown,
+    singleFootnoteShown: state.singleFootnoteShown,
+    highlightBiblicalTerms: state.highlightBiblicalTerms,
+    highlightGuessedRenderings: state.highlightGuessedRenderings,
+  };
+}
+
+/**
+ * Restore TCState fields from a persisted memento (GAP-009). Reorders items according to the saved
+ * item IDs, restores per-item zoom levels, and applies all saved display settings. Items not found
+ * in the memento are appended at the end; items in the memento but not in the available items are
+ * silently dropped.
+ */
+function restoreFromMemento(
+  memento: TextCollectionMemento,
+  availableItems: TextCollectionItem[],
+): Partial<TCState> {
+  const itemMap = new Map<string, TextCollectionItem>();
+  availableItems.forEach((item) => itemMap.set(item.id, item));
+
+  // Reorder items based on memento's saved order, restoring zoom levels
+  const orderedItems: TextCollectionItem[] = [];
+  memento.itemIds.forEach((id) => {
+    const item = itemMap.get(id);
+    if (item) {
+      const restoredZoom = memento.itemZooms[id] ?? item.zoom;
+      orderedItems.push({ ...item, zoom: restoredZoom });
+      itemMap.delete(id);
+    }
+  });
+
+  // Append any items not in the memento (newly added since memento was saved)
+  itemMap.forEach((item) => {
+    orderedItems.push(item);
+  });
+
+  // Clamp curItem to valid range
+  const maxIndex = Math.max(0, orderedItems.length - 1);
+  const restoredCurItem = Math.min(Math.max(0, memento.curItem), maxIndex);
+
+  return {
+    items: orderedItems,
+    curItem: restoredCurItem,
+    splitterProportion: memento.splitterProportion,
+    viewName: memento.viewName,
+    multiPaneZoom: memento.multiPaneZoom,
+    singlePaneZoom: memento.singlePaneZoom,
+    multiShown: memento.multiShown,
+    singleShown: memento.singleShown,
+    singleFootnoteShown: memento.singleFootnoteShown,
+    highlightBiblicalTerms: memento.highlightBiblicalTerms,
+    highlightGuessedRenderings: memento.highlightGuessedRenderings,
+  };
 }
 
 // #endregion
@@ -471,19 +577,62 @@ globalThis.webViewComponent = function TextCollectionWebView({
   const [scrRef] = useWebViewScrollGroupScrRef();
   const verseRefDisplay = useMemo(() => formatVerseRefDisplay(scrRef), [scrRef]);
 
-  // Restore state from web view state if available
-  const [savedTcState] = useWebViewState<Partial<TCState> | undefined>('tcState', undefined);
+  // Full memento persistence via useWebViewState (GAP-009)
+  const [savedMemento, setSavedMemento] = useWebViewState<TextCollectionMemento | undefined>(
+    'tcMemento',
+    undefined,
+  );
 
   const [state, dispatch] = useReducer(tcReducer, initialState);
 
-  // Restore state on first mount if available
+  // Restore state from saved memento on first mount (GAP-009)
   const hasRestored = useRef(false);
   useEffect(() => {
-    if (savedTcState && !hasRestored.current) {
+    if (savedMemento && !hasRestored.current) {
       hasRestored.current = true;
-      dispatch({ type: 'RESTORE_STATE', state: savedTcState });
+      const restoredState = restoreFromMemento(savedMemento, SAMPLE_TEXTS);
+      dispatch({ type: 'RESTORE_STATE', state: restoredState });
+      logger.debug('Text collection: restored state from memento');
     }
-  }, [savedTcState]);
+  }, [savedMemento]);
+
+  // Debounced memento save on state changes (GAP-009)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    // Skip saving until state has been fully initialized
+    if (!state.setupComplete) return undefined;
+
+    // Clear any pending debounce
+    if (debounceTimerRef.current !== undefined) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      const memento = createMemento(state);
+      setSavedMemento(memento);
+      logger.debug('Text collection: saved memento');
+    }, MEMENTO_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceTimerRef.current !== undefined) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [
+    state.items,
+    state.curItem,
+    state.splitterProportion,
+    state.viewName,
+    state.multiPaneZoom,
+    state.singlePaneZoom,
+    state.multiShown,
+    state.singleShown,
+    state.singleFootnoteShown,
+    state.highlightBiblicalTerms,
+    state.highlightGuessedRenderings,
+    state.setupComplete,
+    setSavedMemento,
+  ]);
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState>({
