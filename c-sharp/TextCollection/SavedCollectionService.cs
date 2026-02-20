@@ -87,6 +87,45 @@ internal sealed class SavedCollectionService
         return _savedLists.ContainsKey(name);
     }
 
+    // === CAP-015: AsymmetricSharingCombinedSets ===
+    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:96-120, 271-521
+    // Extraction: EXT-011
+    // Behaviors: BHV-T013
+    // Invariant: INV-012
+
+    /// <summary>
+    /// Returns combined saved selections for the Open dialog, merging TC dialog
+    /// lists (SavedScrTextLists) into the set. INV-012: TC dialog lists appear
+    /// in Open dialog; Open dialog sets do NOT appear in TC dialog.
+    /// </summary>
+    // Maps to: CAP-015, M-017
+    public IList<SavedScrTextSet> GetCombinedSets()
+    {
+        throw new NotImplementedException("CAP-015: GetCombinedSets not yet implemented");
+    }
+
+    /// <summary>
+    /// Saves or overwrites a named text set (unordered) for the Open dialog.
+    /// These sets are available in the Open dialog but NOT in the TC dialog (INV-012).
+    /// </summary>
+    /// <param name="name">Display name of the saved selection. Must be non-empty.</param>
+    /// <param name="textNames">Unordered list of project short names. Must be non-empty.</param>
+    // Maps to: CAP-015 (internal -- Open dialog set management)
+    public void SaveSet(string name, IList<string> textNames)
+    {
+        throw new NotImplementedException("CAP-015: SaveSet not yet implemented");
+    }
+
+    /// <summary>
+    /// Deletes a named text set from the Open dialog's saved selections.
+    /// </summary>
+    /// <param name="name">Name of the set to delete.</param>
+    // Maps to: CAP-015 (internal -- Open dialog set management)
+    public void DeleteSet(string name)
+    {
+        throw new NotImplementedException("CAP-015: DeleteSet not yet implemented");
+    }
+
     private static void ValidateName(string name)
     {
         if (string.IsNullOrEmpty(name))
