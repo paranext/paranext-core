@@ -97,10 +97,6 @@ internal static class TextCollectionService
         return changed;
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/TextCollectionForm.cs:291-330
-    // Method: TextCollectionForm.UpdateWindowTitle()
-    // Maps to: EXT-005, BHV-T001
     /// <summary>
     /// Generates window title with patterns based on item count (EXT-005).
     /// Source: PT9/Paratext/TextCollectionForm.cs:291-330
@@ -129,30 +125,19 @@ internal static class TextCollectionService
 
         const string textCollectionLabel = "Text Collection";
 
-        string title;
-        switch (items.Count)
+        string title = items.Count switch
         {
-            case 0:
-                title = $"({textCollectionLabel} ({reference}))";
-                break;
-            case 1:
-                title = $"{items[0].ScrTextName}: ({textCollectionLabel} ({reference}))";
-                break;
-            case 2:
-                title =
-                    $"{items[0].ScrTextName}, {items[1].ScrTextName}: ({textCollectionLabel} ({reference}))";
-                break;
-            default:
-                title =
-                    $"{items[0].ScrTextName}, ...{items[^1].ScrTextName}: ({textCollectionLabel} ({reference}))";
-                break;
-        }
+            0 => $"({textCollectionLabel} ({reference}))",
+            1 => $"{items[0].ScrTextName}: ({textCollectionLabel} ({reference}))",
+            2 =>
+                $"{items[0].ScrTextName}, {items[1].ScrTextName}: ({textCollectionLabel} ({reference}))",
+            _ =>
+                $"{items[0].ScrTextName}, ...{items[^1].ScrTextName}: ({textCollectionLabel} ({reference}))",
+        };
 
-        string tooltip = $"{textCollectionLabel} ({reference})";
-        foreach (TextCollectionItem item in items)
-        {
-            tooltip += $"\n{item.ScrTextName}";
-        }
+        string itemNames =
+            items.Count > 0 ? "\n" + string.Join("\n", items.Select(item => item.ScrTextName)) : "";
+        string tooltip = $"{textCollectionLabel} ({reference}){itemNames}";
 
         return new TitleResult(title, tooltip);
     }
