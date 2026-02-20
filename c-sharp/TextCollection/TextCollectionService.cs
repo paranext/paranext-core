@@ -13,10 +13,6 @@ namespace Paranext.DataProvider.TextCollection;
 /// </summary>
 internal static class TextCollectionService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/TextCollectionForm.cs:364-380
-    // Method: TextCollectionForm.SetTexts (filtering predicate)
-    // Maps to: EXT-003, BHV-T006, VAL-009
     /// <summary>
     /// Filters texts for TC eligibility. Rejects MarbleResource, Dictionary,
     /// XmlResource, StudyBibleAdditions, and NoteType projects.
@@ -35,7 +31,7 @@ internal static class TextCollectionService
             {
                 scrText = ScrTextCollection.GetById(HexId.FromStr(projectId));
             }
-            catch
+            catch (Exception)
             {
                 rejected.Add(new RejectedText("", projectId, "Project not found"));
                 continue;
