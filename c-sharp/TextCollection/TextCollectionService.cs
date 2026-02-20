@@ -98,6 +98,28 @@ internal static class TextCollectionService
     }
 
     /// <summary>
+    /// Generates window title with patterns based on item count (EXT-005).
+    /// Source: PT9/Paratext/TextCollectionForm.cs:291-330
+    /// 0 items: "(Text Collection ({ref}))"
+    /// 1 item: "{name}: (Text Collection ({ref}))"
+    /// 2 items: "{name1}, {name2}: (Text Collection ({ref}))"
+    /// 3+ items: "{first}, ...{last}: (Text Collection ({ref}))"
+    /// Tooltip includes versification-mapped reference for curItem.
+    /// </summary>
+    /// <param name="items">Current items in the text collection.</param>
+    /// <param name="curItem">Index of the currently selected item.</param>
+    /// <param name="reference">Current verse reference string.</param>
+    /// <returns>TitleResult with title and tooltip strings.</returns>
+    public static TitleResult GenerateTitle(
+        IList<TextCollectionItem> items,
+        int curItem,
+        string reference
+    )
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
     /// Checks the 5 rejection predicates from PT9 TextCollectionForm.SetTexts:364-380.
     /// Returns the rejection reason string, or null if the text is eligible.
     /// </summary>
