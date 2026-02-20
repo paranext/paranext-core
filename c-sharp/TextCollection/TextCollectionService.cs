@@ -142,14 +142,11 @@ internal static class TextCollectionService
         return new TitleResult(title, tooltip);
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/TextCollectionForm.cs:124-143
-    // Method: TextCollectionForm.ChangeListener()
-    // Maps to: EXT-016, CAP-013
     /// <summary>
     /// Handles write lock change notifications. If scope is "Project", checks for
     /// deleted texts via RemoveDeletedTexts. If scope overlaps currentBookNum,
     /// triggers reload. Otherwise, no action needed.
+    /// Source: EXT-016 (PT9/Paratext/TextCollectionForm.cs:124-143)
     /// PT10 adaptation: Replaces WriteLockManager event with string-based scope parameter.
     /// Returns ChangeAction enum instead of directly triggering UI reload.
     /// </summary>
