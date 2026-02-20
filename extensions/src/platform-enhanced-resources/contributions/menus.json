@@ -1,0 +1,35 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {},
+    "items": [
+      {
+        "label": "%mainMenu_openEnhancedResource%",
+        "localizeNotes": "Application main menu > Project > Enhanced Resource",
+        "group": "platform.projectResources",
+        "order": 110,
+        "command": "platformEnhancedResources.openEnhancedResource"
+      },
+      {
+        "label": "%mainMenu_openGuide%",
+        "localizeNotes": "Application main menu > Project > Enhanced Resources Guide",
+        "group": "platform.projectResources",
+        "order": 111,
+        "command": "platformEnhancedResources.openGuide"
+      }
+    ]
+  },
+  "defaultWebViewTopMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewContextMenu": {
+    "groups": {},
+    "items": []
+  },
+  "webViewMenus": {
+    "platformEnhancedResources.enhancedResource": {},
+    "platformEnhancedResources.guide": {}
+  }
+}

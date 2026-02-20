@@ -1,0 +1,53 @@
+/* Enhanced Resources Scripture Pane Styles */
+
+/* Term highlighting colors: applied via CSS classes on the scripture container.
+   The backend HTML includes spans with data-rendering-status attributes.
+   When a highlight category is active, the container gets the corresponding class. */
+
+/* Research terms highlight: blue background */
+.er-highlight-research [data-rendering-status] {
+  background-color: hsl(217 91% 90%);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Found terms highlight: gray background */
+.er-highlight-found [data-rendering-status='11'],
+.er-highlight-found [data-rendering-status='12'] {
+  background-color: hsl(0 0% 88%);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Missing terms highlight: orange background */
+.er-highlight-missing [data-rendering-status='8'],
+.er-highlight-missing [data-rendering-status='7'] {
+  background-color: hsl(30 100% 85%);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Guessed terms: orange with dashed underline */
+.er-highlight-found [data-rendering-status='10'] {
+  background-color: hsl(30 100% 85%);
+  border-radius: 2px;
+  padding: 0 1px;
+  text-decoration: underline dashed;
+}
+
+/* Hover highlight for same-lemma words */
+.er-lemma-hover {
+  background-color: hsl(50 100% 80%) !important;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+/* Word elements in scripture content are clickable */
+.er-scripture-content [data-lemma] {
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.er-scripture-content [data-lemma]:hover {
+  opacity: 0.85;
+}

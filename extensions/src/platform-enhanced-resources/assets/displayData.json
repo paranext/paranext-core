@@ -1,0 +1,12 @@
+{
+  "icon": "",
+  "moreInfoUrl": "",
+  "supportUrl": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Enhanced Resources",
+      "shortSummary": "Interactive Bible translation resources with embedded links to dictionaries, encyclopedias, maps, and media",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}

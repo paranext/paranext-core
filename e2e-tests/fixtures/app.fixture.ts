@@ -9,7 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
-import { sendPapiCommand } from './helpers';
+import { sendPapiCommand, waitForPapiReady } from './helpers';
 
 const WEBSOCKET_PORT = 8876;
 const PROCESS_READY_TIMEOUT = 60_000;
@@ -89,6 +89,11 @@ export const test = base.extend<AppFixtures>({
     await waitForWebSocketReady(WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
     console.log('WebSocket server is ready');
 
+    // Wait for PAPI commands to be registered (extension host initialization)
+    console.log('Waiting for PAPI commands to be ready...');
+    await waitForPapiReady(PROCESS_READY_TIMEOUT, WEBSOCKET_PORT);
+    console.log('PAPI commands are ready');
+
     await use(electronApp);
 
     // Graceful shutdown: ask the platform to quit via PAPI, then close Electron
@@ -102,13 +107,32 @@ export const test = base.extend<AppFixtures>({
     }
 
     console.log('Closing Electron app...');
+    let closedCleanly = false;
     const closeTimeout = new Promise<void>((resolve) => {
       setTimeout(() => {
         console.warn(`electronApp.close() timed out after ${CLOSE_TIMEOUT}ms, force killing`);
         resolve();
       }, CLOSE_TIMEOUT);
     });
-    await Promise.race([electronApp.close(), closeTimeout]);
+    await Promise.race([
+      electronApp.close().then(() => {
+        closedCleanly = true;
+      }),
+      closeTimeout,
+    ]);
+
+    // Force kill if graceful close timed out
+    if (!closedCleanly) {
+      try {
+        const proc = electronApp.process();
+        if (proc.pid) {
+          process.kill(proc.pid, 'SIGKILL');
+          console.log(`Sent SIGKILL to Electron process ${proc.pid}`);
+        }
+      } catch {
+        // Process may already be dead
+      }
+    }
 
     // Clean up the isolated user-data directory
     fs.rmSync(userDataDir, { recursive: true, force: true });
