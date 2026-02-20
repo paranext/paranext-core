@@ -313,7 +313,11 @@
       "%textCollection_singlePanePlaceholder%": "Click a text abbreviation in the multi-pane to view details here",
       "%textCollection_noTextsMessage%": "No texts in collection",
       "%textCollection_footnoteToggleDisabled%": "Enable two panes to toggle footnotes",
-      "%textCollection_missingProjectsLabel%": "Missing projects"
+      "%textCollection_missingProjectsLabel%": "Missing projects",
+      "%textCollection_find%": "Find...",
+      "%textCollection_insertNote%": "Insert consultant note...",
+      "%textCollection_notYetAvailable%": "Not yet available",
+      "%textCollection_closeSinglePane%": "Close single pane"
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
@@ -533,7 +537,11 @@
       "%textCollection_singlePanePlaceholder%": "Haga clic en una abreviatura de texto en el panel multiple para ver detalles aqui",
       "%textCollection_noTextsMessage%": "No hay textos en la coleccion",
       "%textCollection_footnoteToggleDisabled%": "Active dos paneles para alternar las notas al pie",
-      "%textCollection_missingProjectsLabel%": "Proyectos faltantes"
+      "%textCollection_missingProjectsLabel%": "Proyectos faltantes",
+      "%textCollection_find%": "Buscar...",
+      "%textCollection_insertNote%": "Insertar nota del consultor...",
+      "%textCollection_notYetAvailable%": "Aun no disponible",
+      "%textCollection_closeSinglePane%": "Cerrar panel unico"
     }
   }
 }

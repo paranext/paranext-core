@@ -1,8 +1,9 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatScrRef, LocalizeKey } from 'platform-bible-utils';
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import MultiPaneRenderer, { MultiPaneTextItem } from './components/multi-pane-renderer.component';
 import SplitterPanel from './components/splitter-panel.component';
@@ -47,6 +48,7 @@ interface TCState {
   highlightGuessedRenderings: boolean;
   focusedPane: FocusedPane;
   setupComplete: boolean;
+  missingProjects: string[];
 }
 
 type TCAction =
@@ -94,6 +96,10 @@ const TC_STRING_KEYS: LocalizeKey[] = [
   '%textCollection_noTextsMessage%',
   '%textCollection_footnoteToggleDisabled%',
   '%textCollection_missingProjectsLabel%',
+  '%textCollection_find%',
+  '%textCollection_insertNote%',
+  '%textCollection_notYetAvailable%',
+  '%textCollection_closeSinglePane%',
   '%common_ok%',
   '%common_cancel%',
 ];
@@ -334,6 +340,7 @@ const initialState: TCState = {
   highlightGuessedRenderings: false,
   focusedPane: 'multi',
   setupComplete: true,
+  missingProjects: [],
 };
 
 // #endregion
@@ -447,9 +454,22 @@ function ContextMenu({
 
 // #endregion
 
+/** Format a SerializedVerseRef to a display string like "GEN 1:1" */
+function formatVerseRefDisplay(scrRef: SerializedVerseRef): string {
+  return formatScrRef(scrRef);
+}
+
 /** Main TextCollectionWebView component (SCR-001) */
-globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }: WebViewProps) {
+globalThis.webViewComponent = function TextCollectionWebView({
+  useWebViewState,
+  useWebViewScrollGroupScrRef,
+}: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(TC_STRING_KEYS);
+
+  // Scroll group synchronization (GAP-001 + GAP-002)
+  // scrRef syncs with scroll group; setScrRef available at [1] for propagating changes (GAP-002)
+  const [scrRef] = useWebViewScrollGroupScrRef();
+  const verseRefDisplay = useMemo(() => formatVerseRefDisplay(scrRef), [scrRef]);
 
   // Restore state from web view state if available
   const [savedTcState] = useWebViewState<Partial<TCState> | undefined>('tcState', undefined);
@@ -480,6 +500,16 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
       if (e.ctrlKey && e.key === 'e') {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_SINGLE_PANE' });
+      }
+      // Ctrl+C: Copy selected text (GAP-003)
+      if (e.ctrlKey && e.key === 'c') {
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) {
+          navigator.clipboard.writeText(selection.toString()).catch((err) => {
+            logger.warn(`Text collection: clipboard write failed: ${err}`);
+          });
+        }
+        // Do not preventDefault so default copy behavior still works as fallback
       }
       // F7: Toggle footnotes
       if (e.key === 'F7') {
@@ -537,12 +567,13 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
     dispatch({ type: 'SET_FOCUSED_PANE', pane: 'single' });
   }, []);
 
-  // Derive window title
+  // Derive window title using dynamic verse reference (GAP-002)
   const windowTitle = useMemo(() => {
-    if (state.items.length === 0) return 'Text Collection (GEN 1:1)';
+    const titleBase = localizedStrings['%textCollection_title%'] || 'Text Collection';
+    if (state.items.length === 0) return `${titleBase} (${verseRefDisplay})`;
     const names = state.items.map((item) => item.name).join(', ');
-    return `${names}: (Text Collection (GEN 1:1))`;
-  }, [state.items]);
+    return `${names}: (${titleBase} (${verseRefDisplay}))`;
+  }, [state.items, verseRefDisplay, localizedStrings]);
 
   // Map items to multi-pane format
   const multiPaneItems: MultiPaneTextItem[] = useMemo(
@@ -576,7 +607,7 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
           selectedIndex={state.curItem}
           onAbbreviationClick={handleAbbreviationClick}
           onContextMenu={handleContextMenu}
-          verseRefDisplay="GEN 1:1"
+          verseRefDisplay={verseRefDisplay}
           ariaLabel={
             localizedStrings['%textCollection_multiPaneLabel%'] || 'Multi-pane text comparison'
           }
@@ -591,19 +622,41 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
       handleContextMenu,
       handleMultiFocus,
       localizedStrings,
+      verseRefDisplay,
     ],
   );
 
-  // Build single-pane content
+  // Handle closing single pane (GAP-007)
+  const handleCloseSinglePane = useCallback(() => {
+    dispatch({ type: 'TOGGLE_SINGLE_PANE' });
+  }, []);
+
+  // Build single-pane content (GAP-005: full verse text; GAP-007: close button)
   const singlePaneContent = useMemo(
     () => (
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
       <div className="tw-h-full" onClick={handleSingleFocus} data-testid="single-pane-container">
         {selectedItem ? (
           <div className="tw-p-4" data-testid="single-pane-content">
-            <div className="tw-mb-2 tw-text-sm tw-font-semibold tw-text-muted-foreground">
-              {selectedItem.fullName} ({selectedItem.name})
+            {/* Header with project name and close button (GAP-007) */}
+            <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
+              <div className="tw-text-sm tw-font-semibold tw-text-muted-foreground">
+                {selectedItem.fullName} ({selectedItem.name})
+              </div>
+              <button
+                type="button"
+                className="tw-bg-transparent tw-border-none tw-cursor-pointer tw-text-muted-foreground hover:tw-text-foreground tw-text-lg tw-leading-none tw-p-1"
+                onClick={handleCloseSinglePane}
+                aria-label={
+                  localizedStrings['%textCollection_closeSinglePane%'] || 'Close single pane'
+                }
+                title={localizedStrings['%textCollection_closeSinglePane%'] || 'Close single pane'}
+                data-testid="close-single-pane"
+              >
+                &#x2715;
+              </button>
             </div>
+            {/* Full verse text content (GAP-005) */}
             <div
               className="tw-leading-relaxed"
               style={{
@@ -618,10 +671,7 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
               }
             >
               <p className="tw-mb-2">
-                <span className="tw-font-bold">1</span> {selectedItem.verseText}
-              </p>
-              <p className="tw-mb-2 tw-text-muted-foreground tw-text-xs">
-                {`[${localizedStrings['%textCollection_viewPreview%'] || state.viewName} mode - Chapter view placeholder. Full scripture rendering will be provided by platform-scripture-editor integration.]`}
+                <span className="tw-font-bold">{scrRef.verseNum}</span> {selectedItem.verseText}
               </p>
             </div>
             {state.singleFootnoteShown && (
@@ -644,9 +694,10 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
     [
       selectedItem,
       state.singlePaneZoom,
-      state.viewName,
       state.singleFootnoteShown,
+      scrRef.verseNum,
       handleSingleFocus,
+      handleCloseSinglePane,
       localizedStrings,
     ],
   );
@@ -710,7 +761,44 @@ globalThis.webViewComponent = function TextCollectionWebView({ useWebViewState }
             {localizedStrings['%textCollection_showFootnotes%'] || 'Footnotes'}
           </Button>
         </span>
+
+        {/* Disabled Find stub (GAP-006) */}
+        <span title={localizedStrings['%textCollection_notYetAvailable%'] || 'Not yet available'}>
+          <Button
+            type="button"
+            variant="outline"
+            className="tw-text-xs tw-h-6 tw-px-2"
+            disabled
+            data-testid="find-button"
+          >
+            {localizedStrings['%textCollection_find%'] || 'Find...'} (Ctrl+F)
+          </Button>
+        </span>
+
+        {/* Disabled Insert consultant note stub (GAP-006) */}
+        <span title={localizedStrings['%textCollection_notYetAvailable%'] || 'Not yet available'}>
+          <Button
+            type="button"
+            variant="outline"
+            className="tw-text-xs tw-h-6 tw-px-2"
+            disabled
+            data-testid="insert-note-button"
+          >
+            {localizedStrings['%textCollection_insertNote%'] || 'Insert consultant note...'}{' '}
+            (Ctrl+Shift+I)
+          </Button>
+        </span>
       </div>
+
+      {/* Missing projects ribbon (GAP-004) */}
+      {state.missingProjects.length > 0 && (
+        <div className="missing-project-ribbon" role="alert" data-testid="missing-project-ribbon">
+          <span className="tw-font-semibold">
+            {localizedStrings['%textCollection_missingProjectsLabel%'] || 'Missing projects'}:
+          </span>{' '}
+          {state.missingProjects.join(', ')}
+        </div>
+      )}
 
       {/* Content area */}
       <div className="text-collection-content">
