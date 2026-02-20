@@ -19,6 +19,12 @@ internal sealed class SavedCollectionService
     // Maps to: CAP-014
     private readonly Dictionary<string, SavedScrTextList> _savedLists = new();
 
+    // === NEW IN PT10 ===
+    // Reason: PT9 stored Open dialog saved sets via separate Memento persistence;
+    // PT10 uses in-memory Dictionary with future JSON file persistence.
+    // Maps to: CAP-015
+    private readonly Dictionary<string, SavedScrTextSet> _savedSets = new();
+
     /// <summary>
     /// Returns all saved text collection lists.
     /// Returns empty list if no collections have been saved.
@@ -98,10 +104,27 @@ internal sealed class SavedCollectionService
     /// lists (SavedScrTextLists) into the set. INV-012: TC dialog lists appear
     /// in Open dialog; Open dialog sets do NOT appear in TC dialog.
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:96-120
+    // Method: SelectScrTextsForm.GetCombinedSavedSets()
     // Maps to: CAP-015, M-017
     public IList<SavedScrTextSet> GetCombinedSets()
     {
-        throw new NotImplementedException("CAP-015: GetCombinedSets not yet implemented");
+        var combined = new List<SavedScrTextSet>();
+
+        // Convert TC dialog saved lists to sets (asymmetric: TC lists appear in Open dialog)
+        foreach (SavedScrTextList list in _savedLists.Values)
+        {
+            combined.Add(new SavedScrTextSet(list.Name, list.TextNames.ToList()));
+        }
+
+        // Add Open dialog saved sets
+        foreach (SavedScrTextSet set in _savedSets.Values)
+        {
+            combined.Add(set);
+        }
+
+        return combined;
     }
 
     /// <summary>
@@ -110,20 +133,35 @@ internal sealed class SavedCollectionService
     /// </summary>
     /// <param name="name">Display name of the saved selection. Must be non-empty.</param>
     /// <param name="textNames">Unordered list of project short names. Must be non-empty.</param>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:271-350
+    // Method: SelectScrTextsForm.SaveSet()
     // Maps to: CAP-015 (internal -- Open dialog set management)
     public void SaveSet(string name, IList<string> textNames)
     {
-        throw new NotImplementedException("CAP-015: SaveSet not yet implemented");
+        ValidateName(name);
+
+        if (textNames is null || textNames.Count == 0)
+            throw new ArgumentException("Text names must not be null or empty.", nameof(textNames));
+
+        _savedSets[name] = new SavedScrTextSet(name, textNames.ToList());
     }
 
     /// <summary>
     /// Deletes a named text set from the Open dialog's saved selections.
     /// </summary>
     /// <param name="name">Name of the set to delete.</param>
+    /// <exception cref="InvalidOperationException">Set not found.</exception>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:352-380
+    // Method: SelectScrTextsForm.DeleteSet()
     // Maps to: CAP-015 (internal -- Open dialog set management)
     public void DeleteSet(string name)
     {
-        throw new NotImplementedException("CAP-015: DeleteSet not yet implemented");
+        ValidateName(name);
+
+        if (!_savedSets.Remove(name))
+            throw new InvalidOperationException($"Set '{name}' not found.");
     }
 
     private static void ValidateName(string name)
