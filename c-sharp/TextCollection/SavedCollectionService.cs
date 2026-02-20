@@ -12,13 +12,23 @@ namespace Paranext.DataProvider.TextCollection;
 /// </summary>
 internal class SavedCollectionService
 {
+    // === NEW IN PT10 ===
+    // Reason: PT9 used Memento.SetXml/GetXml for persistence; PT10 uses in-memory store
+    // with future JSON file persistence. In-memory Dictionary is the backing store.
+    // Maps to: CAP-014
+    private readonly Dictionary<string, SavedScrTextList> _savedLists = new();
+
     /// <summary>
     /// Returns all saved text collection lists from persistence.
     /// Returns empty list if persistence file is missing.
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/ScrTextListSelectionForm.cs:440-480
+    // Method: ScrTextListSelectionForm.LoadSavedLists()
+    // Maps to: CAP-014
     public IList<SavedScrTextList> GetSavedLists()
     {
-        throw new NotImplementedException();
+        return _savedLists.Values.ToList();
     }
 
     /// <summary>
@@ -28,9 +38,24 @@ internal class SavedCollectionService
     /// <param name="textNames">Ordered list of project short names. Must be non-empty.</param>
     /// <param name="hebGrkIndex">Index of HEB/GRK in the list, or -1 if not present.</param>
     /// <param name="scrProjectIndex">Index of the associated scripture project, or -1 if not applicable.</param>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/ScrTextListSelectionForm.cs:482-520
+    // Method: ScrTextListSelectionForm.SaveList()
+    // Maps to: CAP-014
     public void SaveList(string name, IList<string> textNames, int hebGrkIndex, int scrProjectIndex)
     {
-        throw new NotImplementedException();
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Collection name must not be null or empty.", nameof(name));
+
+        if (textNames is null || textNames.Count == 0)
+            throw new ArgumentException("Text names must not be null or empty.", nameof(textNames));
+
+        _savedLists[name] = new SavedScrTextList(
+            name,
+            textNames.ToList(),
+            hebGrkIndex,
+            scrProjectIndex
+        );
     }
 
     /// <summary>
@@ -38,16 +63,28 @@ internal class SavedCollectionService
     /// </summary>
     /// <param name="name">Name of the collection to delete.</param>
     /// <exception cref="InvalidOperationException">Collection not found.</exception>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/ScrTextListSelectionForm.cs:522-545
+    // Method: ScrTextListSelectionForm.DeleteList()
+    // Maps to: CAP-014
     public void DeleteList(string name)
     {
-        throw new NotImplementedException();
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Collection name must not be null or empty.", nameof(name));
+
+        if (!_savedLists.Remove(name))
+            throw new InvalidOperationException($"Collection '{name}' not found.");
     }
 
     /// <summary>
     /// Checks whether a collection with the given name already exists.
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/ScrTextListSelectionForm.cs:547-561
+    // Method: ScrTextListSelectionForm.ListExists()
+    // Maps to: CAP-014
     public bool Exists(string name)
     {
-        throw new NotImplementedException();
+        return _savedLists.ContainsKey(name);
     }
 }
