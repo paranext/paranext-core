@@ -32,4 +32,29 @@ internal static class ProjectFilterService
 
         return $"Project ({scrText.Settings.TranslationInfo.Type.LocalizedString(scrText)})";
     }
+
+    /// <summary>
+    /// Determines if a project should be shown based on active filter buttons,
+    /// search text, and TC-mode exclusions.
+    /// In TC mode, Enhanced Resources, Source Language Texts, Dictionaries,
+    /// and Consultant Notes are always hidden (VAL-010).
+    /// Source: EXT-012 (PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:769-791)
+    /// </summary>
+    /// <param name="projectId">Project GUID (HexId string).</param>
+    /// <param name="buttons">Filter button toggle states.</param>
+    /// <param name="searchText">Text to search for in project name (case-insensitive). Empty means no filter.</param>
+    /// <param name="isTcMode">Whether the dialog is in Text Collection mode.</param>
+    /// <returns>True if the project should be shown.</returns>
+    public static bool MatchesFilter(
+        string projectId,
+        FilterButtonStates buttons,
+        string searchText,
+        bool isTcMode
+    )
+    {
+        // === STUB: CAP-011 MatchesFilter ===
+        // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:769-791
+        // Maps to: EXT-012, VAL-010, BHV-T006
+        throw new NotImplementedException("CAP-011 MatchesFilter not yet implemented");
+    }
 }
