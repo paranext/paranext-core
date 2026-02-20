@@ -142,11 +142,16 @@ internal static class TextCollectionService
         return new TitleResult(title, tooltip);
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/TextCollectionForm.cs:124-143
+    // Method: TextCollectionForm.ChangeListener()
+    // Maps to: EXT-016, CAP-013
     /// <summary>
     /// Handles write lock change notifications. If scope is "Project", checks for
     /// deleted texts via RemoveDeletedTexts. If scope overlaps currentBookNum,
     /// triggers reload. Otherwise, no action needed.
-    /// Source: EXT-016 (PT9/Paratext/TextCollectionForm.cs:124-143)
+    /// PT10 adaptation: Replaces WriteLockManager event with string-based scope parameter.
+    /// Returns ChangeAction enum instead of directly triggering UI reload.
     /// </summary>
     /// <param name="scope">Scope string: "Project" for project-level, or book number for book-level.</param>
     /// <param name="items">Mutable list of TC items (may be modified if scope is "Project").</param>
@@ -158,8 +163,21 @@ internal static class TextCollectionService
         int currentBookNum
     )
     {
-        // RED phase stub -- implementation pending
-        throw new NotImplementedException();
+        if (items.Count == 0)
+            return ChangeAction.NoAction;
+
+        // Check for projects removed (PT9: writeScope.ContainsEntireProject())
+        if (scope == "Project")
+        {
+            bool anyRemoved = RemoveDeletedTexts(items);
+            return anyRemoved ? ChangeAction.RemoveAndReload : ChangeAction.NoAction;
+        }
+
+        // If books may have changed (PT9: writeScope.Overlaps(WriteScope.ProjectText(scrText)))
+        if (int.TryParse(scope, out int bookNum) && bookNum == currentBookNum)
+            return ChangeAction.Reload;
+
+        return ChangeAction.NoAction;
     }
 
     /// <summary>
