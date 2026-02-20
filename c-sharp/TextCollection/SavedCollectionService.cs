@@ -1,3 +1,5 @@
+using Paratext.Data;
+
 namespace Paranext.DataProvider.TextCollection;
 
 /// <summary>
@@ -103,15 +105,45 @@ internal sealed class SavedCollectionService
     /// via ScrTextCollection. Names that cannot be resolved are collected
     /// in UnresolvedNames.
     /// </summary>
-    // === EXTRACTION: EXT-004 ===
-    // Complexity: Simple
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/TextCollectionForm.cs:525-549
+    // Method: TextCollectionForm.GetSavedCollections()
     // Maps to: CAP-016, M-018
     public IList<SavedTextCollection> GetSavedCollections()
     {
-        throw new NotImplementedException(
-            "CAP-016: GetSavedCollections not yet implemented. "
-                + "TDD RED phase -- this stub exists so tests compile."
-        );
+        List<SavedTextCollection> result = new();
+
+        foreach (SavedScrTextList savedList in _savedLists.Values)
+        {
+            List<TextCollectionItem> items = new();
+            List<string> unresolvedNames = new();
+
+            foreach (string textName in savedList.TextNames)
+            {
+                if (ScrTextCollection.IsPresent(textName))
+                {
+                    ScrText? scrText = ScrTextCollection.Find(textName);
+                    if (scrText != null)
+                    {
+                        items.Add(
+                            new TextCollectionItem(scrText.Name, scrText.Guid.ToString(), 1.0)
+                        );
+                    }
+                    else
+                    {
+                        unresolvedNames.Add(textName);
+                    }
+                }
+                else
+                {
+                    unresolvedNames.Add(textName);
+                }
+            }
+
+            result.Add(new SavedTextCollection(savedList.Name, items, unresolvedNames));
+        }
+
+        return result;
     }
 
     // === CAP-015: AsymmetricSharingCombinedSets ===
