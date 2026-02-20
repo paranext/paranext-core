@@ -1290,4 +1290,569 @@ internal class VerseXmlGeneratorTests : PapiTestBase
     }
 
     #endregion
+
+    // =========================================================================
+    // =========================================================================
+    //
+    //  CAP-006: GenerateMultiPaneContent
+    //
+    //  Tests for VerseXmlGenerator.GenerateMultiPaneContent (EXT-007).
+    //  GenerateMultiPaneContent iterates all items calling WriteResourceXml
+    //  per item and generates CSS per unique language via CSSCreator.
+    //
+    //  Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:327-355
+    //  Golden Master: gm-012 (multi-pane combined XML + CSS)
+    //  Scenarios: TS-097, TS-122
+    //
+    // =========================================================================
+    // =========================================================================
+
+    // =========================================================================
+    // CAP-006 ACCEPTANCE TEST (Step 0)
+    // =========================================================================
+
+    #region CAP-006 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: GenerateMultiPaneContent produces combined XML
+    /// containing one resource element per item, CSS output, and correct
+    /// resource count. When this passes, CAP-006 is complete.
+    ///
+    /// gm-012: 3 items at MAT 1:1 produce combined XML with 3 resource
+    /// elements, CSS per unique language, and resourceCount=3.
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("GoldenMasterId", "gm-012")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_ThreeItems_ProducesCombinedXmlCssAndCorrectCount()
+    {
+        // Arrange: Create 3 projects with different names and content
+        DummyScrText project2 = CreateDummyProject();
+        DummyScrText project3 = CreateDummyProject();
+        ScrTextCollection.Add(project2, true);
+        ScrTextCollection.Add(project3, true);
+
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        PutBookText(
+            project2,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Au commencement de l'Evangile de Jesus-Christ."
+        );
+        PutBookText(
+            project3,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Libro de la genealogia de Jesucristo."
+        );
+
+        var items = new List<TextCollectionItem>
+        {
+            CreateItem(),
+            CreateItem(project2),
+            CreateItem(project3),
+        };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: Combined XML, CSS, and resource count
+        Assert.That(result, Is.Not.Null, "Result must not be null");
+        Assert.That(result.Xml, Is.Not.Null.And.Not.Empty, "XML output must not be empty");
+        Assert.That(result.Css, Is.Not.Null, "CSS output must not be null");
+        Assert.That(result.ResourceCount, Is.EqualTo(3), "ResourceCount must match item count");
+
+        // Verify 3 <resource> elements in the combined XML
+        // Parse by wrapping in a root element (combined XML is a fragment)
+        XElement wrapper = XElement.Parse($"<root>{result.Xml}</root>");
+        var resourceElements = wrapper.Elements("resource").ToList();
+        Assert.That(
+            resourceElements.Count,
+            Is.EqualTo(3),
+            "Combined XML must contain exactly 3 <resource> elements"
+        );
+
+        project2.Dispose();
+        project3.Dispose();
+    }
+
+    #endregion
+
+    // =========================================================================
+    // CAP-006 CONTRACT TESTS: Happy Path
+    // =========================================================================
+
+    #region CAP-006 Happy Path Tests
+
+    /// <summary>
+    /// GenerateMultiPaneContent with a single item produces 1 resource element.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_SingleItem_ProducesOneResourceElement()
+    {
+        // Arrange
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        var items = new List<TextCollectionItem> { CreateItem() };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert
+        Assert.That(result.ResourceCount, Is.EqualTo(1));
+        XElement wrapper = XElement.Parse($"<root>{result.Xml}</root>");
+        Assert.That(
+            wrapper.Elements("resource").Count(),
+            Is.EqualTo(1),
+            "Single item should produce exactly 1 <resource> element"
+        );
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent resource count always equals the number of items passed in.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_TwoItems_ResourceCountMatchesItemCount()
+    {
+        // Arrange
+        DummyScrText project2 = CreateDummyProject();
+        ScrTextCollection.Add(project2, true);
+
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        PutBookText(
+            project2,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Another translation of Matthew verse one."
+        );
+
+        var items = new List<TextCollectionItem> { CreateItem(), CreateItem(project2) };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert
+        Assert.That(
+            result.ResourceCount,
+            Is.EqualTo(2),
+            "ResourceCount must equal the number of items"
+        );
+
+        project2.Dispose();
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent produces CSS output (non-null).
+    /// CSS is generated per unique language via CSSCreator.CreateUsfmCss.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_WithItems_ProducesCssOutput()
+    {
+        // Arrange
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        var items = new List<TextCollectionItem> { CreateItem() };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: CSS must be a non-null string (may be empty if CSSCreator returns empty)
+        Assert.That(result.Css, Is.Not.Null, "CSS output must not be null");
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent XML output contains well-formed XML for each resource.
+    /// Each resource element must follow the BHV-601 structure from CAP-005.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-601")]
+    public void GenerateMultiPaneContent_MultipleItems_EachResourceIsWellFormed()
+    {
+        // Arrange
+        DummyScrText project2 = CreateDummyProject();
+        ScrTextCollection.Add(project2, true);
+
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        PutBookText(
+            project2,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Second translation content."
+        );
+
+        var items = new List<TextCollectionItem> { CreateItem(), CreateItem(project2) };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: Parse combined XML and verify each resource follows BHV-601 structure
+        XElement wrapper = XElement.Parse($"<root>{result.Xml}</root>");
+        foreach (XElement resource in wrapper.Elements("resource"))
+        {
+            Assert.That(
+                resource.Attribute("abbrev")?.Value,
+                Is.Not.Null.And.Not.Empty,
+                "Each resource must have 'abbrev' attribute"
+            );
+            Assert.That(
+                resource.Attribute("direction")?.Value,
+                Is.EqualTo("ltr").Or.EqualTo("rtl"),
+                "Each resource must have valid 'direction' attribute"
+            );
+
+            XElement? verseusx = resource.Element("verseusx");
+            Assert.That(verseusx, Is.Not.Null, "Each resource must have a 'verseusx' child");
+            Assert.That(
+                verseusx!.Attribute("fontsize")?.Value,
+                Is.Not.Null.And.Not.Empty,
+                "Each verseusx must have 'fontsize' attribute"
+            );
+        }
+
+        project2.Dispose();
+    }
+
+    #endregion
+
+    // =========================================================================
+    // CAP-006 GOLDEN MASTER TESTS: gm-012 - Multi-pane structure
+    // =========================================================================
+
+    #region CAP-006 Golden Master Tests (gm-012)
+
+    /// <summary>
+    /// GenerateMultiPaneContent produces resources with distinct abbreviations
+    /// (one per unique project). This verifies that WriteResourceXml is called
+    /// per item and each resource corresponds to a different project.
+    ///
+    /// gm-012: Combined XML has resources for "zzz3", "NIV84", "CEVUK" (3 distinct).
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("GoldenMasterId", "gm-012")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_ThreeItems_ResourcesHaveDistinctAbbreviations()
+    {
+        // Arrange: Create 3 projects
+        DummyScrText project2 = CreateDummyProject();
+        DummyScrText project3 = CreateDummyProject();
+        ScrTextCollection.Add(project2, true);
+        ScrTextCollection.Add(project3, true);
+
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        PutBookText(
+            project2,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Translation two."
+        );
+        PutBookText(
+            project3,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Translation three."
+        );
+
+        var items = new List<TextCollectionItem>
+        {
+            CreateItem(),
+            CreateItem(project2),
+            CreateItem(project3),
+        };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: Each resource has a distinct abbreviation
+        XElement wrapper = XElement.Parse($"<root>{result.Xml}</root>");
+        var abbrevs = wrapper
+            .Elements("resource")
+            .Select(r => r.Attribute("abbrev")?.Value)
+            .ToList();
+
+        Assert.That(
+            abbrevs.Distinct().Count(),
+            Is.EqualTo(3),
+            "Each item should produce a resource with a distinct abbreviation"
+        );
+
+        project2.Dispose();
+        project3.Dispose();
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent preserves item order in the XML output.
+    /// The first item in the list should produce the first resource element.
+    ///
+    /// gm-012: Resources appear in the same order as the items list.
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("GoldenMasterId", "gm-012")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_MultipleItems_PreservesItemOrder()
+    {
+        // Arrange
+        DummyScrText project2 = CreateDummyProject();
+        ScrTextCollection.Add(project2, true);
+
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        PutBookText(
+            project2,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Other content."
+        );
+
+        var items = new List<TextCollectionItem> { CreateItem(), CreateItem(project2) };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: Resource order matches item order
+        XElement wrapper = XElement.Parse($"<root>{result.Xml}</root>");
+        var abbrevs = wrapper
+            .Elements("resource")
+            .Select(r => r.Attribute("abbrev")?.Value)
+            .ToList();
+
+        Assert.That(abbrevs.Count, Is.EqualTo(2));
+        // First resource should match first item's project name
+        Assert.That(
+            abbrevs[0],
+            Does.Contain(_projectName),
+            "First resource should correspond to the first item"
+        );
+        // Second resource should match second item's project name
+        Assert.That(
+            abbrevs[1],
+            Does.Contain(project2.Name),
+            "Second resource should correspond to the second item"
+        );
+
+        project2.Dispose();
+    }
+
+    #endregion
+
+    // =========================================================================
+    // CAP-006 CONTRACT TESTS: Error Cases
+    // =========================================================================
+
+    #region CAP-006 Error Case Tests
+
+    /// <summary>
+    /// GenerateMultiPaneContent with an empty items list should throw or
+    /// return an error. data-contracts.md M-006 specifies: "Items list must
+    /// not be empty" -> INVALID_STATE.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_EmptyItemsList_ThrowsOrReturnsError()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>();
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act & Assert: Should throw an exception for empty items list,
+        // but NOT a NotImplementedException (which means the method is a stub)
+        var ex = Assert.Throws<Exception>(
+            () => VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef)
+        );
+        Assert.That(
+            ex,
+            Is.Not.TypeOf<NotImplementedException>(),
+            "Exception must not be NotImplementedException -- method must be implemented"
+        );
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent with an item referencing a non-existent project
+    /// should throw, propagating the PROJECT_NOT_FOUND from WriteResourceXml.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_ProjectNotFound_Throws()
+    {
+        // Arrange: Item with non-existent project ID
+        var items = new List<TextCollectionItem>
+        {
+            new("NonExistent", "0000000000000000000000000000000000000000", 1.0),
+        };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act & Assert: Should throw (propagated from WriteResourceXml)
+        var ex = Assert.Throws<Exception>(
+            () => VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef)
+        );
+        Assert.That(
+            ex,
+            Is.Not.TypeOf<NotImplementedException>(),
+            "Exception must not be NotImplementedException -- method must be implemented"
+        );
+    }
+
+    #endregion
+
+    // =========================================================================
+    // CAP-006 EDGE CASE TESTS
+    // =========================================================================
+
+    #region CAP-006 Edge Case Tests
+
+    /// <summary>
+    /// GenerateMultiPaneContent with items that have different zoom levels
+    /// produces resources with different font sizes. Zoom is applied per item
+    /// via WriteResourceXml (CAP-005 contract).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-601")]
+    public void GenerateMultiPaneContent_DifferentZooms_ProducesDifferentFontSizes()
+    {
+        // Arrange: Same project but different zoom levels
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        var items = new List<TextCollectionItem>
+        {
+            new(_projectName, _projectId, 1.0),
+            new(_projectName, _projectId, 2.0),
+        };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: Two resources with different font sizes
+        XElement wrapper = XElement.Parse($"<root>{result.Xml}</root>");
+        var fontsizes = wrapper
+            .Elements("resource")
+            .Select(r =>
+                int.Parse(r.Element("verseusx")!.Attribute("fontsize")!.Value)
+            )
+            .ToList();
+
+        Assert.That(fontsizes.Count, Is.EqualTo(2));
+        Assert.That(
+            fontsizes[1],
+            Is.GreaterThan(fontsizes[0]),
+            "Zoom 2.0 should produce a larger font size than zoom 1.0"
+        );
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent XML output is parseable as well-formed XML
+    /// when wrapped in a root element. The combined output is a sequence of
+    /// resource elements (an XML fragment).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_AnyItems_ProducesWellFormedXmlFragment()
+    {
+        // Arrange
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        var items = new List<TextCollectionItem> { CreateItem() };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: XML can be parsed when wrapped in a root element
+        Assert.DoesNotThrow(
+            () => XElement.Parse($"<root>{result.Xml}</root>"),
+            "Combined XML must be a well-formed XML fragment"
+        );
+    }
+
+    /// <summary>
+    /// GenerateMultiPaneContent generates CSS that covers the languages present
+    /// in the items. With multiple items using the same language, CSS should
+    /// be generated at least once for that language (deduplication expected).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("ScenarioId", "TS-097")]
+    [Property("BehaviorId", "BHV-T016")]
+    public void GenerateMultiPaneContent_SameLanguageItems_CssGeneratedForLanguage()
+    {
+        // Arrange: Two items from projects with the same language
+        DummyScrText project2 = CreateDummyProject();
+        ScrTextCollection.Add(project2, true);
+
+        PutBookText(_scrText, MAT, MATTHEW_USFM);
+        PutBookText(
+            project2,
+            MAT,
+            @"\id MAT
+\c 1
+\p
+\v 1 Alternate translation."
+        );
+
+        var items = new List<TextCollectionItem> { CreateItem(), CreateItem(project2) };
+        var verseRef = new VerseRef(MAT, 1, 1, ScrVers.English);
+
+        // Act
+        MultiPaneContent result = VerseXmlGenerator.GenerateMultiPaneContent(items, verseRef);
+
+        // Assert: CSS is generated (non-null); two resources produced
+        Assert.That(result.Css, Is.Not.Null, "CSS must be generated for the language");
+        Assert.That(result.ResourceCount, Is.EqualTo(2));
+
+        project2.Dispose();
+    }
+
+    #endregion
 }
