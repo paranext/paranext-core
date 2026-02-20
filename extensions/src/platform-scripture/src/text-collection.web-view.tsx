@@ -939,13 +939,6 @@ globalThis.webViewComponent = function TextCollectionWebView({
                   return (
                     <p
                       key={verse.verseNum}
-                      ref={
-                        isCurrent
-                          ? (el) => {
-                              el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                            }
-                          : undefined
-                      }
                       className={`tw-mb-1 ${isCurrent ? 'tw-bg-primary/10 tw-rounded tw-px-1' : ''}`}
                       data-testid={`single-pane-verse-${verse.verseNum}`}
                     >
