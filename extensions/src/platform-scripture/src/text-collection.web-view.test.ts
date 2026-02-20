@@ -37,6 +37,7 @@ interface TCState {
   highlightGuessedRenderings: boolean;
   focusedPane: FocusedPane;
   setupComplete: boolean;
+  missingProjects: string[];
 }
 
 type TCAction =
@@ -226,6 +227,7 @@ function createTestState(overrides: Partial<TCState> = {}): TCState {
     highlightGuessedRenderings: false,
     focusedPane: 'multi',
     setupComplete: true,
+    missingProjects: [],
     ...overrides,
   };
 }
