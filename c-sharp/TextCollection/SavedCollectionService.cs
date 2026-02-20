@@ -111,39 +111,31 @@ internal sealed class SavedCollectionService
     // Maps to: CAP-016, M-018
     public IList<SavedTextCollection> GetSavedCollections()
     {
-        List<SavedTextCollection> result = new();
+        return _savedLists.Values.Select(ResolveSavedList).ToList();
+    }
 
-        foreach (SavedScrTextList savedList in _savedLists.Values)
+    private static SavedTextCollection ResolveSavedList(SavedScrTextList savedList)
+    {
+        List<TextCollectionItem> items = new();
+        List<string> unresolvedNames = new();
+
+        foreach (string textName in savedList.TextNames)
         {
-            List<TextCollectionItem> items = new();
-            List<string> unresolvedNames = new();
+            ScrText? scrText = ScrTextCollection.IsPresent(textName)
+                ? ScrTextCollection.Find(textName)
+                : null;
 
-            foreach (string textName in savedList.TextNames)
+            if (scrText != null)
             {
-                if (ScrTextCollection.IsPresent(textName))
-                {
-                    ScrText? scrText = ScrTextCollection.Find(textName);
-                    if (scrText != null)
-                    {
-                        items.Add(
-                            new TextCollectionItem(scrText.Name, scrText.Guid.ToString(), 1.0)
-                        );
-                    }
-                    else
-                    {
-                        unresolvedNames.Add(textName);
-                    }
-                }
-                else
-                {
-                    unresolvedNames.Add(textName);
-                }
+                items.Add(new TextCollectionItem(scrText.Name, scrText.Guid.ToString(), 1.0));
             }
-
-            result.Add(new SavedTextCollection(savedList.Name, items, unresolvedNames));
+            else
+            {
+                unresolvedNames.Add(textName);
+            }
         }
 
-        return result;
+        return new SavedTextCollection(savedList.Name, items, unresolvedNames);
     }
 
     // === CAP-015: AsymmetricSharingCombinedSets ===
