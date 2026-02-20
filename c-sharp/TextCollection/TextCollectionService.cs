@@ -65,10 +65,6 @@ internal static class TextCollectionService
     /// <param name="currentTextIds">Current TC text IDs.</param>
     /// <param name="proposedTextIds">Proposed text IDs to compare.</param>
     /// <returns>True if same length and same order; false otherwise.</returns>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/TextCollectionForm.cs:446-449
-    // Method: TextCollectionForm.Equivalent()
-    // Maps to: EXT-002, BHV-501, INV-009
     public static bool AreEquivalent(IList<string> currentTextIds, IList<string> proposedTextIds)
     {
         ArgumentNullException.ThrowIfNull(currentTextIds);
