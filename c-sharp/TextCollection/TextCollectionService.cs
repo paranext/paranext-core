@@ -202,6 +202,32 @@ internal static class TextCollectionService
     }
 
     /// <summary>
+    /// Creates or activates an existing text collection. Orchestrates CAP-001 (filter)
+    /// and CAP-002 (equivalence) to determine the correct outcome:
+    /// 1. If 0 projectIds: returns error (INSUFFICIENT_TEXTS)
+    /// 2. If 1 projectId: returns fallback to TextForm (BHV-606, INV-010)
+    /// 3. If 2+ projectIds: filters eligible texts, checks for duplicate TC, returns
+    ///    existing window or creates new one
+    /// 4. If all texts rejected: returns error (INELIGIBLE_TEXT)
+    ///
+    /// Source: PT9/Paratext/WindowCollection.cs:518-528 (single-text fallback),
+    ///         PT9/Paratext/WindowCollection.cs:910-917 (duplicate detection)
+    /// </summary>
+    /// <param name="request">The creation request with project IDs and scroll group.</param>
+    /// <param name="existingCollectionIds">Lists of text IDs for already-open TCs (for duplicate detection).</param>
+    /// <returns>TextCollectionCreateResult indicating success, error, or fallback.</returns>
+    public static TextCollectionCreateResult CreateOrActivateTextCollection(
+        TextCollectionCreateRequest request,
+        IList<IList<string>> existingCollectionIds
+    )
+    {
+        // Stub: implementation in GREEN phase
+        throw new NotImplementedException(
+            "CAP-003: CreateOrActivateTextCollection not yet implemented"
+        );
+    }
+
+    /// <summary>
     /// Merges new text selections with existing items, preserving zoom for retained texts.
     /// For each ID in newSelectionIds, if a matching item exists in existingItems (by ScrTextId),
     /// its zoom is preserved; otherwise, the new item gets default zoom (1.0).
