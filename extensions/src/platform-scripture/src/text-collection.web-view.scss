@@ -1,3 +1,16 @@
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+}
+
+#root {
+  height: 100%;
+}
+
 .text-collection-root {
   display: flex;
   flex-direction: column;

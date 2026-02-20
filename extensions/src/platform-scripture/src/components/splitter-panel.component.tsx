@@ -95,7 +95,7 @@ export default function SplitterPanel({
     >
       {leftVisible && (
         <div
-          className="tw-overflow-auto"
+          className="tw-overflow-hidden"
           style={{
             flex: bothVisible ? proportion : 1,
             minWidth: isVertical ? 0 : undefined,
@@ -126,7 +126,7 @@ export default function SplitterPanel({
 
       {rightVisible && (
         <div
-          className="tw-overflow-auto"
+          className="tw-overflow-hidden"
           style={{
             flex: bothVisible ? 1 - proportion : 1,
             minWidth: isVertical ? 0 : undefined,
