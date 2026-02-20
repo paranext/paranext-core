@@ -26,6 +26,11 @@ import ArticleViewer from '../components/article-viewer.component';
 import type { OverlayStackEntry } from '../components/article-viewer.component';
 import ImageViewer from '../components/image-viewer.component';
 import type { MediaViewerInput } from '../components/image-viewer.component';
+import SemanticDomainViewer from '../components/semantic-domain-viewer.component';
+import type {
+  SemanticDomainViewerInput,
+  SemanticDomain,
+} from '../components/semantic-domain-viewer.component';
 
 // --- Types ---
 
@@ -139,6 +144,54 @@ const DEFAULT_ARTICLE_OVERLAY_STACK: OverlayStackEntry[] = [];
 
 /** Default media viewer overlay input (null = closed) */
 const DEFAULT_MEDIA_VIEWER_INPUT: MediaViewerInput | undefined = undefined;
+
+/** Default semantic domain viewer input (undefined = closed) */
+const DEFAULT_SEMANTIC_DOMAIN_INPUT: SemanticDomainViewerInput | undefined = undefined;
+
+/**
+ * Placeholder domain tree used when opening the semantic domain viewer. In a future backend
+ * integration pass the real domain tree will be provided by
+ * platformEnhancedResources.loadDictionaryTab (CAP-009).
+ */
+const PLACEHOLDER_DOMAIN_TREE: SemanticDomain[] = [
+  {
+    number: '1',
+    name: 'Universe, creation',
+    children: [
+      {
+        number: '1.1',
+        name: 'Sky',
+        children: [
+          { number: '1.1.1', name: 'Sun', words: [{ lemma: 'helios', term: 'sun' }], children: [] },
+          {
+            number: '1.1.2',
+            name: 'Moon',
+            words: [{ lemma: 'selene', term: 'moon' }],
+            children: [],
+          },
+          {
+            number: '1.1.3',
+            name: 'Star',
+            children: [{ number: '1.1.3.1', name: 'Constellation', children: [] }],
+          },
+        ],
+      },
+      {
+        number: '1.2',
+        name: 'World',
+        children: [
+          { number: '1.2.1', name: 'Land', children: [] },
+          { number: '1.2.2', name: 'Water', children: [] },
+        ],
+      },
+    ],
+  },
+  {
+    number: '2',
+    name: 'Person',
+    children: [{ number: '2.1', name: 'Body', children: [] }],
+  },
+];
 
 /** Maximum depth for nested article overlays */
 const MAX_OVERLAY_DEPTH = 10;
@@ -264,6 +317,11 @@ global.webViewComponent = function EnhancedResourceWebView({
     'mediaViewerInput',
     DEFAULT_MEDIA_VIEWER_INPUT,
   );
+
+  // --- Semantic domain viewer overlay state ---
+  const [semanticDomainInput, setSemanticDomainInput] = useWebViewState<
+    SemanticDomainViewerInput | undefined
+  >('semanticDomainInput', DEFAULT_SEMANTIC_DOMAIN_INPUT);
 
   // Keep a ref to the current banners for use in callbacks
   const bannersRef = useRef(banners);
@@ -405,10 +463,32 @@ global.webViewComponent = function EnhancedResourceWebView({
     [setHideIrrelevantMeanings],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleSemanticDomainClick = useCallback((_domainNumber: string) => {
-    // Semantic domain viewer will be wired in UI-PKG-012
-  }, []);
+  // Open semantic domain viewer overlay when a domain link is clicked in dictionary tab
+  const handleSemanticDomainClick = useCallback(
+    (domainNumber: string) => {
+      setSemanticDomainInput({
+        selectedDomainNumber: domainNumber,
+        domainTree: PLACEHOLDER_DOMAIN_TREE,
+      });
+    },
+    [setSemanticDomainInput],
+  );
+
+  // Close semantic domain viewer overlay
+  const handleSemanticDomainClose = useCallback(() => {
+    setSemanticDomainInput(undefined);
+  }, [setSemanticDomainInput]);
+
+  // Handle word navigation from semantic domain viewer - close overlay
+  const handleSemanticDomainNavigateToWord = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (_term: string) => {
+      // Close the semantic domain viewer; word filter activation will be
+      // wired during backend integration
+      setSemanticDomainInput(undefined);
+    },
+    [setSemanticDomainInput],
+  );
 
   // Keep a ref to the current assessments for use in callbacks
   const dictionaryAssessmentsRef = useRef(dictionaryAssessments);
@@ -812,6 +892,16 @@ global.webViewComponent = function EnhancedResourceWebView({
               parentTabType={mediaViewerInput.parentTabType}
               displayItems={mediaViewerInput.displayItems}
               onClose={handleMediaViewerClose}
+            />
+          ) : undefined}
+
+          {/* Semantic Domain Viewer overlay - renders above research pane content */}
+          {semanticDomainInput ? (
+            <SemanticDomainViewer
+              selectedDomainNumber={semanticDomainInput.selectedDomainNumber}
+              domainTree={semanticDomainInput.domainTree}
+              onClose={handleSemanticDomainClose}
+              onNavigateToWord={handleSemanticDomainNavigateToWord}
             />
           ) : undefined}
         </ResizablePanel>

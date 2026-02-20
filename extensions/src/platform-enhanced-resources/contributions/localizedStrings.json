@@ -106,7 +106,13 @@
       "%enhancedResources_imageViewer_nextImage%": "Next image",
       "%enhancedResources_imageViewer_zoomIn%": "Zoom in",
       "%enhancedResources_imageViewer_zoomOut%": "Zoom out",
-      "%enhancedResources_imageViewer_title%": "Image Viewer"
+      "%enhancedResources_imageViewer_title%": "Image Viewer",
+      "%enhancedResources_semanticDomain_close%": "Close semantic domain viewer",
+      "%enhancedResources_semanticDomain_breadcrumbLabel%": "Domain path",
+      "%enhancedResources_semanticDomain_expandNode%": "Expand",
+      "%enhancedResources_semanticDomain_collapseNode%": "Collapse",
+      "%enhancedResources_semanticDomain_title%": "Semantic Domains",
+      "%enhancedResources_semanticDomain_goToWord%": "Go to dictionary entry"
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -213,7 +219,13 @@
       "%enhancedResources_imageViewer_nextImage%": "Imagen siguiente",
       "%enhancedResources_imageViewer_zoomIn%": "Acercar",
       "%enhancedResources_imageViewer_zoomOut%": "Alejar",
-      "%enhancedResources_imageViewer_title%": "Visor de imagen"
+      "%enhancedResources_imageViewer_title%": "Visor de imagen",
+      "%enhancedResources_semanticDomain_close%": "Cerrar visor de dominios semanticos",
+      "%enhancedResources_semanticDomain_breadcrumbLabel%": "Ruta de dominio",
+      "%enhancedResources_semanticDomain_expandNode%": "Expandir",
+      "%enhancedResources_semanticDomain_collapseNode%": "Contraer",
+      "%enhancedResources_semanticDomain_title%": "Dominios semanticos",
+      "%enhancedResources_semanticDomain_goToWord%": "Ir a entrada de diccionario"
     }
   }
 }
