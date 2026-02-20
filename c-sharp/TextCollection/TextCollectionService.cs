@@ -73,13 +73,10 @@ internal static class TextCollectionService
         return currentTextIds.SequenceEqual(proposedTextIds);
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728
-    // Method: TextCollectionControl.RemoveDeletedTexts()
-    // Maps to: EXT-014, BHV-112
     /// <summary>
     /// Removes texts no longer present in ScrTextCollection.
     /// Returns true if any items were removed.
+    /// Source: EXT-014 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728)
     /// PT10 adaptation: Uses ScrTextCollection.IsPresent(string) with ScrTextName
     /// instead of IsPresent(ScrText). The string overload handles joined text
     /// splitting on '/' (e.g., "HEB/GRK") and case-insensitive matching internally.
