@@ -21,6 +21,7 @@ import EncyclopediaTab from './encyclopedia-tab.component';
 import type { EncyclopediaDisplayItem, EncyclopediaEntry } from './encyclopedia-tab.component';
 import MediaTab from './media-tab.component';
 import type { MediaDisplayItem, BibleImage } from './media-tab.component';
+import MapsTab from './maps-tab.component';
 
 // --- Types ---
 
@@ -88,6 +89,16 @@ export interface ResearchPaneProps {
   onMediaToggleGroup: (groupId: string) => void;
   /** Callback when a media thumbnail is clicked */
   onMediaItemClick: (image: BibleImage) => void;
+
+  // --- Maps Tab Props ---
+  /** Maps display items to show in the maps tab (Satellite Bible Atlas collection) */
+  mapsItems: MediaDisplayItem[];
+  /** Set of expanded maps group IDs */
+  mapsExpandedGroups: string[];
+  /** Callback when a maps group header is toggled (expand/collapse) */
+  onMapsToggleGroup: (groupId: string) => void;
+  /** Callback when a map thumbnail is clicked */
+  onMapItemClick: (image: BibleImage) => void;
 }
 
 // --- Constants ---
@@ -156,6 +167,10 @@ export default function ResearchPane({
   mediaExpandedGroups,
   onMediaToggleGroup,
   onMediaItemClick,
+  mapsItems,
+  mapsExpandedGroups,
+  onMapsToggleGroup,
+  onMapItemClick,
 }: ResearchPaneProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
 
@@ -309,12 +324,14 @@ export default function ResearchPane({
           />
         </TabsContent>
 
-        <TabsContent value="maps" className="tw-flex-1 tw-overflow-auto tw-min-h-0">
-          <div data-testid="maps-tab-content" className="tw-p-4">
-            <p className="tw-text-muted-foreground tw-text-sm">
-              {localizedStrings['%enhancedResources_emptyState%']}
-            </p>
-          </div>
+        <TabsContent value="maps" className="tw-flex-1 tw-overflow-hidden tw-min-h-0">
+          <MapsTab
+            items={mapsItems}
+            isVisible={activeTab === 'maps'}
+            expandedGroups={mapsExpandedGroups}
+            onToggleGroup={onMapsToggleGroup}
+            onMapItemClick={onMapItemClick}
+          />
         </TabsContent>
       </Tabs>
     </div>

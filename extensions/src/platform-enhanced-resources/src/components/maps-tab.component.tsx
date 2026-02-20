@@ -7,9 +7,9 @@ import type { MediaDisplayItem, BibleImage, MediaGroupType } from './media-item.
 
 // --- Types ---
 
-/** Props for the MediaTab component */
-export interface MediaTabProps {
-  /** Media display items to render */
+/** Props for the MapsTab component */
+export interface MapsTabProps {
+  /** Maps display items to render (filtered by backend to Satellite Bible Atlas collection) */
   items: MediaDisplayItem[];
   /** Whether this tab is currently visible (for deferred loading) */
   isVisible: boolean;
@@ -17,18 +17,18 @@ export interface MediaTabProps {
   expandedGroups: string[];
   /** Callback when a group header is toggled (expand/collapse) */
   onToggleGroup: (groupId: string) => void;
-  /** Callback when a media thumbnail is clicked */
-  onMediaItemClick: (image: BibleImage) => void;
+  /** Callback when a map thumbnail is clicked */
+  onMapItemClick: (image: BibleImage) => void;
 }
 
 // --- Constants ---
 
-const MEDIA_TAB_LOCALIZED_KEYS: LocalizeKey[] = [
+const MAPS_TAB_LOCALIZED_KEYS: LocalizeKey[] = [
   '%enhancedResources_emptyState%',
-  '%enhancedResources_media_wordLinkedGroup%',
-  '%enhancedResources_media_verseRangeGroup%',
-  '%enhancedResources_media_expandGroup%',
-  '%enhancedResources_media_collapseGroup%',
+  '%enhancedResources_maps_wordLinkedGroup%',
+  '%enhancedResources_maps_verseRangeGroup%',
+  '%enhancedResources_maps_expandGroup%',
+  '%enhancedResources_maps_collapseGroup%',
 ];
 
 // --- Helper: Group items by group type ---
@@ -45,9 +45,9 @@ function groupItemsByType(items: MediaDisplayItem[]): GroupedItems {
   };
 }
 
-// --- Sub-component: Media Group ---
+// --- Sub-component: Maps Group ---
 
-interface MediaGroupProps {
+interface MapsGroupProps {
   /** Group type label key */
   groupType: MediaGroupType;
   /** Items in this group */
@@ -56,29 +56,29 @@ interface MediaGroupProps {
   expandedGroups: string[];
   /** Callback when a group header is toggled */
   onToggleGroup: (groupId: string) => void;
-  /** Callback when a media thumbnail is clicked */
-  onMediaItemClick: (image: BibleImage) => void;
+  /** Callback when a map thumbnail is clicked */
+  onMapItemClick: (image: BibleImage) => void;
   /** Localized strings */
   localizedStrings: LanguageStrings;
 }
 
-function MediaGroup({
+function MapsGroup({
   groupType,
   items,
   expandedGroups,
   onToggleGroup,
-  onMediaItemClick,
+  onMapItemClick,
   localizedStrings,
-}: MediaGroupProps) {
+}: MapsGroupProps) {
   if (items.length === 0) return undefined;
 
   const groupLabel =
     groupType === 'word-linked'
-      ? localizedStrings['%enhancedResources_media_wordLinkedGroup%']
-      : localizedStrings['%enhancedResources_media_verseRangeGroup%'];
+      ? localizedStrings['%enhancedResources_maps_wordLinkedGroup%']
+      : localizedStrings['%enhancedResources_maps_verseRangeGroup%'];
 
   return (
-    <div data-testid={`media-group-${groupType}`} className="tw-mb-3">
+    <div data-testid={`maps-group-${groupType}`} className="tw-mb-3">
       {/* Group type header */}
       <div className="tw-text-xs tw-font-semibold tw-text-muted-foreground tw-uppercase tw-tracking-wider tw-px-2 tw-py-1 tw-mb-1">
         {groupLabel}
@@ -91,7 +91,7 @@ function MediaGroup({
         return (
           <div
             key={displayItem.id}
-            data-testid={`media-display-item-${displayItem.id}`}
+            data-testid={`maps-display-item-${displayItem.id}`}
             className="tw-border-b tw-border-border"
           >
             {/* Collapsible group header */}
@@ -102,8 +102,8 @@ function MediaGroup({
               aria-expanded={isExpanded}
               aria-label={
                 isExpanded
-                  ? `${localizedStrings['%enhancedResources_media_collapseGroup%']} ${displayItem.groupHeader}`
-                  : `${localizedStrings['%enhancedResources_media_expandGroup%']} ${displayItem.groupHeader}`
+                  ? `${localizedStrings['%enhancedResources_maps_collapseGroup%']} ${displayItem.groupHeader}`
+                  : `${localizedStrings['%enhancedResources_maps_expandGroup%']} ${displayItem.groupHeader}`
               }
             >
               <span className="tw-w-[22px] tw-shrink-0 tw-flex tw-items-center tw-justify-center">
@@ -124,7 +124,7 @@ function MediaGroup({
               <div className="tw-pl-[30px] tw-pr-2 tw-pb-3 tw-pt-2 tw-bg-accent/20">
                 <div className="tw-flex tw-flex-wrap tw-gap-3">
                   {displayItem.images.map((image) => (
-                    <MediaItem key={image.id} image={image} onImageClick={onMediaItemClick} />
+                    <MediaItem key={image.id} image={image} onImageClick={onMapItemClick} />
                   ))}
                 </div>
               </div>
@@ -139,32 +139,39 @@ function MediaGroup({
 // --- Component ---
 
 /**
- * MediaTab renders the Media research tab content. It displays media items grouped by type
- * (word-linked vs verse-range), with collapsible group headers and thumbnail grids.
+ * MapsTab renders the Maps research tab content. It displays map items from the "Satellite Bible
+ * Atlas" collection, grouped by type (word-linked vs verse-range), with collapsible group headers
+ * and thumbnail grids.
+ *
+ * The backend (platformEnhancedResources.loadMapsTab / CAP-012) filters items to only include
+ * Satellite Bible Atlas collection per INV-012. This component receives the pre-filtered items and
+ * renders them identically to MediaTab.
  *
  * Supports deferred loading via the `isVisible` prop -- content is only rendered when the tab is
  * visible to avoid unnecessary work.
  *
- * This component is rendered within the ResearchPane's media TabsContent area.
+ * Reuses the MediaItem component from media-item.component.tsx for individual thumbnail rendering.
+ *
+ * This component is rendered within the ResearchPane's maps TabsContent area.
  */
-export default function MediaTab({
+export default function MapsTab({
   items,
   isVisible,
   expandedGroups,
   onToggleGroup,
-  onMediaItemClick,
-}: MediaTabProps) {
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => MEDIA_TAB_LOCALIZED_KEYS, []));
+  onMapItemClick,
+}: MapsTabProps) {
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => MAPS_TAB_LOCALIZED_KEYS, []));
 
   const grouped = useMemo(() => groupItemsByType(items), [items]);
 
   // Deferred loading: only render content when tab is visible
   if (!isVisible) {
-    return <div data-testid="media-tab" className="tw-flex tw-flex-col tw-h-full tw-min-h-0" />;
+    return <div data-testid="maps-tab" className="tw-flex tw-flex-col tw-h-full tw-min-h-0" />;
   }
 
   return (
-    <div data-testid="media-tab" className="tw-flex tw-flex-col tw-h-full tw-min-h-0">
+    <div data-testid="maps-tab" className="tw-flex tw-flex-col tw-h-full tw-min-h-0">
       {/* Scrollable content area */}
       <div className="tw-flex-1 tw-overflow-auto tw-min-h-0">
         {items.length === 0 ? (
@@ -176,22 +183,22 @@ export default function MediaTab({
         ) : (
           <>
             {/* Word-linked group */}
-            <MediaGroup
+            <MapsGroup
               groupType="word-linked"
               items={grouped.wordLinked}
               expandedGroups={expandedGroups}
               onToggleGroup={onToggleGroup}
-              onMediaItemClick={onMediaItemClick}
+              onMapItemClick={onMapItemClick}
               localizedStrings={localizedStrings}
             />
 
             {/* Verse-range group */}
-            <MediaGroup
+            <MapsGroup
               groupType="verse-range"
               items={grouped.verseRange}
               expandedGroups={expandedGroups}
               onToggleGroup={onToggleGroup}
-              onMediaItemClick={onMediaItemClick}
+              onMapItemClick={onMapItemClick}
               localizedStrings={localizedStrings}
             />
           </>
@@ -201,5 +208,5 @@ export default function MediaTab({
   );
 }
 
-// Re-export types that consumers of MediaTab will need
+// Re-export types that consumers of MapsTab will need
 export type { MediaDisplayItem, BibleImage, MediaGroupType } from './media-item.component';

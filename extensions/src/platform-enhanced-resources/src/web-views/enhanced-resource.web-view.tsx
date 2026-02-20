@@ -124,6 +124,12 @@ const DEFAULT_ENCYCLOPEDIA_ITEMS: EncyclopediaDisplayItem[] = [];
  */
 const DEFAULT_MEDIA_ITEMS: MediaDisplayItem[] = [];
 
+/**
+ * Default empty maps items (will be populated by backend integration -
+ * platformEnhancedResources.loadMapsTab / CAP-012)
+ */
+const DEFAULT_MAPS_ITEMS: MediaDisplayItem[] = [];
+
 // --- Component ---
 
 global.webViewComponent = function EnhancedResourceWebView({
@@ -221,6 +227,16 @@ global.webViewComponent = function EnhancedResourceWebView({
   // Media expanded groups: track which group IDs are expanded
   const [mediaExpandedGroups, setMediaExpandedGroups] = useWebViewState<string[]>(
     'mediaExpandedGroups',
+    [],
+  );
+
+  // --- Maps tab state ---
+  // Maps items will be populated by backend integration (platformEnhancedResources.loadMapsTab / CAP-012)
+  const [mapsItems] = useWebViewState<MediaDisplayItem[]>('mapsItems', DEFAULT_MAPS_ITEMS);
+
+  // Maps expanded groups: track which group IDs are expanded
+  const [mapsExpandedGroups, setMapsExpandedGroups] = useWebViewState<string[]>(
+    'mapsExpandedGroups',
     [],
   );
 
@@ -435,6 +451,31 @@ global.webViewComponent = function EnhancedResourceWebView({
     // MediaViewer overlay will be wired in UI-PKG-011
   }, []);
 
+  // --- Maps tab handlers ---
+
+  // Keep a ref to the current expanded maps groups for use in callbacks
+  const mapsExpandedGroupsRef = useRef(mapsExpandedGroups);
+  useEffect(() => {
+    mapsExpandedGroupsRef.current = mapsExpandedGroups;
+  }, [mapsExpandedGroups]);
+
+  const handleMapsToggleGroup = useCallback(
+    (groupId: string) => {
+      const prev = mapsExpandedGroupsRef.current;
+      if (prev.includes(groupId)) {
+        setMapsExpandedGroups(prev.filter((g: string) => g !== groupId));
+      } else {
+        setMapsExpandedGroups([...prev, groupId]);
+      }
+    },
+    [setMapsExpandedGroups],
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleMapItemClick = useCallback((_image: BibleImage) => {
+    // MediaViewer overlay will be wired in UI-PKG-011
+  }, []);
+
   // Compute encyclopedia items with expanded state applied
   const encyclopediaItemsWithExpanded = useMemo(
     () =>
@@ -558,6 +599,10 @@ global.webViewComponent = function EnhancedResourceWebView({
             mediaExpandedGroups={mediaExpandedGroups}
             onMediaToggleGroup={handleMediaToggleGroup}
             onMediaItemClick={handleMediaItemClick}
+            mapsItems={mapsItems}
+            mapsExpandedGroups={mapsExpandedGroups}
+            onMapsToggleGroup={handleMapsToggleGroup}
+            onMapItemClick={handleMapItemClick}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

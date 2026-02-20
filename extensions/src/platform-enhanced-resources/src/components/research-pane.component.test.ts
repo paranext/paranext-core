@@ -29,6 +29,10 @@ const DEFAULT_DICTIONARY_PROPS = {
   mediaExpandedGroups: [],
   onMediaToggleGroup: () => {},
   onMediaItemClick: () => {},
+  mapsItems: [],
+  mapsExpandedGroups: [],
+  onMapsToggleGroup: () => {},
+  onMapItemClick: () => {},
 };
 
 describe('research-pane.component', () => {
