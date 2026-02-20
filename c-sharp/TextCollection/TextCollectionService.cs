@@ -201,17 +201,13 @@ internal static class TextCollectionService
         return null;
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:598-626
-    // Method: TextCollectionControl.SelectTexts (zoom preservation logic)
-    // Maps to: EXT-015, BHV-T017
-
     /// <summary>
     /// Merges new text selections with existing items, preserving zoom for retained texts.
     /// For each ID in newSelectionIds, if a matching item exists in existingItems (by ScrTextId),
     /// its zoom is preserved; otherwise, the new item gets default zoom (1.0).
     /// Returned list is in the order of newSelectionIds.
     /// Removed items (in existingItems but not in newSelectionIds) are dropped.
+    /// Source: EXT-015 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:598-626)
     /// </summary>
     /// <param name="existingItems">Current items with per-text zoom values.</param>
     /// <param name="newSelectionIds">Ordered list of project GUIDs for the new selection.</param>
@@ -232,7 +228,7 @@ internal static class TextCollectionService
         {
             if (existingById.TryGetValue(id, out TextCollectionItem? existing))
             {
-                result.Add(new TextCollectionItem(existing.ScrTextName, id, existing.Zoom));
+                result.Add(existing);
             }
             else
             {
