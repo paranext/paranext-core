@@ -201,10 +201,10 @@ internal static class TextCollectionService
         return null;
     }
 
-    // === EXTRACTION: EXT-015 TextCollectionService.MergeWithZoomPreservation ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:598-626
-    // Complexity: Simple
-    // Behaviors: BHV-T017
+    // Method: TextCollectionControl.SelectTexts (zoom preservation logic)
+    // Maps to: EXT-015, BHV-T017
 
     /// <summary>
     /// Merges new text selections with existing items, preserving zoom for retained texts.
@@ -221,6 +221,27 @@ internal static class TextCollectionService
         IList<string> newSelectionIds
     )
     {
-        throw new NotImplementedException("CAP-009: MergeWithZoomPreservation not yet implemented");
+        var existingById = new Dictionary<string, TextCollectionItem>();
+        foreach (TextCollectionItem item in existingItems)
+        {
+            existingById.TryAdd(item.ScrTextId, item);
+        }
+
+        var result = new List<TextCollectionItem>(newSelectionIds.Count);
+        foreach (string id in newSelectionIds)
+        {
+            if (existingById.TryGetValue(id, out TextCollectionItem? existing))
+            {
+                result.Add(new TextCollectionItem(existing.ScrTextName, id, existing.Zoom));
+            }
+            else
+            {
+                ScrText? scrText = ScrTextCollection.GetById(HexId.FromStr(id));
+                string name = scrText?.Name ?? "";
+                result.Add(new TextCollectionItem(name, id, 1.0));
+            }
+        }
+
+        return result;
     }
 }
