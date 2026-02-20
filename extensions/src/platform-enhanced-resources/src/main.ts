@@ -2,16 +2,20 @@ import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext } from '@papi/core';
 import {
   EnhancedResourceWebViewProvider,
+  EnhancedResourceWebViewOptions,
   ENHANCED_RESOURCE_WEB_VIEW_TYPE,
 } from './enhanced-resource.web-view-provider';
 import { GuideWebViewProvider, GUIDE_WEB_VIEW_TYPE } from './guide.web-view-provider';
 
-async function openEnhancedResource(webViewId: string | undefined): Promise<string | undefined> {
-  return papi.webViews.openWebView(
-    ENHANCED_RESOURCE_WEB_VIEW_TYPE,
-    { type: 'tab' },
-    webViewId ? { existingId: webViewId } : undefined,
-  );
+async function openEnhancedResource(
+  webViewId: string | undefined,
+  resourceId: string | undefined,
+): Promise<string | undefined> {
+  const options: EnhancedResourceWebViewOptions = {
+    ...(webViewId ? { existingId: webViewId } : {}),
+    ...(resourceId ? { resourceId } : {}),
+  };
+  return papi.webViews.openWebView(ENHANCED_RESOURCE_WEB_VIEW_TYPE, { type: 'tab' }, options);
 }
 
 async function openGuide(webViewId: string | undefined): Promise<string | undefined> {
@@ -46,6 +50,12 @@ export async function activate(context: ExecutionActivationContext) {
             name: 'webViewId',
             required: false,
             summary: 'Optional existing web view ID to reuse',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'resourceId',
+            required: false,
+            summary: 'Optional enhanced resource ID to display',
             schema: { type: 'string' },
           },
         ],

@@ -10,6 +10,11 @@ import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from 'platform-bible-react';
 import ERToolbar from '../components/er-toolbar.component';
 import ScripturePane, { WordFilterData } from '../components/scripture-pane.component';
@@ -180,7 +185,7 @@ global.webViewComponent = function EnhancedResourceWebView({
   const [scrRef] = useWebViewScrollGroupScrRef();
 
   // --- Resource ID state (selected enhanced resource) ---
-  const [resourceId] = useWebViewState<string | undefined>('resourceId', undefined);
+  const [resourceId, setResourceId] = useWebViewState<string | undefined>('resourceId', undefined);
 
   // --- Persisted state ---
   const [splitterPercentage, setSplitterPercentage] = useWebViewState<number>(
@@ -249,7 +254,15 @@ global.webViewComponent = function EnhancedResourceWebView({
   );
 
   // Data from backend (replaces empty placeholder defaults)
-  const { scriptureHtml, footnoteHtml, dictionaryItems, encyclopediaItems } = backendData;
+  const { scriptureHtml, footnoteHtml, dictionaryItems, encyclopediaItems, availableResources } =
+    backendData;
+
+  // Auto-select if there is exactly one available resource and none is selected yet
+  useEffect(() => {
+    if (!resourceId && availableResources.length === 1) {
+      setResourceId(availableResources[0].id);
+    }
+  }, [resourceId, availableResources, setResourceId]);
 
   // Encyclopedia expanded state: track which entry IDs are expanded
   const [expandedEncyclopediaEntries, setExpandedEncyclopediaEntries] = useWebViewState<string[]>(
@@ -731,6 +744,33 @@ global.webViewComponent = function EnhancedResourceWebView({
       })),
     [dictionaryItems, expandedTerms],
   );
+
+  // --- Resource selector when no resource is selected ---
+  if (!resourceId && availableResources.length > 1) {
+    return (
+      <div
+        data-testid="enhanced-resource-viewer"
+        className="pr-twp tw-flex tw-flex-col tw-items-center tw-justify-center tw-h-screen tw-gap-4 tw-p-8"
+      >
+        <p className="tw-text-lg tw-font-medium">
+          {localizedStrings['%enhancedResources_title%'] || 'Enhanced Resources'}
+        </p>
+        <p className="tw-text-sm tw-text-muted-foreground">Select a resource to view</p>
+        <Select onValueChange={(value: string) => setResourceId(value)}>
+          <SelectTrigger className="tw-w-64">
+            <SelectValue placeholder="Choose a resource..." />
+          </SelectTrigger>
+          <SelectContent>
+            {availableResources.map((resource) => (
+              <SelectItem key={resource.id} value={resource.id}>
+                {resource.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="enhanced-resource-viewer" className="pr-twp tw-flex tw-flex-col tw-h-screen">

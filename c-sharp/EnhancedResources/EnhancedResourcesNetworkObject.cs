@@ -40,6 +40,9 @@ internal sealed class EnhancedResourcesNetworkObject : NetworkObject
     /// </summary>
     public async Task RegisterAsync()
     {
+        // Step 0: Populate data access from installed MarbleResource projects
+        MarbleDataAccessInitializer.Initialize(_dataAccess);
+
         // Step 1: Register as a NetworkObject with 3 functions
         var functions = GetFunctions();
         var functionNames = functions.Select(f => f.functionName).ToList();

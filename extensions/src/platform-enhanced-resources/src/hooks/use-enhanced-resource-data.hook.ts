@@ -142,12 +142,15 @@ interface EnhancedResourceInfo {
   hasUpdate: boolean;
 }
 
+/** Backend WordFilterSource enum values matching C# WordFilterSource */
+type BackendWordFilterSource = 0 | 1;
+
 /** Backend WordFilter for command parameters */
 interface BackendWordFilter {
   lemma: string;
   lexicalLinks: string[];
   surfaceForm: string;
-  sourcePane: 'Scripture' | 'Dictionary';
+  sourcePane: BackendWordFilterSource;
 }
 
 /** Scope filter enum values matching C# ScopeFilter */
@@ -278,7 +281,7 @@ function toBackendWordFilter(wf: WordFilterData): BackendWordFilter {
     lemma: wf.lemma,
     lexicalLinks: wf.lexicalLinks,
     surfaceForm: wf.surfaceForm,
-    sourcePane: wf.sourcePane === 'scripture' ? 'Scripture' : 'Dictionary',
+    sourcePane: wf.sourcePane === 'scripture' ? 0 : 1,
   };
 }
 
@@ -401,6 +404,12 @@ function isMediaTabContent(value: unknown): value is MediaTabContent {
 
 // --- Hook return type ---
 
+/** Lightweight resource descriptor for the resource selector */
+export interface AvailableResource {
+  id: string;
+  name: string;
+}
+
 export interface EnhancedResourceDataResult {
   /** Dictionary items for the research pane */
   dictionaryItems: DictionaryDisplayItem[];
@@ -416,6 +425,8 @@ export interface EnhancedResourceDataResult {
   footnoteHtml: string;
   /** Available tracked projects */
   availableProjects: TrackedProjectOption[];
+  /** Available enhanced resources with IDs (for resource selector) */
+  availableResources: AvailableResource[];
   /** Whether data is currently loading */
   isLoading: boolean;
   /** Last error message, if any */
@@ -445,6 +456,7 @@ export default function useEnhancedResourceData(
   const [scriptureHtml, setScriptureHtml] = useState<string>('');
   const [footnoteHtml, setFootnoteHtml] = useState<string>('');
   const [availableProjects, setAvailableProjects] = useState<TrackedProjectOption[]>([]);
+  const [availableResources, setAvailableResources] = useState<AvailableResource[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastError, setLastError] = useState<string | undefined>(undefined);
 
@@ -468,6 +480,12 @@ export default function useEnhancedResourceData(
               resources.map((r) => ({
                 name: r.name,
                 isNoProject: false,
+              })),
+            );
+            setAvailableResources(
+              resources.map((r) => ({
+                id: r.id,
+                name: r.name,
               })),
             );
           }
@@ -725,6 +743,7 @@ export default function useEnhancedResourceData(
     scriptureHtml,
     footnoteHtml,
     availableProjects,
+    availableResources,
     isLoading,
     lastError,
     saveViewState,

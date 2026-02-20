@@ -1,4 +1,5 @@
 using System.Text;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
@@ -69,9 +70,12 @@ internal static class ScriptureContentService
         if (tokens == null || tokens.Count == 0)
             return Task.FromResult(CreateMissingBookResult(verseRef, resourceId, tokens));
 
-        // Check if tokens actually have content for this book
+        // Check if tokens actually have content for this book.
+        // Parser stores book ID in Book token text (e.g. "JHN"), not in VerseRef.
+        string expectedBookId = Canon.BookNumberToId(verseRef.Book);
         bool hasMatchingBook = tokens.Any(t =>
-            t.VerseRef != null && t.VerseRef.Book == verseRef.Book
+            t.Type == MarbleTokenType.Book
+            && string.Equals(t.Text, expectedBookId, StringComparison.OrdinalIgnoreCase)
         );
         if (!hasMatchingBook)
             return Task.FromResult(CreateMissingBookResult(verseRef, resourceId, tokens));
@@ -160,10 +164,11 @@ internal static class ScriptureContentService
                     break;
 
                 case MarbleTokenType.Verse:
-                    if (token.VerseRef != null && token.VerseRef.Verse > 0)
+                    // Parser stores verse number in Text (e.g. "16"), not VerseRef
+                    if (!string.IsNullOrEmpty(token.Text))
                     {
                         sb.Append("<span class=\"verse-num\">")
-                            .Append(token.VerseRef.Verse)
+                            .Append(token.Text)
                             .Append("</span>");
                     }
                     break;

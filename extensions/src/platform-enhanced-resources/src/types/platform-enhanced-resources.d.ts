@@ -8,12 +8,15 @@ declare module 'platform-enhanced-resources' {
     verse: number;
   }
 
+  /** Backend WordFilterSource enum: 0=Scripture (exact match), 1=Dictionary (partial match) */
+  export type WordFilterSource = 0 | 1;
+
   /** Backend WordFilter for command parameters */
   export interface WordFilter {
     lemma: string;
     lexicalLinks: string[];
     surfaceForm: string;
-    sourcePane: 'Scripture' | 'Dictionary';
+    sourcePane: WordFilterSource;
   }
 
   /** View state for persistence */
@@ -81,10 +84,12 @@ declare module 'papi-shared-types' {
      * Opens an Enhanced Resource viewer web view.
      *
      * @param webViewId Optional existing web view ID to reuse
+     * @param resourceId Optional enhanced resource ID to display
      * @returns The web view ID of the opened Enhanced Resource viewer, or `undefined` if not opened
      */
     'platformEnhancedResources.openEnhancedResource': (
       webViewId: string | undefined,
+      resourceId: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
