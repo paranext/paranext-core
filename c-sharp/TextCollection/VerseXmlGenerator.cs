@@ -175,4 +175,26 @@ internal static class VerseXmlGenerator
 
         return xmlBuilder.ToString();
     }
+
+    // === EXTRACTION: EXT-007 VerseXmlGenerator.GenerateMultiPaneContent ===
+    // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:327-355
+    // Complexity: Simple
+    // Behaviors: BHV-T016
+    // Capability: CAP-006
+
+    /// <summary>
+    /// Generates combined XML and CSS for all items in the multi-pane.
+    /// Iterates items calling WriteResourceXml per item. Generates CSS per
+    /// unique language via CSSCreator.CreateUsfmCss.
+    /// </summary>
+    /// <param name="items">All TC items to render.</param>
+    /// <param name="verseRef">The verse reference to render.</param>
+    /// <returns>MultiPaneContent with combined XML, CSS, and resource count.</returns>
+    public static MultiPaneContent GenerateMultiPaneContent(
+        IList<TextCollectionItem> items,
+        VerseRef verseRef
+    )
+    {
+        throw new NotImplementedException();
+    }
 }
