@@ -27,6 +27,7 @@ const commentListWebViewType = 'legacyCommentManager.commentList';
 interface CommentListWebViewOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
+  editorWebViewId: string | undefined;
 }
 
 /** Map of projectId to comment list web view id for reusing existing web views */
@@ -73,6 +74,10 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       content: commentListWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
+      state: {
+        ...savedWebView.state,
+        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
+      },
     };
   }
 
@@ -159,7 +164,11 @@ async function openCommentList(
 
   if (!commentListWebViewId) {
     // No existing comment list, so create a new one
-    const webViewOptions: CommentListWebViewOptions = { projectId, editorScrollGroupId };
+    const webViewOptions: CommentListWebViewOptions = {
+      projectId,
+      editorScrollGroupId,
+      editorWebViewId: webViewId,
+    };
     commentListWebViewId = await papi.webViews.openWebView(
       commentListWebViewType,
       { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
