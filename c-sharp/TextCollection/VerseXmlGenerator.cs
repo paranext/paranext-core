@@ -219,15 +219,21 @@ internal static class VerseXmlGenerator
         foreach (TextCollectionItem item in items)
         {
             ScrText scrText = ResolveScrText(item);
+            // Use book 1 (Genesis) as representative to get language properties;
+            // language metadata (font, direction) is the same across all books.
             ScrText textForBook = scrText.GetJoinedText(1);
             string languageId = textForBook.Settings.LanguageID.Id;
 
             if (processedLanguages.Add(languageId))
             {
+                string fontFamily = textForBook.Language.FontName;
+                int fontSize = (int)(textForBook.Language.FontSize * item.Zoom);
+                string direction = textForBook.RightToLeft ? "rtl" : "ltr";
+
                 cssBuilder.AppendLine(
-                    $".{languageId} {{ font-family: '{textForBook.Language.FontName}'; "
-                        + $"font-size: {(int)(textForBook.Language.FontSize * item.Zoom)}pt; "
-                        + $"direction: {(textForBook.RightToLeft ? "rtl" : "ltr")}; }}"
+                    $".{languageId} {{ font-family: '{fontFamily}'; "
+                        + $"font-size: {fontSize}pt; "
+                        + $"direction: {direction}; }}"
                 );
             }
         }
