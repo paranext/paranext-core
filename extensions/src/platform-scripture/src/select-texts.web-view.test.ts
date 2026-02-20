@@ -152,14 +152,14 @@ function isAddEnabled(leftSelection: Set<string>): boolean {
 }
 
 /** Check if remove button should be enabled */
-function isRemoveEnabled(rightSelection: string | null, requiredIds: Set<string>): boolean {
-  return rightSelection !== null && !requiredIds.has(rightSelection);
+function isRemoveEnabled(rightSelection: string | undefined, requiredIds: Set<string>): boolean {
+  return rightSelection !== undefined && !requiredIds.has(rightSelection);
 }
 
 /** Check if move up button should be enabled */
 function isMoveUpEnabled(
   rightItems: ScrTextInfo[],
-  rightSelection: string | null,
+  rightSelection: string | undefined,
   requiredIds: Set<string>,
 ): boolean {
   if (!rightSelection) return false;
@@ -171,7 +171,7 @@ function isMoveUpEnabled(
 /** Check if move down button should be enabled */
 function isMoveDownEnabled(
   rightItems: ScrTextInfo[],
-  rightSelection: string | null,
+  rightSelection: string | undefined,
   requiredIds: Set<string>,
 ): boolean {
   if (!rightSelection) return false;
@@ -330,7 +330,7 @@ describe('SelectTextsDialog - button enable states', () => {
   });
 
   it('should disable remove button when no right selection', () => {
-    expect(isRemoveEnabled(null, requiredIds)).toBe(false);
+    expect(isRemoveEnabled(undefined, requiredIds)).toBe(false);
   });
 
   it('should enable move up when not first and not blocked by required', () => {

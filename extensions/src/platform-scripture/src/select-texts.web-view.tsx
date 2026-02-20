@@ -156,7 +156,7 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
   );
   const [rightItems, setRightItems] = useState<ScrTextInfo[]>([]);
   const [leftSelection, setLeftSelection] = useState<Set<string>>(new Set());
-  const [rightSelection, setRightSelection] = useState<string | null>(null);
+  const [rightSelection, setRightSelection] = useState<string | undefined>(undefined);
   const [requiredIds] = useState<Set<string>>(new Set());
   const [savedCollections, setSavedCollections] =
     useState<SavedScrTextList[]>(SAMPLE_SAVED_COLLECTIONS);
@@ -230,7 +230,7 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
     if (!itemToMove) return;
     setLeftItems((prev) => [...prev, itemToMove]);
     setRightItems((prev) => prev.filter((item) => item.id !== rightSelection));
-    setRightSelection(null);
+    setRightSelection(undefined);
   }, [rightSelection, rightItems, requiredIds]);
 
   // Double-click handlers
@@ -249,7 +249,7 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
       if (requiredIds.has(item.id)) return;
       setLeftItems((prev) => [...prev, item]);
       setRightItems((prev) => prev.filter((i) => i.id !== item.id));
-      if (rightSelection === item.id) setRightSelection(null);
+      if (rightSelection === item.id) setRightSelection(undefined);
     },
     [requiredIds, rightSelection],
   );
@@ -280,16 +280,16 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
 
   // Button enabled states
   const isAddEnabled = leftSelection.size > 0;
-  const isRemoveEnabled = rightSelection !== null && !requiredIds.has(rightSelection);
+  const isRemoveEnabled = rightSelection !== undefined && !requiredIds.has(rightSelection);
   const rightSelectionIndex = rightSelection
     ? rightItems.findIndex((item) => item.id === rightSelection)
     : -1;
   const isMoveUpEnabled =
-    rightSelection !== null &&
+    rightSelection !== undefined &&
     rightSelectionIndex > 0 &&
     !requiredIds.has(rightItems[rightSelectionIndex - 1]?.id ?? '');
   const isMoveDownEnabled =
-    rightSelection !== null &&
+    rightSelection !== undefined &&
     rightSelectionIndex >= 0 &&
     rightSelectionIndex < rightItems.length - 1 &&
     !requiredIds.has(rightItems[rightSelectionIndex + 1]?.id ?? '');
@@ -309,7 +309,7 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
       setRightItems(resolved);
       setLeftItems(remaining);
       setLeftSelection(new Set());
-      setRightSelection(null);
+      setRightSelection(undefined);
     },
     [leftItems, rightItems],
   );
@@ -397,7 +397,7 @@ globalThis.webViewComponent = function SelectTextsDialog({ useWebViewState }: We
       // Remove it from right list
       setLeftItems((prev) => [...prev, item]);
       setRightItems((prev) => prev.filter((i) => i.id !== item.id));
-      if (rightSelection === item.id) setRightSelection(null);
+      if (rightSelection === item.id) setRightSelection(undefined);
     },
     [requiredIds, rightSelection],
   );
