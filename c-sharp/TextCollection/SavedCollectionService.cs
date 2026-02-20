@@ -3,14 +3,15 @@ namespace Paranext.DataProvider.TextCollection;
 /// <summary>
 /// CRUD operations for saved text collections (ordered lists).
 /// Preserves HebGrkIndex and ScrProjectIndex for required items.
-/// Persists to JSON file in settings directory.
+/// Currently uses in-memory storage; file-backed persistence will be
+/// added by the DataProvider integration layer (CAP-018).
 ///
 /// === EXTRACTION: EXT-010 SavedCollectionService ===
 /// Source: PT9/ParatextBase/CommonForms/ScrTextListSelectionForm.cs:440-561
 /// Complexity: Complex
 /// Behaviors: BHV-T012
 /// </summary>
-internal class SavedCollectionService
+internal sealed class SavedCollectionService
 {
     // === NEW IN PT10 ===
     // Reason: PT9 used Memento.SetXml/GetXml for persistence; PT10 uses in-memory store
@@ -19,8 +20,8 @@ internal class SavedCollectionService
     private readonly Dictionary<string, SavedScrTextList> _savedLists = new();
 
     /// <summary>
-    /// Returns all saved text collection lists from persistence.
-    /// Returns empty list if persistence file is missing.
+    /// Returns all saved text collection lists.
+    /// Returns empty list if no collections have been saved.
     /// </summary>
     // === PORTED FROM PT9 ===
     // Source: PT9/ParatextBase/CommonForms/ScrTextListSelectionForm.cs:440-480
@@ -44,8 +45,7 @@ internal class SavedCollectionService
     // Maps to: CAP-014
     public void SaveList(string name, IList<string> textNames, int hebGrkIndex, int scrProjectIndex)
     {
-        if (string.IsNullOrEmpty(name))
-            throw new ArgumentException("Collection name must not be null or empty.", nameof(name));
+        ValidateName(name);
 
         if (textNames is null || textNames.Count == 0)
             throw new ArgumentException("Text names must not be null or empty.", nameof(textNames));
@@ -69,8 +69,7 @@ internal class SavedCollectionService
     // Maps to: CAP-014
     public void DeleteList(string name)
     {
-        if (string.IsNullOrEmpty(name))
-            throw new ArgumentException("Collection name must not be null or empty.", nameof(name));
+        ValidateName(name);
 
         if (!_savedLists.Remove(name))
             throw new InvalidOperationException($"Collection '{name}' not found.");
@@ -86,5 +85,11 @@ internal class SavedCollectionService
     public bool Exists(string name)
     {
         return _savedLists.ContainsKey(name);
+    }
+
+    private static void ValidateName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Collection name must not be null or empty.", nameof(name));
     }
 }
