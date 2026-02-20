@@ -1,0 +1,160 @@
+@use './tailwind.css';
+
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+}
+
+#root {
+  height: 100%;
+}
+
+.open-texts-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.open-texts-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.open-texts-filter-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-right: 4px;
+}
+
+.open-texts-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.open-texts-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.open-texts-search-input {
+  flex: 1;
+}
+
+.open-texts-versification-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.open-texts-table-container {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  min-height: 0;
+  position: relative;
+}
+
+.open-texts-no-filters-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.open-texts-table {
+  width: 100%;
+  font-size: 0.8125rem;
+  border-collapse: collapse;
+}
+
+.open-texts-table th {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  padding: 4px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.open-texts-table td {
+  padding: 3px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.open-texts-table .selected {
+  background: hsl(var(--accent));
+}
+
+.open-texts-table tr:hover:not(.selected) {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.open-texts-table tr {
+  cursor: pointer;
+}
+
+.open-texts-table .inaccessible td {
+  color: hsl(var(--muted-foreground));
+  opacity: 0.6;
+}
+
+.open-texts-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.open-texts-saved-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.open-texts-open-as-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.open-texts-open-as-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.open-texts-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.open-texts-toggle-on {
+  background-color: hsl(var(--accent));
+  border-color: hsl(var(--ring));
+  font-weight: 600;
+}

@@ -1627,6 +1627,9 @@ declare module 'papi-shared-types' {
 
     /** Open the Select Texts dialog to choose texts for a text collection */
     'platformScripture.openSelectTexts': () => Promise<string | undefined>;
+
+    /** Open the Open Texts dialog (general-purpose project selection with filters and Open As) */
+    'platformScripture.openOpenTextsDialog': () => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {
