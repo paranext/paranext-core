@@ -21,6 +21,13 @@
         "command": "platformScripture.openOpenTextsDialog",
         "group": "platformScripture.textCollection",
         "order": 2
+      },
+      {
+        "label": "%mainMenu_textCollection_openTextCollection%",
+        "localizeNotes": "Application main menu > Paratext > Text Collection",
+        "command": "platformScripture.openTextCollection",
+        "group": "platformScripture.textCollection",
+        "order": 3
       }
     ]
   },
@@ -53,6 +60,7 @@
     "platformScripture.punctuationInventory": {},
     "platformScripture.markersInventory": {},
     "platformScripture.selectTexts": {},
-    "platformScripture.openTexts": {}
+    "platformScripture.openTexts": {},
+    "platformScripture.textCollection": {}
   }
 }

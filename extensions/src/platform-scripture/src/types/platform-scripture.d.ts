@@ -1630,6 +1630,9 @@ declare module 'papi-shared-types' {
 
     /** Open the Open Texts dialog (general-purpose project selection with filters and Open As) */
     'platformScripture.openOpenTextsDialog': () => Promise<string | undefined>;
+
+    /** Open a Text Collection window for comparing multiple Bible translations */
+    'platformScripture.openTextCollection': () => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {
