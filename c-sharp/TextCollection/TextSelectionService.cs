@@ -11,7 +11,7 @@ namespace Paranext.DataProvider.TextCollection;
 /// Operations: Add, Remove, MoveUp, MoveDown with required-item constraints.
 /// Required items cannot be removed. IsSecondaryText items excluded from available list.
 /// </summary>
-internal class TextSelectionService
+internal sealed class TextSelectionService
 {
     private readonly List<string> _available;
     private readonly List<string> _selected;
@@ -61,17 +61,17 @@ internal class TextSelectionService
     /// Gets the current list of available (unselected) texts, sorted alphabetically.
     /// Excludes IsSecondaryText items (INV-005).
     /// </summary>
-    public IList<string> AvailableTexts => _available;
+    public IReadOnlyList<string> AvailableTexts => _available;
 
     /// <summary>
     /// Gets the current ordered list of selected texts.
     /// </summary>
-    public IList<string> SelectedTexts => _selected;
+    public IReadOnlyList<string> SelectedTexts => _selected;
 
     /// <summary>
-    /// Gets the list of required text names.
+    /// Gets the set of required text names.
     /// </summary>
-    public IList<string> RequiredTexts => _required.ToList();
+    public IReadOnlyCollection<string> RequiredTexts => _required;
 
     /// <summary>
     /// Adds a text from the available list to the selected list.
