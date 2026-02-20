@@ -1,10 +1,10 @@
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { Button, Input } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import SettingSaver, { SavedItem } from './components/setting-saver.component';
 
 // #region Types
@@ -95,170 +95,7 @@ const OPEN_AS_OPTIONS: { label: LocalizeKey; value: OpenAsType }[] = [
 
 // #endregion
 
-// #region Sample Data
-
-const SAMPLE_PROJECTS: ProjectInfo[] = [
-  {
-    name: 'zzz3',
-    id: 'proj-001',
-    fullName: 'Test Project 3',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Project (Standard)',
-    isResourceProject: false,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'NIV84',
-    id: 'res-001',
-    fullName: 'NIV 1984',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Resource',
-    isResourceProject: true,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'CEVUK',
-    id: 'res-002',
-    fullName: 'CEV UK Edition',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Resource',
-    isResourceProject: true,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'FRA',
-    id: 'proj-002',
-    fullName: 'Francais Standard',
-    language: 'French',
-    versification: 'Original',
-    projectType: 'Project (Standard)',
-    isResourceProject: false,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'GNTD',
-    id: 'res-003',
-    fullName: 'Good News Today',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Resource',
-    isResourceProject: true,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'MARBLE1',
-    id: 'res-enh-001',
-    fullName: 'Enhanced Resource 1',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Enhanced Resource',
-    isResourceProject: true,
-    isMarbleResource: true,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'HBOGNT',
-    id: 'res-src-001',
-    fullName: 'Hebrew/Greek Original',
-    language: 'Hebrew',
-    versification: 'Original',
-    projectType: 'Source Language Text',
-    isResourceProject: true,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: true,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'ENGDICT',
-    id: 'dict-001',
-    fullName: 'English Dictionary',
-    language: 'English',
-    versification: '',
-    projectType: 'Dictionary',
-    isResourceProject: false,
-    isMarbleResource: false,
-    isDictionary: true,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'CNOTES',
-    id: 'notes-001',
-    fullName: 'Consultant Notes',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Consultant Notes',
-    isResourceProject: false,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: true,
-    isXmlResource: false,
-    canOpen: true,
-  },
-  {
-    name: 'LOCKED',
-    id: 'proj-locked',
-    fullName: 'Locked Project',
-    language: 'English',
-    versification: 'English',
-    projectType: 'Project (Standard)',
-    isResourceProject: false,
-    isMarbleResource: false,
-    isDictionary: false,
-    isSourceLanguageText: false,
-    isNoteType: false,
-    isXmlResource: false,
-    canOpen: false,
-  },
-];
-
-const SAMPLE_SAVED_SELECTIONS: SavedSelection[] = [
-  {
-    name: 'English Bibles',
-    source: 'set',
-    textNames: ['NIV84', 'CEVUK', 'GNTD'],
-  },
-];
-
-// #endregion
+// No sample data - projects and saved selections are loaded from PAPI at runtime
 
 // #region Filter Logic (EXT-012: MatchesFilter)
 
@@ -394,11 +231,79 @@ globalThis.webViewComponent = function OpenTextsDialog({ useWebViewState }: WebV
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // All projects
-  const [allProjects] = useState<ProjectInfo[]>(SAMPLE_PROJECTS);
+  // All projects - loaded from PAPI
+  const [allProjects, setAllProjects] = useState<ProjectInfo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Saved selections
-  const [savedSelections, setSavedSelections] = useState<SavedSelection[]>(SAMPLE_SAVED_SELECTIONS);
+  // Saved selections - loaded from PAPI
+  const [savedSelections, setSavedSelections] = useState<SavedSelection[]>([]);
+
+  // Load projects and saved selections from PAPI on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Get all projects from the platform
+        const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({});
+
+        // Enrich project metadata with display info
+        const enrichedProjects: ProjectInfo[] = await Promise.all(
+          projectMetadata.map(async (data) => {
+            const pdp = await papi.projectDataProviders.get('platform.base', data.id);
+            const name = (await pdp.getSetting('platform.name')) ?? data.id;
+            const fullName = (await pdp.getSetting('platform.fullName')) ?? name;
+            const language = (await pdp.getSetting('platform.language')) ?? '';
+            const isEditable = (await pdp.getSetting('platform.isEditable')) ?? false;
+
+            return {
+              name,
+              id: data.id,
+              fullName,
+              language,
+              versification: '',
+              projectType: isEditable ? 'Project (Standard)' : 'Resource',
+              isResourceProject: !isEditable,
+              isMarbleResource: false,
+              isDictionary: false,
+              isSourceLanguageText: false,
+              isNoteType: false,
+              isXmlResource: false,
+              canOpen: true,
+            };
+          }),
+        );
+
+        setAllProjects(enrichedProjects);
+
+        // Load saved selections via PAPI command
+        try {
+          type TcProvider = { getCombinedSets(): Promise<{ name: string; textNames: string[] }[]> };
+          const tcProvider = (await papi.dataProviders.get(
+            'platformScripture.textCollection' as never,
+          )) as unknown as TcProvider;
+          const sets = await tcProvider.getCombinedSets();
+          if (Array.isArray(sets)) {
+            setSavedSelections(
+              sets.map((s: { name: string; textNames: string[] }) => ({
+                name: s.name,
+                source: 'set' as const,
+                textNames: s.textNames,
+              })),
+            );
+          }
+        } catch (setsError) {
+          logger.debug(`OpenTexts: saved selections not available: ${setsError}`);
+        }
+
+        logger.debug(`OpenTexts: loaded ${enrichedProjects.length} projects from PAPI`);
+      } catch (error) {
+        logger.warn(`OpenTexts: failed to load projects from PAPI: ${error}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   // Derived: TC mode
   const isTcMode = openAsType === 'TextCollection';
@@ -458,16 +363,28 @@ globalThis.webViewComponent = function OpenTextsDialog({ useWebViewState }: WebV
     });
   }, []);
 
-  // Row double-click = OK
+  // Row double-click = OK (open project directly)
   const handleRowDoubleClick = useCallback(
     (project: ProjectInfo) => {
       if (!project.canOpen) return;
-      const output = {
-        action: 'ok' as const,
-        selections: [project],
-        openAsType,
-      };
-      logger.debug(`OpenTextsDialog OK (double-click): ${JSON.stringify(output)}`);
+
+      if (openAsType === 'TextCollection') {
+        // For TC mode, need at least 2 - double-click opens a single text (falls back to regular)
+        papi.commands
+          .sendCommand('platformScripture.textCollection.createOrActivateTextCollection', {
+            projectIds: [project.id],
+            scrollGroup: 'A',
+          })
+          .then((result) => {
+            logger.debug(`OpenTexts: double-click TC result: ${JSON.stringify(result)}`);
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            logger.warn(`OpenTexts: failed to create TC on double-click: ${error}`);
+          });
+      } else {
+        logger.debug(`OpenTextsDialog OK (double-click): ${project.name}, openAs=${openAsType}`);
+      }
     },
     [openAsType],
   );
@@ -533,7 +450,27 @@ globalThis.webViewComponent = function OpenTextsDialog({ useWebViewState }: WebV
         const filtered = prev.filter((s) => s.name.toLowerCase() !== name.toLowerCase());
         return [...filtered, newSelection];
       });
-      logger.debug(`Saved selection: ${name}`);
+
+      // Persist via PAPI command (M-016: SaveList)
+      if (isTcMode) {
+        papi.commands
+          .sendCommand(
+            'platformScripture.textCollection.saveTextList',
+            name,
+            selectedProjectNames,
+            -1,
+            -1,
+          )
+          .then(() => {
+            logger.debug(`OpenTexts: saved list '${name}' via PAPI`);
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            logger.warn(`OpenTexts: failed to save list via PAPI: ${error}`);
+          });
+      } else {
+        logger.debug(`OpenTexts: saved selection '${name}' (set mode - local only)`);
+      }
     },
     [allProjects, selectedIds, isTcMode],
   );
@@ -542,7 +479,19 @@ globalThis.webViewComponent = function OpenTextsDialog({ useWebViewState }: WebV
     setSavedSelections((prev) =>
       prev.filter((s) => s.name.toLowerCase() !== selection.name.toLowerCase()),
     );
-    logger.debug(`Deleted selection: ${selection.name}`);
+
+    // Delete via PAPI command (M-016: DeleteList)
+    if (selection.source === 'list') {
+      papi.commands
+        .sendCommand('platformScripture.textCollection.deleteTextList', selection.name)
+        .then(() => {
+          logger.debug(`OpenTexts: deleted list '${selection.name}' via PAPI`);
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.warn(`OpenTexts: failed to delete list via PAPI: ${error}`);
+        });
+    }
   }, []);
 
   // OK enabled
@@ -554,12 +503,27 @@ globalThis.webViewComponent = function OpenTextsDialog({ useWebViewState }: WebV
   // OK / Cancel handlers
   const handleOk = useCallback(() => {
     const selections = allProjects.filter((p) => selectedIds.has(p.id));
-    const output = {
-      action: 'ok' as const,
-      selections,
-      openAsType,
-    };
-    logger.debug(`OpenTextsDialog OK: ${JSON.stringify(output)}`);
+
+    if (openAsType === 'TextCollection' && selections.length >= 1) {
+      // Call PAPI to create or activate a text collection (M-003)
+      papi.commands
+        .sendCommand('platformScripture.textCollection.createOrActivateTextCollection', {
+          projectIds: selections.map((s) => s.id),
+          scrollGroup: 'A',
+        })
+        .then((result) => {
+          logger.debug(
+            `OpenTexts: createOrActivateTextCollection result: ${JSON.stringify(result)}`,
+          );
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.warn(`OpenTexts: failed to create text collection via PAPI: ${error}`);
+        });
+    } else {
+      // For non-TC modes, log the selection (other open modes use platform commands)
+      logger.debug(`OpenTextsDialog OK: ${selections.length} selections, openAs=${openAsType}`);
+    }
   }, [allProjects, selectedIds, openAsType]);
 
   const handleCancel = useCallback(() => {
@@ -668,7 +632,14 @@ globalThis.webViewComponent = function OpenTextsDialog({ useWebViewState }: WebV
 
       {/* Project list table */}
       <div className="open-texts-table-container">
-        {showNoFilters ? (
+        {isLoading ? (
+          <div
+            className="tw-flex tw-items-center tw-justify-center tw-h-full tw-text-muted-foreground"
+            data-testid="open-texts-loading"
+          >
+            Loading projects from PAPI...
+          </div>
+        ) : showNoFilters ? (
           <div className="open-texts-no-filters-message">{noFiltersMessage}</div>
         ) : (
           <table className="open-texts-table" role="grid" aria-label={colNameLabel}>

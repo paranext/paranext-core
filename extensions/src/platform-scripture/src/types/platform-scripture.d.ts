@@ -1633,6 +1633,119 @@ declare module 'papi-shared-types' {
 
     /** Open a Text Collection window for comparing multiple Bible translations */
     'platformScripture.openTextCollection': () => Promise<string | undefined>;
+
+    // --- Text Collection PAPI commands ---
+    // Command names use 'platformScripture.textCollection.xxx' format.
+    // Data provider methods (getSavedLists, getCombinedSets, etc.) are accessed
+    // via papi.dataProviders.get('platformScripture.textCollection').
+
+    /** Filter texts for TC eligibility, rejecting ineligible project types */
+    'platformScripture.textCollection.filterEligibleTexts': (projectIds: string[]) => Promise<{
+      accepted: { scrTextName: string; scrTextId: string; zoom: number }[];
+      rejected: { scrTextName: string; scrTextId: string; reason: string }[];
+    }>;
+
+    /** Check if two ordered text lists are equivalent */
+    'platformScripture.textCollection.areEquivalent': (
+      currentTextIds: string[],
+      proposedTextIds: string[],
+    ) => Promise<boolean>;
+
+    /** Create a new Text Collection or reuse an existing equivalent one */
+    'platformScripture.textCollection.createOrActivateTextCollection': (request: {
+      projectIds: string[];
+      scrollGroup?: string;
+    }) => Promise<
+      | { success: true; windowId: string; reused: boolean }
+      | { success: false; error: { code: string; message: string } }
+      | { fallback: true; windowType: string; projectId: string }
+    >;
+
+    /** Generate XML block for a single text at a verse reference */
+    'platformScripture.textCollection.writeResourceXml': (
+      item: { scrTextName: string; scrTextId: string; zoom: number },
+      verseRef: string,
+    ) => Promise<string>;
+
+    /** Determine if the single pane needs a full reload */
+    'platformScripture.textCollection.determineReloadDecision': (
+      curItem: { scrTextName: string; scrTextId: string; zoom: number },
+      previousItem: { scrTextName: string; scrTextId: string; zoom: number } | null,
+      verseRef: string,
+      viewName: string,
+      forceReload: boolean,
+    ) => Promise<{ fullReloadNeeded: boolean; zoomToApply: number }>;
+
+    /** Create a memento from current TC state for persistence */
+    'platformScripture.textCollection.createMemento': (
+      setupComplete: boolean,
+      items: { scrTextName: string; scrTextId: string; zoom: number }[],
+      curItem: number,
+      singleShown: boolean,
+      multiShown: boolean,
+      viewName: string,
+      singleZoom: number,
+      multiZoom: number,
+      splitterProportion: number,
+      reference: string,
+      scrollGroup: string,
+    ) => Promise<Record<string, unknown>>;
+
+    /** Restore a TC from a saved memento */
+    'platformScripture.textCollection.restoreFromMemento': (
+      memento: Record<string, unknown>,
+    ) => Promise<{
+      restoredItems: { scrTextName: string; scrTextId: string; zoom: number }[];
+      missingProjectNames: string[];
+      hasMissingProjects: boolean;
+    }>;
+
+    /** Merge new selections with existing items, preserving zoom factors */
+    'platformScripture.textCollection.mergeWithZoomPreservation': (
+      existingItems: { scrTextName: string; scrTextId: string; zoom: number }[],
+      newSelectionIds: string[],
+    ) => Promise<{ scrTextName: string; scrTextId: string; zoom: number }[]>;
+
+    /** Remove items whose projects have been deleted */
+    'platformScripture.textCollection.removeDeletedTexts': (
+      items: { scrTextName: string; scrTextId: string; zoom: number }[],
+    ) => Promise<{ scrTextName: string; scrTextId: string; zoom: number }[]>;
+
+    /** Check if a project matches the current filter state */
+    'platformScripture.textCollection.matchesFilter': (
+      projectId: string,
+      buttons: {
+        projects: boolean;
+        resources: boolean;
+        enhancedResources: boolean;
+        sourceLanguages: boolean;
+        dictionaries: boolean;
+        consultantNotes: boolean;
+      },
+      searchText: string,
+      isTcMode: boolean,
+    ) => Promise<boolean>;
+
+    /** Get display project type for a project */
+    'platformScripture.textCollection.getProjectType': (projectId: string) => Promise<string>;
+
+    /** Handle write lock change event for TC items */
+    'platformScripture.textCollection.handleWriteLockChange': (
+      scope: string,
+      items: { scrTextName: string; scrTextId: string; zoom: number }[],
+      currentBookNum: number,
+    ) => Promise<string>;
+
+    /** Save a named text list (ordered collection of text names) */
+    'platformScripture.textCollection.saveTextList': (
+      name: string,
+      textNames: string[],
+      hebGrkIndex: number,
+      scrProjectIndex: number,
+    ) => Promise<void>;
+
+    /** Delete a saved text list by name */
+    'platformScripture.textCollection.deleteTextList': (name: string) => Promise<void>;
   }
 
   export interface ProjectSettingTypes {
