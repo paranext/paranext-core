@@ -16,7 +16,6 @@ namespace Paranext.DataProvider.TextCollection;
 internal sealed class SinglePaneReloadService
 {
     private readonly ConcurrentDictionary<string, double> _singleTextZooms = new();
-    private string? _lastTextId;
     private string? _lastViewName;
 
     /// <summary>
@@ -71,7 +70,6 @@ internal sealed class SinglePaneReloadService
         double zoomToApply = _singleTextZooms.GetOrAdd(curItem.ScrTextId, curItem.Zoom);
 
         // Update tracked state for next call
-        _lastTextId = curItem.ScrTextId;
         _lastViewName = viewName;
 
         return new ReloadDecision(fullReloadNeeded, zoomToApply);
