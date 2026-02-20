@@ -49,6 +49,7 @@ import {
   getErrorMessage,
   isPlatformError,
   isString,
+  isWhiteSpace,
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -415,6 +416,136 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
+  const insertCommentAtCurrentSelection = useCallback(() => {
+    const selection = currentSelectionRef.current;
+
+    if (!selection?.start) return;
+
+    // Store the selection as annotation range to show it as the pending annotation
+    const annotationRange: AnnotationRange = {
+      start: { ...selection.start },
+      end: { ...(selection.end ?? selection.start) },
+    };
+
+    // Validate that the selection doesn't contain markers, and that there is meaningful content
+    const editorUsj = editorRef.current?.getUsj();
+    const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
+    if (editorUsjCorrected) {
+      const usjRW = new UsjReaderWriter(editorUsjCorrected, {
+        markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
+      });
+
+      const startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+        selection.start.jsonPath,
+      );
+      const endNodeAndDocumentLocation = selection.end
+        ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
+        : startNodeAndDocumentLocation;
+
+      const startNode = startNodeAndDocumentLocation?.node;
+      const isStartNodeAString = isString(startNode);
+
+      // Make sure the selection is in a string and doesn't span multiple USJ nodes
+      const selectionHasMarker =
+        !isStartNodeAString ||
+        startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
+
+      if (selectionHasMarker) {
+        papi.notifications.send({
+          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+          severity: 'warning',
+        });
+        return;
+      }
+
+      // If the selection is collapsed (cursor with no range), require a non-whitespace character
+      // on at least one side of the cursor position so the backend code can select the word
+      const startTextDocumentLocation = selection.start;
+      const endTextDocumentLocation = selection.end ?? selection.start;
+      const isCollapsed =
+        UsjReaderWriter.isUsjDocumentLocationForTextContent(startTextDocumentLocation) &&
+        UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
+        startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
+        startTextDocumentLocation.offset === endTextDocumentLocation.offset;
+      if (isCollapsed) {
+        if (!('offset' in startTextDocumentLocation)) {
+          papi.notifications.send({
+            message: '%webView_platformScriptureEditor_error_noTextSelected%',
+            severity: 'warning',
+          });
+          return;
+        }
+        const { offset } = startTextDocumentLocation;
+        let charBefore = offset > 0 ? startNode[offset - 1] : '';
+        let charAfter = offset < startNode.length ? startNode[offset] : '';
+        if (
+          (charBefore.length === 0 || isWhiteSpace(charBefore)) &&
+          (charAfter.length === 0 || isWhiteSpace(charAfter))
+        ) {
+          papi.notifications.send({
+            message: '%webView_platformScriptureEditor_error_noTextSelected%',
+            severity: 'warning',
+          });
+          return;
+        }
+
+        // Expand the annotation range to include surrounding non-whitespace characters.
+        // This is a quick and dirty way to do this; the backend will do this properly with the
+        // definition of whitespace according to the project
+        let tempOffset = offset; // Start at the cursor position because that is charAfter
+        while (charAfter.length > 0 && !isWhiteSpace(charAfter)) {
+          charAfter = tempOffset + 1 < startNode.length ? startNode[tempOffset + 1] : '';
+          tempOffset += 1;
+        }
+        annotationRange.end = {
+          ...annotationRange.end,
+          offset: tempOffset,
+        };
+        tempOffset = offset - 1; // Start at the character before the cursor since charBefore is already one step before the offset
+        while (charBefore.length > 0 && !isWhiteSpace(charBefore)) {
+          charBefore = tempOffset > 0 ? startNode[tempOffset - 1] : '';
+          tempOffset -= 1;
+        }
+        annotationRange.start = {
+          ...annotationRange.start,
+          offset: tempOffset + 1, // +1 to move back to the first non-whitespace character
+        };
+      }
+    }
+
+    pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
+
+    // Create a temporary annotation to highlight the selected text
+    editorRef.current?.setAnnotation(
+      annotationRange,
+      ANNOTATION_TYPE_TRANSLATOR_COMMENT,
+      PENDING_COMMENT_ANNOTATION_ID,
+    );
+
+    // Position the popover near the annotation
+    // Try to find the selected text element for positioning
+    const editorContainer = document.querySelector<HTMLElement>('.usfm');
+    if (editorContainer) {
+      // Use the browser's selection to get the bounding rect of the selected text
+      const domSelection = window.getSelection();
+      if (domSelection && domSelection.rangeCount > 0) {
+        const range = domSelection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        setCommentPopoverAnchorX(rect.left);
+        setCommentPopoverAnchorY(rect.bottom);
+        setCommentPopoverAnchorHeight(0);
+      } else {
+        // Fallback to center of editor viewport
+        const rect = editorContainer.getBoundingClientRect();
+        setCommentPopoverAnchorX(rect.left + rect.width / 2);
+        setCommentPopoverAnchorY(rect.top + rect.height / 2);
+        setCommentPopoverAnchorHeight(0);
+      }
+    }
+
+    setShowCommentEditor(true);
+  }, [scrRef]);
+
   // listen to messages from the web view controller
   useEffect(() => {
     const webViewMessageListener = async ({
@@ -465,82 +596,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertCommentAtSelection': {
-          const selection = currentSelectionRef.current;
-
-          // Validate that a text range is selected
-          if (!selection?.start || !selection.end) {
-            papi.notifications.send({
-              message: '%webView_platformScriptureEditor_error_noTextSelected%',
-              severity: 'warning',
-            });
-            return;
-          }
-
-          // Validate that the selection doesn't contain markers
-          const editorUsj = editorRef.current?.getUsj();
-          const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
-          if (editorUsjCorrected) {
-            const usjRW = new UsjReaderWriter(editorUsjCorrected, {
-              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-            });
-
-            const startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-              selection.start.jsonPath,
-            );
-            const endNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-              selection.end.jsonPath,
-            );
-
-            // Make sure the selection is in a string and doesn't span multiple USJ nodes
-            const selectionHasMarker =
-              !isString(startNodeAndDocumentLocation?.node) ||
-              startNodeAndDocumentLocation?.node !== endNodeAndDocumentLocation?.node;
-
-            if (selectionHasMarker) {
-              papi.notifications.send({
-                message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-                severity: 'warning',
-              });
-              return;
-            }
-          }
-
-          // Store the selection as annotation range for later use
-          const annotationRange: AnnotationRange = {
-            start: { ...selection.start },
-            end: { ...selection.end },
-          };
-          pendingCommentAnnotationRange.current = { range: annotationRange, verseRef: scrRef };
-
-          // Create a temporary annotation to highlight the selected text
-          editorRef.current?.setAnnotation(
-            annotationRange,
-            ANNOTATION_TYPE_TRANSLATOR_COMMENT,
-            PENDING_COMMENT_ANNOTATION_ID,
-          );
-
-          // Position the popover near the annotation
-          // Try to find the selected text element for positioning
-          const editorContainer = document.querySelector<HTMLElement>('.usfm');
-          if (editorContainer) {
-            // Use the browser's selection to get the bounding rect of the selected text
-            const domSelection = window.getSelection();
-            if (domSelection && domSelection.rangeCount > 0) {
-              const range = domSelection.getRangeAt(0);
-              const rect = range.getBoundingClientRect();
-              setCommentPopoverAnchorX(rect.left);
-              setCommentPopoverAnchorY(rect.bottom);
-              setCommentPopoverAnchorHeight(0);
-            } else {
-              // Fallback to center of editor viewport
-              const rect = editorContainer.getBoundingClientRect();
-              setCommentPopoverAnchorX(rect.left + rect.width / 2);
-              setCommentPopoverAnchorY(rect.top + rect.height / 2);
-              setCommentPopoverAnchorHeight(0);
-            }
-          }
-
-          setShowCommentEditor(true);
+          insertCommentAtCurrentSelection();
           break;
         }
         case 'setAnnotation': {
@@ -712,6 +768,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       window.removeEventListener('message', webViewMessageListener);
     };
   }, [
+    insertCommentAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
     decorations,
@@ -721,12 +778,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     viewOptions.markerMode,
   ]);
 
-  // Listen for Ctrl+F to open find dialog
+  // Listen for Ctrl+F to open find dialog;
+  // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
+    const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key === 'f') {
+      if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
         papi.commands.sendCommand('platformScripture.openFind', webViewId);
+      } else {
+        const isInsertCommentHotkey = isMac
+          ? event.metaKey && event.altKey && event.key.toLowerCase() === 'm'
+          : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
+            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+        if (isInsertCommentHotkey) {
+          event.preventDefault();
+          insertCommentAtCurrentSelection();
+        }
       }
     };
 
@@ -735,7 +803,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId]);
+  }, [webViewId, insertCommentAtCurrentSelection]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
