@@ -73,19 +73,31 @@ internal static class TextCollectionService
         return currentTextIds.SequenceEqual(proposedTextIds);
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728
+    // Method: TextCollectionControl.RemoveDeletedTexts()
+    // Maps to: EXT-014, BHV-112
     /// <summary>
     /// Removes texts no longer present in ScrTextCollection.
     /// Returns true if any items were removed.
-    /// Source: EXT-014 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728)
+    /// PT10 adaptation: Uses ScrTextCollection.IsPresent(string) with ScrTextName
+    /// instead of IsPresent(ScrText). The string overload handles joined text
+    /// splitting on '/' (e.g., "HEB/GRK") and case-insensitive matching internally.
     /// </summary>
     /// <param name="items">Mutable list of items to filter in-place.</param>
     /// <returns>True if any items were removed; false otherwise.</returns>
     public static bool RemoveDeletedTexts(IList<TextCollectionItem> items)
     {
-        // TODO: Implement in GREEN phase (TDD)
-        // PT9 logic: items.RemoveAll(x => !ScrTextCollection.IsPresent(x.ScrText))
-        // PT10 adaptation: Use ScrTextCollection.IsPresent(item.ScrTextName)
-        throw new NotImplementedException("CAP-010: RemoveDeletedTexts not yet implemented");
+        bool changed = false;
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            if (!ScrTextCollection.IsPresent(items[i].ScrTextName))
+            {
+                items.RemoveAt(i);
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /// <summary>
