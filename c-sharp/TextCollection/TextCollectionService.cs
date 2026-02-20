@@ -201,17 +201,21 @@ internal static class TextCollectionService
         return null;
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/WindowCollection.cs:518-528 (single-text fallback),
+    //         PT9/Paratext/WindowCollection.cs:910-917 (duplicate detection)
+    // Method: WindowCollection.OpenTextCollection() orchestration
+    // Maps to: CAP-003, BHV-500, BHV-501, BHV-606
     /// <summary>
     /// Creates or activates an existing text collection. Orchestrates CAP-001 (filter)
     /// and CAP-002 (equivalence) to determine the correct outcome:
     /// 1. If 0 projectIds: returns error (INSUFFICIENT_TEXTS)
-    /// 2. If 1 projectId: returns fallback to TextForm (BHV-606, INV-010)
-    /// 3. If 2+ projectIds: filters eligible texts, checks for duplicate TC, returns
-    ///    existing window or creates new one
-    /// 4. If all texts rejected: returns error (INELIGIBLE_TEXT)
-    ///
-    /// Source: PT9/Paratext/WindowCollection.cs:518-528 (single-text fallback),
-    ///         PT9/Paratext/WindowCollection.cs:910-917 (duplicate detection)
+    /// 2. Filters eligible texts via FilterEligibleTexts (CAP-001)
+    /// 3. If 0 accepted after filter: returns error (INELIGIBLE_TEXT)
+    /// 4. If 1 accepted after filter: returns fallback to TextForm (BHV-606, INV-010)
+    /// 5. If 2+ accepted: checks for duplicate TC via AreEquivalent (CAP-002)
+    /// 6. Duplicate found: returns reused result (BHV-501)
+    /// 7. No duplicate: returns new TC creation result (BHV-500)
     /// </summary>
     /// <param name="request">The creation request with project IDs and scroll group.</param>
     /// <param name="existingCollectionIds">Lists of text IDs for already-open TCs (for duplicate detection).</param>
@@ -221,10 +225,62 @@ internal static class TextCollectionService
         IList<IList<string>> existingCollectionIds
     )
     {
-        // Stub: implementation in GREEN phase
-        throw new NotImplementedException(
-            "CAP-003: CreateOrActivateTextCollection not yet implemented"
-        );
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(existingCollectionIds);
+
+        // Zero texts: insufficient
+        if (request.ProjectIds.Count == 0)
+        {
+            return new TextCollectionCreateResult
+            {
+                Success = false,
+                Error = new TextCollectionError(
+                    TextCollectionErrorCodes.InsufficientTexts,
+                    "At least one project required"
+                ),
+            };
+        }
+
+        // Filter eligible texts (CAP-001)
+        TextFilterResult filterResult = FilterEligibleTexts(request.ProjectIds);
+
+        // All rejected: ineligible
+        if (filterResult.Accepted.Count == 0)
+        {
+            return new TextCollectionCreateResult
+            {
+                Success = false,
+                Error = new TextCollectionError(
+                    TextCollectionErrorCodes.IneligibleText,
+                    "All proposed texts are ineligible"
+                ),
+            };
+        }
+
+        // Single text: fallback to TextForm (BHV-606, INV-010)
+        if (filterResult.Accepted.Count == 1)
+        {
+            return new TextCollectionCreateResult
+            {
+                Fallback = true,
+                FallbackWindowType = "TextForm",
+                FallbackProjectId = filterResult.Accepted[0].ScrTextId,
+            };
+        }
+
+        // 2+ texts: check for duplicate TC (BHV-501, INV-009)
+        IList<string> acceptedIds = filterResult.Accepted.Select(item => item.ScrTextId).ToList();
+
+        foreach (IList<string> existingIds in existingCollectionIds)
+        {
+            if (AreEquivalent(existingIds, acceptedIds))
+            {
+                return new TextCollectionCreateResult { Success = true, Reused = true };
+            }
+        }
+
+        // No duplicate: create new TC (BHV-500)
+        return new TextCollectionCreateResult { Success = true, Items = filterResult.Accepted };
     }
 
     /// <summary>
