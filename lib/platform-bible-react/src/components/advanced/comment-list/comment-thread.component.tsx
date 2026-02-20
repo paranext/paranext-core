@@ -85,6 +85,7 @@ export function CommentThread({
   canUserEditOrDeleteCommentCallback,
   isRead: isReadProp = false,
   autoReadDelay = 5,
+  onVerseRefClick,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
   const isVerseExpanded = isSelected;
@@ -400,7 +401,21 @@ export function CommentThread({
                 { 'tw-whitespace-nowrap': !isVerseExpanded },
               )}
             >
-              {verseRef}
+              {verseRef && onVerseRefClick ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="tw-h-auto tw-px-1 tw-py-0 tw-text-sm tw-font-normal tw-text-muted-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVerseRefClick(verseRef);
+                  }}
+                >
+                  {verseRef}
+                </Button>
+              ) : (
+                verseRef
+              )}
               <span className={classNameForVerseText}>
                 {firstComment.contextBefore}
                 <span className="tw-font-bold">{firstComment.selectedText}</span>

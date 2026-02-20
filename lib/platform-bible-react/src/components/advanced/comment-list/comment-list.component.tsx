@@ -26,6 +26,7 @@ export default function CommentList({
   canUserEditOrDeleteCommentCallback,
   selectedThreadId: externalSelectedThreadId,
   onSelectedThreadChange,
+  onVerseRefClick,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
@@ -146,6 +147,7 @@ export default function CommentList({
             canUserAssignThreadCallback={canUserAssignThreadCallback}
             canUserResolveThreadCallback={canUserResolveThreadCallback}
             canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+            onVerseRefClick={onVerseRefClick}
           />
         </div>
       ))}

@@ -90,7 +90,7 @@ global.webViewComponent = function CommentListWebView({
       ];
     }, []),
   );
-  const [scrRef] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
   /**
@@ -326,6 +326,20 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const handleVerseRefClick = useCallback(
+    (verseRefStr: string) => {
+      const match = verseRefStr.match(/^(\w+)\s+(\d+):(\d+)$/);
+      if (match) {
+        setScrRef({
+          book: match[1],
+          chapterNum: Number(match[2]),
+          verseNum: Number(match[3]),
+        });
+      }
+    },
+    [setScrRef],
+  );
+
   if (isLoadingCommentThreads || !commentsPdp) {
     return (
       <div className="tw-bg-background tw-flex-1 tw-p-2 tw-space-y-4">
@@ -423,6 +437,7 @@ global.webViewComponent = function CommentListWebView({
             canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
             selectedThreadId={selectedThreadId}
             onSelectedThreadChange={setSelectedThreadId}
+            onVerseRefClick={handleVerseRefClick}
           />
         )}
       </div>
