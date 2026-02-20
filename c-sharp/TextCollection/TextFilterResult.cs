@@ -1,7 +1,3 @@
-// === STUB: TextFilterResult and RejectedText records ===
-// TDD Phase: RED (stub for test compilation only)
-// Will be fully implemented by the TDD Implementer.
-
 namespace Paranext.DataProvider.TextCollection;
 
 /// <summary>
