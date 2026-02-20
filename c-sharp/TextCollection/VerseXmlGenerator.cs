@@ -176,16 +176,15 @@ internal static class VerseXmlGenerator
         return xmlBuilder.ToString();
     }
 
-    // === EXTRACTION: EXT-007 VerseXmlGenerator.GenerateMultiPaneContent ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:327-355
-    // Complexity: Simple
-    // Behaviors: BHV-T016
-    // Capability: CAP-006
+    // Method: TextCollectionControl.ReloadMulti()
+    // Maps to: EXT-007, BHV-T016, CAP-006
 
     /// <summary>
     /// Generates combined XML and CSS for all items in the multi-pane.
     /// Iterates items calling WriteResourceXml per item. Generates CSS per
-    /// unique language via CSSCreator.CreateUsfmCss.
+    /// unique language using ScrText properties.
     /// </summary>
     /// <param name="items">All TC items to render.</param>
     /// <param name="verseRef">The verse reference to render.</param>
@@ -195,6 +194,44 @@ internal static class VerseXmlGenerator
         VerseRef verseRef
     )
     {
-        throw new NotImplementedException();
+        if (items.Count == 0)
+            throw new Exception("Items list must not be empty");
+
+        StringBuilder xmlBuilder = new();
+        foreach (TextCollectionItem item in items)
+            xmlBuilder.Append(WriteResourceXml(item, verseRef));
+
+        string css = GenerateCssForItems(items);
+
+        return new MultiPaneContent(xmlBuilder.ToString(), css, items.Count);
+    }
+
+    /// <summary>
+    /// Generates CSS for all unique languages in the item list.
+    /// Groups items by language ID and generates per-language CSS rules
+    /// for font family, size, and direction.
+    /// </summary>
+    private static string GenerateCssForItems(IList<TextCollectionItem> items)
+    {
+        StringBuilder cssBuilder = new();
+        HashSet<string> processedLanguages = new();
+
+        foreach (TextCollectionItem item in items)
+        {
+            ScrText scrText = ResolveScrText(item);
+            ScrText textForBook = scrText.GetJoinedText(1);
+            string languageId = textForBook.Settings.LanguageID.Id;
+
+            if (processedLanguages.Add(languageId))
+            {
+                cssBuilder.AppendLine(
+                    $".{languageId} {{ font-family: '{textForBook.Language.FontName}'; "
+                        + $"font-size: {(int)(textForBook.Language.FontSize * item.Zoom)}pt; "
+                        + $"direction: {(textForBook.RightToLeft ? "rtl" : "ltr")}; }}"
+                );
+            }
+        }
+
+        return cssBuilder.ToString();
     }
 }
