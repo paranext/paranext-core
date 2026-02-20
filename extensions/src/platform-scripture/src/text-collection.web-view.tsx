@@ -136,6 +136,47 @@ const TC_STRING_KEYS: LocalizeKey[] = [
 
 // No sample data - items are loaded from PAPI at runtime
 
+// #region USFM Helpers
+
+/** A single parsed verse from chapter USFM */
+interface ParsedVerse {
+  verseNum: number;
+  text: string;
+}
+
+/** Strip USFM markers from verse text to produce plain text for display */
+function stripUsfmToPlainText(usfm: string): string {
+  let text = usfm;
+  // Remove footnotes \f ... \f*
+  text = text.replace(/\\f\s.*?\\f\*/gs, '');
+  // Remove cross-references \x ... \x*
+  text = text.replace(/\\x\s.*?\\x\*/gs, '');
+  // Remove remaining USFM markers (e.g., \v 1, \p, \nd, \nd*)
+  text = text.replace(/\\[a-z]+\d?\*?\s?/gi, '');
+  // Normalize whitespace
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
+/** Parse chapter USFM into an array of verses with their verse numbers and plain text */
+function parseChapterUsfm(usfm: string): ParsedVerse[] {
+  const verses: ParsedVerse[] = [];
+  const verseRegex = /\\v\s+(\d+[-\d]*)\s+((?:(?!\\v\s+\d)[\s\S])*)/g;
+  let match = verseRegex.exec(usfm);
+  while (match !== null) {
+    const verseNum = parseInt(match[1], 10);
+    const rawText = match[2];
+    verses.push({
+      verseNum,
+      text: stripUsfmToPlainText(rawText),
+    });
+    match = verseRegex.exec(usfm);
+  }
+  return verses;
+}
+
+// #endregion
+
 // #region Helpers
 
 /** Compute new curItem after a move operation */
@@ -596,6 +637,82 @@ globalThis.webViewComponent = function TextCollectionWebView({
     loadItems();
   }, [savedMemento]);
 
+  // Verse text fetching - separate from reducer state to avoid triggering memento saves
+  const [verseTexts, setVerseTexts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!state.setupComplete || state.items.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchVerseTexts = async () => {
+      const texts: Record<string, string> = {};
+      await Promise.all(
+        state.items.map(async (item) => {
+          try {
+            const pdp = await papi.projectDataProviders.get(
+              'platformScripture.USFM_Verse',
+              item.id,
+            );
+            const usfm = await pdp.getVerseUSFM(scrRef);
+            texts[item.id] = usfm ? stripUsfmToPlainText(usfm) : '';
+          } catch (err) {
+            logger.warn(`Text collection: failed to fetch verse for ${item.name}: ${err}`);
+            texts[item.id] = '';
+          }
+        }),
+      );
+      if (!cancelled) {
+        setVerseTexts(texts);
+      }
+    };
+
+    fetchVerseTexts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scrRef, state.items, state.setupComplete]);
+
+  // Chapter text for single-pane: fetch full chapter USFM for the selected project
+  const [chapterVerses, setChapterVerses] = useState<ParsedVerse[]>([]);
+  const selectedItem = state.items[state.curItem];
+
+  useEffect(() => {
+    if (!state.setupComplete || !selectedItem) {
+      setChapterVerses([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchChapter = async () => {
+      try {
+        const pdp = await papi.projectDataProviders.get(
+          'platformScripture.USFM_Chapter',
+          selectedItem.id,
+        );
+        const chapterUsfm = await pdp.getChapterUSFM(scrRef);
+        if (!cancelled && chapterUsfm) {
+          setChapterVerses(parseChapterUsfm(chapterUsfm));
+        } else if (!cancelled) {
+          setChapterVerses([]);
+        }
+      } catch (err) {
+        logger.warn(`Text collection: failed to fetch chapter for ${selectedItem.name}: ${err}`);
+        if (!cancelled) setChapterVerses([]);
+      }
+    };
+
+    fetchChapter();
+
+    return () => {
+      cancelled = true;
+    };
+    // Only refetch when book/chapter changes or the selected project changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrRef.book, scrRef.chapterNum, selectedItem?.id, state.setupComplete]);
+
   // Debounced memento save on state changes (GAP-009)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
@@ -724,7 +841,7 @@ globalThis.webViewComponent = function TextCollectionWebView({
     return `${names}: (${titleBase} (${verseRefDisplay}))`;
   }, [state.items, verseRefDisplay, localizedStrings]);
 
-  // Map items to multi-pane format
+  // Map items to multi-pane format, injecting live verse texts from PAPI
   const multiPaneItems: MultiPaneTextItem[] = useMemo(
     () =>
       state.items.map((item) => ({
@@ -737,13 +854,10 @@ globalThis.webViewComponent = function TextCollectionWebView({
         baseFontSize: item.baseFontSize,
         isRTL: item.isRTL,
         zoom: item.zoom,
-        verseText: item.verseText,
+        verseText: verseTexts[item.id] || '',
       })),
-    [state.items],
+    [state.items, verseTexts],
   );
-
-  // Currently selected item
-  const selectedItem = state.items[state.curItem];
 
   // Build multi-pane content
   const multiPaneContent = useMemo(
@@ -780,15 +894,15 @@ globalThis.webViewComponent = function TextCollectionWebView({
     dispatch({ type: 'TOGGLE_SINGLE_PANE' });
   }, []);
 
-  // Build single-pane content (GAP-005: full verse text; GAP-007: close button)
+  // Build single-pane content (GAP-005: full chapter text; GAP-007: close button)
   const singlePaneContent = useMemo(
     () => (
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
       <div className="tw-h-full" onClick={handleSingleFocus} data-testid="single-pane-container">
         {selectedItem ? (
-          <div className="tw-p-4" data-testid="single-pane-content">
+          <div className="tw-p-4 tw-h-full tw-flex tw-flex-col" data-testid="single-pane-content">
             {/* Header with project name and close button (GAP-007) */}
-            <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
+            <div className="tw-flex tw-items-center tw-justify-between tw-mb-2 tw-flex-shrink-0">
               <div className="tw-text-sm tw-font-semibold tw-text-muted-foreground">
                 {selectedItem.fullName} ({selectedItem.name})
               </div>
@@ -805,9 +919,9 @@ globalThis.webViewComponent = function TextCollectionWebView({
                 &#x2715;
               </button>
             </div>
-            {/* Full verse text content (GAP-005) */}
+            {/* Full chapter text with current verse highlighted (GAP-005) */}
             <div
-              className="tw-leading-relaxed"
+              className="tw-leading-relaxed tw-overflow-auto tw-flex-1"
               style={{
                 fontFamily: selectedItem.fontName || 'inherit',
                 fontSize: `${selectedItem.baseFontSize * state.singlePaneZoom}pt`,
@@ -819,13 +933,36 @@ globalThis.webViewComponent = function TextCollectionWebView({
                 localizedStrings['%textCollection_singlePaneLabel%'] || 'Single-pane detail view'
               }
             >
-              <p className="tw-mb-2">
-                <span className="tw-font-bold">{scrRef.verseNum}</span> {selectedItem.verseText}
-              </p>
+              {chapterVerses.length > 0 ? (
+                chapterVerses.map((verse) => {
+                  const isCurrent = verse.verseNum === scrRef.verseNum;
+                  return (
+                    <p
+                      key={verse.verseNum}
+                      ref={
+                        isCurrent
+                          ? (el) => {
+                              el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                            }
+                          : undefined
+                      }
+                      className={`tw-mb-1 ${isCurrent ? 'tw-bg-primary/10 tw-rounded tw-px-1' : ''}`}
+                      data-testid={`single-pane-verse-${verse.verseNum}`}
+                    >
+                      <span className="tw-font-bold tw-text-primary tw-text-xs tw-align-super tw-mr-0.5">
+                        {verse.verseNum}
+                      </span>
+                      {verse.text}
+                    </p>
+                  );
+                })
+              ) : (
+                <p className="tw-text-muted-foreground tw-text-sm">Loading chapter...</p>
+              )}
             </div>
             {state.singleFootnoteShown && (
               <div
-                className="tw-border-t tw-border-border tw-mt-4 tw-pt-2 tw-text-xs tw-text-muted-foreground"
+                className="tw-border-t tw-border-border tw-mt-4 tw-pt-2 tw-text-xs tw-text-muted-foreground tw-flex-shrink-0"
                 data-testid="footnote-pane"
               >
                 [Footnote pane placeholder - will display footnotes for the current chapter]
@@ -845,6 +982,7 @@ globalThis.webViewComponent = function TextCollectionWebView({
       state.singlePaneZoom,
       state.singleFootnoteShown,
       scrRef.verseNum,
+      chapterVerses,
       handleSingleFocus,
       handleCloseSinglePane,
       localizedStrings,
