@@ -820,7 +820,7 @@ internal class SavedCollectionServiceTests
 
     #endregion
 
-    #region Invariant Tests
+    #region CAP-014 Invariant Tests
 
     /// <summary>
     /// INV-012 boundary: GetSavedLists only returns TC dialog saved lists.
@@ -900,6 +900,737 @@ internal class SavedCollectionServiceTests
         Assert.That(retrieved.TextNames, Is.EqualTo(textNames));
         Assert.That(retrieved.HebGrkIndex, Is.EqualTo(hebGrkIndex));
         Assert.That(retrieved.ScrProjectIndex, Is.EqualTo(scrProjectIndex));
+    }
+
+    #endregion
+
+    // ========================================================================
+    // CAP-015: AsymmetricSharingCombinedSets
+    // ========================================================================
+    // TDD Phase: RED (tests should fail -- GetCombinedSets not yet implemented)
+    // Capability: CAP-015 (AsymmetricSharingCombinedSets)
+    // Micro-Phase: BE-5 (Domain: Saved Collections)
+    // Sources: EXT-011 (PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:96-120, 271-521)
+    // Golden Master: gm-009 (asymmetric sharing -- TC lists appear in Open dialog, not vice versa)
+    // Invariant: INV-012 (Asymmetric Saved Collection Sharing)
+    // Scenarios: TS-067, TS-068
+
+    #region CAP-015 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: Asymmetric sharing between TC dialog and Open dialog.
+    ///
+    /// Verifies the complete INV-012 invariant:
+    /// 1. Save a collection in TC dialog (SaveList)
+    /// 2. Save a selection in Open dialog (SaveSet)
+    /// 3. GetCombinedSets returns BOTH (TC lists merged into sets)
+    /// 4. GetSavedLists returns ONLY TC lists (Open dialog sets excluded)
+    ///
+    /// This is the "done signal" for CAP-015. When this passes, the capability is complete.
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067,TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    [Property("InvariantId", "INV-012")]
+    public void AsymmetricSharing_FullRoundTrip_TcListsInOpenDialogButNotViceVersa()
+    {
+        // Arrange: Save a collection in TC dialog (ordered list with indices)
+        _service.SaveList(
+            "My TC Collection",
+            new List<string> { "NIV84", "ESV", "KJV" },
+            -1,
+            -1
+        );
+
+        // Save a selection in Open dialog (unordered set)
+        _service.SaveSet("My Open Selection", new List<string> { "NASB", "NRSV" });
+
+        // Act: Get combined sets (Open dialog view)
+        IList<SavedScrTextSet> combinedSets = _service.GetCombinedSets();
+
+        // Assert 1 (TS-067): TC dialog collection IS visible in combined sets
+        var combinedNames = combinedSets.Select(s => s.Name).ToList();
+        Assert.That(
+            combinedNames,
+            Does.Contain("My TC Collection"),
+            "INV-012: TC dialog saved lists MUST appear in Open dialog combined sets"
+        );
+        Assert.That(
+            combinedNames,
+            Does.Contain("My Open Selection"),
+            "Open dialog saved sets should also appear in combined sets"
+        );
+
+        // Assert 2 (TS-068): Open dialog selection is NOT visible in TC saved lists
+        IList<SavedScrTextList> tcLists = _service.GetSavedLists();
+        var tcNames = tcLists.Select(l => l.Name).ToList();
+        Assert.That(
+            tcNames,
+            Does.Not.Contain("My Open Selection"),
+            "INV-012: Open dialog saved sets must NOT appear in TC dialog"
+        );
+        Assert.That(
+            tcNames,
+            Does.Contain("My TC Collection"),
+            "TC dialog lists should still be returned by GetSavedLists"
+        );
+    }
+
+    #endregion
+
+    #region CAP-015 Contract Tests - GetCombinedSets (M-017)
+
+    /// <summary>
+    /// GetCombinedSets returns an empty list when no collections or sets have been saved.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_WhenNothingSaved_ReturnsEmptyList()
+    {
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(0));
+    }
+
+    /// <summary>
+    /// GetCombinedSets returns TC dialog lists converted to sets when only TC lists exist.
+    /// This is the primary merge path: SavedScrTextLists are converted to SavedScrTextSets.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_OnlyTcLists_ReturnsMergedSets()
+    {
+        // Arrange: Save two TC dialog lists
+        _service.SaveList(
+            "TC Alpha",
+            new List<string> { "NIV84", "ESV" },
+            -1,
+            -1
+        );
+        _service.SaveList(
+            "TC Beta",
+            new List<string> { "KJV", "NASB", "NRSV" },
+            -1,
+            0
+        );
+
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert: Both TC lists appear as sets in combined view
+        Assert.That(result, Has.Count.EqualTo(2));
+        var names = result.Select(s => s.Name).ToList();
+        Assert.That(names, Does.Contain("TC Alpha"));
+        Assert.That(names, Does.Contain("TC Beta"));
+    }
+
+    /// <summary>
+    /// GetCombinedSets returns Open dialog sets when only Open sets exist.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_OnlyOpenSets_ReturnsOnlyOpenSets()
+    {
+        // Arrange: Save Open dialog sets only (no TC lists)
+        _service.SaveSet("Open Set 1", new List<string> { "NIV84", "ESV" });
+        _service.SaveSet("Open Set 2", new List<string> { "KJV" });
+
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert: Only Open dialog sets
+        Assert.That(result, Has.Count.EqualTo(2));
+        var names = result.Select(s => s.Name).ToList();
+        Assert.That(names, Does.Contain("Open Set 1"));
+        Assert.That(names, Does.Contain("Open Set 2"));
+    }
+
+    /// <summary>
+    /// GetCombinedSets merges both TC lists and Open sets into a single combined list.
+    /// Both sources contribute to the Open dialog's combined view.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067,TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_BothListsAndSets_ReturnsMergedResult()
+    {
+        // Arrange: Save in both stores
+        _service.SaveList(
+            "TC List",
+            new List<string> { "NIV84", "ESV" },
+            -1,
+            -1
+        );
+        _service.SaveSet("Open Set", new List<string> { "KJV", "NASB" });
+
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert: Both appear in combined result
+        Assert.That(result, Has.Count.EqualTo(2));
+        var names = result.Select(s => s.Name).ToList();
+        Assert.That(names, Does.Contain("TC List"));
+        Assert.That(names, Does.Contain("Open Set"));
+    }
+
+    /// <summary>
+    /// When a TC list is converted to a set in GetCombinedSets, the text names are preserved.
+    /// The set contains the same text names as the original list.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_TcListConvertedToSet_PreservesTextNames()
+    {
+        // Arrange
+        var textNames = new List<string> { "NIV84", "ESV", "HEB/GRK", "KJV" };
+        _service.SaveList("With Texts", textNames, 2, 0);
+
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert: Text names from the TC list are present in the set
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("With Texts"));
+        Assert.That(result[0].TextNames, Is.EquivalentTo(textNames));
+    }
+
+    /// <summary>
+    /// GetCombinedSets reflects changes made via SaveList after initial population.
+    /// When a TC list is added, it appears in the combined view.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_AfterNewTcListSaved_IncludesNewList()
+    {
+        // Arrange: Initial state with one Open set
+        _service.SaveSet("Existing Open", new List<string> { "NIV84" });
+
+        // Act 1: Verify initial state
+        IList<SavedScrTextSet> before = _service.GetCombinedSets();
+        Assert.That(before, Has.Count.EqualTo(1));
+
+        // Act 2: Add a TC list
+        _service.SaveList(
+            "New TC",
+            new List<string> { "ESV", "KJV" },
+            -1,
+            -1
+        );
+
+        // Assert: Combined sets now include the new TC list
+        IList<SavedScrTextSet> after = _service.GetCombinedSets();
+        Assert.That(after, Has.Count.EqualTo(2));
+        var names = after.Select(s => s.Name).ToList();
+        Assert.That(names, Does.Contain("New TC"));
+        Assert.That(names, Does.Contain("Existing Open"));
+    }
+
+    /// <summary>
+    /// GetCombinedSets reflects deletion of a TC list. After DeleteList,
+    /// the TC list no longer appears in the combined view.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_AfterTcListDeleted_ExcludesDeletedList()
+    {
+        // Arrange: Save TC list and Open set
+        _service.SaveList(
+            "TC To Delete",
+            new List<string> { "NIV84" },
+            -1,
+            -1
+        );
+        _service.SaveSet("Keep Open", new List<string> { "ESV" });
+
+        // Act: Delete the TC list
+        _service.DeleteList("TC To Delete");
+
+        // Assert: Combined sets no longer include the deleted TC list
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("Keep Open"));
+    }
+
+    #endregion
+
+    #region CAP-015 Contract Tests - SaveSet / DeleteSet
+
+    /// <summary>
+    /// SaveSet persists a named text set that appears in GetCombinedSets.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void SaveSet_NewSet_AppearsInCombinedSets()
+    {
+        // Act
+        _service.SaveSet("Open Dialog Set", new List<string> { "NIV84", "ESV" });
+
+        // Assert
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("Open Dialog Set"));
+        Assert.That(
+            result[0].TextNames,
+            Is.EquivalentTo(new List<string> { "NIV84", "ESV" })
+        );
+    }
+
+    /// <summary>
+    /// SaveSet with empty name should throw ArgumentException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-125")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void SaveSet_EmptyName_ThrowsArgumentException()
+    {
+        Assert.That(
+            () => _service.SaveSet("", new List<string> { "NIV84" }),
+            Throws.TypeOf<ArgumentException>()
+        );
+    }
+
+    /// <summary>
+    /// SaveSet with null name should throw ArgumentException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-125")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void SaveSet_NullName_ThrowsArgumentException()
+    {
+        Assert.That(
+            () => _service.SaveSet(null!, new List<string> { "NIV84" }),
+            Throws.TypeOf<ArgumentException>()
+        );
+    }
+
+    /// <summary>
+    /// SaveSet with empty textNames should throw ArgumentException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-125")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void SaveSet_EmptyTextNames_ThrowsArgumentException()
+    {
+        Assert.That(
+            () => _service.SaveSet("Valid Name", new List<string>()),
+            Throws.TypeOf<ArgumentException>()
+        );
+    }
+
+    /// <summary>
+    /// SaveSet with existing name overwrites the previous set.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void SaveSet_ExistingName_OverwritesPreviousSet()
+    {
+        // Arrange
+        _service.SaveSet("My Set", new List<string> { "NIV84" });
+
+        // Act: Overwrite with new texts
+        _service.SaveSet("My Set", new List<string> { "ESV", "KJV" });
+
+        // Assert: Only one set, with updated content
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].TextNames,
+            Is.EquivalentTo(new List<string> { "ESV", "KJV" })
+        );
+    }
+
+    /// <summary>
+    /// DeleteSet removes a named set from the Open dialog.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void DeleteSet_ExistingSet_RemovesFromCombinedSets()
+    {
+        // Arrange
+        _service.SaveSet("To Remove", new List<string> { "NIV84" });
+        _service.SaveSet("To Keep", new List<string> { "ESV" });
+
+        // Act
+        _service.DeleteSet("To Remove");
+
+        // Assert
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("To Keep"));
+    }
+
+    /// <summary>
+    /// DeleteSet with non-existent name should throw InvalidOperationException.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void DeleteSet_NonExistentName_ThrowsInvalidOperationException()
+    {
+        Assert.That(
+            () => _service.DeleteSet("Does Not Exist"),
+            Throws.TypeOf<InvalidOperationException>()
+        );
+    }
+
+    #endregion
+
+    #region CAP-015 Invariant Tests - INV-012
+
+    /// <summary>
+    /// INV-012 core invariant: TC dialog saved lists (SavedScrTextLists) appear
+    /// in the Open dialog via GetCombinedSets.
+    /// This is the "tc-to-open" direction of gm-009.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("InvariantId", "INV-012")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void INV012_TcDialogLists_AppearInOpenDialogCombinedSets()
+    {
+        // Arrange: Save a TC dialog list
+        _service.SaveList(
+            "Study Resources",
+            new List<string> { "NIV84", "ESV", "HEB/GRK" },
+            2,
+            0
+        );
+
+        // Act: Get combined sets (Open dialog's view)
+        IList<SavedScrTextSet> combinedSets = _service.GetCombinedSets();
+
+        // Assert: TC list is visible in combined sets
+        Assert.That(combinedSets, Has.Count.EqualTo(1));
+        Assert.That(
+            combinedSets[0].Name,
+            Is.EqualTo("Study Resources"),
+            "INV-012: TC dialog list MUST be visible in Open dialog combined sets"
+        );
+        Assert.That(
+            combinedSets[0].TextNames,
+            Does.Contain("NIV84"),
+            "TC list text names must be preserved in combined set"
+        );
+        Assert.That(
+            combinedSets[0].TextNames,
+            Does.Contain("HEB/GRK"),
+            "TC list joined text names must be preserved in combined set"
+        );
+    }
+
+    /// <summary>
+    /// INV-012 core invariant: Open dialog saved sets (SavedScrTextSets) do NOT
+    /// appear in the TC dialog via GetSavedLists.
+    /// This is the "open-to-tc" direction of gm-009.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("InvariantId", "INV-012")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void INV012_OpenDialogSets_DoNotAppearInTcDialogLists()
+    {
+        // Arrange: Save an Open dialog set
+        _service.SaveSet(
+            "Open Dialog Only",
+            new List<string> { "NASB", "NRSV" }
+        );
+
+        // Act: Get TC dialog lists
+        IList<SavedScrTextList> tcLists = _service.GetSavedLists();
+
+        // Assert: Open dialog set is NOT in TC dialog
+        Assert.That(
+            tcLists.Select(l => l.Name),
+            Does.Not.Contain("Open Dialog Only"),
+            "INV-012: Open dialog sets must NOT appear in TC dialog"
+        );
+    }
+
+    /// <summary>
+    /// INV-012 with both stores populated: verify the full asymmetric sharing.
+    /// TC lists contribute to combined; Open sets stay out of TC.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("InvariantId", "INV-012")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067,TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void INV012_FullAsymmetricSharing_BothStoresPopulated()
+    {
+        // Arrange: Populate both stores
+        _service.SaveList(
+            "TC Alpha",
+            new List<string> { "NIV84", "ESV" },
+            -1,
+            -1
+        );
+        _service.SaveList(
+            "TC Beta",
+            new List<string> { "KJV", "NASB" },
+            -1,
+            -1
+        );
+        _service.SaveSet("Open Gamma", new List<string> { "NRSV" });
+        _service.SaveSet("Open Delta", new List<string> { "NIV84", "KJV" });
+
+        // Act: Get both views
+        IList<SavedScrTextSet> combinedSets = _service.GetCombinedSets();
+        IList<SavedScrTextList> tcLists = _service.GetSavedLists();
+
+        // Assert: Combined sets include all 4 (2 TC + 2 Open)
+        Assert.That(
+            combinedSets,
+            Has.Count.EqualTo(4),
+            "Combined sets should include both TC lists and Open sets"
+        );
+        var combinedNames = combinedSets.Select(s => s.Name).ToList();
+        Assert.That(combinedNames, Does.Contain("TC Alpha"));
+        Assert.That(combinedNames, Does.Contain("TC Beta"));
+        Assert.That(combinedNames, Does.Contain("Open Gamma"));
+        Assert.That(combinedNames, Does.Contain("Open Delta"));
+
+        // Assert: TC lists include only the 2 TC lists (not Open sets)
+        Assert.That(
+            tcLists,
+            Has.Count.EqualTo(2),
+            "TC dialog should only show TC lists, not Open sets"
+        );
+        var tcNames = tcLists.Select(l => l.Name).ToList();
+        Assert.That(tcNames, Does.Contain("TC Alpha"));
+        Assert.That(tcNames, Does.Contain("TC Beta"));
+        Assert.That(tcNames, Does.Not.Contain("Open Gamma"));
+        Assert.That(tcNames, Does.Not.Contain("Open Delta"));
+    }
+
+    /// <summary>
+    /// INV-012 after mutations: adding and removing from both stores does not
+    /// break the asymmetric sharing invariant.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("InvariantId", "INV-012")]
+    [Property("ScenarioId", "TS-067,TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void INV012_AfterMutations_AsymmetricSharingMaintained()
+    {
+        // Arrange: Build up state
+        _service.SaveList(
+            "TC 1",
+            new List<string> { "NIV84" },
+            -1,
+            -1
+        );
+        _service.SaveSet("Open 1", new List<string> { "ESV" });
+
+        // Act: Delete TC list, add new Open set
+        _service.DeleteList("TC 1");
+        _service.SaveSet("Open 2", new List<string> { "KJV" });
+
+        // Assert: Combined has only Open sets, TC has nothing
+        IList<SavedScrTextSet> combined = _service.GetCombinedSets();
+        Assert.That(combined, Has.Count.EqualTo(2));
+        var combinedNames = combined.Select(s => s.Name).ToList();
+        Assert.That(combinedNames, Does.Contain("Open 1"));
+        Assert.That(combinedNames, Does.Contain("Open 2"));
+
+        IList<SavedScrTextList> tcLists = _service.GetSavedLists();
+        Assert.That(tcLists, Has.Count.EqualTo(0));
+    }
+
+    #endregion
+
+    #region CAP-015 Edge Case Tests
+
+    /// <summary>
+    /// When TC list and Open set have the same name, both should appear
+    /// in GetCombinedSets (they are from different stores).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-067,TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_SameNameInBothStores_BothAppear()
+    {
+        // Arrange: Same name in both TC and Open dialog
+        _service.SaveList(
+            "Shared Name",
+            new List<string> { "NIV84", "ESV" },
+            -1,
+            -1
+        );
+        _service.SaveSet("Shared Name", new List<string> { "KJV", "NASB" });
+
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert: Both appear (duplicate names are valid across stores)
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result.Select(s => s.Name).ToList(), Has.All.EqualTo("Shared Name"));
+    }
+
+    /// <summary>
+    /// Multiple TC lists all appear in combined view with correct text names.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_MultipleTcLists_AllConvertedToSets()
+    {
+        // Arrange: Save several TC lists with varying content
+        _service.SaveList(
+            "List A",
+            new List<string> { "NIV84" },
+            -1,
+            -1
+        );
+        _service.SaveList(
+            "List B",
+            new List<string> { "ESV", "KJV" },
+            -1,
+            -1
+        );
+        _service.SaveList(
+            "List C",
+            new List<string> { "HEB/GRK", "NASB", "NRSV" },
+            0,
+            1
+        );
+
+        // Act
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+
+        // Assert: All three appear
+        Assert.That(result, Has.Count.EqualTo(3));
+
+        // Verify text names for each
+        SavedScrTextSet? setC = result.FirstOrDefault(s => s.Name == "List C");
+        Assert.That(setC, Is.Not.Null);
+        Assert.That(
+            setC!.TextNames,
+            Is.EquivalentTo(new List<string> { "HEB/GRK", "NASB", "NRSV" })
+        );
+    }
+
+    /// <summary>
+    /// Overwriting a TC list via SaveList updates the combined sets view.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-067")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void GetCombinedSets_TcListOverwritten_ReflectsUpdatedTexts()
+    {
+        // Arrange: Save initial TC list
+        _service.SaveList(
+            "Evolving List",
+            new List<string> { "NIV84", "ESV" },
+            -1,
+            -1
+        );
+
+        // Act: Overwrite with different texts
+        _service.SaveList(
+            "Evolving List",
+            new List<string> { "KJV", "NASB", "NRSV" },
+            -1,
+            0
+        );
+
+        // Assert: Combined sets show updated texts
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].TextNames,
+            Is.EquivalentTo(new List<string> { "KJV", "NASB", "NRSV" })
+        );
+    }
+
+    /// <summary>
+    /// Deleting an Open dialog set does not affect TC lists in combined view.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-015")]
+    [Property("ScenarioId", "TS-067,TS-068")]
+    [Property("BehaviorId", "BHV-T013")]
+    public void DeleteSet_DoesNotAffectTcListsInCombined()
+    {
+        // Arrange
+        _service.SaveList(
+            "TC Stays",
+            new List<string> { "NIV84" },
+            -1,
+            -1
+        );
+        _service.SaveSet("Open Goes", new List<string> { "ESV" });
+
+        // Act: Delete the Open set
+        _service.DeleteSet("Open Goes");
+
+        // Assert: TC list still in combined, Open set gone
+        IList<SavedScrTextSet> result = _service.GetCombinedSets();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("TC Stays"));
     }
 
     #endregion
