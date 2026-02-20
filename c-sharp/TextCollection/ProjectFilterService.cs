@@ -45,6 +45,10 @@ internal static class ProjectFilterService
     /// <param name="searchText">Text to search for in project name (case-insensitive). Empty means no filter.</param>
     /// <param name="isTcMode">Whether the dialog is in Text Collection mode.</param>
     /// <returns>True if the project should be shown.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:769-791
+    // Method: SelectScrTextsForm.MatchesFilter()
+    // Maps to: EXT-012, VAL-010, BHV-T006
     public static bool MatchesFilter(
         string projectId,
         FilterButtonStates buttons,
@@ -52,9 +56,67 @@ internal static class ProjectFilterService
         bool isTcMode
     )
     {
-        // === STUB: CAP-011 MatchesFilter ===
-        // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:769-791
-        // Maps to: EXT-012, VAL-010, BHV-T006
-        throw new NotImplementedException("CAP-011 MatchesFilter not yet implemented");
+        ScrText scrText = ScrTextCollection.GetById(HexId.FromStr(projectId));
+
+        // In TC mode, EnhancedResources, SourceLanguages, Dictionaries, and
+        // ConsultantNotes buttons are effectively disabled (VAL-010).
+        // PT9 hid these buttons in the UI; PT10 enforces via isTcMode parameter.
+        bool enhancedResources = !isTcMode && buttons.EnhancedResources;
+        bool sourceLanguages = !isTcMode && buttons.SourceLanguages;
+        bool dictionaries = !isTcMode && buttons.Dictionaries;
+        bool consultantNotes = !isTcMode && buttons.ConsultantNotes;
+
+        // Step 1: Check if the project matches any active button category
+        bool selectedProjectType = false;
+
+        // Projects: not resource AND not note type
+        selectedProjectType |=
+            buttons.Projects
+            && !scrText.IsResourceProject
+            && !scrText.Settings.TranslationInfo.Type.IsNoteType();
+
+        // Resources: resource AND not marble AND not dictionary AND not note AND not xml dictionary
+        selectedProjectType |=
+            buttons.Resources
+            && scrText.IsResourceProject
+            && !scrText.IsMarbleResource
+            && !scrText.IsDictionary
+            && !scrText.Settings.TranslationInfo.Type.IsNoteType()
+            && !scrText.IsXmlResourceDictionary;
+
+        // Enhanced Resources: marble
+        selectedProjectType |= enhancedResources && scrText.IsMarbleResource;
+
+        // Source Languages: resource AND not marble AND not dictionary AND source language
+        selectedProjectType |=
+            sourceLanguages
+            && scrText.IsResourceProject
+            && !scrText.IsMarbleResource
+            && !scrText.IsDictionary
+            && scrText.IsSourceLanguageText;
+
+        // Dictionaries: resource AND (dictionary OR xml dictionary)
+        selectedProjectType |=
+            dictionaries
+            && scrText.IsResourceProject
+            && (scrText.IsDictionary || scrText.IsXmlResourceDictionary);
+
+        // Consultant Notes: note type
+        selectedProjectType |=
+            consultantNotes && scrText.Settings.TranslationInfo.Type.IsNoteType();
+
+        if (!selectedProjectType)
+            return false;
+
+        // Step 2: If no search text, the type match is sufficient
+        if (string.IsNullOrEmpty(searchText))
+            return true;
+
+        // Step 3: Check search text against Name, FullName, and LanguageName (case-insensitive)
+        return scrText.Name.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0
+            || scrText.Settings.FullName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase)
+                >= 0
+            || scrText.Settings.LanguageName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase)
+                >= 0;
     }
 }
