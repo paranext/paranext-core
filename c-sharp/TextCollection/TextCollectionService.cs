@@ -74,6 +74,21 @@ internal static class TextCollectionService
     }
 
     /// <summary>
+    /// Removes texts no longer present in ScrTextCollection.
+    /// Returns true if any items were removed.
+    /// Source: EXT-014 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728)
+    /// </summary>
+    /// <param name="items">Mutable list of items to filter in-place.</param>
+    /// <returns>True if any items were removed; false otherwise.</returns>
+    public static bool RemoveDeletedTexts(IList<TextCollectionItem> items)
+    {
+        // TODO: Implement in GREEN phase (TDD)
+        // PT9 logic: items.RemoveAll(x => !ScrTextCollection.IsPresent(x.ScrText))
+        // PT10 adaptation: Use ScrTextCollection.IsPresent(item.ScrTextName)
+        throw new NotImplementedException("CAP-010: RemoveDeletedTexts not yet implemented");
+    }
+
+    /// <summary>
     /// Checks the 5 rejection predicates from PT9 TextCollectionForm.SetTexts:364-380.
     /// Returns the rejection reason string, or null if the text is eligible.
     /// </summary>
