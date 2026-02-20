@@ -78,9 +78,8 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
   if (scrollContainerElement && (verseElement || verseRef.verseNum <= 1)) {
     // Get the scroll position all the way up to the scroll container
     let offsetElement = verseElement;
-    // If we're at the first verse, scroll to the top so we can see intro material
     let verseOffsetTop = 0;
-    if (verseRef.verseNum > 1) {
+    if (verseRef.verseNum >= 1) {
       // Find the y offset from the scrolling container
       while (offsetElement && offsetElement !== scrollContainerElement) {
         verseOffsetTop += offsetElement.offsetTop;
