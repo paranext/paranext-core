@@ -2630,4 +2630,900 @@ internal class TextCollectionServiceTests : PapiTestBase
     }
 
     #endregion
+
+    // ========================================================================
+    // CAP-009: MergeWithZoomPreservation Tests (EXT-015)
+    // ========================================================================
+    // Source: EXT-015 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:598-626)
+    // Contract: M-010 MergeWithZoomPreservation
+    // Behaviors: BHV-T017 (zoom preservation)
+    // Golden Master: gm-007 (zoom preservation on text selection change)
+    //
+    // MergeWithZoomPreservation merges new text selections with existing items.
+    // For each ID in newSelectionIds:
+    //   - If a matching item exists in existingItems (by ScrTextId), its zoom is preserved
+    //   - Otherwise, the new item gets default zoom (1.0)
+    // Returned list is in the order of newSelectionIds.
+    // Removed items (in existingItems but not in newSelectionIds) are dropped.
+    // ========================================================================
+
+    #region CAP-009 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: Given existing items [A(zoom=1.2), B(zoom=0.8)]
+    /// and new selection [A, C], the merge preserves A's zoom (1.2), gives C
+    /// default zoom (1.0), and drops B. Result order matches newSelectionIds.
+    ///
+    /// This is the "done signal" for CAP-009. When this passes, the capability is complete.
+    /// Source: gm-007 (zoom preservation on text selection change)
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("GoldenMasterId", "gm-007")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015,BHV-T017")]
+    public void MergeWithZoomPreservation_GoldenMasterScenario_PreservesZoomForRetainedDropsRemoved()
+    {
+        // Arrange: Create three projects (A, B, C) and register them
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+        string idC = projectC.Guid.ToString();
+
+        // Existing items: A with zoom 1.2, B with zoom 0.8
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(projectA.Name, idA, 1.2),
+            new(projectB.Name, idB, 0.8),
+        };
+
+        // New selection: A and C (B removed, C added)
+        var newSelectionIds = new List<string> { idA, idC };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert: Result has exactly 2 items
+        Assert.That(result, Has.Count.EqualTo(2), "Result should contain 2 items (A and C)");
+
+        // Assert: A retains zoom 1.2 (preserved from existing)
+        Assert.That(
+            result[0].ScrTextId,
+            Is.EqualTo(idA),
+            "First item should be A (matches newSelectionIds order)"
+        );
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.2).Within(0.001),
+            "A's zoom should be preserved at 1.2"
+        );
+
+        // Assert: C gets default zoom 1.0 (new item)
+        Assert.That(
+            result[1].ScrTextId,
+            Is.EqualTo(idC),
+            "Second item should be C (matches newSelectionIds order)"
+        );
+        Assert.That(
+            result[1].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "C should get default zoom 1.0"
+        );
+
+        // Assert: B is not in the result (removed)
+        Assert.That(
+            result.Select(r => r.ScrTextId),
+            Does.Not.Contain(idB),
+            "B should be dropped (not in newSelectionIds)"
+        );
+    }
+
+    #endregion
+
+    #region CAP-009 Contract Tests - Happy Path
+
+    /// <summary>
+    /// A retained item (present in both existingItems and newSelectionIds)
+    /// must preserve its exact zoom value from existingItems.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_RetainedItem_PreservesExistingZoom()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(project.Name, projectId, 1.5),
+        };
+        var newSelectionIds = new List<string> { projectId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.5).Within(0.001),
+            "Retained item zoom must be preserved exactly"
+        );
+    }
+
+    /// <summary>
+    /// A new item (present in newSelectionIds but not in existingItems)
+    /// must receive the default zoom of 1.0.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_NewItem_GetsDefaultZoom()
+    {
+        // Arrange
+        DummyScrText existingProject = CreateDummyProject();
+        ScrTextCollection.Add(existingProject, true);
+        string existingId = existingProject.Guid.ToString();
+
+        DummyScrText newProject = CreateDummyProject();
+        ScrTextCollection.Add(newProject, true);
+        string newId = newProject.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(existingProject.Name, existingId, 1.3),
+        };
+        var newSelectionIds = new List<string> { newId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].ScrTextId,
+            Is.EqualTo(newId),
+            "Result should contain the new project"
+        );
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "New items must get default zoom of 1.0"
+        );
+    }
+
+    /// <summary>
+    /// An item in existingItems but NOT in newSelectionIds must be dropped
+    /// from the result entirely.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_RemovedItem_IsDropped()
+    {
+        // Arrange
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(projectA.Name, idA, 1.0),
+            new(projectB.Name, idB, 1.0),
+        };
+        // Only keep A; B is removed
+        var newSelectionIds = new List<string> { idA };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1), "Only retained items should be in result");
+        Assert.That(result[0].ScrTextId, Is.EqualTo(idA));
+        Assert.That(
+            result.Select(r => r.ScrTextId),
+            Does.Not.Contain(idB),
+            "Removed items must not appear in result"
+        );
+    }
+
+    /// <summary>
+    /// The result order must match the order of newSelectionIds, not the
+    /// order of existingItems. This ensures user-specified ordering is honored.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_ResultOrder_MatchesNewSelectionIds()
+    {
+        // Arrange: existing order is A, B; new selection order is B, A
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(projectA.Name, idA, 1.1),
+            new(projectB.Name, idB, 0.9),
+        };
+        // Reversed order in new selection
+        var newSelectionIds = new List<string> { idB, idA };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert: order matches newSelectionIds (B first, then A)
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(
+            result[0].ScrTextId,
+            Is.EqualTo(idB),
+            "First item should be B (per newSelectionIds order)"
+        );
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(0.9).Within(0.001),
+            "B's zoom should be preserved"
+        );
+        Assert.That(
+            result[1].ScrTextId,
+            Is.EqualTo(idA),
+            "Second item should be A (per newSelectionIds order)"
+        );
+        Assert.That(
+            result[1].Zoom,
+            Is.EqualTo(1.1).Within(0.001),
+            "A's zoom should be preserved"
+        );
+    }
+
+    /// <summary>
+    /// When all items in newSelectionIds are new (none exist in existingItems),
+    /// all items should receive default zoom of 1.0.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_AllNewItems_AllGetDefaultZoom()
+    {
+        // Arrange
+        DummyScrText oldProject = CreateDummyProject();
+        ScrTextCollection.Add(oldProject, true);
+        string oldId = oldProject.Guid.ToString();
+
+        DummyScrText newProjectA = CreateDummyProject();
+        ScrTextCollection.Add(newProjectA, true);
+        string newIdA = newProjectA.Guid.ToString();
+
+        DummyScrText newProjectB = CreateDummyProject();
+        ScrTextCollection.Add(newProjectB, true);
+        string newIdB = newProjectB.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(oldProject.Name, oldId, 2.0),
+        };
+        // Completely new set of projects
+        var newSelectionIds = new List<string> { newIdA, newIdB };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "New item A should get default zoom"
+        );
+        Assert.That(
+            result[1].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "New item B should get default zoom"
+        );
+    }
+
+    /// <summary>
+    /// New items must have their ScrTextName resolved from the project
+    /// (via ScrTextCollection lookup), not left empty.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_NewItem_HasResolvedProjectName()
+    {
+        // Arrange
+        DummyScrText newProject = CreateDummyProject();
+        ScrTextCollection.Add(newProject, true);
+        string newId = newProject.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>();
+        var newSelectionIds = new List<string> { newId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert: Name should be resolved from the project, not empty
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].ScrTextName,
+            Is.Not.Null.And.Not.Empty,
+            "New item must have its project name resolved"
+        );
+        Assert.That(
+            result[0].ScrTextName,
+            Is.EqualTo(newProject.Name),
+            "Resolved name must match the actual project name"
+        );
+    }
+
+    #endregion
+
+    #region CAP-009 Golden Master Tests
+
+    /// <summary>
+    /// Golden master gm-007: TC has [A(zoom=1.2), B(zoom=0.8)]; new selection is [A, C].
+    /// Result: A retains zoom 1.2; C gets default zoom 1.0; B removed.
+    /// Verifies full golden master scenario with precise zoom values.
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("GoldenMasterId", "gm-007")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015,BHV-T017")]
+    public void MergeWithZoomPreservation_GoldenMaster007_ExactZoomValues()
+    {
+        // Arrange: Reproduce gm-007 input exactly
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+        string idC = projectC.Guid.ToString();
+
+        // gm-007 input: existing = [{A, zoom=1.2}, {B, zoom=0.8}]
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(projectA.Name, idA, 1.2),
+            new(projectB.Name, idB, 0.8),
+        };
+
+        // gm-007 input: newSelection = [A, C]
+        var newSelectionIds = new List<string> { idA, idC };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert: gm-007 expected output
+        // resultItems: [{A, zoom=1.2, zoomSource=preserved}, {C, zoom=1.0, zoomSource=default}]
+        Assert.That(result, Has.Count.EqualTo(2), "gm-007: result should have 2 items");
+
+        // Item A: zoom preserved at 1.2
+        Assert.That(
+            result[0].ScrTextId,
+            Is.EqualTo(idA),
+            "gm-007: first item should be A"
+        );
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.2).Within(0.001),
+            "gm-007: A zoom should be preserved at 1.2"
+        );
+
+        // Item C: zoom default at 1.0
+        Assert.That(
+            result[1].ScrTextId,
+            Is.EqualTo(idC),
+            "gm-007: second item should be C"
+        );
+        Assert.That(
+            result[1].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "gm-007: C zoom should be default 1.0"
+        );
+
+        // B should be removed (not in result)
+        Assert.That(
+            result.Any(r => r.ScrTextId == idB),
+            Is.False,
+            "gm-007: B should be removed (not in newSelection)"
+        );
+    }
+
+    #endregion
+
+    #region CAP-009 Edge Case Tests
+
+    /// <summary>
+    /// When newSelectionIds is empty, the result should be an empty list.
+    /// All existing items are effectively removed.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_EmptyNewSelection_ReturnsEmptyList()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(project.Name, projectId, 1.5),
+        };
+        var newSelectionIds = new List<string>();
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(0), "Empty selection should return empty list");
+    }
+
+    /// <summary>
+    /// When existingItems is empty but newSelectionIds has items,
+    /// all items should get default zoom of 1.0.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_EmptyExistingItems_AllNewGetDefaultZoom()
+    {
+        // Arrange
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>();
+        var newSelectionIds = new List<string> { idA, idB };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "All new items should get default zoom"
+        );
+        Assert.That(
+            result[1].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "All new items should get default zoom"
+        );
+    }
+
+    /// <summary>
+    /// When all existing items are retained (newSelectionIds == existingItems by ID),
+    /// all zooms should be preserved exactly.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_AllRetained_AllZoomPreserved()
+    {
+        // Arrange
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+        string idC = projectC.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(projectA.Name, idA, 1.1),
+            new(projectB.Name, idB, 0.8),
+            new(projectC.Name, idC, 2.0),
+        };
+        var newSelectionIds = new List<string> { idA, idB, idC };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(3));
+        Assert.That(result[0].Zoom, Is.EqualTo(1.1).Within(0.001), "A zoom preserved");
+        Assert.That(result[1].Zoom, Is.EqualTo(0.8).Within(0.001), "B zoom preserved");
+        Assert.That(result[2].Zoom, Is.EqualTo(2.0).Within(0.001), "C zoom preserved");
+    }
+
+    /// <summary>
+    /// When there is exactly one item that is retained, its zoom is preserved.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_SingleItemRetained_ZoomPreserved()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(project.Name, projectId, 0.7),
+        };
+        var newSelectionIds = new List<string> { projectId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(0.7).Within(0.001),
+            "Single retained item zoom must be preserved"
+        );
+    }
+
+    /// <summary>
+    /// When there is no overlap between existingItems and newSelectionIds,
+    /// all result items should have default zoom 1.0.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_NoOverlap_AllDefaultZoom()
+    {
+        // Arrange
+        DummyScrText oldProject = CreateDummyProject();
+        ScrTextCollection.Add(oldProject, true);
+        string oldId = oldProject.Guid.ToString();
+
+        DummyScrText newProject = CreateDummyProject();
+        ScrTextCollection.Add(newProject, true);
+        string newId = newProject.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(oldProject.Name, oldId, 1.5),
+        };
+        // Completely different project
+        var newSelectionIds = new List<string> { newId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(1.0).Within(0.001),
+            "No overlap means all items get default zoom"
+        );
+        Assert.That(
+            result[0].ScrTextId,
+            Is.EqualTo(newId),
+            "Result should contain the new project ID"
+        );
+    }
+
+    /// <summary>
+    /// Zoom values very close to 1.0 (but not exactly 1.0) must be preserved
+    /// exactly, not rounded or snapped to 1.0.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_ZoomNearOne_PreservedExactly()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+
+        // Zoom very close to 1.0 but not exactly 1.0
+        double nearOneZoom = 1.0 / 1.1 * 1.1; // Should be ~1.0 but may have floating point noise
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(project.Name, projectId, 0.99),
+        };
+        var newSelectionIds = new List<string> { projectId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(0.99).Within(0.001),
+            "Near-1.0 zoom must be preserved without snapping"
+        );
+    }
+
+    /// <summary>
+    /// Large zoom values (e.g., from repeated Ctrl+= zoom-in) must be
+    /// preserved exactly.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_LargeZoom_PreservedExactly()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+
+        // Large zoom from repeated zoom-in (*1.1 many times)
+        double largeZoom = 3.138; // approximately 1.0 * 1.1^12
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(project.Name, projectId, largeZoom),
+        };
+        var newSelectionIds = new List<string> { projectId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(largeZoom).Within(0.001),
+            "Large zoom values must be preserved exactly"
+        );
+    }
+
+    /// <summary>
+    /// When both existing and new lists are empty, the result should be empty.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_BothEmpty_ReturnsEmptyList()
+    {
+        // Arrange
+        var existingItems = new List<TextCollectionItem>();
+        var newSelectionIds = new List<string>();
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(0), "Both empty => empty result");
+    }
+
+    /// <summary>
+    /// Retained items must have their ScrTextName preserved from existingItems
+    /// (not re-resolved), since the project name is already known.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_RetainedItem_PreservesName()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+        string originalName = project.Name;
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(originalName, projectId, 1.3),
+        };
+        var newSelectionIds = new List<string> { projectId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert: Name should be preserved from existingItems
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].ScrTextName,
+            Is.EqualTo(originalName),
+            "Retained item name should be preserved"
+        );
+    }
+
+    /// <summary>
+    /// When multiple items have various zoom levels and the new selection
+    /// reorders them, zooms are matched correctly by ScrTextId, not position.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_Reorder_ZoomMatchedById()
+    {
+        // Arrange: 3 existing items with distinct zooms
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        string idA = projectA.Guid.ToString();
+
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        string idB = projectB.Guid.ToString();
+
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+        string idC = projectC.Guid.ToString();
+
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(projectA.Name, idA, 1.1),
+            new(projectB.Name, idB, 1.2),
+            new(projectC.Name, idC, 1.3),
+        };
+        // Reverse order
+        var newSelectionIds = new List<string> { idC, idB, idA };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert: Each zoom matched by ID despite reordering
+        Assert.That(result, Has.Count.EqualTo(3));
+        Assert.That(result[0].ScrTextId, Is.EqualTo(idC));
+        Assert.That(result[0].Zoom, Is.EqualTo(1.3).Within(0.001), "C zoom matched by ID");
+        Assert.That(result[1].ScrTextId, Is.EqualTo(idB));
+        Assert.That(result[1].Zoom, Is.EqualTo(1.2).Within(0.001), "B zoom matched by ID");
+        Assert.That(result[2].ScrTextId, Is.EqualTo(idA));
+        Assert.That(result[2].Zoom, Is.EqualTo(1.1).Within(0.001), "A zoom matched by ID");
+    }
+
+    /// <summary>
+    /// Small zoom values (e.g., from repeated zoom-out operations)
+    /// must be preserved exactly without clamping to a minimum.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-009")]
+    [Property("ScenarioId", "TS-062")]
+    [Property("BehaviorId", "EXT-015")]
+    public void MergeWithZoomPreservation_SmallZoom_PreservedExactly()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+        string projectId = project.Guid.ToString();
+
+        // Small zoom from repeated zoom-out (/1.1 many times)
+        double smallZoom = 0.35;
+        var existingItems = new List<TextCollectionItem>
+        {
+            new(project.Name, projectId, smallZoom),
+        };
+        var newSelectionIds = new List<string> { projectId };
+
+        // Act
+        IList<TextCollectionItem> result = TextCollectionService.MergeWithZoomPreservation(
+            existingItems,
+            newSelectionIds
+        );
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(
+            result[0].Zoom,
+            Is.EqualTo(smallZoom).Within(0.001),
+            "Small zoom values must be preserved exactly"
+        );
+    }
+
+    #endregion
 }

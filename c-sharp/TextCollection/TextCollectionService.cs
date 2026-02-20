@@ -200,4 +200,27 @@ internal static class TextCollectionService
 
         return null;
     }
+
+    // === EXTRACTION: EXT-015 TextCollectionService.MergeWithZoomPreservation ===
+    // Source: PT9/ParatextBase/TextCollection/TextCollectionControl.cs:598-626
+    // Complexity: Simple
+    // Behaviors: BHV-T017
+
+    /// <summary>
+    /// Merges new text selections with existing items, preserving zoom for retained texts.
+    /// For each ID in newSelectionIds, if a matching item exists in existingItems (by ScrTextId),
+    /// its zoom is preserved; otherwise, the new item gets default zoom (1.0).
+    /// Returned list is in the order of newSelectionIds.
+    /// Removed items (in existingItems but not in newSelectionIds) are dropped.
+    /// </summary>
+    /// <param name="existingItems">Current items with per-text zoom values.</param>
+    /// <param name="newSelectionIds">Ordered list of project GUIDs for the new selection.</param>
+    /// <returns>Merged list preserving zoom for retained items, default zoom for new items.</returns>
+    public static IList<TextCollectionItem> MergeWithZoomPreservation(
+        IList<TextCollectionItem> existingItems,
+        IList<string> newSelectionIds
+    )
+    {
+        throw new NotImplementedException("CAP-009: MergeWithZoomPreservation not yet implemented");
+    }
 }
