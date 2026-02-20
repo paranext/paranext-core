@@ -1,7 +1,3 @@
-// === EXTRACTION: EXT-013 ProjectFilterService.GetProjectType ===
-// Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:717-730
-// Complexity: Simple
-
 using Paratext.Data;
 using PtxUtils;
 
@@ -13,14 +9,11 @@ namespace Paranext.DataProvider.TextCollection;
 /// </summary>
 internal static class ProjectFilterService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:717-730
-    // Method: SelectScrTextsForm.GetProjectType()
-    // Maps to: EXT-013
     /// <summary>
     /// Returns user-visible type string: "Dictionary", "Source Language Text",
     /// resource type, or "Project ({type})".
     /// Priority chain of type checks using ParatextData properties.
+    /// Source: EXT-013 (PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:717-730)
     /// </summary>
     /// <param name="projectId">Project GUID (HexId string).</param>
     /// <returns>User-visible type category string.</returns>
