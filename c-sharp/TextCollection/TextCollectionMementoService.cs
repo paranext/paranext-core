@@ -1,11 +1,3 @@
-// === EXTRACTION: EXT-001 TextCollectionMementoService ===
-// Source: PT9/Paratext/TextCollectionForm.cs:166-278, 588-624
-// Complexity: Complex
-// Target: c-sharp/TextCollection/TextCollectionMementoService.cs
-// Pattern: Service (stateless)
-// Behaviors: BHV-600, BHV-T014, BHV-T015
-// Scenarios: TS-048, TS-049, TS-050, TS-051
-
 using Paratext.Data;
 
 namespace Paranext.DataProvider.TextCollection;
@@ -17,14 +9,9 @@ namespace Paranext.DataProvider.TextCollection;
 /// </summary>
 internal static class TextCollectionMementoService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/TextCollectionForm.cs:166-278
-    // Method: TextCollectionForm.CreateMementoInternal
-    // Maps to: EXT-001, BHV-600, BHV-T014
     /// <summary>
     /// Creates a memento capturing complete TC window state.
-    /// Returns empty memento if setupComplete is false (BHV-600 safety guard).
-    /// Source: PT9/Paratext/TextCollectionForm.cs:166-278
+    /// Returns empty memento if setupComplete is false (crash recovery safety guard).
     /// </summary>
     public static TextCollectionMemento CreateMemento(
         bool setupComplete,
@@ -40,11 +27,8 @@ internal static class TextCollectionMementoService
         ScrollGroup scrollGroup
     )
     {
-        // BHV-600: Return empty memento when setup not complete (crash recovery safety)
         if (!setupComplete)
-        {
             return new TextCollectionMemento();
-        }
 
         return new TextCollectionMemento
         {
@@ -67,14 +51,9 @@ internal static class TextCollectionMementoService
         };
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/TextCollectionForm.cs:588-624
-    // Method: TextCollectionForm.SetState
-    // Maps to: EXT-001, BHV-103, BHV-516, BHV-T015
     /// <summary>
     /// Restores TC state from a memento. Detects missing projects and returns recovery info.
     /// Projects resolved via FindById(scrTextId) with fallback to Find(scrTextName).
-    /// Source: PT9/Paratext/TextCollectionForm.cs:588-624
     /// </summary>
     public static TextCollectionRestoreResult RestoreFromMemento(TextCollectionMemento memento)
     {
@@ -85,24 +64,18 @@ internal static class TextCollectionMementoService
 
         foreach (TextCollectionItemState itemState in memento.Items)
         {
-            // BHV-103: Try FindById first, then fallback to Find by name
-            ScrText? scrText = ScrTextCollection.FindById(HexId.FromStr(itemState.ScrTextId));
-
-            if (scrText == null)
-            {
-                scrText = ScrTextCollection.Find(itemState.ScrTextName);
-            }
+            ScrText? scrText =
+                ScrTextCollection.FindById(HexId.FromStr(itemState.ScrTextId))
+                ?? ScrTextCollection.Find(itemState.ScrTextName);
 
             if (scrText != null)
             {
-                // Use the resolved ScrText name (may differ from memento if renamed)
                 restoredItems.Add(
                     new TextCollectionItem(scrText.Name, scrText.Guid.ToString(), itemState.Zoom)
                 );
             }
             else
             {
-                // BHV-516: Track missing projects for notification
                 missingProjectNames.Add(itemState.ScrTextName);
             }
         }
