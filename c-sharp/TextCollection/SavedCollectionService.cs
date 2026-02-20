@@ -52,9 +52,7 @@ internal sealed class SavedCollectionService
     public void SaveList(string name, IList<string> textNames, int hebGrkIndex, int scrProjectIndex)
     {
         ValidateName(name);
-
-        if (textNames is null || textNames.Count == 0)
-            throw new ArgumentException("Text names must not be null or empty.", nameof(textNames));
+        ValidateTextNames(textNames);
 
         _savedLists[name] = new SavedScrTextList(
             name,
@@ -110,21 +108,12 @@ internal sealed class SavedCollectionService
     // Maps to: CAP-015, M-017
     public IList<SavedScrTextSet> GetCombinedSets()
     {
-        var combined = new List<SavedScrTextSet>();
-
         // Convert TC dialog saved lists to sets (asymmetric: TC lists appear in Open dialog)
-        foreach (SavedScrTextList list in _savedLists.Values)
-        {
-            combined.Add(new SavedScrTextSet(list.Name, list.TextNames.ToList()));
-        }
-
-        // Add Open dialog saved sets
-        foreach (SavedScrTextSet set in _savedSets.Values)
-        {
-            combined.Add(set);
-        }
-
-        return combined;
+        // then append Open dialog saved sets
+        return _savedLists
+            .Values.Select(list => new SavedScrTextSet(list.Name, list.TextNames.ToList()))
+            .Concat(_savedSets.Values)
+            .ToList();
     }
 
     /// <summary>
@@ -140,9 +129,7 @@ internal sealed class SavedCollectionService
     public void SaveSet(string name, IList<string> textNames)
     {
         ValidateName(name);
-
-        if (textNames is null || textNames.Count == 0)
-            throw new ArgumentException("Text names must not be null or empty.", nameof(textNames));
+        ValidateTextNames(textNames);
 
         _savedSets[name] = new SavedScrTextSet(name, textNames.ToList());
     }
@@ -168,5 +155,11 @@ internal sealed class SavedCollectionService
     {
         if (string.IsNullOrEmpty(name))
             throw new ArgumentException("Collection name must not be null or empty.", nameof(name));
+    }
+
+    private static void ValidateTextNames(IList<string> textNames)
+    {
+        if (textNames is null || textNames.Count == 0)
+            throw new ArgumentException("Text names must not be null or empty.", nameof(textNames));
     }
 }
