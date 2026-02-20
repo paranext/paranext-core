@@ -1,33 +1,28 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {
-      "platformScripture.textCollection": {
-        "column": "platform.paratext",
-        "order": 3
-      }
-    },
+    "groups": {},
     "items": [
       {
         "label": "%mainMenu_textCollection_selectTexts%",
-        "localizeNotes": "Application main menu > Paratext > Open text collection...",
+        "localizeNotes": "Application main menu > Platform > Open text collection...",
         "command": "platformScripture.openSelectTexts",
-        "group": "platformScripture.textCollection",
-        "order": 1
+        "group": "platform.projectResources",
+        "order": 10
       },
       {
         "label": "%mainMenu_textCollection_openTexts%",
-        "localizeNotes": "Application main menu > Paratext > Open...",
+        "localizeNotes": "Application main menu > Platform > Open...",
         "command": "platformScripture.openOpenTextsDialog",
-        "group": "platformScripture.textCollection",
-        "order": 2
+        "group": "platform.projectResources",
+        "order": 11
       },
       {
         "label": "%mainMenu_textCollection_openTextCollection%",
-        "localizeNotes": "Application main menu > Paratext > Text Collection",
+        "localizeNotes": "Application main menu > Platform > Text Collection",
         "command": "platformScripture.openTextCollection",
-        "group": "platformScripture.textCollection",
-        "order": 3
+        "group": "platform.projectResources",
+        "order": 12
       }
     ]
   },
