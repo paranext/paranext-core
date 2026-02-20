@@ -91,6 +91,29 @@ internal sealed class SavedCollectionService
         return _savedLists.ContainsKey(name);
     }
 
+    // === CAP-016: GetSavedCollectionsResolved ===
+    // Source: PT9/Paratext/TextCollectionForm.cs:525-549
+    // Extraction: EXT-004
+    // Behaviors: BHV-T012
+    // Contract: M-018
+
+    /// <summary>
+    /// Returns saved text collections with resolved project references.
+    /// Each saved list's text names are resolved to TextCollectionItems
+    /// via ScrTextCollection. Names that cannot be resolved are collected
+    /// in UnresolvedNames.
+    /// </summary>
+    // === EXTRACTION: EXT-004 ===
+    // Complexity: Simple
+    // Maps to: CAP-016, M-018
+    public IList<SavedTextCollection> GetSavedCollections()
+    {
+        throw new NotImplementedException(
+            "CAP-016: GetSavedCollections not yet implemented. "
+                + "TDD RED phase -- this stub exists so tests compile."
+        );
+    }
+
     // === CAP-015: AsymmetricSharingCombinedSets ===
     // Source: PT9/ParatextBase/CommonForms/SelectScrTextsForm.cs:96-120, 271-521
     // Extraction: EXT-011
