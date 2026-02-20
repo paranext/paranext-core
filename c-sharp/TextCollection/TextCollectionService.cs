@@ -58,6 +58,20 @@ internal static class TextCollectionService
     }
 
     /// <summary>
+    /// Determines if two text collections are equivalent (same texts, same order).
+    /// Uses order-sensitive SequenceEqual semantics (INV-009).
+    /// Source: EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449)
+    /// </summary>
+    /// <param name="currentTextIds">Current TC text IDs.</param>
+    /// <param name="proposedTextIds">Proposed text IDs to compare.</param>
+    /// <returns>True if same length and same order; false otherwise.</returns>
+    public static bool AreEquivalent(IList<string> currentTextIds, IList<string> proposedTextIds)
+    {
+        // TDD RED PHASE STUB: Implementation will be provided by TDD Implementer.
+        throw new NotImplementedException("CAP-002: AreEquivalent not yet implemented");
+    }
+
+    /// <summary>
     /// Checks the 5 rejection predicates from PT9 TextCollectionForm.SetTexts:364-380.
     /// Returns the rejection reason string, or null if the text is eligible.
     /// </summary>
