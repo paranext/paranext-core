@@ -63,3 +63,26 @@ export async function waitForAppReady(page: Page, timeout = 60_000): Promise<voi
     timeout,
   });
 }
+
+/**
+ * Wait for PAPI commands to be registered and responding. Polls `platform.getOSPlatform` until it
+ * returns a valid response, indicating the extension host has fully initialized.
+ */
+export async function waitForPapiReady(
+  timeout = 90_000,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+): Promise<void> {
+  const startTime = Date.now();
+  const pollInterval = 2_000;
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const result = await sendPapiCommand<string>('platform.getOSPlatform', [], port);
+      if (result) return;
+    } catch {
+      // Command not yet available, wait and retry
+    }
+    await new Promise((r) => setTimeout(r, pollInterval));
+  }
+  throw new Error(`PAPI commands not ready after ${timeout}ms`);
+}
