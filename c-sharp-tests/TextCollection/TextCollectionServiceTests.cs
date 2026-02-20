@@ -1,9 +1,10 @@
-// === TEST FILE: CAP-001 FilterEligibleTexts, CAP-002 AreEquivalent ===
-// TDD Phase: RED (tests should fail -- implementation does not exist yet)
-// Capabilities: CAP-001 (FilterEligibleTexts), CAP-002 (AreEquivalent)
+// === TEST FILE: CAP-001 FilterEligibleTexts, CAP-002 AreEquivalent, CAP-010 RemoveDeletedTexts ===
+// TDD Phase: RED (tests should fail -- implementation does not exist yet for CAP-010)
+// Capabilities: CAP-001 (FilterEligibleTexts), CAP-002 (AreEquivalent), CAP-010 (RemoveDeletedTexts)
 // Micro-Phase: BE-1 (Foundation: Simple Predicates)
 // Sources: EXT-003 (PT9/Paratext/TextCollectionForm.cs:364-380),
-//          EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449)
+//          EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449),
+//          EXT-014 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728)
 
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Projects;
@@ -13,7 +14,10 @@ using Paratext.Data;
 namespace TestParanextDataProvider.TextCollection;
 
 /// <summary>
-/// Tests for TextCollectionService (CAP-001: FilterEligibleTexts, CAP-002: AreEquivalent).
+/// Tests for TextCollectionService:
+///   CAP-001: FilterEligibleTexts - Text eligibility filtering (EXT-003)
+///   CAP-002: AreEquivalent - Order-sensitive collection comparison (EXT-002)
+///   CAP-010: RemoveDeletedTexts - Remove absent projects from list (EXT-014)
 ///
 /// CAP-001: FilterEligibleTexts takes a list of project IDs (GUIDs) and returns a
 /// TextFilterResult separating accepted texts from rejected texts with reasons.
@@ -24,6 +28,12 @@ namespace TestParanextDataProvider.TextCollection;
 /// CAP-002: AreEquivalent compares two ordered lists of project IDs using
 /// order-sensitive SequenceEqual semantics (INV-009).
 /// Source: EXT-002 (PT9/Paratext/TextCollectionForm.cs:446-449)
+///
+/// CAP-010: RemoveDeletedTexts iterates a list of TextCollectionItem and removes
+/// any whose project is no longer present in ScrTextCollection (via IsPresent).
+/// Returns true if any items were removed. Handles joined text names (HEB/GRK)
+/// by splitting on '/' and checking each part (BHV-112, INV-005).
+/// Source: EXT-014 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728)
 /// </summary>
 [TestFixture]
 [ExcludeFromCodeCoverage]
@@ -997,6 +1007,373 @@ internal class TextCollectionServiceTests : PapiTestBase
             Is.False,
             "String comparison should be case-sensitive (GUID hex strings)"
         );
+    }
+
+    #endregion
+
+    // =========================================================================
+    // CAP-010: RemoveDeletedTexts
+    // Source: EXT-014 (PT9/ParatextBase/TextCollection/TextCollectionControl.cs:720-728)
+    // RemoveDeletedTexts iterates a list of TextCollectionItem and removes any
+    // whose project is no longer present in ScrTextCollection. Returns true if
+    // any items were removed. The PT9 implementation uses
+    // ScrTextCollection.IsPresent(item.ScrText); the PT10 adaptation uses
+    // ScrTextCollection.IsPresent(item.ScrTextName) which handles:
+    //   - Case-insensitive matching (BHV-112, spec-004 scenario 1)
+    //   - Joined text name splitting on '/' (BHV-112, INV-005, spec-004 scenario 2)
+    // =========================================================================
+
+    #region CAP-010 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: Given a list of TextCollectionItems where some projects
+    /// are present in ScrTextCollection and others have been removed/deleted, the method
+    /// removes the absent items from the list and returns true.
+    ///
+    /// This is the "done signal" for CAP-010. When this passes, the capability is complete.
+    ///
+    /// Verifies spec-004 scenarios: case-insensitive presence check, joined text handling.
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("SpecId", "spec-004")]
+    [Property("ScenarioId", "TS-060,TS-061")]
+    [Property("BehaviorId", "EXT-014,BHV-112")]
+    public void RemoveDeletedTexts_WithMixOfPresentAndAbsent_RemovesAbsentAndReturnsTrue()
+    {
+        // Arrange: Create two projects that ARE in ScrTextCollection
+        DummyScrText presentProject1 = CreateDummyProject();
+        ScrTextCollection.Add(presentProject1, true);
+        DummyScrText presentProject2 = CreateDummyProject();
+        ScrTextCollection.Add(presentProject2, true);
+
+        // Create items: two present, one absent (not in ScrTextCollection)
+        var items = new List<TextCollectionItem>
+        {
+            new(presentProject1.Name, presentProject1.Guid.ToString(), 1.0),
+            new("DeletedProject", "0000000000000000000000000000000000000000", 1.2),
+            new(presentProject2.Name, presentProject2.Guid.ToString(), 0.9),
+        };
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert: Absent item removed, present items remain
+        Assert.That(result, Is.True, "Should return true when items are removed");
+        Assert.That(items, Has.Count.EqualTo(2), "Absent item should be removed from list");
+        Assert.That(
+            items.Select(i => i.ScrTextName),
+            Does.Contain(presentProject1.Name),
+            "Present project 1 should remain"
+        );
+        Assert.That(
+            items.Select(i => i.ScrTextName),
+            Does.Contain(presentProject2.Name),
+            "Present project 2 should remain"
+        );
+        Assert.That(
+            items.Select(i => i.ScrTextName),
+            Does.Not.Contain("DeletedProject"),
+            "Deleted project should be removed"
+        );
+    }
+
+    #endregion
+
+    #region CAP-010 Contract Tests - Happy Path
+
+    /// <summary>
+    /// When all items in the list are present in ScrTextCollection,
+    /// no items are removed and the method returns false.
+    /// PT9: items.Any(item => !ScrTextCollection.IsPresent(item.ScrText)) returns false.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-061")]
+    [Property("BehaviorId", "EXT-014,BHV-112")]
+    public void RemoveDeletedTexts_AllPresent_ReturnsFalseAndListUnchanged()
+    {
+        // Arrange: Create and register three projects
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(projectA.Name, projectA.Guid.ToString(), 1.0),
+            new(projectB.Name, projectB.Guid.ToString(), 1.1),
+            new(projectC.Name, projectC.Guid.ToString(), 0.8),
+        };
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(result, Is.False, "No items removed, should return false");
+        Assert.That(items, Has.Count.EqualTo(3), "All items should remain");
+    }
+
+    /// <summary>
+    /// When one item is not present in ScrTextCollection (project deleted/uninstalled),
+    /// that item is removed from the list and the method returns true.
+    /// Matches TS-060: TC has texts [A, B, C]; project B has been uninstalled.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-060")]
+    [Property("BehaviorId", "EXT-014,BHV-112")]
+    public void RemoveDeletedTexts_OneAbsent_RemovesItAndReturnsTrue()
+    {
+        // Arrange: Two present projects, one absent
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(projectA.Name, projectA.Guid.ToString(), 1.0),
+            new("AbsentProject", "1111111111111111111111111111111111111111", 1.0),
+            new(projectC.Name, projectC.Guid.ToString(), 1.0),
+        };
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(result, Is.True, "Should return true when an item is removed");
+        Assert.That(items, Has.Count.EqualTo(2), "One item should be removed");
+        Assert.That(
+            items[0].ScrTextName,
+            Is.EqualTo(projectA.Name),
+            "First remaining item should be project A"
+        );
+        Assert.That(
+            items[1].ScrTextName,
+            Is.EqualTo(projectC.Name),
+            "Second remaining item should be project C"
+        );
+    }
+
+    #endregion
+
+    #region CAP-010 Contract Tests - Return Value and Side Effect
+
+    /// <summary>
+    /// The method modifies the passed list in-place (items are removed from the
+    /// same IList instance). This verifies the side-effect contract from M-011:
+    /// "Items not present in ScrTextCollection are removed from the list".
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-060")]
+    [Property("BehaviorId", "EXT-014")]
+    public void RemoveDeletedTexts_ModifiesListInPlace()
+    {
+        // Arrange
+        DummyScrText presentProject = CreateDummyProject();
+        ScrTextCollection.Add(presentProject, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(presentProject.Name, presentProject.Guid.ToString(), 1.0),
+            new("GoneProject", "2222222222222222222222222222222222222222", 1.0),
+        };
+
+        // Keep a reference to the same list
+        IList<TextCollectionItem> sameListReference = items;
+
+        // Act
+        TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert: The same list object was modified
+        Assert.That(
+            sameListReference,
+            Has.Count.EqualTo(1),
+            "The original list reference should reflect the removal"
+        );
+        Assert.That(
+            ReferenceEquals(items, sameListReference),
+            Is.True,
+            "The list should be modified in-place, not replaced"
+        );
+    }
+
+    /// <summary>
+    /// Remaining items must preserve their original order after removal.
+    /// If items were [A, B, C, D] and B and D are absent, result is [A, C].
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-060")]
+    [Property("BehaviorId", "EXT-014")]
+    public void RemoveDeletedTexts_PreservesOrderOfRemainingItems()
+    {
+        // Arrange: Four projects, register only A and C
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(projectA.Name, projectA.Guid.ToString(), 1.0),
+            new("AbsentB", "3333333333333333333333333333333333333333", 1.0),
+            new(projectC.Name, projectC.Guid.ToString(), 1.0),
+            new("AbsentD", "4444444444444444444444444444444444444444", 1.0),
+        };
+
+        // Act
+        TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert: A and C remain in original relative order
+        Assert.That(items, Has.Count.EqualTo(2));
+        Assert.That(items[0].ScrTextName, Is.EqualTo(projectA.Name), "A should be first");
+        Assert.That(items[1].ScrTextName, Is.EqualTo(projectC.Name), "C should be second");
+    }
+
+    /// <summary>
+    /// Zoom values must be preserved on remaining items after removal.
+    /// Per data-contracts.md, TextCollectionItem carries per-text zoom.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-060")]
+    [Property("BehaviorId", "EXT-014")]
+    public void RemoveDeletedTexts_PreservesZoomOnRemainingItems()
+    {
+        // Arrange
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(projectA.Name, projectA.Guid.ToString(), 1.5),
+            new("AbsentB", "5555555555555555555555555555555555555555", 0.8),
+        };
+
+        // Act
+        TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(items, Has.Count.EqualTo(1));
+        Assert.That(
+            items[0].Zoom,
+            Is.EqualTo(1.5).Within(0.001),
+            "Zoom should be preserved on remaining item"
+        );
+    }
+
+    #endregion
+
+    #region CAP-010 Edge Case Tests
+
+    /// <summary>
+    /// When the items list is empty, the method should return false
+    /// without throwing (no items to check).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-061")]
+    [Property("BehaviorId", "EXT-014")]
+    public void RemoveDeletedTexts_EmptyList_ReturnsFalse()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>();
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(result, Is.False, "Empty list should return false (nothing to remove)");
+        Assert.That(items, Has.Count.EqualTo(0));
+    }
+
+    /// <summary>
+    /// When all items have been deleted (none present), all are removed
+    /// and the method returns true. The list becomes empty.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-060")]
+    [Property("BehaviorId", "EXT-014")]
+    public void RemoveDeletedTexts_AllAbsent_ReturnsTrue_ListEmpty()
+    {
+        // Arrange: No projects registered in ScrTextCollection
+        var items = new List<TextCollectionItem>
+        {
+            new("Gone1", "6666666666666666666666666666666666666666", 1.0),
+            new("Gone2", "7777777777777777777777777777777777777777", 1.0),
+        };
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(result, Is.True, "All items removed, should return true");
+        Assert.That(items, Has.Count.EqualTo(0), "List should be empty");
+    }
+
+    /// <summary>
+    /// A single item that is present should remain; method returns false.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-061")]
+    [Property("BehaviorId", "EXT-014,BHV-112")]
+    public void RemoveDeletedTexts_SinglePresentItem_ReturnsFalse()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(project.Name, project.Guid.ToString(), 1.0),
+        };
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(result, Is.False, "Single present item should not be removed");
+        Assert.That(items, Has.Count.EqualTo(1));
+    }
+
+    /// <summary>
+    /// A single item that is absent should be removed; method returns true.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("ScenarioId", "TS-060")]
+    [Property("BehaviorId", "EXT-014")]
+    public void RemoveDeletedTexts_SingleAbsentItem_ReturnsTrue()
+    {
+        // Arrange: Item references a project not in ScrTextCollection
+        var items = new List<TextCollectionItem>
+        {
+            new("NonExistent", "8888888888888888888888888888888888888888", 1.0),
+        };
+
+        // Act
+        bool result = TextCollectionService.RemoveDeletedTexts(items);
+
+        // Assert
+        Assert.That(result, Is.True, "Single absent item removed, should return true");
+        Assert.That(items, Has.Count.EqualTo(0));
     }
 
     #endregion
