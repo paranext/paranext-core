@@ -2076,4 +2076,558 @@ internal class TextCollectionServiceTests : PapiTestBase
     }
 
     #endregion
+
+    // =========================================================================
+    // CAP-013: HandleWriteLockChange
+    // Source: EXT-016 (PT9/Paratext/TextCollectionForm.cs:124-143)
+    // HandleWriteLockChange is an event-driven dispatcher that responds to write
+    // lock change notifications. It evaluates the change scope to determine
+    // what action the TC should take:
+    //   1. scope == "Project": Calls RemoveDeletedTexts (CAP-010). If items were
+    //      removed, returns RemoveAndReload; otherwise returns NoAction.
+    //   2. scope overlaps currentBookNum: Returns Reload (content may have changed
+    //      for the currently displayed book).
+    //   3. Otherwise: Returns NoAction (change is irrelevant to current display).
+    //
+    // The ChangeAction enum has three values: NoAction, Reload, RemoveAndReload.
+    // =========================================================================
+
+    #region CAP-013 Acceptance Test
+
+    /// <summary>
+    /// OUTER ACCEPTANCE TEST: Given a write lock change with scope "Project" where one
+    /// TC text has been deleted, HandleWriteLockChange calls RemoveDeletedTexts, removes
+    /// the absent text, and returns RemoveAndReload.
+    ///
+    /// This is the "done signal" for CAP-013. When this passes, the capability is complete.
+    ///
+    /// Verifies TS-095: WriteLock change listener removes deleted texts.
+    /// Verifies TS-096: WriteLock change for overlapping book triggers reload.
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095,TS-096")]
+    [Property("BehaviorId", "EXT-016,EXT-014")]
+    public void HandleWriteLockChange_AcceptanceScenarios_CorrectActions()
+    {
+        // === TS-095: Project scope with deleted text => RemoveAndReload ===
+        {
+            // Arrange: TC has texts [A, B]; project B has been deleted (not in ScrTextCollection)
+            DummyScrText projectA = CreateDummyProject();
+            ScrTextCollection.Add(projectA, true);
+
+            var items = new List<TextCollectionItem>
+            {
+                new(projectA.Name, projectA.Guid.ToString(), 1.0),
+                new("DeletedProjectB", "0000000000000000000000000000000000000099", 1.0),
+            };
+
+            // Act
+            ChangeAction result = TextCollectionService.HandleWriteLockChange(
+                "Project",
+                items,
+                40 // MAT
+            );
+
+            // Assert: Deleted text removed, action is RemoveAndReload
+            Assert.That(
+                result,
+                Is.EqualTo(ChangeAction.RemoveAndReload),
+                "TS-095: Project scope with deleted text should return RemoveAndReload"
+            );
+            Assert.That(
+                items,
+                Has.Count.EqualTo(1),
+                "TS-095: Deleted text should be removed from items list"
+            );
+            Assert.That(
+                items[0].ScrTextName,
+                Is.EqualTo(projectA.Name),
+                "TS-095: Present project should remain"
+            );
+        }
+
+        // Clean up ScrTextCollection for next scenario
+        foreach (
+            ScrText s in ScrTextCollection.ScrTexts(IncludeProjects.Everything).ToList()
+        )
+            ScrTextCollection.Remove(s, false);
+
+        // === TS-096: Book scope overlapping current book => Reload ===
+        {
+            // Arrange: TC is displaying MAT (book 40), change scope is book 40
+            DummyScrText projectC = CreateDummyProject();
+            ScrTextCollection.Add(projectC, true);
+
+            var items = new List<TextCollectionItem>
+            {
+                new(projectC.Name, projectC.Guid.ToString(), 1.0),
+            };
+
+            // Act: Scope contains book number 40, which matches currentBookNum
+            ChangeAction result = TextCollectionService.HandleWriteLockChange(
+                "40",
+                items,
+                40 // MAT
+            );
+
+            // Assert: Reload triggered because scope overlaps current book
+            Assert.That(
+                result,
+                Is.EqualTo(ChangeAction.Reload),
+                "TS-096: Overlapping book scope should return Reload"
+            );
+            Assert.That(
+                items,
+                Has.Count.EqualTo(1),
+                "TS-096: Items list should not be modified for book-scope changes"
+            );
+        }
+    }
+
+    #endregion
+
+    #region CAP-013 Contract Tests - Scope "Project"
+
+    /// <summary>
+    /// When scope is "Project" and some items have been deleted (not present in
+    /// ScrTextCollection), HandleWriteLockChange calls RemoveDeletedTexts,
+    /// removes the absent items, and returns RemoveAndReload.
+    /// PT9 source: TextCollectionForm.ChangeListener checks scope == "Project"
+    /// and calls RemoveDeletedTexts.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095")]
+    [Property("BehaviorId", "EXT-016,EXT-014")]
+    public void HandleWriteLockChange_ProjectScopeWithDeletedText_ReturnsRemoveAndReload()
+    {
+        // Arrange: One present project, one deleted project
+        DummyScrText presentProject = CreateDummyProject();
+        ScrTextCollection.Add(presentProject, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(presentProject.Name, presentProject.Guid.ToString(), 1.0),
+            new("GoneProject", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", 1.0),
+        };
+
+        // Act
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "Project",
+            items,
+            40
+        );
+
+        // Assert
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.RemoveAndReload),
+            "Project scope with deleted text must return RemoveAndReload"
+        );
+        Assert.That(items, Has.Count.EqualTo(1), "Deleted text should be removed from list");
+        Assert.That(
+            items[0].ScrTextName,
+            Is.EqualTo(presentProject.Name),
+            "Present project should remain in list"
+        );
+    }
+
+    /// <summary>
+    /// When scope is "Project" but all items are still present in ScrTextCollection,
+    /// RemoveDeletedTexts finds nothing to remove, and the method returns NoAction.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095")]
+    [Property("BehaviorId", "EXT-016,EXT-014")]
+    public void HandleWriteLockChange_ProjectScopeAllPresent_ReturnsNoAction()
+    {
+        // Arrange: All items are present in ScrTextCollection
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(projectA.Name, projectA.Guid.ToString(), 1.0),
+            new(projectB.Name, projectB.Guid.ToString(), 1.0),
+        };
+
+        // Act
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "Project",
+            items,
+            40
+        );
+
+        // Assert: No items removed => NoAction
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.NoAction),
+            "Project scope with all texts present should return NoAction"
+        );
+        Assert.That(items, Has.Count.EqualTo(2), "No items should be removed");
+    }
+
+    /// <summary>
+    /// When scope is "Project" and all items have been deleted, RemoveDeletedTexts
+    /// removes all items and the method returns RemoveAndReload.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095")]
+    [Property("BehaviorId", "EXT-016,EXT-014")]
+    public void HandleWriteLockChange_ProjectScopeAllDeleted_ReturnsRemoveAndReload()
+    {
+        // Arrange: No projects registered in ScrTextCollection
+        var items = new List<TextCollectionItem>
+        {
+            new("Gone1", "1111111111111111111111111111111111111111", 1.0),
+            new("Gone2", "2222222222222222222222222222222222222222", 1.0),
+        };
+
+        // Act
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "Project",
+            items,
+            40
+        );
+
+        // Assert
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.RemoveAndReload),
+            "Project scope with all deleted texts should return RemoveAndReload"
+        );
+        Assert.That(items, Has.Count.EqualTo(0), "All items should be removed");
+    }
+
+    #endregion
+
+    #region CAP-013 Contract Tests - Scope Overlapping Book
+
+    /// <summary>
+    /// When scope contains/matches the current book number, HandleWriteLockChange
+    /// returns Reload because the displayed content may have changed.
+    /// TS-096: WriteLock change for book that TC is currently displaying.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-096")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_ScopeOverlapsCurrentBook_ReturnsReload()
+    {
+        // Arrange: TC is displaying MAT (book 40)
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(project.Name, project.Guid.ToString(), 1.0),
+        };
+
+        // Act: Scope is book 40 (same as currentBookNum)
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "40",
+            items,
+            40
+        );
+
+        // Assert
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.Reload),
+            "Scope matching current book should return Reload"
+        );
+    }
+
+    /// <summary>
+    /// When scope does NOT overlap the current book number, the method returns
+    /// NoAction because the change is irrelevant to the current display.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-096")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_ScopeDoesNotOverlapCurrentBook_ReturnsNoAction()
+    {
+        // Arrange: TC is displaying MAT (book 40), scope is GEN (book 1)
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(project.Name, project.Guid.ToString(), 1.0),
+        };
+
+        // Act: Scope is book 1 (GEN), currentBookNum is 40 (MAT)
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "1",
+            items,
+            40
+        );
+
+        // Assert
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.NoAction),
+            "Scope not matching current book should return NoAction"
+        );
+    }
+
+    /// <summary>
+    /// Verify that a book-scope change does not modify the items list.
+    /// Only Project-scope changes trigger RemoveDeletedTexts.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-096")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_BookScope_DoesNotModifyItemsList()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(project.Name, project.Guid.ToString(), 1.0),
+            new("MaybeGone", "3333333333333333333333333333333333333333", 1.0),
+        };
+        int originalCount = items.Count;
+
+        // Act: Book scope (not "Project"), so should NOT call RemoveDeletedTexts
+        TextCollectionService.HandleWriteLockChange("40", items, 40);
+
+        // Assert: Items list unchanged (no removals for book-scope changes)
+        Assert.That(
+            items,
+            Has.Count.EqualTo(originalCount),
+            "Book-scope change should not modify items list (only Project scope does)"
+        );
+    }
+
+    #endregion
+
+    #region CAP-013 Edge Case Tests
+
+    /// <summary>
+    /// When items list is empty and scope is "Project", RemoveDeletedTexts
+    /// finds nothing to remove; the method returns NoAction.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_EmptyItemsProjectScope_ReturnsNoAction()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>();
+
+        // Act
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "Project",
+            items,
+            40
+        );
+
+        // Assert: No items to remove => NoAction
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.NoAction),
+            "Empty items list with Project scope should return NoAction"
+        );
+    }
+
+    /// <summary>
+    /// When items list is empty and scope is a book number, the method
+    /// returns NoAction (nothing to reload for an empty TC).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-096")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_EmptyItemsBookScope_ReturnsNoAction()
+    {
+        // Arrange
+        var items = new List<TextCollectionItem>();
+
+        // Act: Scope overlaps current book, but list is empty
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "40",
+            items,
+            40
+        );
+
+        // Assert: Empty TC has nothing to reload
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.NoAction),
+            "Empty items list with book scope should return NoAction"
+        );
+    }
+
+    /// <summary>
+    /// When scope is an unrecognized string (neither "Project" nor a valid
+    /// book number), the method returns NoAction.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-096")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_UnrecognizedScope_ReturnsNoAction()
+    {
+        // Arrange
+        DummyScrText project = CreateDummyProject();
+        ScrTextCollection.Add(project, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(project.Name, project.Guid.ToString(), 1.0),
+        };
+
+        // Act: Scope is an unrecognized string
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "SomeOtherScope",
+            items,
+            40
+        );
+
+        // Assert: Unrecognized scope => NoAction
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.NoAction),
+            "Unrecognized scope should return NoAction"
+        );
+    }
+
+    /// <summary>
+    /// When scope is "Project" with a case variation ("project" or "PROJECT"),
+    /// the method should still recognize it as a project scope. The PT9 comparison
+    /// uses string equality; if the implementation is case-sensitive, this test
+    /// documents that behavior.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095")]
+    [Property("BehaviorId", "EXT-016")]
+    public void HandleWriteLockChange_ProjectScopeExactCaseRequired()
+    {
+        // Arrange: One deleted project
+        var items = new List<TextCollectionItem>
+        {
+            new("GoneProject", "4444444444444444444444444444444444444444", 1.0),
+        };
+
+        // Act: Scope is exactly "Project" (PT9 uses exact string match)
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "Project",
+            items,
+            40
+        );
+
+        // Assert: "Project" scope recognized, deleted text triggers RemoveAndReload
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.RemoveAndReload),
+            "Exact 'Project' scope should trigger RemoveDeletedTexts"
+        );
+    }
+
+    /// <summary>
+    /// Multiple items present with Project scope where none are deleted should
+    /// return NoAction. Verifies the method correctly delegates to RemoveDeletedTexts
+    /// and interprets its return value.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095")]
+    [Property("BehaviorId", "EXT-016,EXT-014")]
+    public void HandleWriteLockChange_ProjectScopeMultiplePresent_PreservesAllItems()
+    {
+        // Arrange: Three present projects
+        DummyScrText projectA = CreateDummyProject();
+        ScrTextCollection.Add(projectA, true);
+        DummyScrText projectB = CreateDummyProject();
+        ScrTextCollection.Add(projectB, true);
+        DummyScrText projectC = CreateDummyProject();
+        ScrTextCollection.Add(projectC, true);
+
+        var items = new List<TextCollectionItem>
+        {
+            new(projectA.Name, projectA.Guid.ToString(), 1.0),
+            new(projectB.Name, projectB.Guid.ToString(), 1.1),
+            new(projectC.Name, projectC.Guid.ToString(), 0.9),
+        };
+
+        // Act
+        ChangeAction result = TextCollectionService.HandleWriteLockChange(
+            "Project",
+            items,
+            40
+        );
+
+        // Assert
+        Assert.That(
+            result,
+            Is.EqualTo(ChangeAction.NoAction),
+            "All present => NoAction"
+        );
+        Assert.That(items, Has.Count.EqualTo(3), "All items should be preserved");
+        Assert.That(
+            items[1].Zoom,
+            Is.EqualTo(1.1).Within(0.001),
+            "Zoom values should be preserved"
+        );
+    }
+
+    /// <summary>
+    /// Verify that the returned ChangeAction enum values are as defined in
+    /// data-contracts.md: NoAction, Reload, RemoveAndReload.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-013")]
+    [Property("ScenarioId", "TS-095,TS-096")]
+    [Property("BehaviorId", "EXT-016")]
+    public void ChangeAction_EnumValues_MatchDataContractDefinition()
+    {
+        // Assert: All three enum values exist as defined in data-contracts.md
+        Assert.That(
+            Enum.GetNames(typeof(ChangeAction)),
+            Has.Length.EqualTo(3),
+            "ChangeAction must have exactly 3 values"
+        );
+        Assert.That(
+            Enum.IsDefined(typeof(ChangeAction), "NoAction"),
+            Is.True,
+            "ChangeAction must have NoAction"
+        );
+        Assert.That(
+            Enum.IsDefined(typeof(ChangeAction), "Reload"),
+            Is.True,
+            "ChangeAction must have Reload"
+        );
+        Assert.That(
+            Enum.IsDefined(typeof(ChangeAction), "RemoveAndReload"),
+            Is.True,
+            "ChangeAction must have RemoveAndReload"
+        );
+    }
+
+    #endregion
 }

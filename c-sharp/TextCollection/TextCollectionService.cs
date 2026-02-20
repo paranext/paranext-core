@@ -143,6 +143,26 @@ internal static class TextCollectionService
     }
 
     /// <summary>
+    /// Handles write lock change notifications. If scope is "Project", checks for
+    /// deleted texts via RemoveDeletedTexts. If scope overlaps currentBookNum,
+    /// triggers reload. Otherwise, no action needed.
+    /// Source: EXT-016 (PT9/Paratext/TextCollectionForm.cs:124-143)
+    /// </summary>
+    /// <param name="scope">Scope string: "Project" for project-level, or book number for book-level.</param>
+    /// <param name="items">Mutable list of TC items (may be modified if scope is "Project").</param>
+    /// <param name="currentBookNum">Current book number being displayed.</param>
+    /// <returns>ChangeAction indicating what the caller should do.</returns>
+    public static ChangeAction HandleWriteLockChange(
+        string scope,
+        IList<TextCollectionItem> items,
+        int currentBookNum
+    )
+    {
+        // RED phase stub -- implementation pending
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
     /// Checks the 5 rejection predicates from PT9 TextCollectionForm.SetTexts:364-380.
     /// Returns the rejection reason string, or null if the text is eligible.
     /// </summary>
