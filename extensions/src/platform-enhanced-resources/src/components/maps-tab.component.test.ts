@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { MapsTabProps } from './maps-tab.component';
-import type { MediaDisplayItem, BibleImage, MediaGroupType } from './media-item.component';
+import type { MediaDisplayItem, BibleImage } from './media-item.component';
 
 /**
  * MapsTab component tests.
@@ -30,7 +30,7 @@ function createMockBibleImage(overrides: Partial<BibleImage> = {}): BibleImage {
 function createMockMediaDisplayItem(overrides: Partial<MediaDisplayItem> = {}): MediaDisplayItem {
   return {
     id: 'maps-001',
-    groupType: 'verse-range' as MediaGroupType,
+    groupType: 'verse-range',
     groupHeader: 'Matthew 2:1-12',
     images: [createMockBibleImage()],
     ...overrides,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { WebViewProps } from '@papi/core';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
+import papi from '@papi/frontend';
 import {
   Alert,
   AlertDescription,
@@ -10,17 +11,11 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from 'platform-bible-react';
-import ERToolbar, { TrackedProjectOption } from '../components/er-toolbar.component';
+import ERToolbar from '../components/er-toolbar.component';
 import ScripturePane, { WordFilterData } from '../components/scripture-pane.component';
 import ResearchPane, { ResearchTab, ScopeFilterValue } from '../components/research-pane.component';
-import type {
-  DictionaryDisplayItem,
-  DictionarySortField,
-} from '../components/dictionary-tab.component';
-import type {
-  EncyclopediaDisplayItem,
-  EncyclopediaEntry,
-} from '../components/encyclopedia-tab.component';
+import type { DictionarySortField } from '../components/dictionary-tab.component';
+import type { EncyclopediaEntry } from '../components/encyclopedia-tab.component';
 import type { MediaDisplayItem, BibleImage } from '../components/media-tab.component';
 import ArticleViewer from '../components/article-viewer.component';
 import type { OverlayStackEntry } from '../components/article-viewer.component';
@@ -31,6 +26,7 @@ import type {
   SemanticDomainViewerInput,
   SemanticDomain,
 } from '../components/semantic-domain-viewer.component';
+import useEnhancedResourceData from '../hooks/use-enhanced-resource-data.hook';
 
 // --- Types ---
 
@@ -111,33 +107,8 @@ const BANNER_DISPLAY_ORDER: (keyof WarningBannerStates)[] = [
   'updateAvailable',
 ];
 
-/** Default empty project list (will be populated by backend integration) */
-const DEFAULT_AVAILABLE_PROJECTS: TrackedProjectOption[] = [];
-
-/** Default empty scripture content (will be populated by backend integration) */
-const DEFAULT_SCRIPTURE_HTML = '';
-const DEFAULT_FOOTNOTE_HTML = '';
-
-/** Default empty dictionary items (will be populated by backend integration) */
-const DEFAULT_DICTIONARY_ITEMS: DictionaryDisplayItem[] = [];
-
 /** Default dictionary assessments */
 const DEFAULT_DICTIONARY_ASSESSMENTS: Record<string, boolean | undefined> = {};
-
-/** Default empty encyclopedia items (will be populated by backend integration) */
-const DEFAULT_ENCYCLOPEDIA_ITEMS: EncyclopediaDisplayItem[] = [];
-
-/**
- * Default empty media items (will be populated by backend integration -
- * platformEnhancedResources.loadMediaTab)
- */
-const DEFAULT_MEDIA_ITEMS: MediaDisplayItem[] = [];
-
-/**
- * Default empty maps items (will be populated by backend integration -
- * platformEnhancedResources.loadMapsTab / CAP-012)
- */
-const DEFAULT_MAPS_ITEMS: MediaDisplayItem[] = [];
 
 /** Default empty article viewer overlay stack */
 const DEFAULT_ARTICLE_OVERLAY_STACK: OverlayStackEntry[] = [];
@@ -206,8 +177,10 @@ global.webViewComponent = function EnhancedResourceWebView({
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
 
   // --- Scroll group verse synchronization ---
-  // scrRef will be used by scripture pane and research tabs in future work packages
-  useWebViewScrollGroupScrRef();
+  const [scrRef] = useWebViewScrollGroupScrRef();
+
+  // --- Resource ID state (selected enhanced resource) ---
+  const [resourceId] = useWebViewState<string | undefined>('resourceId', undefined);
 
   // --- Persisted state ---
   const [splitterPercentage, setSplitterPercentage] = useWebViewState<number>(
@@ -245,16 +218,7 @@ global.webViewComponent = function EnhancedResourceWebView({
     'current-verse',
   );
 
-  // Scripture content will be populated by backend integration (platformEnhancedResources.getScriptureContent)
-  const [scriptureHtml] = useWebViewState<string>('scriptureHtml', DEFAULT_SCRIPTURE_HTML);
-  const [footnoteHtml] = useWebViewState<string>('footnoteHtml', DEFAULT_FOOTNOTE_HTML);
-
-  // --- Dictionary tab state ---
-  // Dictionary items will be populated by backend integration (platformEnhancedResources.loadDictionaryTab)
-  const [dictionaryItems] = useWebViewState<DictionaryDisplayItem[]>(
-    'dictionaryItems',
-    DEFAULT_DICTIONARY_ITEMS,
-  );
+  // --- Dictionary tab state (must be declared before hook call) ---
   const [dictionarySortColumn, setDictionarySortColumn] = useWebViewState<
     DictionarySortField | undefined
   >('dictionarySortColumn', undefined);
@@ -273,12 +237,19 @@ global.webViewComponent = function EnhancedResourceWebView({
   // Dictionary expanded state: track which terms are expanded
   const [expandedTerms, setExpandedTerms] = useWebViewState<string[]>('expandedTerms', []);
 
-  // --- Encyclopedia tab state ---
-  // Encyclopedia items will be populated by backend integration (platformEnhancedResources.loadEncyclopediaTab)
-  const [encyclopediaItems] = useWebViewState<EncyclopediaDisplayItem[]>(
-    'encyclopediaItems',
-    DEFAULT_ENCYCLOPEDIA_ITEMS,
+  // --- PAPI data hook: wires frontend to backend commands ---
+  const backendData = useEnhancedResourceData(
+    scrRef,
+    scopeFilter,
+    wordFilter,
+    activeTab,
+    dictionarySortColumn,
+    dictionarySortAscending,
+    resourceId,
   );
+
+  // Data from backend (replaces empty placeholder defaults)
+  const { scriptureHtml, footnoteHtml, dictionaryItems, encyclopediaItems } = backendData;
 
   // Encyclopedia expanded state: track which entry IDs are expanded
   const [expandedEncyclopediaEntries, setExpandedEncyclopediaEntries] = useWebViewState<string[]>(
@@ -287,8 +258,7 @@ global.webViewComponent = function EnhancedResourceWebView({
   );
 
   // --- Media tab state ---
-  // Media items will be populated by backend integration (platformEnhancedResources.loadMediaTab / CAP-011)
-  const [mediaItems] = useWebViewState<MediaDisplayItem[]>('mediaItems', DEFAULT_MEDIA_ITEMS);
+  const { mediaItems } = backendData;
 
   // Media expanded groups: track which group IDs are expanded
   const [mediaExpandedGroups, setMediaExpandedGroups] = useWebViewState<string[]>(
@@ -297,8 +267,7 @@ global.webViewComponent = function EnhancedResourceWebView({
   );
 
   // --- Maps tab state ---
-  // Maps items will be populated by backend integration (platformEnhancedResources.loadMapsTab / CAP-012)
-  const [mapsItems] = useWebViewState<MediaDisplayItem[]>('mapsItems', DEFAULT_MAPS_ITEMS);
+  const { mapsItems } = backendData;
 
   // Maps expanded groups: track which group IDs are expanded
   const [mapsExpandedGroups, setMapsExpandedGroups] = useWebViewState<string[]>(
@@ -385,7 +354,9 @@ global.webViewComponent = function EnhancedResourceWebView({
   );
 
   const handleToggleGuide = useCallback(() => {
-    // Guide toggle will be wired to guide visibility in a future work package
+    papi.commands.sendCommand('platformEnhancedResources.openGuide', undefined).catch(() => {
+      // Silently handle if guide command is not available
+    });
   }, []);
 
   // --- Scripture pane handlers ---
@@ -770,7 +741,7 @@ global.webViewComponent = function EnhancedResourceWebView({
         showMissing={highlights.missing}
         onHighlightChange={handleHighlightChange}
         trackedProjectName={trackedProjectName}
-        availableProjects={DEFAULT_AVAILABLE_PROJECTS}
+        availableProjects={backendData.availableProjects}
         onTrackedProjectChange={handleTrackedProjectChange}
         onToggleGuide={handleToggleGuide}
       />

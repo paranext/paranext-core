@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { Button } from 'platform-bible-react';

@@ -13,7 +13,7 @@ import type { WordFilterData } from './scripture-pane.component';
 /** Default dictionary-related props for creating ResearchPaneProps in tests */
 const DEFAULT_DICTIONARY_PROPS = {
   dictionaryItems: [],
-  dictionarySortColumn: undefined as undefined,
+  dictionarySortColumn: undefined,
   dictionarySortAscending: true,
   onDictionarySortChange: () => {},
   onDictionaryToggleExpand: () => {},

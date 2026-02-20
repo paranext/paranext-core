@@ -41,7 +41,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // Skip type checking of declaration files from node_modules to avoid
+    // errors from hoisted dependencies (e.g., vite/rollup type conflicts)
+    "skipLibCheck": true
   },
   "include": ["src"],
   "exclude": ["node_modules"],

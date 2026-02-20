@@ -1,11 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { MediaTabProps } from './media-tab.component';
-import type {
-  MediaItemProps,
-  MediaDisplayItem,
-  BibleImage,
-  MediaGroupType,
-} from './media-item.component';
+import type { MediaItemProps, MediaDisplayItem, BibleImage } from './media-item.component';
 
 /**
  * MediaTab and MediaItem component tests.
@@ -34,7 +29,7 @@ function createMockBibleImage(overrides: Partial<BibleImage> = {}): BibleImage {
 function createMockMediaDisplayItem(overrides: Partial<MediaDisplayItem> = {}): MediaDisplayItem {
   return {
     id: 'media-001',
-    groupType: 'word-linked' as MediaGroupType,
+    groupType: 'word-linked',
     groupHeader: 'baptizo (to baptize)',
     images: [createMockBibleImage()],
     ...overrides,

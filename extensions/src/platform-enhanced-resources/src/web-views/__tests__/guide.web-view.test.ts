@@ -35,9 +35,9 @@ const EXPECTED_GUIDE_KEYS = [
 describe('guide.web-view', () => {
   it('defines all expected localization keys', () => {
     // Verify the expected localization keys follow the naming convention
-    for (const key of EXPECTED_GUIDE_KEYS) {
+    EXPECTED_GUIDE_KEYS.forEach((key) => {
       expect(key).toMatch(/^%enhancedResources_guide_\w+%$/);
-    }
+    });
     expect(EXPECTED_GUIDE_KEYS).toHaveLength(20);
   });
 
