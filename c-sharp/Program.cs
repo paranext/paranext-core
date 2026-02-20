@@ -4,6 +4,7 @@ using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.TextCollection;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
 using PtxUtils;
@@ -62,12 +63,14 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var textCollectionProvider = new TextCollectionDataProvider(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                paratextRegistrationService.InitializeAsync()
+                paratextRegistrationService.InitializeAsync(),
+                textCollectionProvider.RegisterDataProviderAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
