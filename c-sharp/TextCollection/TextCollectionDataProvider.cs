@@ -15,10 +15,16 @@ namespace Paranext.DataProvider.TextCollection;
 /// </summary>
 internal sealed class TextCollectionDataProvider : NetworkObjects.DataProvider
 {
+    #region Consts and member variables
+
     private readonly SavedCollectionService _savedCollectionService;
     private readonly SinglePaneReloadService _singlePaneReloadService;
 
     private const string CommandPrefix = "command:platformScripture.textCollection";
+
+    #endregion
+
+    #region Constructor
 
     public TextCollectionDataProvider(PapiClient papiClient)
         : base("platformScripture.textCollection", papiClient)
@@ -27,13 +33,14 @@ internal sealed class TextCollectionDataProvider : NetworkObjects.DataProvider
         _singlePaneReloadService = new SinglePaneReloadService();
     }
 
-    // === NEW IN PT10 ===
-    // Reason: PAPI DataProvider registration pattern
-    // Maps to: CAP-018, BHV-107
+    #endregion
+
+    #region DataProvider methods
+
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
-        return new List<(string functionName, Delegate function)>
-        {
+        return
+        [
             (
                 "getTitle",
                 new Func<IList<TextCollectionItem>, int, string, TitleResult>(
@@ -58,47 +65,38 @@ internal sealed class TextCollectionDataProvider : NetworkObjects.DataProvider
                 "getSavedCollections",
                 new Func<IList<SavedTextCollection>>(_savedCollectionService.GetSavedCollections)
             ),
-        };
+        ];
     }
 
-    // === NEW IN PT10 ===
-    // Reason: PAPI command registration pattern
-    // Maps to: CAP-018, BHV-108
     protected override async Task StartDataProviderAsync()
     {
-        // Register all 14 commands
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.filterEligibleTexts",
-            new Func<IList<string>, TextFilterResult>(TextCollectionService.FilterEligibleTexts),
-            null
+            new Func<IList<string>, TextFilterResult>(TextCollectionService.FilterEligibleTexts)
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.areEquivalent",
-            new Func<IList<string>, IList<string>, bool>(TextCollectionService.AreEquivalent),
-            null
+            new Func<IList<string>, IList<string>, bool>(TextCollectionService.AreEquivalent)
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.createOrActivateTextCollection",
             new Func<TextCollectionCreateRequest, IList<IList<string>>, TextCollectionCreateResult>(
                 TextCollectionService.CreateOrActivateTextCollection
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.writeResourceXml",
-            new Func<TextCollectionItem, VerseRef, string>(VerseXmlGenerator.WriteResourceXml),
-            null
+            new Func<TextCollectionItem, VerseRef, string>(VerseXmlGenerator.WriteResourceXml)
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.determineReloadDecision",
             new Func<TextCollectionItem, TextCollectionItem?, string, string, bool, ReloadDecision>(
                 _singlePaneReloadService.DetermineReloadDecision
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
@@ -116,30 +114,26 @@ internal sealed class TextCollectionDataProvider : NetworkObjects.DataProvider
                 string,
                 ScrollGroup,
                 TextCollectionMemento
-            >(TextCollectionMementoService.CreateMemento),
-            null
+            >(TextCollectionMementoService.CreateMemento)
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.restoreFromMemento",
             new Func<TextCollectionMemento, TextCollectionRestoreResult>(
                 TextCollectionMementoService.RestoreFromMemento
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.mergeWithZoomPreservation",
             new Func<IList<TextCollectionItem>, IList<string>, IList<TextCollectionItem>>(
                 TextCollectionService.MergeWithZoomPreservation
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.removeDeletedTexts",
-            new Func<IList<TextCollectionItem>, bool>(TextCollectionService.RemoveDeletedTexts),
-            null
+            new Func<IList<TextCollectionItem>, bool>(TextCollectionService.RemoveDeletedTexts)
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
@@ -147,22 +141,19 @@ internal sealed class TextCollectionDataProvider : NetworkObjects.DataProvider
             new Func<string, FilterButtonStates, bool>(
                 (projectId, buttons) =>
                     ProjectFilterService.MatchesFilter(projectId, buttons, "", false)
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.getProjectType",
-            new Func<string, string>(ProjectFilterService.GetProjectType),
-            null
+            new Func<string, string>(ProjectFilterService.GetProjectType)
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.handleWriteLockChange",
             new Func<string, IList<TextCollectionItem>, int, ChangeAction>(
                 TextCollectionService.HandleWriteLockChange
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
@@ -173,20 +164,18 @@ internal sealed class TextCollectionDataProvider : NetworkObjects.DataProvider
                     _savedCollectionService.SaveList(name, textNames, hebGrkIndex, scrProjectIndex);
                     SendDataUpdateEvent("*", "saveTextList");
                 }
-            ),
-            null
+            )
         );
 
         await PapiClient.RegisterRequestHandlerAsync(
             $"{CommandPrefix}.deleteTextList",
-            new Action<string>(
-                (name) =>
-                {
-                    _savedCollectionService.DeleteList(name);
-                    SendDataUpdateEvent("*", "deleteTextList");
-                }
-            ),
-            null
+            new Action<string>(name =>
+            {
+                _savedCollectionService.DeleteList(name);
+                SendDataUpdateEvent("*", "deleteTextList");
+            })
         );
     }
+
+    #endregion
 }
