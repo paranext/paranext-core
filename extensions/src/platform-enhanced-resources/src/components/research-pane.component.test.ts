@@ -25,6 +25,10 @@ const DEFAULT_DICTIONARY_PROPS = {
   encyclopediaItems: [],
   onEncyclopediaToggleExpand: () => {},
   onEncyclopediaReadArticle: () => {},
+  mediaItems: [],
+  mediaExpandedGroups: [],
+  onMediaToggleGroup: () => {},
+  onMediaItemClick: () => {},
 };
 
 describe('research-pane.component', () => {

@@ -21,6 +21,7 @@ import type {
   EncyclopediaDisplayItem,
   EncyclopediaEntry,
 } from '../components/encyclopedia-tab.component';
+import type { MediaDisplayItem, BibleImage } from '../components/media-tab.component';
 
 // --- Types ---
 
@@ -117,6 +118,12 @@ const DEFAULT_DICTIONARY_ASSESSMENTS: Record<string, boolean | undefined> = {};
 /** Default empty encyclopedia items (will be populated by backend integration) */
 const DEFAULT_ENCYCLOPEDIA_ITEMS: EncyclopediaDisplayItem[] = [];
 
+/**
+ * Default empty media items (will be populated by backend integration -
+ * platformEnhancedResources.loadMediaTab)
+ */
+const DEFAULT_MEDIA_ITEMS: MediaDisplayItem[] = [];
+
 // --- Component ---
 
 global.webViewComponent = function EnhancedResourceWebView({
@@ -204,6 +211,16 @@ global.webViewComponent = function EnhancedResourceWebView({
   // Encyclopedia expanded state: track which entry IDs are expanded
   const [expandedEncyclopediaEntries, setExpandedEncyclopediaEntries] = useWebViewState<string[]>(
     'expandedEncyclopediaEntries',
+    [],
+  );
+
+  // --- Media tab state ---
+  // Media items will be populated by backend integration (platformEnhancedResources.loadMediaTab / CAP-011)
+  const [mediaItems] = useWebViewState<MediaDisplayItem[]>('mediaItems', DEFAULT_MEDIA_ITEMS);
+
+  // Media expanded groups: track which group IDs are expanded
+  const [mediaExpandedGroups, setMediaExpandedGroups] = useWebViewState<string[]>(
+    'mediaExpandedGroups',
     [],
   );
 
@@ -393,6 +410,31 @@ global.webViewComponent = function EnhancedResourceWebView({
     // Article viewer overlay will be wired in UI-PKG-010
   }, []);
 
+  // --- Media tab handlers ---
+
+  // Keep a ref to the current expanded media groups for use in callbacks
+  const mediaExpandedGroupsRef = useRef(mediaExpandedGroups);
+  useEffect(() => {
+    mediaExpandedGroupsRef.current = mediaExpandedGroups;
+  }, [mediaExpandedGroups]);
+
+  const handleMediaToggleGroup = useCallback(
+    (groupId: string) => {
+      const prev = mediaExpandedGroupsRef.current;
+      if (prev.includes(groupId)) {
+        setMediaExpandedGroups(prev.filter((g: string) => g !== groupId));
+      } else {
+        setMediaExpandedGroups([...prev, groupId]);
+      }
+    },
+    [setMediaExpandedGroups],
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleMediaItemClick = useCallback((_image: BibleImage) => {
+    // MediaViewer overlay will be wired in UI-PKG-011
+  }, []);
+
   // Compute encyclopedia items with expanded state applied
   const encyclopediaItemsWithExpanded = useMemo(
     () =>
@@ -512,6 +554,10 @@ global.webViewComponent = function EnhancedResourceWebView({
             encyclopediaItems={encyclopediaItemsWithExpanded}
             onEncyclopediaToggleExpand={handleEncyclopediaToggleExpand}
             onEncyclopediaReadArticle={handleEncyclopediaReadArticle}
+            mediaItems={mediaItems}
+            mediaExpandedGroups={mediaExpandedGroups}
+            onMediaToggleGroup={handleMediaToggleGroup}
+            onMediaItemClick={handleMediaItemClick}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

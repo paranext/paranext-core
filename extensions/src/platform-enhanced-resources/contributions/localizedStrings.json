@@ -85,7 +85,14 @@
       "%enhancedResources_enc_readFullArticle%": "Read full article",
       "%enhancedResources_enc_translations%": "Translations:",
       "%enhancedResources_enc_sourceText%": "Source:",
-      "%enhancedResources_enc_seeAlso%": "See also:"
+      "%enhancedResources_enc_seeAlso%": "See also:",
+      "%enhancedResources_media_wordLinkedGroup%": "Word-Linked",
+      "%enhancedResources_media_verseRangeGroup%": "Verse Range",
+      "%enhancedResources_media_expandGroup%": "Expand",
+      "%enhancedResources_media_collapseGroup%": "Collapse",
+      "%enhancedResources_media_viewImage%": "View image",
+      "%enhancedResources_media_imagePlaceholder%": "Image",
+      "%enhancedResources_videoPlayback_notAvailable%": "Video playback is not yet supported in this version."
     },
     "es": {
       "%enhancedResources_title%": "Recursos mejorados",
@@ -171,7 +178,14 @@
       "%enhancedResources_enc_readFullArticle%": "Leer articulo completo",
       "%enhancedResources_enc_translations%": "Traducciones:",
       "%enhancedResources_enc_sourceText%": "Fuente:",
-      "%enhancedResources_enc_seeAlso%": "Ver tambien:"
+      "%enhancedResources_enc_seeAlso%": "Ver tambien:",
+      "%enhancedResources_media_wordLinkedGroup%": "Vinculado a palabra",
+      "%enhancedResources_media_verseRangeGroup%": "Rango de versiculos",
+      "%enhancedResources_media_expandGroup%": "Expandir",
+      "%enhancedResources_media_collapseGroup%": "Contraer",
+      "%enhancedResources_media_viewImage%": "Ver imagen",
+      "%enhancedResources_media_imagePlaceholder%": "Imagen",
+      "%enhancedResources_videoPlayback_notAvailable%": "La reproduccion de video aun no es compatible con esta version."
     }
   }
 }

@@ -19,6 +19,8 @@ import DictionaryTab from './dictionary-tab.component';
 import type { DictionaryDisplayItem, DictionarySortField } from './dictionary-tab.component';
 import EncyclopediaTab from './encyclopedia-tab.component';
 import type { EncyclopediaDisplayItem, EncyclopediaEntry } from './encyclopedia-tab.component';
+import MediaTab from './media-tab.component';
+import type { MediaDisplayItem, BibleImage } from './media-tab.component';
 
 // --- Types ---
 
@@ -76,6 +78,16 @@ export interface ResearchPaneProps {
   onEncyclopediaToggleExpand: (id: string) => void;
   /** Callback when "Read full article" is clicked in encyclopedia */
   onEncyclopediaReadArticle: (entry: EncyclopediaEntry) => void;
+
+  // --- Media Tab Props ---
+  /** Media display items to show in the media tab */
+  mediaItems: MediaDisplayItem[];
+  /** Set of expanded media group IDs */
+  mediaExpandedGroups: string[];
+  /** Callback when a media group header is toggled (expand/collapse) */
+  onMediaToggleGroup: (groupId: string) => void;
+  /** Callback when a media thumbnail is clicked */
+  onMediaItemClick: (image: BibleImage) => void;
 }
 
 // --- Constants ---
@@ -140,6 +152,10 @@ export default function ResearchPane({
   encyclopediaItems,
   onEncyclopediaToggleExpand,
   onEncyclopediaReadArticle,
+  mediaItems,
+  mediaExpandedGroups,
+  onMediaToggleGroup,
+  onMediaItemClick,
 }: ResearchPaneProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
 
@@ -283,12 +299,14 @@ export default function ResearchPane({
           />
         </TabsContent>
 
-        <TabsContent value="media" className="tw-flex-1 tw-overflow-auto tw-min-h-0">
-          <div data-testid="media-tab-content" className="tw-p-4">
-            <p className="tw-text-muted-foreground tw-text-sm">
-              {localizedStrings['%enhancedResources_emptyState%']}
-            </p>
-          </div>
+        <TabsContent value="media" className="tw-flex-1 tw-overflow-hidden tw-min-h-0">
+          <MediaTab
+            items={mediaItems}
+            isVisible={activeTab === 'media'}
+            expandedGroups={mediaExpandedGroups}
+            onToggleGroup={onMediaToggleGroup}
+            onMediaItemClick={onMediaItemClick}
+          />
         </TabsContent>
 
         <TabsContent value="maps" className="tw-flex-1 tw-overflow-auto tw-min-h-0">
