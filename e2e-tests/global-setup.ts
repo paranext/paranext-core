@@ -95,8 +95,10 @@ async function globalSetup(config: FullConfig): Promise<void> {
       cwd: rootDir,
       stdio: 'pipe',
       shell: true,
-      // Must clear ELECTRON_RUN_AS_NODE for the env to be clean
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined },
+      // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
+      // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
+      // spawning start:main — Playwright launches Electron directly via electron.launch().
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, SKIP_START_MAIN: '1' },
     });
 
     // Store PID so teardown can find it
