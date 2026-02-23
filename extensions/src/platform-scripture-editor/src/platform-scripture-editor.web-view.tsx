@@ -443,7 +443,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
 
-    if (!selection?.start) return;
+    if (!selection?.start || isReadOnlyEffective) return;
 
     // Store the selection as annotation range to show it as the pending annotation
     const annotationRange: AnnotationRange = {
@@ -568,7 +568,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     setShowCommentEditor(true);
-  }, [scrRef]);
+  }, [scrRef, isReadOnlyEffective]);
 
   const options = useMemo<EditorOptions>(
     () => ({
