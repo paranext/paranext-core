@@ -96,6 +96,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+  '%webView_platformScriptureEditor_insertCommentAtSelection%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -356,18 +357,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return getViewOptionsForType(viewType);
   }, [viewType]);
 
-  const options = useMemo<EditorOptions>(
-    () => ({
-      isReadonly: isReadOnlyEffective,
-      hasSpellCheck: false,
-      nodes: nodeOptions,
-      textDirection: textDirectionEffective,
-      markerMenuTrigger: '\\',
-      view: viewOptions,
-    }),
-    [isReadOnlyEffective, textDirectionEffective, nodeOptions, viewOptions],
-  );
-
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
     false,
@@ -545,6 +534,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     setShowCommentEditor(true);
   }, [scrRef]);
+
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnlyEffective,
+      hasSpellCheck: false,
+      nodes: nodeOptions,
+      textDirection: textDirectionEffective,
+      markerMenuTrigger: '\\',
+      view: viewOptions,
+      contextMenu: [
+        {
+          title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
+          onSelect: insertCommentAtCurrentSelection,
+          isDisabled: isReadOnlyEffective,
+        },
+      ],
+    }),
+    [
+      isReadOnlyEffective,
+      textDirectionEffective,
+      nodeOptions,
+      viewOptions,
+      localizedStrings,
+      insertCommentAtCurrentSelection,
+    ],
+  );
 
   // listen to messages from the web view controller
   useEffect(() => {
