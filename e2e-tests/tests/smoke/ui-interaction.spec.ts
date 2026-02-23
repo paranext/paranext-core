@@ -2,7 +2,16 @@ import { test, expect } from '../../fixtures/papi.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 
 test.describe('UI Interaction', () => {
-  test('should open the About dialog from the Help menu', async ({ electronApp, mainPage }) => {
+  test.beforeAll(async ({ electronApp }) => {
+    // Maximize the window once so everything is visible and clickable for all tests
+    // Wait for the first window to exist before maximizing
+    await electronApp.firstWindow({ timeout: 10_000 });
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].maximize();
+    });
+  });
+
+  test('should open the About dialog from the Help menu', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Click the "Help" menu trigger in the menubar
@@ -16,10 +25,17 @@ test.describe('UI Interaction', () => {
     // The about dialog opens as a floating dock tab. Wait for it to appear.
     const aboutTab = mainPage.locator('.dock-tab', { hasText: /About/i });
     await expect(aboutTab).toBeVisible({ timeout: 10_000 });
+
+    // Close the about tab that we just opened.
+    // The close button is visibility:hidden until the tab is hovered.
+    await aboutTab.hover();
+    const closeButton = aboutTab.locator('.dock-tab-close-btn');
+    await expect(closeButton).toBeVisible({ timeout: 5_000 });
+    await closeButton.click();
+    await expect(aboutTab).not.toBeVisible();
   });
 
   test('should open the About dialog via PAPI command and show version info', async ({
-    electronApp,
     papiClient,
     mainPage,
   }) => {
@@ -31,9 +47,19 @@ test.describe('UI Interaction', () => {
     // The about panel is labeled with the about menu localization key
     const aboutPane = mainPage.getByLabel('%mainMenu_about%');
     await expect(aboutPane).toBeVisible({ timeout: 10_000 });
+
+    // Close the About tab to avoid leaking UI state into later tests.
+    // The close button is visibility:hidden until the tab is hovered.
+    const aboutTab = mainPage.locator('.dock-tab', { hasText: /About/i });
+    await expect(aboutTab).toBeVisible({ timeout: 10_000 });
+    await aboutTab.hover();
+    const closeButton = aboutTab.locator('.dock-tab-close-btn');
+    await expect(closeButton).toBeVisible({ timeout: 5_000 });
+    await closeButton.click();
+    await expect(aboutTab).not.toBeVisible({ timeout: 10_000 });
   });
 
-  test('should toggle theme via toolbar button', async ({ electronApp, papiClient, mainPage }) => {
+  test('should toggle theme via toolbar button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // The theme style element carries the current theme id
@@ -45,15 +71,23 @@ test.describe('UI Interaction', () => {
     const initialThemeId = await getThemeId();
     expect(initialThemeId).toBeTruthy();
 
-    // Toggle theme via PAPI data provider instead of fragile button click.
-    // The toolbar button calls setTheme with the opposite type, so we do the same.
-    const newType = initialThemeId === 'dark' ? 'light' : 'dark';
-    await papiClient.request('setData:platformTheme-currentTheme', [undefined, { type: newType }]);
+    // Find and click the theme toggle button (Sun or Moon icon) in the toolbar
+    const themeButton = mainPage.locator('button:has(svg.lucide-sun), button:has(svg.lucide-moon)');
+    await expect(themeButton).toBeVisible({ timeout: 5_000 });
+    await expect(themeButton).toBeEnabled({ timeout: 5_000 });
+    await themeButton.click();
 
     // Wait for theme data provider to update the stylesheet
     await expect(async () => {
       const newThemeId = await getThemeId();
       expect(newThemeId).not.toBe(initialThemeId);
+    }).toPass({ timeout: 5_000 });
+
+    // Toggle back to restore the original theme for subsequent tests
+    await themeButton.click();
+    await expect(async () => {
+      const restoredThemeId = await getThemeId();
+      expect(restoredThemeId).toBe(initialThemeId);
     }).toPass({ timeout: 5_000 });
   });
 
@@ -75,7 +109,7 @@ test.describe('UI Interaction', () => {
     await expect(listItem.first()).toBeVisible({ timeout: 5_000 });
   });
 
-  test('should open Settings from the menu', async ({ electronApp, papiClient, mainPage }) => {
+  test('should open Settings from the menu', async ({ papiClient, mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Open settings via PAPI command
@@ -84,5 +118,13 @@ test.describe('UI Interaction', () => {
     // Settings opens as a new tab in the dock layout
     const settingsTab = mainPage.locator('.dock-tab', { hasText: /Settings/i });
     await expect(settingsTab).toBeVisible({ timeout: 10_000 });
+
+    // Close the Settings tab to avoid leaking UI state into later tests.
+    // The close button is visibility:hidden until the tab is hovered.
+    await settingsTab.hover();
+    const closeButton = settingsTab.locator('.dock-tab-close-btn');
+    await expect(closeButton).toBeVisible({ timeout: 5_000 });
+    await closeButton.click();
+    await expect(settingsTab).not.toBeVisible({ timeout: 10_000 });
   });
 });
