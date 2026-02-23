@@ -60,6 +60,10 @@ const SELECT_TEXTS_STRING_KEYS: LocalizeKey[] = [
   '%selectTexts_moveUpButton_ariaLabel%',
   '%selectTexts_moveDownButton_ariaLabel%',
   '%selectTexts_savedCollections_ariaLabel%',
+  '%selectTexts_colType%',
+  '%selectTexts_colName%',
+  '%selectTexts_colFullName%',
+  '%selectTexts_colLanguage%',
   '%general_ok%',
   '%general_cancel%',
   '%general_yes%',
@@ -455,25 +459,25 @@ global.webViewComponent = function SelectTextsWebView({ useWebViewState }: WebVi
                     <TableRow>
                       <TableHead onClick={() => handleSort('projectType')} style={{ width: '20%' }}>
                         <div className="tw-flex tw-cursor-pointer tw-items-center">
-                          <span>Type</span>
+                          <span>{localizedStrings['%selectTexts_colType%']}</span>
                           {buildSortIcon('projectType')}
                         </div>
                       </TableHead>
                       <TableHead onClick={() => handleSort('name')} style={{ width: '20%' }}>
                         <div className="tw-flex tw-cursor-pointer tw-items-center">
-                          <span>Name</span>
+                          <span>{localizedStrings['%selectTexts_colName%']}</span>
                           {buildSortIcon('name')}
                         </div>
                       </TableHead>
                       <TableHead onClick={() => handleSort('fullName')} style={{ width: '40%' }}>
                         <div className="tw-flex tw-cursor-pointer tw-items-center">
-                          <span>Full Name</span>
+                          <span>{localizedStrings['%selectTexts_colFullName%']}</span>
                           {buildSortIcon('fullName')}
                         </div>
                       </TableHead>
                       <TableHead onClick={() => handleSort('language')} style={{ width: '20%' }}>
                         <div className="tw-flex tw-cursor-pointer tw-items-center">
-                          <span>Language</span>
+                          <span>{localizedStrings['%selectTexts_colLanguage%']}</span>
                           {buildSortIcon('language')}
                         </div>
                       </TableHead>
