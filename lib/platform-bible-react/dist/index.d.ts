@@ -302,11 +302,11 @@ export interface CommentListProps {
 	 */
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 	/**
-	 * Callback when the user clicks a verse reference in a comment thread. Receives the verse
-	 * reference string (e.g., "MAT 1:23") and the USFM character offset within the verse so the
-	 * parent can navigate and position the editor cursor at the comment's location.
+	 * Callback when the user clicks a verse reference in a comment thread. The related project editor
+	 * web view can navigate and position the editor cursor at the start of the comment inside the
+	 * verse.
 	 */
-	onVerseRefClick?: (verseRef: string) => void;
+	onVerseRefClick?: (thread: LegacyCommentThread) => void;
 }
 /**
  * Component for rendering a list of comment threads

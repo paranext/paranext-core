@@ -73,6 +73,7 @@ export function CommentThread({
   currentUser,
   handleSelectThread,
   threadId,
+  thread,
   threadStatus,
   handleAddCommentToThread,
   handleUpdateComment,
@@ -408,7 +409,7 @@ export function CommentThread({
                   className="tw-h-auto tw-px-1 tw-py-0 tw-text-sm tw-font-normal tw-text-muted-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onVerseRefClick(verseRef);
+                    onVerseRefClick(thread);
                   }}
                 >
                   {verseRef}

@@ -133,6 +133,7 @@ export default function CommentList({
             verseRef={thread.verseRef}
             handleSelectThread={handleSelectThread}
             threadId={thread.id}
+            thread={thread}
             isRead={thread.isRead}
             isSelected={expandedThreadIds.has(thread.id)}
             currentUser={currentUser}
