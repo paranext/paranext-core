@@ -1624,6 +1624,24 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    /** Open the Select Texts dialog for choosing texts in a text collection */
+    'platformScripture.openSelectTexts': () => Promise<string | undefined>;
+
+    /** Load available texts filtered for eligibility */
+    'platformScripture.filterEligibleTexts': () => Promise<unknown[]>;
+
+    /** Get the project type categorization for a given project ID */
+    'platformScripture.getProjectType': (projectId: string) => Promise<string>;
+
+    /** Get saved text collections */
+    'platformScripture.getSavedTextCollections': () => Promise<unknown[]>;
+
+    /** Save a named text list */
+    'platformScripture.saveTextList': (collection: unknown) => Promise<void>;
+
+    /** Delete a named text list by name */
+    'platformScripture.deleteTextList': (name: string) => Promise<void>;
   }
 
   export interface ProjectSettingTypes {

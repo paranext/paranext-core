@@ -8,6 +8,10 @@ import {
 } from './checks-side-panel.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
+  SelectTextsWebViewProvider,
+  selectTextsWebViewType,
+} from './select-texts.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -205,6 +209,14 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
   return findWebViewId;
 }
 
+async function openSelectTexts(): Promise<string | undefined> {
+  return papi.webViews.openWebView(
+    selectTextsWebViewType,
+    { type: 'float', floatSize: { width: 900, height: 700 } },
+    {},
+  );
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is activating!');
 
@@ -395,6 +407,27 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewProvider,
   );
 
+  const selectTextsWebViewProvider = new SelectTextsWebViewProvider();
+  const selectTextsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    selectTextsWebViewType,
+    selectTextsWebViewProvider,
+  );
+  const openSelectTextsPromise = papi.commands.registerCommand(
+    'platformScripture.openSelectTexts',
+    openSelectTexts,
+    {
+      method: {
+        summary: 'Open the Select Texts dialog for choosing texts in a text collection',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Select Texts web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -474,6 +507,8 @@ export async function activate(context: ExecutionActivationContext) {
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,
+    await selectTextsWebViewProviderPromise,
+    await openSelectTextsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
