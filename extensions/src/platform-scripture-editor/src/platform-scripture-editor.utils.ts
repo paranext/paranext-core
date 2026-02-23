@@ -333,7 +333,7 @@ export function generateMarkerMenuListItems(
   return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
     const markerMenuItem: MarkerMenuItem = {
       marker,
-      title: localizedStrings[title],
+      title: localizedStrings[title] ?? title,
       action: () => {
         editorRef.current?.formatPara(marker);
       },

@@ -940,6 +940,12 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 export type MarkerMenuLocalizedStrings = {
 	[localizedKey in (typeof MARKER_MENU_STRING_KEYS)[number]]?: string;
 };
+interface MarkerIconProps {
+	/** CSS class name to apply to the icon */
+	className?: string;
+	/** Size in px that the icon should be */
+	size?: string | number;
+}
 /** Type for the markers that contain all necessary information to be displayed in the list */
 export interface MarkerMenuItem {
 	/** If the item is a marker, then this is the marker code */
@@ -949,7 +955,7 @@ export interface MarkerMenuItem {
 	/** An optional subtitle for the marker */
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
-	icon?: React$1.FC;
+	icon?: React$1.FC<MarkerIconProps>;
 	/** Whether the command/marker is deprecated */
 	isDeprecated?: boolean;
 	/** Whether the command/marker is disallowed for this project */

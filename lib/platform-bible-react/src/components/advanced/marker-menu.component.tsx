@@ -26,6 +26,14 @@ export type MarkerMenuLocalizedStrings = {
   [localizedKey in (typeof MARKER_MENU_STRING_KEYS)[number]]?: string;
 };
 
+/** Interface that includes the properties that the provided icon element should have */
+export interface MarkerIconProps {
+  /** CSS class name to apply to the icon */
+  className?: string;
+  /** Size in px that the icon should be */
+  size?: string | number;
+}
+
 /** Type for the markers that contain all necessary information to be displayed in the list */
 export interface MarkerMenuItem {
   /** If the item is a marker, then this is the marker code */
@@ -35,7 +43,7 @@ export interface MarkerMenuItem {
   /** An optional subtitle for the marker */
   subtitle?: string;
   /** Optional name of icon to use instead of the marker */
-  icon?: FC;
+  icon?: FC<MarkerIconProps>;
   /** Whether the command/marker is deprecated */
   isDeprecated?: boolean;
   /** Whether the command/marker is disallowed for this project */
@@ -56,7 +64,7 @@ export interface MarkerMenuProps {
 }
 
 /** Function to format the marker menu icon and size it accordingly */
-function MenuMarkerIcon({ icon, className }: { icon?: FC; className?: string }) {
+function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; className?: string }) {
   const IconComponent = icon ?? Ban;
   return <IconComponent className={className} size={16} />;
 }

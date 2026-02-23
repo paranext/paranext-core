@@ -1351,7 +1351,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   return (
     <div className="tw-flex tw-flex-col tw-h-screen">
-      {/* <div className="tw-fixed tw-top-0 tw-z-50 tw-w-screen tw-bg-background"> */}
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
@@ -1427,7 +1426,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           />
         }
       />
-      {/* </div> */}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-auto tw-flex-1 tw-min-h-0 tw-overflow-auto" dir={options.textDirection}>
