@@ -18,6 +18,7 @@ import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@pa
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { VerseRef } from '@sillsdev/scripture';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -328,14 +329,8 @@ global.webViewComponent = function CommentListWebView({
 
   const handleVerseRefClick = useCallback(
     (verseRefStr: string) => {
-      const match = verseRefStr.match(/^(\w+)\s+(\d+):(\d+)$/);
-      if (match) {
-        setScrRef({
-          book: match[1],
-          chapterNum: Number(match[2]),
-          verseNum: Number(match[3]),
-        });
-      }
+      const { verseRef } = VerseRef.tryParse(verseRefStr);
+      if (verseRef.valid) setScrRef(verseRef.toJSON());
     },
     [setScrRef],
   );
