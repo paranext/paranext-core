@@ -10,8 +10,9 @@ npm stop 2>/dev/null || true
 echo "Building..."
 npm run build
 
-echo "Starting with CDP enabled..."
-MAIN_ARGS="--remote-debugging-port=9223" npm start &
+echo "Starting with CDP enabled (headless via xvfb)..."
+xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+    env MAIN_ARGS="--remote-debugging-port=9223" npm start &
 
 # Wait for all ports (max 3 minutes)
 echo "Waiting for app to be ready..."
