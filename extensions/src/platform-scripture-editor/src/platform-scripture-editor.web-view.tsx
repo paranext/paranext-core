@@ -289,6 +289,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [commentsPdp]);
   const [commentEditorAssignableUsers] = usePromise(fetchAssignableUsers, []);
 
+  const fetchCanUserCreateComments = useCallback(async () => {
+    if (!commentsPdp) return false;
+    return commentsPdp.canUserCreateComments();
+  }, [commentsPdp]);
+  const [canUserCreateComments] = usePromise(fetchCanUserCreateComments, false);
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
       noteCallerOnClick: isReadOnly
@@ -408,7 +414,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
 
-    if (!selection?.start || isReadOnlyEffective) return;
+    if (!selection?.start || !canUserCreateComments) return;
 
     // Store the selection as annotation range to show it as the pending annotation
     const annotationRange: AnnotationRange = {
@@ -533,7 +539,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     setShowCommentEditor(true);
-  }, [scrRef, isReadOnlyEffective]);
+  }, [scrRef, canUserCreateComments]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -547,12 +553,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         {
           title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
           onSelect: insertCommentAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
+          isDisabled: !canUserCreateComments,
         },
       ],
     }),
     [
       isReadOnlyEffective,
+      canUserCreateComments,
       textDirectionEffective,
       nodeOptions,
       viewOptions,

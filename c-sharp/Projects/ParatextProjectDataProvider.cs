@@ -264,6 +264,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Cannot delete comment {commentId} in thread {parentThread.Id} - only the last comment can be deleted (last comment ID: {lastComment?.Id})"
             );
 
+        if (!CanUserEditOrDeleteComment(commentId))
+            throw new InvalidOperationException(
+                $"User does not have permission to delete comment {commentId}."
+            );
+
         // Remove the comment using CommentManager
         _commentManager.RemoveComment(commentToDelete);
 
@@ -295,6 +300,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// in this project.
     public string CreateComment(PlatformCommentWrapper comment)
     {
+        if (!CanUserCreateComments())
+            throw new InvalidOperationException(
+                "You do not have permission to create comments in this project."
+            );
+
         if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
         {
             throw new InvalidOperationException(
@@ -304,6 +314,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Check thread-level permissions if adding to an existing thread
+        if (!string.IsNullOrEmpty(comment.Thread))
+        {
+            if (comment.AssignedUser != null && !CanUserAssignThread(comment.Thread))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' does not have permission to assign threads in this project."
+                );
+            if (comment.Status == NoteStatus.Resolved && !CanUserResolveThread(comment.Thread))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' does not have permission to resolve threads in this project."
+                );
+        }
 
         if (comment.AssignedUser != null)
         {
@@ -430,18 +453,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
-        // Validate permissions for status changes (resolve/unresolve)
+        if (!CanUserAddCommentToThread())
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' does not have permission to add comments to threads in this project."
+            );
+
+        // Validate permissions for status changes (resolve/re-open)
         if (
             comment.Status != NoteStatus.Unspecified
             && (comment.Status == NoteStatus.Resolved || comment.Status == NoteStatus.Todo)
         )
         {
-            CommentTags tags = CommentTags.Get(scrText);
-            bool canResolve = existingThread.TagIds.All(tagId =>
-                existingThread.CanCurrentUserResolve(tags.Get(tagId))
-            );
-
-            if (!canResolve)
+            if (!CanUserResolveThread(comment.Thread))
             {
                 throw new InvalidOperationException(
                     $"User '{scrText.User.Name}' cannot resolve or re-open thread '{existingThread.Id}' - insufficient permissions."
@@ -449,9 +472,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             }
         }
 
-        // Validate assigned user is in the assignable users list
+        // Validate assigned user has permission to be assigned and is in the assignable users list
         if (comment.AssignedUser != null)
         {
+            if (!CanUserAssignThread(comment.Thread))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' does not have permission to assign this thread."
+                );
             var assignableUsers = CommentThread
                 .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
                 .ToList();
@@ -557,6 +584,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (lastComment == null || lastComment.Id != commentId)
             throw new InvalidOperationException(
                 $"Cannot update comment {commentId} in thread {parentThread.Id} - only the last comment can be updated (last comment ID: {lastComment?.Id})"
+            );
+
+        if (!CanUserEditOrDeleteComment(commentId))
+            throw new InvalidOperationException(
+                $"User does not have permission to update comment {commentId}."
             );
 
         // Update the comment contents from HTML
