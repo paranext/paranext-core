@@ -8,6 +8,11 @@ import {
 } from './checks-side-panel.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
+  OpenTextsWebViewProvider,
+  OpenTextsWebViewOptions,
+  openTextsWebViewType,
+} from './open-texts.web-view-provider';
+import {
   SelectTextsWebViewProvider,
   selectTextsWebViewType,
 } from './select-texts.web-view-provider';
@@ -214,6 +219,15 @@ async function openSelectTexts(): Promise<string | undefined> {
     selectTextsWebViewType,
     { type: 'float', floatSize: { width: 900, height: 700 } },
     {},
+  );
+}
+
+async function openOpenTextsDialog(): Promise<string | undefined> {
+  const options: OpenTextsWebViewOptions = { showOpenModeSelector: true };
+  return papi.webViews.openWebView(
+    openTextsWebViewType,
+    { type: 'float', floatSize: { width: 900, height: 700 } },
+    options,
   );
 }
 
@@ -428,6 +442,27 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  const openTextsWebViewProvider = new OpenTextsWebViewProvider();
+  const openTextsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    openTextsWebViewType,
+    openTextsWebViewProvider,
+  );
+  const openOpenTextsDialogPromise = papi.commands.registerCommand(
+    'platformScripture.openOpenTextsDialog',
+    openOpenTextsDialog,
+    {
+      method: {
+        summary: 'Open the Open Texts dialog for general-purpose project selection',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Open Texts web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -509,6 +544,8 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidateResultsPromise,
     await selectTextsWebViewProviderPromise,
     await openSelectTextsPromise,
+    await openTextsWebViewProviderPromise,
+    await openOpenTextsDialogPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

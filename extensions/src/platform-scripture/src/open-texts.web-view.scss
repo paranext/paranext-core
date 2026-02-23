@@ -1,0 +1,126 @@
+/* Open Texts Dialog (SCR-003) styles */
+
+.open-texts-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100vh;
+  padding: 16px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* Filter area */
+.open-texts-filter-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.open-texts-filter-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.open-texts-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Project list area */
+.open-texts-list-area {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.open-texts-list-container {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 0;
+}
+
+.open-texts-no-filters-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 24px;
+  text-align: center;
+}
+
+/* Table styles */
+.open-texts-table {
+  width: 100%;
+}
+
+.open-texts-table th,
+.open-texts-table td {
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.open-texts-table th {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Inaccessible project row */
+.open-texts-row-inaccessible {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Footer */
+.open-texts-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+
+.open-texts-footer-left {
+  flex: 1;
+  max-width: 400px;
+}
+
+.open-texts-open-as {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.open-texts-footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Toggle button pressed/unpressed state */
+.open-texts-toggle-button {
+  min-width: 80px;
+}
+
+.open-texts-toggle-button.pressed {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.open-texts-toggle-button.pressed:hover {
+  background-color: var(--primary);
+  opacity: 0.9;
+}

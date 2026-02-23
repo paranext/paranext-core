@@ -19,6 +19,13 @@
         "command": "platformScripture.openSelectTexts",
         "group": "platform.paratext.textCollection",
         "order": 1
+      },
+      {
+        "label": "%mainMenu_openTextsDialog%",
+        "localizeNotes": "Application main menu > Paratext > Open...",
+        "command": "platformScripture.openOpenTextsDialog",
+        "group": "platform.paratext.textCollection",
+        "order": 2
       }
     ]
   },
@@ -50,6 +57,7 @@
     "platformScripture.repeatedWordsInventory": {},
     "platformScripture.punctuationInventory": {},
     "platformScripture.markersInventory": {},
-    "platformScripture.selectTexts": {}
+    "platformScripture.selectTexts": {},
+    "platformScripture.openTexts": {}
   }
 }
