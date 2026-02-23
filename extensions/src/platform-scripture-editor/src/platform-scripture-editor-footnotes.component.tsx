@@ -253,6 +253,7 @@ export function FootnotesLayout({
               layout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
               footnotes={footnotes}
               showMarkers={showMarkers}
+              formatCaller={showMarkers ? (c) => c : undefined}
               selectedFootnote={selectedFootnote?.footnote}
               onFootnoteSelected={handleFootnoteSelected}
             />

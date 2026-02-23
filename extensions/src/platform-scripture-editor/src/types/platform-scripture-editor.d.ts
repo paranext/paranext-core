@@ -221,9 +221,9 @@ declare module 'platform-scripture-editor' {
    * {@link UsjVerseRefChapterLocation}
    */
   export type ScriptureRangeUsjVerseRefChapterLocation = {
-    /** Starting point where the check result applies in the document */
+    /** Starting point of the Scripture range in the document */
     start: UsjVerseRefChapterLocation;
-    /** Ending point where the check result applies in the document */
+    /** Ending point of the Scripture range in the document */
     end: UsjVerseRefChapterLocation;
   };
 

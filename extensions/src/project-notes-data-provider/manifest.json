@@ -1,9 +1,0 @@
-{
-  "name": "projectNotesDataProvider",
-  "version": "0.6.0-alpha.0",
-  "description": "Project Notes Data Provider for Paranext - provided by C# data provider",
-  "author": "Paranext",
-  "license": "MIT",
-  "main": "",
-  "activationEvents": []
-}

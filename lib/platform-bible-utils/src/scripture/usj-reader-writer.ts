@@ -35,6 +35,7 @@ import {
   UsjClosingAttributeMarkerLocation,
   UsjClosingMarkerLocation,
   UsjDocumentLocation,
+  UsjLocation,
   UsjMarkerLocation,
   UsjNodeAndDocumentLocation,
   UsjPropertyValueLocation,
@@ -1183,6 +1184,39 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   }
 
   /**
+   * Type guard to check if a location is a {@link UsjChapterLocation} rather than a
+   * {@link UsjBookLocation} or {@link UsfmVerseLocation}.
+   *
+   * @param location The location to check
+   * @returns `true` if the location is a {@link UsjChapterLocation}
+   */
+  static isUsjChapterLocation(
+    location: UsjLocation | UsfmVerseLocation,
+  ): location is UsjChapterLocation {
+    // Check for UsjVerseRefChapterLocation with documentLocation
+    // Note: UsjVerseRefBookLocation also has verseRef + documentLocation but has
+    // granularity: 'book'. UsjChapterLocation has granularity: 'chapter' or undefined.
+    if (
+      'verseRef' in location &&
+      'documentLocation' in location &&
+      (!location.granularity || location.granularity === 'chapter')
+    ) {
+      return true;
+    }
+
+    // Check for UsjFlatChapterLocation or UsjFlatTextChapterLocation
+    if (
+      'book' in location &&
+      'chapterNum' in location &&
+      ('documentLocation' in location || 'jsonPath' in location)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Transforms a USJ chapter-based location into a single standardized format of USJ chapter-based
    * location for ease of accessing the location's properties
    *
@@ -1382,8 +1416,66 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       documentLocation = usjDocumentLocationMaybeNode.documentLocation;
     }
 
+    // Document location must always have jsonPath
+    if (!('jsonPath' in documentLocation)) return false;
+
     // Text content representation in USJDocumentLocation requires offset and nothing else has offset
     return 'offset' in documentLocation;
+  }
+
+  /**
+   * Determine if the USJ document location is pointing to a node (text or start of marker) content
+   * location instead of some location related to a marker's closing marker, property, or attribute
+   *
+   * @param usjDocumentLocation USJ document location to test
+   * @returns `true` if the location is for text content; `false` otherwise
+   */
+  static isUsjDocumentLocationForNode(
+    usjDocumentLocation: UsjDocumentLocation,
+  ): usjDocumentLocation is UsjMarkerLocation | UsjTextContentLocation;
+  /**
+   * Determine if the USJ document location in this node and document location is pointing to a node
+   * (text or start of marker) content location instead of some location related to a marker's
+   * closing marker, property, or attribute
+   *
+   * @param usjNodeAndDocumentLocation USJ node and document location to test
+   * @returns `true` if the location is for text content; `false` otherwise
+   */
+  static isUsjDocumentLocationForNode(
+    usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation,
+  ): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<
+    UsjMarkerLocation | UsjTextContentLocation
+  >;
+  static isUsjDocumentLocationForNode(
+    usjDocumentLocationMaybeNode: UsjDocumentLocation | UsjNodeAndDocumentLocation,
+  ): boolean {
+    let documentLocation = usjDocumentLocationMaybeNode;
+    if ('node' in usjDocumentLocationMaybeNode) {
+      // If it's a UsjNodeAndDocumentLocation and the node is a string, check if it is a text content
+      // location
+      if (isString(usjDocumentLocationMaybeNode.node))
+        return UsjReaderWriter.isUsjDocumentLocationForTextContent(usjDocumentLocationMaybeNode);
+
+      documentLocation = usjDocumentLocationMaybeNode.documentLocation;
+    }
+
+    // Document location must always have jsonPath
+    if (!('jsonPath' in documentLocation)) return false;
+
+    // Not UsjClosingMarkerLocation
+    if ('closingMarkerOffset' in documentLocation) return false;
+    // Not UsjPropertyValueLocation
+    if ('propertyOffset' in documentLocation) return false;
+    // Not UsjAttributeMarkerLocation, UsjAttributeKeyLocation, or UsjClosingAttributeMarkerLocation
+    if ('keyName' in documentLocation) return false;
+    // Not UsjAttributeKeyLocation
+    if ('keyOffset' in documentLocation) return false;
+    // Not UsjClosingAttributeMarkerLocation
+    if ('keyClosingMarkerOffset' in documentLocation) return false;
+
+    // All that's left is UsjMarkerLocation and UsjTextContentLocation!
+    // May or may not have `offset` (text content vs marker), but either way it's a node
+    return true;
   }
 
   // #endregion UsjDocumentLocation utilities
@@ -1518,7 +1610,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     };
   }
 
-  search(regex: RegExp): UsjSearchResult[] {
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[] {
     const retVal: UsjSearchResult[] = [];
     if (this.usj.content.length === 0) return retVal;
 
@@ -1549,6 +1641,34 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // eslint-disable-next-line no-loop-func
         (node, workingStack) => {
           if (typeof node !== 'string') return false;
+
+          // If filtering by marker style, check if any para/note ancestor is NOT in the allowed set.
+          // Only check 'para' and 'note' type ancestors — 'char' type ancestors (e.g., \it, \bd,
+          // \sc) are inline formatting within verse text and should not affect filtering.
+          if (markerStylesToInclude) {
+            const hasExcludedAncestor = workingStack.some((stackItem) => {
+              const ancestor = stackItem.parent;
+              if (!ancestor || !('type' in ancestor)) return false;
+
+              // Skip char-type ancestors — they are inline formatting, not structural markers
+              if (ancestor.type === 'char') return false;
+
+              // Get the marker style from either 'style' or 'marker' property
+              let markerStyle: string | undefined;
+              if ('style' in ancestor && typeof ancestor.style === 'string') {
+                markerStyle = ancestor.style;
+              } else if ('marker' in ancestor && typeof ancestor.marker === 'string') {
+                markerStyle = ancestor.marker;
+              }
+
+              // If this ancestor has a style that's not in the allowed set, exclude this text
+              return markerStyle !== undefined && !markerStylesToInclude.has(markerStyle);
+            });
+
+            if (hasExcludedAncestor) {
+              return false; // Skip this text node - an ancestor's style is not in the allowed set
+            }
+          }
 
           textChunks.push(node);
           fullTextIndexMap.set(currentIndex, {
