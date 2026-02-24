@@ -18,40 +18,46 @@ function filterConsoleErrors(errors: string[]): string[] {
   );
 }
 
+/**
+ * Open the Select Texts dialog via the Platform menu. If the tab is already visible (e.g. from a
+ * previous test or manual interaction), skip navigation.
+ */
+async function openSelectTextsDialog(mainPage: import('@playwright/test').Page): Promise<void> {
+  const tab = mainPage.locator('.dock-tab', { hasText: /Select Texts/i });
+
+  // If the tab is already visible, no need to navigate
+  if (await tab.isVisible().catch(() => false)) return;
+
+  // Click the "Platform" top-level menu trigger
+  const platformMenu = mainPage.getByRole('menuitem', { name: /Platform/i });
+  await platformMenu.click();
+
+  // Click the "Select Texts..." menu entry
+  const selectTextsItem = mainPage.getByRole('menuitem', { name: /Select Texts/i });
+  await selectTextsItem.click();
+
+  // Wait for the tab to appear
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+}
+
 test.describe('Select Texts Dialog Render Tests', () => {
-  test('should open Select Texts dialog via Project menu', async ({ mainPage }) => {
+  test('should open Select Texts dialog via Platform menu', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
+    await openSelectTextsDialog(mainPage);
 
-    // Step 1: Click the Project top-level menu
-    const projectMenu = mainPage.getByRole('menuitem', { name: /Project/i });
-    await projectMenu.click();
-
-    // Step 2: Click the Select Texts menu entry
-    const selectTextsItem = mainPage.getByRole('menuitem', { name: /Select Texts/i });
-    await selectTextsItem.click();
-
-    // Step 3: Verify the dialog opened (look for dock tab or panel with Select Texts)
+    // Verify the dialog opened (dock tab appeared)
     const tab = mainPage.locator('.dock-tab', { hasText: /Select Texts/i });
     await expect(tab).toBeVisible({ timeout: 15_000 });
   });
 
-  test('should render Select Texts dialog without console errors', async ({ mainPage }) => {
+  test('should render without console errors', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const consoleErrors: string[] = [];
     mainPage.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    // Navigate to Select Texts dialog via menu
-    const projectMenu = mainPage.getByRole('menuitem', { name: /Project/i });
-    await projectMenu.click();
-    const selectTextsItem = mainPage.getByRole('menuitem', { name: /Select Texts/i });
-    await selectTextsItem.click();
-
-    // Wait for the dialog to appear
-    await expect(mainPage.locator('.dock-tab', { hasText: /Select Texts/i })).toBeVisible({
-      timeout: 15_000,
-    });
+    await openSelectTextsDialog(mainPage);
 
     // Give the web view a moment to fully render (content loads async via PAPI)
     await mainPage.waitForTimeout(3_000);
@@ -63,19 +69,10 @@ test.describe('Select Texts Dialog Render Tests', () => {
 
   test('should display the two-pane layout inside the web view', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
+    await openSelectTextsDialog(mainPage);
 
-    // Open Select Texts dialog
-    const projectMenu = mainPage.getByRole('menuitem', { name: /Project/i });
-    await projectMenu.click();
-    const selectTextsItem = mainPage.getByRole('menuitem', { name: /Select Texts/i });
-    await selectTextsItem.click();
-
-    await expect(mainPage.locator('.dock-tab', { hasText: /Select Texts/i })).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Web view content is inside an iframe. Find the iframe for Select Texts.
-    const webViewFrame = mainPage.frameLocator('iframe').first();
+    // Web view content is inside an iframe titled "Select Texts"
+    const webViewFrame = mainPage.frameLocator('iframe[title="Select Texts"]');
 
     // Verify the main component rendered via data-testid
     await expect(webViewFrame.locator('[data-testid="select-texts-dialog"]')).toBeVisible({
