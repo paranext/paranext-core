@@ -1,6 +1,6 @@
 /**
- * E2E render smoke tests for the Select Texts dialog (UI-PKG-001) and Open Texts dialog
- * (UI-PKG-002).
+ * E2E render smoke tests for the Select Texts dialog (UI-PKG-001), Open Texts dialog (UI-PKG-002),
+ * and Text Collection main view (UI-PKG-003).
  *
  * Uses cdp.fixture to connect to an already-running Platform.Bible instance. Verifies that web view
  * components render correctly inside iframes.
@@ -119,5 +119,51 @@ test.describe('Open Texts Dialog Render Tests (UI-PKG-002)', () => {
 
     // Verify the data table exists
     await expect(webViewFrame.locator('.open-texts-table')).toBeAttached({ timeout: 15_000 });
+  });
+});
+
+/** Ensure the Text Collection web view is open. Uses PAPI command as fallback. */
+async function ensureTextCollectionOpen(mainPage: Page): Promise<void> {
+  // Check if the Text Collection iframe already exists
+  const iframe = mainPage.locator('iframe[title="Text Collection"]').first();
+  if ((await iframe.count()) > 0) return;
+
+  // Open via PAPI command
+  await sendPapiCommand('platformScripture.openTextCollection');
+  await mainPage.waitForTimeout(3_000);
+
+  await expect(iframe).toBeAttached({ timeout: 15_000 });
+}
+
+test.describe('Text Collection Main View Render Tests (UI-PKG-003)', () => {
+  test('should have Text Collection iframe attached', async ({ mainPage }) => {
+    await ensureTextCollectionOpen(mainPage);
+
+    const iframe = mainPage.locator('iframe[title="Text Collection"]').first();
+    await expect(iframe).toBeAttached({ timeout: 15_000 });
+  });
+
+  test('should render Text Collection component inside iframe', async ({ mainPage }) => {
+    await ensureTextCollectionOpen(mainPage);
+
+    const webViewFrame = mainPage.frameLocator('iframe[title="Text Collection"]').first();
+
+    // Verify the main component rendered via data-testid
+    await expect(webViewFrame.locator('[data-testid="text-collection-view"]')).toBeAttached({
+      timeout: 15_000,
+    });
+  });
+
+  test('should render without critical console errors', async ({ mainPage }) => {
+    const consoleErrors: string[] = [];
+    mainPage.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+
+    await ensureTextCollectionOpen(mainPage);
+    await mainPage.waitForTimeout(3_000);
+
+    const criticalErrors = filterConsoleErrors(consoleErrors);
+    expect(criticalErrors).toHaveLength(0);
   });
 });

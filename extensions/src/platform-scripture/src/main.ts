@@ -13,6 +13,10 @@ import {
 } from './select-texts.web-view-provider';
 import { OpenTextsWebViewProvider, openTextsWebViewType } from './open-texts.web-view-provider';
 import {
+  TextCollectionWebViewProvider,
+  textCollectionWebViewType,
+} from './text-collection.web-view-provider';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -225,6 +229,10 @@ async function openOpenTexts(): Promise<string | undefined> {
   });
 }
 
+async function openTextCollection(): Promise<string | undefined> {
+  return papi.webViews.openWebView(textCollectionWebViewType, { type: 'tab' });
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is activating!');
 
@@ -262,6 +270,7 @@ export async function activate(context: ExecutionActivationContext) {
   const findWebViewProvider = new FindWebViewProvider();
   const selectTextsWebViewProvider = new SelectTextsWebViewProvider();
   const openTextsWebViewProvider = new OpenTextsWebViewProvider();
+  const textCollectionWebViewProvider = new TextCollectionWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -480,6 +489,26 @@ export async function activate(context: ExecutionActivationContext) {
     openTextsWebViewProvider,
   );
 
+  const openTextCollectionPromise = papi.commands.registerCommand(
+    'platformScripture.openTextCollection',
+    openTextCollection,
+    {
+      method: {
+        summary: 'Open a Text Collection window for comparing multiple Bible translations',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Text Collection web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const textCollectionWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    textCollectionWebViewType,
+    textCollectionWebViewProvider,
+  );
+
   const invalidateResultsPromise = papi.commands.registerCommand(
     'platformScripture.invalidateCheckResults',
     async (details: CheckResultsInvalidated) => {
@@ -540,6 +569,8 @@ export async function activate(context: ExecutionActivationContext) {
     await selectTextsWebViewProviderPromise,
     await openOpenTextsPromise,
     await openTextsWebViewProviderPromise,
+    await openTextCollectionPromise,
+    await textCollectionWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

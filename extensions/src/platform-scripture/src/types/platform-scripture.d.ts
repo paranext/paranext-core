@@ -1653,6 +1653,9 @@ declare module 'papi-shared-types' {
     /** Open the Open/Select Projects dialog for opening projects or text collections */
     'platformScripture.openOpenTexts': () => Promise<string | undefined>;
 
+    /** Open a Text Collection window for comparing multiple Bible translations */
+    'platformScripture.openTextCollection': () => Promise<string | undefined>;
+
     /** Filter eligible texts for text collection (CAP-001) */
     'platformScripture.filterEligibleTexts': () => Promise<
       import('platform-scripture').ScrTextInfo[]

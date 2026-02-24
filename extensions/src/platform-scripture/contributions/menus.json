@@ -21,6 +21,13 @@
         "command": "platformScripture.openOpenTexts",
         "group": "platformScripture.textCollection",
         "order": 2
+      },
+      {
+        "label": "%mainMenu_textCollection%",
+        "localizeNotes": "Application main menu > Project column > Open Text Collection window",
+        "command": "platformScripture.openTextCollection",
+        "group": "platformScripture.textCollection",
+        "order": 3
       }
     ]
   },
@@ -53,6 +60,7 @@
     "platformScripture.punctuationInventory": {},
     "platformScripture.markersInventory": {},
     "platformScripture.selectTexts": {},
-    "platformScripture.openTexts": {}
+    "platformScripture.openTexts": {},
+    "platformScripture.textCollection": {}
   }
 }
