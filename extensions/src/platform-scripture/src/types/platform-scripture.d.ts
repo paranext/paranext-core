@@ -22,6 +22,28 @@ declare module 'platform-scripture' {
   } from 'platform-bible-utils';
   import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 
+  // #region Text Collection Types
+
+  /** Scripture text info returned by filterEligibleTexts */
+  export interface ScrTextInfo {
+    name: string;
+    id: string;
+    fullName: string;
+    language: string;
+    projectType: string;
+    isSecondaryText: boolean;
+  }
+
+  /** Saved text collection returned by getSavedTextCollections */
+  export interface SavedScrTextList {
+    name: string;
+    scrTextNames: string[];
+    scrProjectIndex: number;
+    hebGrkIndex: number;
+  }
+
+  // #endregion
+
   // #region Project Interface Data Types
 
   /** Provides Scripture data in USFM format by book */
@@ -1624,6 +1646,28 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    /** Open the Select Texts dialog for choosing texts in a text collection */
+    'platformScripture.openSelectTexts': () => Promise<string | undefined>;
+
+    /** Filter eligible texts for text collection (CAP-001) */
+    'platformScripture.filterEligibleTexts': () => Promise<
+      import('platform-scripture').ScrTextInfo[]
+    >;
+
+    /** Get saved text collections resolved (CAP-016) */
+    'platformScripture.getSavedTextCollections': () => Promise<
+      import('platform-scripture').SavedScrTextList[]
+    >;
+
+    /** Save a named text list (CAP-014) */
+    'platformScripture.saveTextList': (name: string, textNames: string[]) => Promise<void>;
+
+    /** Delete a named text list (CAP-014) */
+    'platformScripture.deleteTextList': (name: string) => Promise<void>;
+
+    /** Get project type for display categorization (CAP-012) */
+    'platformScripture.getProjectType': (projectId: string) => Promise<string>;
   }
 
   export interface ProjectSettingTypes {

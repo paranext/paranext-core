@@ -1,8 +1,21 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {},
-    "items": []
+    "groups": {
+      "platformScripture.textCollection": {
+        "column": "platform.project",
+        "order": 20
+      }
+    },
+    "items": [
+      {
+        "label": "%mainMenu_selectTexts%",
+        "localizeNotes": "Application main menu > Project column > Select Texts dialog",
+        "command": "platformScripture.openSelectTexts",
+        "group": "platformScripture.textCollection",
+        "order": 1
+      }
+    ]
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
@@ -31,6 +44,7 @@
     "platformScripture.characterInventory": {},
     "platformScripture.repeatedWordsInventory": {},
     "platformScripture.punctuationInventory": {},
-    "platformScripture.markersInventory": {}
+    "platformScripture.markersInventory": {},
+    "platformScripture.selectTexts": {}
   }
 }

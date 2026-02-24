@@ -244,7 +244,23 @@
       "%webView_scope_selector_selected_text%": "Selected text",
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Deselect all",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Select all",
-      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up"
+      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up",
+      "%mainMenu_selectTexts%": "Select Texts...",
+      "%selectTexts_title%": "Select Texts",
+      "%selectTexts_allLabel%": "All:",
+      "%selectTexts_selectedLabel%": "Selected:",
+      "%selectTexts_addHint%": "Double-click text to add",
+      "%selectTexts_removeHint%": "Double-click text to remove",
+      "%selectTexts_savedCollections%": "Saved text collections",
+      "%selectTexts_replaceConfirm%": "Replace existing selection?",
+      "%selectTexts_colType%": "Type",
+      "%selectTexts_colName%": "Name",
+      "%selectTexts_colFullName%": "Full Name",
+      "%selectTexts_colLanguage%": "Language",
+      "%selectTexts_save%": "Save",
+      "%selectTexts_delete%": "Delete",
+      "%selectTexts_ok%": "OK",
+      "%selectTexts_cancel%": "Cancel"
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
@@ -395,7 +411,23 @@
       "%webView_repeatedWordsInventory_title%": "Inventario de palabras repetidas: {projectName}",
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Anular la selección de todos",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Seleccionar todos",
-      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración"
+      "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
+      "%mainMenu_selectTexts%": "Seleccionar textos...",
+      "%selectTexts_title%": "Seleccionar textos",
+      "%selectTexts_allLabel%": "Todos:",
+      "%selectTexts_selectedLabel%": "Seleccionados:",
+      "%selectTexts_addHint%": "Haga doble clic en el texto para agregar",
+      "%selectTexts_removeHint%": "Haga doble clic en el texto para quitar",
+      "%selectTexts_savedCollections%": "Colecciones de textos guardadas",
+      "%selectTexts_replaceConfirm%": "Reemplazar la selección existente?",
+      "%selectTexts_colType%": "Tipo",
+      "%selectTexts_colName%": "Nombre",
+      "%selectTexts_colFullName%": "Nombre completo",
+      "%selectTexts_colLanguage%": "Idioma",
+      "%selectTexts_save%": "Guardar",
+      "%selectTexts_delete%": "Eliminar",
+      "%selectTexts_ok%": "Aceptar",
+      "%selectTexts_cancel%": "Cancelar"
     }
   }
 }

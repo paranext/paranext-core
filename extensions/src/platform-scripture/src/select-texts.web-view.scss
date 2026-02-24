@@ -1,0 +1,145 @@
+.select-texts-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.select-texts-main {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.select-texts-left-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 3;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.select-texts-center-buttons {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.select-texts-right-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 2;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.select-texts-right-panel-with-reorder {
+  display: flex;
+  flex: 2;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.select-texts-reorder-buttons {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.select-texts-list-container {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+}
+
+.select-texts-list-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+}
+
+.select-texts-hint {
+  font-size: 0.75rem;
+  color: var(--muted-foreground, #64748b);
+  margin-top: 4px;
+}
+
+.select-texts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.select-texts-table th {
+  position: sticky;
+  top: 0;
+  background: var(--background, #fff);
+  border-bottom: 2px solid var(--border, #e2e8f0);
+  padding: 4px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.75rem;
+  z-index: 1;
+}
+
+.select-texts-table td {
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select-texts-table .selected {
+  background: var(--accent, #f1f5f9);
+}
+
+.select-texts-table tr:hover:not(.selected) {
+  background: var(--muted, #f8fafc);
+}
+
+.select-texts-table .required td:first-child::before {
+  content: '*';
+  color: var(--destructive, #ef4444);
+  margin-right: 2px;
+}
+
+.select-texts-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.select-texts-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Column widths for left list */
+.col-type {
+  width: 20%;
+}
+
+.col-name {
+  width: 20%;
+}
+
+.col-fullname {
+  width: 40%;
+}
+
+.col-language {
+  width: 20%;
+}
