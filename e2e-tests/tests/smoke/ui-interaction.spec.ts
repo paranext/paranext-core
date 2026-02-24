@@ -1,3 +1,5 @@
+// SMOKE TEST ONLY — uses papi.fixture for CI smoke testing.
+// Per-feature E2E tests MUST use cdp.fixture instead. See e2e-tests/tests/_example/.
 import { test, expect } from '../../fixtures/papi.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
 

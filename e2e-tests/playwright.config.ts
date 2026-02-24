@@ -7,6 +7,7 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
+  testIgnore: ['**/_example/**'], // _example/ contains reference templates, not runnable tests
   fullyParallel: false, // Electron tests need serial execution
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1, // Retry once locally to handle flaky DataProvider timeouts

@@ -1,3 +1,5 @@
+// SMOKE TEST ONLY — uses app.fixture for CI smoke testing (launches Electron).
+// Per-feature E2E tests MUST use cdp.fixture instead. See e2e-tests/tests/_example/.
 import { test, expect } from '../../fixtures/app.fixture';
 
 test.describe('Application Launch', () => {
