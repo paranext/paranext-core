@@ -950,11 +950,15 @@ namespace TestParanextDataProvider.Projects
         // You are not necessarily supposed to edit conflict comment contents like this in real
         // usage. It is possible; we just didn't look into getting the answer to this question.
         [Test]
-        public void UpdateComment_TimConflictXml_UpdatesContentsSuccessfully()
+        public void UpdateComment_TimConflictXml_POC_UpdatesContentsSuccessfully()
         {
-            // Create a conflict comment using the helper method
+            // Create a conflict comment using the helper method (for its complex XML content structure)
             var comment = CommentTestHelper.CreateConflictComment();
             comment.Thread = null; // Will be set in _provider.CreateComment
+            // Reset the type so this isn't treated as a conflict thread. The purpose of this test
+            // is to verify that complex conflict-note XML content can be updated, not to test
+            // conflict thread permissions (which prevent editing the first comment of conflict threads).
+            comment.Type = NoteType.Unspecified;
 
             // Add to provider using CreateComment
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
@@ -982,6 +986,21 @@ namespace TestParanextDataProvider.Projects
             );
             Assert.That(string.Equals(updatedComment.Id, commentId), Is.True);
             Assert.That(string.Equals(updatedComment.Thread, threadId), Is.True);
+        }
+
+        [Test]
+        public void UpdateComment_ConflictThreadFirstComment_ThrowsInvalidOperationException()
+        {
+            // Create a conflict comment — NoteType.Conflict makes the resulting thread a conflict
+            // thread, whose first comment cannot be edited per CanUserEditOrDeleteComment.
+            var comment = CommentTestHelper.CreateConflictComment();
+            comment.Thread = null; // Will be set in _provider.CreateComment
+
+            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            Assert.Throws<InvalidOperationException>(() =>
+                _provider.UpdateComment(commentId, "<p>Attempted edit</p>")
+            );
         }
 
         [Test]
