@@ -1,14 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Xml;
 using Paranext.DataProvider.JsonUtils;
-using static Paranext.DataProvider.JsonUtils.JsonConverterUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
-using Paratext.Data.Users;
-using PtxUtils;
 using SIL.Scripture;
-using TestParanextDataProvider;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -998,8 +993,8 @@ namespace TestParanextDataProvider.Projects
 
             string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
 
-            Assert.Throws<InvalidOperationException>(() =>
-                _provider.UpdateComment(commentId, "<p>Attempted edit</p>")
+            Assert.Throws<InvalidOperationException>(
+                () => _provider.UpdateComment(commentId, "<p>Attempted edit</p>")
             );
         }
 
@@ -1028,7 +1023,7 @@ namespace TestParanextDataProvider.Projects
             Assert.That(
                 () => _provider.UpdateComment(firstCommentId, "Updated content"),
                 Throws.InvalidOperationException.With.Message.Contains(
-                    "only the last comment can be updated"
+                    "only the last comment can be edited or deleted"
                 )
             );
         }

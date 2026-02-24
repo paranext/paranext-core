@@ -250,24 +250,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (commentToDelete == null || parentThread == null)
             return false;
 
-        // Do not allow deletion of comments not created by the current user
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        if (commentToDelete.User != scrText.User.Name)
-            throw new InvalidOperationException(
-                $"Cannot delete comment {commentId} in thread {commentToDelete.Thread} - not created by current user {scrText.User.Name} (created by {commentToDelete.User})"
-            );
-
-        // Only allow deleting the last comment in the thread
-        var lastComment = parentThread.LastComment;
-        if (lastComment == null || lastComment.Id != commentId)
-            throw new InvalidOperationException(
-                $"Cannot delete comment {commentId} in thread {parentThread.Id} - only the last comment can be deleted (last comment ID: {lastComment?.Id})"
-            );
-
-        if (!CanUserEditOrDeleteComment(commentId))
-            throw new InvalidOperationException(
-                $"User does not have permission to delete comment {commentId}."
-            );
+        VerifyUserCanEditOrDeleteComment(commentId);
 
         // Remove the comment using CommentManager
         _commentManager.RemoveComment(commentToDelete);
@@ -300,10 +283,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// in this project.
     public string CreateComment(PlatformCommentWrapper comment)
     {
-        if (!CanUserCreateComments())
-            throw new InvalidOperationException(
-                "You do not have permission to create comments in this project."
-            );
+        VerifyUserCanCreateComments();
 
         if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
         {
@@ -440,10 +420,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
-        if (!CanUserAddCommentToThread())
-            throw new InvalidOperationException(
-                $"User '{scrText.User.Name}' does not have permission to add comments to threads in this project."
-            );
+        VerifyUserCanAddCommentToThread();
 
         // Validate permissions for status changes (resolve/re-open)
         if (
@@ -451,21 +428,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             && (comment.Status == NoteStatus.Resolved || comment.Status == NoteStatus.Todo)
         )
         {
-            if (!CanUserResolveThread(comment.Thread))
-            {
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' cannot resolve or re-open thread '{existingThread.Id}' - insufficient permissions."
-                );
-            }
+            VerifyUserCanResolveThread(comment.Thread);
         }
 
         // Validate assigned user has permission to be assigned and is in the assignable users list
         if (comment.AssignedUser != null)
         {
-            if (!CanUserAssignThread(comment.Thread))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' does not have permission to assign this thread."
-                );
+            VerifyUserCanAssignThread(comment.Thread);
             var assignableUsers = CommentThread
                 .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
                 .ToList();
@@ -559,24 +528,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (commentToUpdate == null || parentThread == null)
             return false;
 
-        // Do not allow updating of comments not created by the current user
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        if (commentToUpdate.User != scrText.User.Name)
-            throw new InvalidOperationException(
-                $"Cannot update comment {commentId} in thread {commentToUpdate.Thread} - not created by current user {scrText.User.Name} (created by {commentToUpdate.User})"
-            );
-
-        // Only allow updating the last comment in the thread
-        var lastComment = parentThread.LastComment;
-        if (lastComment == null || lastComment.Id != commentId)
-            throw new InvalidOperationException(
-                $"Cannot update comment {commentId} in thread {parentThread.Id} - only the last comment can be updated (last comment ID: {lastComment?.Id})"
-            );
-
-        if (!CanUserEditOrDeleteComment(commentId))
-            throw new InvalidOperationException(
-                $"User does not have permission to update comment {commentId}."
-            );
+        VerifyUserCanEditOrDeleteComment(commentId);
 
         // Update the comment contents from HTML
         var commentWrapper = new PlatformCommentWrapper(
@@ -626,31 +578,74 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #region Permission Checks
 
     /// <summary>
+    /// Verifies that the current user can create new comment threads in this project.
+    /// Throws an <see cref="InvalidOperationException"/> with a specific message if not allowed.
+    /// </summary>
+    /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default: false)</param>
+    private void VerifyUserCanCreateComments(bool allowInSba = false)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Cannot create comments in resource projects
+        if (scrText.IsResourceProject)
+            throw new InvalidOperationException("Cannot create comments in resource projects.");
+
+        // Must have a role other than Observer or None
+        if (!scrText.Permissions.HaveRoleNotObserver)
+            throw new InvalidOperationException(
+                "You do not have permission to create comments in this project."
+            );
+
+        // Cannot create comments in Study Bible Additions (unless explicitly allowed)
+        if (!allowInSba && scrText.Settings.IsStudyBibleAdditions)
+            throw new InvalidOperationException(
+                "Cannot create comments in Study Bible Additions projects."
+            );
+
+        // Cannot create comments in Transliteration with Encoder projects
+        if (scrText.Settings.TranslationInfo.Type == ProjectType.TransliterationWithEncoder)
+            throw new InvalidOperationException(
+                "Cannot create comments in Transliteration with Encoder projects."
+            );
+    }
+
+    /// <summary>
     /// Determines if the current user can create new comment threads in this project.
     /// </summary>
     /// <param name="allowInSba">Allow creating comments in Study Bible Additions projects (default: false)</param>
     /// <returns>True if the user can create comments, false otherwise</returns>
     public bool CanUserCreateComments(bool allowInSba = false)
     {
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-
-        // Cannot create comments in resource projects
-        if (scrText.IsResourceProject)
+        try
+        {
+            VerifyUserCanCreateComments(allowInSba);
+            return true;
+        }
+        catch
+        {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the current user can add comments to existing threads in this project.
+    /// Throws an <see cref="InvalidOperationException"/> with a specific message if not allowed.
+    /// </summary>
+    private void VerifyUserCanAddCommentToThread()
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         // Must have a role other than Observer or None
         if (!scrText.Permissions.HaveRoleNotObserver)
-            return false;
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' does not have permission to add comments to threads in this project."
+            );
 
-        // Cannot create comments in Study Bible Additions (unless explicitly allowed)
-        if (!allowInSba && scrText.Settings.IsStudyBibleAdditions)
-            return false;
-
-        // Cannot create comments in Transliteration with Encoder projects
-        if (scrText.Settings.TranslationInfo.Type == ProjectType.TransliterationWithEncoder)
-            return false;
-
-        return true;
+        // Resource projects with global note types are read-only
+        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
+            throw new InvalidOperationException(
+                "Resource projects with global note types are read-only."
+            );
     }
 
     /// <summary>
@@ -661,17 +656,43 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>True if the user can add comments to threads, false otherwise</returns>
     public bool CanUserAddCommentToThread()
     {
+        try
+        {
+            VerifyUserCanAddCommentToThread();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the current user can change the assigned user on a specific thread.
+    /// Throws an <see cref="InvalidOperationException"/> with a specific message if not allowed.
+    /// </summary>
+    /// <param name="threadId">The ID of the thread to check</param>
+    private void VerifyUserCanAssignThread(string threadId)
+    {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         // Must have a role other than Observer or None
         if (!scrText.Permissions.HaveRoleNotObserver)
-            return false;
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' does not have permission to assign this thread."
+            );
 
-        // Resource projects with global note types are read-only
-        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
-            return false;
+        CommentThread? thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            throw new InvalidOperationException($"Thread with id {threadId} does not exist.");
 
-        return true;
+        // Biblical Term notes cannot have assignments
+        if (thread.IsBTNote)
+            throw new InvalidOperationException("Biblical Term notes cannot have assignments.");
+
+        // Spelling notes cannot have assignments
+        if (thread.IsSpellingNote)
+            throw new InvalidOperationException("Spelling notes cannot have assignments.");
     }
 
     /// <summary>
@@ -681,25 +702,49 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>True if the user can assign the thread, false otherwise</returns>
     public bool CanUserAssignThread(string threadId)
     {
+        try
+        {
+            VerifyUserCanAssignThread(threadId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the current user can resolve or re-open a specific thread.
+    /// Throws an <see cref="InvalidOperationException"/> with a specific message if not allowed.
+    /// </summary>
+    /// <param name="threadId">The ID of the thread to check</param>
+    private void VerifyUserCanResolveThread(string threadId)
+    {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         // Must have a role other than Observer or None
         if (!scrText.Permissions.HaveRoleNotObserver)
-            return false;
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' does not have permission to resolve or re-open threads in this project."
+            );
+
+        // Resource projects with global note types are read-only
+        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
+            throw new InvalidOperationException(
+                "Resource projects with global note types are read-only."
+            );
 
         CommentThread? thread = _commentManager.FindThread(threadId);
         if (thread == null)
-            return false;
+            throw new InvalidOperationException($"Thread with id {threadId} does not exist.");
 
-        // Biblical Term notes cannot have assignments
-        if (thread.IsBTNote)
-            return false;
+        CommentTags tags = CommentTags.Get(scrText);
 
-        // Spelling notes cannot have assignments
-        if (thread.IsSpellingNote)
-            return false;
-
-        return true;
+        // Check if user can resolve based on all tags on the thread
+        if (!thread.TagIds.All(tagId => thread.CanCurrentUserResolve(tags.Get(tagId))))
+            throw new InvalidOperationException(
+                $"User '{scrText.User.Name}' cannot resolve or re-open thread '{threadId}' - insufficient permissions."
+            );
     }
 
     /// <summary>
@@ -709,16 +754,68 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>True if the user can resolve the thread, false otherwise</returns>
     public bool CanUserResolveThread(string threadId)
     {
+        try
+        {
+            VerifyUserCanResolveThread(threadId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the current user can edit or delete a specific comment.
+    /// Throws an <see cref="InvalidOperationException"/> with a specific message if not allowed.
+    /// Checks are ordered from most fundamental (role/project level) to most specific (comment level),
+    /// so the most actionable error is always reported first.
+    /// </summary>
+    /// <param name="commentId">The ID of the comment to check</param>
+    private void VerifyUserCanEditOrDeleteComment(string commentId)
+    {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
-        CommentThread? thread = _commentManager.FindThread(threadId);
-        if (thread == null)
-            return false;
+        // Must have general edit permission on the project (checked first - most fundamental)
+        if (!scrText.Permissions.HaveRoleNotObserver)
+            throw new InvalidOperationException(
+                $"User does not have permission to edit or delete comment {commentId}."
+            );
 
-        CommentTags tags = CommentTags.Get(scrText);
+        // Resource projects with global note types are read-only
+        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
+            throw new InvalidOperationException(
+                $"User does not have permission to edit or delete comment {commentId}."
+            );
 
-        // Check if user can resolve based on all tags on the thread
-        return thread.TagIds.All(tagId => thread.CanCurrentUserResolve(tags.Get(tagId)));
+        var (comment, thread) = FindCommentByIdWithThread(commentId);
+        if (comment == null || thread == null)
+            throw new InvalidOperationException($"Comment with ID {commentId} does not exist.");
+
+        // Must be the last comment in the thread
+        var lastComment = thread.LastComment;
+        if (lastComment == null || comment.Id != lastComment.Id)
+            throw new InvalidOperationException(
+                $"Cannot edit or delete comment {commentId} in thread {thread.Id} - only the last comment can be edited or deleted (last comment ID: {lastComment?.Id})"
+            );
+
+        // Must be the author of the comment
+        if (comment.User != scrText.User.Name)
+            throw new InvalidOperationException(
+                $"Cannot edit or delete comment {commentId} in thread {comment.Thread} - not created by current user {scrText.User.Name} (created by {comment.User})"
+            );
+
+        // Cannot edit/delete if it's a conflict resolution action
+        if (comment.ConflictResolutionAction != NoteConflictResolutions.None)
+            throw new InvalidOperationException(
+                $"Cannot edit or delete comment {commentId} in thread {thread.Id} - comment is a conflict resolution action."
+            );
+
+        // Cannot edit/delete the first comment of a conflict note
+        if (thread.Type == NoteType.Conflict && thread.Comments[0].Id == comment.Id)
+            throw new InvalidOperationException(
+                $"Cannot edit or delete comment {commentId} in thread {thread.Id} - cannot edit or delete the first comment of a conflict note."
+            );
     }
 
     /// <summary>
@@ -729,38 +826,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <returns>True if the user can edit or delete the comment, false otherwise</returns>
     public bool CanUserEditOrDeleteComment(string commentId)
     {
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-
-        // Must have general edit permission on the project
-        if (!scrText.Permissions.HaveRoleNotObserver)
+        try
+        {
+            VerifyUserCanEditOrDeleteComment(commentId);
+            return true;
+        }
+        catch
+        {
             return false;
-
-        // Resource projects with global note types are read-only
-        if (scrText.IsResourceProject && scrText.Settings.TranslationInfo.Type.IsGlobalNoteType())
-            return false;
-
-        var (comment, thread) = FindCommentByIdWithThread(commentId);
-        if (comment == null || thread == null)
-            return false;
-
-        // Must be the last comment in the thread
-        var lastComment = thread.LastComment;
-        if (lastComment == null || comment.Id != lastComment.Id)
-            return false;
-
-        // Must be the author of the comment
-        if (comment.User != scrText.User.Name)
-            return false;
-
-        // Cannot edit/delete if it's a conflict resolution action
-        if (comment.ConflictResolutionAction != NoteConflictResolutions.None)
-            return false;
-
-        // Cannot edit/delete the first comment of a conflict note
-        if (thread.Type == NoteType.Conflict && thread.Comments[0].Id == comment.Id)
-            return false;
-
-        return true;
+        }
     }
 
     #endregion

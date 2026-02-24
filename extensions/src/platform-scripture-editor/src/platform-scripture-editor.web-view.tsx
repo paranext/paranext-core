@@ -846,11 +846,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         papi.commands.sendCommand('platformScripture.openFind', webViewId);
       } else {
         const isInsertCommentHotkey = isMac
-          ? event.metaKey && event.altKey && event.key.toLowerCase() === 'm'
+          ? event.metaKey &&
+            event.altKey &&
+            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
           : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
             (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
         if (isInsertCommentHotkey) {
           event.preventDefault();
+          event.stopPropagation();
           insertCommentAtCurrentSelection();
         }
       }
