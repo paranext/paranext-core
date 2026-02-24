@@ -151,6 +151,15 @@ jobs:
           npm run build:main
           npm run typecheck
 
+      - name: Validate utility registry
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          if [ -d ".context/scripts" ]; then
+            npm run validate:utility-registry
+          else
+            echo "Skipping: .context/scripts directory not found"
+          fi
+
       - name: Build
         run: npm run build
 
@@ -174,6 +183,25 @@ jobs:
 
       - name: npm unit tests
         run: npm test
+
+      - name: E2E tests (Linux)
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: xvfb-run --auto-servernum npm run test:e2e:smoke
+
+      - name: E2E tests (Windows/macOS)
+        if: ${{ matrix.os != env.OS_LINUX }}
+        run: npm run test:e2e:smoke
+
+      - name: Upload Playwright test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-${{ matrix.os }}
+          retention-days: 7
+          path: |
+            e2e-tests/test-results/
+            e2e-tests/playwright-report/
+          if-no-files-found: ignore
 
       - name: check dotnet formatting
         if: ${{ matrix.os == env.OS_LINUX }}
@@ -281,3 +309,44 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+
+  # DISABLED: AI-specific lint checks
+  # The lint-ai job is disabled because it checks the entire codebase, not just PR changes.
+  # This would block PRs due to existing code that doesn't follow the new AI patterns.
+  # AI code quality is enforced via pre-commit hooks on ai/* branches instead.
+  # TODO: Re-enable when we have PR-diff-only linting or when codebase is fully compliant.
+  #
+  # lint-ai:
+  #   name: AI Lint Checks
+  #   runs-on: ubuntu-22.04
+  #   if: github.ref == 'refs/heads/ai/main' || startsWith(github.head_ref || github.ref_name, 'ai/feature/')
+  #   steps:
+  #     - name: Check out Git repository
+  #       uses: actions/checkout@v4
+  #     - name: Install .NET
+  #       uses: actions/setup-dotnet@v4
+  #       with:
+  #         dotnet-version: 8.0.x
+  #     - name: Read package.json
+  #       id: package_json
+  #       uses: zoexx/github-action-json-file-properties@1.0.6
+  #       with:
+  #         file_path: 'package.json'
+  #     - name: Install Node.js and NPM
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+  #         cache: npm
+  #     - name: Install packages
+  #       run: npm ci
+  #     - name: Build ESLint plugin
+  #       run: npm run build --workspace=eslint-plugin-paranext
+  #     - name: AI TypeScript lint (paranext plugin)
+  #       run: npm run lint:ai-strict
+  #     - name: Check C# formatting
+  #       run: |
+  #         cd c-sharp
+  #         dotnet tool restore
+  #         dotnet csharpier --check .
+  #     - name: AI C# analyzers (PNX001-PNX006 as errors)
+  #       run: dotnet build c-sharp/ParanextDataProvider.sln -warnaserror
