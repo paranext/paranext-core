@@ -518,29 +518,33 @@ global.webViewComponent = function TextCollectionWebView({
     </div>
   );
 
-  // Empty state when no texts are loaded
-  if (state.items.length === 0 && state.setupComplete) {
-    return (
-      <div
-        data-testid="text-collection-view"
-        className="text-collection-view tw-flex tw-flex-col tw-h-full"
-      >
-        <div className="tw-flex tw-items-center tw-justify-center tw-flex-1">
-          <p className="tw-text-muted-foreground">{getString('%textCollection_noTextsLoaded%')}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Loading state
+  // Loading state (check before empty state - setupComplete gates the transition)
   if (!state.setupComplete && state.items.length === 0) {
     return (
       <div
         data-testid="text-collection-view"
         className="text-collection-view tw-flex tw-flex-col tw-h-full"
+        role="region"
+        aria-label={getString('%webView_textCollection_title%')}
       >
         <div className="tw-flex tw-items-center tw-justify-center tw-flex-1">
           <Spinner />
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state when setup is complete but no texts are loaded
+  if (state.items.length === 0 && state.setupComplete) {
+    return (
+      <div
+        data-testid="text-collection-view"
+        className="text-collection-view tw-flex tw-flex-col tw-h-full"
+        role="region"
+        aria-label={getString('%webView_textCollection_title%')}
+      >
+        <div className="tw-flex tw-items-center tw-justify-center tw-flex-1">
+          <p className="tw-text-muted-foreground">{getString('%textCollection_noTextsLoaded%')}</p>
         </div>
       </div>
     );
@@ -550,6 +554,8 @@ global.webViewComponent = function TextCollectionWebView({
     <div
       data-testid="text-collection-view"
       className="text-collection-view tw-flex tw-flex-col tw-h-full"
+      role="region"
+      aria-label={getString('%webView_textCollection_title%')}
     >
       {/* Missing project ribbon */}
       {showMissingRibbon && (
