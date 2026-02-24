@@ -205,18 +205,25 @@ const configuration: webpack.Configuration = {
         name: 'Extension Builder',
       });
 
-      console.log('Starting Main Process...');
-      let args = ['run', 'start:main'];
-      if (process.env.MAIN_ARGS) {
-        args = args.concat(['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat());
+      // When running E2E tests, Playwright launches Electron directly via electron.launch().
+      // Skip spawning start:main to avoid a second Electron instance conflicting with the
+      // test-managed one.
+      if (!process.env.SKIP_START_MAIN) {
+        console.log('Starting Main Process...');
+        let args = ['run', 'start:main'];
+        if (process.env.MAIN_ARGS) {
+          args = args.concat(['--', ...process.env.MAIN_ARGS.matchAll(/"[^"]+"|[^\s"]+/g)].flat());
+        }
+        childProcessInfos.push({
+          process: spawn('npm', args, {
+            shell: true,
+            stdio: 'inherit',
+          }),
+          name: 'Main',
+        });
+      } else {
+        console.log('SKIP_START_MAIN is set — skipping start:main (Playwright manages Electron).');
       }
-      childProcessInfos.push({
-        process: spawn('npm', args, {
-          shell: true,
-          stdio: 'inherit',
-        }),
-        name: 'Main',
-      });
 
       function tryKillChildProcess(
         childProcessInfo: ChildProcessInfo,
