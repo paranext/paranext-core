@@ -20,7 +20,17 @@ export interface CdpFixtures {
 
 export const test = base.extend<CdpFixtures>({
   mainPage: async ({}, use) => {
-    const browser = await chromium.connectOverCDP(CDP_URL, { timeout: 10_000 });
+    let browser;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        browser = await chromium.connectOverCDP(CDP_URL, { timeout: 10_000 });
+        break;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await new Promise((r) => setTimeout(r, 2_000));
+      }
+    }
+    if (!browser) throw new Error('Failed to connect to CDP after 3 attempts');
 
     // Find the renderer page (not devtools) — same logic as pw-server.mjs
     let page: Page | undefined;

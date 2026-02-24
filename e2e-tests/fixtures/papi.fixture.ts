@@ -1,3 +1,15 @@
+/**
+ * @deprecated For CI smoke tests only. New feature E2E tests MUST use cdp.fixture.ts instead.
+ *
+ *   This fixture launches a fresh Electron instance via app.fixture and adds a PAPI WebSocket client.
+ *   It is NOT suitable for agent-driven E2E tests because:
+ *
+ *   - It restarts the app (conflicts with the running dev instance on port 8876)
+ *   - It exposes papiClient, which encourages bypassing visible UI interaction
+ *
+ *   For per-feature E2E tests, import from '../fixtures/cdp.fixture' and navigate via menu clicks.
+ *   See e2e-tests/tests/smoke/cdp-example.spec.ts for the correct pattern.
+ */
 import { test as appTest, AppFixtures } from './app.fixture';
 import WebSocket from 'ws';
 import { JSONRPCClient } from 'json-rpc-2.0';
@@ -28,12 +40,6 @@ export const test = appTest.extend<PapiFixtures>({
     });
 
     // Create JSON-RPC client
-    const pendingRequests = new Map<
-      number,
-      { resolve: (value: unknown) => void; reject: (error: Error) => void }
-    >();
-    let requestId = 0;
-
     const jsonRpcClient = new JSONRPCClient((jsonRPCRequest) => {
       ws.send(JSON.stringify(jsonRPCRequest));
       return Promise.resolve();
