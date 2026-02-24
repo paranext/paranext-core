@@ -10,7 +10,7 @@
  *   For per-feature E2E tests, import from '../fixtures/cdp.fixture' and navigate via menu clicks.
  *   See e2e-tests/tests/smoke/cdp-example.spec.ts for the correct pattern.
  */
-import { test as appTest, AppFixtures } from './app.fixture';
+import { test as appTest, AppFixtures, WorkerAppFixtures } from './app.fixture';
 import WebSocket from 'ws';
 import { JSONRPCClient } from 'json-rpc-2.0';
 
@@ -25,11 +25,10 @@ export interface PapiClient {
   close(): void;
 }
 
-export interface PapiFixtures extends AppFixtures {
-  papiClient: PapiClient;
-}
+/** All fixtures exposed by the papi fixture (union of worker + test scoped). */
+export type PapiFixtures = AppFixtures & { papiClient: PapiClient };
 
-export const test = appTest.extend<PapiFixtures>({
+export const test = appTest.extend<{ papiClient: PapiClient }, WorkerAppFixtures>({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   papiClient: async ({ electronApp }, use) => {
     const ws = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
