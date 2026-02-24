@@ -1,33 +1,28 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {
-      "platformScripture.textCollection": {
-        "column": "platform.project",
-        "order": 20
-      }
-    },
+    "groups": {},
     "items": [
       {
         "label": "%mainMenu_selectTexts%",
-        "localizeNotes": "Application main menu > Project column > Select Texts dialog",
+        "localizeNotes": "Application main menu > App > Select Texts dialog",
         "command": "platformScripture.openSelectTexts",
-        "group": "platformScripture.textCollection",
-        "order": 1
+        "group": "platform.projectProjects",
+        "order": 100
       },
       {
         "label": "%mainMenu_openTexts%",
-        "localizeNotes": "Application main menu > Project column > Open Projects dialog",
+        "localizeNotes": "Application main menu > App > Open Projects dialog",
         "command": "platformScripture.openOpenTexts",
-        "group": "platformScripture.textCollection",
-        "order": 2
+        "group": "platform.projectProjects",
+        "order": 101
       },
       {
         "label": "%mainMenu_textCollection%",
-        "localizeNotes": "Application main menu > Project column > Open Text Collection window",
+        "localizeNotes": "Application main menu > App > Open Text Collection window",
         "command": "platformScripture.openTextCollection",
-        "group": "platformScripture.textCollection",
-        "order": 3
+        "group": "platform.projectProjects",
+        "order": 102
       }
     ]
   },
