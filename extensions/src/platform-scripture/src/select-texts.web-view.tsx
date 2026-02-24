@@ -410,6 +410,21 @@ global.webViewComponent = function SelectTextsWebView({ useWebViewState }: WebVi
     logger.info(`SelectTexts Cancel: ${JSON.stringify(result)}`);
   }, []);
 
+  // Enter/Escape keyboard shortcuts for dialog
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleOk();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleOk, handleCancel]);
+
   // #endregion
 
   // Button enabled states

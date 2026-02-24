@@ -466,6 +466,21 @@ global.webViewComponent = function OpenTextsWebView({ useWebViewState }: WebView
     logger.info('Open dialog: Cancel');
   }, []);
 
+  // Enter/Escape keyboard shortcuts for dialog
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && okEnabled) {
+        e.preventDefault();
+        handleOk();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleOk, handleCancel, okEnabled]);
+
   // #endregion
 
   // #region Open As Handler
