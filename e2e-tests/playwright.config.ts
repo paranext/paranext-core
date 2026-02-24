@@ -1,0 +1,39 @@
+import { defineConfig } from '@playwright/test';
+
+/**
+ * Playwright configuration for paranext-core E2E tests.
+ *
+ * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
+ * - `isolated`: each test gets a fresh Electron restart — for state-mutating tests.
+ */
+export default defineConfig({
+  testDir: './tests',
+  testIgnore: ['**/_example/**'], // _example/ contains reference templates, not runnable tests
+  fullyParallel: false, // Electron tests need serial execution
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 1, // Retry once locally to handle flaky DataProvider timeouts
+  workers: 1, // Single worker for Electron to avoid port conflicts
+  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  timeout: 120_000, // 2 minutes per test (app initialization can be slow)
+  expect: {
+    timeout: 10_000,
+  },
+  use: {
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  globalSetup: './global-setup.ts',
+  globalTeardown: './global-teardown.ts',
+  outputDir: './test-results',
+  projects: [
+    {
+      name: 'smoke',
+      testDir: './tests/smoke',
+    },
+    {
+      name: 'isolated',
+      testDir: './tests/isolated',
+    },
+  ],
+});

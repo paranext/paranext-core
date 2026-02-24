@@ -1,3 +1,29 @@
+#!/usr/bin/env sh
+
+# ============================================
+# Standard hooks (ALL branches)
+# ============================================
 echo "Format and stylelint fixes..."
 npm run lint:staged
 echo "Format and stylelint fixes finished"
+
+# ============================================
+# AI-specific hooks (ai/* branches only)
+# Husky runs hooks with sh, so we detect the branch with POSIX shell
+# then delegate to bash for the AI validations.
+# ============================================
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+
+case "$BRANCH" in
+  ai/*)
+    echo ""
+    echo "=========================================="
+    echo "AI Branch Detected: $BRANCH"
+    echo "Running additional validations..."
+    echo "=========================================="
+
+    HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+    # shellcheck source=lib/ai-hooks.sh
+    bash -e -c ". '$HOOK_DIR/lib/ai-hooks.sh' && run_all_ai_checks '$BRANCH'"
+    ;;
+esac
