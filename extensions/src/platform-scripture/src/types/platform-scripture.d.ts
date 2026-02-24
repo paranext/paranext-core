@@ -1650,6 +1650,9 @@ declare module 'papi-shared-types' {
     /** Open the Select Texts dialog for choosing texts in a text collection */
     'platformScripture.openSelectTexts': () => Promise<string | undefined>;
 
+    /** Open the Open/Select Projects dialog for opening projects or text collections */
+    'platformScripture.openOpenTexts': () => Promise<string | undefined>;
+
     /** Filter eligible texts for text collection (CAP-001) */
     'platformScripture.filterEligibleTexts': () => Promise<
       import('platform-scripture').ScrTextInfo[]

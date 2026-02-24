@@ -11,6 +11,7 @@ import {
   SelectTextsWebViewProvider,
   selectTextsWebViewType,
 } from './select-texts.web-view-provider';
+import { OpenTextsWebViewProvider, openTextsWebViewType } from './open-texts.web-view-provider';
 import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
@@ -217,6 +218,13 @@ async function openSelectTexts(): Promise<string | undefined> {
   );
 }
 
+async function openOpenTexts(): Promise<string | undefined> {
+  return papi.webViews.openWebView(openTextsWebViewType, {
+    type: 'float',
+    floatSize: { width: 900, height: 700 },
+  });
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is activating!');
 
@@ -253,6 +261,7 @@ export async function activate(context: ExecutionActivationContext) {
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
   const selectTextsWebViewProvider = new SelectTextsWebViewProvider();
+  const openTextsWebViewProvider = new OpenTextsWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -451,6 +460,26 @@ export async function activate(context: ExecutionActivationContext) {
     selectTextsWebViewProvider,
   );
 
+  const openOpenTextsPromise = papi.commands.registerCommand(
+    'platformScripture.openOpenTexts',
+    openOpenTexts,
+    {
+      method: {
+        summary: 'Open the Open/Select Projects dialog for opening projects or text collections',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened Open Texts web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const openTextsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    openTextsWebViewType,
+    openTextsWebViewProvider,
+  );
+
   const invalidateResultsPromise = papi.commands.registerCommand(
     'platformScripture.invalidateCheckResults',
     async (details: CheckResultsInvalidated) => {
@@ -509,6 +538,8 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidateResultsPromise,
     await openSelectTextsPromise,
     await selectTextsWebViewProviderPromise,
+    await openOpenTextsPromise,
+    await openTextsWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
