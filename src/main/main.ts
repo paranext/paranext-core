@@ -6,7 +6,7 @@
  * using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, session, shell } from 'electron';
 import os from 'os';
 import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -681,6 +681,22 @@ async function main() {
       ipcMain.handle(
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
+      );
+
+      // When packaged, the app loads from file:// which has an opaque (null) origin and sends no
+      // Referer header. YouTube embeds require a non-null HTTP/HTTPS Referer and show Error 153
+      // when none is present. Intercept YouTube requests and add a Referer so embedded YouTube
+      // iframes work in the packaged app. See more about this requirement at
+      // https://developers.google.com/youtube/terms/required-minimum-functionality#embedded-player-api-client-identity
+      session.defaultSession.webRequest.onBeforeSendHeaders(
+        { urls: ['https://*.youtube.com/*', 'https://*.youtube-nocookie.com/*'] },
+        (details, respond) => {
+          const { requestHeaders } = details;
+          if (!requestHeaders.Referer)
+            // Made up URL that communicates the general idea that the request is coming from our app
+            requestHeaders.Referer = 'https://app.platform.paratext.org/';
+          respond({ requestHeaders });
+        },
       );
 
       createWindow();
