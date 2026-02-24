@@ -1,0 +1,78 @@
+{
+  "steps": [
+    {
+      "step": "launch",
+      "status": "pass",
+      "ms": 484
+    },
+    {
+      "step": "evalMain",
+      "status": "pass",
+      "appName": "Electron",
+      "appVersion": "36.5.0",
+      "userDataPath": "/tmp/paranext-spike-b-D39UjU"
+    },
+    {
+      "step": "getWindow",
+      "status": "pass",
+      "url": "http://localhost:1212/index.html?logLevel=debug"
+    },
+    {
+      "step": "waitForRoot",
+      "status": "pass"
+    },
+    {
+      "step": "waitForPAPI",
+      "status": "pass"
+    },
+    {
+      "step": "waitForDock",
+      "status": "pass"
+    },
+    {
+      "step": "screenshot-initial",
+      "status": "pass",
+      "path": "/home/paratext/git/paranext-core/e2e-tests/spikes/results-b/01-initial.png"
+    },
+    {
+      "step": "clickHelp",
+      "status": "pass"
+    },
+    {
+      "step": "clickAbout",
+      "status": "pass"
+    },
+    {
+      "step": "verifyAbout",
+      "status": "pass"
+    },
+    {
+      "step": "screenshot-about",
+      "status": "pass",
+      "path": "/home/paratext/git/paranext-core/e2e-tests/spikes/results-b/03-about-open.png"
+    },
+    {
+      "step": "textInput",
+      "status": "pass",
+      "path": "/home/paratext/git/paranext-core/e2e-tests/spikes/results-b/04-text-input.png"
+    },
+    {
+      "step": "evalRenderer",
+      "status": "pass",
+      "value": "Platform.Bible"
+    },
+    {
+      "step": "iframeAccess",
+      "status": "pass",
+      "frameCount": 2,
+      "frameUrls": ["http://localhost:1212/index.html?logLevel=debug", "about:blank"]
+    }
+  ],
+  "errors": [],
+  "timing": {
+    "launchMs": 484,
+    "totalMs": 7077
+  },
+  "passCount": 14,
+  "failCount": 0
+}
