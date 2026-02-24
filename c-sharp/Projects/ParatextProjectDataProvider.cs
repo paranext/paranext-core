@@ -315,19 +315,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
-        // Check thread-level permissions if adding to an existing thread
-        if (!string.IsNullOrEmpty(comment.Thread))
-        {
-            if (comment.AssignedUser != null && !CanUserAssignThread(comment.Thread))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' does not have permission to assign threads in this project."
-                );
-            if (comment.Status == NoteStatus.Resolved && !CanUserResolveThread(comment.Thread))
-                throw new InvalidOperationException(
-                    $"User '{scrText.User.Name}' does not have permission to resolve threads in this project."
-                );
-        }
-
         if (comment.AssignedUser != null)
         {
             var assignableUsers = CommentThread
