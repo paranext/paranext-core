@@ -4,8 +4,11 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
- * Send a JSON-RPC request over WebSocket to the PAPI server. Opens a connection, sends the request,
- * waits for response, then closes.
+ * @deprecated For CI smoke tests / app.fixture teardown only. Per-feature E2E tests must navigate
+ *   through visible UI using cdp.fixture, not PAPI commands.
+ *
+ *   Send a JSON-RPC request over WebSocket to the PAPI server. Opens a connection, sends the request,
+ *   waits for response, then closes.
  */
 export async function sendPapiCommand<T = unknown>(
   command: string,
