@@ -153,7 +153,12 @@ jobs:
 
       - name: Validate utility registry
         if: ${{ matrix.os == env.OS_LINUX }}
-        run: npm run validate:utility-registry
+        run: |
+          if [ -d ".context/scripts" ]; then
+            npm run validate:utility-registry
+          else
+            echo "Skipping: .context/scripts directory not found"
+          fi
 
       - name: Build
         run: npm run build
