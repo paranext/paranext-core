@@ -14,8 +14,14 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocalizedStrings, useProjectData, useProjectDataProvider } from '@papi/frontend/react';
+import {
+  useLocalizedStrings,
+  useProjectData,
+  useProjectDataProvider,
+  useWebViewController,
+} from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
+import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
 
@@ -74,6 +80,7 @@ function isScopeFilter(value: string): value is ScopeFilter {
 
 global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
+  useWebViewState,
   projectId,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
@@ -90,7 +97,12 @@ global.webViewComponent = function CommentListWebView({
       ];
     }, []),
   );
-  const [scrRef] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+  const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+  const editorWebViewController = useWebViewController(
+    'platformScriptureEditor.react',
+    editorWebViewId,
+  );
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
   /**
@@ -326,6 +338,25 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const handleVerseRefClick = useCallback(
+    (thread: LegacyCommentThread) => {
+      const { verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
+      if (!verseRef.valid) return;
+
+      setScrRef(verseRef.toJSON());
+
+      if (editorWebViewId && editorWebViewController) {
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        const location = {
+          verseRef: verseRef.toJSON(),
+          offset: Math.max(0, (thread.comments[0]?.startPosition ?? 0) - 1),
+        };
+        editorWebViewController.selectRange({ start: location, end: location });
+      }
+    },
+    [setScrRef, editorWebViewId, editorWebViewController],
+  );
+
   if (isLoadingCommentThreads || !commentsPdp) {
     return (
       <div className="tw-bg-background tw-flex-1 tw-p-2 tw-space-y-4">
@@ -423,6 +454,7 @@ global.webViewComponent = function CommentListWebView({
             canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
             selectedThreadId={selectedThreadId}
             onSelectedThreadChange={setSelectedThreadId}
+            onVerseRefClick={handleVerseRefClick}
           />
         )}
       </div>

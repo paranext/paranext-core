@@ -113,6 +113,12 @@ export interface CommentListProps {
    * that resolves to true if the user can edit or delete the comment, false otherwise.
    */
   canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+  /**
+   * Callback when the user clicks a verse reference in a comment thread. The related project editor
+   * web view can navigate and position the editor cursor at the start of the comment inside the
+   * verse.
+   */
+  onVerseRefClick?: (thread: LegacyCommentThread) => void;
 }
 
 /** Props for the CommentThread component */
@@ -135,6 +141,8 @@ export interface CommentThreadProps {
   handleSelectThread: (threadId: string) => void;
   /** ID of the thread */
   threadId: string;
+  /** The full thread object, passed through so the onVerseRefClick callback can access all data */
+  thread: LegacyCommentThread;
   /** Status of the thread */
   threadStatus?: CommentStatus;
   /**
@@ -184,6 +192,12 @@ export interface CommentThreadProps {
   isRead?: boolean;
   /** Delay in seconds before auto-marking as read when selected, default 5s */
   autoReadDelay?: number;
+  /**
+   * Callback when the user clicks a verse reference in a comment thread. The related project editor
+   * web view can navigate and position the editor cursor at the start of the comment inside the
+   * verse.
+   */
+  onVerseRefClick?: (thread: LegacyCommentThread) => void;
 }
 
 /** Props for the CommentItem component */
