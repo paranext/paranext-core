@@ -9,7 +9,10 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
-  testIgnore: ['**/smoke/**'],
+  // Smoke tests use app.fixture/papi.fixture (launch their own Electron instance).
+  // CDP tests connect to an already-running app. They cannot mix.
+  // _example/ contains reference templates, not runnable tests.
+  testIgnore: ['**/smoke/**', '**/_example/**'],
   fullyParallel: false,
   workers: 1,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
