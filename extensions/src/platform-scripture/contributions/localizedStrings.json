@@ -260,7 +260,9 @@
       "%selectTexts_save%": "Save",
       "%selectTexts_delete%": "Delete",
       "%selectTexts_ok%": "OK",
-      "%selectTexts_cancel%": "Cancel"
+      "%selectTexts_cancel%": "Cancel",
+      "%selectTexts_moveUp%": "Move up",
+      "%selectTexts_moveDown%": "Move down"
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
@@ -427,7 +429,9 @@
       "%selectTexts_save%": "Guardar",
       "%selectTexts_delete%": "Eliminar",
       "%selectTexts_ok%": "Aceptar",
-      "%selectTexts_cancel%": "Cancelar"
+      "%selectTexts_cancel%": "Cancelar",
+      "%selectTexts_moveUp%": "Subir",
+      "%selectTexts_moveDown%": "Bajar"
     }
   }
 }

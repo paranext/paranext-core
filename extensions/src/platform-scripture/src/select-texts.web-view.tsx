@@ -26,6 +26,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%selectTexts_delete%',
   '%selectTexts_ok%',
   '%selectTexts_cancel%',
+  '%selectTexts_moveUp%',
+  '%selectTexts_moveDown%',
 ];
 
 /** Get English default for a localization key */
@@ -46,6 +48,8 @@ function getEnglishDefault(key: LocalizeKey): string {
     '%selectTexts_delete%': 'Delete',
     '%selectTexts_ok%': 'OK',
     '%selectTexts_cancel%': 'Cancel',
+    '%selectTexts_moveUp%': 'Move up',
+    '%selectTexts_moveDown%': 'Move down',
   };
   return defaults[key] || key;
 }
@@ -528,7 +532,7 @@ global.webViewComponent = function SelectTextsWebView({ useWebViewState }: WebVi
                 size="icon"
                 onClick={handleMoveUp}
                 disabled={!canMoveUp}
-                aria-label="Move up"
+                aria-label={getString('%selectTexts_moveUp%')}
               >
                 <ArrowUp className="tw-h-4 tw-w-4" />
               </Button>
@@ -538,7 +542,7 @@ global.webViewComponent = function SelectTextsWebView({ useWebViewState }: WebVi
                 size="icon"
                 onClick={handleMoveDown}
                 disabled={!canMoveDown}
-                aria-label="Move down"
+                aria-label={getString('%selectTexts_moveDown%')}
               >
                 <ArrowDown className="tw-h-4 tw-w-4" />
               </Button>
