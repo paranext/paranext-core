@@ -242,11 +242,14 @@ export default function CommentEditor({
             e.preventDefault();
             e.stopPropagation();
             onClose();
-          } else if (e.key === 'Enter' && e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (hasEditorContent(editorState)) {
-              handleSave();
+          } else if (e.key === 'Enter') {
+            const isMac = /Macintosh/i.test(navigator.userAgent);
+            if ((isMac && e.metaKey) || (!isMac && e.ctrlKey)) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (hasEditorContent(editorState)) {
+                handleSave();
+              }
             }
           }
         }}
