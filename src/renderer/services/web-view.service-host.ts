@@ -83,6 +83,7 @@ import {
   USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
 } from './usersnap.service';
+import localWindowStorage from './localStorage.service';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -639,7 +640,7 @@ const onLayoutChange: OnLayoutChangeRCDock = async (
  */
 async function loadLayout(layout?: LayoutBase): Promise<void> {
   const dockLayoutVar = await getDockLayout();
-  const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
+  const layoutToLoad = layout || getLayoutStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
 
   dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
   if (layout) {
@@ -656,8 +657,8 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
  * @param defaultValue To return if the key is not found.
  * @returns The value of the key fetched from local storage, or the default value if not found.
  */
-function getStorageValue<T>(key: string, defaultValue: T): T {
-  const saved = localStorage.getItem(key);
+function getLayoutStorageValue<T>(key: string, defaultValue: T): T {
+  const saved = localWindowStorage.getItem(key);
   const initial = saved ? deserialize(saved) : undefined;
   return initial || defaultValue;
 }
@@ -669,7 +670,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  */
 async function saveLayout(layout: LayoutBase): Promise<void> {
   const currentLayout = layout;
-  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
+  localWindowStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
 }
 
 /**

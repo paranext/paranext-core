@@ -790,6 +790,8 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
+    /** Window id of the Electron browser window */
+    var windowId: string | null;
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -4707,7 +4709,7 @@ declare module 'shared/models/project-lookup.service-model' {
    * Transform the well-known pdp factory id into an id for its network object to use
    *
    * @param pdpFactoryId Id extensions use to identify this pdp factory
-   * @returns Id for then network object for this pdp factory
+   * @returns Id for the network object for this pdp factory
    */
   export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
   /**
@@ -6694,6 +6696,8 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** Query string for the electron window id */
+  export const WINDOW_ID = 'windowId';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
