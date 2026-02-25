@@ -16,7 +16,7 @@ async function initialize(): Promise<void> {
         try {
           await networkObjectStatusService.waitForNetworkObject(
             { id: NETWORK_OBJECT_NAME_WINDOW_AGGREGATOR_SERVICE },
-            // Wait 30 seconds for the web view service to appear
+            // Wait 30 seconds for the window aggregator service to appear
             30000,
           );
 

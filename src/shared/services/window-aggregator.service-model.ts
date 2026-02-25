@@ -3,6 +3,7 @@ import networkObjectStatusService from '@shared/services/network-object-status.s
 import IWindowController, {
   WINDOW_CONTROLLER_OBJECT_TYPE,
 } from '@shared/models/window-controller.interface';
+import { NetworkObject } from '@shared/models/network-object.model';
 import { endsWith } from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_WINDOW_AGGREGATOR_SERVICE = 'WindowAggregatorService';
@@ -41,25 +42,19 @@ export const windowAggregatorServiceBase: WindowAggregatorServiceType = {};
 
 // #region Window Aggregator Service utility functions
 
-export async function getAllWindowControllers(): Promise<IWindowController[]> {
-  // Get all registered PDP factories
+export async function getAllWindowControllers(): Promise<NetworkObject<IWindowController>[]> {
   const networkObjects = await networkObjectStatusService.getAllNetworkObjectDetails();
-  const windowControllers = Object.fromEntries(
-    await Promise.all(
-      Object.entries(networkObjects)
-        .filter(
-          ([, networkObjectDetails]) =>
-            networkObjectDetails.objectType === WINDOW_CONTROLLER_OBJECT_TYPE &&
-            networkObjectDetails.attributes,
-        )
-        .map(async ([key, networkObjectDetails]) => {
-          // adding ? to satisfy typescript as we already checked it when filtering
-          return [networkObjectDetails.attributes?.windowId, await networkObjectService.get(key)];
-        }),
-    ),
+  const entries = Object.entries(networkObjects).filter(
+    ([, networkObjectDetails]) =>
+      networkObjectDetails.objectType === WINDOW_CONTROLLER_OBJECT_TYPE &&
+      networkObjectDetails.attributes,
   );
 
-  return windowControllers;
+  const controllers = await Promise.all(
+    entries.map(async ([key]) => networkObjectService.get<IWindowController>(key)),
+  );
+
+  return controllers.filter((c): c is NetworkObject<IWindowController> => c !== undefined);
 }
 
 // #endregion
