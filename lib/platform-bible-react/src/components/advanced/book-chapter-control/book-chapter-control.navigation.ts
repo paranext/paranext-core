@@ -104,7 +104,7 @@ export function useQuickNavButtons(
         disabled:
           availableBooks.length === 0 ||
           ((scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
-            fetchEndChapter(scrRef.book) === -1) &&
+            fetchEndChapter(scrRef.book) <= 0) &&
             availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
         title: 'Next chapter',
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,

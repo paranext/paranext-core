@@ -7,7 +7,7 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { SearchX, SlidersHorizontal } from 'lucide-react';
+import { Info, SearchX, SlidersHorizontal } from 'lucide-react';
 import {
   Button,
   Card,
@@ -16,6 +16,8 @@ import {
   Input,
   Label,
   Progress,
+  RadioGroup,
+  RadioGroupItem,
   RecentSearches,
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
@@ -31,6 +33,7 @@ import {
 } from 'platform-bible-react';
 import {
   formatReplacementString,
+  formatReplacementStringToArray,
   getErrorMessage,
   groupBy,
   isPlatformError,
@@ -53,18 +56,27 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_findButton%',
   '%webView_find_findInProject%',
   '%webView_find_matchCase%',
-  '%webView_find_maxResultsExceeded%',
   '%webView_find_noResultsFound%',
+  '%webView_find_scopeSummary_format%',
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
   '%webView_find_scopeUndetermined%',
   '%webView_find_scrollGroup%',
   '%webView_find_searchPlaceholder%',
+  '%webView_find_result%',
   '%webView_find_showingResults%',
+  '%webView_find_showingResultsOfMore%',
   '%webView_find_toggleFilters%',
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
+  '%webView_find_matchContentIn%',
+  '%webView_find_allText%',
+  '%webView_find_allText_tooltip%',
+  '%webView_find_verseTextOnly%',
 ];
+
+/** The type of text content to search in */
+type SearchTextType = 'all' | 'verseOnly';
 
 const defaultBooksPresent: string = '';
 const defaultProjectName = '';
@@ -99,6 +111,8 @@ global.webViewComponent = function FindWebView({
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
   const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
+  const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
+  const [submittedSearchTextType, setSubmittedSearchTextType] = useState<SearchTextType>('all');
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -357,6 +371,7 @@ global.webViewComponent = function FindWebView({
         searchString: searchTerm,
         caseInsensitive: !shouldMatchCase,
         useRegex: isRegexAllowed,
+        verseTextOnly: searchTextType === 'verseOnly',
       });
       if (!isMountedRef.current) return;
 
@@ -370,6 +385,7 @@ global.webViewComponent = function FindWebView({
       setSubmittedBookIds(selectedBookIds);
       setSubmittedShouldMatchCase(shouldMatchCase);
       setSubmittedIsRegexAllowed(isRegexAllowed);
+      setSubmittedSearchTextType(searchTextType);
       setFocusedResultIndex(undefined);
 
       setResults([]);
@@ -400,6 +416,7 @@ global.webViewComponent = function FindWebView({
     scope,
     scrollGroupId,
     searchTerm,
+    searchTextType,
     selectedBookIds,
     shouldMatchCase,
     verseRefSetting,
@@ -424,6 +441,7 @@ global.webViewComponent = function FindWebView({
     setSubmittedBookIds([]);
     setSubmittedShouldMatchCase(false);
     setSubmittedIsRegexAllowed(false);
+    setSubmittedSearchTextType('all');
 
     setFocusedResultIndex(undefined);
   }, [abandonFindJob]);
@@ -452,9 +470,10 @@ global.webViewComponent = function FindWebView({
           verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
       (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
       (scope === 'selectedBooks' &&
-        selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
+        [...selectedBookIds].sort().join(',') !== [...submittedBookIds].sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
-      isRegexAllowed !== submittedIsRegexAllowed
+      isRegexAllowed !== submittedIsRegexAllowed ||
+      searchTextType !== submittedSearchTextType
     );
   }, [
     searchTerm,
@@ -471,6 +490,8 @@ global.webViewComponent = function FindWebView({
     submittedShouldMatchCase,
     isRegexAllowed,
     submittedIsRegexAllowed,
+    searchTextType,
+    submittedSearchTextType,
   ]);
 
   const loadMoreResults = useCallback(async () => {
@@ -592,7 +613,10 @@ global.webViewComponent = function FindWebView({
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        editorWebViewController.selectRange(searchResult);
+        editorWebViewController.selectRange({
+          start: searchResult.start,
+          end: searchResult.end,
+        });
       }
     },
     [editorWebViewController, editorWebViewId, setVerseRefSetting],
@@ -616,6 +640,22 @@ global.webViewComponent = function FindWebView({
     [searchQueryChanged, searchStatus],
   );
 
+  const resultsMessage = useMemo(() => {
+    if (!results) return '';
+    if (results.length === 0) {
+      return localizedStrings['%webView_find_noResultsFound%'];
+    }
+    const l10nKey =
+      searchStatus === 'exceeded'
+        ? '%webView_find_showingResultsOfMore%'
+        : (numberOfHiddenResults > 0 && '%webView_find_showingResults%') || '%webView_find_result%';
+
+    return formatReplacementString(localizedStrings[l10nKey], {
+      visibleNumber: (results.length - numberOfHiddenResults).toString(),
+      totalNumber: totalNumberOfResults.toString(),
+    });
+  }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
+
   const findButtonText = isLocalizedStringsLoading
     ? ''
     : localizedStrings['%webView_find_findButton%'];
@@ -637,9 +677,10 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'} scripture-font`}
               />
               <RecentSearches
+                classNameForItems="scripture-font"
                 recentSearches={recentSearches}
                 onSearchItemSelect={setSearchTerm}
                 ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
@@ -709,6 +750,43 @@ global.webViewComponent = function FindWebView({
                 localizedStrings={scopeSelectorLocalizedStrings}
                 localizedBookNames={localizedBookData}
               />
+
+              <div className="tw-space-y-2">
+                <Label>{localizedStrings['%webView_find_matchContentIn%']}</Label>
+                <RadioGroup
+                  value={searchTextType}
+                  onValueChange={(value: SearchTextType) => setSearchTextType(value)}
+                >
+                  <div className="tw-flex tw-items-center tw-space-x-2">
+                    <RadioGroupItem value="all" id="text-type-all" />
+                    <Label htmlFor="text-type-all" className="tw-cursor-pointer tw-font-normal">
+                      {localizedStrings['%webView_find_allText%']}
+                    </Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="tw-h-4 tw-w-4 tw-text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="tw-max-w-xs">
+                            {localizedStrings['%webView_find_allText_tooltip%']}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <div className="tw-flex tw-items-center tw-space-x-2">
+                    <RadioGroupItem value="verseOnly" id="text-type-verse-only" />
+                    <Label
+                      htmlFor="text-type-verse-only"
+                      className="tw-cursor-pointer tw-font-normal"
+                    >
+                      {localizedStrings['%webView_find_verseTextOnly%']}
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               {(scope === 'chapter' || scope === 'book') && (
                 <div className="tw-flex tw-flex-col tw-gap-4 tw-items-start">
                   <Label>{localizedStrings['%webView_find_scrollGroup%']}</Label>
@@ -753,11 +831,22 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Query Summary */}
       <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-        {submittedScope && submittedSearchTerm
-          ? `${projectName} · ${scopeSummaryText} · Find: ${submittedSearchTerm}`
-          : formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-              projectName,
-            })}
+        {submittedScope && submittedSearchTerm ? (
+          <>
+            {formatReplacementStringToArray(
+              localizedStrings['%webView_find_scopeSummary_format%'],
+              {
+                projectName,
+                scope: scopeSummaryText,
+                searchTerm: <span className="scripture-font">{submittedSearchTerm}</span>,
+              },
+            )}
+          </>
+        ) : (
+          formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
+            projectName,
+          })
+        )}
       </div>
 
       {/* Search Results Placeholder */}
@@ -820,21 +909,9 @@ global.webViewComponent = function FindWebView({
           {(searchStatus === 'completed' ||
             searchStatus === 'stopped' ||
             searchStatus === 'exceeded') &&
-            results && (
-              <p className="tw-font-light">
-                {results.length > 0
-                  ? formatReplacementString(localizedStrings['%webView_find_showingResults%'], {
-                      visibleNumber: (results.length - numberOfHiddenResults).toString(),
-                      totalNumber: totalNumberOfResults.toString(),
-                    })
-                  : localizedStrings['%webView_find_noResultsFound%']}
-              </p>
-            )}
-          {searchStatus === 'exceeded' && (
-            <p className="tw-font-light">{localizedStrings['%webView_find_maxResultsExceeded%']}</p>
-          )}
+            results && <p className="tw-font-light tw-text-center">{resultsMessage}</p>}
           {searchStatus === 'errored' && searchError && (
-            <p className="tw-font-light">
+            <p className="tw-font-light tw-text-center">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
                 error: searchError,
               })}

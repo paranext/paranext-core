@@ -1,7 +1,14 @@
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { createHeadlessEditor } from '@lexical/headless';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
-import { $getRoot, $insertNodes, SerializedEditorState } from 'lexical';
+import {
+  $getRoot,
+  $insertNodes,
+  SerializedEditorState,
+  SerializedElementNode,
+  SerializedLexicalNode,
+  SerializedTextNode,
+} from 'lexical';
 import React from 'react';
 import { nodes } from './nodes';
 
@@ -29,6 +36,28 @@ export function focusContentEditable(container: HTMLElement): boolean {
 }
 
 /**
+ * Recursively check if any children have meaningful editor content
+ *
+ * @param children - Array of serialized lexical nodes to check
+ * @returns True if any child has content, false otherwise
+ */
+function doChildrenHaveEditorContent(
+  children: (SerializedLexicalNode | SerializedElementNode | SerializedTextNode)[] | undefined,
+): boolean {
+  if (!children) return false;
+
+  return children.some(
+    (child: SerializedLexicalNode | SerializedElementNode | SerializedTextNode) => {
+      if (child && 'text' in child && child.text.trim().length > 0) return true;
+
+      if (!child || !('children' in child)) return false;
+
+      return doChildrenHaveEditorContent(child.children);
+    },
+  );
+}
+
+/**
  * Check if the editor state has any meaningful content
  *
  * @param editorState - SerializedEditorState to check
@@ -36,19 +65,11 @@ export function focusContentEditable(container: HTMLElement): boolean {
  */
 export function hasEditorContent(editorState: SerializedEditorState | undefined): boolean {
   if (!editorState?.root?.children) return false;
-  // Check for text content in the specific structure we care about: root → paragraph → text
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return editorState.root.children.some((paragraph: any) => {
-    if (!paragraph?.children) return false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return paragraph.children.some((textNode: any) => {
-      return textNode?.text && textNode.text.trim().length > 0;
-    });
-  });
+  return doChildrenHaveEditorContent(editorState.root.children);
 }
 
 /**
- * Convert Paratext specific HTML string to Lexical SerializedEditorState
+ * Convert HTML string to Lexical SerializedEditorState
  *
  * @param html - HTML string to convert
  * @returns SerializedEditorState that can be used with the Editor component
@@ -57,17 +78,6 @@ export function htmlToEditorState(html: string): SerializedEditorState {
   if (!html || html.trim() === '') {
     throw new Error('Input HTML is empty');
   }
-
-  // Clean up the HTML to replace PT9-specific attributes and simplify structure
-  const cleanHtml = html
-    // Replace `<strikethrough>` with `<s>`
-    .replace(/<strikethrough>([\s\S]*?)<\/strikethrough>/gi, '<s>$1</s>')
-    // Remove `<color>` tags but keep their content
-    // TODO: This needs to be revisited when we know how we want to handle the <color> tag
-    .replace(/<color[^>]*>([\s\S]*?)<\/color>/gi, '$1')
-    // Remove `<language>` tags but keep their content
-    // TODO: This needs to be revisited when we know how we want to handle the <language> tag
-    .replace(/<language[^>]*>([\s\S]*?)<\/language>/gi, '$1');
 
   const editor = createHeadlessEditor({
     namespace: 'EditorUtils',
@@ -83,7 +93,7 @@ export function htmlToEditorState(html: string): SerializedEditorState {
   editor.update(
     () => {
       const parser = new DOMParser();
-      const dom = parser.parseFromString(cleanHtml, 'text/html');
+      const dom = parser.parseFromString(html, 'text/html');
       const generatedNodes = $generateNodesFromDOM(editor, dom);
 
       $getRoot().clear();
@@ -148,8 +158,6 @@ export function editorStateToHtml(editorState: SerializedEditorState): string {
     .replace(/<u><span[^>]*>(.*?)<\/span><\/u>/g, '<u>$1</u>')
     // Simplify nested strikethrough tags (e.g., <s><span>text</span></s> -> <s>text</s>)
     .replace(/<s><span[^>]*>(.*?)<\/span><\/s>/g, '<s>$1</s>')
-    // Convert <s> tags back to <strikethrough> for Paratext compatibility
-    .replace(/<s>(.*?)<\/s>/g, '<strikethrough>$1</strikethrough>')
     // Convert all <br> variants to XML-compatible <br/> for Paratext
     .replace(/<br\s*\/?>/gi, '<br/>');
 

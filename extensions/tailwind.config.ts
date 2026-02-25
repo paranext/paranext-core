@@ -7,7 +7,12 @@ import typography from '@tailwindcss/typography';
 import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
-  content: ['./src/**/*.{js,ts,jsx,tsx}', '!./**/node_modules/**/*'],
+  content: [
+    './src/**/*.{js,ts,jsx,tsx}',
+    '!./**/node_modules/**/*',
+    '!./**/temp-build/**/*',
+    '!./**/dist/**/*',
+  ],
   // Prefix on all tailwind classes so they don't clash with built-in classes
   // short for tailwind - we hope to have the same prefix as users of this library so the cn
   // function that uses tailwind-merge can properly overwrite related tailwind classes
@@ -95,6 +100,19 @@ const config: Config = {
             '--tw-prose-pre-bg': 'hsl(var(--muted))',
             '--tw-prose-th-borders': 'hsl(var(--border))',
             '--tw-prose-td-borders': 'hsl(var(--border))',
+            blockquote: {
+              // The default quotes are encoded with 0o or \, and it makes them not display in our
+              // environment. So override them with not encoded characters to make them work.
+              quotes: `"“""”""‘""’"`,
+            },
+          },
+        },
+        // Can use `tw-prose tw-prose-quoteless` to remove quotes on `blockquote`s
+        // Thanks to RobinMalfait https://github.com/tailwindlabs/tailwindcss-typography/issues/66#issuecomment-756834635
+        quoteless: {
+          css: {
+            'blockquote p:first-of-type::before': { content: 'none' },
+            'blockquote p:last-of-type::after': { content: 'none' },
           },
         },
       },

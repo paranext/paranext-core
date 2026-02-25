@@ -8,11 +8,6 @@ import * as SillsdevScripture from '@sillsdev/scripture';
 import * as papiCore from '@shared/services/papi-core.service';
 import papiFrontend, { Papi } from '@renderer/services/papi-frontend.service';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
-import {
-  getWebViewStateById,
-  setWebViewStateById,
-  resetWebViewStateById,
-} from '@renderer/services/web-view-state.service';
 import { useWebViewState } from '@renderer/hooks/use-web-view-state.hook';
 import { useWebViewScrollGroupScrRef } from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
@@ -76,10 +71,6 @@ declare global {
   var ReactDOMClient: ReactDOMClientType;
   var createRoot: typeof ReactDOMClient.createRoot;
   var SillsdevScripture: SillsdevScriptureType;
-  // Web view state functions are used in the default imports for each webview in web-view.service.ts
-  var getWebViewStateById: <T>(id: string, stateKey: string, defaultValue: T) => T;
-  var setWebViewStateById: <T>(id: string, stateKey: string, stateValue: T) => void;
-  var resetWebViewStateById: (id: string, stateKey: string) => void;
   // Web view cleanup functions for iframe content
   var webViewCleanup: WebViewCleanup;
 }
@@ -95,10 +86,6 @@ globalThis.ReactDOMClient = ReactDOMClient;
 globalThis.createRoot = ReactDOMClient.createRoot;
 globalThis.SillsdevScripture = SillsdevScripture;
 globalThis.webViewRequire = webViewRequire;
-// We don't expose get/setWebViewStateById/resetWebViewStateById in PAPI because web views don't have access to IDs
-globalThis.getWebViewStateById = getWebViewStateById;
-globalThis.setWebViewStateById = setWebViewStateById;
-globalThis.resetWebViewStateById = resetWebViewStateById;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context
 globalThis.useWebViewState = useWebViewState;
 globalThis.useWebViewScrollGroupScrRef = useWebViewScrollGroupScrRef;

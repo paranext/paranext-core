@@ -219,6 +219,8 @@ type WebViewDefinitionBase = {
   /**
    * Whether a toolbar should be displayed at the top of the web view. Currently this toolbar cannot
    * be modified and is provided as is. It displays a BookChapterControl and a ScrollGroupSelector.
+   *
+   * @default false
    */
   shouldShowToolbar?: boolean;
 };
@@ -300,13 +302,14 @@ export type SavedWebViewDefinition = (
  */
 // If you add to these, please make sure they are in `WebViewDefinition`
 // See also the following function that makes use of these updatable properties:
-// `web-view.service.ts` -> `mergeUpdatablePropertiesIntoWebViewDefinition`
+// `web-view.service.ts` -> `mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent`
 export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'iconUrl',
   'title',
   'tooltip',
   'projectId',
   'scrollGroupScrRef',
+  'state',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */

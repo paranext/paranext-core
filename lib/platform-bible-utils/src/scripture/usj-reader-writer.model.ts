@@ -616,6 +616,27 @@ export interface IUsjReaderWriter {
     text: string,
     maxTextLengthToSearch: number,
   ): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
+  /**
+   * Given a starting point, find the next node location in this USJ data that matches the search
+   * conditions. The given starting point is included in the search.
+   *
+   * @param nodeAndLocation Node from which the search will start
+   * @param searchFunction Function that nodes and their locations will be passed into to determine
+   *   if they are the correct node. Stops searching and returns the node and location if this
+   *   function returns `true`
+   * @returns Object containing the USJ node that matched the condition tested by the search
+   *   function and a JSONPath string that indicates the location of the of USJ node within `usj`.
+   *   Note that if the USJ node returned is an object, it is the same object that is within this
+   *   USJ data. So if you change it, you are changing this USJ data.
+   */
+  findNextMatchingNode(
+    nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>,
+    searchFunction: (
+      potentiallyMatchingNodeAndLocation: UsjNodeAndDocumentLocation<
+        UsjMarkerLocation | UsjTextContentLocation
+      >,
+    ) => boolean,
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> | undefined;
   /** Find the first value matching the given JSONPath query within this USJ data */
   findSingleValue<T>(jsonPathQuery: string): T | undefined;
   /** Find the parent of the first value matching the given JSONPath query within this USJ data */
@@ -648,7 +669,9 @@ export interface IUsjReaderWriter {
    * @returns USJ node, JSONPath, and offset that represent the location within this USJ data
    *   indicated by `jsonPathQuery`
    */
-  jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
+  jsonPathToUsjNodeAndDocumentLocation(
+    jsonPathQuery: string,
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
   /** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
   nodeToJsonPath(node: MarkerObject): ContentJsonPath;
   /**
@@ -689,7 +712,7 @@ export interface IUsjReaderWriter {
   nodeToUsjNodeAndDocumentLocation(
     node: MarkerContent | Usj,
     nodeParent?: MarkerObject | MarkerContent[] | Usj,
-  ): UsjNodeAndDocumentLocation;
+  ): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
   /**
    * Remove all nodes from this USJ data that match a given search function.
    *
@@ -701,9 +724,13 @@ export interface IUsjReaderWriter {
    * Search for matches of a regular expression within this USJ's text data
    *
    * @param regex Regular expression to search for. Specify the global flag to find all matches.
+   * @param markerStylesToInclude Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include
+   *   in the search. When provided, only text within markers whose style is in this set will be
+   *   searched. Text inside markers not in this set (e.g., footnotes, cross-references) will be
+   *   excluded. When omitted, all text is searched.
    * @returns Array of `UsjSearchResult` objects that match the given regular expression
    */
-  search(regex: RegExp): UsjSearchResult[];
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
   /** Transforms the USJ document into USFM */
   toUsfm(): string;
   /**

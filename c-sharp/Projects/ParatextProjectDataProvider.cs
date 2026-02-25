@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -27,6 +28,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.CHAPTER_USX,
         ProjectDataType.VERSE_USX,
         ProjectDataType.VERSE_PLAIN_TEXT,
+    ];
+
+    // All data types related to Scripture editing plus project settings. This is useful when an edit
+    // changes Scripture and also causes a project setting to change (e.g., adding a new book updates
+    // the BooksPresent setting)
+    public static readonly List<string> AllScriptureDataTypesPlusSettings =
+    [
+        .. AllScriptureDataTypes,
+        ProjectDataType.SETTING,
     ];
 
     public static readonly List<string> AllCommentDataTypes =
@@ -80,13 +90,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         retVal.Add(("getVersePlainText", GetVersePlainText));
 
-        retVal.Add(("getComments", GetComments));
-        retVal.Add(("setComments", SetComments));
         retVal.Add(("getCommentThreads", GetCommentThreads));
         retVal.Add(("createComment", CreateComment));
         retVal.Add(("addCommentToThread", AddCommentToThread));
         retVal.Add(("deleteComment", DeleteComment));
         retVal.Add(("updateComment", UpdateComment));
+        retVal.Add(("setIsCommentThreadRead", SetIsCommentThreadRead));
         retVal.Add(("findAssignableUsers", FindAssignableUsers));
         retVal.Add(("canUserCreateComments", CanUserCreateComments));
         retVal.Add(("canUserAddCommentToThread", CanUserAddCommentToThread));
@@ -181,87 +190,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #endregion
 
     #region Comments
-
-    public List<Comment> GetComments(CommentSelector selector)
-    {
-        List<Comment> comments = _commentManager.AllComments.ToList();
-        if (comments.Count == 0)
-            return comments;
-
-        string matchingVerseRef;
-        if (selector.ChapterNum > 0 && selector.VerseNum > 0)
-            matchingVerseRef = $"{selector.BookId} {selector.ChapterNum}:{selector.VerseNum}";
-        else if (selector.ChapterNum > 0)
-            matchingVerseRef = $"{selector.BookId} {selector.ChapterNum}:";
-        else
-            matchingVerseRef = selector.BookId;
-
-        comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
-        if (!string.IsNullOrEmpty(selector.CommentId))
-            comments = comments.FindAll((c) => selector.CommentId == c.Id);
-        return comments;
-    }
-
-    // For now, only allow adding comments, not changing or removing existing PT 9 comments
-    // Too much risk of data loss while there are other bugs related to comments floating around
-    public bool SetComments(CommentSelector _ignore, Comment[] incomingComments)
-    {
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        bool madeChange = false;
-        foreach (var ic in incomingComments)
-        {
-            if (string.IsNullOrWhiteSpace(ic.Thread))
-                continue;
-            var thread =
-                _commentManager.FindThread(ic.Thread)
-                ?? _commentManager.CreateThread(
-                    _commentManager.ScrText,
-                    new ScriptureSelection(ic.VerseRef, ic.SelectedText, ic.StartPosition),
-                    NoteStatus.Todo
-                );
-            if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
-                continue;
-            // Override the user name with the value from ParatextData
-            ic.User = scrText.User.Name;
-            _commentManager.AddComment(ic);
-            _commentManager.SaveUser(ic.User, false);
-            madeChange = true;
-        }
-
-        if (madeChange)
-            SendDataUpdateEvent(AllCommentDataTypes, "comments data update event");
-
-        return madeChange;
-    }
-
-    public List<CommentThread> GetCommentThreads(CommentThreadSelector selector)
+    public List<PlatformCommentThreadWrapper> GetCommentThreads(CommentThreadSelector selector)
     {
         // Get all threads (activeOnly=false to include threads with deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
         // If no selector provided or all properties are null/default, return all thread IDs
         if (selector == null || selector.IsEmpty)
-            return allThreads.ToList();
+            return allThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
 
         // Apply filters
         IEnumerable<CommentThread> filteredThreads = allThreads;
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))
-            filteredThreads = filteredThreads.Where(t => t.Id == selector.ThreadId);
+            filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
         // Filter by status
-        if (!string.IsNullOrEmpty(selector.Status))
+        if (selector.Status != Enum<NoteStatus>.Null)
         {
-            var status = new Enum<NoteStatus>(selector.Status);
-            filteredThreads = filteredThreads.Where(t => t.Status == status);
+            filteredThreads = filteredThreads.Where(t => t.Status == selector.Status);
         }
 
         // Filter by type
-        if (!string.IsNullOrEmpty(selector.Type))
+        if (selector.Type != null)
         {
-            var type = new Enum<NoteType>(selector.Type);
-            filteredThreads = filteredThreads.Where(t => t.Type == type);
+            filteredThreads = filteredThreads.Where(t => t.Type == selector.Type);
         }
 
         // Filter by user (who created comments in the thread)
@@ -282,7 +236,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (selector.ScriptureRanges != null && selector.ScriptureRanges.Count > 0)
             filteredThreads = FilterByScriptureRanges(filteredThreads, selector.ScriptureRanges);
 
-        return filteredThreads.ToList();
+        // Filter by read status
+        if (selector.IsRead is bool isRead)
+            filteredThreads = filteredThreads.Where(t => ThreadStatus.IsThreadRead(t) == isRead);
+
+        return filteredThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
     }
 
     public bool DeleteComment(string commentId)
@@ -316,13 +274,35 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
+    /// Replace newlines in the text with spaces. We need to do this to the USFM text in comments
+    /// before saving them to file because they come from the PAPI with newlines but should be saved
+    /// to file with spaces.
+    /// </summary>
+    private static string ReplaceNewlinesWithSpaces(string text)
+    {
+        text = text.Replace("\r", "").Replace("\n", " ");
+        return text;
+    }
+
+    /// <summary>
     /// Creates a new comment and a new thread. Any thread id, user, or date provided in the
     /// comment parameter will be ignored - these are auto-generated by the Comment constructor.
     /// </summary>
     /// <param name="comment">Comment data. Thread, User, and Date will be ignored/auto-generated.</param>
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
-    public string CreateComment(Comment comment)
+    /// <exception cref="InvalidOperationException">If the selected text is invalid or the comment's
+    /// assigned (<see cref="PlatformCommentWrapper.AssignedUser"/>) cannot be assigned to threads
+    /// in this project.
+    public string CreateComment(PlatformCommentWrapper comment)
     {
+        if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
+        {
+            throw new InvalidOperationException(
+                "Invalid selection. Selected text must be a simple word or phrase. "
+                    + "Selected text cannot contain USFM markers (backslash characters)."
+            );
+        }
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         if (comment.AssignedUser != null)
@@ -340,8 +320,81 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         CopyCommentProperties(comment, newComment);
 
+        // Reformat USFM text in the comment by replacing newlines with spaces
+        if (comment.SelectedText != null)
+            newComment.SelectedText = ReplaceNewlinesWithSpaces(comment.SelectedText);
+
+        if (
+            string.IsNullOrEmpty(newComment.Verse)
+            && string.IsNullOrEmpty(newComment.ContextBefore)
+            && string.IsNullOrEmpty(newComment.ContextAfter)
+        )
+        {
+            // Check *incoming* values that do not necessarily get copied to newComment.
+            if (
+                string.IsNullOrEmpty(comment.VerseRefStr) // This condition will throw exception below.
+                || comment.StartPosition < 0
+                || comment.SelectedText == null
+            )
+            {
+                Console.Error.WriteLine(
+                    "VerseRef, StartPosition, and SelectedText are required when Verse, ContextBefore, and ContextAfter are not provided"
+                );
+            }
+            else
+            {
+                // Get the values of Verse, ContextBefore, and ContextAfter from the scrText since that's
+                // the data that is supposed to be saved (already has spaces instead of newlines)
+                // From CommentManager.CreateThread
+                newComment.Verse = scrText.Parser.GetVerseUsfmText(newComment.VerseRef);
+
+                if (newComment.Verse == null)
+                {
+                    Console.Error.WriteLine(
+                        $"Unable to retrieve verse text for VerseRef {newComment.VerseRef}"
+                    );
+                }
+                else
+                {
+                    newComment.ContextBefore = newComment.Verse[..newComment.StartPosition];
+                    newComment.ContextAfter = newComment.Verse[
+                        (newComment.StartPosition + newComment.SelectedText.Length)..
+                    ];
+                }
+            }
+        }
+
+        // Create a ScriptureSelection to put the USFM snippets through the same processing as they
+        // go through in P9
+        ScriptureSelection selection;
+        try
+        {
+            selection = new ScriptureSelection(
+                newComment.VerseRef,
+                newComment.SelectedText,
+                newComment.StartPosition,
+                newComment.ContextBefore,
+                newComment.ContextAfter
+            );
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Invalid Scripture selection: {ex.Message}", ex);
+        }
+
+        // From CommentManager.CreateThread
+        CommentUtils.AdjustNoteSelection(scrText, selection);
+        newComment.StartPosition = selection.StartPosition;
+        newComment.SelectedText = selection.SelectedText;
+        newComment.ContextBefore = selection.ContextBefore;
+        newComment.ContextAfter = selection.ContextAfter;
+
+        if (string.IsNullOrEmpty(newComment.Language))
+            newComment.Language = scrText.Language.Id;
+
         _commentManager.AddComment(newComment);
         _commentManager.SaveUser(newComment.User, false);
+        ThreadStatus.MarkThreadRead(_commentManager.FindThread(newComment.Thread));
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
 
@@ -356,7 +409,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <param name="comment">Comment data. Must have a valid Thread ID that exists.</param>
     /// <returns>The auto-generated comment ID (format: "threadId/userName/date")</returns>
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
-    public string AddCommentToThread(Comment comment)
+    public string AddCommentToThread(PlatformCommentWrapper comment)
     {
         if (string.IsNullOrEmpty(comment.Thread))
             throw new InvalidDataException("Thread ID is required for AddCommentToThread");
@@ -426,6 +479,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         _commentManager.AddComment(newComment);
         _commentManager.SaveUser(newComment.User, false);
+        ThreadStatus.MarkThreadRead(existingThread);
 
         SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
 
@@ -436,7 +490,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// Copies properties from the source comment to the target comment, excluding
     /// auto-generated fields (Thread, User, Date).
     /// </summary>
-    private static void CopyCommentProperties(Comment source, Comment target)
+    private static void CopyCommentProperties(PlatformCommentWrapper source, Comment target)
     {
         if (!string.IsNullOrEmpty(source.ContextAfter))
             target.ContextAfter = source.ContextAfter;
@@ -444,7 +498,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.ContextBefore = source.ContextBefore;
         if (!string.IsNullOrEmpty(source.SelectedText))
             target.SelectedText = source.SelectedText;
-        if (source.StartPosition != -1)
+        if (source.StartPosition >= 0)
             target.StartPosition = source.StartPosition;
         // AssignedUser allows empty string (means "unassigned"), so only check for null
         if (source.AssignedUser != null)
@@ -465,7 +519,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.Shared = source.Shared;
         if (source.Status != NoteStatus.Unspecified)
             target.Status = source.Status;
-        if (source.Type != NoteType.Normal)
+        if (source.Type != NoteType.Unspecified)
             target.Type = source.Type;
         if (!string.IsNullOrEmpty(source.Verse))
             target.Verse = source.Verse;
@@ -481,7 +535,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             target.ExtraHeadingInfoInternal = source.ExtraHeadingInfoInternal;
     }
 
-    public bool UpdateComment(string commentId, string updatedContent)
+    public bool UpdateComment(string commentId, string updatedContentHtml)
     {
         if (string.IsNullOrEmpty(commentId))
             return false;
@@ -505,16 +559,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Cannot update comment {commentId} in thread {parentThread.Id} - only the last comment can be updated (last comment ID: {lastComment?.Id})"
             );
 
-        XmlDocument xmlDoc = new() { PreserveWhitespace = true };
-        try
-        {
-            xmlDoc.LoadXml($"<Contents>{updatedContent ?? string.Empty}</Contents>");
-        }
-        catch (XmlException ex)
-        {
-            throw new InvalidDataException($"Updated content is not valid XML/HTML: {ex.Message}");
-        }
-        commentToUpdate.Contents = xmlDoc.DocumentElement;
+        // Update the comment contents from HTML
+        var commentWrapper = new PlatformCommentWrapper(
+            commentToUpdate,
+            new PlatformCommentThreadWrapper(parentThread)
+        );
+        commentWrapper.ContentsHtml = updatedContentHtml;
 
         // Reset the status field to Unspecified when a comment is edited
         commentToUpdate.Status = NoteStatus.Unspecified;
@@ -524,6 +574,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
 
         return true;
+    }
+
+    public void SetIsCommentThreadRead(string threadId, bool markRead)
+    {
+        CommentThread? thread = _commentManager.FindThread(threadId);
+        if (thread == null)
+            throw new ArgumentException($"Thread with ID '{threadId}' not found", nameof(threadId));
+
+        if (markRead)
+            ThreadStatus.MarkThreadRead(thread);
+        else
+            ThreadStatus.MarkThreadUnread(thread);
+
+        SendDataUpdateEvent(AllCommentDataTypes, "comment thread read status updated");
     }
 
     /// <summary>
@@ -661,7 +725,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return false;
 
         // Must be the last comment in the thread
-        if (comment != thread.LastComment)
+        var lastComment = thread.LastComment;
+        if (lastComment == null || comment.Id != lastComment.Id)
             return false;
 
         // Must be the author of the comment
@@ -673,7 +738,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             return false;
 
         // Cannot edit/delete the first comment of a conflict note
-        if (thread.Type == NoteType.Conflict && thread.Comments[0] == comment)
+        if (thread.Type == NoteType.Conflict && thread.Comments[0].Id == comment.Id)
             return false;
 
         return true;
@@ -1045,30 +1110,27 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         verseRef.ChapterNum = 0;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        var isNewBook = false;
+
         RunWithinLock(
             WriteScope.EntireProject(scrText),
-            _ =>
+            writeLock =>
             {
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
-                if (
-                    !localBooksPresentSet.IsSelected(verseRef.BookNum)
-                    && !scrText.Creatable(verseRef.BookNum)
-                )
-                    throw new InvalidOperationException($"{verseRef.Book} cannot be created");
-                if (!scrText.Writable(verseRef.BookNum, 0))
-                    throw new InvalidOperationException($"{verseRef.Book} is not writable");
-                if (!scrText.Settings.Editable)
-                    throw new InvalidOperationException($"{verseRef.Book} is not editable");
-                byte[] rawData = scrText.Settings.Encoder.Convert(data, out string errorMessage);
-                if (!string.IsNullOrEmpty(errorMessage))
-                    throw new InvalidOperationException(errorMessage);
-                string bookFilePath = scrText.Settings.BookFileName(verseRef.BookNum, true);
-                File.WriteAllBytes(bookFilePath, rawData);
-                scrText.Reload();
+                isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
+                // Set with chapter 0 sets the whole book
+                scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
         );
 
-        SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
+        if (isNewBook)
+            SendDataUpdateEvent(
+                AllScriptureDataTypesPlusSettings,
+                "USFM book data update event - new book added"
+            );
+        else
+            SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
         return true;
     }
 

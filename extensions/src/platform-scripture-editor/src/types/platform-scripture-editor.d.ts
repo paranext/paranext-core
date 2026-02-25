@@ -1,5 +1,9 @@
 declare module 'platform-scripture-editor' {
-  import { SelectionRange as PlatformEditorSelectionRange } from '@eten-tech-foundation/platform-editor';
+  import {
+    AnnotationRange,
+    SelectionRange as PlatformEditorSelectionRange,
+    TypedMarkRemovalCause,
+  } from '@eten-tech-foundation/platform-editor';
   // Used in TSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { CheckLocation } from 'platform-scripture';
@@ -12,9 +16,11 @@ declare module 'platform-scripture-editor' {
     UsfmVerseLocation,
     UsjChapterLocation,
     UsjFlatTextChapterLocation,
+    UsjVerseRefChapterLocation,
   } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
   import { SerializedVerseRef } from '@sillsdev/scripture';
+  import type { CommandNames } from 'papi-shared-types';
 
   // #region editor WebViewController messages
 
@@ -59,6 +65,74 @@ declare module 'platform-scripture-editor' {
     method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
   };
 
+  /** Tell the editor to open the comment editor for inserting a new comment at the current verse */
+  export type EditorMessageInsertCommentAtSelection = {
+    method: 'insertCommentAtSelection';
+  };
+
+  /**
+   * The action that triggered an annotation interaction.
+   *
+   * - `'clicked'` - The user clicked on the annotation
+   * - {@link TypedMarkRemovalCause} - The annotation was removed for the specified reason
+   *
+   *   - `removed` - when the annotation is removed programmatically (manual remove action)
+   *   - `destroyed` - when the text the annotation was on is completely deleted
+   */
+  export type AnnotationAction = 'clicked' | TypedMarkRemovalCause;
+
+  /**
+   * Handler function for annotation interactions. To handle annotation interactions, register a
+   * command with this type and pass the command's name to the editor WebViewController with
+   * {@link PlatformScriptureEditorWebViewController.setAnnotation}
+   *
+   * @param type The type of annotation (e.g., 'translator-comment')
+   * @param id The unique identifier of the annotation
+   * @param action The action that triggered the interaction
+   */
+  export type AnnotationActionHandler = (
+    type: string,
+    id: string,
+    action: AnnotationAction,
+  ) => Promise<void>;
+
+  /** Tell the editor to set an annotation on the specified range */
+  export type EditorMessageSetAnnotation = {
+    method: 'setAnnotation';
+    /**
+     * Target verse ref for the annotation. If this reference is not displayed in the editor, the
+     * annotation will not be added
+     */
+    verseRef: SerializedVerseRef;
+    /** The annotation range in editor-usable format */
+    annotationRange: AnnotationRange;
+    /** The type of annotation (e.g., 'translator-comment') */
+    annotationType: string;
+    /** Unique identifier for this annotation */
+    annotationId: string;
+    /**
+     * Optional command to execute when the annotation is interacted with. The command will be
+     * called with the following parameters:
+     *
+     * - `type: string` - The type of annotation (e.g., 'translator-comment')
+     * - `annotationId: string` - The unique identifier of the annotation
+     * - `action: AnnotationAction` - The action that triggered the interaction
+     *
+     * We expect that the command handler has the function signature of
+     * {@link AnnotationActionHandler}
+     */
+    interactionCommand?: CommandNames;
+  };
+
+  /** Tell the editor to run a command on an annotation */
+  export type EditorMessageRunAnnotationAction = {
+    method: 'runAnnotationAction';
+    /** The unique identifier of the annotation */
+    annotationId: string;
+    /** The action to run on the annotation */
+    action: AnnotationAction;
+  };
+
   /** Messages sent to the editor web view */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
@@ -66,9 +140,38 @@ declare module 'platform-scripture-editor' {
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
     | EditorMessageChangeFootnotesPaneLocation
-    | EditorMessageInsertTextualNoteAtSelection;
+    | EditorMessageInsertTextualNoteAtSelection
+    | EditorMessageInsertCommentAtSelection
+    | EditorMessageSetAnnotation
+    | EditorMessageRunAnnotationAction;
 
   // #endregion editor WebViewController messages
+
+  // #region editor selection tracking
+
+  /**
+   * Data emitted when an editor's selection changes. Subscribe to the
+   * `platformScriptureEditor.onDidSelectionChange` network event using
+   * `papi.network.getNetworkEvent()` to receive these events.
+   *
+   * @example
+   *
+   * ```typescript
+   * const unsubscribe = papi.network
+   *   .getNetworkEvent('platformScriptureEditor.onDidSelectionChange')
+   *   .event((data: SelectionChangeEvent) => {
+   *     console.log(`Editor ${data.webViewId} selection changed:`, data.selection);
+   *   });
+   * ```
+   */
+  export type SelectionChangeEvent = {
+    /** The WebView ID of the editor whose selection changed */
+    webViewId: string;
+    /** The current selection in the editor, or undefined if there is no selection */
+    selection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
+  };
+
+  // #endregion editor selection tracking
 
   // #region USFM locations and ranges
 
@@ -111,6 +214,17 @@ declare module 'platform-scripture-editor' {
      * {@link ScriptureLocation} for details.
      */
     end: UsjChapterLocation | UsfmVerseLocation | ScriptureLocation;
+  };
+
+  /**
+   * A pair of Scripture positions that are in USJ format specifically using
+   * {@link UsjVerseRefChapterLocation}
+   */
+  export type ScriptureRangeUsjVerseRefChapterLocation = {
+    /** Starting point of the Scripture range in the document */
+    start: UsjVerseRefChapterLocation;
+    /** Ending point of the Scripture range in the document */
+    end: UsjVerseRefChapterLocation;
   };
 
   // #endregion USFM locations and ranges
@@ -176,7 +290,7 @@ declare module 'platform-scripture-editor' {
      *
      * Defaults to 'formatted'.
      */
-    scriptureViewType?: ScriptureEditorViewType;
+    viewType?: ScriptureEditorViewType;
     /**
      * When the footnote pane is shown, where it should be positioned
      *
@@ -190,7 +304,7 @@ declare module 'platform-scripture-editor' {
      *
      * Defaults to 20.
      */
-    footnotesPaneSize?: number;
+    footnotesPaneSizePercent?: number;
     /**
      * Flag indicating whether the footnote pane should be displayed
      *
@@ -205,7 +319,15 @@ declare module 'platform-scripture-editor' {
     iconUrl?: string;
     /**
      * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
-     * WebView
+     * WebView.
+     *
+     * If a localized string is passed in, the following replacement strings will be processed in
+     * the localized string:
+     *
+     * - `{projectId}`: The name of the project opened in the editor (`platform.name` setting)
+     * - `{editable}`: Will be replaced with an empty string for non-editable projects and the
+     *   localized value of `%webView_platformScriptureEditor_title_editable_indicator%` (in
+     *   English, `(Editable)`) for editable projects.
      */
     title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */
@@ -239,6 +361,70 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /**
+     * Function to open the comment editor for inserting a new project comment at the current verse.
+     * Checks permissions and fetches assignable users before opening the editor.
+     */
+    insertCommentAtSelection(): Promise<void>;
+    /**
+     * Set an annotation on the specified Scripture range. The annotation will be highlighted in the
+     * editor.
+     *
+     * @param range The Scripture range to annotate. If this reference is not displayed in the
+     *   editor, the annotation will not be added
+     * @param annotationType The type of annotation (e.g., 'translator-comment', 'spelling')
+     * @param annotationId Unique identifier for this annotation
+     * @param interactionCommand Optional command to execute when the annotation is interacted with.
+     *   The command will be called with the following parameters:
+     *
+     *   - `type: string` - The type of annotation (e.g., 'translator-comment')
+     *   - `annotationId: string` - The unique identifier of the annotation
+     *   - `action: AnnotationAction` - The action that triggered the interaction
+     *
+     *   We expect that the command handler has the function signature of
+     *   {@link AnnotationActionHandler}
+     */
+    setAnnotation(
+      range: ScriptureRange,
+      annotationType: string,
+      annotationId: string,
+      interactionCommand?: CommandNames,
+    ): Promise<void>;
+    /**
+     * Focus on a specific comment thread. Opens the Comments List web view for this project (or
+     * focuses it if already open) and scrolls to the specified thread.
+     *
+     * @param threadId The ID of the thread to focus on
+     */
+    focusComment(threadId: string): Promise<void>;
+    /**
+     * Manually run an action on an annotation.
+     *
+     * @param annotationId The ID of the annotation to run the action on
+     * @param action The action to run on the annotation. Note: running `destroyed` will trigger the
+     *   annotation `removed` action because `destroyed` is specifically due to the text being
+     *   deleted whereas `removed` is a programmatic removal
+     */
+    runAnnotationAction(annotationId: string, action: AnnotationAction): Promise<void>;
+    /**
+     * Get the current selection in the editor.
+     *
+     * @returns The current selection range, or undefined if there is no selection
+     */
+    getSelection(): Promise<ScriptureRangeUsjVerseRefChapterLocation | undefined>;
+    /**
+     * **INTERNAL - DO NOT USE DIRECTLY.** This method is intended to be called only by the
+     * Scripture editor WebView itself to notify the backend of selection changes. External callers
+     * should subscribe to the `platformScriptureEditor.onDidSelectionChange` network event or use
+     * `getSelection()` instead.
+     *
+     * @param selection The new selection in Scripture range format, or undefined if there is no
+     *   selection
+     * @internal
+     */
+    updateSelectionInternal(
+      selection: ScriptureRangeUsjVerseRefChapterLocation | undefined,
+    ): Promise<void>;
   }>;
 
   // #endregion editor WebView types
@@ -482,6 +668,8 @@ declare module 'papi-shared-types' {
     OpenEditorOptions,
     PlatformScriptureEditorWebViewController,
   } from 'platform-scripture-editor';
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
+  import type { NotificationClickCommandHandler } from '@papi/core';
 
   export interface CommandHandlers {
     /**
@@ -560,6 +748,21 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
+
+    /**
+     * Command to insert a project comment at the current verse in a given editor web view. Opens a
+     * comment editor popover for drafting the comment content and optionally assigning to a user.
+     *
+     * @param editorWebViewId The ID of the web view to insert the comment for
+     */
+    'platformScriptureEditor.insertCommentAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+    /**
+     * Dismiss the marker-view readonly notification for a given notification ID. The command
+     * receives the `notificationId` when the notification's click action is used.
+     */
+    'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
   }
 
   export interface DataProviders {

@@ -3,8 +3,12 @@
 /** Possible status of a comment/note as defined in Paratext 9 */
 export type CommentStatus = 'Unspecified' | 'Todo' | 'Done' | 'Resolved';
 
-/** Possible types of comment/note as defined in Paratext 9 */
-export type CommentType = 'Unspecified' | 'Normal' | 'Conflict';
+/**
+ * Possible types of comment/note as defined in Paratext 9. P9 also defines a "Unspecified" type,
+ * which used to be used for filtering. It now gets treating the same as Normal, so we don't need to
+ * include it here.
+ */
+export type CommentType = 'Normal' | 'Conflict';
 
 // #endregion
 
@@ -47,6 +51,8 @@ export type LegacyComment = {
   hideInTextWindow: boolean;
   /** Unique id of the comment, unchanged by subsequent editing */
   id: string;
+  /** Whether the comment has been read (by the current user) */
+  isRead: boolean;
   /** Language of note */
   language: string;
   /** Present in a note when it has been assigned to reply-to a particular user */
@@ -92,10 +98,15 @@ export type LegacyCommentThread = {
   status: CommentStatus;
   /** Thread type (from first comment) */
   type: CommentType;
-  /** User to whom the thread is assigned */
-  assignedUser: string;
+  /**
+   * User to whom the thread is assigned
+   *
+   * - `undefined` or not present if there is no assignment info
+   * - Empty string means explicitly unassigned
+   */
+  assignedUser?: string;
   /** User to reply to */
-  replyToUser: string;
+  replyToUser?: string;
   /** Last modified date (ISO 8601 string) */
   modifiedDate: string;
   /** Scripture reference for this thread */
@@ -108,6 +119,8 @@ export type LegacyCommentThread = {
   isBTNote: boolean;
   /** Whether this is a consultant note */
   isConsultantNote: boolean;
+  /** Whether the thread has been read (by the current user) */
+  isRead: boolean;
   /** Biblical term ID if this is a biblical term note */
   biblicalTermId?: string;
 };

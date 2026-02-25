@@ -15,7 +15,7 @@ import {
   SerializedParagraphNode,
   SerializedTextNode,
 } from 'lexical';
-import { ArrowUp, AtSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -64,6 +64,7 @@ const initialValue: SerializedEditorState<
  * @props CommentThreadProps
  */
 export function CommentThread({
+  classNameForVerseText,
   comments,
   localizedStrings,
   isSelected = false,
@@ -72,33 +73,62 @@ export function CommentThread({
   currentUser,
   handleSelectThread,
   threadId,
+  thread,
   threadStatus,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
+  handleReadStatusChange,
   assignableUsers,
   canUserAddCommentToThread,
   canUserAssignThreadCallback,
   canUserResolveThreadCallback,
   canUserEditOrDeleteCommentCallback,
+  isRead: isReadProp = false,
+  autoReadDelay = 5,
+  onVerseRefClick,
 }: CommentThreadProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
-  const [isVerseExpanded, setIsVerseExpanded] = useState<boolean>(false);
-  const [isVerseOverflowing, setIsVerseOverflowing] = useState<boolean>(false);
+  const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
   const [pendingAssignedUser, setPendingAssignedUser] = useState<string | undefined>(undefined);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);
+  const [isRead, setIsRead] = useState<boolean>(isReadProp);
+  const [manuallyUnread, setManuallyUnread] = useState<boolean>(false);
+  const autoReadTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [commentEditDeletePermissions, setCommentEditDeletePermissions] = useState<
+    Map<string, boolean>
+  >(new Map());
 
-  // Check async permissions when thread is selected
+  // Check resolve permission on mount so the button can appear on hover
   useEffect(() => {
-    let isMounted = true;
+    let isPromiseCurrent = true;
+
+    const checkResolvePermission = async () => {
+      const resolveResult = canUserResolveThreadCallback
+        ? await canUserResolveThreadCallback(threadId)
+        : false;
+
+      if (!isPromiseCurrent) return;
+      setCanResolve(resolveResult);
+    };
+
+    checkResolvePermission();
+    return () => {
+      isPromiseCurrent = false;
+    };
+  }, [threadId, canUserResolveThreadCallback]);
+
+  // Check remaining async permissions when thread is selected
+  useEffect(() => {
+    let isPromiseCurrent = true;
 
     if (!isSelected) {
       setCanAssign(false);
-      setCanResolve(false);
+      setCommentEditDeletePermissions(new Map());
       return undefined;
     }
 
@@ -107,25 +137,49 @@ export function CommentThread({
         ? await canUserAssignThreadCallback(threadId)
         : false;
 
-      if (!isMounted) return;
-
-      const resolveResult = canUserResolveThreadCallback
-        ? await canUserResolveThreadCallback(threadId)
-        : false;
-
-      if (!isMounted) return;
-
+      if (!isPromiseCurrent) return;
       setCanAssign(assignResult);
-      setCanResolve(resolveResult);
     };
 
     checkPermissions();
     return () => {
-      isMounted = false;
+      isPromiseCurrent = false;
     };
-  }, [isSelected, threadId, canUserAssignThreadCallback, canUserResolveThreadCallback]);
+  }, [isSelected, threadId, canUserAssignThreadCallback]);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
+
+  // Check edit/delete permissions for all comments when thread is selected or comments change
+  useEffect(() => {
+    let isPromiseCurrent = true;
+
+    if (!isSelected || !canUserEditOrDeleteCommentCallback) {
+      setCommentEditDeletePermissions(new Map());
+      return undefined;
+    }
+
+    const checkCommentPermissions = async () => {
+      const permissionsMap = new Map<string, boolean>();
+
+      await Promise.all(
+        activeComments.map(async (comment) => {
+          const canEdit = await canUserEditOrDeleteCommentCallback(comment.id);
+          if (isPromiseCurrent) {
+            permissionsMap.set(comment.id, canEdit);
+          }
+        }),
+      );
+
+      if (isPromiseCurrent) {
+        setCommentEditDeletePermissions(permissionsMap);
+      }
+    };
+
+    checkCommentPermissions();
+    return () => {
+      isPromiseCurrent = false;
+    };
+  }, [isSelected, activeComments, canUserEditOrDeleteCommentCallback]);
 
   const firstComment = useMemo(() => activeComments[0], [activeComments]);
 
@@ -139,22 +193,35 @@ export function CommentThread({
     setEditorState(initialValue);
   }, []);
 
-  useEffect(() => {
-    const verseTextElement = verseTextRef.current;
-    if (!verseTextElement) return;
-
-    const checkOverflow = () => {
-      setIsVerseOverflowing(verseTextElement.scrollWidth > verseTextElement.clientWidth);
-    };
-
-    checkOverflow();
-    window.addEventListener('resize', checkOverflow);
-    return () => window.removeEventListener('resize', checkOverflow);
-  }, [firstComment?.verse]);
+  const toggleRead = useCallback(() => {
+    const newIsRead = !isRead;
+    setIsRead(newIsRead);
+    if (!newIsRead) {
+      setManuallyUnread(true);
+    } else {
+      setManuallyUnread(false);
+    }
+    handleReadStatusChange?.(threadId, newIsRead);
+  }, [isRead, handleReadStatusChange, threadId]);
 
   useEffect(() => {
     setShowAllReplies(false);
   }, [isSelected]);
+
+  useEffect((): void | (() => void) => {
+    if (isSelected && !isRead && !manuallyUnread) {
+      const timer = setTimeout(() => {
+        setIsRead(true);
+        handleReadStatusChange?.(threadId, true);
+      }, autoReadDelay * 1000);
+      autoReadTimerRef.current = timer;
+      return () => clearTimeout(timer);
+    }
+    if (autoReadTimerRef.current) {
+      clearTimeout(autoReadTimerRef.current);
+      autoReadTimerRef.current = undefined;
+    }
+  }, [isSelected, isRead, manuallyUnread, autoReadDelay, threadId, handleReadStatusChange]);
 
   const localizedReplies = useMemo(
     () => ({
@@ -265,12 +332,13 @@ export function CommentThread({
       aria-selected={isSelected}
       id={threadId}
       className={cn(
-        'tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        'tw-group tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
         { 'tw-cursor-pointer hover:tw-shadow-md': !isSelected },
         {
-          'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved',
-          'tw-bg-background': isSelected && threadStatus !== 'Resolved',
+          'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
+          'tw-bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
           'tw-bg-muted': threadStatus === 'Resolved',
+          'tw-bg-blue-50': !isRead && !isSelected && threadStatus !== 'Resolved',
         },
       )}
       onClick={() => {
@@ -280,11 +348,46 @@ export function CommentThread({
     >
       <CardContent className="tw-flex tw-flex-col tw-gap-2 tw-p-0">
         <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
-          {localizedAssignedToText && (
-            <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
-              {localizedAssignedToText}
-            </Badge>
-          )}
+          <div className="tw-flex tw-items-center tw-gap-2">
+            {localizedAssignedToText && (
+              <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
+                {localizedAssignedToText}
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleRead();
+              }}
+              className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
+              aria-label={isRead ? 'Mark as unread' : 'Mark as read'}
+            >
+              {isRead ? <MailOpen /> : <Mail />}
+            </Button>
+            {canResolve && threadStatus !== 'Resolved' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'tw-ms-auto',
+                  'tw-text-primary tw-transition-opacity tw-duration-200 hover:tw-bg-primary/10',
+                  'tw-opacity-0 group-hover:tw-opacity-100',
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddCommentToThreadWithContents({
+                    threadId,
+                    status: 'Resolved',
+                  });
+                }}
+                aria-label="Resolve thread"
+              >
+                <Check className="tw-h-4 tw-w-4" />
+              </Button>
+            )}
+          </div>
           <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-baseline tw-gap-2">
             {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
@@ -299,22 +402,27 @@ export function CommentThread({
                 { 'tw-whitespace-nowrap': !isVerseExpanded },
               )}
             >
-              {verseRef} {firstComment.verse}
+              {verseRef && onVerseRefClick ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="tw-h-auto tw-px-1 tw-py-0 tw-text-sm tw-font-normal tw-text-muted-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVerseRefClick(thread);
+                  }}
+                >
+                  {verseRef}
+                </Button>
+              ) : (
+                verseRef
+              )}
+              <span className={classNameForVerseText}>
+                {firstComment.contextBefore}
+                <span className="tw-font-bold">{firstComment.selectedText}</span>
+                {firstComment.contextAfter}
+              </span>
             </p>
-            {isVerseOverflowing && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent triggering the expand/collapse of the thread
-                  setIsVerseExpanded(!isVerseExpanded);
-                }}
-                className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
-                aria-label={isVerseExpanded ? 'Collapse text' : 'Expand text'}
-              >
-                {isVerseExpanded ? <ChevronUp /> : <ChevronDown />}
-              </Button>
-            )}
           </div>
           <CommentItem
             comment={firstComment}
@@ -325,7 +433,7 @@ export function CommentThread({
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
-            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+            canEditOrDelete={commentEditDeletePermissions.get(firstComment.id) ?? false}
             canUserResolveThread={canResolve}
           />
         </div>
@@ -385,7 +493,7 @@ export function CommentThread({
                     handleUpdateComment={handleUpdateComment}
                     handleDeleteComment={handleDeleteComment}
                     onEditingChange={setIsAnyCommentEditing}
-                    canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+                    canEditOrDelete={commentEditDeletePermissions.get(reply.id) ?? false}
                   />
                 </div>
               ))}

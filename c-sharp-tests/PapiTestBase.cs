@@ -19,6 +19,13 @@ namespace TestParanextDataProvider
         #endregion
 
         #region Test setup/teardown
+        [OneTimeSetUp]
+        public virtual void FixtureSetUp()
+        {
+            // Required for the Paratext.Data.Encodings.StringEncoders static constructor
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        }
+
         [SetUp]
         public virtual Task TestSetupAsync()
         {

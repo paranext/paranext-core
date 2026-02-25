@@ -22,7 +22,6 @@ const commentListLocalizedStrings: LanguageStrings = {
   '%comment_status_todo%': 'Re-opened',
   '%comment_thread_multiple_replies%': '{count} replies',
   '%comment_thread_single_reply%': '1 reply',
-  '%no_comments%': 'No comments yet',
 };
 
 const mockAssignableUsers: string[] = ['', 'Team', 'Alice', 'Bob', 'Charlie', 'Current User'];
@@ -73,6 +72,7 @@ function CommentListStory({
             deleted: false,
             hideInTextWindow: false,
             language: 'en',
+            isRead: false,
             startPosition: 0,
             selectedText: '',
             contextBefore: '',
@@ -150,15 +150,28 @@ function CommentListStory({
   };
 
   // Default permission callback for edit/delete - only allow for current user's comments
+  // and only if the comment is the last (most recent) in the thread
   const defaultCanUserEditOrDeleteCallback = useMemo(() => {
     return async (commentId: string): Promise<boolean> => {
       console.log(`Checking if user can edit/delete comment ${commentId}`);
-      const comment = threads
-        .flatMap((thread) => thread.comments)
-        .find((c) => c.id === commentId && !c.deleted);
-      return comment?.user === 'Current User';
+      const thread = threads.find((t) => t.comments.some((c) => c.id === commentId && !c.deleted));
+      if (!thread) return false;
+
+      const activeComments = thread.comments.filter((c) => !c.deleted);
+      const lastComment = activeComments[activeComments.length - 1];
+      if (!lastComment || lastComment.id !== commentId) return false;
+
+      return lastComment.user === 'Current User';
     };
   }, [threads]);
+
+  // Default callback for read status change
+  const threadReadStatusChangeCallback = useMemo(() => {
+    return async (threadId: string, markRead: boolean): Promise<boolean> => {
+      console.log(`Marking thread ${threadId} as ${markRead ? 'read' : 'unread'}`);
+      return true;
+    };
+  }, []);
 
   return (
     <CommentList
@@ -168,6 +181,7 @@ function CommentListStory({
       handleAddCommentToThread={handleAddCommentToThread}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}
+      handleReadStatusChange={threadReadStatusChangeCallback}
       assignableUsers={mockAssignableUsers}
       canUserAddCommentToThread={canUserAddCommentToThread}
       canUserAssignThreadCallback={canUserAssignThreadCallback}
@@ -210,6 +224,10 @@ export const Default: Story = {
       }}
       canUserResolveThreadCallback={async (threadId) => {
         console.log(`Checking if user can resolve thread ${threadId}`);
+        return true;
+      }}
+      canUserEditOrDeleteCommentCallback={async () => {
+        console.log(`Checking if user can edit/delete comment`);
         return true;
       }}
     />

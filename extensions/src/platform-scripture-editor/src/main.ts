@@ -1,4 +1,4 @@
-﻿import papi, { logger, WebViewFactory } from '@papi/backend';
+import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
   IWebViewProvider,
@@ -6,172 +6,54 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  formatReplacementString,
+  AsyncVariable,
+  deepEqual,
   getErrorMessage,
-  isLocalizeKey,
-  LanguageStrings,
-  LocalizeKey,
+  PlatformEventEmitter,
   serialize,
-  USFM_MARKERS_MAP_PARATEXT_3_0,
-  UsjNodeAndDocumentLocation,
-  UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
   EditorDecorations,
+  SelectionChangeEvent,
   EditorWebViewMessage,
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
-  ScriptureRange,
+  ScriptureRangeUsjVerseRefChapterLocation,
 } from 'platform-scripture-editor';
 import { AnnotationStyleDataProviderEngine } from './annotations/annotation-style.data-provider-engine.model';
 import { mergeDecorations } from './decorations.util';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
+import {
+  convertScriptureRangeToEditorRange,
+  formatEditorTitle,
+  openCommentListAndSelectThread,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+} from './platform-scripture-editor.utils';
+import { MarkersViewNotifier } from './markers-view-notifier.model';
 
 logger.debug('Scripture Editor is importing!');
 
-const scriptureEditorWebViewType = 'platformScriptureEditor.react';
+// #region Editor Selection Tracking
 
-const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
-const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
-const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
-const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
+/**
+ * Network event name for editor selection change events. Use
+ * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')` to subscribe.
+ */
+const EDITOR_SELECTION_CHANGED_EVENT = 'platformScriptureEditor.onDidSelectionChange';
+
+/** Event emitter for selection change events. Created in activate() */
+let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | undefined;
+
+// Selection is stored per-WebViewController instance in createWebViewController.
+
+// #endregion Editor Selection Tracking
 
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
   options?: OpenEditorOptions;
-}
-
-// #region selectRange helper functions
-
-/**
- * Figure out the location properties on a {@link ScriptureRange} `start` or `end`. Takes the complex
- * disparate USFM and USJ location types and returns the properties in them
- *
- * @param rangeLocation {@link ScriptureRange} `start` or `end`
- * @param baseVerseRef Verse reference to start with. In some cases, only certain properties on this
- *   verse reference will be changed
- * @returns Location properties found in `rangeLocation`
- */
-function determineLocationProperties(
-  rangeLocation: ScriptureRange['start'],
-  baseVerseRef: SerializedVerseRef,
-): {
-  /** Empty string if not found */
-  jsonPath: string;
-  /** `undefined` if not found */
-  jsonPathOffset: number | undefined;
-  verseRef: SerializedVerseRef;
-  /** `undefined` if not found */
-  verseOffset: number | undefined;
-} {
-  let jsonPath = '';
-  let jsonPathOffset: number | undefined;
-  let verseRef = { ...baseVerseRef };
-  let verseOffset: number | undefined;
-
-  if ('jsonPath' in rangeLocation || 'documentLocation' in rangeLocation) {
-    const chapterLocation =
-      UsjReaderWriter.usjChapterLocationToUsjVerseRefChapterLocation(rangeLocation);
-    verseRef.book = chapterLocation.verseRef.book;
-    verseRef.chapterNum = chapterLocation.verseRef.chapterNum;
-    jsonPath = chapterLocation.documentLocation.jsonPath;
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(chapterLocation.documentLocation))
-      jsonPathOffset = chapterLocation.documentLocation.offset;
-  } else {
-    const startVerseLocation =
-      UsjReaderWriter.usfmVerseLocationToUsfmVerseRefVerseLocation(rangeLocation);
-    verseRef = startVerseLocation.verseRef;
-    verseOffset = startVerseLocation.offset;
-  }
-
-  return {
-    jsonPath,
-    jsonPathOffset,
-    verseRef,
-    verseOffset,
-  };
-}
-
-/**
- * Calculate the USJ JSONPath and offset within it to a text location from USFM verse location
- * information if the USJ location information is not already determined
- *
- * @param usjRW {@link UsjReaderWriter} to use for getting the USJ location info
- * @param verseRef Which verse the location is in
- * @param verseOffset The offset in USFM space from the start of the verse
- * @param currentJsonPath Current value of the JSONPath for this location. Empty string if not
- *   determined yet
- * @param currentJsonPathOffset Current value of the USJ offset in the location. `undefined` if not
- *   determined yet
- * @returns USJ location properties
- */
-function calculateUsjLocationProperties(
-  usjRW: UsjReaderWriter,
-  verseRef: SerializedVerseRef,
-  verseOffset: number | undefined,
-  currentJsonPath: string,
-  currentJsonPathOffset: number | undefined,
-): {
-  jsonPath: string;
-  jsonPathOffset: number;
-  usjContentLocation: UsjNodeAndDocumentLocation | undefined;
-} {
-  let jsonPath = currentJsonPath;
-  let jsonPathOffset = currentJsonPathOffset;
-
-  // Convert the UsfmVerseLocation to get jsonPath and offset from them
-  let usjContentLocation: UsjNodeAndDocumentLocation | undefined;
-  if (!jsonPath) {
-    usjContentLocation = usjRW.usfmVerseLocationToUsjNodeAndDocumentLocation({
-      verseRef,
-      offset: verseOffset,
-    });
-
-    jsonPath = usjContentLocation.documentLocation.jsonPath;
-    if (UsjReaderWriter.isUsjDocumentLocationForTextContent(usjContentLocation.documentLocation)) {
-      jsonPathOffset = usjContentLocation.documentLocation.offset;
-    }
-  }
-
-  // If we haven't found JSONPath offsets, find the nearest text location. We only need to do
-  // this because the editor does not support the full `UsjDocumentLocation`; once it is
-  // updated to support them, we can stop tracking jsonPathOffsets
-  if (jsonPathOffset === undefined) {
-    usjContentLocation = usjContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(jsonPath);
-    const nextTextContentLocation = usjRW.findNextLocationOfMatchingText(usjContentLocation, '');
-    if (nextTextContentLocation) {
-      jsonPath = nextTextContentLocation.documentLocation.jsonPath;
-      jsonPathOffset = nextTextContentLocation.documentLocation.offset;
-    } else
-      // Just put the offset at the start of the marker pointed to by the jsonPath and
-      // hope that's good enough for now. This probably won't happen much, and this case
-      // will not exist once the editor is updated
-      jsonPathOffset = 0;
-  }
-
-  return { jsonPath, jsonPathOffset, usjContentLocation };
-}
-
-// #endregion selectRange helper functions
-
-/**
- * Get localized strings for creating the editor WebView tab
- *
- * @param tabTitleFormatString Localize key or plain string for title of the tab
- * @returns Localized strings
- */
-async function getEditorTabLocalizations(
-  tabTitleFormatString: LocalizeKey,
-): Promise<LanguageStrings> {
-  const localizationData = await papi.localization.getLocalizedStrings({
-    localizeKeys: [EDITABLE_KEY, tabTitleFormatString],
-    locales: ['en'],
-  });
-  return localizationData;
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
@@ -202,7 +84,7 @@ async function insertFootnoteAtSelection(webViewId: string | undefined): Promise
   }
 
   const webViewController = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -221,7 +103,7 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   }
 
   const webViewController = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -230,6 +112,25 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   }
 
   await webViewController.insertCrossReferenceAtSelection();
+}
+
+async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting project comment...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertCommentAtSelection();
 }
 
 /** Function to prompt for a project and open it in the editor */
@@ -292,7 +193,7 @@ async function open(
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.openWebView(
-      scriptureEditorWebViewType,
+      SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       existingTabIdToReplace
         ? { type: 'replace-tab', targetTabId: existingTabIdToReplace }
         : undefined,
@@ -314,13 +215,13 @@ async function changeScriptureView(webViewId: string | undefined): Promise<void>
     return;
   }
 
-  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
     return;
   }
 
   const controller = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -344,13 +245,13 @@ async function toggleFootnotesPane(webViewId: string | undefined): Promise<void>
     return;
   }
 
-  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
     return;
   }
 
   const controller = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -374,13 +275,13 @@ async function changeFootnotesPaneLocation(webViewId: string | undefined): Promi
     return;
   }
 
-  if (webViewDefinition.webViewType !== scriptureEditorWebViewType) {
+  if (webViewDefinition.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) {
     logger.debug(`WebView is not a Scripture editor!`);
     return;
   }
 
   const controller = await papi.webViews.getWebViewController(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     webViewId,
   );
 
@@ -393,65 +294,79 @@ async function changeFootnotesPaneLocation(webViewId: string | undefined): Promi
 }
 
 /** Simple WebView provider so PAPI can get a Scripture Editor upon request */
-class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
+class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDITOR_WEBVIEW_TYPE> {
   constructor() {
-    super(scriptureEditorWebViewType);
+    super(SCRIPTURE_EDITOR_WEBVIEW_TYPE);
   }
 
   override async getWebViewDefinition(
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: PlatformScriptureEditorOptions,
   ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== scriptureEditorWebViewType)
+    if (savedWebView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE)
       throw new Error(
-        `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} WebView`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
-    const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
-    let title = getWebViewOptions.options?.title ?? savedWebView.title;
-    if (!title) {
-      if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
-      else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
-    }
-    if (isLocalizeKey(title)) {
-      const localizedStrings = await getEditorTabLocalizations(title);
-      const localizedTitleFormatStr = localizedStrings[title];
-      const localizedEditable = localizedStrings[EDITABLE_KEY];
+    const isReadOnly = getWebViewOptions.isReadOnly ?? !!savedWebView.state?.isReadOnly;
 
-      let projectName = projectId;
-      if (projectId) {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        projectName = (await pdp.getSetting('platform.name')) ?? projectName;
-      }
+    // Get the options out that we need to do more stuff with
+    const {
+      decorations: optionsDecorations,
+      iconUrl: optionsIconUrl,
+      title: optionsTitle,
+      tooltip: optionsTooltip,
+      ...optionsWebViewState
+    } = getWebViewOptions.options ?? {};
 
-      title = formatReplacementString(localizedTitleFormatStr, {
-        projectId: projectName,
-        editable: isReadOnly ? '' : localizedEditable,
-      });
-    }
+    const unformattedTitle =
+      optionsTitle ??
+      // WebView state is not yet typed, but we know this is string | undefined
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.unformattedTitle as string | undefined);
+
+    // Overwrite the saved state with the relevant options passed in and some other updated values
+    const savedWebViewStateUpdated = {
+      ...savedWebView.state,
+      ...optionsWebViewState,
+      decorations: mergeDecorations(
+        // We know this will be EditorDecorations though webView state doesn't have types
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        savedWebView.state?.decorations as EditorDecorations,
+        optionsDecorations,
+      ),
+      isReadOnly,
+      /**
+       * The original title string or localized string key passed in for us to use to format the
+       * title when it should change
+       */
+      unformattedTitle,
+    };
+
+    const title = await formatEditorTitle(
+      unformattedTitle,
+      projectId,
+      isReadOnly || savedWebViewStateUpdated.viewType === 'markers',
+      async (projectIdFormat) => {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
+        return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
+      },
+      papi.localization.getLocalizedStrings,
+    );
 
     return {
       ...savedWebView,
       title,
-      iconUrl: getWebViewOptions.options?.iconUrl ?? savedWebView.iconUrl,
-      tooltip: getWebViewOptions.options?.tooltip ?? savedWebView.tooltip,
+      iconUrl: optionsIconUrl ?? savedWebView.iconUrl,
+      tooltip: optionsTooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
-      state: {
-        ...savedWebView.state,
-        isReadOnly,
-        decorations: mergeDecorations(
-          // We know this will be EditorDecorations though webView state doesn't have types
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          savedWebView.state?.decorations as EditorDecorations,
-          getWebViewOptions.options?.decorations,
-        ),
-      },
+      state: savedWebViewStateUpdated,
       projectId,
       allowPopups: true,
-      shouldShowToolbar: true,
+      shouldShowToolbar: false,
     };
   }
 
@@ -463,6 +378,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
     const unsubFromWebViewUpdates = papi.webViews.onDidUpdateWebView(({ webView }) => {
       if (webView.id === currentWebViewDefinition.id) currentWebViewDefinition = webView;
     });
+    /**
+     * Variable that holds the current selection in the editor. Will be `undefined` if could not
+     * determine selection. Will also be `undefined` initially until the editor reports its first
+     * selection.
+     */
+    let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
+    /** Variable we will use to wait to get the first selection reported from the editor */
+    const firstSelectionAsync: AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined> =
+      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`);
     return {
       async selectRange(range) {
         try {
@@ -472,114 +396,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          // Figure out the information needed to make the USJ range to give to the editor:
-          // book, chapter, start jsonPath and offset, and end jsonPath and offset.
-          // Also need to get the verse to set the scroll group verse to because the editor doesn't
-          // do it automatically right now
-          let startVerseRef = { book: '', chapterNum: 0, verseNum: -1 };
-          let startJsonPath = '';
-          let endJsonPath = '';
-          // Start and end offsets based on the USJ JSONPath location
-          let startJsonPathOffset: number | undefined;
-          let endJsonPathOffset: number | undefined;
-
-          // May need to use verse refs and offsets from the USFM verse location to get USJ offsets
-          let endVerseRef = { book: '', chapterNum: 0, verseNum: 0 };
-
-          // Figure out the book and chapter and the jsonPaths and offsets if they're in the range
-          // passed to us
-          // Process the starting location
-          const { verseOffset: startVerseOffset, ...startLocationProperties } =
-            determineLocationProperties(range.start, startVerseRef);
-          ({
-            jsonPath: startJsonPath,
-            jsonPathOffset: startJsonPathOffset,
-            verseRef: startVerseRef,
-          } = startLocationProperties);
-
-          // Process the ending location
-          const { verseOffset: endVerseOffset, ...endLocationProperties } =
-            determineLocationProperties(range.end, endVerseRef);
-          ({
-            jsonPath: endJsonPath,
-            jsonPathOffset: endJsonPathOffset,
-            verseRef: endVerseRef,
-          } = endLocationProperties);
-          if (
-            startVerseRef.book !== endVerseRef.book ||
-            startVerseRef.chapterNum !== endVerseRef.chapterNum
-          )
-            throw new Error(
-              'Could not get targetScrRef from range! Selection range cannot (yet) span chapters or books',
-            );
-
-          // If we don't have at least one of the USJ range properties or the verse number, need to
-          // process the chapter to find them based on what we have
-          if (
-            !startJsonPath ||
-            !endJsonPath ||
-            startJsonPathOffset === undefined ||
-            endJsonPathOffset === undefined ||
-            startVerseRef.verseNum === -1
-          ) {
-            // Get the USJ chapter we're on so we can determine the missing USJ range properties
-            const pdp = await papi.projectDataProviders.get(
-              'platformScripture.USJ_Chapter',
-              currentWebViewDefinition.projectId,
-            );
-            const usjChapter = await pdp.getChapterUSJ(startVerseRef);
-
-            if (!usjChapter)
-              throw new Error(
-                `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(startVerseRef)} is undefined!`,
-              );
-
-            const usjRW = new UsjReaderWriter(usjChapter, {
-              markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
-            });
-
-            // Convert the UsfmVerseLocations to get jsonPath and offset from them
-            let startContentLocation: UsjNodeAndDocumentLocation | undefined;
-            ({
-              jsonPath: startJsonPath,
-              jsonPathOffset: startJsonPathOffset,
-              usjContentLocation: startContentLocation,
-            } = calculateUsjLocationProperties(
-              usjRW,
-              startVerseRef,
-              startVerseOffset,
-              startJsonPath,
-              startJsonPathOffset,
-            ));
-
-            ({ jsonPath: endJsonPath, jsonPathOffset: endJsonPathOffset } =
-              calculateUsjLocationProperties(
-                usjRW,
-                endVerseRef,
-                endVerseOffset,
-                endJsonPath,
-                endJsonPathOffset,
-              ));
-
-            // If we don't have which verse we're setting the scroll group to, get it
-            if (startVerseRef.verseNum === -1) {
-              const startUsfmLocation = usjRW.usjDocumentLocationToUsfmVerseRefVerseLocation(
-                (startContentLocation ?? usjRW.jsonPathToUsjNodeAndDocumentLocation(startJsonPath))
-                  .documentLocation,
-              );
-              startVerseRef.verseNum = startUsfmLocation.verseRef.verseNum;
-            }
-          }
-
-          const convertedRange = {
-            start: { jsonPath: startJsonPath, offset: startJsonPathOffset },
-            end: { jsonPath: endJsonPath, offset: endJsonPathOffset },
-          };
+          const { verseRef, editorRange } = await convertScriptureRangeToEditorRange(
+            papi,
+            range,
+            currentWebViewDefinition.projectId,
+          );
 
           const message: EditorWebViewMessage = {
             method: 'selectRange',
-            scrRef: startVerseRef,
-            range: convertedRange,
+            scrRef: verseRef,
+            range: editorRange,
           };
           await papi.webViewProviders.postMessageToWebView(
             currentWebViewDefinition.id,
@@ -710,7 +536,130 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           message,
         );
       },
+      async insertCommentAtSelection() {
+        const { projectId } = currentWebViewDefinition;
+        if (!projectId) {
+          logger.warn('Cannot insert comment: No project ID associated with this editor');
+          return;
+        }
+
+        try {
+          const commentManagerPdp = await papi.projectDataProviders.get(
+            'legacyCommentManager.comments',
+            projectId,
+          );
+
+          const canCreate = await commentManagerPdp.canUserCreateComments();
+          if (!canCreate) {
+            throw new Error(
+              `User does not have permission to create comments in project ${projectId}`,
+            );
+          }
+
+          const message: EditorWebViewMessage = {
+            method: 'insertCommentAtSelection',
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          logger.warn(`Failed to open comment editor: ${getErrorMessage(e)}`);
+          throw e;
+        }
+      },
+      async setAnnotation(range, annotationType, annotationId, interactionCommand) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to setAnnotation ${serialize({ annotationType, annotationId, interactionCommand })}`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const { verseRef, editorRange } = await convertScriptureRangeToEditorRange(
+            papi,
+            range,
+            currentWebViewDefinition.projectId,
+          );
+
+          const message: EditorWebViewMessage = {
+            method: 'setAnnotation',
+            verseRef,
+            annotationRange: editorRange,
+            annotationType,
+            annotationId,
+            interactionCommand,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const errorMessage = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running setAnnotation! ${getErrorMessage(e)}`;
+          logger.warn(errorMessage);
+          throw new Error(errorMessage);
+        }
+      },
+      async focusComment(threadId) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to focusComment ${threadId}`,
+          );
+
+          await openCommentListAndSelectThread(papi, currentWebViewDefinition.id, threadId);
+        } catch (e) {
+          logger.warn(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running focusComment: ${getErrorMessage(e)}`,
+          );
+          throw e;
+        }
+      },
+      async runAnnotationAction(annotationId, action) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} received request to runAnnotationAction ${serialize({ annotationId, action })}`,
+          );
+
+          const message: EditorWebViewMessage = {
+            method: 'runAnnotationAction',
+            annotationId,
+            action,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const errorMessage = `Platform Scripture Editor WebView Controller ${currentWebViewDefinition.id} threw while running runAnnotationAction! ${getErrorMessage(e)}`;
+          logger.warn(errorMessage);
+          throw new Error(errorMessage);
+        }
+      },
+      async getSelection() {
+        // If we haven't yet received the first selection, wait for it
+        if (!firstSelectionAsync.hasSettled) {
+          return firstSelectionAsync.promise;
+        }
+        return currentSelection;
+      },
+      async updateSelectionInternal(selection) {
+        const webViewId = currentWebViewDefinition.id;
+
+        // If the selection didn't change, we don't need to do anything
+        if (deepEqual(currentSelection, selection)) return;
+
+        currentSelection = selection;
+        // Resolve the first selection async variable with the first selection we get
+        if (!firstSelectionAsync.hasSettled) firstSelectionAsync.resolveToValue(selection);
+        selectionChangedEventEmitter?.emit({ webViewId, selection });
+      },
       async dispose() {
+        currentSelection = undefined;
+        // If we never got a selection, reject the first selection promise
+        firstSelectionAsync.rejectWithReason('Disposed before first selection received');
         return unsubFromWebViewUpdates();
       },
     };
@@ -762,6 +711,29 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             summary:
               'The ID of the web view tied to the project that we are inserting the footnote',
             schema: { type: 'null' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertCommentPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertCommentAtSelection',
+    insertCommentAtSelection,
+    {
+      method: {
+        summary:
+          'Open the comment editor to insert a project comment at the current verse in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the web view tied to the project where we are inserting the comment',
+            schema: { type: 'string' },
           },
         ],
         result: {
@@ -829,7 +801,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const scriptureEditorWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    scriptureEditorWebViewType,
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     scriptureEditorWebViewProvider,
   );
 
@@ -900,7 +872,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  // Create the selection changed event emitter
+  selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
+    EDITOR_SELECTION_CHANGED_EVENT,
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
+  const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
+  const markerNotifierUnsubscribers = await markerNotifier.start();
+
   context.registrations.add(
     await scriptureEditorWebViewProviderPromise,
     await openPlatformScriptureEditorPromise,
@@ -910,7 +890,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await insertCommentPromise,
     await annotationStyleDataProviderPromise,
+    selectionChangedEventEmitter,
+    ...markerNotifierUnsubscribers,
   );
 
   logger.debug('Scripture editor is finished activating!');

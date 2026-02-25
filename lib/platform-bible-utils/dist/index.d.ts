@@ -336,6 +336,11 @@ export declare class MutexMap {
 	 * @returns The Mutex associated with the provided ID
 	 */
 	get(mutexID: string): Mutex;
+	/**
+	 * Disposes of this MutexMap by canceling all pending operations on all mutexes and clearing the
+	 * map. After disposal, the MutexMap should not be used.
+	 */
+	dispose(): void;
 }
 export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
 	constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions);
@@ -2878,6 +2883,20 @@ export interface IUsjReaderWriter {
 	 *   changing this USJ data.
 	 */
 	findNextLocationOfMatchingText(start: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
+	/**
+	 * Given a starting point, find the next node location in this USJ data that matches the search
+	 * conditions. The given starting point is included in the search.
+	 *
+	 * @param nodeAndLocation Node from which the search will start
+	 * @param searchFunction Function that nodes and their locations will be passed into to determine
+	 *   if they are the correct node. Stops searching and returns the node and location if this
+	 *   function returns `true`
+	 * @returns Object containing the USJ node that matched the condition tested by the search
+	 *   function and a JSONPath string that indicates the location of the of USJ node within `usj`.
+	 *   Note that if the USJ node returned is an object, it is the same object that is within this
+	 *   USJ data. So if you change it, you are changing this USJ data.
+	 */
+	findNextMatchingNode(nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>, searchFunction: (potentiallyMatchingNodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>) => boolean): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> | undefined;
 	/** Find the first value matching the given JSONPath query within this USJ data */
 	findSingleValue<T>(jsonPathQuery: string): T | undefined;
 	/** Find the parent of the first value matching the given JSONPath query within this USJ data */
@@ -2907,7 +2926,7 @@ export interface IUsjReaderWriter {
 	 * @returns USJ node, JSONPath, and offset that represent the location within this USJ data
 	 *   indicated by `jsonPathQuery`
 	 */
-	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
+	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	/** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
 	nodeToJsonPath(node: MarkerObject): ContentJsonPath;
 	/**
@@ -2941,7 +2960,7 @@ export interface IUsjReaderWriter {
 	 * @throws If not able to establish relationship between string `node` and `nodeParent`
 	 * @throws If not able to find the node in the USJ document
 	 */
-	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation;
+	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	/**
 	 * Remove all nodes from this USJ data that match a given search function.
 	 *
@@ -2953,9 +2972,13 @@ export interface IUsjReaderWriter {
 	 * Search for matches of a regular expression within this USJ's text data
 	 *
 	 * @param regex Regular expression to search for. Specify the global flag to find all matches.
+	 * @param markerStylesToInclude Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include
+	 *   in the search. When provided, only text within markers whose style is in this set will be
+	 *   searched. Text inside markers not in this set (e.g., footnotes, cross-references) will be
+	 *   excluded. When omitted, all text is searched.
 	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
 	 */
-	search(regex: RegExp): UsjSearchResult[];
+	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
 	/** Transforms the USJ document into USFM */
 	toUsfm(): string;
 	/**
@@ -3029,20 +3052,6 @@ export interface IUsjReaderWriter {
 	 */
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
-/**
- * Check if an HTML string contains custom Paratext-specific tags
- *
- * @param html - HTML string to check
- * @returns True if the HTML contains <color> or <language> tags
- */
-export declare function hasCustomParatextTags(html: string): boolean;
-/**
- * Parse Paratext specific HTML tags to standard HTML
- *
- * @param html - HTML string to parse
- * @returns Parsed HTML string
- */
-export declare function parseParatextHtml(html: string): string;
 /**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
@@ -5112,9 +5121,10 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @returns Node matching condition tested by the search function
 	 */
 	private static findNextMatchingNodeUsingWorkingStack;
+	findNextMatchingNode(nodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>, searchFunction: (potentiallyMatchingNodeAndLocation: UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>) => boolean): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation> | undefined;
 	nodeToJsonPath(node: MarkerObject): ContentJsonPath;
 	nodeToUsfmVerseRefVerseLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
-	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation;
+	nodeToUsjNodeAndDocumentLocation(node: MarkerContent | Usj, nodeParent?: MarkerObject | MarkerContent[] | Usj): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	/**
 	 * Finds the node associated with the JSONPath provided, and also gets the parent of the node if
 	 * the node is a string. This is helpful so you can find a real object that is actually somewhere
@@ -5126,7 +5136,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   string. Note that the object returned is the actual object in the USJ document.
 	 */
 	private jsonPathToNodeAndParentIfString;
-	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation;
+	jsonPathToUsjNodeAndDocumentLocation(jsonPathQuery: string): UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	jsonPathToUsfmVerseRefVerseLocation(jsonPathQuery: string, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 	/**
@@ -5168,6 +5178,14 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 		offset: number;
 	};
 	/**
+	 * Type guard to check if a location is a {@link UsjChapterLocation} rather than a
+	 * {@link UsjBookLocation} or {@link UsfmVerseLocation}.
+	 *
+	 * @param location The location to check
+	 * @returns `true` if the location is a {@link UsjChapterLocation}
+	 */
+	static isUsjChapterLocation(location: UsjLocation | UsfmVerseLocation): location is UsjChapterLocation;
+	/**
 	 * Transforms a USJ chapter-based location into a single standardized format of USJ chapter-based
 	 * location for ease of accessing the location's properties
 	 *
@@ -5207,9 +5225,26 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 * @returns `true` if the location is for text content; `false` otherwise
 	 */
 	static isUsjDocumentLocationForTextContent(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjTextContentLocation>;
+	/**
+	 * Determine if the USJ document location is pointing to a node (text or start of marker) content
+	 * location instead of some location related to a marker's closing marker, property, or attribute
+	 *
+	 * @param usjDocumentLocation USJ document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForNode(usjDocumentLocation: UsjDocumentLocation): usjDocumentLocation is UsjMarkerLocation | UsjTextContentLocation;
+	/**
+	 * Determine if the USJ document location in this node and document location is pointing to a node
+	 * (text or start of marker) content location instead of some location related to a marker's
+	 * closing marker, property, or attribute
+	 *
+	 * @param usjNodeAndDocumentLocation USJ node and document location to test
+	 * @returns `true` if the location is for text content; `false` otherwise
+	 */
+	static isUsjDocumentLocationForNode(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	usfmVerseLocationToNextTextLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 	findNextLocationOfMatchingText(startingPoint: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch?: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
-	search(regex: RegExp): UsjSearchResult[];
+	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
 	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;
@@ -5402,8 +5437,12 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 }
 /** Possible status of a comment/note as defined in Paratext 9 */
 export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
-/** Possible types of comment/note as defined in Paratext 9 */
-export type CommentType = "Unspecified" | "Normal" | "Conflict";
+/**
+ * Possible types of comment/note as defined in Paratext 9. P9 also defines a "Unspecified" type,
+ * which used to be used for filtering. It now gets treating the same as Normal, so we don't need to
+ * include it here.
+ */
+export type CommentType = "Normal" | "Conflict";
 /**
  * Represents a single comment/note in a scripture text
  *
@@ -5441,6 +5480,8 @@ export type LegacyComment = {
 	hideInTextWindow: boolean;
 	/** Unique id of the comment, unchanged by subsequent editing */
 	id: string;
+	/** Whether the comment has been read (by the current user) */
+	isRead: boolean;
 	/** Language of note */
 	language: string;
 	/** Present in a note when it has been assigned to reply-to a particular user */
@@ -5485,10 +5526,15 @@ export type LegacyCommentThread = {
 	status: CommentStatus;
 	/** Thread type (from first comment) */
 	type: CommentType;
-	/** User to whom the thread is assigned */
-	assignedUser: string;
+	/**
+	 * User to whom the thread is assigned
+	 *
+	 * - `undefined` or not present if there is no assignment info
+	 * - Empty string means explicitly unassigned
+	 */
+	assignedUser?: string;
 	/** User to reply to */
-	replyToUser: string;
+	replyToUser?: string;
 	/** Last modified date (ISO 8601 string) */
 	modifiedDate: string;
 	/** Scripture reference for this thread */
@@ -5501,6 +5547,8 @@ export type LegacyCommentThread = {
 	isBTNote: boolean;
 	/** Whether this is a consultant note */
 	isConsultantNote: boolean;
+	/** Whether the thread has been read (by the current user) */
+	isRead: boolean;
 	/** Biblical term ID if this is a biblical term note */
 	biblicalTermId?: string;
 };

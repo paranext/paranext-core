@@ -248,10 +248,12 @@ export function FootnotesLayout({
         >
           <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
             <FootnoteList
+              classNameForItems="scripture-font"
               listId={footnoteListKey}
               layout={footnotesPanePosition === 'bottom' ? 'horizontal' : 'vertical'}
               footnotes={footnotes}
               showMarkers={showMarkers}
+              formatCaller={showMarkers ? (c) => c : undefined}
               selectedFootnote={selectedFootnote?.footnote}
               onFootnoteSelected={handleFootnoteSelected}
             />

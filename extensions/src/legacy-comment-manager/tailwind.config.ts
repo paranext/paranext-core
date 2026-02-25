@@ -95,6 +95,19 @@ const config: Config = {
             '--tw-prose-pre-bg': 'hsl(var(--muted))',
             '--tw-prose-th-borders': 'hsl(var(--border))',
             '--tw-prose-td-borders': 'hsl(var(--border))',
+            blockquote: {
+              // The default quotes are encoded with 0o or \, and it makes them not display in our
+              // environment. So override them with not encoded characters to make them work.
+              quotes: `"“""”""‘""’"`,
+            },
+          },
+        },
+        // Can use `tw-prose tw-prose-quoteless` to remove quotes on `blockquote`s
+        // Thanks to RobinMalfait https://github.com/tailwindlabs/tailwindcss-typography/issues/66#issuecomment-756834635
+        quoteless: {
+          css: {
+            'blockquote p:first-of-type::before': { content: 'none' },
+            'blockquote p:last-of-type::after': { content: 'none' },
           },
         },
       },

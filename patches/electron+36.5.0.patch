@@ -1,0 +1,15 @@
+diff --git a/node_modules/electron/electron.d.ts b/node_modules/electron/electron.d.ts
+index 53721f0..1545b95 100644
+--- a/node_modules/electron/electron.d.ts
++++ b/node_modules/electron/electron.d.ts
+@@ -25205,7 +25205,9 @@ declare namespace NodeJS {
+      * `stderr`. Setting this to `true` will silence deprecation warnings. This
+      * property is used instead of the `--no-deprecation` command line flag.
+      */
+-    noDeprecation: boolean;
++    // patch-package notes: Added `?` to match Node.js typings.
++    // This patch can be removed once https://github.com/electron/electron/issues/49213 is fixed
++    noDeprecation?: boolean;
+     /**
+      * A `Electron.ParentPort` property if this is a `UtilityProcess` (or `null`
+      * otherwise) allowing communication with the parent process.

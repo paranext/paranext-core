@@ -1,5 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import {
+  DeltaOp,
   DeltaOpInsertNoteEmbed,
   Editorial,
   EditorOptions,
@@ -19,12 +20,15 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@/components/shadcn-ui/tooltip';
+import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
+  /** Class name for styling the embedded `Editor` component in this editor popover */
+  classNameForEditor?: string;
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOpInsertNoteEmbed[] | undefined;
   /** External function to handle saving changes to the footnote */
@@ -45,11 +49,77 @@ export interface FootnoteEditorProps {
 }
 
 /**
+ * Function to convert a footnote/endnote type node to a cross-reference type node
+ *
+ * @param op The node to be converted
+ */
+function footnoteToCrossReferenceOp(op: DeltaOp) {
+  // The built-in type for the delta note ops does not contain the types for the attributes
+  // so have to cast it here
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const opCharAttribute = op.attributes?.char as Record<string, string>;
+  if (opCharAttribute.style) {
+    if (opCharAttribute.style === 'ft') {
+      opCharAttribute.style = 'xt';
+    }
+
+    if (opCharAttribute.style === 'fr') {
+      opCharAttribute.style = 'xo';
+    }
+
+    if (opCharAttribute.style === 'fq') {
+      opCharAttribute.style = 'xq';
+    }
+  }
+}
+
+/**
+ * Function to convert a cross-reference type node to a footnote/endnote type node
+ *
+ * @param op THe node to be converted
+ */
+function crossReferenceToFootnoteOp(op: DeltaOp) {
+  // The built-in type for the delta note ops does not contain the types for the attributes
+  // so have to cast it here
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const opCharAttribute = op.attributes?.char as Record<string, string>;
+  if (opCharAttribute.style) {
+    if (opCharAttribute.style === 'xt') {
+      opCharAttribute.style = 'ft';
+    }
+
+    if (opCharAttribute.style === 'xo') {
+      opCharAttribute.style = 'fr';
+    }
+
+    if (opCharAttribute.style === 'xq') {
+      opCharAttribute.style = 'fq';
+    }
+  }
+}
+
+// TODO: Remove this once the new marker menu is implemented with correct logic
+/**
+ * This is for a temporary fix to get the markers menu to work by having the default usj include a
+ * parent paragraph node
+ */
+const PARAGRAPH_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    {
+      type: 'para',
+    },
+  ],
+};
+
+/**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
 export default function FootnoteEditor({
+  classNameForEditor,
   noteOps,
   onSave,
   onClose,
@@ -67,6 +137,8 @@ export default function FootnoteEditor({
   const [customCaller, setCustomCaller] = useState<string>('*');
 
   const [noteType, setNoteType] = useState<string>('f');
+
+  const [isTypeSwitchable, setIsTypeSwitchable] = useState<boolean>(false);
 
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
@@ -103,11 +175,9 @@ export default function FootnoteEditor({
       setCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
-      // Sets the caller to empty in the footnote editor so that it doesn't show
-      if (noteOp.insert.note) noteOp.insert.note.caller = '';
-      // Applies timeout for the apply update operation to avoid flush sync warning
       timeout = setTimeout(() => {
-        editorRef.current?.applyUpdate([{ delete: 1 }, noteOp]);
+        // Inserts the note node to be edited as an delta operation
+        editorRef.current?.applyUpdate([noteOp]);
       }, 0);
     }
 
@@ -147,7 +217,60 @@ export default function FootnoteEditor({
     const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
       if (currentNoteOp.insert.note) currentNoteOp.insert.note.style = value;
-      editorRef.current?.applyUpdate([{ delete: 1 }, currentNoteOp]);
+
+      // If switching between cross-reference and footnote/endnote, need to switch the nodes inside
+      const innerNoteOps = currentNoteOp.insert.note?.contents?.ops;
+      if (noteType !== 'x' && value === 'x') {
+        innerNoteOps?.forEach((op) => footnoteToCrossReferenceOp(op));
+      } else if (noteType === 'x' && value !== 'x') {
+        innerNoteOps?.forEach((op) => crossReferenceToFootnoteOp(op));
+      }
+
+      // Inserts the new footnote/cross-reference and deletes the old one
+      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+    }
+  };
+
+  const handleUsjChange = (usj: Usj) => {
+    const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
+    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+      // Prevents adding additional note nodes or other nodes after the main footnote node
+      if (usj.content.length > 1) {
+        setTimeout(() => {
+          // Retains the first two nodes which are the added paragraph node (for now) and the
+          // footnote/cross-reference and deletes the unwanted node that was just inserted
+          editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
+        }, 0);
+      }
+      const currentNoteType = noteOp.insert.note?.style;
+      const innerNoteOps = noteOp.insert.note?.contents?.ops;
+      if (!currentNoteType) setIsTypeSwitchable(false);
+
+      if (currentNoteType === 'x') {
+        setIsTypeSwitchable(
+          !!innerNoteOps?.every((op) => {
+            if (!op.attributes?.char) return true;
+            // The built-in type for the delta note ops does not contain the types for the attributes
+            // so have to cast it here
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const nodeType = (op.attributes?.char as Record<string, string>).style;
+            return nodeType === 'xt' || nodeType === 'xo' || nodeType === 'xq';
+          }),
+        );
+      } else {
+        setIsTypeSwitchable(
+          !!innerNoteOps?.every((op) => {
+            if (!op.attributes?.char) return true;
+            // The built-in type for the delta note ops does not contain the types for the attributes
+            // so have to cast it here
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            const nodeType = (op.attributes?.char as Record<string, string>).style;
+            return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
+          }),
+        );
+      }
+    } else {
+      setIsTypeSwitchable(false);
     }
   };
 
@@ -156,6 +279,7 @@ export default function FootnoteEditor({
       <div className="tw-flex">
         <div className="tw-flex tw-gap-4">
           <FootnoteTypeDropdown
+            isTypeSwitchable={isTypeSwitchable}
             noteType={noteType}
             handleNoteTypeChange={handleNoteTypeChange}
             localizedStrings={localizedStrings}
@@ -204,7 +328,16 @@ export default function FootnoteEditor({
         ref={editorParentRef}
         className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
       >
-        <Editorial options={options} onScrRefChange={() => {}} scrRef={scrRef} ref={editorRef} />
+        <div className={classNameForEditor}>
+          <Editorial
+            options={options}
+            onUsjChange={handleUsjChange}
+            defaultUsj={PARAGRAPH_USJ}
+            onScrRefChange={() => {}}
+            scrRef={scrRef}
+            ref={editorRef}
+          />
+        </div>
         <div className="tw-absolute tw-bottom-0 tw-right-0">
           <TooltipProvider>
             <Tooltip>

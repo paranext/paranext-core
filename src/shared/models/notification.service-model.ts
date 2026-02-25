@@ -19,11 +19,28 @@ export interface PlatformNotification {
    * Automatically localized if this is a {@link LocalizeKey}.
    */
   clickCommandLabel?: string | LocalizeKey;
-  /** Optional command to run if users click on the label in the notification */
+  /**
+   * Optional command to run if users click on the label in the notification. The command will be
+   * sent one argument:
+   *
+   * - NotificationId: The ID of the notification that was clicked
+   *
+   * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+   */
   clickCommand?: keyof CommandHandlers;
   /** Optional ID of a previous notification to update instead of showing a new notification */
   notificationId?: string | number;
 }
+
+/**
+ * Type signature for a command handler that is called when a user clicks on a notification.
+ *
+ * Register a command handler with this signature and pass its name as the `clickCommand` property
+ * of a {@link PlatformNotification} to have it called when the user clicks on the notification.
+ *
+ * @param notificationId ID of the notification that was clicked
+ */
+export type NotificationClickCommandHandler = (notificationId: string | number) => Promise<void>;
 
 /** JSDOC DESTINATION notificationService */
 export interface INotificationService {

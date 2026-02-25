@@ -3,15 +3,19 @@ import { fn } from 'storybook/test';
 
 const preview: Preview = {
   parameters: {
-    backgrounds: {
-      default: 'light',
-    },
+    backgrounds: {},
     actions: { onClick: fn() },
     controls: {
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/,
       },
+    },
+  },
+
+  initialGlobals: {
+    backgrounds: {
+      value: 'light',
     },
   },
 };

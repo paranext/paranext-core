@@ -12,6 +12,7 @@ import { Check, Settings, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { CheckRunResult } from 'platform-scripture';
 import { useLocalizedStrings } from '@papi/frontend/react';
+import { formatScrRef } from 'platform-bible-utils';
 
 /** Enum representing the possible states of a check */
 export enum CheckStates {
@@ -75,8 +76,6 @@ export type CheckCardProps = {
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
   handleDenyCheck: (result: CheckRunResult) => Promise<boolean>;
-  /** The title of the card */
-  checkCardTitle: string;
   /** A brief description of the check result. Optional. */
   checkCardDescription?: string;
   /** Callback function triggered to open the configure checks webview */
@@ -103,7 +102,6 @@ export function CheckCard({
   handleSelectCheck,
   handleAllowCheck,
   handleDenyCheck,
-  checkCardTitle,
   checkCardDescription,
   handleOpenSettingsAndInventories,
   showBadge = false,
@@ -186,7 +184,8 @@ export function CheckCard({
     <div className={cn('tw-flex tw-flex-col tw-gap-2', className)}>
       <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
         <span className="tw-shrink-0 tw-text-nowrap tw-text-xs tw-font-medium">
-          {checkCardTitle}
+          {formatScrRef(checkResult.verseRef)}{' '}
+          <span className="scripture-font">{checkResult.itemText}</span>
         </span>
         {showBadge &&
           (checkState === CheckStates.Fixed ||

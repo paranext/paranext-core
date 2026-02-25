@@ -17,14 +17,8 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedEditorState } from 'lexical';
-import { ArrowUp, Check, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
-import {
-  formatRelativeDate,
-  formatReplacementString,
-  hasCustomParatextTags,
-  parseParatextHtml,
-  sanitizeHtml,
-} from 'platform-bible-utils';
+import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
 import { getAssignedUserDisplayName } from './comment-list.utils';
@@ -39,43 +33,16 @@ export function CommentItem({
   isReply = false,
   localizedStrings,
   isThreadExpanded = false,
-  threadStatus = 'Unspecified',
-  handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
   onEditingChange,
-  canUserEditOrDeleteCommentCallback,
-  canUserResolveThread = false,
+  canEditOrDelete = false,
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editorState, setEditorState] = useState<SerializedEditorState>();
-  const [canEditOrDelete, setCanEditOrDelete] = useState(false);
 
   // eslint-disable-next-line no-null/no-null
   const editContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Check if the user can edit or delete this comment
-  useEffect(() => {
-    let isMounted = true;
-
-    if (!isThreadExpanded) {
-      setCanEditOrDelete(false);
-      return undefined;
-    }
-
-    const checkPermission = async () => {
-      const canEdit = canUserEditOrDeleteCommentCallback
-        ? await canUserEditOrDeleteCommentCallback(comment.id)
-        : false;
-
-      if (isMounted) setCanEditOrDelete(canEdit);
-    };
-
-    checkPermission();
-    return () => {
-      isMounted = false;
-    };
-  }, [canUserEditOrDeleteCommentCallback, comment.id, isThreadExpanded]);
 
   // Focus the editor when entering edit mode, after dropdown menu has fully closed
   useEffect(() => {
@@ -153,10 +120,7 @@ export function CommentItem({
     [comment.user],
   );
 
-  const sanitizedContent = useMemo(
-    () => sanitizeHtml(parseParatextHtml(comment.contents)),
-    [comment.contents],
-  );
+  const sanitizedContent = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
 
   const dropdownContent = useMemo(() => {
     if (!isThreadExpanded) return undefined;
@@ -164,18 +128,16 @@ export function CommentItem({
 
     return (
       <>
-        {!hasCustomParatextTags(comment.contents) && (
-          <DropdownMenuItem
-            onClick={() => {
-              setIsEditing(true);
-              setEditorState(htmlToEditorState(parseParatextHtml(comment.contents)));
-              onEditingChange?.(true);
-            }}
-          >
-            <Pencil className="tw-me-2 tw-h-4 tw-w-4" />
-            {localizedStrings['%comment_editComment%']}
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem
+          onClick={() => {
+            setIsEditing(true);
+            setEditorState(htmlToEditorState(comment.contents));
+            onEditingChange?.(true);
+          }}
+        >
+          <Pencil className="tw-me-2 tw-h-4 tw-w-4" />
+          {localizedStrings['%comment_editComment%']}
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
             if (handleDeleteComment) {
@@ -245,6 +207,14 @@ export function CommentItem({
             }}
           >
             <Editor
+              className={cn(
+                // Don't render blockquote on the first child. All comments are wrapped in blockquote
+                // that has text-align corresponding to LTR or RTL, so the blockquote is important.
+                // But we don't want it to look like there's a blockquote there. Target the
+                // lowest-level Lexical editor element by attribute so Tailwind can apply styles to
+                // the blockquote directly inside the editor.
+                '[&_[data-lexical-editor="true"]>blockquote]:tw-mt-0 [&_[data-lexical-editor="true"]>blockquote]:tw-border-s-0 [&_[data-lexical-editor="true"]>blockquote]:tw-ps-0 [&_[data-lexical-editor="true"]>blockquote]:tw-font-normal [&_[data-lexical-editor="true"]>blockquote]:tw-not-italic [&_[data-lexical-editor="true"]>blockquote]:tw-text-foreground',
+              )}
               editorSerializedState={editorState}
               onSerializedChange={(value) => setEditorState(value)}
             />
@@ -275,7 +245,7 @@ export function CommentItem({
                 {localizedStrings['%comment_status_resolved%']}
               </div>
             )}
-            {comment.status === 'Todo' && (
+            {comment.status === 'Todo' && isReply && (
               <div className="tw-text-sm tw-italic">
                 {localizedStrings['%comment_status_todo%']}
               </div>
@@ -285,6 +255,13 @@ export function CommentItem({
                 'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
                 // tw-prose has a max width defined on it, that we choose to override
                 'tw-max-w-none',
+                // Don't render blockquote on the first child. All comments are wrapped in blockquote
+                // that has text-align corresponding to LTR or RTL, so the blockquote is important.
+                // But we don't want it to look like there's a blockquote there. Apply styles to the
+                // blockquote directly inside this div.
+                '[&>blockquote]:tw-border-s-0 [&>blockquote]:tw-p-0 [&>blockquote]:tw-ps-0 [&>blockquote]:tw-font-normal [&>blockquote]:tw-not-italic [&>blockquote]:tw-text-foreground',
+                // Don't render quotes on blockquotes
+                'tw-prose-quoteless',
                 {
                   'tw-line-clamp-3': !isThreadExpanded,
                 },
@@ -297,23 +274,6 @@ export function CommentItem({
           </>
         )}
       </div>
-      {isThreadExpanded &&
-        canUserResolveThread &&
-        !isReply &&
-        threadStatus !== 'Resolved' &&
-        handleAddCommentToThread && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="tw-shrink-0"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent triggering the expand/collapse
-              handleAddCommentToThread({ threadId: comment.thread, status: 'Resolved' });
-            }}
-          >
-            <Check />
-          </Button>
-        )}
       {dropdownContent && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

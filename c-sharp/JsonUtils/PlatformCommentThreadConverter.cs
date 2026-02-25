@@ -1,13 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Paratext.Data.ProjectComments;
-using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
 
 // This should be kept in sync with the CommentThread TypeScript type in
 // extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts
-public class CommentThreadConverter : JsonConverter<CommentThread>
+public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThreadWrapper>
 {
     private const string ID = "id";
     private const string COMMENTS = "comments";
@@ -21,20 +20,23 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
     private const string IS_SPELLING_NOTE = "isSpellingNote";
     private const string IS_BT_NOTE = "isBTNote";
     private const string IS_CONSULTANT_NOTE = "isConsultantNote";
+    private const string IS_READ = "isRead";
     private const string BIBLICAL_TERM_ID = "biblicalTermId";
 
-    public override CommentThread Read(
+    public override PlatformCommentThreadWrapper Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
     )
     {
-        throw new NotSupportedException("Reading CommentThread from JSON is not yet supported.");
+        throw new NotSupportedException(
+            "Reading PlatformCommentThreadWrapper from JSON is not yet supported."
+        );
     }
 
     public override void Write(
         Utf8JsonWriter writer,
-        CommentThread value,
+        PlatformCommentThreadWrapper value,
         JsonSerializerOptions options
     )
     {
@@ -48,10 +50,12 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
         JsonSerializer.Serialize(writer, value.Comments, options);
 
         // Status and Type - convert NoteStatus to CommentStatus for frontend
-        string noteStatusValue = value.Status.ToString();
-        string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(noteStatusValue);
+        string threadStatus = JsonConverterUtils.ConvertNoteStatusToCommentStatus(value.Status);
         writer.WriteString(STATUS, threadStatus);
-        writer.WriteString(TYPE, value.Type.ToString());
+
+        string commentTypeValue = JsonConverterUtils.ConvertNoteTypeToCommentType(value.Type);
+        writer.WriteString(TYPE, commentTypeValue);
+
         writer.WriteBoolean(IS_SPELLING_NOTE, value.IsSpellingNote);
         writer.WriteBoolean(IS_BT_NOTE, value.IsBTNote);
         writer.WriteBoolean(IS_CONSULTANT_NOTE, value.IsConsultantNote);
@@ -75,6 +79,7 @@ public class CommentThreadConverter : JsonConverter<CommentThread>
         // Biblical term ID (optional)
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
 
+        writer.WriteBoolean(IS_READ, value.IsRead);
         writer.WriteEndObject();
     }
 }

@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { MarkdownRenderer } from 'platform-bible-react';
 import { RegistrationForm } from './components/registration-form.component';
 import { PARATEXT_REGISTRY_LINK } from './utils';
@@ -29,9 +29,9 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
 
   const [isInitialRegistration, setIsInitialRegistration] = useState(false);
 
-  const handleFormTypeChange = (newIsInitialRegistration: boolean) => {
+  const handleFormTypeChange = useCallback((newIsInitialRegistration: boolean) => {
     setIsInitialRegistration(newIsInitialRegistration);
-  };
+  }, []);
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-4 tw-h-screen tw-p-4">

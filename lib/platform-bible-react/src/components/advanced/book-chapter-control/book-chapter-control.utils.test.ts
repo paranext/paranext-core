@@ -27,9 +27,9 @@ describe('book-chapter-control.utils', () => {
       expect(chapters).toBe(1);
     });
 
-    test('Returns -1 for Deuterocanonical book (not in scrBookData)', () => {
-      const chapters = fetchEndChapter('TOB');
-      expect(chapters).toBe(-1);
+    test('Returns 0 for Deuterocanonical book with unknown chapters', () => {
+      const chapters = fetchEndChapter('3ES');
+      expect(chapters).toBe(0);
     });
 
     test('Returns -1 for invalid book ID', () => {
@@ -189,10 +189,10 @@ describe('book-chapter-control.utils', () => {
       });
 
       test('Handles DC book with invalid chapter data', () => {
-        const dcBooks = ['TOB', 'JDT', 'ESG'];
-        const result = calculateTopMatch('TOB 999', dcBooks);
+        const dcBooks = ['3ES', 'JDT', 'ESG'];
+        const result = calculateTopMatch('3ES 999', dcBooks);
         expect(result).toEqual({
-          book: 'TOB',
+          book: '3ES',
           chapterNum: 1, // Falls back to 1 when fetchEndChapter returns -1
           verseNum: undefined,
         });

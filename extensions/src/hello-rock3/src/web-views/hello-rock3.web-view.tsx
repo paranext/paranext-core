@@ -178,8 +178,9 @@ globalThis.webViewComponent = function HelloRock3({
   const excludePdpFactoryIds = useMemo(() => {
     if (isPlatformError(excludePdpFactoryIdsPossiblyError)) {
       logger.warn(
-        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-        excludePdpFactoryIdsPossiblyError,
+        `Failed to load setting 'platformGetResources.excludePdpFactoryIdsInHome': ${getErrorMessage(
+          excludePdpFactoryIdsPossiblyError,
+        )}`,
       );
       return defaultExcludePdpFactoryIds;
     }
@@ -260,6 +261,9 @@ globalThis.webViewComponent = function HelloRock3({
 
   const name = useMemo(() => {
     if (isPlatformError(namePossiblyError)) {
+      logger.warn(
+        `Failed to load setting 'helloRock3.personName': ${getErrorMessage(namePossiblyError)}`,
+      );
       return '';
     }
     return namePossiblyError;
@@ -308,6 +312,9 @@ globalThis.webViewComponent = function HelloRock3({
 
   const currentProjectVerse = useMemo(() => {
     if (isPlatformError(currentProjectVersePossiblyError)) {
+      logger.warn(
+        `Failed to load 'platformScripture.USFM_Verse': ${getErrorMessage(currentProjectVersePossiblyError)}`,
+      );
       return getErrorMessage(currentProjectVersePossiblyError);
     }
     return currentProjectVersePossiblyError;
@@ -343,8 +350,9 @@ globalThis.webViewComponent = function HelloRock3({
   const webViewMenu = useMemo(() => {
     if (isPlatformError(webViewMenuPossiblyError)) {
       logger.warn(
-        `Failed to load web view menu for ${HELLO_ROCK_3_REACT_WEBVIEW_TYPE}`,
-        webViewMenuPossiblyError,
+        `Failed to load web view menu for ${HELLO_ROCK_3_REACT_WEBVIEW_TYPE}: ${getErrorMessage(
+          webViewMenuPossiblyError,
+        )}`,
       );
       return defaultWebViewMenu;
     }

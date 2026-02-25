@@ -9,10 +9,10 @@ env:
 
 on:
   push:
-    branches: ['main', 'release-prep', 'hotfix-*']
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
   pull_request:
     # The branches below should be a subset of the branches above
-    branches: ['main', 'release-prep', 'hotfix-*']
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
   workflow_dispatch:
     inputs:
       debug_enabled:
@@ -117,6 +117,23 @@ jobs:
         uses: zoexx/github-action-json-file-properties@1.0.6
         with:
           file_path: 'package.json'
+
+      - name: Checkout scripture-editors
+        uses: actions/checkout@v4
+        with:
+          repository: eten-tech-foundation/scripture-editors
+          ref: platform-yalc
+          path: dev-packages/scripture-editors
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install scripture-editors dependencies
+        env:
+          VOLTA_FEATURE_PNPM: '1'
+        run: |
+          cd dev-packages/scripture-editors
+          pnpm install
 
       - name: Install Node.js and NPM
         uses: actions/setup-node@v4

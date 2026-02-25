@@ -22,198 +22,13 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
+import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
-type Unsubscriber = () => boolean;
-type UnsubscriberAsync = () => Promise<boolean>;
-type PlatformEventHandler<T> = (event: T) => void;
-type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
-type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
-type ScriptureNode = SerializedVerseRef & {
-	jsonPath: string;
-};
-type ScriptureTextAnchor = ScriptureNode & {
-	offset: number;
-};
-type ScriptureSelection = {
-	start: ScriptureNode | ScriptureTextAnchor;
-	end?: ScriptureNode | ScriptureTextAnchor;
-};
-type ScrollGroupId = number;
-type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
-	[K in keyof T]: ReplaceType<T[K], A, B>;
-} : T;
-type LocalizeKey = `%${string}%`;
-type ReferencedItem = `${string}.${string}`;
-type OrderedItem = {
-	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
-	order: number;
-};
-type OrderedExtensibleContainer = OrderedItem & {
-	/** Determines whether other items can be added to this after it has been defined */
-	isExtensible?: boolean;
-};
-type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
-	/** ID of column in which this group resides */
-	column: ReferencedItem;
-};
-type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
-	/** ID of menu item hosting the submenu in which this group resides */
-	menuItem: ReferencedItem;
-};
-type MenuColumnWithHeader = OrderedExtensibleContainer & {
-	/** Key that represents the text of the header text of the column */
-	label: LocalizeKey;
-};
-type MenuItemBase = OrderedItem & {
-	/** Menu group to which this menu item belongs */
-	group: ReferencedItem;
-	/** Key that represents the text of this menu item to display */
-	label: LocalizeKey;
-	/** Key that represents words the platform should reference when users are searching for menu items */
-	searchTerms?: LocalizeKey;
-	/** Key that represents the text to display if a mouse pointer hovers over the menu item */
-	tooltip?: LocalizeKey;
-	/** Additional information provided by developers to help people who perform localization */
-	localizeNotes: string;
-};
-type MenuItemContainingSubmenu = MenuItemBase & {
-	/** ID for this menu item that holds a submenu */
-	id: ReferencedItem;
-};
-type MenuItemContainingCommand = MenuItemBase & {
-	/** Name of the PAPI command to run when this menu item is selected. */
-	command: ReferencedItem;
-	/**
-	 * Uri path to the icon to display after the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
-	 */
-	iconPathAfter?: string;
-	/**
-	 * Uri path to the icon to display before the menu text. Ex:
-	 * `papi-extension://helloWorld/assets/icon.png`
-	 */
-	iconPathBefore?: string;
-};
-type GroupsInMultiColumnMenu = {
-	/** Named menu group */
-	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
-};
-type ColumnsWithHeaders = {
-	/** Named column of a menu */
-	[property: ReferencedItem]: MenuColumnWithHeader;
-	/** Defines whether columns can be added to this multi-column menu */
-	isExtensible?: boolean;
-};
-type MultiColumnMenu = {
-	/** Columns that belong in this menu */
-	columns: ColumnsWithHeaders;
-	/** Groups that belong in this menu */
-	groups: GroupsInMultiColumnMenu;
-	/** List of menu items that belong in this menu */
-	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
-};
-type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
-type LocalizedStringValue = string;
-interface LanguageStrings {
-	[k: LocalizeKey]: LocalizedStringValue;
-}
-type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
-type CommentType = "Unspecified" | "Normal" | "Conflict";
-type LegacyComment = {
-	/** Present in a note when it has been assigned to a particular user */
-	assignedUser?: string;
-	/** Present when there is a Biblical Term Id associated with the note */
-	biblicalTermId?: string;
-	/**
-	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-	 * message when displaying the note.
-	 */
-	conflictType?: string;
-	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
-	contents: string;
-	/**
-	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
-	 * after the selection.
-	 */
-	contextAfter?: string;
-	/**
-	 * If SelectedText is not empty, some optional context of the selected text occurs immediately
-	 * before the selection.
-	 */
-	contextBefore?: string;
-	/** Date the comment was created (format like 2008-04-10T06:30:00.0000000-07:00) */
-	date: string;
-	/** True if the comment has been deleted */
-	deleted: boolean;
-	/** Additional information for the note header, added for Biblical Term notes. */
-	extraHeadingInfo?: string;
-	/** Present in a comment to hide the note when showing notes in teh Scripture text windows. */
-	hideInTextWindow: boolean;
-	/** Unique id of the comment, unchanged by subsequent editing */
-	id: string;
-	/** Language of note */
-	language: string;
-	/** Present in a note when it has been assigned to reply-to a particular user */
-	replyToUser?: string;
-	/** Text which was selected in comment, or "" for none */
-	selectedText?: string;
-	/** Present in a note when it has been marked to be shared in teh Global Consultant Notes */
-	shared?: string;
-	/** Approximate position where the comment begins. Zero for attached to a verse. */
-	startPosition: number;
-	/** Can be "todo", "done", or "deleted." Empty string falls back to previous status in thread. */
-	status?: CommentStatus;
-	/** Tags added in this note, joined with (',') */
-	tagAdded?: string;
-	/** Tags removed in this note, joined with (',') */
-	tagRemoved?: string;
-	/** Guid of the thread of comments */
-	thread: string;
-	/**
-	 * Type of note. Normal notes have no type (""), but conflicts that are stored as notes have type
-	 * "conflict."
-	 */
-	type?: string;
-	/** Name of the user who created this comment */
-	user: string;
-	/** Original USFM content of verse */
-	verse?: string;
-	/** Verse reference in which comment appears */
-	verseRef: string;
-};
-type LegacyCommentThread = {
-	/** Thread identifier (from first comment) */
-	id: string;
-	/** All comments in this thread */
-	comments: LegacyComment[];
-	/** Thread status (aggregated from most recent non-Unspecified comment) */
-	status: CommentStatus;
-	/** Thread type (from first comment) */
-	type: CommentType;
-	/** User to whom the thread is assigned */
-	assignedUser: string;
-	/** User to reply to */
-	replyToUser: string;
-	/** Last modified date (ISO 8601 string) */
-	modifiedDate: string;
-	/** Scripture reference for this thread */
-	verseRef: string;
-	/** Name of the context scripture text */
-	contextScrTextName?: string;
-	/** Whether this is a spelling note */
-	isSpellingNote: boolean;
-	/** Whether this is a back translation note */
-	isBTNote: boolean;
-	/** Whether this is a consultant note */
-	isConsultantNote: boolean;
-	/** Biblical term ID if this is a biblical term note */
-	biblicalTermId?: string;
-};
 /**
  * Object containing all keys used for localization in the BookChapterControl component. If you're
  * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -350,14 +165,58 @@ export interface RecentSearchesProps<T> {
 	groupHeading?: string;
 	/** Optional ID for the popover content for accessibility */
 	id?: string;
+	/** Class name for styling the `CommandItem` for each recent search result */
+	classNameForItems?: string;
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
+/**
+ * Object containing all keys used for localization in the CommentEditor component. If you're using
+ * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
+ * obtain the localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const COMMENT_EDITOR_STRING_KEYS: readonly [
+	"%commentEditor_placeholder%",
+	"%commentEditor_saveButton_tooltip%",
+	"%commentEditor_cancelButton_tooltip%",
+	"%commentEditor_assignTo_label%",
+	"%commentEditor_unassigned%",
+	"%commentEditor_team%"
+];
+/** Localized strings needed for the comment editor component */
+export type CommentEditorLocalizedStrings = {
+	[localizedKey in (typeof COMMENT_EDITOR_STRING_KEYS)[number]]?: string;
+};
+/** Interface containing the types of the properties that are passed to the `CommentEditor` */
+export interface CommentEditorProps {
+	/** List of users that can be assigned to the new comment thread */
+	assignableUsers: string[];
+	/**
+	 * External function to handle saving the new comment
+	 *
+	 * @param contents HTML content of the comment
+	 * @param assignedUser Optional user to assign the comment to
+	 */
+	onSave: (contents: string, assignedUser?: string) => void;
+	/**
+	 * External function to handle closing the comment editor. Gets called when the editor is closed
+	 * without saving changes
+	 */
+	onClose: () => void;
+	/** Localized strings to be passed to the comment editor component */
+	localizedStrings: CommentEditorLocalizedStrings;
+}
+/**
+ * Component to create a new project comment from within the scripture editor
+ *
+ * @param CommentEditorProps - The properties for the comment editor component
+ */
+export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -379,12 +238,26 @@ export declare const COMMENT_LIST_STRING_KEYS: LocalizeKey[];
 export interface CommentListProps {
 	/** Additional class name for the component */
 	className?: string;
+	/** Class name to apply to the display of the verse text for the first comment in the thread */
+	classNameForVerseText?: string;
 	/** Comment threads to render */
 	threads: LegacyCommentThread[];
 	/** Name of the current user, retrieved from the current user's Paratext Registry user information */
 	currentUser: string;
 	/** Localized strings for the component */
 	localizedStrings: LanguageStrings;
+	/**
+	 * Externally controlled selected thread ID. When provided, this will be used as the selected
+	 * thread instead of internal state. The parent component is responsible for updating this value
+	 * when the selection changes.
+	 */
+	selectedThreadId?: string;
+	/**
+	 * Callback when the selected thread changes. Called when a thread is selected via click or
+	 * keyboard navigation. Parent components can use this to sync their state with the internal
+	 * selection.
+	 */
+	onSelectedThreadChange?: (threadId: string | undefined) => void;
 	/**
 	 * Handler for adding a comment to a thread. This unified handler supports:
 	 *
@@ -401,6 +274,8 @@ export interface CommentListProps {
 	handleUpdateComment: (commentId: string, contents: string) => Promise<boolean>;
 	/** Handler for deleting a comment */
 	handleDeleteComment: (commentId: string) => Promise<boolean>;
+	/** Handler for updating a thread's read status */
+	handleReadStatusChange: (threadId: string, markRead: boolean) => Promise<boolean>;
 	/**
 	 * Users that can be assigned to threads. Includes special values: "Team" for team assignment, ""
 	 * (empty string) for unassigned.
@@ -426,13 +301,19 @@ export interface CommentListProps {
 	 * that resolves to true if the user can edit or delete the comment, false otherwise.
 	 */
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
+	/**
+	 * Callback when the user clicks a verse reference in a comment thread. The related project editor
+	 * web view can navigate and position the editor cursor at the start of the comment inside the
+	 * verse.
+	 */
+	onVerseRefClick?: (thread: LegacyCommentThread) => void;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -826,6 +707,8 @@ export type FootnoteEditorLocalizedStrings = {
 export type FootnoteCallerType = "generated" | "hidden" | "custom";
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
+	/** Class name for styling the embedded `Editor` component in this editor popover */
+	classNameForEditor?: string;
 	/** Delta ops for the current note being edited that are applied to the note editorial */
 	noteOps: DeltaOpInsertNoteEmbed[] | undefined;
 	/** External function to handle saving changes to the footnote */
@@ -849,7 +732,7 @@ export interface FootnoteEditorProps {
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
@@ -911,7 +794,12 @@ export declare const getBookIdFromUSFM: (text: string) => string;
  * @returns The status for the specified item
  */
 export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
-/** Represents an item in the inventory with associated text and verse reference. */
+/**
+ * Represents an item in the inventory with associated text and verse reference.
+ *
+ * @deprecated 12 January 2026. Use InventorySummaryItem instead for better performance and
+ *   functionality.
+ */
 export type InventoryItem = {
 	/**
 	 * The label by which the item is shown in the inventory (e.g. the word that is repeated in case
@@ -930,6 +818,22 @@ export type InventoryItem = {
 	 * `verse` string
 	 */
 	offset: number;
+};
+/**
+ * Represents a summary item in the inventory with aggregated count and optional detailed
+ * occurrences. This type is used for displaying inventory data in a summarized format, where each
+ * item shows the total count and can optionally include detailed occurrence information that gets
+ * loaded dynamically when the user selects the item.
+ */
+export type InventorySummaryItem = {
+	/** The item key (e.g., character, word, etc.) */
+	key: string | string[];
+	/** Total count of occurrences */
+	count: number;
+	/** Status of the item */
+	status?: Status;
+	/** Detailed occurrences - optional, loaded on demand */
+	occurrences?: InventoryItemOccurrence[];
 };
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -959,7 +863,7 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The inventory items that the inventory should be populated with */
-	inventoryItems: InventoryItem[] | undefined;
+	inventoryItems: InventorySummaryItem[] | undefined;
 	/** Callback function that is executed when the scripture reference is changed */
 	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
@@ -993,9 +897,13 @@ type InventoryProps = {
 	id?: string;
 	/** Whether the inventory items are still loading */
 	areInventoryItemsLoading?: boolean;
+	/** Class name to apply to the provided occurrence verse text in the `OccurrencesTable` component */
+	classNameForVerseText?: string;
+	/** Optional callback that is called when an item is selected. Receives the selected item key. */
+	onItemSelected?: (itemKey: string) => void;
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, id, areInventoryItemsLoading, classNameForVerseText, onItemSelected, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -1038,6 +946,12 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 export type MarkerMenuLocalizedStrings = {
 	[localizedKey in (typeof MARKER_MENU_STRING_KEYS)[number]]?: string;
 };
+interface MarkerIconProps {
+	/** CSS class name to apply to the icon */
+	className?: string;
+	/** Size in px that the icon should be */
+	size?: string | number;
+}
 /** Type for the markers that contain all necessary information to be displayed in the list */
 export interface MarkerMenuItem {
 	/** If the item is a marker, then this is the marker code */
@@ -1047,7 +961,7 @@ export interface MarkerMenuItem {
 	/** An optional subtitle for the marker */
 	subtitle?: string;
 	/** Optional name of icon to use instead of the marker */
-	icon?: React$1.ReactNode;
+	icon?: React$1.FC<MarkerIconProps>;
 	/** Whether the command/marker is deprecated */
 	isDeprecated?: boolean;
 	/** Whether the command/marker is disallowed for this project */

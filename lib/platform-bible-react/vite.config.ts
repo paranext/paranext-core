@@ -3,7 +3,16 @@ import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import react from '@vitejs/plugin-react-swc';
 import styleInject from '@senojs/rollup-plugin-style-inject';
-import { peerDependencies, dependencies } from './package.json';
+import packageInfo from './package.json';
+import rootPackageInfo from '../../package.json';
+
+// peerDependencies might not be in package.json, but that's fine. Just account for that
+const packageInfoFull: typeof packageInfo & {
+  peerDependencies?: Record<string, unknown>;
+} = packageInfo;
+const rootPackageInfoFull: typeof rootPackageInfo & {
+  peerDependencies?: Record<string, unknown>;
+} = rootPackageInfo;
 
 const config = defineConfig({
   base: './',
@@ -25,10 +34,12 @@ const config = defineConfig({
     },
     rollupOptions: {
       external: [
-        ...Object.keys(peerDependencies ?? {}),
-        ...Object.keys(dependencies ?? {}),
+        ...Object.keys(packageInfoFull.peerDependencies ?? {}),
+        ...Object.keys(packageInfoFull.dependencies ?? {}),
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
+        ...Object.keys(rootPackageInfoFull.peerDependencies ?? {}),
+        ...Object.keys(rootPackageInfoFull.dependencies ?? {}),
       ],
       output: {
         globals: {
