@@ -8,7 +8,7 @@ const build = JSON5.parse(fs.readFileSync('./electron-builder.json5', 'utf8'));
 exports.default = async function notarizeMacos(context) {
   const { electronPlatformName, appOutDir } = context;
 
-  if (electronPlatformName !== 'darwin' && process.env.CI !== 'true') {
+  if (electronPlatformName !== 'darwin' || process.env.CI !== 'true') {
     console.warn('Skipping notarizing step. Packaging is only for macOS in CI');
     return;
   }
