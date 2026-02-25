@@ -238,3 +238,18 @@ export type CloseWebViewEvent = {
 };
 
 export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+
+/**
+ * Command names that are hosted by the renderer process and need to be registered with
+ * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+ * the generic names that forward to the focused window's scoped handler.
+ */
+export const RENDERER_HOSTED_COMMAND_NAMES = [
+  'platform.openSettings',
+  'platform.openProjectSettings',
+  'platform.openUserSettings',
+  'platform.usersnapSubmitIdea',
+  'platform.usersnapReportIssue',
+  'platform.isUsersnapFormCurrentlyOpen',
+  'platform.closeOpenUsersnapForm',
+] as const;
