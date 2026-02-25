@@ -1,4 +1,5 @@
 import { deserialize, serialize } from 'platform-bible-utils';
+import localWindowStorage from './localStorage.service';
 
 const WEBVIEW_STATE_KEY = 'web-view-state';
 const stateMap = new Map<string, Record<string, unknown>>();
@@ -8,7 +9,7 @@ function loadIfNeeded(): void {
   // If we have any data or tried to look something up, we've already loaded
   if (stateMap.size > 0 || idsLookedUp.size > 0) return;
 
-  const serializedState = localStorage.getItem(WEBVIEW_STATE_KEY);
+  const serializedState = localWindowStorage.getItem(WEBVIEW_STATE_KEY);
   if (!serializedState) return;
 
   const entries: [[string, Record<string, unknown>]] = deserialize(serializedState);
@@ -22,7 +23,7 @@ function save(): void {
   if (idsLookedUp.size <= 0) return;
 
   const stateToSave = serialize(Array.from(stateMap.entries()));
-  localStorage.setItem(WEBVIEW_STATE_KEY, stateToSave);
+  localWindowStorage.setItem(WEBVIEW_STATE_KEY, stateToSave);
 }
 
 function getRecord(id: string): Record<string, unknown> {

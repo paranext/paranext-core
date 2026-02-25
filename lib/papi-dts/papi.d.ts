@@ -790,6 +790,13 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
+    /**
+     * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
+     * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
+     * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
+     * `platform.getFocusedWindowId`). `null` until the renderer reads the URL parameter.
+     */
+    var windowId: string | null;
   }
   /** Type of Paranext process */
   export enum ProcessType {
@@ -3176,6 +3183,20 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+  /**
+   * Command names that are hosted by the renderer process and need to be registered with
+   * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+   * the generic names that forward to the focused window's scoped handler.
+   */
+  export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
+    'platform.openSettings',
+    'platform.openProjectSettings',
+    'platform.openUserSettings',
+    'platform.usersnapSubmitIdea',
+    'platform.usersnapReportIssue',
+    'platform.isUsersnapFormCurrentlyOpen',
+    'platform.closeOpenUsersnapForm',
+  ];
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
@@ -3473,6 +3494,10 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /** Create a new application window */
+    'platform.createWindow': () => Promise<void>;
+    /** Get the ID of the currently focused window, or undefined if no window is focused */
+    'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */
@@ -4680,7 +4705,7 @@ declare module 'shared/models/project-lookup.service-model' {
    * Transform the well-known pdp factory id into an id for its network object to use
    *
    * @param pdpFactoryId Id extensions use to identify this pdp factory
-   * @returns Id for then network object for this pdp factory
+   * @returns Id for the network object for this pdp factory
    */
   export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
   /**
@@ -6667,6 +6692,8 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** Query string for the electron window id */
+  export const WINDOW_ID = 'windowId';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */

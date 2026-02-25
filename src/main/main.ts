@@ -20,12 +20,22 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
+import { startCommandRoutingService } from '@main/services/command-routing.service';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
+import { startWindowAggregatorService } from '@main/services/window-aggregator.service-host';
+import {
+  addWindow,
+  getWindows,
+  removeWindow,
+  setFocusedWindowId,
+  getTargetWindowId,
+} from '@main/services/window-state.service';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
@@ -34,6 +44,7 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -55,8 +66,9 @@ import {
   UnsubscriberAsyncList,
   wait,
 } from 'platform-bible-utils';
-import { windowService } from '@shared/services/window.service';
+import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
 import { themeService } from '@shared/services/theme.service';
+import { IWindowService, windowServiceProviderName } from '@shared/services/window.service-model';
 
 // #region Helper functions
 
@@ -87,11 +99,7 @@ const setZoomFactor = async (factor: number): Promise<void> => {
   }
 };
 
-/**
- * Reset the zoom factor of the app's main window to 1.0 (100%)
- *
- * @param mainWindow The main BrowserWindow instance
- */
+/** Reset the zoom factor of the app to 1.0 (100%) */
 const resetZoomFactor = async () => {
   try {
     return await settingsService.reset('platform.zoomFactor');
@@ -151,6 +159,48 @@ const TITLE_BAR_BUTTON_BACKGROUND_COLOR = 'hsla(0, 0%, 100%, 0)'; // transparent
  */
 let willRestart = false;
 
+/**
+ * Cached window service data providers keyed by window ID. Avoids repeated network lookups on every
+ * input event while the data provider is already registered.
+ */
+const windowServiceCache = new Map<number, IWindowService>();
+
+/** In-flight lookups so concurrent input events share one network request instead of each retrying */
+const windowServicePending = new Map<number, Promise<IWindowService | undefined>>();
+
+/**
+ * Get the window service data provider for a specific window by its ID. Each renderer registers its
+ * own scoped data provider (e.g. "platform.windowServiceDataProvider-1"). Results are cached to
+ * avoid repeated network lookups on every input/mouse event. Concurrent lookups for the same window
+ * share a single in-flight promise.
+ */
+async function getWindowServiceForWindow(winId: number): Promise<IWindowService | undefined> {
+  const cached = windowServiceCache.get(winId);
+  if (cached) return cached;
+
+  // If a lookup is already in flight for this window, reuse it
+  const pending = windowServicePending.get(winId);
+  if (pending) return pending;
+
+  const promise = (async () => {
+    const svc = await getDataProviderByType<IWindowService>(
+      `${windowServiceProviderName}-${winId}`,
+    );
+    if (svc) {
+      windowServiceCache.set(winId, svc);
+      svc.onDidDispose(() => windowServiceCache.delete(winId));
+    }
+    return svc;
+  })();
+
+  windowServicePending.set(winId, promise);
+  try {
+    return await promise;
+  } finally {
+    windowServicePending.delete(winId);
+  }
+}
+
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
   logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
@@ -196,6 +246,15 @@ async function main() {
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
+  // The window aggregator service relies on the network object status service
+  await startWindowAggregatorService();
+
+  // Register multi-window routing proxies before any windows are created. These claim generic names
+  // (e.g. "WebViewService", "platform.openSettings") so renderers register under scoped names
+  // (e.g. "WebViewService-1", "platform.openSettings-1") and the proxies route to the focused window.
+  await startWebViewRoutingService();
+  await startCommandRoutingService();
+
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
 
@@ -218,9 +277,7 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Keep a global reference of the window object. If you don't, the window will
-  // be closed automatically when the JavaScript object is garbage collected.
-  let mainWindow: BrowserWindow | undefined;
+  const windows = getWindows();
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
 
@@ -229,9 +286,10 @@ async function main() {
   const args = process.argv.slice(1);
 
   function handleUri(uri: string) {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
+    const focusWindow = BrowserWindow.getFocusedWindow() ?? windows[0];
+    if (focusWindow) {
+      if (focusWindow.isMinimized()) focusWindow.restore();
+      focusWindow.focus();
     }
     logger.debug(`Main is handling uri ${uri}`);
     // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
@@ -321,22 +379,18 @@ async function main() {
 
   /** Sets up the electron BrowserWindow renderer process */
   const createWindow = async () => {
-    if (isDebug) {
-      await installExtensions();
-    }
+    // Load the previous state with fallback to defaults.
+    // Only use windowStateKeeper for the first window; subsequent windows let the OS stagger them.
+    const isFirstWindow = windows.length === 0;
+    const mainWindowState = isFirstWindow
+      ? windowStateKeeper({ defaultWidth: 1024, defaultHeight: 728 })
+      : undefined;
 
-    // Load the previous state with fallback to defaults
-    const mainWindowState = windowStateKeeper({
-      defaultWidth: 1024,
-      defaultHeight: 728,
-    });
-
-    mainWindow = new BrowserWindow({
+    const newWindow = new BrowserWindow({
       show: true,
-      x: mainWindowState.x,
-      y: mainWindowState.y,
-      width: mainWindowState.width,
-      height: mainWindowState.height,
+      ...(mainWindowState ? { x: mainWindowState.x, y: mainWindowState.y } : {}),
+      width: mainWindowState?.width ?? 1024,
+      height: mainWindowState?.height ?? 728,
       minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       icon: getAssetPath('icon.png'),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
@@ -358,21 +412,32 @@ async function main() {
       },
     });
 
+    // Capture the window ID before it can be destroyed (used in the `closed` handler)
+    const windowId = newWindow.id;
+
+    // Track this window immediately
+    addWindow(newWindow);
+
+    // Track which window is focused for multi-window command routing
+    newWindow.on('focus', () => {
+      setFocusedWindowId(windowId);
+    });
+
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
 
     // Register listeners on the window, so the state is updated automatically
     // (the listeners will be removed when the window is closed)
     // and restore the maximized or full screen state
-    mainWindowState.manage(mainWindow);
+    if (mainWindowState) mainWindowState.manage(newWindow);
 
-    // Add several listeners to the main window to log events
-    mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
-    mainWindow.webContents.on('responsive', () => logger.warn('mainWindow responsive'));
-    mainWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) =>
-      logger.warn(`mainWindow render process gone: ${JSON.stringify(details)}`),
+    // Add several listeners to the window to log events
+    newWindow.webContents.on('unresponsive', () => logger.warn(`Window ${windowId} unresponsive`));
+    newWindow.webContents.on('responsive', () => logger.warn(`Window ${windowId} responsive`));
+    newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) =>
+      logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`),
     );
-    mainWindow.webContents.on(
+    newWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
       (
@@ -383,18 +448,27 @@ async function main() {
         isMainFrame: boolean,
       ) => {
         logger.warn(
-          `mainWindow failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
+          `Window ${windowId} failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
         );
       },
     );
 
-    mainWindow.webContents.on('before-input-event', async (_, event) => {
+    /** Helper to call setFocus on this specific window's service data provider */
+    const setWindowFocus = async (
+      specifier: import('@shared/services/window.service-model').SetFocusSpecifier,
+    ) => {
+      const svc = await getWindowServiceForWindow(windowId);
+      if (svc) await svc.setFocus(specifier);
+      else logger.debug(`Window service for window ${windowId} not available yet`);
+    };
+
+    newWindow.webContents.on('before-input-event', async (_, event) => {
       // Key up seems not to change focus in Windows, so we will only change on keyDown
       if (event.type !== 'keyDown') return;
 
       // Announce a possible focus change
       try {
-        await windowService.setFocus('detect');
+        await setWindowFocus('detect');
       } catch (e) {
         logger.warn(
           `Failed to instruct window service to detect focus on ${event.type} ${event.key}: ${getErrorMessage(e)}`,
@@ -402,13 +476,13 @@ async function main() {
       }
     });
 
-    mainWindow.webContents.on('before-mouse-event', async (_, event) => {
+    newWindow.webContents.on('before-mouse-event', async (_, event) => {
       // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
       if (event.type !== 'mouseDown') return;
 
       // Announce a possible focus change
       try {
-        await windowService.setFocus('detect');
+        await setWindowFocus('detect');
       } catch (e) {
         logger.warn(
           `Failed to instruct window service to detect focus on ${event.type} ${event.button}: ${getErrorMessage(e)}`,
@@ -422,13 +496,12 @@ async function main() {
      */
     const windowCloseUnsubscribers = new UnsubscriberAsyncList('Window close unsubscribers');
 
-    mainWindow.on('ready-to-show', async () => {
-      logger.info('mainWindow is ready to show');
-      if (!mainWindow) throw new Error('"mainWindow" is not defined');
+    newWindow.on('ready-to-show', async () => {
+      logger.info(`Window ${windowId} is ready to show`);
       if (process.env.START_MINIMIZED) {
-        mainWindow.minimize();
+        newWindow.minimize();
       } else {
-        mainWindow.show();
+        newWindow.show();
       }
 
       // Adjust the Window button colors based on the current theme
@@ -455,7 +528,7 @@ async function main() {
               // Need to put commas between the numbers for it to work here
               const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
 
-              mainWindow?.setTitleBarOverlay({
+              newWindow.setTitleBarOverlay({
                 color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
                 symbolColor: `hsl(${newThemePrimaryString})`,
                 height: TITLE_BAR_BUTTON_HEIGHT,
@@ -472,41 +545,36 @@ async function main() {
       }
     });
 
-    if (process.platform === 'darwin') {
-      (async () => {
-        try {
-          windowCloseUnsubscribers.add(await subscribeCurrentMacosMenubar());
-        } catch (error) {
-          logger.info(`Failed to build the macOS menubar ${error}`);
-        }
-      })();
-    }
-
-    mainWindow.on('closed', async () => {
-      mainWindow = undefined;
+    newWindow.on('closed', async () => {
+      removeWindow(newWindow);
+      windowServiceCache.delete(windowId);
+      // If the focused window was closed, fall back to the first remaining window
+      if (getTargetWindowId() === windowId) {
+        setFocusedWindowId(windows[0]?.id);
+      }
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
       } catch (e) {
-        logger.warn(`Window close unsubscribers failed: ${getErrorMessage(e)}`);
+        logger.warn(`Window ${windowId} close unsubscribers failed: ${getErrorMessage(e)}`);
       }
     });
 
     // This sets the menu on Windows and Linux
     // 'null' to interact with external API
     // eslint-disable-next-line no-null/no-null
-    mainWindow.setMenu(null);
+    newWindow.setMenu(null);
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with
     // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
-    mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
+    newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
       (async () => {
         try {
           openExternal(handlerDetails.url);
         } catch (e) {
           logger.warn(
-            `mainWindow could not open external url "${handlerDetails.url}" from windowOpenHandler. ${e}`,
+            `Window ${windowId} could not open external url "${handlerDetails.url}" from windowOpenHandler. ${e}`,
           );
         }
       })();
@@ -517,28 +585,29 @@ async function main() {
     // Built URL search parameters for use in `src/renderer/global-this.model.ts`
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+      [WINDOW_ID]: `${windowId}`,
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
-    mainWindow.loadURL(urlToLoad).catch((e) => {
-      logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
+    newWindow.loadURL(urlToLoad).catch((e) => {
+      logger.error(`Window ${windowId} could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
     // Register zoom keyboard shortcuts. MacOS already supports this natively
-    mainWindow.webContents.on('before-input-event', (event, input) => {
+    newWindow.webContents.on('before-input-event', (event, input) => {
       // Just act on keyDown and ignore keyUp. Could cause trouble if we need to preventDefault on keyUp
       if (input.type === 'keyUp') return;
 
       // F12: Open dev tools in both development and production
       if (input.key === 'F12') {
         event.preventDefault();
-        if (mainWindow?.webContents.isDevToolsOpened()) {
-          mainWindow.webContents.closeDevTools();
+        if (newWindow.webContents.isDevToolsOpened()) {
+          newWindow.webContents.closeDevTools();
         } else {
-          mainWindow?.webContents.openDevTools();
+          newWindow.webContents.openDevTools();
         }
         return;
       }
@@ -546,8 +615,8 @@ async function main() {
       // keyboard tab navigation - Ctrl+Tab and Ctrl+Shift+Tab
       if (input.control && input.key === 'Tab') {
         event.preventDefault();
-        if (input.shift) windowService.setFocus('previousTab');
-        else windowService.setFocus('nextTab');
+        if (input.shift) setWindowFocus('previousTab');
+        else setWindowFocus('nextTab');
         return;
       }
 
@@ -577,8 +646,8 @@ async function main() {
         // keyboard tab group navigation - Ctrl+PgUp and Ctrl+PgDown
         if (input.control && (input.key === 'PageUp' || input.key === 'PageDown')) {
           event.preventDefault();
-          if (input.key === 'PageUp') windowService.setFocus('previousTabGroup');
-          else windowService.setFocus('nextTabGroup');
+          if (input.key === 'PageUp') setWindowFocus('previousTabGroup');
+          else setWindowFocus('nextTabGroup');
           return;
         }
 
@@ -590,48 +659,49 @@ async function main() {
       // More keyboard tab navigation - Cmd+Shift+[]
       if (input.meta && input.shift && (input.key === '[' || input.key === ']')) {
         event.preventDefault();
-        if (input.key === '[') windowService.setFocus('previousTab');
-        else windowService.setFocus('nextTab');
+        if (input.key === '[') setWindowFocus('previousTab');
+        else setWindowFocus('nextTab');
         return;
       }
 
       // keyboard tab group navigation - Cmd+Option+Up and Cmd+Option+Down
       if (input.meta && input.alt && (input.key === 'ArrowUp' || input.key === 'ArrowDown')) {
         event.preventDefault();
-        if (input.key === 'ArrowUp') windowService.setFocus('previousTabGroup');
-        else windowService.setFocus('nextTabGroup');
+        if (input.key === 'ArrowUp') setWindowFocus('previousTabGroup');
+        else setWindowFocus('nextTabGroup');
       }
     });
 
     // Set initial zoom factor from settings
-    mainWindow.webContents.on('did-finish-load', async () => {
-      if (mainWindow && mainWindow.webContents) {
-        try {
-          const zoom = await getZoomFactor();
-          mainWindow.webContents.setZoomFactor(zoom);
-        } catch (e) {
-          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-        }
+    newWindow.webContents.on('did-finish-load', async () => {
+      try {
+        const zoom = await getZoomFactor();
+        newWindow.webContents.setZoomFactor(zoom);
+      } catch (e) {
+        logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
       }
     });
 
-    // Update zoomfactor when the setting changes
-    settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
-      const zoomFactor = () => {
-        if (isPlatformError(newZoomFactor)) {
-          logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
-          return DEFAULT_ZOOM_FACTOR;
-        }
-        return newZoomFactor;
-      };
-      if (mainWindow && mainWindow.webContents) {
-        try {
-          mainWindow.webContents.setZoomFactor(zoomFactor());
-        } catch (e) {
-          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
-        }
-      }
-    });
+    // Update zoom factor when the setting changes (per-window subscription with cleanup)
+    try {
+      windowCloseUnsubscribers.add(
+        await settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
+          const zoomFactor = isPlatformError(newZoomFactor)
+            ? (() => {
+                logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
+                return DEFAULT_ZOOM_FACTOR;
+              })()
+            : newZoomFactor;
+          try {
+            newWindow.webContents.setZoomFactor(zoomFactor);
+          } catch (e) {
+            logger.error(`Failed to update zoom factor: ${getErrorMessage(e)}`);
+          }
+        }),
+      );
+    } catch (e) {
+      logger.warn(`Failed to subscribe to zoom factor changes: ${getErrorMessage(e)}`);
+    }
 
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
@@ -676,19 +746,34 @@ async function main() {
   app
     .whenReady()
     // eslint-disable-next-line promise/always-return
-    .then(() => {
+    .then(async () => {
       // Set up ipc handlers
       ipcMain.handle(
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
       );
 
+      // Install Chromium devtools extensions once (not per-window)
+      if (isDebug) {
+        await installExtensions();
+      }
+
+      // Subscribe to macOS menubar once globally (not per-window)
+      if (process.platform === 'darwin') {
+        try {
+          const unsubscribeMacosMenubar = await subscribeCurrentMacosMenubar();
+          app.on('will-quit', () => unsubscribeMacosMenubar());
+        } catch (error) {
+          logger.info(`Failed to build the macOS menubar ${error}`);
+        }
+      }
+
       createWindow();
 
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (!mainWindow) createWindow();
+        if (windows.length === 0) createWindow();
       });
 
       return undefined;
@@ -745,6 +830,40 @@ async function main() {
         result: {
           name: 'return value',
           schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.createWindow',
+    async () => {
+      createWindow();
+    },
+    {
+      method: {
+        summary: 'Create a new application window',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getFocusedWindowId',
+    async () => {
+      return getTargetWindowId();
+    },
+    {
+      method: {
+        summary: 'Get the ID of the currently focused window',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'number' },
         },
       },
     },
