@@ -474,7 +474,7 @@ export function Home({
                             >
                               <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
                                 {project.editedStatus === 'edited' && (
-                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-m-[-10px]" />
+                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-ms-[-8px]" />
                                 )}
                                 {project.isEditable ? (
                                   <ScrollText className="tw-pr-0" size={18} />
