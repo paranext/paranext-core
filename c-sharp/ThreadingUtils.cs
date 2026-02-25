@@ -2,7 +2,7 @@ namespace Paranext.DataProvider;
 
 // Providing a bridge between asynchronous and synchronous code which these warnings don't like
 #pragma warning disable VSTHRD002, VSTHRD104
-
+// Test comment
 public static class ThreadingUtils
 {
     /// <summary>
