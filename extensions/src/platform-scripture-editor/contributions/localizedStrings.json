@@ -58,6 +58,7 @@
       "%versionHistoryCommit_beforeInsertFootnote%": "Before inserting footnote",
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_platformScriptureEditor_backgroundColor%": "Background Color",
+      "%webView_platformScriptureEditor_moveToNextWindow%": "Move Tab To Next Window",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
       "%webView_platformScriptureEditor_configureChecks%": "Configure Checks...",
       "%webView_platformScriptureEditor_copyrightInfo%": "Copyright Info",
