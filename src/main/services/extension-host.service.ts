@@ -196,7 +196,8 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
 
     const extensionHostEntryPath = app.isPackaged
       ? path.join(__dirname, '../extension-host/extension-host.js')
-      : path.join(__dirname, '../../src/extension-host/extension-host.ts');
+      : // process.cwd() in dev is the repo root
+        path.join(process.cwd(), 'src/extension-host/extension-host.ts');
 
     const extensionHostArgs = app.isPackaged
       ? [
