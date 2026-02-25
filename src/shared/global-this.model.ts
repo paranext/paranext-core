@@ -75,6 +75,8 @@ declare global {
    * as `isNoisyDevModeEnabled`.
    */
   var startupMarks: boolean;
+  /** Window id of the Electron browser window */
+  var windowId: string | null;
 }
 /* eslint-enable */
 

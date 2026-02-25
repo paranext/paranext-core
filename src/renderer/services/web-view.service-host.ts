@@ -102,6 +102,7 @@ import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
+import localWindowStorage from './localStorage.service';
 
 // These web view lifecycle emitters are created at module load as buffered emitters so they're
 // usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
@@ -870,7 +871,7 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
  * @returns The value of the key fetched from local storage, or the default value if not found.
  */
 function getStorageValue<T>(key: string, defaultValue: T): T {
-  const saved = localStorage.getItem(key);
+  const saved = localWindowStorage.getItem(key);
   const initial = saved ? deserialize(saved) : undefined;
   return initial || defaultValue;
 }
@@ -891,7 +892,7 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
-  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
+  localWindowStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
 }
 
 /**

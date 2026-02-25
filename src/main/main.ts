@@ -30,6 +30,7 @@ import { extensionAssetProtocolService } from '@main/services/extension-asset-pr
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { startWindowAggregatorService } from '@main/services/window-aggregator.service-host';
 import { performShutdownTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
@@ -47,6 +48,7 @@ import {
   MIN_ZOOM_FACTOR,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
+  WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -214,6 +216,9 @@ async function main() {
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
+  // The window aggregator service relies on the network object status service
+  await startWindowAggregatorService();
+
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
 
@@ -265,8 +270,9 @@ async function main() {
     }
   })();
 
-  // Keep a global reference of the window object. If you don't, the window will
-  // be closed automatically when the JavaScript object is garbage collected.
+  // Keep a global reference of the window objects. If you don't, the windows will
+  // be closed automatically when the JavaScript objects are garbage collected.
+  const windows: BrowserWindow[] = [];
   let mainWindow: BrowserWindow | undefined;
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
@@ -648,6 +654,7 @@ async function main() {
     // Built URL search parameters for use in `src/renderer/global-this.model.ts`
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+      [WINDOW_ID]: `${mainWindow.id}`,
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
@@ -826,6 +833,8 @@ async function main() {
       }
     });
 
+    windows.push(mainWindow);
+
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -899,7 +908,7 @@ async function main() {
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (!mainWindow) createWindow();
+        if (windows.length === 0) createWindow();
       });
 
       return undefined;
@@ -956,6 +965,23 @@ async function main() {
         result: {
           name: 'return value',
           schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.createWindow',
+    async () => {
+      createWindow();
+    },
+    {
+      method: {
+        summary: 'Create a new application window',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
         },
       },
     },
