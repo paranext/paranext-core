@@ -357,17 +357,7 @@ export function generateInlineMarkerMenuListItems(
   closeMarkersMenu: () => void,
   parentMarker?: string,
 ): MarkerMenuItem[] {
-  if (!parentMarker)
-    return Object.entries(usfmMarkers).map(([marker, details]) => {
-      return {
-        marker,
-        title: details.description,
-        action: () => {
-          editorRef.current?.insertMarker(marker);
-          closeMarkersMenu();
-        },
-      };
-    });
+  if (!parentMarker) return [];
 
   const markerDetails = usfmMarkers[parentMarker];
   if (!markerDetails || !markerDetails.children) return [];
