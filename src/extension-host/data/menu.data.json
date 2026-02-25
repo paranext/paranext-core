@@ -42,9 +42,9 @@
       },
       {
         "label": "%mainMenu_openNewWindow%",
-        "localizeNotes": "Application main menu > Window > Open New Window",
-        "group": "platform.windowGroup",
-        "order": 1,
+        "localizeNotes": "Application main menu > Platform > Open New Window",
+        "group": "platform.projectSettings",
+        "order": 0,
         "command": "platform.createWindow"
       },
       {

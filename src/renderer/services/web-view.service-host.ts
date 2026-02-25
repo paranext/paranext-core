@@ -53,6 +53,7 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
+  RENDERER_HOSTED_COMMAND_NAMES,
   UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
@@ -1805,11 +1806,16 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
   await initialize();
+  if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
+
+  // Register network object under a window-scoped name (e.g. "WebViewService-1") so multiple
+  // renderers can coexist. The main process registers a proxy under the generic name.
   await networkObjectService.set<WebViewServiceType>(
-    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+    `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     papiWebViewService,
   );
 
+  // Map command names to their handlers
   // This map should allow any functions because commands can be any function type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
@@ -1822,9 +1828,25 @@ export async function startWebViewService(): Promise<void> {
     'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
 
+  // Validate that commandHandlers keys match RENDERER_HOSTED_COMMAND_NAMES
+  const handlerKeys = Object.keys(commandHandlers);
+  const routedCommands: string[] = [...RENDERER_HOSTED_COMMAND_NAMES];
+  const missing = handlerKeys.filter((k) => !routedCommands.includes(k));
+  const extra = routedCommands.filter((k) => !handlerKeys.includes(k));
+  if (missing.length > 0)
+    logger.warn(
+      `Commands registered in renderer but not in RENDERER_HOSTED_COMMAND_NAMES: ${missing.join(', ')}`,
+    );
+  if (extra.length > 0)
+    logger.warn(
+      `Commands in RENDERER_HOSTED_COMMAND_NAMES but not registered in renderer: ${extra.join(', ')}`,
+    );
+
+  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
+  // renderers can coexist. The main process registers proxies under the generic names.
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
     // Re-assert type after passing through `forEach`.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    registerCommand(commandName as CommandNames, handler);
+    registerCommand(`${commandName}-${globalThis.windowId}` as CommandNames, handler);
   });
 }
