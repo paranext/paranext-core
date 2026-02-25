@@ -252,8 +252,11 @@ export async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          dataProvider = await dataProviderService.registerEngine(
-            windowServiceProviderName,
+          // Register under window-scoped name (e.g. "platform.windowServiceDataProvider-1")
+          // so multiple renderers can coexist. The main process or window aggregator handles
+          // routing to the correct window.
+          dataProvider = await dataProviderService.registerEngineByType(
+            `${windowServiceProviderName}-${globalThis.windowId}`,
             new WindowDataProviderEngine(),
           );
           resolve();

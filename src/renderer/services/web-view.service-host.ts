@@ -1805,11 +1805,15 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
   await initialize();
+
+  // Register network object under a window-scoped name (e.g. "WebViewService-1") so multiple
+  // renderers can coexist. The main process registers a proxy under the generic name.
   await networkObjectService.set<WebViewServiceType>(
-    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+    `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     papiWebViewService,
   );
 
+  // Map command names to their handlers
   // This map should allow any functions because commands can be any function type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
@@ -1822,9 +1826,11 @@ export async function startWebViewService(): Promise<void> {
     'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
 
+  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
+  // renderers can coexist. The main process registers proxies under the generic names.
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
     // Re-assert type after passing through `forEach`.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    registerCommand(commandName as CommandNames, handler);
+    registerCommand(`${commandName}-${globalThis.windowId}` as CommandNames, handler);
   });
 }
