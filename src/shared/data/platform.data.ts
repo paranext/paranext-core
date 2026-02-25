@@ -10,6 +10,9 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
+/** Query string for the electron window id */
+export const WINDOW_ID = 'windowId';
+
 /** ID of the default theme family for use in the application */
 export const DEFAULT_THEME_FAMILY = '';
 /** Type of the default theme for use in the application */

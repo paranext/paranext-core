@@ -77,6 +77,7 @@
   "%mainMenu_quitProductName%": "Quit {%product_name%}",
   "%mainMenu_settings%": "Settings",
   "%mainMenu_tab%": "Tab",
+  "%mainMenu_openNewWindow%": "Open New Window",
   "%mainMenu_text%": "Text",
   "%mainMenu_view%": "View",
   "%mainMenu_visitSupportBible%": "Visit Support.Bible",
