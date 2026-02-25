@@ -88,7 +88,8 @@ import {
   blockMarkerToBlockNames,
   deepEqualAcrossIframes,
   formatEditorTitle,
-  generateMarkerMenuListItems,
+  generateInlineMarkerMenuListItems,
+  generateParagraphMenuListItems,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
@@ -162,6 +163,8 @@ const NO_UPDATE_TITLE = '__do_not_update_title_not_for_use__';
 
 const defaultTextDirection = 'ltr';
 
+const defaultMarkersMenuTrigger = '\\';
+
 const defaultView: ViewOptions = getDefaultViewOptions();
 
 // Return the appropriate ViewOptions for the given webview `viewType`.
@@ -219,6 +222,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
   const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
   const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
+
+  // These control the placement of the inline markers menu by setting the location of the anchor
+  const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
+  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
+  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
+  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+
+  const markerMenuSearchRef = useRef<HTMLInputElement>(null);
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [canUndo, setCanUndo] = useState(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [canRedo, setCanRedo] = useState(false);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [blockMarker, setBlockMarker] = useState<string | undefined>();
 
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
@@ -445,7 +463,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const paragraphSwitcherMenuItems = useMemo(
-    () => generateMarkerMenuListItems(editorRef, localizedStrings),
+    () => generateParagraphMenuListItems(editorRef, localizedStrings),
     [localizedStrings],
   );
 
@@ -757,9 +775,44 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     viewOptions.markerMode,
   ]);
 
-  // Listen for Ctrl+F to open find dialog
+  const inlineMarkerMenuItems = useMemo(
+    () =>
+      generateInlineMarkerMenuListItems(editorRef, () => setShowMarkersMenu(false), blockMarker),
+    [blockMarker],
+  );
+
+  const showInlineMarkersMenu = useCallback(() => {
+    // Only shows the markers menu if there is currently a selection in the editor and there are
+    // existing marker menu items to be shown
+    const windowSelection = window.getSelection();
+    if (inlineMarkerMenuItems && windowSelection && windowSelection.rangeCount > 0) {
+      const selectionRect = windowSelection.getRangeAt(0).getBoundingClientRect();
+      setMarkersMenuAnchorX(selectionRect.left);
+      setMarkersMenuAnchorY(selectionRect.top);
+      setMarkersMenuAnchorHeight(selectionRect.height);
+      setShowMarkersMenu(true);
+      markerMenuSearchRef.current?.focus();
+    }
+  }, [inlineMarkerMenuItems]);
+
+  // When the inline markers menu is showed, makes sure the search input is focused
+  useEffect(() => {
+    if (showMarkersMenu) {
+      markerMenuSearchRef.current?.focus();
+    }
+  }, [showMarkersMenu]);
+
+  // Listen for Ctrl+F to open find dialog and the markers menu trigger
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Markers menu trigger listener
+      if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
+        showInlineMarkersMenu();
+      } else if (showMarkersMenu && event.key === 'Escape') {
+        setShowMarkersMenu(false);
+      }
+
+      // Find dialog trigger listener
       if (event.ctrlKey && event.key === 'f') {
         event.preventDefault();
         papi.commands.sendCommand('platformScripture.openFind', webViewId);
@@ -771,7 +824,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId]);
+  }, [webViewId, showMarkersMenu]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1296,13 +1349,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [webViewId],
   );
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [canUndo, setCanUndo] = useState(false);
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [canRedo, setCanRedo] = useState(false);
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [blockMarker, setBlockMarker] = useState<string | undefined>();
-
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
@@ -1350,7 +1396,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }
 
   return (
-    <div className="tw-flex tw-flex-col tw-h-screen">
+    <div
+      className="tw-flex tw-flex-col tw-h-screen"
+      onClick={() => {
+        if (showMarkersMenu) setShowMarkersMenu(false);
+      }}
+    >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
@@ -1499,6 +1550,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </div>,
         )}
       </div>
+      {/** Inline markers menu components */}
+      <Popover open={showMarkersMenu}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: markersMenuAnchorY,
+            left: markersMenuAnchorX,
+            height: markersMenuAnchorHeight,
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent
+          className="tw-w-[500px] tw-p-0"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <MarkerMenu
+            markerMenuItems={inlineMarkerMenuItems}
+            localizedStrings={localizedStrings}
+            searchRef={markerMenuSearchRef}
+          />
+        </PopoverContent>
+      </Popover>
       {/** Footnote editor components */}
       <Popover open={showFootnoteEditor}>
         <PopoverAnchor
