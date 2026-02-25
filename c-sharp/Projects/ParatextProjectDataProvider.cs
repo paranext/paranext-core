@@ -1358,7 +1358,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     // This may happen if someone makes a whitespace change that gets normalized
                     // back to the same USFM
                     var currentUsfm = GetChapterUsfm(verseRef);
-                    if (currentUsfm == usfm)
+                    // We need to remove carriage returns from the new USFM before comparing
+                    // because GetChapterUsfm removes carriage returns but the normalized USFM
+                    // from the input USX appropriately has CRLFs for saving to file
+                    if (currentUsfm == RemoveCarriageReturns(usfm))
                     {
                         didChange = false;
                         return;
