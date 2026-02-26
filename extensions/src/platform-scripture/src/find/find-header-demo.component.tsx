@@ -52,10 +52,8 @@ export function FindHeaderDemo() {
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
-  // setIsRegexAllowed is intentionally kept for future UI use; regex is currently hidden from users
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [isRegexAllowed, setIsRegexAllowed] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // _setIsRegexAllowed is intentionally kept for future UI use; regex is currently hidden from users
+  const [isRegexAllowed, _setIsRegexAllowed] = useState(false);
   const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
   const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
