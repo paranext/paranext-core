@@ -60,15 +60,12 @@ internal static class InventoryOptionsService
             return new SaveInventoryOptionsResult { Success = false };
         }
 
-        var changedSettings = new List<SaveOperation>();
-
-        foreach (var kvp in newValues)
-        {
-            if (!oldValues.TryGetValue(kvp.Key, out var oldValue) || oldValue != kvp.Value)
-            {
-                changedSettings.Add(new SaveOperation(kvp.Key, kvp.Value));
-            }
-        }
+        List<SaveOperation> changedSettings = newValues
+            .Where(kvp =>
+                !oldValues.TryGetValue(kvp.Key, out var oldValue) || oldValue != kvp.Value
+            )
+            .Select(kvp => new SaveOperation(kvp.Key, kvp.Value))
+            .ToList();
 
         return new SaveInventoryOptionsResult { Success = true, ChangedSettings = changedSettings };
     }
