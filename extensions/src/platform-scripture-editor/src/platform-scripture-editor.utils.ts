@@ -363,6 +363,7 @@ export function generateInlineMarkerMenuListItems(
   if (!markerDetails || !markerDetails.children) return [];
 
   const markerMenuItems: MarkerMenuItem[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Object.entries(markerDetails.children).forEach(([_, markers]) => {
     markerMenuItems.push(
       ...markers.map((marker) => {
