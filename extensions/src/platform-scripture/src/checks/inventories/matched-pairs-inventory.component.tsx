@@ -1,0 +1,441 @@
+import { useLocalizedStrings } from '@papi/frontend/react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import {
+  ColumnDef,
+  Inventory,
+  InventorySummaryItem,
+  InventoryTableData,
+  Scope,
+  inventoryCountColumn,
+  inventoryItemColumn,
+  inventoryStatusColumn,
+} from 'platform-bible-react';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+
+const MATCHED_PAIRS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
+  '%webView_inventory_table_header_count%',
+  '%webView_inventory_table_header_status%',
+  '%webView_matchedPairsInventory_table_header_text%',
+  '%webView_inventory_all%',
+  '%webView_inventory_approved%',
+  '%webView_inventory_unapproved%',
+  '%webView_inventory_unknown%',
+  '%webView_inventory_scope_currentBook%',
+  '%webView_inventory_scope_chapter%',
+  '%webView_inventory_scope_verse%',
+  '%webView_inventory_filter_text%',
+];
+
+/**
+ * Creates column definitions for the matched pairs inventory table.
+ *
+ * @param textLabel Localized label for the text column
+ * @param countLabel Localized label for the count column
+ * @param statusLabel Localized label for the status column
+ * @param approvedItems Array of approved items
+ * @param onApprovedItemsChange Callback for updating approved items
+ * @param unapprovedItems Array of unapproved items
+ * @param onUnapprovedItemsChange Callback for updating unapproved items
+ * @returns Column definitions for the inventory data table
+ */
+const createColumns = (
+  textLabel: string,
+  countLabel: string,
+  statusLabel: string,
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
+): ColumnDef<InventoryTableData>[] => [
+  {
+    ...inventoryItemColumn(textLabel),
+    cell: ({ row }) => (
+      <div className="tw-text-lg tw-font-bold tw-font-mono tw-flex tw-justify-center">
+        {row.getValue('item')}
+      </div>
+    ),
+  },
+  inventoryCountColumn(countLabel),
+  inventoryStatusColumn(
+    statusLabel,
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
+];
+
+/** Undo/redo state management for status changes (BHV-312) */
+type StatusChangeRecord = {
+  itemKey: string;
+  previousApproved: string[];
+  previousUnapproved: string[];
+  newApproved: string[];
+  newUnapproved: string[];
+};
+
+type UndoRedoState = {
+  undoStack: StatusChangeRecord[];
+  redoStack: StatusChangeRecord[];
+};
+
+type UndoRedoAction =
+  | { type: 'PUSH_CHANGE'; change: StatusChangeRecord }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  | { type: 'CLEAR' };
+
+function undoRedoReducer(state: UndoRedoState, action: UndoRedoAction): UndoRedoState {
+  switch (action.type) {
+    case 'PUSH_CHANGE':
+      return {
+        undoStack: [...state.undoStack, action.change],
+        redoStack: [],
+      };
+    case 'UNDO': {
+      if (state.undoStack.length === 0) return state;
+      const lastChange = state.undoStack[state.undoStack.length - 1];
+      return {
+        undoStack: state.undoStack.slice(0, -1),
+        redoStack: [...state.redoStack, lastChange],
+      };
+    }
+    case 'REDO': {
+      if (state.redoStack.length === 0) return state;
+      const nextChange = state.redoStack[state.redoStack.length - 1];
+      return {
+        undoStack: [...state.undoStack, nextChange],
+        redoStack: state.redoStack.slice(0, -1),
+      };
+    }
+    case 'CLEAR':
+      return { undoStack: [], redoStack: [] };
+    default:
+      return state;
+  }
+}
+
+type MatchedPairsInventoryProps = {
+  inventoryItems: InventorySummaryItem[] | undefined;
+  verseRef?: SerializedVerseRef;
+  setVerseRef: (scriptureReference: SerializedVerseRef) => void;
+  localizedStrings: LanguageStrings;
+  approvedItems: string[];
+  onApprovedItemsChange: (items: string[]) => void;
+  unapprovedItems: string[];
+  onUnapprovedItemsChange: (items: string[]) => void;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
+  projectId?: string;
+  areInventoryItemsLoading?: boolean;
+  onItemSelected?: (itemKey: string) => void;
+};
+
+export function MatchedPairsInventory({
+  inventoryItems,
+  setVerseRef,
+  localizedStrings,
+  approvedItems,
+  onApprovedItemsChange,
+  unapprovedItems,
+  onUnapprovedItemsChange,
+  scope,
+  onScopeChange,
+  areInventoryItemsLoading,
+  onItemSelected,
+}: MatchedPairsInventoryProps) {
+  const [matchedPairsInventoryStrings] = useLocalizedStrings(MATCHED_PAIRS_INVENTORY_STRING_KEYS);
+  const textLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_table_header_text%'],
+    [matchedPairsInventoryStrings],
+  );
+  const countLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_inventory_table_header_count%'],
+    [matchedPairsInventoryStrings],
+  );
+  const statusLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_inventory_table_header_status%'],
+    [matchedPairsInventoryStrings],
+  );
+
+  // Undo/redo state (BHV-312)
+  const [undoRedoState, dispatchUndoRedo] = useReducer(undoRedoReducer, {
+    undoStack: [],
+    redoStack: [],
+  });
+
+  // Separation state (BHV-314: verse/non-verse separation toggle)
+  const [isSeparated, setIsSeparated] = useState(false);
+
+  // Wrap onApprovedItemsChange and onUnapprovedItemsChange with undo tracking
+  const previousApprovedRef = useRef<string[]>(approvedItems);
+  const previousUnapprovedRef = useRef<string[]>(unapprovedItems);
+
+  useEffect(() => {
+    previousApprovedRef.current = approvedItems;
+    previousUnapprovedRef.current = unapprovedItems;
+  }, [approvedItems, unapprovedItems]);
+
+  const handleApprovedItemsChangeWithUndo = useCallback(
+    (items: string[]) => {
+      dispatchUndoRedo({
+        type: 'PUSH_CHANGE',
+        change: {
+          itemKey: '',
+          previousApproved: previousApprovedRef.current,
+          previousUnapproved: previousUnapprovedRef.current,
+          newApproved: items,
+          newUnapproved: unapprovedItems,
+        },
+      });
+      onApprovedItemsChange(items);
+    },
+    [onApprovedItemsChange, unapprovedItems],
+  );
+
+  const handleUnapprovedItemsChangeWithUndo = useCallback(
+    (items: string[]) => {
+      dispatchUndoRedo({
+        type: 'PUSH_CHANGE',
+        change: {
+          itemKey: '',
+          previousApproved: approvedItems,
+          previousUnapproved: previousUnapprovedRef.current,
+          newApproved: approvedItems,
+          newUnapproved: items,
+        },
+      });
+      onUnapprovedItemsChange(items);
+    },
+    [onUnapprovedItemsChange, approvedItems],
+  );
+
+  // Keep a synchronous ref to undoRedoState so handlers always see the latest value.
+  // useReducer dispatch is synchronous, but the component re-render (which updates
+  // useCallback closures) is deferred. Using a ref ensures handleRedo sees the
+  // redoStack populated by a preceding handleUndo dispatch within the same render cycle.
+  const undoRedoRef = useRef(undoRedoState);
+  undoRedoRef.current = undoRedoState;
+
+  const handleUndo = useCallback(() => {
+    const state = undoRedoRef.current;
+    if (state.undoStack.length === 0) return;
+    const lastChange = state.undoStack[state.undoStack.length - 1];
+    onApprovedItemsChange(lastChange.previousApproved);
+    onUnapprovedItemsChange(lastChange.previousUnapproved);
+    dispatchUndoRedo({ type: 'UNDO' });
+  }, [onApprovedItemsChange, onUnapprovedItemsChange]);
+
+  const handleRedo = useCallback(() => {
+    const state = undoRedoRef.current;
+    if (state.redoStack.length === 0) return;
+    const nextChange = state.redoStack[state.redoStack.length - 1];
+    onApprovedItemsChange(nextChange.newApproved);
+    onUnapprovedItemsChange(nextChange.newUnapproved);
+    dispatchUndoRedo({ type: 'REDO' });
+  }, [onApprovedItemsChange, onUnapprovedItemsChange]);
+
+  const handleToggleSeparation = useCallback(() => {
+    setIsSeparated((prev) => !prev);
+    dispatchUndoRedo({ type: 'CLEAR' });
+  }, []);
+
+  // Menu state
+  const [isInventoryMenuOpen, setIsInventoryMenuOpen] = useState(false);
+
+  const columns = useMemo(() => {
+    if (isSeparated) {
+      // When separated, show verse text and non-verse text columns (BHV-314)
+      return [
+        {
+          ...inventoryItemColumn(textLabel),
+          cell: ({ row }: { row: { getValue: (key: string) => string } }) => (
+            <div className="tw-text-lg tw-font-bold tw-font-mono tw-flex tw-justify-center">
+              {row.getValue('item')}
+            </div>
+          ),
+        },
+        inventoryCountColumn('Verse text'),
+        inventoryStatusColumn(
+          'Verse text',
+          approvedItems,
+          handleApprovedItemsChangeWithUndo,
+          unapprovedItems,
+          handleUnapprovedItemsChangeWithUndo,
+        ),
+        inventoryCountColumn('Non-verse text'),
+        inventoryStatusColumn(
+          'Non-verse text',
+          approvedItems,
+          handleApprovedItemsChangeWithUndo,
+          unapprovedItems,
+          handleUnapprovedItemsChangeWithUndo,
+        ),
+      ];
+    }
+    return createColumns(
+      textLabel,
+      countLabel,
+      statusLabel,
+      approvedItems,
+      handleApprovedItemsChangeWithUndo,
+      unapprovedItems,
+      handleUnapprovedItemsChangeWithUndo,
+    );
+  }, [
+    isSeparated,
+    textLabel,
+    countLabel,
+    statusLabel,
+    approvedItems,
+    handleApprovedItemsChangeWithUndo,
+    unapprovedItems,
+    handleUnapprovedItemsChangeWithUndo,
+  ]);
+
+  const itemCount = useMemo(() => {
+    if (!inventoryItems) return 0;
+    return inventoryItems.filter((item) => item.count > 0).length;
+  }, [inventoryItems]);
+
+  // Keyboard shortcuts (BHV-305)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case 'y':
+          // Handled by the Inventory component's status column
+          break;
+        case 'n':
+          // Handled by the Inventory component's status column
+          break;
+        case 'u':
+          // Handled by the Inventory component's status column
+          break;
+        case 'z':
+          e.preventDefault();
+          handleUndo();
+          break;
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo]);
+
+  return (
+    <div data-testid="inventory-form" className="tw-flex tw-flex-col tw-h-full">
+      {/* Menu bar */}
+      <div className="tw-flex tw-items-center tw-border-b tw-border-border tw-px-2 tw-py-1 tw-gap-2 tw-text-sm">
+        <div className="tw-relative">
+          <button
+            type="button"
+            role="menuitem"
+            aria-label="Inventory"
+            className="tw-px-2 tw-py-1 tw-rounded hover:tw-bg-muted"
+            onClick={() => setIsInventoryMenuOpen(!isInventoryMenuOpen)}
+          >
+            {matchedPairsInventoryStrings['%webView_inventory_all%'] ? 'Inventory' : 'Inventory'}
+          </button>
+          {isInventoryMenuOpen && (
+            <div className="tw-absolute tw-left-0 tw-top-full tw-z-50 tw-bg-background tw-border tw-border-border tw-rounded tw-shadow-lg tw-min-w-[250px]">
+              <button
+                type="button"
+                role="menuitem"
+                className="tw-w-full tw-text-left tw-px-3 tw-py-2 hover:tw-bg-muted tw-text-sm"
+                onClick={() => {
+                  handleToggleSeparation();
+                  setIsInventoryMenuOpen(false);
+                }}
+              >
+                Set verse and non-verse status separately
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="tw-w-full tw-text-left tw-px-3 tw-py-2 hover:tw-bg-muted tw-text-sm"
+                onClick={() => {
+                  setIsInventoryMenuOpen(false);
+                }}
+              >
+                Edit inventory options
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="tw-w-full tw-text-left tw-px-3 tw-py-2 hover:tw-bg-muted tw-text-sm"
+                onClick={() => {
+                  setIsInventoryMenuOpen(false);
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Toolbar with undo/redo and filter controls */}
+      <div className="tw-flex tw-items-center tw-gap-2 tw-px-2 tw-py-1 tw-border-b tw-border-border">
+        <button
+          type="button"
+          aria-label="Undo"
+          className="tw-px-2 tw-py-1 tw-rounded hover:tw-bg-muted disabled:tw-opacity-50"
+          disabled={undoRedoState.undoStack.length === 0}
+          onClick={handleUndo}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          aria-label="Redo"
+          className="tw-px-2 tw-py-1 tw-rounded hover:tw-bg-muted disabled:tw-opacity-50"
+          disabled={undoRedoState.redoStack.length === 0}
+          onClick={handleRedo}
+        >
+          Redo
+        </button>
+      </div>
+
+      {/* Inventory list with search, filter, and scope */}
+      <div
+        data-testid="inventory-list"
+        className="tw-flex-1 tw-overflow-hidden tw-flex tw-flex-col"
+      >
+        <Inventory
+          inventoryItems={inventoryItems}
+          setVerseRef={setVerseRef}
+          localizedStrings={localizedStrings}
+          approvedItems={approvedItems}
+          unapprovedItems={unapprovedItems}
+          scope={scope}
+          onScopeChange={onScopeChange}
+          columns={columns}
+          areInventoryItemsLoading={areInventoryItemsLoading}
+          classNameForVerseText="scripture-font"
+          onItemSelected={onItemSelected}
+        />
+      </div>
+
+      {/* Verse reference list (lower pane) */}
+      <div
+        data-testid="verse-reference-list"
+        className="tw-border-t tw-border-border tw-min-h-[100px]"
+      />
+
+      {/* Status bar with item count */}
+      <div
+        data-testid="item-count-label"
+        className="tw-px-2 tw-py-1 tw-text-sm tw-text-muted-foreground tw-border-t tw-border-border"
+      >
+        {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+      </div>
+    </div>
+  );
+}
+
+export default MatchedPairsInventory;
