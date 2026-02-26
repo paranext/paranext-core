@@ -1,9 +1,5 @@
 namespace Paranext.DataProvider.Checks;
 
-// === NEW IN PT10 ===
-// Reason: PAPI communication types for content type filter configuration
-// Maps to: CAP-013 (shared types)
-
 /// <summary>
 /// Content type filter configuration result.
 /// </summary>

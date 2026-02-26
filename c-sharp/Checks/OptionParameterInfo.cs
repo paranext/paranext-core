@@ -1,9 +1,5 @@
 namespace Paranext.DataProvider.Checks;
 
-// === NEW IN PT10 ===
-// Reason: PAPI communication type for option parameter UI control info
-// Maps to: CAP-013 (shared types)
-
 /// <summary>
 /// Describes the UI control type for a check option parameter.
 /// </summary>
