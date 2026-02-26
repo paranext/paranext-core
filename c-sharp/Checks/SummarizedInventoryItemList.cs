@@ -9,8 +9,8 @@ namespace Paranext.DataProvider.Checks;
 /// This class must serialize/deserialize to the SummarizedInventoryItemList type defined in
 /// TypeScript.
 /// </summary>
-internal sealed class SummarizedInventoryItemList(InventoryTextType textType)
+internal sealed class SummarizedInventoryItemList(Paratext.Checks.InventoryTextType textType)
 {
-    public InventoryTextType TextType { get; init; } = textType;
+    public Paratext.Checks.InventoryTextType TextType { get; init; } = textType;
     public List<SummarizedInventoryItem> Items { get; init; } = [];
 }

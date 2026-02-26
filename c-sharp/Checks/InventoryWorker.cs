@@ -9,7 +9,7 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
 
-using static InventoryTextType;
+using static Paratext.Checks.InventoryTextType;
 
 /// <summary>
 /// Represents the state needed to build and summarize an inventory for a specific project and set
@@ -19,7 +19,10 @@ internal sealed class InventoryWorker
 {
     private readonly object _lock = new();
     private bool _isInventoryBuilt = false;
-    private readonly Dictionary<InventoryTextType, TextInventory> _summarizedInventoriesByType = [];
+    private readonly Dictionary<
+        Paratext.Checks.InventoryTextType,
+        TextInventory
+    > _summarizedInventoriesByType = [];
     private readonly ScriptureInventoryBase _inventory;
     private readonly ScrText _scrText;
     private readonly ChecksDataSource _dataSource;
@@ -327,7 +330,10 @@ internal sealed class InventoryWorker
         }
     }
 
-    private void ProcessTokens(IEnumerable<ITextToken> tokens, InventoryTextType textType)
+    private void ProcessTokens(
+        IEnumerable<ITextToken> tokens,
+        Paratext.Checks.InventoryTextType textType
+    )
     {
         _summarizedInventoriesByType[textType]
             .ProcessTokens(tokens, _dataSource, _inventory, _selectedChapterPlaceholder);

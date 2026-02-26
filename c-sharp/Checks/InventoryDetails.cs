@@ -15,7 +15,7 @@ internal sealed class InventoryDetails
 
         InventoryId = inventory.Type.InternalValue;
         LocalizeKeyName = $"%inventoryName_{InventoryId}%";
-        Options = new List<InventoryOption>();
+        Options = new List<InventoryOptionDescriptor>();
 
         foreach (var option in inventory.InventoryOptions ?? [])
         {
@@ -23,13 +23,13 @@ internal sealed class InventoryDetails
                 continue;
 
             Options.Add(
-                new InventoryOption
+                new InventoryOptionDescriptor
                 {
                     OptionName = option.Name,
                     LocalizeKeyName = $"%inventoryOptionName_{InventoryId}_{option.Name}%",
                     ValueType = option.IsYesNo
-                        ? InventoryOption.TYPE_BOOLEAN
-                        : InventoryOption.TYPE_STRING,
+                        ? InventoryOptionDescriptor.TYPE_BOOLEAN
+                        : InventoryOptionDescriptor.TYPE_STRING,
                 }
             );
         }
@@ -37,11 +37,11 @@ internal sealed class InventoryDetails
         if (inventory.SupportsSeparateInventories)
         {
             Options.Add(
-                new InventoryOption
+                new InventoryOptionDescriptor
                 {
                     OptionName = "SetVerseAndNonVerseSeparately",
                     LocalizeKeyName = "%inventoryOptionName_SetVerseAndNonVerseSeparately%",
-                    ValueType = InventoryOption.TYPE_BOOLEAN,
+                    ValueType = InventoryOptionDescriptor.TYPE_BOOLEAN,
                 }
             );
         }
@@ -53,5 +53,5 @@ internal sealed class InventoryDetails
 
     public string InventoryId { get; set; }
     public string LocalizeKeyName { get; set; }
-    public List<InventoryOption> Options { get; set; }
+    public List<InventoryOptionDescriptor> Options { get; set; }
 }

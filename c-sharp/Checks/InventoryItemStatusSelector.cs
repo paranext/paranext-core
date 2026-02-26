@@ -11,6 +11,6 @@ internal sealed class InventoryItemStatusSelector
 {
     public string ProjectId { get; set; } = string.Empty;
     public string InventoryId { get; set; } = string.Empty;
-    public InventoryTextType? TextType { get; set; }
+    public Paratext.Checks.InventoryTextType? TextType { get; set; }
     public string? Key { get; set; }
 };
