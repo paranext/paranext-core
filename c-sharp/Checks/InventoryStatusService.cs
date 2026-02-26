@@ -1,8 +1,9 @@
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// Service for managing inventory status persistence.
-/// Contains EXT-003 (SaveInventoryStatus) branching logic.
+/// Service for managing inventory status operations.
+/// Contains EXT-002 (SetSelectedStatus with always-valid protection),
+/// EXT-003 (SaveInventoryStatus branching logic), and permission guards (VAL-004).
 ///
 /// The service operates on InventoryStatusSnapshot records (testable DTOs) rather than
 /// ParatextData types directly. The PAPI integration layer is responsible for creating
@@ -136,26 +137,12 @@ internal static class InventoryStatusService
             };
         }
 
-        int skippedCount = 0;
-        bool statusChanged = false;
-
-        foreach (string item in selectedItems)
-        {
-            if (!isAlwaysValid(item) || desiredStatus == ItemStatus.Valid)
-            {
-                statusChanged = true;
-            }
-            else
-            {
-                skippedCount++;
-            }
-        }
-
+        int skippedCount = selectedItems.Count(item =>
+            isAlwaysValid(item) && desiredStatus != ItemStatus.Valid
+        );
+        bool statusChanged = skippedCount < selectedItems.Length;
         bool allChanged = skippedCount == 0;
-        string? warningMessage =
-            skippedCount > 0 && desiredStatus != ItemStatus.Valid
-                ? "Item is in Language Settings"
-                : null;
+        string? warningMessage = skippedCount > 0 ? "Item is in Language Settings" : null;
 
         return new StatusChangeResult
         {
