@@ -25,9 +25,42 @@ import {
   FindResult,
   FindScope,
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
+  WordRestriction,
 } from 'platform-scripture';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
+
+/**
+ * Unicode character class for word-forming characters. Similar to P9 uses base characters (letters)
+ * and diacritics (marks). Requires the `u` regex flag.
+ */
+const WORD_CHAR = '[\\p{L}\\p{M}]';
+
+/**
+ * Wraps a regex pattern with Unicode-aware word boundary lookbehind/lookahead assertions based on
+ * the given {@link WordRestriction}. Follows P9's behavior of treating Unicode letters (`\p{L}`) and
+ * marks/diacritics (`\p{M}`) as word-forming characters.
+ *
+ * @param pattern The base regex pattern string to wrap
+ * @param restriction The word boundary restriction to apply
+ * @returns The pattern wrapped with the appropriate assertions, or unchanged if `'none'`
+ */
+function applyWordRestriction(pattern: string, restriction: WordRestriction | undefined): string {
+  if (!restriction || restriction === 'none') return pattern;
+  const notPreceded = `(?<!${WORD_CHAR})`;
+  const notFollowed = `(?!${WORD_CHAR})`;
+  const wrapped = `(?:${pattern})`;
+  switch (restriction) {
+    case 'wholeWord':
+      return `${notPreceded}${wrapped}${notFollowed}`;
+    case 'startOfWord':
+      return `${notPreceded}${wrapped}`;
+    case 'endOfWord':
+      return `${wrapped}${notFollowed}`;
+    default:
+      return pattern;
+  }
+}
 
 /**
  * Extracts the book ID and chapter number from a scripture location without needing a reader
@@ -623,18 +656,20 @@ export class ScriptureFinderProjectDataProviderEngine
     // Get the cached reader writer for this scope
     const usj = await this.#getOrCreateCachedReaderWriter(scope.bookId, scope.chapter);
 
-    const regexString = job.options.useRegex
+    const basePattern = job.options.useRegex
       ? job.options.searchString
       : escapeStringRegexp(job.options.searchString);
+
+    const restriction = job.options.wordRestriction;
+    const regexString = applyWordRestriction(basePattern, restriction);
+    const needsUnicodeFlag = restriction && restriction !== 'none';
+    const flags = `${job.options.caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
 
     const markerStylesToInclude = job.options.verseTextOnly
       ? USFM_VERSE_TEXT_MARKERS_SET
       : undefined;
 
-    const matches = usj.search(
-      new RegExp(regexString, job.options.caseInsensitive ? 'ig' : 'g'),
-      markerStylesToInclude,
-    );
+    const matches = usj.search(new RegExp(regexString, flags), markerStylesToInclude);
 
     return matches.map((match) => {
       return {

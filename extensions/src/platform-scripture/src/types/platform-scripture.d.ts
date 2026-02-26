@@ -450,6 +450,19 @@ declare module 'platform-scripture' {
   // #region Find Types
 
   /**
+   * Defines how a find operation should restrict matches at word boundaries.
+   *
+   * - `'none'`: match anywhere (default)
+   * - `'wholeWord'`: match only complete words
+   * - `'startOfWord'`: match at the start of a word
+   * - `'endOfWord'`: match at the end of a word
+   *
+   * Word-forming characters are Unicode letters (`\p{L}`) and marks/diacritics (`\p{M}`),
+   * approximating Paratext 9's `BaseCharacterRegex + DiacriticCharacterRegex`.
+   */
+  export type WordRestriction = 'none' | 'wholeWord' | 'startOfWord' | 'endOfWord';
+
+  /**
    * Defines the scope of a find operation. A scope is a book and optionally a chapter within that
    * book. If no chapter is provided, then the find operation should search across all chapters.
    */
@@ -482,6 +495,11 @@ declare module 'platform-scripture' {
      * all text content including notes, figures, sidebars, tables, etc.
      */
     verseTextOnly?: boolean;
+    /**
+     * Controls whether the search matches only at word boundaries. If undefined or `'none'`, match
+     * anywhere. See {@link WordRestriction} for all options.
+     */
+    wordRestriction?: WordRestriction;
   };
 
   /** Represents a single result from a find operation. */

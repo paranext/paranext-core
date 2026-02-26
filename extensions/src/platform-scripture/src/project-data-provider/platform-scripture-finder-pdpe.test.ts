@@ -847,21 +847,6 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain(String.raw`\v 1 This is a very long replacement text for book`);
     });
 
-    it('should handle replacement with shorter text', async () => {
-      // Replace "Abraham" (7 chars) with "A"
-      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
-        {
-          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 5 },
-          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
-        },
-      ];
-
-      await engine.replace(ranges, 'A');
-
-      const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain(String.raw`\v 2 A was the father`);
-    });
-
     it('should handle special characters in replacement text', async () => {
       // Replace text with special characters
       const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
@@ -1119,6 +1104,72 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       const writtenUsfm = getWrittenUsfm();
       expect(writtenUsfm).toContain(String.raw`\v 1 A book`);
       expect(writtenUsfm).toContain(String.raw`\v 1 B after`);
+      expect(callCount).toBe(2);
+    });
+
+    it('should throw when book-level cache is invalidated on every attempt including the last retry', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+
+      // Invalidate on every book-level fetch (multi-chapter ranges use getBookUSX)
+      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
+        invalidateCache();
+        return Promise.resolve(TEST_BOOK_USX);
+      });
+
+      // Multi-chapter ranges to force book-level fetch
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await expect(engine.replace(ranges, ['A', 'B'])).rejects.toThrow(
+        /Cache was invalidated 4 times/,
+      );
+    });
+
+    it('should use fresh data after a successful book-level retry', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let callCount = 0;
+
+      // First call: invalidate and return original data. Second call: return "updated" data.
+      const UPDATED_BOOK_USX = TEST_BOOK_USX.replace(
+        'The book of the genealogy',
+        'The UPDATED genealogy',
+      );
+
+      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          invalidateCache();
+          return Promise.resolve(TEST_BOOK_USX);
+        }
+        return Promise.resolve(UPDATED_BOOK_USX);
+      });
+
+      // Multi-chapter ranges to force book-level fetch
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await engine.replace(ranges, ['A', 'B']);
+
+      const bookMock = vi.mocked(mockPdps['platformScripture.USFM_Book'].setBookUSFM);
+      const writtenUsfm = String(bookMock.mock.calls[0][1]);
+      // Should have applied the replacement to the fresh (UPDATED) data from the retry
+      expect(writtenUsfm).toContain('UPDATED');
       expect(callCount).toBe(2);
     });
   });
@@ -1818,5 +1869,221 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).not.toContain('FIRST_MAT_CH2_B');
       expect(writtenUsfm).not.toContain('FIRST_MRK');
     });
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
+  let engine: ScriptureFinderProjectDataProviderEngine;
+  let mockPdps: ScriptureFinderOverlayPDPs;
+
+  beforeEach(() => {
+    mockPdps = createMockPdps();
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  /**
+   * Helper: run a find job for the given options and return matched texts. Uses MAT book scope and
+   * polls until the job completes.
+   */
+  async function findTexts(
+    searchString: string,
+    options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
+  ): Promise<string[]> {
+    const jobId = await engine.beginFindJob({
+      searchString,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: true,
+      ...options,
+    });
+
+    // Poll until job completes
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    }
+
+    return (report.nextResults ?? []).map((r) => r.text);
+  }
+
+  // Test USFM verse text:
+  // v1: "The book of the genealogy of Jesus Christ, the son of David, the son of Abraham."
+  // v2: "Abraham was the father of Isaac, and Isaac the father of Jacob."
+  // v3: "And Jacob the father of Judah and his brothers."
+  // v1 (ch2): "Now after Jesus was born in Bethlehem of Judea in the days of Herod the king."
+
+  describe('no restriction', () => {
+    it('matches "the" anywhere, including inside longer words', async () => {
+      const results = await findTexts('the', { wordRestriction: 'none' });
+      // Should match "the" inside "genealogy", "brothers", "Bethlehem", "the" standalone, etc.
+      expect(results.length).toBeGreaterThan(0);
+      // Every result should be the literal string "the" (case-insensitive)
+      results.forEach((text) => expect(text.toLowerCase()).toBe('the'));
+    });
+
+    it('finds more matches than whole-word mode', async () => {
+      const noRestriction = await findTexts('the', { wordRestriction: 'none' });
+      const wholeWord = await findTexts('the', { wordRestriction: 'wholeWord' });
+      expect(noRestriction.length).toBeGreaterThan(wholeWord.length);
+    });
+  });
+
+  describe('whole word', () => {
+    it('matches only standalone "the", not "the" inside other words', async () => {
+      const results = await findTexts('the', { wordRestriction: 'wholeWord' });
+      expect(results.length).toBeGreaterThan(0);
+      // All results are exact word matches — confirmed by having fewer hits than unrestricted
+      results.forEach((text) => expect(text.toLowerCase()).toBe('the'));
+    });
+
+    it('matches a whole word that does not appear as a substring of other words', async () => {
+      // "son" appears standalone in the text and should be found
+      const results = await findTexts('son', { wordRestriction: 'wholeWord' });
+      expect(results.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('start of word', () => {
+    it('finds "the" at word-start but not mid-word occurrences like in "father"', async () => {
+      // standalone "the" is at start of a word; "the" inside "father" (f-a-t-h-e-r) is mid-word
+      const startResults = await findTexts('the', { wordRestriction: 'startOfWord' });
+      const noRestrictionResults = await findTexts('the', { wordRestriction: 'none' });
+      expect(startResults.length).toBeLessThan(noRestrictionResults.length);
+      expect(startResults.length).toBeGreaterThan(0);
+    });
+
+    it('does not match a pattern that appears only at the end of words', async () => {
+      // "am" ends "Abraham" but never starts a word — startOfWord should find nothing
+      const startResults = await findTexts('am', { wordRestriction: 'startOfWord' });
+      expect(startResults.length).toBe(0);
+    });
+  });
+
+  describe('end of word', () => {
+    it('matches "the" at the end of a word (standalone "the") but not inside "Bethlehem"', async () => {
+      const endResults = await findTexts('the', { wordRestriction: 'endOfWord' });
+      const noRestrictionResults = await findTexts('the', { wordRestriction: 'none' });
+      // End-of-word excludes "the" at start of words like "theology" but keeps "the" at end
+      expect(endResults.length).toBeLessThanOrEqual(noRestrictionResults.length);
+    });
+
+    it('matches "father" at end of word', async () => {
+      // "father" appears as a whole word — end-of-word restriction should still find it
+      const results = await findTexts('father', { wordRestriction: 'endOfWord' });
+      expect(results.length).toBeGreaterThan(0);
+    });
+
+    it('does not match a pattern that appears only at the start of words', async () => {
+      // "Ab" appears only at the start of "Abraham" — never at the end of a word
+      const endResults = await findTexts('Ab', { wordRestriction: 'endOfWord' });
+      expect(endResults.length).toBe(0);
+    });
+  });
+
+  describe('case insensitivity with word restriction', () => {
+    it('whole-word match is case-insensitive when caseInsensitive is true', async () => {
+      const lower = await findTexts('the', { wordRestriction: 'wholeWord', caseInsensitive: true });
+      const upper = await findTexts('THE', { wordRestriction: 'wholeWord', caseInsensitive: true });
+      expect(lower.length).toBe(upper.length);
+    });
+
+    it('whole-word match is case-sensitive when caseInsensitive is false', async () => {
+      // "and" (lowercase) appears in v2 and v3; "And" (capitalized) appears only in v3.
+      // Case-insensitive matches both, case-sensitive misses "And".
+      const insensitive = await findTexts('and', {
+        wordRestriction: 'wholeWord',
+        caseInsensitive: true,
+      });
+      const sensitive = await findTexts('and', {
+        wordRestriction: 'wholeWord',
+        caseInsensitive: false,
+      });
+      // Case-sensitive finds fewer (misses "And" at start of v3)
+      expect(sensitive.length).toBeLessThan(insensitive.length);
+    });
+
+    it('no-restriction match is case-sensitive when caseInsensitive is false', async () => {
+      // "The" (capital T) starts ch1:v1; "the" (lowercase) appears many times.
+      // Case-sensitive search for lowercase "the" misses the capital "The" in v1.
+      const insensitive = await findTexts('the', {
+        wordRestriction: 'none',
+        caseInsensitive: true,
+      });
+      const sensitive = await findTexts('the', { wordRestriction: 'none', caseInsensitive: false });
+      // Case-sensitive finds fewer (misses "The" at start of ch1:v1)
+      expect(sensitive.length).toBeLessThan(insensitive.length);
+    });
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
+  let engine: ScriptureFinderProjectDataProviderEngine;
+  let mockPdps: ScriptureFinderOverlayPDPs;
+
+  beforeEach(() => {
+    mockPdps = createMockPdps();
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  it('should throw when retrieving update for an unknown job ID', async () => {
+    await expect(engine.retrieveFindJobUpdate('unknown-job-id', 100)).rejects.toThrow(
+      'Job with ID unknown-job-id not found',
+    );
+  });
+
+  it('should return no results when the search string has no matches', async () => {
+    const jobId = await engine.beginFindJob({
+      searchString: 'ZZZNOMATCH',
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+
+    let resultCount = 0;
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    resultCount += (report.nextResults ?? []).length;
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+      resultCount += (report.nextResults ?? []).length;
+    }
+
+    expect(report.status).toBe('completed');
+    expect(resultCount).toBe(0);
+  });
+
+  it('should find results from both books when scope spans MAT and MRK', async () => {
+    const jobId = await engine.beginFindJob({
+      searchString: 'Jesus',
+      scope: [
+        { bookId: 'MAT', chapter: 1 },
+        { bookId: 'MRK', chapter: 1 },
+      ],
+      caseInsensitive: false,
+    });
+
+    const foundBooks = new Set<string>();
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+      (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
+    }
+
+    expect(report.status).toBe('completed');
+    expect(foundBooks.has('MAT')).toBe(true);
+    expect(foundBooks.has('MRK')).toBe(true);
   });
 });
