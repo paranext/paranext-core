@@ -3,12 +3,13 @@ namespace Paranext.DataProvider.Checks;
 /// <summary>
 /// Service for managing inventory status operations.
 /// Contains EXT-002 (SetSelectedStatus with always-valid protection),
-/// EXT-003 (SaveInventoryStatus branching logic), and permission guards (VAL-004).
+/// EXT-003 (SaveInventoryStatus branching logic),
+/// EXT-004 (ToggleSeparation/DetermineSetSeparatelyState), and permission guards (VAL-004, VAL-006).
 ///
-/// The service operates on InventoryStatusSnapshot records (testable DTOs) rather than
-/// ParatextData types directly. The PAPI integration layer is responsible for creating
-/// snapshots from ScriptureInventoryBase/TextInventory objects and applying the save
-/// operations back to the inventory.
+/// The service operates on InventoryStatusSnapshot and SeparationSnapshot records
+/// (testable DTOs) rather than ParatextData types directly. The PAPI integration layer
+/// is responsible for creating snapshots from ScriptureInventoryBase/TextInventory
+/// objects and applying the results back to the inventory.
 /// </summary>
 internal static class InventoryStatusService
 {
@@ -214,5 +215,99 @@ internal static class InventoryStatusService
         }
 
         return computeAction();
+    }
+
+    // =========================================================================
+    // EXT-004: Verse/Non-Verse Separation Toggle Logic (CAP-005)
+    // =========================================================================
+
+    /// <summary>
+    /// Computes the result of toggling verse/non-verse separation.
+    /// When enabling (enable=true): performs destructive merge where unknown non-verse
+    /// items inherit their status from the verse inventory. Items already categorized
+    /// in non-verse are preserved.
+    /// When disabling (enable=false): no merge, just indicates separation is off.
+    ///
+    /// DESTRUCTIVE: The merge permanently modifies non-verse statuses. Toggling OFF
+    /// does NOT restore original non-verse state. Re-toggling ON re-applies the merge
+    /// for items that are currently Unknown in non-verse.
+    /// </summary>
+    /// <param name="enable">Whether to enable (true) or disable (false) separation.</param>
+    /// <param name="snapshot">Current state of verse/non-verse inventory items.</param>
+    /// <returns>SeparationToggleResult with merge details.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:2101-2112, 1229-1267
+    // Method: InventoryForm.setNonVerseStatus_Clicked() + SetNonVerseStatusFromVerseStatus()
+    // Maps to: EXT-004, BHV-107, BHV-314
+    public static SeparationToggleResult ComputeToggleSeparation(
+        bool enable,
+        SeparationSnapshot snapshot
+    )
+    {
+        throw new NotImplementedException("CAP-005: ComputeToggleSeparation not yet implemented");
+    }
+
+    /// <summary>
+    /// Determines the initial separation state by checking the project setting
+    /// and auto-detecting whether non-verse settings differ from verse settings.
+    /// Returns true if separation should be enabled.
+    /// </summary>
+    /// <param name="settingValue">Value of MatchedPairsCheckSetSeparately project setting (may be null/empty).</param>
+    /// <param name="snapshot">Current verse/non-verse inventory items for auto-detection.</param>
+    /// <returns>True if separation is enabled (by setting or auto-detection).</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:1875-1901
+    // Method: InventoryForm.DetermineSetSeparatelyState()
+    // Maps to: M-006, BHV-107
+    public static bool DetermineSetSeparatelyState(
+        string? settingValue,
+        SeparationDetectionSnapshot snapshot
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-005: DetermineSetSeparatelyState not yet implemented"
+        );
+    }
+
+    /// <summary>
+    /// Guards the ToggleSeparation operation with administrator permission check (VAL-006).
+    /// When isAdmin is false, returns a failure SeparationToggleResult without invoking
+    /// the toggle action.
+    /// </summary>
+    /// <param name="isAdmin">Whether the current user is an administrator.</param>
+    /// <param name="toggleAction">The action to compute the toggle result.</param>
+    /// <returns>SeparationToggleResult from toggleAction, or failure if not admin.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:370 (UpdateMenuStatus)
+    // Maps to: VAL-006
+    public static SeparationToggleResult ToggleSeparationIfPermitted(
+        bool isAdmin,
+        Func<SeparationToggleResult> toggleAction
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-005: ToggleSeparationIfPermitted not yet implemented"
+        );
+    }
+
+    /// <summary>
+    /// Guards the ToggleSeparation operation with check-type support check (BHV-107).
+    /// When supportsSeparateInventories is false, returns a failure SeparationToggleResult
+    /// without invoking the toggle action.
+    /// </summary>
+    /// <param name="supportsSeparateInventories">Whether the check supports separation.</param>
+    /// <param name="toggleAction">The action to compute the toggle result.</param>
+    /// <returns>SeparationToggleResult from toggleAction, or failure if not supported.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextChecks/Checks/MatchedPairsCheck.cs:81-90
+    // Maps to: BHV-107
+    public static SeparationToggleResult ToggleSeparationIfSupported(
+        bool supportsSeparateInventories,
+        Func<SeparationToggleResult> toggleAction
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-005: ToggleSeparationIfSupported not yet implemented"
+        );
     }
 }

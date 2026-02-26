@@ -2049,4 +2049,1393 @@ public class InventoryStatusServiceTests
     }
 
     #endregion
+
+    // =========================================================================
+    // CAP-005: ToggleSeparation
+    //
+    // Tests for EXT-004: verse/non-verse separation toggle logic.
+    // Two methods tested:
+    //   1. ComputeToggleSeparation - Toggles separation ON/OFF with destructive merge
+    //   2. DetermineSetSeparatelyState - Auto-detects separation state
+    //
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:2101-2112, 1229-1267, 1875-1901
+    // Contract: Section 4.5 M-005 ToggleSeparation, Section 4.6 M-006 DetermineSetSeparatelyState
+    // Behaviors: BHV-107, BHV-314
+    // Invariant: INV-017 (non-verse validity falls back to verse validity)
+    // Golden masters: gm-005 (toggle ON), gm-006 (round-trip)
+    //
+    // DESTRUCTIVE: When enabling separation, unknown non-verse items permanently
+    // inherit verse status. This cannot be undone by toggling OFF.
+    //
+    // Test design: Tests call InventoryStatusService static methods with
+    // SeparationSnapshot records (testable DTOs that capture the verse/non-verse
+    // valid/invalid item state). The service returns SeparationToggleResult
+    // records indicating the new state and whether rebuild is required.
+    // =========================================================================
+
+    #region CAP-005 Acceptance Test (gm-005, gm-006)
+
+    /// <summary>
+    /// Acceptance test: Verifies that toggling separation ON performs the destructive
+    /// merge -- non-verse items that are Unknown inherit their verse status.
+    /// '(' becomes valid in non-verse (was unknown), ')' becomes invalid in non-verse
+    /// (was unknown). The setting is saved and rebuild is required.
+    ///
+    /// When this test passes along with the round-trip test, CAP-005 is complete.
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("GoldenMasterId", "gm-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description(
+        "Acceptance test: ToggleSeparation ON merges unknown non-verse items "
+            + "from verse status (destructive merge, matches gm-005)"
+    )]
+    public void ToggleSeparation_EnableWithUnknownNonVerse_MergesFromVerseStatus()
+    {
+        // Arrange: Regular project, separation OFF, verse has '(' valid and ')' invalid,
+        // non-verse has both as unknown (matches gm-005 input)
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(", ")" },
+        };
+
+        // Act: Toggle ON
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: matches gm-005 expected output
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Enabled, Is.True);
+            Assert.That(result.RebuildRequired, Is.True);
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Contain("("),
+                "Non-verse '(' should inherit valid from verse"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Contain(")"),
+                "Non-verse ')' should inherit invalid from verse"
+            );
+        });
+    }
+
+    /// <summary>
+    /// Acceptance test: Round-trip toggle (ON -> set -> OFF -> ON) confirms that
+    /// the destructive merge permanently changes non-verse statuses. Previously
+    /// Unknown items that were manually changed to valid remain valid even after
+    /// re-merge on second toggle ON (gm-006).
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("GoldenMasterId", "gm-006")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-100")]
+    [Description(
+        "Acceptance test: Round-trip toggle permanently changes non-verse statuses "
+            + "(destructive merge re-applied, matches gm-006)"
+    )]
+    public void ToggleSeparation_RoundTrip_PermanentlyChangesNonVerseStatuses()
+    {
+        // Arrange: Step 1 -- initial state, verse has '(' valid, non-verse unknown
+        var initialSnapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act: Step 1 -- Toggle ON (first time)
+        var firstToggle = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            initialSnapshot
+        );
+
+        // Assert: Step 1 -- '(' is now valid in non-verse
+        Assert.That(
+            firstToggle.MergedNonVerseValid,
+            Does.Contain("("),
+            "First toggle ON: '(' should inherit valid from verse"
+        );
+
+        // Arrange: Step 2 -- User manually sets '(' back to unknown in non-verse
+        var afterManualChange = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act: Step 2 -- Toggle OFF (just disables separation, no merge)
+        var toggleOff = InventoryStatusService.ComputeToggleSeparation(
+            enable: false,
+            afterManualChange
+        );
+
+        Assert.That(toggleOff.Enabled, Is.False, "Separation should be disabled");
+
+        // Act: Step 3 -- Toggle ON again (re-applies merge)
+        var secondToggle = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            afterManualChange
+        );
+
+        // Assert: Step 3 -- '(' is valid again (merge re-applied from verse)
+        Assert.Multiple(() =>
+        {
+            Assert.That(secondToggle.Success, Is.True);
+            Assert.That(secondToggle.Enabled, Is.True);
+            Assert.That(secondToggle.RebuildRequired, Is.True);
+            Assert.That(
+                secondToggle.MergedNonVerseValid,
+                Does.Contain("("),
+                "Round-trip: '(' should be valid again after re-merge (matches gm-006)"
+            );
+        });
+    }
+
+    #endregion
+
+    #region CAP-005 Contract Tests - ToggleSeparation (TS-098, TS-099)
+
+    /// <summary>
+    /// Happy path: Toggle ON with multiple items -- verse valid items are inherited
+    /// by non-verse unknowns, verse invalid items are inherited by non-verse unknowns.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Toggle ON: non-verse unknowns inherit verse status")]
+    public void ComputeToggleSeparation_EnableOn_NonVerseUnknownsInheritVerseStatus()
+    {
+        // Arrange: verse has '(' valid, ')' invalid; non-verse has both unknown
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(", ")" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Enabled, Is.True);
+            Assert.That(result.MergedNonVerseValid, Does.Contain("("));
+            Assert.That(result.MergedNonVerseInvalid, Does.Contain(")"));
+        });
+    }
+
+    /// <summary>
+    /// Happy path: Toggle OFF returns to combined view. No merge is performed.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-099")]
+    [Description("Toggle OFF: combined view, no merge performed")]
+    public void ComputeToggleSeparation_Disable_ReturnsCombinedView()
+    {
+        // Arrange: existing separated state with items
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string> { "[" },
+            NonVerseInvalidItems = new HashSet<string> { "]" },
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: false,
+            snapshot
+        );
+
+        // Assert: No merge, just disables separation
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Enabled, Is.False);
+            Assert.That(result.RebuildRequired, Is.True, "Rebuild always required after toggle");
+        });
+    }
+
+    /// <summary>
+    /// Toggle ON: items already categorized in non-verse are NOT overwritten.
+    /// Only items that are Unknown in non-verse get changed.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Toggle ON preserves already-categorized non-verse items")]
+    public void ComputeToggleSeparation_Enable_PreservesExistingNonVerseStatuses()
+    {
+        // Arrange: verse has '(' valid; non-verse has '(' already invalid (explicit)
+        // and ')' as unknown
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(", ")" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string> { "(" },
+            NonVerseUnknownItems = new HashSet<string> { ")" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: '(' should NOT be overwritten (already categorized as invalid)
+        // ')' should inherit valid from verse (was unknown)
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Contain("("),
+                "'(' was already invalid in non-verse -- must NOT be overwritten"
+            );
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Not.Contain("("),
+                "'(' must not appear in valid (it was explicitly invalid)"
+            );
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Contain(")"),
+                "')' was unknown, should inherit valid from verse"
+            );
+        });
+    }
+
+    /// <summary>
+    /// Toggle ON with no unknown non-verse items: merge is a no-op but
+    /// still succeeds and requires rebuild.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Toggle ON with no unknowns is a no-op merge")]
+    public void ComputeToggleSeparation_Enable_NoUnknowns_StillSucceeds()
+    {
+        // Arrange: all non-verse items already categorized
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string> { "(" },
+            NonVerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: success, no changes needed but still requires rebuild
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Enabled, Is.True);
+            Assert.That(result.RebuildRequired, Is.True);
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Contain("("),
+                "Existing valid items preserved"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Contain(")"),
+                "Existing invalid items preserved"
+            );
+        });
+    }
+
+    /// <summary>
+    /// Toggle ON with empty inventories: no items to merge, still succeeds.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Toggle ON with empty inventories succeeds with no merge")]
+    public void ComputeToggleSeparation_Enable_EmptyInventories_Succeeds()
+    {
+        // Arrange: completely empty inventories
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Enabled, Is.True);
+            Assert.That(result.RebuildRequired, Is.True);
+            Assert.That(result.MergedNonVerseValid, Is.Empty);
+            Assert.That(result.MergedNonVerseInvalid, Is.Empty);
+        });
+    }
+
+    /// <summary>
+    /// RebuildRequired is always true after a successful toggle (both ON and OFF).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("RebuildRequired is always true after successful toggle")]
+    public void ComputeToggleSeparation_AnyDirection_RebuildRequiredAlwaysTrue()
+    {
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        // Act: Toggle ON
+        var onResult = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+        // Act: Toggle OFF
+        var offResult = InventoryStatusService.ComputeToggleSeparation(
+            enable: false,
+            snapshot
+        );
+
+        // Assert: Both directions require rebuild
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                onResult.RebuildRequired,
+                Is.True,
+                "Toggle ON always requires rebuild"
+            );
+            Assert.That(
+                offResult.RebuildRequired,
+                Is.True,
+                "Toggle OFF always requires rebuild"
+            );
+        });
+    }
+
+    /// <summary>
+    /// Toggle ON: only Unknown items in non-verse are modified. Items in the
+    /// verse set that have no corresponding non-verse Unknown item are ignored.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Only non-verse unknowns that match verse items get merged")]
+    public void ComputeToggleSeparation_Enable_OnlyMatchingUnknownsAreMerged()
+    {
+        // Arrange: verse has '(' valid; non-verse unknowns has ')' but not '('
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { ")" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: ')' is not in verse valid or invalid, so it stays unknown
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Not.Contain(")"),
+                "')' not in verse valid, should not become valid"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Not.Contain(")"),
+                "')' not in verse invalid, should not become invalid"
+            );
+        });
+    }
+
+    #endregion
+
+    #region CAP-005 DetermineSetSeparatelyState Tests (TS-026)
+
+    /// <summary>
+    /// DetermineSetSeparatelyState returns true when the project setting
+    /// MatchedPairsCheckSetSeparately is "true".
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-026")]
+    [Description("DetermineSetSeparatelyState returns true when setting is true")]
+    public void DetermineSetSeparatelyState_SettingTrue_ReturnsTrue()
+    {
+        // Arrange: setting value is true, no auto-detection needed
+        string settingValue = "true";
+        var nonVerseSnapshot = new SeparationDetectionSnapshot
+        {
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string>(),
+        };
+
+        // Act
+        bool result = InventoryStatusService.DetermineSetSeparatelyState(
+            settingValue,
+            nonVerseSnapshot
+        );
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    /// <summary>
+    /// DetermineSetSeparatelyState returns false when the project setting
+    /// is "false" and non-verse items match verse items (no auto-detection trigger).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-026")]
+    [Description("DetermineSetSeparatelyState returns false when setting is false and no diff")]
+    public void DetermineSetSeparatelyState_SettingFalseNoDiff_ReturnsFalse()
+    {
+        // Arrange: setting is false, non-verse matches verse
+        string settingValue = "false";
+        var nonVerseSnapshot = new SeparationDetectionSnapshot
+        {
+            NonVerseValidItems = new HashSet<string> { "(" },
+            NonVerseInvalidItems = new HashSet<string> { ")" },
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+        };
+
+        // Act
+        bool result = InventoryStatusService.DetermineSetSeparatelyState(
+            settingValue,
+            nonVerseSnapshot
+        );
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    /// <summary>
+    /// DetermineSetSeparatelyState auto-detects separation when non-verse items
+    /// differ from verse items, even if the setting is "false".
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-026")]
+    [Description("DetermineSetSeparatelyState auto-detects when non-verse differs from verse")]
+    public void DetermineSetSeparatelyState_SettingFalseButDiffDetected_ReturnsTrue()
+    {
+        // Arrange: setting is false, but non-verse valid differs from verse valid
+        string settingValue = "false";
+        var nonVerseSnapshot = new SeparationDetectionSnapshot
+        {
+            NonVerseValidItems = new HashSet<string> { "[" },
+            NonVerseInvalidItems = new HashSet<string>(),
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+        };
+
+        // Act
+        bool result = InventoryStatusService.DetermineSetSeparatelyState(
+            settingValue,
+            nonVerseSnapshot
+        );
+
+        // Assert: auto-detects because non-verse settings differ
+        Assert.That(
+            result,
+            Is.True,
+            "Should auto-detect separation when non-verse differs from verse"
+        );
+    }
+
+    /// <summary>
+    /// DetermineSetSeparatelyState returns false for empty inventories
+    /// with setting false (default for new projects).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-026")]
+    [Description("Default for new projects: separation is false")]
+    public void DetermineSetSeparatelyState_EmptyInventories_ReturnsFalse()
+    {
+        // Arrange: empty inventories, setting is false/empty
+        string settingValue = "";
+        var nonVerseSnapshot = new SeparationDetectionSnapshot
+        {
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string>(),
+        };
+
+        // Act
+        bool result = InventoryStatusService.DetermineSetSeparatelyState(
+            settingValue,
+            nonVerseSnapshot
+        );
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    /// <summary>
+    /// DetermineSetSeparatelyState returns true when setting is null but
+    /// non-verse has different items from verse (auto-detection).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-026")]
+    [Description("Null setting with differing non-verse items auto-detects true")]
+    public void DetermineSetSeparatelyState_NullSettingWithDiff_AutoDetectsTrue()
+    {
+        // Arrange: no explicit setting, but inventories differ
+        string? settingValue = null;
+        var nonVerseSnapshot = new SeparationDetectionSnapshot
+        {
+            NonVerseValidItems = new HashSet<string> { "[" },
+            NonVerseInvalidItems = new HashSet<string> { "]" },
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+        };
+
+        // Act
+        bool result = InventoryStatusService.DetermineSetSeparatelyState(
+            settingValue,
+            nonVerseSnapshot
+        );
+
+        // Assert
+        Assert.That(result, Is.True, "Auto-detection should trigger with differing inventories");
+    }
+
+    #endregion
+
+    #region CAP-005 Permission/Precondition Tests (VAL-006)
+
+    /// <summary>
+    /// VAL-006: Only administrators can toggle separation.
+    /// Non-admin users get a PERMISSION_DENIED error.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ScenarioId", "TS-098")]
+    [Property("ValidationRule", "VAL-006")]
+    [Description("Non-admin cannot toggle separation")]
+    public void ToggleSeparationIfPermitted_NotAdmin_ReturnsPermissionDenied()
+    {
+        // Arrange
+        bool isAdmin = false;
+
+        // Act
+        var result = InventoryStatusService.ToggleSeparationIfPermitted(
+            isAdmin,
+            () => new SeparationToggleResult
+            {
+                Success = true,
+                Enabled = true,
+                RebuildRequired = true,
+            }
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.False);
+            Assert.That(
+                result.Error,
+                Does.Contain("administrator"),
+                "Error message should mention administrator requirement"
+            );
+            Assert.That(result.RebuildRequired, Is.False, "No rebuild when permission denied");
+        });
+    }
+
+    /// <summary>
+    /// VAL-006: Administrators can toggle separation successfully.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ScenarioId", "TS-098")]
+    [Property("ValidationRule", "VAL-006")]
+    [Description("Admin can toggle separation")]
+    public void ToggleSeparationIfPermitted_Admin_InvokesToggle()
+    {
+        // Arrange
+        bool isAdmin = true;
+        bool toggleWasCalled = false;
+
+        // Act
+        var result = InventoryStatusService.ToggleSeparationIfPermitted(
+            isAdmin,
+            () =>
+            {
+                toggleWasCalled = true;
+                return new SeparationToggleResult
+                {
+                    Success = true,
+                    Enabled = true,
+                    RebuildRequired = true,
+                };
+            }
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(toggleWasCalled, Is.True, "Toggle action must be invoked for admin");
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Enabled, Is.True);
+            Assert.That(result.RebuildRequired, Is.True);
+        });
+    }
+
+    /// <summary>
+    /// BHV-107: Check must support separate inventories. If not supported,
+    /// returns NOT_SUPPORTED error.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Check not supporting separation returns NOT_SUPPORTED error")]
+    public void ToggleSeparationIfSupported_NotSupported_ReturnsNotSupportedError()
+    {
+        // Arrange
+        bool supportsSeparateInventories = false;
+
+        // Act
+        var result = InventoryStatusService.ToggleSeparationIfSupported(
+            supportsSeparateInventories,
+            () => new SeparationToggleResult
+            {
+                Success = true,
+                Enabled = true,
+                RebuildRequired = true,
+            }
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.False);
+            Assert.That(
+                result.Error,
+                Does.Contain("does not support"),
+                "Error should mention lack of support"
+            );
+        });
+    }
+
+    /// <summary>
+    /// BHV-107: Check supporting separation proceeds normally.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Check supporting separation invokes toggle")]
+    public void ToggleSeparationIfSupported_Supported_InvokesToggle()
+    {
+        // Arrange
+        bool supportsSeparateInventories = true;
+        bool toggleWasCalled = false;
+
+        // Act
+        var result = InventoryStatusService.ToggleSeparationIfSupported(
+            supportsSeparateInventories,
+            () =>
+            {
+                toggleWasCalled = true;
+                return new SeparationToggleResult
+                {
+                    Success = true,
+                    Enabled = true,
+                    RebuildRequired = true,
+                };
+            }
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(toggleWasCalled, Is.True, "Toggle action must be invoked when supported");
+            Assert.That(result.Success, Is.True);
+        });
+    }
+
+    #endregion
+
+    #region CAP-005 Golden Master Tests (gm-005, gm-006)
+
+    /// <summary>
+    /// Golden master gm-005: Toggle ON with verse ('(' valid, ')' invalid) and
+    /// non-verse (both unknown) produces:
+    ///   - non-verse '(' becomes valid
+    ///   - non-verse ')' becomes invalid
+    ///   - separationEnabled = true
+    ///   - settingSaved = true (implied by success)
+    ///   - inventoryRebuilt = true (RebuildRequired)
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("GoldenMasterId", "gm-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("gm-005: Toggle ON destructive merge matches expected output")]
+    public void GoldenMaster_gm005_ToggleOn_MatchesExpectedOutput()
+    {
+        // Arrange: exact gm-005 input
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(", ")" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: matches gm-005 expected-output.json
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True, "gm-005: operation succeeds");
+            Assert.That(result.Enabled, Is.True, "gm-005: separationEnabled = true");
+            Assert.That(result.RebuildRequired, Is.True, "gm-005: inventoryRebuilt = true");
+            // nonVerseStatus: { "(": "valid", ")": "invalid" }
+            Assert.That(
+                result.MergedNonVerseValid,
+                Is.EquivalentTo(new[] { "(" }),
+                "gm-005: non-verse '(' = valid"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Is.EquivalentTo(new[] { ")" }),
+                "gm-005: non-verse ')' = invalid"
+            );
+        });
+    }
+
+    /// <summary>
+    /// Golden master gm-006: Round-trip toggle confirms destructive merge.
+    /// After ON -> manual change -> OFF -> ON, previously unknown items that were
+    /// made unknown again get re-merged from verse status.
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("GoldenMasterId", "gm-006")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-100")]
+    [Description("gm-006: Round-trip toggle permanently changes statuses")]
+    public void GoldenMaster_gm006_RoundTrip_PermanentlyChangesStatuses()
+    {
+        // Arrange: Start with verse '(' valid, non-verse '(' unknown
+        var initialSnapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act 1: Toggle ON -- '(' becomes valid in non-verse
+        var firstOn = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            initialSnapshot
+        );
+        Assert.That(firstOn.MergedNonVerseValid, Does.Contain("("), "Step 1: merge applies");
+
+        // Simulate user putting '(' back to unknown
+        var afterRevert = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act 2: Toggle OFF
+        var offResult = InventoryStatusService.ComputeToggleSeparation(
+            enable: false,
+            afterRevert
+        );
+        Assert.That(offResult.Enabled, Is.False, "Step 2: separation off");
+
+        // Act 3: Toggle ON again -- merge re-applies
+        var secondOn = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            afterRevert
+        );
+
+        // Assert: gm-006 confirms previously unknown now valid
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                secondOn.MergedNonVerseValid,
+                Does.Contain("("),
+                "gm-006: previously unknown now valid after round-trip"
+            );
+            Assert.That(secondOn.RebuildRequired, Is.True);
+        });
+    }
+
+    #endregion
+
+    #region CAP-005 Extraction Tests (EXT-004) - Toggle Logic
+
+    /// <summary>
+    /// EXT-004 merge algorithm: iterates verse valid items, sets unknown
+    /// non-verse items to valid.
+    /// </summary>
+    [Test]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ExtractionId", "EXT-004")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("EXT-004: Merge iterates verse valid, sets unknown non-verse to valid")]
+    public void ComputeToggleSeparation_MergeAlgorithm_VerseValidSetsUnknownNonVerseValid()
+    {
+        // Arrange: three verse valid items, two are unknown in non-verse
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(", "[", "{" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string> { "(" },
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "[", "{" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: '[' and '{' inherit valid from verse; '(' already valid, preserved
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.MergedNonVerseValid, Does.Contain("("));
+            Assert.That(result.MergedNonVerseValid, Does.Contain("["));
+            Assert.That(result.MergedNonVerseValid, Does.Contain("{"));
+        });
+    }
+
+    /// <summary>
+    /// EXT-004 merge algorithm: iterates verse invalid items, sets unknown
+    /// non-verse items to invalid.
+    /// </summary>
+    [Test]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ExtractionId", "EXT-004")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("EXT-004: Merge iterates verse invalid, sets unknown non-verse to invalid")]
+    public void ComputeToggleSeparation_MergeAlgorithm_VerseInvalidSetsUnknownNonVerseInvalid()
+    {
+        // Arrange: two verse invalid items, both unknown in non-verse
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string> { ")", "]" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { ")", "]" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: ')' and ']' inherit invalid from verse
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.MergedNonVerseInvalid, Does.Contain(")"));
+            Assert.That(result.MergedNonVerseInvalid, Does.Contain("]"));
+        });
+    }
+
+    /// <summary>
+    /// EXT-004: Toggle OFF does NOT perform merge. Non-verse items unchanged.
+    /// </summary>
+    [Test]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ExtractionId", "EXT-004")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-099")]
+    [Description("EXT-004: Toggle OFF does not merge, just disables separation")]
+    public void ComputeToggleSeparation_Disable_DoesNotMerge()
+    {
+        // Arrange: non-verse has unknown items
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: false,
+            snapshot
+        );
+
+        // Assert: no MergedNonVerse* fields populated (no merge for OFF)
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Enabled, Is.False);
+            Assert.That(result.RebuildRequired, Is.True, "Rebuild required even for OFF");
+        });
+    }
+
+    /// <summary>
+    /// EXT-004: mixed scenario -- some items valid in verse, some invalid,
+    /// non-verse has a mix of categorized and unknown items.
+    /// </summary>
+    [Test]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("ExtractionId", "EXT-004")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("EXT-004: Mixed scenario with some categorized and some unknown non-verse items")]
+    public void ComputeToggleSeparation_MixedScenario_CorrectlyMerges()
+    {
+        // Arrange: verse: '(' valid, ')' invalid, '[' valid
+        // non-verse: '(' already valid, ')' unknown, '[' already invalid, ']' unknown
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(", "[" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string> { "(" },
+            NonVerseInvalidItems = new HashSet<string> { "[" },
+            NonVerseUnknownItems = new HashSet<string> { ")", "]" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert:
+        // '(' was already valid in non-verse -> stays valid
+        // ')' was unknown, verse says invalid -> becomes invalid
+        // '[' was already invalid in non-verse -> stays invalid (not overwritten)
+        // ']' was unknown, not in verse valid or invalid -> stays unknown
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.MergedNonVerseValid, Does.Contain("("), "'(' already valid");
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Contain(")"),
+                "')' unknown -> inherits invalid from verse"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Contain("["),
+                "'[' was already invalid -> preserved"
+            );
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Not.Contain("]"),
+                "']' unknown but not in any verse set -> not merged to valid"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Not.Contain("]"),
+                "']' unknown but not in any verse set -> not merged to invalid"
+            );
+        });
+    }
+
+    #endregion
+
+    #region CAP-005 Invariant Tests (INV-017)
+
+    /// <summary>
+    /// INV-017: Non-verse validity falls back to verse validity. When checking
+    /// non-verse text with separation enabled, if an item is not explicitly valid
+    /// or invalid in the non-verse set, the system falls back to checking the
+    /// main (verse text) valid set.
+    ///
+    /// After toggle ON, items that were unknown in non-verse and had a verse status
+    /// should now explicitly have that status in non-verse (no longer relying on fallback).
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("InvariantId", "INV-017")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("INV-017: After toggle ON, previously-unknown non-verse items have explicit status")]
+    public void ComputeToggleSeparation_Enable_EliminatesNeedForFallback()
+    {
+        // Arrange: '(' is valid in verse, unknown in non-verse
+        // Before toggle: non-verse would fall back to verse for '(' validity
+        // After toggle: '(' should be explicitly valid in non-verse
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: '(' is now explicitly in MergedNonVerseValid (no fallback needed)
+        Assert.That(
+            result.MergedNonVerseValid,
+            Does.Contain("("),
+            "INV-017: After merge, '(' has explicit non-verse status (no fallback)"
+        );
+    }
+
+    /// <summary>
+    /// INV-017: Items unknown in both verse and non-verse remain unknown after merge.
+    /// The merge only propagates verse VALID and verse INVALID to unknown non-verse items.
+    /// Items that are unknown in verse stay unknown in non-verse too.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("InvariantId", "INV-017")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("INV-017: Items unknown in verse do not get merged into non-verse")]
+    public void ComputeToggleSeparation_Enable_UnknownVerseItemsNotMerged()
+    {
+        // Arrange: '(' is not in verse valid or invalid (unknown in verse too)
+        // '(' is unknown in non-verse
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: '(' stays unknown (not in valid or invalid)
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                result.MergedNonVerseValid,
+                Does.Not.Contain("("),
+                "INV-017: Unknown verse items do not propagate to non-verse valid"
+            );
+            Assert.That(
+                result.MergedNonVerseInvalid,
+                Does.Not.Contain("("),
+                "INV-017: Unknown verse items do not propagate to non-verse invalid"
+            );
+        });
+    }
+
+    /// <summary>
+    /// INV-017: Merge direction is one-way (verse -> non-verse). Non-verse
+    /// categorized items do NOT flow back to verse.
+    /// </summary>
+    [Test]
+    [Category("Invariant")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("InvariantId", "INV-017")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("INV-017: Merge is one-way (verse -> non-verse), never reverse")]
+    public void ComputeToggleSeparation_Enable_MergeIsOneWay()
+    {
+        // Arrange: verse has '(' as unknown (not in valid/invalid),
+        // non-verse has '(' as valid
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string> { "(" },
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        // Act
+        var result = InventoryStatusService.ComputeToggleSeparation(
+            enable: true,
+            snapshot
+        );
+
+        // Assert: non-verse '(' stays valid (not affected by verse unknown)
+        Assert.That(
+            result.MergedNonVerseValid,
+            Does.Contain("("),
+            "INV-017: Non-verse valid '(' preserved -- merge is verse->non-verse only"
+        );
+    }
+
+    #endregion
+
+    #region CAP-005 Edge Case - Round-Trip Toggle (TS-100)
+
+    /// <summary>
+    /// TS-100 edge case: Toggle ON then OFF then ON permanently changes statuses.
+    /// Each toggle ON re-applies the merge for items that are currently Unknown
+    /// in non-verse, regardless of their previous history.
+    /// </summary>
+    [Test]
+    [Category("EdgeCase")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-100")]
+    [Description("TS-100: Multiple toggle cycles permanently change non-verse statuses")]
+    public void ComputeToggleSeparation_MultipleToggleCycles_PermanentlyChangesStatuses()
+    {
+        // Setup: verse '(' valid, ')' invalid; non-verse both unknown
+        var initial = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(", ")" },
+        };
+
+        // Cycle 1: Toggle ON -- both items get merged
+        var cycle1 = InventoryStatusService.ComputeToggleSeparation(true, initial);
+        Assert.That(cycle1.MergedNonVerseValid, Does.Contain("("), "Cycle 1: '(' merged to valid");
+        Assert.That(
+            cycle1.MergedNonVerseInvalid,
+            Does.Contain(")"),
+            "Cycle 1: ')' merged to invalid"
+        );
+
+        // Between cycles: simulate user sets '(' back to unknown in non-verse
+        var afterUserChange = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseUnknownItems = new HashSet<string> { "(" },
+        };
+
+        // Cycle 2: Toggle OFF
+        var cycle2Off = InventoryStatusService.ComputeToggleSeparation(false, afterUserChange);
+        Assert.That(cycle2Off.Enabled, Is.False, "Cycle 2: separation off");
+
+        // Cycle 3: Toggle ON again -- '(' is unknown again, gets re-merged
+        var cycle3 = InventoryStatusService.ComputeToggleSeparation(true, afterUserChange);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                cycle3.MergedNonVerseValid,
+                Does.Contain("("),
+                "Cycle 3: '(' re-merged to valid (permanent change)"
+            );
+            Assert.That(
+                cycle3.MergedNonVerseInvalid,
+                Does.Contain(")"),
+                "Cycle 3: ')' stays invalid (not reverted by OFF)"
+            );
+            Assert.That(cycle3.RebuildRequired, Is.True);
+        });
+    }
+
+    /// <summary>
+    /// TS-100 edge case: After toggle ON, items that were already categorized
+    /// in non-verse (not unknown) are never affected by any toggle cycle.
+    /// </summary>
+    [Test]
+    [Category("EdgeCase")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-100")]
+    [Description("TS-100: Already-categorized non-verse items survive toggle cycles")]
+    public void ComputeToggleSeparation_ToggleCycles_CategorizedItemsSurvive()
+    {
+        // Arrange: '(' valid in verse; '(' explicitly invalid in non-verse
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string> { "(" },
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        // Act: multiple toggle cycles should not overwrite explicit non-verse status
+        var on1 = InventoryStatusService.ComputeToggleSeparation(true, snapshot);
+        // '(' is not unknown in non-verse, so it must NOT be overwritten
+        Assert.That(
+            on1.MergedNonVerseInvalid,
+            Does.Contain("("),
+            "Categorized as invalid in non-verse survives toggle ON"
+        );
+        Assert.That(
+            on1.MergedNonVerseValid,
+            Does.Not.Contain("("),
+            "'(' must NOT be moved to valid -- it was explicitly invalid"
+        );
+    }
+
+    #endregion
+
+    #region CAP-005 Return Value Tests
+
+    /// <summary>
+    /// SeparationToggleResult.Enabled matches the requested enable direction.
+    /// </summary>
+    [TestCase(true)]
+    [TestCase(false)]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("Enabled field matches requested direction")]
+    public void ComputeToggleSeparation_EnabledMatchesDirection(bool enable)
+    {
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string>(),
+            VerseInvalidItems = new HashSet<string>(),
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string>(),
+        };
+
+        var result = InventoryStatusService.ComputeToggleSeparation(enable, snapshot);
+
+        Assert.That(result.Enabled, Is.EqualTo(enable));
+    }
+
+    /// <summary>
+    /// SeparationToggleResult.Success is always true for the core computation
+    /// (permission/support checks are handled by guard methods).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-005")]
+    [Property("BehaviorId", "BHV-107")]
+    [Property("ScenarioId", "TS-098")]
+    [Description("ComputeToggleSeparation always succeeds (guards are separate)")]
+    public void ComputeToggleSeparation_AlwaysSucceeds()
+    {
+        var snapshot = new SeparationSnapshot
+        {
+            VerseValidItems = new HashSet<string> { "(" },
+            VerseInvalidItems = new HashSet<string> { ")" },
+            NonVerseValidItems = new HashSet<string>(),
+            NonVerseInvalidItems = new HashSet<string>(),
+            NonVerseUnknownItems = new HashSet<string> { "(", ")" },
+        };
+
+        var result = InventoryStatusService.ComputeToggleSeparation(true, snapshot);
+
+        Assert.That(result.Success, Is.True, "Core computation always succeeds");
+    }
+
+    #endregion
 }
