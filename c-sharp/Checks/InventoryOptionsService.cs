@@ -45,7 +45,7 @@ internal static class InventoryOptionsService
     /// <param name="newValues">New option values (from user edits).</param>
     /// <param name="isWriteProtected">Whether the project is write-protected.</param>
     /// <returns>SaveInventoryOptionsResult with success flag and changed settings list.</returns>
-    // === EXTRACTION STUB: EXT-007 ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CMSOptionsForm.cs:64-86
     // Method: CMSOptionsForm.cmdOK_Click()
     // Maps to: EXT-007, BHV-119, BHV-130, VAL-005
@@ -55,6 +55,21 @@ internal static class InventoryOptionsService
         bool isWriteProtected
     )
     {
-        throw new NotImplementedException("CAP-008: DetermineOptionChanges not yet implemented");
+        if (isWriteProtected)
+        {
+            return new SaveInventoryOptionsResult { Success = false };
+        }
+
+        var changedSettings = new List<SaveOperation>();
+
+        foreach (var kvp in newValues)
+        {
+            if (!oldValues.TryGetValue(kvp.Key, out var oldValue) || oldValue != kvp.Value)
+            {
+                changedSettings.Add(new SaveOperation(kvp.Key, kvp.Value));
+            }
+        }
+
+        return new SaveInventoryOptionsResult { Success = true, ChangedSettings = changedSettings };
     }
 }
