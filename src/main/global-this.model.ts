@@ -7,7 +7,6 @@
  * https://webpack.js.org/plugins/normal-module-replacement-plugin/
  */
 
-import path from 'path';
 import { polyfillLocalStorage } from '@node/polyfills/local-storage.polyfill';
 import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
@@ -19,7 +18,8 @@ import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
 
 globalThis.processType = ProcessType.Main;
 globalThis.isPackaged = app.isPackaged;
-globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../');
+// process.cwd() in dev is the repo root
+globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : process.cwd();
 globalThis.logLevel =
   // Assert the extracted type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
