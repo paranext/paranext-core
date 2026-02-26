@@ -70,7 +70,7 @@ internal static class InventoryDisplayService
         columns.Add(new("CombinedStatus", "Status", "status", DefaultSortDescending: false));
     }
 
-    // === STUB FOR TDD RED PHASE ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checking/InventoryForm.cs:1281-1320
     // Method: InventoryForm.SetupTextTypeDropdown()
     // Maps to: EXT-006
@@ -83,9 +83,25 @@ internal static class InventoryDisplayService
     /// <returns>Content type filter configuration with visibility and options.</returns>
     public static ContentTypeFilterResult GetContentTypeFilterOptions(bool isSba, bool isSeparated)
     {
-        throw new NotImplementedException(
-            "CAP-007: GetContentTypeFilterOptions not yet implemented"
-        );
+        if (!isSba && !isSeparated)
+            return new ContentTypeFilterResult { Visible = false };
+
+        var options = new List<ContentTypeOption> { new("All text", InventoryTextType.AllText) };
+
+        if (isSeparated)
+        {
+            options.Add(new("Verse text only", InventoryTextType.VerseText));
+            options.Add(new("Non-verse text only", InventoryTextType.NonVerseText));
+        }
+        else if (isSba)
+        {
+            options.Add(new("Base project content only", InventoryTextType.RegularContent));
+        }
+
+        if (isSba)
+            options.Add(new("Study Bible content only", InventoryTextType.StudyBibleContent));
+
+        return new ContentTypeFilterResult { Visible = true, Options = options };
     }
 
     private static void AddStudyContentColumns(List<ColumnDefinition> columns)
