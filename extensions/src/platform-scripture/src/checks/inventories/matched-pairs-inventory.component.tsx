@@ -25,6 +25,16 @@ const MATCHED_PAIRS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_scope_chapter%',
   '%webView_inventory_scope_verse%',
   '%webView_inventory_filter_text%',
+  '%webView_matchedPairsInventory_menu_inventory%',
+  '%webView_matchedPairsInventory_menu_setSeparateStatus%',
+  '%webView_matchedPairsInventory_menu_editOptions%',
+  '%webView_matchedPairsInventory_menu_refresh%',
+  '%webView_matchedPairsInventory_toolbar_undo%',
+  '%webView_matchedPairsInventory_toolbar_redo%',
+  '%webView_matchedPairsInventory_column_verseText%',
+  '%webView_matchedPairsInventory_column_nonVerseText%',
+  '%webView_matchedPairsInventory_statusBar_item%',
+  '%webView_matchedPairsInventory_statusBar_items%',
 ];
 
 /**
@@ -158,6 +168,46 @@ export function MatchedPairsInventory({
     () => matchedPairsInventoryStrings['%webView_inventory_table_header_status%'],
     [matchedPairsInventoryStrings],
   );
+  const inventoryMenuLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_menu_inventory%'],
+    [matchedPairsInventoryStrings],
+  );
+  const setSeparateStatusLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_menu_setSeparateStatus%'],
+    [matchedPairsInventoryStrings],
+  );
+  const editOptionsLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_menu_editOptions%'],
+    [matchedPairsInventoryStrings],
+  );
+  const refreshLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_menu_refresh%'],
+    [matchedPairsInventoryStrings],
+  );
+  const undoLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_toolbar_undo%'],
+    [matchedPairsInventoryStrings],
+  );
+  const redoLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_toolbar_redo%'],
+    [matchedPairsInventoryStrings],
+  );
+  const verseTextLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_column_verseText%'],
+    [matchedPairsInventoryStrings],
+  );
+  const nonVerseTextLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_column_nonVerseText%'],
+    [matchedPairsInventoryStrings],
+  );
+  const itemLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_statusBar_item%'],
+    [matchedPairsInventoryStrings],
+  );
+  const itemsLabel = useMemo(
+    () => matchedPairsInventoryStrings['%webView_matchedPairsInventory_statusBar_items%'],
+    [matchedPairsInventoryStrings],
+  );
 
   // Undo/redo state (BHV-312)
   const [undoRedoState, dispatchUndoRedo] = useReducer(undoRedoReducer, {
@@ -256,17 +306,17 @@ export function MatchedPairsInventory({
             </div>
           ),
         },
-        inventoryCountColumn('Verse text'),
+        inventoryCountColumn(verseTextLabel),
         inventoryStatusColumn(
-          'Verse text',
+          verseTextLabel,
           approvedItems,
           handleApprovedItemsChangeWithUndo,
           unapprovedItems,
           handleUnapprovedItemsChangeWithUndo,
         ),
-        inventoryCountColumn('Non-verse text'),
+        inventoryCountColumn(nonVerseTextLabel),
         inventoryStatusColumn(
-          'Non-verse text',
+          nonVerseTextLabel,
           approvedItems,
           handleApprovedItemsChangeWithUndo,
           unapprovedItems,
@@ -288,6 +338,8 @@ export function MatchedPairsInventory({
     textLabel,
     countLabel,
     statusLabel,
+    verseTextLabel,
+    nonVerseTextLabel,
     approvedItems,
     handleApprovedItemsChangeWithUndo,
     unapprovedItems,
@@ -339,7 +391,7 @@ export function MatchedPairsInventory({
             className="tw-px-2 tw-py-1 tw-rounded hover:tw-bg-muted"
             onClick={() => setIsInventoryMenuOpen(!isInventoryMenuOpen)}
           >
-            {matchedPairsInventoryStrings['%webView_inventory_all%'] ? 'Inventory' : 'Inventory'}
+            {inventoryMenuLabel}
           </button>
           {isInventoryMenuOpen && (
             <div className="tw-absolute tw-left-0 tw-top-full tw-z-50 tw-bg-background tw-border tw-border-border tw-rounded tw-shadow-lg tw-min-w-[250px]">
@@ -352,7 +404,7 @@ export function MatchedPairsInventory({
                   setIsInventoryMenuOpen(false);
                 }}
               >
-                Set verse and non-verse status separately
+                {setSeparateStatusLabel}
               </button>
               <button
                 type="button"
@@ -362,7 +414,7 @@ export function MatchedPairsInventory({
                   setIsInventoryMenuOpen(false);
                 }}
               >
-                Edit inventory options
+                {editOptionsLabel}
               </button>
               <button
                 type="button"
@@ -372,7 +424,7 @@ export function MatchedPairsInventory({
                   setIsInventoryMenuOpen(false);
                 }}
               >
-                Refresh
+                {refreshLabel}
               </button>
             </div>
           )}
@@ -388,7 +440,7 @@ export function MatchedPairsInventory({
           disabled={undoRedoState.undoStack.length === 0}
           onClick={handleUndo}
         >
-          Undo
+          {undoLabel}
         </button>
         <button
           type="button"
@@ -397,7 +449,7 @@ export function MatchedPairsInventory({
           disabled={undoRedoState.redoStack.length === 0}
           onClick={handleRedo}
         >
-          Redo
+          {redoLabel}
         </button>
       </div>
 
@@ -432,7 +484,7 @@ export function MatchedPairsInventory({
         data-testid="item-count-label"
         className="tw-px-2 tw-py-1 tw-text-sm tw-text-muted-foreground tw-border-t tw-border-border"
       >
-        {itemCount} {itemCount === 1 ? 'Item' : 'Items'}
+        {itemCount} {itemCount === 1 ? itemLabel : itemsLabel}
       </div>
     </div>
   );
