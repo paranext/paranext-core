@@ -46,9 +46,19 @@ function waitForPort(port: number, timeout: number): Promise<void> {
 async function globalSetup(config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
-  // Remove stale Electron singleton lock files (left behind after crashes)
-  // BEFORE the port check — a stale lock could prevent a fresh launch even
-  // when the port is free.
+  // Fail fast if Platform.Bible is already running (single-instance lock will
+  // cause Playwright's Electron instance to exit immediately)
+  if (await isPortInUse(WEBSOCKET_PORT)) {
+    throw new Error(
+      `Port ${WEBSOCKET_PORT} is already in use. ` +
+        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
+    );
+  }
+
+  // Remove stale Electron singleton lock files (left behind after crashes).
+  // Done AFTER the port check so we only delete locks when the port is free,
+  // confirming they are genuinely stale rather than belonging to an instance
+  // that is still starting up.
   const os = await import('os');
   const appSupportDir =
     process.platform === 'darwin'
@@ -64,15 +74,6 @@ async function globalSetup(config: FullConfig): Promise<void> {
       console.log(`Removing stale singleton lock: ${lockPath}`);
       fs.unlinkSync(lockPath);
     }
-  }
-
-  // Fail fast if Platform.Bible is already running (single-instance lock will
-  // cause Playwright's Electron instance to exit immediately)
-  if (await isPortInUse(WEBSOCKET_PORT)) {
-    throw new Error(
-      `Port ${WEBSOCKET_PORT} is already in use. ` +
-        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
-    );
   }
 
   // Ensure the dev main bundle exists

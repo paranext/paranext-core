@@ -79,12 +79,34 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
     });
   } catch (error) {
     console.error('Failed to launch Electron:', error);
+    // Clean up the temp directory created above — launch never succeeded
+    fs.rmSync(userDataDir, { recursive: true, force: true });
     throw error;
   }
 
   // Wait for WebSocket server to be ready (port 8876)
   console.log('Waiting for WebSocket server on port 8876...');
-  await waitForWebSocketReady(DEFAULT_WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
+  try {
+    await waitForWebSocketReady(DEFAULT_WEBSOCKET_PORT, PROCESS_READY_TIMEOUT);
+  } catch (error) {
+    // Launch succeeded but WebSocket never became ready — kill the orphaned
+    // Electron process and clean up the temp directory before propagating.
+    console.error('WebSocket readiness check failed after Electron launch:', error);
+    const proc = electronApp.process();
+    if (proc?.pid) {
+      try {
+        process.kill(-proc.pid, 'SIGKILL');
+      } catch {
+        try {
+          proc.kill('SIGKILL');
+        } catch {
+          /* already dead */
+        }
+      }
+    }
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+    throw error;
+  }
   console.log('WebSocket server is ready');
 
   // Register the close listener BEFORE yielding to tests. The 'close' event
@@ -188,15 +210,19 @@ export async function sendPapiCommand<T = unknown>(
     });
 
     ws.on('message', (data) => {
-      clearTimeout(timeout);
       try {
         const response = JSON.parse(data.toString());
+        // Ignore unsolicited messages (notifications, events) that don't
+        // match our request id — only resolve on the actual response.
+        if (response.id !== 1) return;
+        clearTimeout(timeout);
         if (response.error) {
           reject(new Error(`PAPI error: ${JSON.stringify(response.error)}`));
         } else {
           resolve(response.result as T);
         }
       } catch (err) {
+        clearTimeout(timeout);
         reject(err);
       } finally {
         ws.close();
