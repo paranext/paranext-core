@@ -96,6 +96,8 @@ const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
+/** Set to true to re-enable the Allow Regex option for advanced users */
+const SHOW_ALLOW_REGEX_OPTION = false;
 
 global.webViewComponent = function FindWebView({
   projectId,
@@ -122,13 +124,13 @@ global.webViewComponent = function FindWebView({
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
-  // _setIsRegexAllowed is intentionally kept for future UI use; regex is currently hidden from users
-  const [isRegexAllowed, _setIsRegexAllowed] = useState(false);
-  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [submittedSearchTextType, setSubmittedSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
   const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
+  // isRegexAllowed is hidden from the UI via SHOW_ALLOW_REGEX_OPTION but kept for future use
+  const [isRegexAllowed, setIsRegexAllowed] = useState(false);
+  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -399,9 +401,9 @@ global.webViewComponent = function FindWebView({
       setSubmittedVerseRef(verseRefSetting);
       setSubmittedBookIds(selectedBookIds);
       setSubmittedShouldMatchCase(shouldMatchCase);
-      setSubmittedIsRegexAllowed(isRegexAllowed);
       setSubmittedSearchTextType(searchTextType);
       setSubmittedWordRestriction(wordRestriction);
+      setSubmittedIsRegexAllowed(isRegexAllowed);
       setFocusedResultIndex(undefined);
 
       setResults([]);
@@ -454,9 +456,9 @@ global.webViewComponent = function FindWebView({
     setSubmittedVerseRef(undefined);
     setSubmittedBookIds([]);
     setSubmittedShouldMatchCase(false);
-    setSubmittedIsRegexAllowed(false);
     setSubmittedSearchTextType('all');
     setSubmittedWordRestriction('none');
+    setSubmittedIsRegexAllowed(false);
 
     setFocusedResultIndex(undefined);
   }, [abandonFindJob]);
@@ -486,9 +488,9 @@ global.webViewComponent = function FindWebView({
       (scope === 'selectedBooks' &&
         [...selectedBookIds].sort().join(',') !== [...submittedBookIds].sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
-      isRegexAllowed !== submittedIsRegexAllowed ||
       searchTextType !== submittedSearchTextType ||
-      wordRestriction !== submittedWordRestriction
+      wordRestriction !== submittedWordRestriction ||
+      isRegexAllowed !== submittedIsRegexAllowed
     );
   }, [
     searchTerm,
@@ -501,12 +503,12 @@ global.webViewComponent = function FindWebView({
     submittedBookIds,
     shouldMatchCase,
     submittedShouldMatchCase,
-    isRegexAllowed,
-    submittedIsRegexAllowed,
     searchTextType,
     submittedSearchTextType,
     wordRestriction,
     submittedWordRestriction,
+    isRegexAllowed,
+    submittedIsRegexAllowed,
   ]);
 
   const loadMoreResults = useCallback(async () => {
@@ -838,6 +840,18 @@ global.webViewComponent = function FindWebView({
                   {localizedStrings['%webView_find_matchCase%']}
                 </Label>
               </div>
+              {SHOW_ALLOW_REGEX_OPTION && (
+                <div className="tw-flex tw-items-center tw-space-x-2">
+                  <Checkbox
+                    id="allow-regex"
+                    checked={isRegexAllowed}
+                    onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
+                  />
+                  <Label htmlFor="allow-regex" className="tw-cursor-pointer">
+                    {localizedStrings['%webView_find_allowRegex%']}
+                  </Label>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

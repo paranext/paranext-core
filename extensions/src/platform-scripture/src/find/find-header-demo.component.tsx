@@ -25,6 +25,9 @@ import {
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
 
+/** Set to true to re-enable the Allow Regex option for advanced users */
+const SHOW_ALLOW_REGEX_OPTION = false;
+
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
@@ -52,11 +55,11 @@ export function FindHeaderDemo() {
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
-  // _setIsRegexAllowed is intentionally kept for future UI use; regex is currently hidden from users
-  const [isRegexAllowed, _setIsRegexAllowed] = useState(false);
-  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
   const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
+  // isRegexAllowed is hidden from the UI via SHOW_ALLOW_REGEX_OPTION but kept for future use
+  const [isRegexAllowed, setIsRegexAllowed] = useState(false);
+  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
 
   // not used in demo component
   // const [activeJobId, setActiveJobId] = useState<string>();
@@ -83,8 +86,8 @@ export function FindHeaderDemo() {
       (scope === 'selectedBooks' &&
         selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
-      isRegexAllowed !== submittedIsRegexAllowed ||
-      wordRestriction !== submittedWordRestriction
+      wordRestriction !== submittedWordRestriction ||
+      isRegexAllowed !== submittedIsRegexAllowed
     );
   }, [
     searchTerm,
@@ -99,10 +102,10 @@ export function FindHeaderDemo() {
     submittedBookIds,
     shouldMatchCase,
     submittedShouldMatchCase,
-    isRegexAllowed,
-    submittedIsRegexAllowed,
     wordRestriction,
     submittedWordRestriction,
+    isRegexAllowed,
+    submittedIsRegexAllowed,
   ]);
 
   const canClearResults = useMemo(
@@ -140,8 +143,8 @@ export function FindHeaderDemo() {
     setSubmittedVerseRef(verseRefSetting);
     setSubmittedBookIds(selectedBookIds);
     setSubmittedShouldMatchCase(shouldMatchCase);
-    setSubmittedIsRegexAllowed(isRegexAllowed);
     setSubmittedWordRestriction(wordRestriction);
+    setSubmittedIsRegexAllowed(isRegexAllowed);
   };
 
   // custom for demo
@@ -277,6 +280,18 @@ export function FindHeaderDemo() {
                 %webView_find_matchCase%
               </Label>
             </div>
+            {SHOW_ALLOW_REGEX_OPTION && (
+              <div className="tw-flex tw-items-center tw-space-x-2">
+                <Checkbox
+                  id="allow-regex"
+                  checked={isRegexAllowed}
+                  onCheckedChange={(checked: boolean) => setIsRegexAllowed(checked === true)}
+                />
+                <Label htmlFor="allow-regex" className="tw-cursor-pointer">
+                  %webView_find_allowRegex%
+                </Label>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
