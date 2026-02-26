@@ -7,23 +7,12 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
 
-// === NEW IN PT10 ===
-// Reason: Adapter for IRecordCheckError that collects VerseListItem results
-// for the BasicChecksExecutionService pipeline.
-// Maps to: CAP-010
 /// <summary>
 /// Implements IRecordCheckError to collect check errors as VerseListItem instances.
 /// Used by BasicChecksExecutionService to capture results from check.Run().
 /// </summary>
-internal sealed class CheckErrorRecorder : IRecordCheckError
+internal sealed class CheckErrorRecorder(List<VerseListItem> results) : IRecordCheckError
 {
-    private readonly List<VerseListItem> _results;
-
-    public CheckErrorRecorder(List<VerseListItem> results)
-    {
-        _results = results;
-    }
-
     public void RecordError(
         ITextToken token,
         int offset,
@@ -58,22 +47,10 @@ internal sealed class CheckErrorRecorder : IRecordCheckError
         VerseListItemType type = VerseListItemType.Error
     )
     {
-        VerseListItem item;
+        ScriptureSelection? selection = vref.IsDefault
+            ? null
+            : new ScriptureSelection(vref.Clone(), text, selectionStart);
 
-        if (!vref.IsDefault)
-        {
-            ScriptureSelection selection = new ScriptureSelection(
-                vref.Clone(),
-                text,
-                selectionStart
-            );
-            item = new VerseListItem(selection, message, messageId, type);
-        }
-        else
-        {
-            item = new VerseListItem((ScriptureSelection?)null, message, messageId, type);
-        }
-
-        _results.Add(item);
+        results.Add(new VerseListItem(selection, message, messageId, type));
     }
 }

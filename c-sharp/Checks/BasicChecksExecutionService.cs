@@ -2,7 +2,6 @@ using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
-using Paratext.Data.Filters;
 using Paratext.Data.Find;
 using PtxUtils;
 using SIL.Scripture;
@@ -11,20 +10,13 @@ namespace Paranext.DataProvider.Checks;
 
 /// <summary>
 /// Executes selected basic checks on specified books.
-/// Wraps the RunBasicChecks pipeline (EXT-009) and provides check filtering (EXT-010)
-/// and SBA scope configuration (EXT-011).
+/// Wraps the RunBasicChecks pipeline and provides check filtering
+/// and SBA scope configuration.
 /// </summary>
 internal static class BasicChecksExecutionService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextChecks/RunBasicChecks.cs:20
-    // Maps to: INV-010
     private const int MaxCheckingResults = 5000;
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checking/RunBasicChecksForm.cs:195-234
-    // Method: RunBasicChecksForm.cmdOK_Click()
-    // Maps to: EXT-009
     /// <summary>
     /// Executes basic checks on specified books.
     /// </summary>
@@ -35,11 +27,6 @@ internal static class BasicChecksExecutionService
         return ExecuteBasicChecks(input, CancellationToken.None);
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checking/RunBasicChecksForm.cs:195-234
-    //         PT9/ParatextChecks/RunBasicChecks.cs:62-120, 232-295
-    // Method: RunBasicChecksForm.cmdOK_Click(), RunBasicChecks.Run()
-    // Maps to: EXT-009
     /// <summary>
     /// Executes basic checks on specified books with cancellation support.
     /// </summary>
@@ -52,195 +39,31 @@ internal static class BasicChecksExecutionService
     )
     {
         if (input.ChecksToRun.Count == 0)
-        {
-            return new CheckExecutionResult
-            {
-                Success = false,
-                Error = "At least one check type must be specified",
-                Results = new List<CheckError>(),
-                Overflow = false,
-                TotalCount = 0,
-            };
-        }
+            return CreateErrorResult("At least one check type must be specified");
 
         if (input.BooksToCheck.Count == 0)
-        {
-            return new CheckExecutionResult
-            {
-                Success = false,
-                Error = "At least one book must be specified",
-                Results = new List<CheckError>(),
-                Overflow = false,
-                TotalCount = 0,
-            };
-        }
+            return CreateErrorResult("At least one book must be specified");
 
         if (cancellationToken.IsCancellationRequested)
-        {
-            return new CheckExecutionResult
-            {
-                Success = false,
-                Error = "Check execution was cancelled",
-                Results = new List<CheckError>(),
-                Overflow = false,
-                TotalCount = 0,
-            };
-        }
+            return CreateErrorResult("Check execution was cancelled");
 
         try
         {
             ScrText scrText = LocalParatextProjects.GetParatextProject(input.ProjectId);
 
             if (scrText.IsResourceProject)
-            {
-                return new CheckExecutionResult
-                {
-                    Success = false,
-                    Error = "Cannot record checking results for resource projects",
-                    Results = new List<CheckError>(),
-                    Overflow = false,
-                    TotalCount = 0,
-                };
-            }
+                return CreateErrorResult("Cannot record checking results for resource projects");
 
-            List<ScriptureCheckBase> checksToRun = new();
-            foreach (string checkType in input.ChecksToRun)
-            {
-                ScriptureCheckBase? check = BasicChecksFactory.GetCheck(checkType);
-                if (check != null)
-                    checksToRun.Add(check);
-            }
-
-            bool sbaContentOnly = false;
-            ChecksDataSource checksDataSource = new ChecksDataSource(scrText);
-            checksDataSource.SbaContentOnly = sbaContentOnly;
-
-            scrText.Parser.ClearCaches();
-            CheckingStatusRecorder? recorder = new CheckingStatusRecorder(scrText);
-
-            foreach (ScriptureCheckBase check in checksToRun)
-                check.Initialize(checksDataSource);
-
-            List<CheckError> allErrors = new();
-            int totalCount = 0;
-            bool overflow = false;
-
-            BookSet bookSet = new BookSet();
-            foreach (int bookNum in input.BooksToCheck)
-                bookSet.Add(bookNum);
-
-            CheckDataFormat neededFormat = 0;
-            foreach (ScriptureCheckBase check in checksToRun)
-                neededFormat |= check.NeededFormat;
-
-            foreach (int bookNum in input.BooksToCheck)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return new CheckExecutionResult
-                    {
-                        Success = false,
-                        Error = "Check execution was cancelled",
-                        Results = allErrors,
-                        Overflow = overflow,
-                        TotalCount = totalCount,
-                    };
-                }
-
-                checksDataSource.GetText(bookNum, 0, neededFormat);
-
-                foreach (ScriptureCheckBase check in checksToRun)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        return new CheckExecutionResult
-                        {
-                            Success = false,
-                            Error = "Check execution was cancelled",
-                            Results = allErrors,
-                            Overflow = overflow,
-                            TotalCount = totalCount,
-                        };
-                    }
-
-                    List<VerseListItem> bookCheckErrors = new();
-                    CheckErrorRecorder errorRecorder = new CheckErrorRecorder(bookCheckErrors);
-
-                    try
-                    {
-                        check.Run(bookNum, checksDataSource, errorRecorder);
-
-                        if (input.FirstChapter > 0 && input.LastChapter > 0)
-                        {
-                            bookCheckErrors.RemoveAll(item =>
-                                item.VerseReference == null
-                                || item.VerseReference.Value.ChapterNum < input.FirstChapter
-                                || item.VerseReference.Value.ChapterNum > input.LastChapter
-                            );
-                        }
-
-                        recorder.RecordOneCheck(bookCheckErrors, bookNum, check.Type);
-                    }
-                    catch (RequiredCheckSettingsMissingException)
-                    {
-                        // Skip checks that aren't properly set up
-                    }
-
-                    foreach (VerseListItem item in bookCheckErrors)
-                    {
-                        if (item.VerseReference == null)
-                            continue;
-
-                        totalCount++;
-
-                        if (!overflow && allErrors.Count < MaxCheckingResults)
-                        {
-                            VerseRef vref = item.VerseReference.Value;
-                            string reference =
-                                $"{Canon.BookNumberToId(vref.BookNum)} {vref.ChapterNum}:{vref.VerseNum}";
-                            string message = item.Message ?? string.Empty;
-                            string selectedText = item.Selection?.SelectedText ?? string.Empty;
-                            string checkType = check.Type.InternalValue;
-
-                            allErrors.Add(
-                                new CheckError(reference, checkType, message, selectedText)
-                            );
-                        }
-                        else if (!overflow)
-                        {
-                            overflow = true;
-                        }
-                    }
-                }
-            }
-
-            CheckingStatuses.Get(scrText).Save();
-
-            return new CheckExecutionResult
-            {
-                Success = true,
-                Error = null,
-                Results = allErrors,
-                Overflow = overflow,
-                TotalCount = totalCount,
-            };
+            return RunChecksOnBooks(input, scrText, cancellationToken);
         }
         catch (Exception ex)
         {
-            return new CheckExecutionResult
-            {
-                Success = false,
-                Error = $"Error running checks on project {input.ProjectId}: {ex.Message}",
-                Results = new List<CheckError>(),
-                Overflow = false,
-                TotalCount = 0,
-            };
+            return CreateErrorResult(
+                $"Error running checks on project {input.ProjectId}: {ex.Message}"
+            );
         }
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checking/RunBasicChecksForm.cs:69-75
-    // Maps to: EXT-010
     /// <summary>
     /// Returns filtered list of available checks based on project type.
     /// Schema check hidden unless showSchema=true. QuotationTypes hidden for SBA.
@@ -250,33 +73,192 @@ internal static class BasicChecksExecutionService
     /// <returns>List of available check type strings</returns>
     public static List<string> GetAvailableChecks(bool isSba, bool showSchema)
     {
-        List<string> result = new();
-        foreach (string checkType in BasicChecksFactory.AvailableChecks)
-        {
-            if (checkType == CheckType.Schema.InternalValue && !showSchema)
-                continue;
-
-            if (checkType == CheckType.QuotationTypes.InternalValue && isSba)
-                continue;
-
-            result.Add(checkType);
-        }
-
-        return result;
+        return BasicChecksFactory
+            .AvailableChecks.Where(checkType =>
+                (checkType != CheckType.Schema.InternalValue || showSchema)
+                && (checkType != CheckType.QuotationTypes.InternalValue || !isSba)
+            )
+            .ToList();
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checking/RunBasicChecksForm.cs:236-247, 325-343
-    // Maps to: EXT-011
     /// <summary>
     /// Returns check scope configuration for SBA projects.
     /// </summary>
-    /// <param name="selectedIndex">Dropdown selection index</param>
+    /// <param name="selectedIndex">Dropdown selection index (0 = All content, 1+ = Study content only)</param>
     /// <returns>SBA check scope configuration</returns>
     public static SbaCheckScope GetSbaCheckScope(int selectedIndex)
     {
-        // selectedIndex 0 = "All content" (no disable)
-        // selectedIndex 1 = "Study content only" (disable ChapterVerse)
         return new SbaCheckScope(DisableChapterVerseCheck: selectedIndex != 0);
     }
+
+    private static CheckExecutionResult RunChecksOnBooks(
+        ExecuteBasicChecksInput input,
+        ScrText scrText,
+        CancellationToken cancellationToken
+    )
+    {
+        List<ScriptureCheckBase> checksToRun = ResolveChecks(input.ChecksToRun);
+
+        ChecksDataSource checksDataSource = new(scrText) { SbaContentOnly = false };
+        scrText.Parser.ClearCaches();
+        CheckingStatusRecorder recorder = new(scrText);
+
+        foreach (ScriptureCheckBase check in checksToRun)
+            check.Initialize(checksDataSource);
+
+        CheckDataFormat neededFormat = checksToRun.Aggregate(
+            (CheckDataFormat)0,
+            (format, check) => format | check.NeededFormat
+        );
+
+        List<CheckError> allErrors = new();
+        int totalCount = 0;
+        bool overflow = false;
+
+        foreach (int bookNum in input.BooksToCheck)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return CreateCancelledResult(allErrors, overflow, totalCount);
+
+            checksDataSource.GetText(bookNum, 0, neededFormat);
+
+            foreach (ScriptureCheckBase check in checksToRun)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return CreateCancelledResult(allErrors, overflow, totalCount);
+
+                List<VerseListItem> bookCheckErrors = RunSingleCheck(
+                    check,
+                    bookNum,
+                    checksDataSource,
+                    recorder,
+                    input.FirstChapter,
+                    input.LastChapter
+                );
+
+                CollectErrors(
+                    bookCheckErrors,
+                    check.Type.InternalValue,
+                    allErrors,
+                    ref totalCount,
+                    ref overflow
+                );
+            }
+        }
+
+        CheckingStatuses.Get(scrText).Save();
+
+        return new CheckExecutionResult
+        {
+            Success = true,
+            Results = allErrors,
+            Overflow = overflow,
+            TotalCount = totalCount,
+        };
+    }
+
+    private static List<ScriptureCheckBase> ResolveChecks(List<string> checkTypes)
+    {
+        List<ScriptureCheckBase> checks = new();
+        foreach (string checkType in checkTypes)
+        {
+            ScriptureCheckBase? check = BasicChecksFactory.GetCheck(checkType);
+            if (check != null)
+                checks.Add(check);
+        }
+        return checks;
+    }
+
+    private static List<VerseListItem> RunSingleCheck(
+        ScriptureCheckBase check,
+        int bookNum,
+        ChecksDataSource dataSource,
+        CheckingStatusRecorder recorder,
+        int firstChapter,
+        int lastChapter
+    )
+    {
+        List<VerseListItem> bookCheckErrors = new();
+        CheckErrorRecorder errorRecorder = new(bookCheckErrors);
+
+        try
+        {
+            check.Run(bookNum, dataSource, errorRecorder);
+
+            if (firstChapter > 0 && lastChapter > 0)
+            {
+                bookCheckErrors.RemoveAll(item =>
+                    item.VerseReference == null
+                    || item.VerseReference.Value.ChapterNum < firstChapter
+                    || item.VerseReference.Value.ChapterNum > lastChapter
+                );
+            }
+
+            recorder.RecordOneCheck(bookCheckErrors, bookNum, check.Type);
+        }
+        catch (RequiredCheckSettingsMissingException)
+        {
+            // Skip checks that aren't properly set up
+        }
+
+        return bookCheckErrors;
+    }
+
+    private static void CollectErrors(
+        List<VerseListItem> bookCheckErrors,
+        string checkType,
+        List<CheckError> allErrors,
+        ref int totalCount,
+        ref bool overflow
+    )
+    {
+        foreach (VerseListItem item in bookCheckErrors)
+        {
+            if (item.VerseReference == null)
+                continue;
+
+            totalCount++;
+
+            if (!overflow && allErrors.Count < MaxCheckingResults)
+            {
+                VerseRef vref = item.VerseReference.Value;
+                allErrors.Add(
+                    new CheckError(
+                        Reference: $"{Canon.BookNumberToId(vref.BookNum)} {vref.ChapterNum}:{vref.VerseNum}",
+                        CheckType: checkType,
+                        Message: item.Message ?? string.Empty,
+                        SelectedText: item.Selection?.SelectedText ?? string.Empty
+                    )
+                );
+            }
+            else if (!overflow)
+            {
+                overflow = true;
+            }
+        }
+    }
+
+    private static CheckExecutionResult CreateErrorResult(string error) =>
+        new()
+        {
+            Success = false,
+            Error = error,
+            Results = new List<CheckError>(),
+            Overflow = false,
+            TotalCount = 0,
+        };
+
+    private static CheckExecutionResult CreateCancelledResult(
+        List<CheckError> results,
+        bool overflow,
+        int totalCount
+    ) =>
+        new()
+        {
+            Success = false,
+            Error = "Check execution was cancelled",
+            Results = results,
+            Overflow = overflow,
+            TotalCount = totalCount,
+        };
 }
