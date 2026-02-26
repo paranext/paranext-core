@@ -266,4 +266,43 @@ public class OneTypePerFileAnalyzerTests
 
         await VerifyNet80Async(source, expected);
     }
+
+    [Test]
+    public async Task TwoRecords_SubstringNameCollision_Diagnostic()
+    {
+        // "Bar" is a substring of "BarCode" but not an actual type reference.
+        // Must still produce a diagnostic — these records are unrelated.
+        const string source = """
+            namespace TestProject;
+
+            record MyData(string BarCode);
+            record {|#0:Bar|}(int Value);
+            """;
+
+        var expected = Verifier
+            .Diagnostic(DiagnosticIds.OneTypePerFile)
+            .WithLocation(0)
+            .WithArguments(2);
+
+        await VerifyNet80Async(source, expected);
+    }
+
+    [Test]
+    public async Task TwoRecords_ShortNameSubstringCollision_Diagnostic()
+    {
+        // "Id" appears as a substring in "IdValue" but is not a type reference
+        const string source = """
+            namespace TestProject;
+
+            record Config(int IdValue);
+            record {|#0:Id|}(int Value);
+            """;
+
+        var expected = Verifier
+            .Diagnostic(DiagnosticIds.OneTypePerFile)
+            .WithLocation(0)
+            .WithArguments(2);
+
+        await VerifyNet80Async(source, expected);
+    }
 }

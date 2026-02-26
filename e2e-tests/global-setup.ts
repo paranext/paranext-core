@@ -93,11 +93,18 @@ async function globalSetup(config: FullConfig): Promise<void> {
       cwd: rootDir,
       stdio: 'ignore',
       shell: true,
+      // Create a new process group so global-teardown can kill the entire tree
+      // via process.kill(-pid). Without this, the shell child inherits the
+      // parent's PGID and process.kill(-pid) throws ESRCH.
+      detached: true,
       // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
       // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
       // spawning start:main — Playwright launches Electron directly via electron.launch().
       env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, SKIP_START_MAIN: '1' },
     });
+
+    // Allow the Playwright process to exit independently of the detached server
+    devServer.unref();
 
     // Store PID so global-teardown can find and stop the process
     const pidFile = path.join(rootDir, 'e2e-tests/.dev-server.pid');

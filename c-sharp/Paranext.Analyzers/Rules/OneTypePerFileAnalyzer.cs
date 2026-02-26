@@ -93,7 +93,14 @@ public sealed class OneTypePerFileAnalyzer : DiagnosticAnalyzer
                 if (j == i)
                     continue;
 
-                if (types[j].ToString().Contains(helperName))
+                // Walk the syntax tree for actual identifier references rather
+                // than substring matching (e.g., "Bar" must not match "BarCode").
+                if (
+                    types[j]
+                        .DescendantNodes()
+                        .OfType<IdentifierNameSyntax>()
+                        .Any(id => id.Identifier.Text == helperName)
+                )
                 {
                     referencedByAnother = true;
                     break;
