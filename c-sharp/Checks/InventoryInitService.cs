@@ -12,7 +12,7 @@ internal static class InventoryInitService
     ///
     /// Formulas:
     ///   CanMakeChanges = amAdministratorOrTeamMember AND editable (BHV-311)
-    ///   ToggleEnabled = amAdministrator AND supportsSeparateInventories (VAL-006)
+    ///   ToggleEnabled = amAdministrator AND supportsSeparateInventories AND editable (VAL-006, gm-012)
     ///   ButtonsEnabled = CanMakeChanges AND NOT isSbaBaseContent (BHV-304)
     /// </summary>
     /// <param name="amAdministratorOrTeamMember">Whether user is admin or team member.</param>
@@ -29,6 +29,19 @@ internal static class InventoryInitService
         bool isSbaBaseContent
     )
     {
-        throw new NotImplementedException("CAP-012: ComputePermissions not yet implemented");
+        // === PORTED FROM PT9 ===
+        // Source: PT9/InventoryForm.cs:1208,328-371 (BHV-311 permission logic)
+        // Source: PT9/InventoryForm.cs:1826-1851 (BHV-304 button disabling for SBA)
+        // Maps to: BHV-311, BHV-304, VAL-004, VAL-006
+        bool canMakeChanges = amAdministratorOrTeamMember && editable;
+        bool toggleEnabled = amAdministrator && supportsSeparateInventories && editable;
+        bool buttonsEnabled = canMakeChanges && !isSbaBaseContent;
+
+        return new PermissionState
+        {
+            CanMakeChanges = canMakeChanges,
+            ToggleEnabled = toggleEnabled,
+            ButtonsEnabled = buttonsEnabled,
+        };
     }
 }
