@@ -11,13 +11,18 @@ import {
   Scope,
   ScopeSelector,
   ScrollGroupSelector,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { FindJobStatus } from 'platform-scripture';
+import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
 
 export function FindHeaderDemo() {
@@ -47,8 +52,13 @@ export function FindHeaderDemo() {
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
+  // setIsRegexAllowed is intentionally kept for future UI use; regex is currently hidden from users
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
+  const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
+  const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
 
   // not used in demo component
   // const [activeJobId, setActiveJobId] = useState<string>();
@@ -75,7 +85,8 @@ export function FindHeaderDemo() {
       (scope === 'selectedBooks' &&
         selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
-      isRegexAllowed !== submittedIsRegexAllowed
+      isRegexAllowed !== submittedIsRegexAllowed ||
+      wordRestriction !== submittedWordRestriction
     );
   }, [
     searchTerm,
@@ -92,6 +103,8 @@ export function FindHeaderDemo() {
     submittedShouldMatchCase,
     isRegexAllowed,
     submittedIsRegexAllowed,
+    wordRestriction,
+    submittedWordRestriction,
   ]);
 
   const canClearResults = useMemo(
@@ -130,6 +143,7 @@ export function FindHeaderDemo() {
     setSubmittedBookIds(selectedBookIds);
     setSubmittedShouldMatchCase(shouldMatchCase);
     setSubmittedIsRegexAllowed(isRegexAllowed);
+    setSubmittedWordRestriction(wordRestriction);
   };
 
   // custom for demo
@@ -219,6 +233,26 @@ export function FindHeaderDemo() {
               localizedStrings={{}}
               availableBookInfo={availableBookIds}
             />
+            <div className="tw-space-y-2">
+              <Label>%webView_find_restrictions%</Label>
+              <Select
+                value={wordRestriction}
+                onValueChange={(value: WordRestriction) => setWordRestriction(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">%webView_find_restrictions_none%</SelectItem>
+                  <SelectItem value="wholeWord">%webView_find_restrictions_wholeWord%</SelectItem>
+                  <SelectItem value="startOfWord">
+                    %webView_find_restrictions_startOfWord%
+                  </SelectItem>
+                  <SelectItem value="endOfWord">%webView_find_restrictions_endOfWord%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {(scope === 'chapter' || scope === 'book') && (
               <div className="tw-flex tw-flex-col tw-items-start tw-gap-4">
                 <Label>%webView_find_scrollGroup%</Label>
@@ -244,15 +278,6 @@ export function FindHeaderDemo() {
               <Label htmlFor="match-case" className="tw-cursor-pointer">
                 %webView_find_matchCase%
               </Label>
-            </div>
-
-            <div className="tw-flex tw-items-center tw-space-x-2">
-              <Checkbox
-                id="show-context"
-                checked={isRegexAllowed}
-                onCheckedChange={(checked: boolean) => setIsRegexAllowed(checked === true)}
-              />
-              <Label htmlFor="show-context">%webView_find_allowRegex%</Label>
             </div>
           </div>
         )}
