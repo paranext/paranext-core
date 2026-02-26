@@ -1,4 +1,6 @@
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.Checks;
 
@@ -18,8 +20,44 @@ namespace TestParanextDataProvider.Checks;
 /// Validations: VAL-003 (Resource project rejection), VAL-008 (Multi-book error prohibition)
 /// </summary>
 [TestFixture]
-public class BasicChecksExecutionServiceTests
+internal class BasicChecksExecutionServiceTests : PapiTestBase
 {
+    private string _testProjectId = string.Empty;
+    private DummyScrText? _scrText;
+
+    [SetUp]
+    public override async Task TestSetupAsync()
+    {
+        await base.TestSetupAsync();
+
+        _scrText = CreateDummyProject();
+        var details = CreateProjectDetails(_scrText);
+        _testProjectId = details.Metadata.Id;
+        ParatextProjects.FakeAddProject(details, _scrText);
+
+        // Inject USFM text with unmatched pairs into book 1 (GEN)
+        // so MatchedPairs check finds errors for acceptance and other tests.
+        // Text has 3 unmatched characters: ( ] )
+        _scrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 (foo] bar)", null);
+    }
+
+    [TearDown]
+    public override void TestTearDown()
+    {
+        _scrText?.Dispose();
+        _scrText = null;
+        base.TestTearDown();
+    }
+
+    /// <summary>
+    /// Sets the USFM text for a specific book in the test project.
+    /// Uses ScrText.PutText(bookNum, chapterNum=0, skipUpdates=false, usfm, progress=null).
+    /// </summary>
+    private void SetBookText(int bookNum, string usfm)
+    {
+        _scrText!.PutText(bookNum, 0, false, usfm, null);
+    }
+
     #region Acceptance Tests (spec-011, spec-012)
 
     /// <summary>
@@ -37,7 +75,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project with text containing 3 unmatched chars, '(' marked valid
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-filter",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -74,7 +112,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Run checks on multiple books
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-status",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2, 3 }
         );
@@ -112,7 +150,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: A project where '(' is marked valid in the inventory
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-validity-filter",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -144,7 +182,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project with separation enabled, '}' valid in non-verse
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-nonverse",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -178,7 +216,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Multiple books to check
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-order",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2, 3, 40, 41 }
         );
@@ -208,7 +246,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Multiple check types
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-multi-check",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs", "Character" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -238,7 +276,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project with known unmatched pairs
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-formatting",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -282,7 +320,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-msg-format",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -322,7 +360,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project that will produce errors
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-status-errors",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -351,7 +389,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project where all errors have been previously denied
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-denied-only",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -381,7 +419,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-md5",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2 }
         );
@@ -416,7 +454,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project with enough data to produce >5000 errors
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-overflow",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
         );
@@ -459,7 +497,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Small project that won't exceed 5000 results
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-small",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 65 } // 3 John - small book
         );
@@ -499,7 +537,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Project with no unmatched pairs (clean text)
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-clean",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -530,7 +568,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Many books to check, with cancellation requested immediately
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-cancel",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
         );
@@ -568,7 +606,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Multiple books, no cancellation
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-no-cancel",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2, 3 }
         );
@@ -603,7 +641,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Empty checks list
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-no-checks",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string>(),
             BooksToCheck: new List<int> { 1 }
         );
@@ -632,7 +670,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Empty books list
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-no-books",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int>()
         );
@@ -697,7 +735,7 @@ public class BasicChecksExecutionServiceTests
         // (BHV-122 outer loop books). If errors from multiple books were ever combined,
         // CheckingStatusRecorder would throw InvalidOperationException.
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-multibook-guard",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1, 2 }
         );
@@ -731,7 +769,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-delegation",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -758,7 +796,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Check only chapters 1-3 of Genesis
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-chapter-range",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 },
             FirstChapter: 1,
@@ -941,7 +979,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-structure",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
@@ -981,7 +1019,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange: Invalid input (no checks)
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-error-structure",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string>(),
             BooksToCheck: new List<int> { 1 }
         );
@@ -1041,7 +1079,7 @@ public class BasicChecksExecutionServiceTests
     {
         // Arrange
         var input = new ExecuteBasicChecksInput(
-            ProjectId: "test-project-overload",
+            ProjectId: _testProjectId,
             ChecksToRun: new List<string> { "MatchedPairs" },
             BooksToCheck: new List<int> { 1 }
         );
