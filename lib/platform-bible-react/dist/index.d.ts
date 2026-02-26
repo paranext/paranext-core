@@ -301,11 +301,7 @@ export interface CommentListProps {
 	 * that resolves to true if the user can edit or delete the comment, false otherwise.
 	 */
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
-	/**
-	 * Callback when the user clicks a verse reference in a comment thread. The related project editor
-	 * web view can navigate and position the editor cursor at the start of the comment inside the
-	 * verse.
-	 */
+	/** Callback when the user clicks a verse reference in a comment thread. */
 	onVerseRefClick?: (thread: LegacyCommentThread) => void;
 }
 /**
