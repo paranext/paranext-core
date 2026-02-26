@@ -15,6 +15,11 @@ import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-ut
 import type { InventoryOptionValue } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { CMSOptionsDialog } from './cms-options-dialog.component';
+import {
+  undoRedoReducer,
+  type StatusChangeRecord,
+  type UndoRedoState,
+} from './matched-pairs-inventory.utils';
 
 const MATCHED_PAIRS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
@@ -79,55 +84,7 @@ const createColumns = (
   ),
 ];
 
-/** Undo/redo state management for status changes (BHV-312) */
-type StatusChangeRecord = {
-  itemKey: string;
-  previousApproved: string[];
-  previousUnapproved: string[];
-  newApproved: string[];
-  newUnapproved: string[];
-};
-
-type UndoRedoState = {
-  undoStack: StatusChangeRecord[];
-  redoStack: StatusChangeRecord[];
-};
-
-type UndoRedoAction =
-  | { type: 'PUSH_CHANGE'; change: StatusChangeRecord }
-  | { type: 'UNDO' }
-  | { type: 'REDO' }
-  | { type: 'CLEAR' };
-
-function undoRedoReducer(state: UndoRedoState, action: UndoRedoAction): UndoRedoState {
-  switch (action.type) {
-    case 'PUSH_CHANGE':
-      return {
-        undoStack: [...state.undoStack, action.change],
-        redoStack: [],
-      };
-    case 'UNDO': {
-      if (state.undoStack.length === 0) return state;
-      const lastChange = state.undoStack[state.undoStack.length - 1];
-      return {
-        undoStack: state.undoStack.slice(0, -1),
-        redoStack: [...state.redoStack, lastChange],
-      };
-    }
-    case 'REDO': {
-      if (state.redoStack.length === 0) return state;
-      const nextChange = state.redoStack[state.redoStack.length - 1];
-      return {
-        undoStack: [...state.undoStack, nextChange],
-        redoStack: state.redoStack.slice(0, -1),
-      };
-    }
-    case 'CLEAR':
-      return { undoStack: [], redoStack: [] };
-    default:
-      return state;
-  }
-}
+// Undo/redo types and reducer imported from matched-pairs-inventory.utils.ts
 
 type MatchedPairsInventoryProps = {
   inventoryItems: InventorySummaryItem[] | undefined;

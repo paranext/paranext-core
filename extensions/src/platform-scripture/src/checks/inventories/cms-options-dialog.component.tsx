@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import type { InventoryOptionValue } from 'platform-scripture';
+import { validatePairsString } from './matched-pairs-inventory.utils';
 
 /** Metadata for a CMS option (BHV-106, BHV-119) */
 export type CMSOptionInfo = {
@@ -61,30 +62,7 @@ const CMS_OPTIONS_DIALOG_STRING_KEYS: LocalizeKey[] = [
   '%webView_matchedPairsInventory_optionsDialog_multiCharError%',
 ];
 
-/**
- * Validates paired punctuation format (VAL-001, VAL-002). Format: Space-delimited pairs where each
- * pair is "opener/closer" Each half must be exactly one character.
- */
-function validatePairsString(value: string): { valid: boolean; error?: string } {
-  if (!value.trim()) return { valid: true };
-
-  const pairs = value.trim().split(/\s+/);
-  for (const pair of pairs) {
-    const parts = pair.split('/');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      return { valid: false, error: `Invalid Pair: ${pair}` };
-    }
-    // VAL-002: Each half must be exactly one character
-    if ([...parts[0]].length > 1 || [...parts[1]].length > 1) {
-      return {
-        valid: false,
-        error:
-          'Multiple character punctuation marks are not allowed. Each side of a pair must be a single character.',
-      };
-    }
-  }
-  return { valid: true };
-}
+// validatePairsString imported from matched-pairs-inventory.utils.ts
 
 type CMSOptionsDialogProps = {
   /** Whether the dialog is open */
