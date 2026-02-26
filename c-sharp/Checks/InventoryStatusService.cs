@@ -114,7 +114,7 @@ internal static class InventoryStatusService
     /// <param name="selectedItems">Item texts to change status for.</param>
     /// <param name="isAlwaysValid">Predicate checking if an item is always-valid.</param>
     /// <returns>StatusChangeResult with success, change, skip, and warning info.</returns>
-    // === STUB: CAP-003 ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checking/InventoryForm.cs:784-859
     // Method: InventoryForm.SetSelectedStatus()
     // Maps to: EXT-002, BHV-114, BHV-305, INV-007, VAL-007
@@ -124,7 +124,47 @@ internal static class InventoryStatusService
         Func<string, bool> isAlwaysValid
     )
     {
-        throw new NotImplementedException("CAP-003: ComputeStatusChanges not yet implemented");
+        if (selectedItems.Length == 0)
+        {
+            return new StatusChangeResult
+            {
+                Success = true,
+                StatusChanged = false,
+                AllChanged = true,
+                SkippedCount = 0,
+                WarningMessage = null,
+            };
+        }
+
+        int skippedCount = 0;
+        bool statusChanged = false;
+
+        foreach (string item in selectedItems)
+        {
+            if (!isAlwaysValid(item) || desiredStatus == ItemStatus.Valid)
+            {
+                statusChanged = true;
+            }
+            else
+            {
+                skippedCount++;
+            }
+        }
+
+        bool allChanged = skippedCount == 0;
+        string? warningMessage =
+            skippedCount > 0 && desiredStatus != ItemStatus.Valid
+                ? "Item is in Language Settings"
+                : null;
+
+        return new StatusChangeResult
+        {
+            Success = true,
+            StatusChanged = statusChanged,
+            AllChanged = allChanged,
+            SkippedCount = skippedCount,
+            WarningMessage = warningMessage,
+        };
     }
 
     /// <summary>
@@ -138,7 +178,7 @@ internal static class InventoryStatusService
     /// <param name="category">Content category string from UI.</param>
     /// <param name="supportsSeparateInventories">Whether the check supports separation.</param>
     /// <returns>The InventoryTextType for the target inventory.</returns>
-    // === STUB: CAP-003 ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checking/InventoryForm.cs:801-815
     // Method: InventoryForm.SetSelectedStatus() (category switch)
     // Maps to: EXT-002, TS-095
@@ -147,7 +187,14 @@ internal static class InventoryStatusService
         bool supportsSeparateInventories
     )
     {
-        throw new NotImplementedException("CAP-003: ResolveInventoryCategory not yet implemented");
+        return category switch
+        {
+            "studycontenttext" => InventoryTextType.StudyBibleContent,
+            "nonversetext" => InventoryTextType.NonVerseText,
+            _ => supportsSeparateInventories
+                ? InventoryTextType.VerseText
+                : InventoryTextType.AllText,
+        };
     }
 
     /// <summary>
@@ -158,7 +205,7 @@ internal static class InventoryStatusService
     /// <param name="canMakeChanges">Whether user has permission to make changes.</param>
     /// <param name="computeAction">The action to compute status changes.</param>
     /// <returns>StatusChangeResult from computeAction, or failure if not permitted.</returns>
-    // === STUB: CAP-003 ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checking/InventoryForm.cs:784-786
     // Method: InventoryForm.SetSelectedStatus() (permission guard)
     // Maps to: VAL-004
@@ -167,8 +214,18 @@ internal static class InventoryStatusService
         Func<StatusChangeResult> computeAction
     )
     {
-        throw new NotImplementedException(
-            "CAP-003: SetSelectedStatusIfPermitted not yet implemented"
-        );
+        if (!canMakeChanges)
+        {
+            return new StatusChangeResult
+            {
+                Success = false,
+                Error = "Permission denied: cannot make changes",
+                StatusChanged = false,
+                AllChanged = false,
+                SkippedCount = 0,
+            };
+        }
+
+        return computeAction();
     }
 }
