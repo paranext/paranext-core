@@ -6,6 +6,10 @@ namespace Paranext.DataProvider.Checks;
 /// </summary>
 internal static class InventoryOptionsService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CMSOptionsForm.cs:123-176
+    // Method: CMSOptionsForm.SetupParameterValue()
+    // Maps to: EXT-008
     /// <summary>
     /// Determines the UI control type for a check option parameter value editor.
     /// YesNo for boolean options, EditableCombo for freeform values.
@@ -15,6 +19,27 @@ internal static class InventoryOptionsService
     /// <returns>OptionParameterInfo with control type, available values, and current value.</returns>
     public static OptionParameterInfo GetOptionParameterType(GetOptionParameterTypeInput input)
     {
-        throw new NotImplementedException("CAP-009: GetOptionParameterType not yet implemented");
+        string effectiveCurrentValue = input.IsErrorStorage
+            ? input.DefaultValue
+            : input.CurrentValue;
+
+        bool isYesNo = input.DefaultValue == "Yes" || input.DefaultValue == "No";
+
+        if (isYesNo)
+        {
+            return new OptionParameterInfo
+            {
+                ControlType = OptionControlType.YesNo,
+                AvailableValues = new List<string> { "Yes", "No" },
+                CurrentValue = effectiveCurrentValue,
+            };
+        }
+
+        return new OptionParameterInfo
+        {
+            ControlType = OptionControlType.EditableCombo,
+            AvailableValues = null,
+            CurrentValue = effectiveCurrentValue,
+        };
     }
 }
