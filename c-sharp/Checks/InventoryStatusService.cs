@@ -244,7 +244,46 @@ internal static class InventoryStatusService
         SeparationSnapshot snapshot
     )
     {
-        throw new NotImplementedException("CAP-005: ComputeToggleSeparation not yet implemented");
+        if (!enable)
+        {
+            return new SeparationToggleResult
+            {
+                Success = true,
+                Enabled = false,
+                RebuildRequired = true,
+            };
+        }
+
+        // Start with existing categorized non-verse items (preserved)
+        var mergedValid = new HashSet<string>(snapshot.NonVerseValidItems);
+        var mergedInvalid = new HashSet<string>(snapshot.NonVerseInvalidItems);
+
+        // Iterate verse valid items: set unknown non-verse items to valid
+        foreach (string item in snapshot.VerseValidItems)
+        {
+            if (snapshot.NonVerseUnknownItems.Contains(item))
+            {
+                mergedValid.Add(item);
+            }
+        }
+
+        // Iterate verse invalid items: set unknown non-verse items to invalid
+        foreach (string item in snapshot.VerseInvalidItems)
+        {
+            if (snapshot.NonVerseUnknownItems.Contains(item))
+            {
+                mergedInvalid.Add(item);
+            }
+        }
+
+        return new SeparationToggleResult
+        {
+            Success = true,
+            Enabled = true,
+            RebuildRequired = true,
+            MergedNonVerseValid = mergedValid,
+            MergedNonVerseInvalid = mergedInvalid,
+        };
     }
 
     /// <summary>
@@ -264,9 +303,35 @@ internal static class InventoryStatusService
         SeparationDetectionSnapshot snapshot
     )
     {
-        throw new NotImplementedException(
-            "CAP-005: DetermineSetSeparatelyState not yet implemented"
+        // If setting is explicitly "true", return true immediately
+        if (
+            !string.IsNullOrEmpty(settingValue)
+            && bool.TryParse(settingValue, out bool explicitValue)
+            && explicitValue
+        )
+        {
+            return true;
+        }
+
+        // For null, empty, or "false" settings: auto-detect by checking
+        // if non-verse settings differ from verse settings
+        bool hasNonVerseContent =
+            snapshot.NonVerseValidItems.Count > 0 || snapshot.NonVerseInvalidItems.Count > 0;
+
+        if (!hasNonVerseContent)
+            return false;
+
+        // Check if any non-verse valid item is NOT in the verse valid set
+        bool validDiffers = snapshot.NonVerseValidItems.Any(item =>
+            !snapshot.VerseValidItems.Contains(item)
         );
+
+        // Check if any non-verse invalid item is NOT in the verse invalid set
+        bool invalidDiffers = snapshot.NonVerseInvalidItems.Any(item =>
+            !snapshot.VerseInvalidItems.Contains(item)
+        );
+
+        return validDiffers || invalidDiffers;
     }
 
     /// <summary>
@@ -285,9 +350,18 @@ internal static class InventoryStatusService
         Func<SeparationToggleResult> toggleAction
     )
     {
-        throw new NotImplementedException(
-            "CAP-005: ToggleSeparationIfPermitted not yet implemented"
-        );
+        if (!isAdmin)
+        {
+            return new SeparationToggleResult
+            {
+                Success = false,
+                Error = "Only administrators can toggle verse/non-verse separation",
+                Enabled = false,
+                RebuildRequired = false,
+            };
+        }
+
+        return toggleAction();
     }
 
     /// <summary>
@@ -306,8 +380,17 @@ internal static class InventoryStatusService
         Func<SeparationToggleResult> toggleAction
     )
     {
-        throw new NotImplementedException(
-            "CAP-005: ToggleSeparationIfSupported not yet implemented"
-        );
+        if (!supportsSeparateInventories)
+        {
+            return new SeparationToggleResult
+            {
+                Success = false,
+                Error = "This check type does not support separate inventories",
+                Enabled = false,
+                RebuildRequired = false,
+            };
+        }
+
+        return toggleAction();
     }
 }
