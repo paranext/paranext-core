@@ -35,6 +35,7 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
         });
         ws.on('error', (err) => {
           clearTimeout(timer);
+          ws.close();
           reject(err);
         });
       });

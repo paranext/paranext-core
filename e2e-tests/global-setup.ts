@@ -1,5 +1,5 @@
 import type { FullConfig } from '@playwright/test';
-import { execSync, spawn, ChildProcess } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import net from 'net';
 import path from 'path';
 import fs from 'fs';
@@ -43,23 +43,12 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
-// Store the dev server process so teardown can stop it
-let devServerProcess: ChildProcess | undefined;
-
 async function globalSetup(config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
-  // Fail fast if Platform.Bible is already running (single-instance lock will
-  // cause Playwright's Electron instance to exit immediately)
-  if (await isPortInUse(WEBSOCKET_PORT)) {
-    throw new Error(
-      `Port ${WEBSOCKET_PORT} is already in use. ` +
-        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
-    );
-  }
-
-  // Remove stale Electron singleton lock files (left behind after crashes).
-  // The app may use different data directories depending on configuration.
+  // Remove stale Electron singleton lock files (left behind after crashes)
+  // BEFORE the port check — a stale lock could prevent a fresh launch even
+  // when the port is free.
   const os = await import('os');
   const appSupportDir =
     process.platform === 'darwin'
@@ -77,6 +66,15 @@ async function globalSetup(config: FullConfig): Promise<void> {
     }
   }
 
+  // Fail fast if Platform.Bible is already running (single-instance lock will
+  // cause Playwright's Electron instance to exit immediately)
+  if (await isPortInUse(WEBSOCKET_PORT)) {
+    throw new Error(
+      `Port ${WEBSOCKET_PORT} is already in use. ` +
+        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
+    );
+  }
+
   // Ensure the dev main bundle exists
   const devMainPath = path.join(rootDir, '.erb/dll/main.bundle.dev.js');
   if (!fs.existsSync(devMainPath)) {
@@ -91,9 +89,9 @@ async function globalSetup(config: FullConfig): Promise<void> {
     console.log(`Renderer dev server already running on port ${RENDERER_PORT}.`);
   } else {
     console.log('Starting renderer dev server...');
-    devServerProcess = spawn('npm', ['run', 'start:renderer'], {
+    const devServer = spawn('npm', ['run', 'start:renderer'], {
       cwd: rootDir,
-      stdio: 'pipe',
+      stdio: 'ignore',
       shell: true,
       // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
       // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
@@ -101,10 +99,10 @@ async function globalSetup(config: FullConfig): Promise<void> {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, SKIP_START_MAIN: '1' },
     });
 
-    // Store PID so teardown can find it
+    // Store PID so global-teardown can find and stop the process
     const pidFile = path.join(rootDir, 'e2e-tests/.dev-server.pid');
-    if (devServerProcess.pid) {
-      fs.writeFileSync(pidFile, String(devServerProcess.pid));
+    if (devServer.pid) {
+      fs.writeFileSync(pidFile, String(devServer.pid));
     }
 
     // Wait for the dev server to be ready

@@ -53,8 +53,6 @@ export default createRule({
     messages: {
       missingCleanup:
         "Registration result '{{name}}' should be added to context.registrations.add() for proper cleanup.",
-      unusedRegistration:
-        'Registration call result is not captured. Store in a variable and add to context.registrations.add().',
     },
   },
   defaultOptions: [],
