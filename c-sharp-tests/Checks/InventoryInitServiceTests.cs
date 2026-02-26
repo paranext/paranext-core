@@ -14,7 +14,7 @@ namespace TestParanextDataProvider.Checks;
 ///
 /// The permission computation is:
 ///   - CanMakeChanges = AmAdministratorOrTeamMember AND Editable (BHV-311)
-///   - ToggleEnabled = AmAdministrator AND SupportsSeparateInventories (VAL-006)
+///   - ToggleEnabled = AmAdministrator AND SupportsSeparateInventories AND Editable (VAL-006)
 ///   - ButtonsEnabled = CanMakeChanges AND NOT isSbaBaseContent (BHV-304)
 ///
 /// Test design: Tests call InventoryInitService.ComputePermissions with boolean flags
@@ -847,7 +847,7 @@ public class InventoryInitServiceTests
     /// computation formulas are correctly applied across all possible states.
     /// This is a property-based exhaustive test for the three formulas:
     ///   CanMakeChanges = amAdministratorOrTeamMember AND editable
-    ///   ToggleEnabled = amAdministrator AND supportsSeparateInventories
+    ///   ToggleEnabled = amAdministrator AND supportsSeparateInventories AND editable
     ///   ButtonsEnabled = CanMakeChanges AND NOT isSbaBaseContent
     /// </summary>
     [Test]
@@ -878,7 +878,7 @@ public class InventoryInitServiceTests
             );
 
             bool expectedCanMake = adminOrTeam && editable;
-            bool expectedToggle = admin && separateInventories;
+            bool expectedToggle = admin && separateInventories && editable;
             bool expectedButtons = expectedCanMake && !sbaBase;
 
             string combo =
