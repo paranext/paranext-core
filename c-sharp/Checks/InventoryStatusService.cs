@@ -34,45 +34,52 @@ internal static class InventoryStatusService
         var operations = new List<SaveOperation>();
 
         if (isSba)
-        {
-            operations.Add(
-                new SaveOperation(
-                    "MatchedPairingCharacters_StudyBible",
-                    snapshot.StudyBibleValidItems
-                )
-            );
-            operations.Add(
-                new SaveOperation(
-                    "UnmatchedPairingCharacters_StudyBible",
-                    snapshot.StudyBibleInvalidItems
-                )
-            );
-        }
+            AddStudyBibleOperations(operations, snapshot);
         else if (isSeparated)
-        {
-            operations.Add(new SaveOperation("MatchedPairingCharacters", snapshot.VerseValidItems));
-            operations.Add(
-                new SaveOperation("UnmatchedPairingCharacters", snapshot.VerseInvalidItems)
-            );
-            operations.Add(
-                new SaveOperation("MatchedPairingCharacters_NonText", snapshot.NonVerseValidItems)
-            );
-            operations.Add(
-                new SaveOperation(
-                    "UnmatchedPairingCharacters_NonText",
-                    snapshot.NonVerseInvalidItems
-                )
-            );
-        }
+            AddSeparatedOperations(operations, snapshot);
         else
-        {
-            operations.Add(new SaveOperation("MatchedPairingCharacters", snapshot.VerseValidItems));
-            operations.Add(
-                new SaveOperation("UnmatchedPairingCharacters", snapshot.VerseInvalidItems)
-            );
-        }
+            AddMainOperations(operations, snapshot);
 
         return new SaveOperationResult { Operations = operations };
+    }
+
+    private static void AddStudyBibleOperations(
+        List<SaveOperation> operations,
+        InventoryStatusSnapshot snapshot
+    )
+    {
+        operations.Add(
+            new SaveOperation("MatchedPairingCharacters_StudyBible", snapshot.StudyBibleValidItems)
+        );
+        operations.Add(
+            new SaveOperation(
+                "UnmatchedPairingCharacters_StudyBible",
+                snapshot.StudyBibleInvalidItems
+            )
+        );
+    }
+
+    private static void AddSeparatedOperations(
+        List<SaveOperation> operations,
+        InventoryStatusSnapshot snapshot
+    )
+    {
+        AddMainOperations(operations, snapshot);
+        operations.Add(
+            new SaveOperation("MatchedPairingCharacters_NonText", snapshot.NonVerseValidItems)
+        );
+        operations.Add(
+            new SaveOperation("UnmatchedPairingCharacters_NonText", snapshot.NonVerseInvalidItems)
+        );
+    }
+
+    private static void AddMainOperations(
+        List<SaveOperation> operations,
+        InventoryStatusSnapshot snapshot
+    )
+    {
+        operations.Add(new SaveOperation("MatchedPairingCharacters", snapshot.VerseValidItems));
+        operations.Add(new SaveOperation("UnmatchedPairingCharacters", snapshot.VerseInvalidItems));
     }
 
     /// <summary>
@@ -95,43 +102,3 @@ internal static class InventoryStatusService
         return true;
     }
 }
-
-/// <summary>
-/// Snapshot of inventory valid/invalid item state, captured from TextInventory objects.
-/// Used as input to DetermineSaveOperations for testable business logic separation.
-/// </summary>
-public record InventoryStatusSnapshot
-{
-    /// <summary>Verse text valid items (space-separated).</summary>
-    public string VerseValidItems { get; init; } = "";
-
-    /// <summary>Verse text invalid items (space-separated).</summary>
-    public string VerseInvalidItems { get; init; } = "";
-
-    /// <summary>Non-verse text valid items (space-separated).</summary>
-    public string NonVerseValidItems { get; init; } = "";
-
-    /// <summary>Non-verse text invalid items (space-separated).</summary>
-    public string NonVerseInvalidItems { get; init; } = "";
-
-    /// <summary>Study Bible content valid items (space-separated).</summary>
-    public string StudyBibleValidItems { get; init; } = "";
-
-    /// <summary>Study Bible content invalid items (space-separated).</summary>
-    public string StudyBibleInvalidItems { get; init; } = "";
-}
-
-/// <summary>
-/// Result of determining save operations. Contains the list of parameter name/value
-/// pairs that should be persisted to project settings.
-/// </summary>
-public record SaveOperationResult
-{
-    /// <summary>List of save operations to execute.</summary>
-    public List<SaveOperation> Operations { get; init; } = new();
-}
-
-/// <summary>
-/// A single save operation: a parameter name and its value to persist.
-/// </summary>
-public record SaveOperation(string ParameterName, string Value);
