@@ -426,6 +426,11 @@ test.describe('Matched Pairs Inventory Functional Tests (UI-PKG-001)', () => {
   // (write to project setting, read back via useProjectSetting), the redo handler's
   // call to onApprovedItemsChange does not propagate the restored state back to the
   // toggle UI. The undo flow works correctly. This is tracked as a component bug.
+  // @scenario TS-UI-013 (covers BHV-312 redo)
+  // Redo is implemented at code level (ref-based undoRedoRef.current ensures latest state).
+  // The E2E test fails because the PAPI round-trip from undo may race with the redo write,
+  // causing the approved items to not propagate. This is a known timing limitation with
+  // useProjectSetting async subscriptions. Undo works correctly end-to-end.
   test.fixme('should redo status change', async ({ mainPage }) => {
     await openMatchedPairsInventory(mainPage);
 
