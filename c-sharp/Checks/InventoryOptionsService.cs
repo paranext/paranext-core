@@ -23,22 +23,12 @@ internal static class InventoryOptionsService
             ? input.DefaultValue
             : input.CurrentValue;
 
-        bool isYesNo = input.DefaultValue == "Yes" || input.DefaultValue == "No";
-
-        if (isYesNo)
-        {
-            return new OptionParameterInfo
-            {
-                ControlType = OptionControlType.YesNo,
-                AvailableValues = new List<string> { "Yes", "No" },
-                CurrentValue = effectiveCurrentValue,
-            };
-        }
+        bool isYesNo = input.DefaultValue is "Yes" or "No";
 
         return new OptionParameterInfo
         {
-            ControlType = OptionControlType.EditableCombo,
-            AvailableValues = null,
+            ControlType = isYesNo ? OptionControlType.YesNo : OptionControlType.EditableCombo,
+            AvailableValues = isYesNo ? ["Yes", "No"] : null,
             CurrentValue = effectiveCurrentValue,
         };
     }
