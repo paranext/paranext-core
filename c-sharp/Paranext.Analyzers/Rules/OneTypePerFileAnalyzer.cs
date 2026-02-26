@@ -77,10 +77,33 @@ public sealed class OneTypePerFileAnalyzer : DiagnosticAnalyzer
         if (!allRecords)
             return false;
 
-        // Exception: a primary record can have helper records in the same file
-        // if those helper records are only used by the primary record
-        // This is a simplified check - we assume if all are records, it's allowed
-        // A more sophisticated check would verify actual usage relationships
+        // Each secondary record must be referenced by name in at least one
+        // other record in the file. This supports multi-tier chains where
+        // A uses B and B uses C — C doesn't need to appear in A directly.
+        // This is a syntactic heuristic — it doesn't prove "exclusive" use
+        // across the compilation, but it catches the common pattern of
+        // helper/DTO records that accompany a primary record.
+        for (int i = 1; i < types.Count; i++)
+        {
+            var helperName = types[i].Identifier.Text;
+            bool referencedByAnother = false;
+
+            for (int j = 0; j < types.Count; j++)
+            {
+                if (j == i)
+                    continue;
+
+                if (types[j].ToString().Contains(helperName))
+                {
+                    referencedByAnother = true;
+                    break;
+                }
+            }
+
+            if (!referencedByAnother)
+                return false;
+        }
+
         return true;
     }
 }

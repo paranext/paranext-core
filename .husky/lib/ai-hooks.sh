@@ -217,7 +217,7 @@ run_localization_check() {
   # Extract all %key% patterns from staged files
   local keys_used
   # shellcheck disable=SC2086
-  keys_used=$(grep -hoE '%[a-zA-Z_]+%' $staged_files 2>/dev/null | sort -u)
+  keys_used=$(grep -hoE '%[a-zA-Z0-9_.]+%' $staged_files 2>/dev/null | sort -u)
 
   if [[ -z "$keys_used" ]]; then
     echo "No localization keys found in staged files"

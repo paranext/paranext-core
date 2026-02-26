@@ -33,11 +33,10 @@ public static class DiagnosticIds
     public const string NoTupleReturnTypes = "PNX007";
 
     /// <summary>
-    /// PNX008: DataProvider/NetworkObject methods should not return 'dynamic'.
-    /// Only applies to classes that inherit from DataProvider or NetworkObject.
-    /// See: phase-3-implementation-backend.md "Smoke Test 3" section.
+    /// PNX008: Ban 'dynamic' keyword everywhere — use concrete types instead.
+    /// See: Paranext-Core-Patterns.md
     /// </summary>
-    public const string ConcreteReturnTypes = "PNX008";
+    public const string BanDynamic = "PNX008";
 
     /// <summary>
     /// Base URL for help documentation.

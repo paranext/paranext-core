@@ -27,7 +27,7 @@
     <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)ai-analyzers.globalconfig" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Paranext.Analyzers' AND '$(PARANEXT_AI_BRANCH)' == 'true'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Paranext.Analyzers' AND '$(MSBuildProjectName)' != 'Paranext.Analyzers.Tests' AND '$(PARANEXT_AI_BRANCH)' == 'true'">
     <ProjectReference Include="$(MSBuildThisFileDirectory)Paranext.Analyzers/Paranext.Analyzers.csproj">
       <PrivateAssets>all</PrivateAssets>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>

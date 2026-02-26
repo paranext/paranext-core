@@ -110,7 +110,9 @@ public sealed class NamespaceDirectoryAnalyzer : DiagnosticAnalyzer
 
         // Skip if this is a special directory
         if (
-            directoryPath.StartsWith("obj/", StringComparison.OrdinalIgnoreCase)
+            directoryPath.Equals("obj", StringComparison.OrdinalIgnoreCase)
+            || directoryPath.Equals("bin", StringComparison.OrdinalIgnoreCase)
+            || directoryPath.StartsWith("obj/", StringComparison.OrdinalIgnoreCase)
             || directoryPath.StartsWith("bin/", StringComparison.OrdinalIgnoreCase)
         )
             return null;

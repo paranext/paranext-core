@@ -6,7 +6,7 @@ const createRule = ESLintUtils.RuleCreator(
 );
 
 /** Pattern to detect shadow classes: tw-shadow, tw-shadow-sm, tw-shadow-lg, etc. */
-const SHADOW_PATTERN = /tw-shadow(-[a-z]+)?/;
+const SHADOW_PATTERN = /^tw-shadow(-[a-z]+)?$/;
 
 /** Check if a class string contains shadow classes */
 function findShadowClasses(classString: string): string[] {
