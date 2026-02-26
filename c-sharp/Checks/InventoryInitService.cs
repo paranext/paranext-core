@@ -68,63 +68,25 @@ internal static class InventoryInitService
 
             // Create ChecksDataSource and inventory (BHV-111: Initialize loads valid/invalid)
             var dataSource = new ChecksDataSource(scrText);
-            // ChecksDataSource may change ScrText (e.g., SBA wrapping)
             scrText = dataSource.ScrText;
             ScriptureInventoryBase inventory = InventoryFactory.CreateInventory(
                 checkType,
                 dataSource
             );
 
-            // BHV-107: Read separation state from inventory
+            // BHV-107: Read separation state
             bool isSeparated = inventory.SetVerseAndNonVerseSeparately ?? false;
             bool supportsSeparateInventories = inventory.SupportsSeparateInventories;
-
-            // BHV-106: Read inventory options (BHV-119: NullValue handled by GetValue,
-            // BHV-120: UFFFD handled by GetValue, BHV-130: defaults applied by Initialize)
-            var options = new List<InventoryOption>();
-            foreach (var cmsOption in inventory.InventoryOptions ?? [])
-            {
-                if (cmsOption.Hide)
-                    continue;
-
-                string value = cmsOption.GetValue(scrText);
-                string defaultValue = cmsOption.DefaultValue;
-
-                options.Add(
-                    new InventoryOption(
-                        Name: cmsOption.Name,
-                        Value: value,
-                        DefaultValue: defaultValue,
-                        Label: $"%inventoryOptionName_{checkType}_{cmsOption.Name}%"
-                    )
-                );
-            }
-
-            // BHV-310: Compute title "{CheckName} inventory: {ProjectName}"
-            string title = $"{checkDisplayName} inventory: {scrText.Name}";
-
-            // BHV-311: Compute permissions (delegates to CAP-012)
-            bool editable = scrText.Settings.Editable;
-            bool amAdmin = scrText.Permissions.AmAdministrator;
-            bool amAdminOrTeamMember = scrText.Permissions.AmAdministratorOrTeamMember;
-
-            PermissionState permissions = ComputePermissions(
-                amAdministratorOrTeamMember: amAdminOrTeamMember,
-                amAdministrator: amAdmin,
-                editable: editable,
-                supportsSeparateInventories: supportsSeparateInventories,
-                isSbaBaseContent: false
-            );
 
             return new InventoryInitResult
             {
                 Success = true,
-                Title = title,
+                Title = ComputeTitle(checkDisplayName, scrText.Name),
                 IsSba = isSba,
                 IsSeparated = isSeparated,
                 SupportsSeparateInventories = supportsSeparateInventories,
-                Options = options,
-                Permissions = permissions,
+                Options = BuildInventoryOptions(inventory, scrText, checkType),
+                Permissions = ReadProjectPermissions(scrText, supportsSeparateInventories),
             };
         }
         catch (ArgumentException ex)
@@ -139,6 +101,54 @@ internal static class InventoryInitService
                 Error = $"Failed to initialize check: {ex.Message}",
             };
         }
+    }
+
+    /// <summary>
+    /// Builds the title string for the inventory window.
+    /// Format: "{CheckDisplayName} inventory: {ProjectName}" (BHV-310).
+    /// </summary>
+    private static string ComputeTitle(string checkDisplayName, string projectName) =>
+        $"{checkDisplayName} inventory: {projectName}";
+
+    /// <summary>
+    /// Reads visible inventory options from the check instance and maps them to
+    /// InventoryOption records with localization key labels.
+    /// BHV-106: option enumeration, BHV-119: NullValue handled by GetValue,
+    /// BHV-120: UFFFD handled by GetValue, BHV-130: defaults applied by Initialize.
+    /// </summary>
+    private static List<InventoryOption> BuildInventoryOptions(
+        ScriptureInventoryBase inventory,
+        ScrText scrText,
+        string checkType
+    )
+    {
+        return (inventory.InventoryOptions ?? [])
+            .Where(option => !option.Hide)
+            .Select(option => new InventoryOption(
+                Name: option.Name,
+                Value: option.GetValue(scrText),
+                DefaultValue: option.DefaultValue,
+                Label: $"%inventoryOptionName_{checkType}_{option.Name}%"
+            ))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Reads permission-relevant properties from the project and delegates to
+    /// ComputePermissions (CAP-012) to produce the PermissionState (BHV-311).
+    /// </summary>
+    private static PermissionState ReadProjectPermissions(
+        ScrText scrText,
+        bool supportsSeparateInventories
+    )
+    {
+        return ComputePermissions(
+            amAdministratorOrTeamMember: scrText.Permissions.AmAdministratorOrTeamMember,
+            amAdministrator: scrText.Permissions.AmAdministrator,
+            editable: scrText.Settings.Editable,
+            supportsSeparateInventories: supportsSeparateInventories,
+            isSbaBaseContent: false
+        );
     }
 
     /// <summary>
