@@ -32,4 +32,29 @@ internal static class InventoryOptionsService
             CurrentValue = effectiveCurrentValue,
         };
     }
+
+    /// <summary>
+    /// Determines which inventory option values have changed between old and new dictionaries.
+    /// Returns a result indicating success/failure and the list of changed settings.
+    ///
+    /// Write-protected projects return Success=false with no changes (VAL-005).
+    /// Only values where old != new are included in ChangedSettings.
+    /// New keys not present in oldValues are treated as changes (PT9: !HasSetting).
+    /// </summary>
+    /// <param name="oldValues">Previous option values (from dialog open / GetValue).</param>
+    /// <param name="newValues">New option values (from user edits).</param>
+    /// <param name="isWriteProtected">Whether the project is write-protected.</param>
+    /// <returns>SaveInventoryOptionsResult with success flag and changed settings list.</returns>
+    // === EXTRACTION STUB: EXT-007 ===
+    // Source: PT9/Paratext/ToolsMenu/CMSOptionsForm.cs:64-86
+    // Method: CMSOptionsForm.cmdOK_Click()
+    // Maps to: EXT-007, BHV-119, BHV-130, VAL-005
+    public static SaveInventoryOptionsResult DetermineOptionChanges(
+        Dictionary<string, string> oldValues,
+        Dictionary<string, string> newValues,
+        bool isWriteProtected
+    )
+    {
+        throw new NotImplementedException("CAP-008: DetermineOptionChanges not yet implemented");
+    }
 }
