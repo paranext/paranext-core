@@ -64,7 +64,3 @@ c-sharp/CLAUDE.md
 CLAUDE.md
 CLAUDE.md.backup
 
-# C# build artifacts (Paranext.Analyzers)
-c-sharp/Paranext.Analyzers/bin/
-c-sharp/Paranext.Analyzers/obj/
-
