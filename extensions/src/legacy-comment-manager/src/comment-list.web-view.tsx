@@ -343,8 +343,6 @@ global.webViewComponent = function CommentListWebView({
       const { verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
       if (!verseRef.valid) return;
 
-      setScrRef(verseRef.toJSON());
-
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
         const location = {
@@ -352,6 +350,8 @@ global.webViewComponent = function CommentListWebView({
           offset: Math.max(0, (thread.comments[0]?.startPosition ?? 0) - 1),
         };
         editorWebViewController.selectRange({ start: location, end: location });
+      } else {
+        setScrRef(verseRef.toJSON());
       }
     },
     [setScrRef, editorWebViewId, editorWebViewController],
