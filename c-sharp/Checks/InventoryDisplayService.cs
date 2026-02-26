@@ -6,10 +6,6 @@ namespace Paranext.DataProvider.Checks;
 /// </summary>
 internal static class InventoryDisplayService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checking/InventoryForm.cs:1322-1388
-    // Method: InventoryForm.SetupDisplayedColumns()
-    // Maps to: EXT-005
     /// <summary>
     /// Returns the list of column definitions for the inventory display.
     /// For MatchedPairs: Text + count/status columns per project type and separation.
@@ -70,10 +66,21 @@ internal static class InventoryDisplayService
         columns.Add(new("CombinedStatus", "Status", "status", DefaultSortDescending: false));
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checking/InventoryForm.cs:1281-1320
-    // Method: InventoryForm.SetupTextTypeDropdown()
-    // Maps to: EXT-006
+    private static void AddStudyContentColumns(List<ColumnDefinition> columns)
+    {
+        columns.Add(
+            new("StudyContentCount", "Study Bible content #", "count", DefaultSortDescending: true)
+        );
+        columns.Add(
+            new(
+                "StudyContentStatus",
+                "Study Bible content Status",
+                "status",
+                DefaultSortDescending: false
+            )
+        );
+    }
+
     /// <summary>
     /// Returns content type filter options based on project type and separation state.
     /// Hidden when regular non-separated; shows options for all other paths.
@@ -102,20 +109,5 @@ internal static class InventoryDisplayService
             options.Add(new("Study Bible content only", InventoryTextType.StudyBibleContent));
 
         return new ContentTypeFilterResult { Visible = true, Options = options };
-    }
-
-    private static void AddStudyContentColumns(List<ColumnDefinition> columns)
-    {
-        columns.Add(
-            new("StudyContentCount", "Study Bible content #", "count", DefaultSortDescending: true)
-        );
-        columns.Add(
-            new(
-                "StudyContentStatus",
-                "Study Bible content Status",
-                "status",
-                DefaultSortDescending: false
-            )
-        );
     }
 }
