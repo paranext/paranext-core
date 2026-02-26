@@ -143,6 +143,10 @@ type MatchedPairsInventoryProps = {
   projectId?: string;
   areInventoryItemsLoading?: boolean;
   onItemSelected?: (itemKey: string) => void;
+  /** Whether the user has permission to change item statuses. Defaults to true. */
+  canMakeChanges?: boolean;
+  /** Whether the user is an administrator (can toggle separation). Defaults to true. */
+  isAdministrator?: boolean;
 };
 
 export function MatchedPairsInventory({
@@ -158,6 +162,8 @@ export function MatchedPairsInventory({
   projectId,
   areInventoryItemsLoading,
   onItemSelected,
+  canMakeChanges = true,
+  isAdministrator = true,
 }: MatchedPairsInventoryProps) {
   const [matchedPairsInventoryStrings] = useLocalizedStrings(MATCHED_PAIRS_INVENTORY_STRING_KEYS);
   const textLabel = useMemo(
@@ -295,6 +301,62 @@ export function MatchedPairsInventory({
     dispatchUndoRedo({ type: 'CLEAR' });
   }, []);
 
+  // Track selected item for keyboard shortcuts (GAP-001, GAP-004)
+  const [selectedItemKey, setSelectedItemKey] = useState<string | undefined>();
+
+  const handleItemSelectedInternal = useCallback(
+    (itemKey: string) => {
+      setSelectedItemKey(itemKey);
+      onItemSelected?.(itemKey);
+    },
+    [onItemSelected],
+  );
+
+  /** Change status of the selected item via keyboard shortcut (GAP-001) */
+  const handleStatusChangeViaKeyboard = useCallback(
+    (status: 'approved' | 'unapproved' | 'unknown') => {
+      if (!selectedItemKey || !canMakeChanges) return;
+
+      let newApproved = [...approvedItems];
+      let newUnapproved = [...unapprovedItems];
+
+      // Remove from both lists first
+      newApproved = newApproved.filter((i) => i !== selectedItemKey);
+      newUnapproved = newUnapproved.filter((i) => i !== selectedItemKey);
+
+      // Add to appropriate list
+      if (status === 'approved') {
+        newApproved.push(selectedItemKey);
+      } else if (status === 'unapproved') {
+        newUnapproved.push(selectedItemKey);
+      }
+      // For 'unknown', item stays in neither list
+
+      // Push combined change to undo stack
+      dispatchUndoRedo({
+        type: 'PUSH_CHANGE',
+        change: {
+          itemKey: selectedItemKey,
+          previousApproved: previousApprovedRef.current,
+          previousUnapproved: previousUnapprovedRef.current,
+          newApproved,
+          newUnapproved,
+        },
+      });
+
+      onApprovedItemsChange(newApproved);
+      onUnapprovedItemsChange(newUnapproved);
+    },
+    [
+      selectedItemKey,
+      canMakeChanges,
+      approvedItems,
+      unapprovedItems,
+      onApprovedItemsChange,
+      onUnapprovedItemsChange,
+    ],
+  );
+
   // Menu state
   const [isInventoryMenuOpen, setIsInventoryMenuOpen] = useState(false);
 
@@ -402,24 +464,31 @@ export function MatchedPairsInventory({
     return inventoryItems.filter((item) => item.count > 0).length;
   }, [inventoryItems]);
 
-  // Keyboard shortcuts (BHV-305)
+  // Keyboard shortcuts (BHV-305, GAP-001, GAP-002)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!e.ctrlKey) return;
 
       switch (e.key.toLowerCase()) {
         case 'y':
-          // Handled by the Inventory component's status column
+          e.preventDefault();
+          handleStatusChangeViaKeyboard('approved');
           break;
         case 'n':
-          // Handled by the Inventory component's status column
+          e.preventDefault();
+          handleStatusChangeViaKeyboard('unapproved');
           break;
         case 'u':
-          // Handled by the Inventory component's status column
+          e.preventDefault();
+          handleStatusChangeViaKeyboard('unknown');
           break;
         case 'z':
           e.preventDefault();
-          handleUndo();
+          if (e.shiftKey) {
+            handleRedo();
+          } else {
+            handleUndo();
+          }
           break;
         default:
           break;
@@ -428,7 +497,7 @@ export function MatchedPairsInventory({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo]);
+  }, [handleUndo, handleRedo, handleStatusChangeViaKeyboard]);
 
   return (
     <div data-testid="inventory-form" className="tw-flex tw-flex-col tw-h-full">
@@ -449,7 +518,8 @@ export function MatchedPairsInventory({
               <button
                 type="button"
                 role="menuitem"
-                className="tw-w-full tw-text-left tw-px-3 tw-py-2 hover:tw-bg-muted tw-text-sm"
+                className={`tw-w-full tw-text-left tw-px-3 tw-py-2 hover:tw-bg-muted tw-text-sm${!isAdministrator ? ' tw-opacity-50 tw-cursor-not-allowed' : ''}`}
+                disabled={!isAdministrator}
                 onClick={() => {
                   handleToggleSeparation();
                   setIsInventoryMenuOpen(false);
@@ -521,15 +591,9 @@ export function MatchedPairsInventory({
           columns={columns}
           areInventoryItemsLoading={areInventoryItemsLoading}
           classNameForVerseText="scripture-font"
-          onItemSelected={onItemSelected}
+          onItemSelected={handleItemSelectedInternal}
         />
       </div>
-
-      {/* Verse reference list (lower pane) */}
-      <div
-        data-testid="verse-reference-list"
-        className="tw-border-t tw-border-border tw-min-h-[100px]"
-      />
 
       {/* Status bar with item count */}
       <div

@@ -41,7 +41,7 @@ async function openMatchedPairsInventory(mainPage: Page) {
 
 /** Return a FrameLocator for the inventory form web view iframe. */
 function inventoryFrame(mainPage: Page) {
-  return mainPage.frameLocator('iframe[title="Unmatched Pairs of Punctuation Inventory"]');
+  return mainPage.frameLocator('iframe[title*="Unmatched Pairs of Punctuation Inventory"]');
 }
 
 /** Return a FrameLocator for the CMS options dialog iframe. */

@@ -42,7 +42,7 @@ async function openMatchedPairsInventory(mainPage: Page): Promise<void> {
 
 /** Gets the inventory WebView frame locator. */
 function getInventoryFrame(mainPage: Page) {
-  return mainPage.frameLocator('iframe[title="Unmatched Pairs of Punctuation Inventory"]');
+  return mainPage.frameLocator('iframe[title*="Unmatched Pairs of Punctuation Inventory"]');
 }
 
 /**
