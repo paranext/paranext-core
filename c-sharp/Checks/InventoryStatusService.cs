@@ -101,4 +101,74 @@ internal static class InventoryStatusService
         saveAction();
         return true;
     }
+
+    /// <summary>
+    /// Computes status changes for selected inventory items, enforcing always-valid
+    /// protection (VAL-007). Items marked as always-valid in Language Settings cannot
+    /// be set to invalid or unknown, but CAN be set to valid.
+    ///
+    /// Returns a StatusChangeResult indicating which items were changed and which
+    /// were skipped, with a warning message for skipped items.
+    /// </summary>
+    /// <param name="desiredStatus">The status to set (Valid, Invalid, or Unknown).</param>
+    /// <param name="selectedItems">Item texts to change status for.</param>
+    /// <param name="isAlwaysValid">Predicate checking if an item is always-valid.</param>
+    /// <returns>StatusChangeResult with success, change, skip, and warning info.</returns>
+    // === STUB: CAP-003 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:784-859
+    // Method: InventoryForm.SetSelectedStatus()
+    // Maps to: EXT-002, BHV-114, BHV-305, INV-007, VAL-007
+    public static StatusChangeResult ComputeStatusChanges(
+        ItemStatus desiredStatus,
+        string[] selectedItems,
+        Func<string, bool> isAlwaysValid
+    )
+    {
+        throw new NotImplementedException("CAP-003: ComputeStatusChanges not yet implemented");
+    }
+
+    /// <summary>
+    /// Resolves a content category string to the appropriate InventoryTextType.
+    ///
+    /// Category mapping (EXT-002):
+    /// - "studycontenttext" -> StudyBibleContent
+    /// - "nonversetext" -> NonVerseText
+    /// - default -> VerseText (when separation supported) or AllText (combined)
+    /// </summary>
+    /// <param name="category">Content category string from UI.</param>
+    /// <param name="supportsSeparateInventories">Whether the check supports separation.</param>
+    /// <returns>The InventoryTextType for the target inventory.</returns>
+    // === STUB: CAP-003 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:801-815
+    // Method: InventoryForm.SetSelectedStatus() (category switch)
+    // Maps to: EXT-002, TS-095
+    public static InventoryTextType ResolveInventoryCategory(
+        string category,
+        bool supportsSeparateInventories
+    )
+    {
+        throw new NotImplementedException("CAP-003: ResolveInventoryCategory not yet implemented");
+    }
+
+    /// <summary>
+    /// Guards the SetSelectedStatus operation with permission check (VAL-004).
+    /// When canMakeChanges is false, returns a failure StatusChangeResult without
+    /// invoking the compute action.
+    /// </summary>
+    /// <param name="canMakeChanges">Whether user has permission to make changes.</param>
+    /// <param name="computeAction">The action to compute status changes.</param>
+    /// <returns>StatusChangeResult from computeAction, or failure if not permitted.</returns>
+    // === STUB: CAP-003 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:784-786
+    // Method: InventoryForm.SetSelectedStatus() (permission guard)
+    // Maps to: VAL-004
+    public static StatusChangeResult SetSelectedStatusIfPermitted(
+        bool canMakeChanges,
+        Func<StatusChangeResult> computeAction
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-003: SetSelectedStatusIfPermitted not yet implemented"
+        );
+    }
 }
