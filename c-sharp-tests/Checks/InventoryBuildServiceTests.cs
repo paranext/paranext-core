@@ -48,10 +48,18 @@ internal class InventoryBuildServiceTests : PapiTestBase
     }
 
     [TearDown]
-    public void TestTearDown()
+    public override void TestTearDown()
     {
-        _scrText?.Dispose();
-        _scrText = null;
+        // Remove our ScrText with deleteProjectFiles=true to trigger full index
+        // cleanup in ScrTextCollection, preventing internal cache accumulation.
+        if (_scrText != null)
+        {
+            ScrTextCollection.Remove(_scrText, true);
+            _scrText.Dispose();
+            _scrText = null;
+        }
+
+        base.TestTearDown();
     }
 
     #endregion
