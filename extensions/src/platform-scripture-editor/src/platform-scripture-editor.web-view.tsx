@@ -239,6 +239,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [canRedo, setCanRedo] = useState(false);
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const [contextMarker, setContextMarker] = useState<string | undefined>();
 
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
@@ -856,7 +858,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const inlineMarkerMenuItems = useMemo(
     () =>
-      generateInlineMarkerMenuListItems(editorRef, () => setShowMarkersMenu(false), blockMarker),
+      generateInlineMarkerMenuListItems(editorRef, () => setShowMarkersMenu(false), contextMarker),
     [blockMarker],
   );
 
@@ -864,7 +866,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const windowSelection = window.getSelection();
-    if (inlineMarkerMenuItems && windowSelection && windowSelection.rangeCount > 0) {
+    if (inlineMarkerMenuItems.length && windowSelection && windowSelection.rangeCount > 0) {
       const selectionRect = windowSelection.getRangeAt(0).getBoundingClientRect();
       setMarkersMenuAnchorX(selectionRect.left);
       setMarkersMenuAnchorY(selectionRect.top);
@@ -918,7 +920,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu]);
+  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1483,6 +1485,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             setCanUndo(state.canUndo);
             setCanRedo(state.canRedo);
             setBlockMarker(state.blockMarker);
+            setContextMarker(state.contextMarker);
           }}
         />
       </>
