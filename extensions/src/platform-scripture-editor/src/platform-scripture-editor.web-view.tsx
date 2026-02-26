@@ -229,6 +229,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
   const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
 
+  // The ref needs to start out with null for it to work as a element ref
+  // eslint-disable-next-line no-null/no-null
   const markerMenuSearchRef = useRef<HTMLInputElement>(null);
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -780,7 +782,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const inlineMarkerMenuItems = useMemo(
     () =>
       generateInlineMarkerMenuListItems(editorRef, () => setShowMarkersMenu(false), contextMarker),
-    [blockMarker],
+    [contextMarker],
   );
 
   const showInlineMarkersMenu = useCallback(() => {
@@ -793,9 +795,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       setMarkersMenuAnchorY(selectionRect.top);
       setMarkersMenuAnchorHeight(selectionRect.height);
       setShowMarkersMenu(true);
-      markerMenuSearchRef.current?.focus();
     }
   }, [inlineMarkerMenuItems]);
+
+  // Need to add a window listener for click events that will close the markers menu when you click
+  // outside
+  useEffect(() => {
+    const clickListener = () => {
+      if (showMarkersMenu) setShowMarkersMenu(false);
+    };
+
+    window.addEventListener('click', clickListener);
+
+    return () => {
+      window.removeEventListener('click', clickListener);
+    };
+  }, [showMarkersMenu]);
 
   // When the inline markers menu is showed, makes sure the search input is focused
   useEffect(() => {
@@ -1399,12 +1414,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }
 
   return (
-    <div
-      className="tw-flex tw-flex-col tw-h-screen"
-      onClick={() => {
-        if (showMarkersMenu) setShowMarkersMenu(false);
-      }}
-    >
+    <div className="tw-flex tw-flex-col tw-h-screen">
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
