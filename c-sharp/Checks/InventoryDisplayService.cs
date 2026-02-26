@@ -29,120 +29,59 @@ internal static class InventoryDisplayService
             new("Text", "Text", "text", DefaultSortDescending: false),
         };
 
-        if (isSba)
-        {
-            if (isSeparated)
-            {
-                // SBA separated: verse/non-verse columns then study content columns
-                columns.Add(
-                    new("VerseTextCount", "Verse text #", "count", DefaultSortDescending: true)
-                );
-                columns.Add(
-                    new(
-                        "VerseTextStatus",
-                        "Verse text Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-                columns.Add(
-                    new("NonVerseCount", "Non-verse text #", "count", DefaultSortDescending: true)
-                );
-                columns.Add(
-                    new(
-                        "NonVerseStatus",
-                        "Non-verse text Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-                columns.Add(
-                    new(
-                        "StudyContentCount",
-                        "Study Bible content #",
-                        "count",
-                        DefaultSortDescending: true
-                    )
-                );
-                columns.Add(
-                    new(
-                        "StudyContentStatus",
-                        "Study Bible content Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-            }
-            else
-            {
-                // SBA non-separated: regular text and study content columns
-                columns.Add(
-                    new("RegularTextCount", "Regular text #", "count", DefaultSortDescending: true)
-                );
-                columns.Add(
-                    new(
-                        "RegularTextStatus",
-                        "Regular text Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-                columns.Add(
-                    new(
-                        "StudyContentCount",
-                        "Study Bible content #",
-                        "count",
-                        DefaultSortDescending: true
-                    )
-                );
-                columns.Add(
-                    new(
-                        "StudyContentStatus",
-                        "Study Bible content Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-            }
-        }
+        if (isSeparated)
+            AddVerseAndNonVerseColumns(columns);
+        else if (isSba)
+            AddRegularTextColumns(columns);
         else
-        {
-            if (isSeparated)
-            {
-                // Regular separated: verse and non-verse columns
-                columns.Add(
-                    new("VerseTextCount", "Verse text #", "count", DefaultSortDescending: true)
-                );
-                columns.Add(
-                    new(
-                        "VerseTextStatus",
-                        "Verse text Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-                columns.Add(
-                    new("NonVerseCount", "Non-verse text #", "count", DefaultSortDescending: true)
-                );
-                columns.Add(
-                    new(
-                        "NonVerseStatus",
-                        "Non-verse text Status",
-                        "status",
-                        DefaultSortDescending: false
-                    )
-                );
-            }
-            else
-            {
-                // Regular non-separated: combined columns
-                columns.Add(new("CombinedCount", "#", "count", DefaultSortDescending: true));
-                columns.Add(
-                    new("CombinedStatus", "Status", "status", DefaultSortDescending: false)
-                );
-            }
-        }
+            AddCombinedColumns(columns);
+
+        if (isSba)
+            AddStudyContentColumns(columns);
 
         return columns;
+    }
+
+    private static void AddVerseAndNonVerseColumns(List<ColumnDefinition> columns)
+    {
+        columns.Add(new("VerseTextCount", "Verse text #", "count", DefaultSortDescending: true));
+        columns.Add(
+            new("VerseTextStatus", "Verse text Status", "status", DefaultSortDescending: false)
+        );
+        columns.Add(new("NonVerseCount", "Non-verse text #", "count", DefaultSortDescending: true));
+        columns.Add(
+            new("NonVerseStatus", "Non-verse text Status", "status", DefaultSortDescending: false)
+        );
+    }
+
+    private static void AddRegularTextColumns(List<ColumnDefinition> columns)
+    {
+        columns.Add(
+            new("RegularTextCount", "Regular text #", "count", DefaultSortDescending: true)
+        );
+        columns.Add(
+            new("RegularTextStatus", "Regular text Status", "status", DefaultSortDescending: false)
+        );
+    }
+
+    private static void AddCombinedColumns(List<ColumnDefinition> columns)
+    {
+        columns.Add(new("CombinedCount", "#", "count", DefaultSortDescending: true));
+        columns.Add(new("CombinedStatus", "Status", "status", DefaultSortDescending: false));
+    }
+
+    private static void AddStudyContentColumns(List<ColumnDefinition> columns)
+    {
+        columns.Add(
+            new("StudyContentCount", "Study Bible content #", "count", DefaultSortDescending: true)
+        );
+        columns.Add(
+            new(
+                "StudyContentStatus",
+                "Study Bible content Status",
+                "status",
+                DefaultSortDescending: false
+            )
+        );
     }
 }
