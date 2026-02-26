@@ -258,23 +258,9 @@ internal static class InventoryStatusService
         var mergedValid = new HashSet<string>(snapshot.NonVerseValidItems);
         var mergedInvalid = new HashSet<string>(snapshot.NonVerseInvalidItems);
 
-        // Iterate verse valid items: set unknown non-verse items to valid
-        foreach (string item in snapshot.VerseValidItems)
-        {
-            if (snapshot.NonVerseUnknownItems.Contains(item))
-            {
-                mergedValid.Add(item);
-            }
-        }
-
-        // Iterate verse invalid items: set unknown non-verse items to invalid
-        foreach (string item in snapshot.VerseInvalidItems)
-        {
-            if (snapshot.NonVerseUnknownItems.Contains(item))
-            {
-                mergedInvalid.Add(item);
-            }
-        }
+        // Unknown non-verse items inherit their status from the verse inventory
+        MergeUnknownItems(snapshot.VerseValidItems, snapshot.NonVerseUnknownItems, mergedValid);
+        MergeUnknownItems(snapshot.VerseInvalidItems, snapshot.NonVerseUnknownItems, mergedInvalid);
 
         return new SeparationToggleResult
         {
@@ -304,34 +290,14 @@ internal static class InventoryStatusService
     )
     {
         // If setting is explicitly "true", return true immediately
-        if (
-            !string.IsNullOrEmpty(settingValue)
-            && bool.TryParse(settingValue, out bool explicitValue)
-            && explicitValue
-        )
-        {
+        if (string.Equals(settingValue, "True", StringComparison.OrdinalIgnoreCase))
             return true;
-        }
 
         // For null, empty, or "false" settings: auto-detect by checking
-        // if non-verse settings differ from verse settings
-        bool hasNonVerseContent =
-            snapshot.NonVerseValidItems.Count > 0 || snapshot.NonVerseInvalidItems.Count > 0;
-
-        if (!hasNonVerseContent)
-            return false;
-
-        // Check if any non-verse valid item is NOT in the verse valid set
-        bool validDiffers = snapshot.NonVerseValidItems.Any(item =>
-            !snapshot.VerseValidItems.Contains(item)
-        );
-
-        // Check if any non-verse invalid item is NOT in the verse invalid set
-        bool invalidDiffers = snapshot.NonVerseInvalidItems.Any(item =>
-            !snapshot.VerseInvalidItems.Contains(item)
-        );
-
-        return validDiffers || invalidDiffers;
+        // if non-verse settings differ from verse settings.
+        // Returns true when non-verse valid/invalid items are not subsets of verse items.
+        return !snapshot.NonVerseValidItems.IsSubsetOf(snapshot.VerseValidItems)
+            || !snapshot.NonVerseInvalidItems.IsSubsetOf(snapshot.VerseInvalidItems);
     }
 
     /// <summary>
@@ -392,5 +358,25 @@ internal static class InventoryStatusService
         }
 
         return toggleAction();
+    }
+
+    /// <summary>
+    /// Copies items from <paramref name="sourceItems"/> into <paramref name="targetSet"/>
+    /// when the item exists in <paramref name="unknownItems"/>. Used during separation toggle
+    /// to inherit verse statuses for unknown non-verse items.
+    /// </summary>
+    private static void MergeUnknownItems(
+        HashSet<string> sourceItems,
+        HashSet<string> unknownItems,
+        HashSet<string> targetSet
+    )
+    {
+        foreach (string item in sourceItems)
+        {
+            if (unknownItems.Contains(item))
+            {
+                targetSet.Add(item);
+            }
+        }
     }
 }
