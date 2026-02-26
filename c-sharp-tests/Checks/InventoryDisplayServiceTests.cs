@@ -541,10 +541,7 @@ public class InventoryDisplayServiceTests
     [Category("Contract")]
     [Property("CapabilityId", "CAP-006")]
     [Property("BehaviorId", "EXT-005")]
-    public void GetDisplayedColumns_AllPaths_FirstColumnIsAlwaysText(
-        bool isSba,
-        bool isSeparated
-    )
+    public void GetDisplayedColumns_AllPaths_FirstColumnIsAlwaysText(bool isSba, bool isSeparated)
     {
         var columns = InventoryDisplayService.GetDisplayedColumns(
             isSba,
@@ -742,37 +739,705 @@ public class InventoryDisplayServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(
-                InventoryDisplayService
-                    .GetDisplayedColumns(false, false, true)
-                    .Count,
+                InventoryDisplayService.GetDisplayedColumns(false, false, true).Count,
                 Is.EqualTo(3),
                 "Regular non-separated should have 3 columns"
             );
 
             Assert.That(
-                InventoryDisplayService
-                    .GetDisplayedColumns(false, true, true)
-                    .Count,
+                InventoryDisplayService.GetDisplayedColumns(false, true, true).Count,
                 Is.EqualTo(5),
                 "Regular separated should have 5 columns"
             );
 
             Assert.That(
-                InventoryDisplayService
-                    .GetDisplayedColumns(true, false, true)
-                    .Count,
+                InventoryDisplayService.GetDisplayedColumns(true, false, true).Count,
                 Is.EqualTo(5),
                 "SBA non-separated should have 5 columns"
             );
 
             Assert.That(
-                InventoryDisplayService
-                    .GetDisplayedColumns(true, true, true)
-                    .Count,
+                InventoryDisplayService.GetDisplayedColumns(true, true, true).Count,
                 Is.EqualTo(7),
                 "SBA separated should have 7 columns"
             );
         });
+    }
+
+    #endregion
+
+    // ========================================================================
+    // CAP-007: GetContentTypeFilterOptions
+    //
+    // Tests for the content type filter dropdown configuration.
+    // Pure computation with 4-way branching (Regular/SBA x Separated/NonSeparated).
+    //
+    // Source: EXT-006 (InventoryForm.SetupTextTypeDropdown, PT9 InventoryForm.cs:1281-1320)
+    // Contract: Section 4.8 M-008 GetContentTypeFilterOptions
+    // Golden master: gm-009 (content type filter configuration)
+    // ========================================================================
+
+    #region CAP-007 Acceptance Test (gm-009)
+
+    /// <summary>
+    /// Acceptance test: Verifies all 4 branching paths return correct visibility and option
+    /// labels matching the golden master gm-009 exactly. When this test passes, CAP-007 is complete.
+    /// </summary>
+    [Test]
+    [Category("Acceptance")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("BehaviorId", "EXT-006")]
+    [Description(
+        "Acceptance test: GetContentTypeFilterOptions returns correct visibility and options for all 4 branching paths"
+    )]
+    public void GetContentTypeFilterOptions_AllFourPaths_MatchGoldenMaster()
+    {
+        // Path 1: Regular non-separated -> not visible
+        var regularNonSep = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: false
+        );
+        Assert.That(
+            regularNonSep.Visible,
+            Is.False,
+            "Regular non-separated: filter must be hidden"
+        );
+        Assert.That(
+            regularNonSep.Options,
+            Is.Null,
+            "Regular non-separated: Options must be null when not visible"
+        );
+
+        // Path 2: Regular separated -> 3 options
+        var regularSep = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: true
+        );
+        Assert.That(regularSep.Visible, Is.True, "Regular separated: filter must be visible");
+        Assert.That(
+            regularSep.Options!.Select(o => o.Label).ToArray(),
+            Is.EqualTo(new[] { "All text", "Verse text only", "Non-verse text only" }),
+            "Regular separated: option labels must match gm-009"
+        );
+
+        // Path 3: SBA non-separated -> 3 options
+        var sbaNonSep = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: false
+        );
+        Assert.That(sbaNonSep.Visible, Is.True, "SBA non-separated: filter must be visible");
+        Assert.That(
+            sbaNonSep.Options!.Select(o => o.Label).ToArray(),
+            Is.EqualTo(
+                new[] { "All text", "Base project content only", "Study Bible content only" }
+            ),
+            "SBA non-separated: option labels must match gm-009"
+        );
+
+        // Path 4: SBA separated -> 4 options
+        var sbaSep = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: true
+        );
+        Assert.That(sbaSep.Visible, Is.True, "SBA separated: filter must be visible");
+        Assert.That(
+            sbaSep.Options!.Select(o => o.Label).ToArray(),
+            Is.EqualTo(
+                new[]
+                {
+                    "All text",
+                    "Verse text only",
+                    "Non-verse text only",
+                    "Study Bible content only",
+                }
+            ),
+            "SBA separated: option labels must match gm-009"
+        );
+    }
+
+    #endregion
+
+    #region CAP-007 Contract Tests - Regular Non-Separated (TS-103)
+
+    /// <summary>
+    /// TS-103: Regular non-separated project hides the content type filter dropdown.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-103")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_RegularNonSeparated_NotVisible()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: false
+        );
+
+        Assert.That(result.Visible, Is.False);
+    }
+
+    /// <summary>
+    /// TS-103: When not visible, Options must be null (Section 3.5 validation rule).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-103")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_RegularNonSeparated_OptionsIsNull()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: false
+        );
+
+        Assert.That(
+            result.Options,
+            Is.Null,
+            "When Visible is false, Options must be null (Section 3.5 validation)"
+        );
+    }
+
+    #endregion
+
+    #region CAP-007 Contract Tests - Regular Separated (TS-104)
+
+    /// <summary>
+    /// TS-104: Regular separated project shows the content type filter dropdown.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-104")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_RegularSeparated_IsVisible()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: true
+        );
+
+        Assert.That(result.Visible, Is.True);
+    }
+
+    /// <summary>
+    /// TS-104: Regular separated provides exactly 3 options.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-104")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_RegularSeparated_ReturnsThreeOptions()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: true
+        );
+
+        Assert.That(result.Options, Is.Not.Null);
+        Assert.That(result.Options!, Has.Count.EqualTo(3));
+    }
+
+    /// <summary>
+    /// TS-104: Regular separated option labels match exactly.
+    /// Contract Section 4.8: "All text, Verse text only, Non-verse text only"
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-104")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_RegularSeparated_OptionLabels()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: true
+        );
+
+        var labels = result.Options!.Select(o => o.Label).ToArray();
+        Assert.That(
+            labels,
+            Is.EqualTo(new[] { "All text", "Verse text only", "Non-verse text only" })
+        );
+    }
+
+    /// <summary>
+    /// TS-104: Regular separated option TextType values match the enum.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-104")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_RegularSeparated_OptionTextTypes()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: false,
+            isSeparated: true
+        );
+
+        var textTypes = result.Options!.Select(o => o.TextType).ToArray();
+        Assert.That(
+            textTypes,
+            Is.EqualTo(
+                new[]
+                {
+                    InventoryTextType.AllText,
+                    InventoryTextType.VerseText,
+                    InventoryTextType.NonVerseText,
+                }
+            )
+        );
+    }
+
+    #endregion
+
+    #region CAP-007 Contract Tests - SBA Non-Separated (TS-105)
+
+    /// <summary>
+    /// TS-105: SBA non-separated project shows the content type filter dropdown.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-105")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaNonSeparated_IsVisible()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: false
+        );
+
+        Assert.That(result.Visible, Is.True);
+    }
+
+    /// <summary>
+    /// TS-105: SBA non-separated provides exactly 3 options.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-105")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaNonSeparated_ReturnsThreeOptions()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: false
+        );
+
+        Assert.That(result.Options, Is.Not.Null);
+        Assert.That(result.Options!, Has.Count.EqualTo(3));
+    }
+
+    /// <summary>
+    /// TS-105: SBA non-separated option labels match exactly.
+    /// Contract Section 4.8: "All text, Base project content only, Study Bible content only"
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-105")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaNonSeparated_OptionLabels()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: false
+        );
+
+        var labels = result.Options!.Select(o => o.Label).ToArray();
+        Assert.That(
+            labels,
+            Is.EqualTo(
+                new[] { "All text", "Base project content only", "Study Bible content only" }
+            )
+        );
+    }
+
+    /// <summary>
+    /// TS-105: SBA non-separated option TextType values match the enum.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-105")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaNonSeparated_OptionTextTypes()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: false
+        );
+
+        var textTypes = result.Options!.Select(o => o.TextType).ToArray();
+        Assert.That(
+            textTypes,
+            Is.EqualTo(
+                new[]
+                {
+                    InventoryTextType.AllText,
+                    InventoryTextType.RegularContent,
+                    InventoryTextType.StudyBibleContent,
+                }
+            )
+        );
+    }
+
+    #endregion
+
+    #region CAP-007 Contract Tests - SBA Separated (TS-106)
+
+    /// <summary>
+    /// TS-106: SBA separated project shows the content type filter dropdown.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-106")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaSeparated_IsVisible()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: true
+        );
+
+        Assert.That(result.Visible, Is.True);
+    }
+
+    /// <summary>
+    /// TS-106: SBA separated provides exactly 4 options (most options of any path).
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-106")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaSeparated_ReturnsFourOptions()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: true
+        );
+
+        Assert.That(result.Options, Is.Not.Null);
+        Assert.That(result.Options!, Has.Count.EqualTo(4));
+    }
+
+    /// <summary>
+    /// TS-106: SBA separated option labels match exactly.
+    /// Contract Section 4.8: "All text, Verse text only, Non-verse text only, Study Bible content only"
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-106")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaSeparated_OptionLabels()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: true
+        );
+
+        var labels = result.Options!.Select(o => o.Label).ToArray();
+        Assert.That(
+            labels,
+            Is.EqualTo(
+                new[]
+                {
+                    "All text",
+                    "Verse text only",
+                    "Non-verse text only",
+                    "Study Bible content only",
+                }
+            )
+        );
+    }
+
+    /// <summary>
+    /// TS-106: SBA separated option TextType values match the enum.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ScenarioId", "TS-106")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaSeparated_OptionTextTypes()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: true
+        );
+
+        var textTypes = result.Options!.Select(o => o.TextType).ToArray();
+        Assert.That(
+            textTypes,
+            Is.EqualTo(
+                new[]
+                {
+                    InventoryTextType.AllText,
+                    InventoryTextType.VerseText,
+                    InventoryTextType.NonVerseText,
+                    InventoryTextType.StudyBibleContent,
+                }
+            )
+        );
+    }
+
+    #endregion
+
+    #region CAP-007 Golden Master Tests (gm-009)
+
+    /// <summary>
+    /// Golden master gm-009: Verifies exact option counts per path.
+    /// Regular non-separated: not visible, Regular separated: 3, SBA non-separated: 3, SBA separated: 4.
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_OptionCounts_MatchGoldenMaster()
+    {
+        Assert.Multiple(() =>
+        {
+            var regNonSep = InventoryDisplayService.GetContentTypeFilterOptions(false, false);
+            Assert.That(
+                regNonSep.Visible,
+                Is.False,
+                "gm-009: Regular non-separated must be hidden"
+            );
+
+            var regSep = InventoryDisplayService.GetContentTypeFilterOptions(false, true);
+            Assert.That(
+                regSep.Options!.Count,
+                Is.EqualTo(3),
+                "gm-009: Regular separated must have 3 options"
+            );
+
+            var sbaNonSep = InventoryDisplayService.GetContentTypeFilterOptions(true, false);
+            Assert.That(
+                sbaNonSep.Options!.Count,
+                Is.EqualTo(3),
+                "gm-009: SBA non-separated must have 3 options"
+            );
+
+            var sbaSep = InventoryDisplayService.GetContentTypeFilterOptions(true, true);
+            Assert.That(
+                sbaSep.Options!.Count,
+                Is.EqualTo(4),
+                "gm-009: SBA separated must have 4 options"
+            );
+        });
+    }
+
+    /// <summary>
+    /// Golden master gm-009: Verifies the exact first option is always "All text" when visible.
+    /// This is true for all 3 visible paths.
+    /// </summary>
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("GoldenMasterId", "gm-009")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_VisiblePaths_FirstOptionIsAllText()
+    {
+        Assert.Multiple(() =>
+        {
+            var regSep = InventoryDisplayService.GetContentTypeFilterOptions(false, true);
+            Assert.That(regSep.Options![0].Label, Is.EqualTo("All text"));
+            Assert.That(regSep.Options[0].TextType, Is.EqualTo(InventoryTextType.AllText));
+
+            var sbaNonSep = InventoryDisplayService.GetContentTypeFilterOptions(true, false);
+            Assert.That(sbaNonSep.Options![0].Label, Is.EqualTo("All text"));
+            Assert.That(sbaNonSep.Options[0].TextType, Is.EqualTo(InventoryTextType.AllText));
+
+            var sbaSep = InventoryDisplayService.GetContentTypeFilterOptions(true, true);
+            Assert.That(sbaSep.Options![0].Label, Is.EqualTo("All text"));
+            Assert.That(sbaSep.Options[0].TextType, Is.EqualTo(InventoryTextType.AllText));
+        });
+    }
+
+    #endregion
+
+    #region CAP-007 Invariant Tests (INV-008)
+
+    /// <summary>
+    /// INV-008: NonVerseText filter explicitly excludes Study Bible content.
+    /// In all paths that include NonVerseText, there is no overlap with StudyBibleContent.
+    /// Regular separated has NonVerseText but NOT StudyBibleContent.
+    /// SBA separated has BOTH NonVerseText AND StudyBibleContent as separate options.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("InvariantId", "INV-008")]
+    [Property("BehaviorId", "EXT-006")]
+    [Description(
+        "INV-008: NonVerseText and StudyBibleContent are always distinct filter options, never merged"
+    )]
+    public void GetContentTypeFilterOptions_NonVerseAndStudyBible_AlwaysDistinct()
+    {
+        // Regular separated: has NonVerseText, does NOT have StudyBibleContent
+        var regSep = InventoryDisplayService.GetContentTypeFilterOptions(false, true);
+        var regSepTypes = regSep.Options!.Select(o => o.TextType).ToList();
+        Assert.That(
+            regSepTypes,
+            Does.Contain(InventoryTextType.NonVerseText),
+            "Regular separated must include NonVerseText"
+        );
+        Assert.That(
+            regSepTypes,
+            Does.Not.Contain(InventoryTextType.StudyBibleContent),
+            "Regular separated must NOT include StudyBibleContent (not an SBA project)"
+        );
+
+        // SBA separated: has BOTH NonVerseText AND StudyBibleContent as separate entries
+        var sbaSep = InventoryDisplayService.GetContentTypeFilterOptions(true, true);
+        var sbaSepTypes = sbaSep.Options!.Select(o => o.TextType).ToList();
+        Assert.That(
+            sbaSepTypes,
+            Does.Contain(InventoryTextType.NonVerseText),
+            "SBA separated must include NonVerseText"
+        );
+        Assert.That(
+            sbaSepTypes,
+            Does.Contain(InventoryTextType.StudyBibleContent),
+            "SBA separated must include StudyBibleContent"
+        );
+
+        // Verify they are separate options (not merged)
+        var nonVerseIndex = sbaSepTypes.IndexOf(InventoryTextType.NonVerseText);
+        var studyBibleIndex = sbaSepTypes.IndexOf(InventoryTextType.StudyBibleContent);
+        Assert.That(
+            nonVerseIndex,
+            Is.Not.EqualTo(studyBibleIndex),
+            "INV-008: NonVerseText and StudyBibleContent must be distinct filter options"
+        );
+    }
+
+    /// <summary>
+    /// INV-008: SBA non-separated uses RegularContent (not NonVerseText) for base project content,
+    /// keeping Study Bible content separate.
+    /// </summary>
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("InvariantId", "INV-008")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_SbaNonSeparated_UsesRegularContentNotNonVerse()
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(
+            isSba: true,
+            isSeparated: false
+        );
+
+        var textTypes = result.Options!.Select(o => o.TextType).ToList();
+        Assert.That(
+            textTypes,
+            Does.Contain(InventoryTextType.RegularContent),
+            "SBA non-separated must use RegularContent for base project content"
+        );
+        Assert.That(
+            textTypes,
+            Does.Not.Contain(InventoryTextType.NonVerseText),
+            "SBA non-separated must NOT use NonVerseText (uses RegularContent instead)"
+        );
+        Assert.That(
+            textTypes,
+            Does.Not.Contain(InventoryTextType.VerseText),
+            "SBA non-separated must NOT use VerseText (not separated)"
+        );
+    }
+
+    #endregion
+
+    #region CAP-007 Extraction Tests - Visibility Invariants (EXT-006)
+
+    /// <summary>
+    /// EXT-006: Only regular non-separated hides the filter. All other paths show it.
+    /// This is the core visibility rule from the 4-way branch.
+    /// </summary>
+    [TestCase(false, false, false, TestName = "Regular non-separated: hidden")]
+    [TestCase(false, true, true, TestName = "Regular separated: visible")]
+    [TestCase(true, false, true, TestName = "SBA non-separated: visible")]
+    [TestCase(true, true, true, TestName = "SBA separated: visible")]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ExtractionId", "EXT-006")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_Visibility_MatchesExpected(
+        bool isSba,
+        bool isSeparated,
+        bool expectedVisible
+    )
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(isSba, isSeparated);
+
+        Assert.That(result.Visible, Is.EqualTo(expectedVisible));
+    }
+
+    /// <summary>
+    /// EXT-006: When visible, Options must not be null and must contain at least one option.
+    /// When not visible, Options must be null.
+    /// </summary>
+    [TestCase(false, false, TestName = "Regular non-separated")]
+    [TestCase(false, true, TestName = "Regular separated")]
+    [TestCase(true, false, TestName = "SBA non-separated")]
+    [TestCase(true, true, TestName = "SBA separated")]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ExtractionId", "EXT-006")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_OptionsNullity_MatchesVisibility(
+        bool isSba,
+        bool isSeparated
+    )
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(isSba, isSeparated);
+
+        if (result.Visible)
+        {
+            Assert.That(result.Options, Is.Not.Null, "Options must not be null when Visible=true");
+            Assert.That(
+                result.Options!,
+                Is.Not.Empty,
+                "Options must not be empty when Visible=true"
+            );
+        }
+        else
+        {
+            Assert.That(result.Options, Is.Null, "Options must be null when Visible=false");
+        }
+    }
+
+    /// <summary>
+    /// EXT-006: When visible, the first option is always "All text" with TextType AllText.
+    /// This is the default selection for the filter dropdown.
+    /// </summary>
+    [TestCase(false, true, TestName = "Regular separated")]
+    [TestCase(true, false, TestName = "SBA non-separated")]
+    [TestCase(true, true, TestName = "SBA separated")]
+    [Category("Extraction")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("ExtractionId", "EXT-006")]
+    [Property("BehaviorId", "EXT-006")]
+    public void GetContentTypeFilterOptions_WhenVisible_FirstOptionIsAllText(
+        bool isSba,
+        bool isSeparated
+    )
+    {
+        var result = InventoryDisplayService.GetContentTypeFilterOptions(isSba, isSeparated);
+
+        Assert.That(result.Visible, Is.True, "Precondition: filter must be visible for this test");
+        Assert.That(result.Options![0].Label, Is.EqualTo("All text"));
+        Assert.That(result.Options[0].TextType, Is.EqualTo(InventoryTextType.AllText));
     }
 
     #endregion

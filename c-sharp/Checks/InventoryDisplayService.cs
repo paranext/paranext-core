@@ -70,6 +70,24 @@ internal static class InventoryDisplayService
         columns.Add(new("CombinedStatus", "Status", "status", DefaultSortDescending: false));
     }
 
+    // === STUB FOR TDD RED PHASE ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:1281-1320
+    // Method: InventoryForm.SetupTextTypeDropdown()
+    // Maps to: EXT-006
+    /// <summary>
+    /// Returns content type filter options based on project type and separation state.
+    /// Hidden when regular non-separated; shows options for all other paths.
+    /// </summary>
+    /// <param name="isSba">Whether the project is Study Bible Additions.</param>
+    /// <param name="isSeparated">Whether verse/non-verse separation is enabled.</param>
+    /// <returns>Content type filter configuration with visibility and options.</returns>
+    public static ContentTypeFilterResult GetContentTypeFilterOptions(bool isSba, bool isSeparated)
+    {
+        throw new NotImplementedException(
+            "CAP-007: GetContentTypeFilterOptions not yet implemented"
+        );
+    }
+
     private static void AddStudyContentColumns(List<ColumnDefinition> columns)
     {
         columns.Add(
