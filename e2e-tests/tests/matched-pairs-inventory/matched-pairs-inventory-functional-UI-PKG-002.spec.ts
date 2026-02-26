@@ -11,7 +11,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
   // ═══════════════════════════════════════════════
 
   // @scenario TS-026 (opens dialog from inventory form)
-  test.fixme('should open CMS Options dialog via Inventory menu', async ({ mainPage }) => {
+  test('should open CMS Options dialog via Inventory menu', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to Matched Pairs Inventory
@@ -42,61 +42,58 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
   // ═══════════════════════════════════════════════
 
   // @scenario TS-026 (BHV-106)
-  test.fixme(
-    'should display all expected dialog elements with option list',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should display all expected dialog elements with option list', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      // Navigate to inventory and open options dialog
-      await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
-      await expect(
-        mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
-      ).toBeVisible({ timeout: 15_000 });
+    // Navigate to inventory and open options dialog
+    await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
+    await expect(
+      mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
+    ).toBeVisible({ timeout: 15_000 });
 
-      const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
+    const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
 
-      // Open options dialog
-      await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
-      await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
+    // Open options dialog
+    await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
+    await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
 
-      const dialog = inventoryFrame.getByTestId('cms-options-form');
-      await expect(dialog).toBeVisible();
+    const dialog = inventoryFrame.getByTestId('cms-options-form');
+    await expect(dialog).toBeVisible();
 
-      // Verify option list (lstOptions) displays all 4 Matched Pairs options
-      const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-      await expect(optionList).toBeVisible();
+    // Verify option list (lstOptions) displays all 4 Matched Pairs options
+    const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
+    await expect(optionList).toBeVisible();
 
-      // Check for specific options (BHV-106)
-      await expect(dialog.getByText(/PairedPunctuation/i)).toBeVisible();
-      await expect(dialog.getByText(/ClosedByParagraph/i)).toBeVisible();
-      await expect(dialog.getByText(/PoeticStyles/i)).toBeVisible();
-      await expect(dialog.getByText(/IntroductionOutlineStyles/i)).toBeVisible();
+    // Check for specific options (BHV-106)
+    await expect(dialog.getByText(/PairedPunctuation/i)).toBeVisible();
+    await expect(dialog.getByText(/ClosedByParagraph/i)).toBeVisible();
+    await expect(dialog.getByText(/PoeticStyles/i)).toBeVisible();
+    await expect(dialog.getByText(/IntroductionOutlineStyles/i)).toBeVisible();
 
-      // Verify description field (txtDescription)
-      await expect(dialog.getByTestId('option-description')).toBeVisible();
+    // Verify description field (txtDescription)
+    await expect(dialog.getByTestId('option-description')).toBeVisible();
 
-      // Verify value input (cmbValue)
-      await expect(dialog.getByTestId('option-value-input')).toBeVisible();
+    // Verify value input (cmbValue)
+    await expect(dialog.getByTestId('option-value-input')).toBeVisible();
 
-      // Verify action buttons
-      await expect(dialog.getByRole('button', { name: /OK/i })).toBeVisible();
-      await expect(dialog.getByRole('button', { name: /Cancel/i })).toBeVisible();
+    // Verify action buttons
+    await expect(dialog.getByRole('button', { name: /OK/i })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Cancel/i })).toBeVisible();
 
-      // EVD-009: Dialog fully loaded with options
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-009-options-dialog-open.png',
-      });
-    },
-  );
+    // EVD-009: Dialog fully loaded with options
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-009-options-dialog-open.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════
   // Category 3: Data Wiring
   // ═══════════════════════════════════════════════
 
   // @scenario TS-026 (BHV-106, BHV-119)
-  test.fixme('should display real option values from backend', async ({ mainPage }) => {
+  test('should display real option values from backend', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to inventory and open options dialog
@@ -136,50 +133,47 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
   // ═══════════════════════════════════════════════
 
   // @scenario TS-026 (BHV-119 — adaptive input)
-  test.fixme(
-    'should switch to Yes/No dropdown for ClosedByParagraph option',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should switch to Yes/No dropdown for ClosedByParagraph option', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      // Navigate to inventory and open options dialog
-      await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
-      await expect(
-        mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
-      ).toBeVisible({ timeout: 15_000 });
+    // Navigate to inventory and open options dialog
+    await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
+    await expect(
+      mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
+    ).toBeVisible({ timeout: 15_000 });
 
-      const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
-      await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
-      await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
+    const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
+    await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
+    await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
 
-      const dialog = inventoryFrame.getByTestId('cms-options-form');
+    const dialog = inventoryFrame.getByTestId('cms-options-form');
 
-      // Select ClosedByParagraph option
-      const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-      await optionList.getByText(/ClosedByParagraph/i).click();
+    // Select ClosedByParagraph option
+    const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
+    await optionList.getByText(/ClosedByParagraph/i).click();
 
-      // Verify description updated
-      const descriptionField = dialog.getByTestId('option-description');
-      await expect(descriptionField).toContainText(/paragraph/i);
+    // Verify description updated
+    const descriptionField = dialog.getByTestId('option-description');
+    await expect(descriptionField).toContainText(/paragraph/i);
 
-      // Verify value input is now a dropdown (not editable text)
-      const valueInput = dialog.getByTestId('option-value-input');
-      await expect(valueInput).toBeVisible();
+    // Verify value input is now a dropdown (not editable text)
+    const valueInput = dialog.getByTestId('option-value-input');
+    await expect(valueInput).toBeVisible();
 
-      // Verify current value is either "Yes" or "No" (BHV-119 — isYesNo option type)
-      const value = await valueInput.inputValue();
-      expect(['Yes', 'No']).toContain(value);
+    // Verify current value is either "Yes" or "No" (BHV-119 — isYesNo option type)
+    const value = await valueInput.inputValue();
+    expect(['Yes', 'No']).toContain(value);
 
-      // EVD-010: Yes/No dropdown visible for ClosedByParagraph
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-010-yesno-option.png',
-      });
-    },
-  );
+    // EVD-010: Yes/No dropdown visible for ClosedByParagraph
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-010-yesno-option.png',
+    });
+  });
 
   // @scenario TS-026 (BHV-106)
-  test.fixme('should edit Pairs value successfully', async ({ mainPage }) => {
+  test('should edit Pairs value successfully', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to inventory and open options dialog
@@ -220,7 +214,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
   });
 
   // @scenario TS-026 (BHV-314)
-  test.fixme('should save changed options and close dialog', async ({ mainPage }) => {
+  test('should save changed options and close dialog', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to inventory and open options dialog
@@ -263,7 +257,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
     await expect(inventoryFrame.getByRole('button', { name: /Inventory/i })).toBeVisible();
   });
 
-  test.fixme('should discard changes on Cancel', async ({ mainPage }) => {
+  test('should discard changes on Cancel', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to inventory and open options dialog
@@ -306,7 +300,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
   // ═══════════════════════════════════════════════
 
   // @scenario TS-013 (VAL-001, VAL-002)
-  test.fixme('should show validation error for invalid pair format', async ({ mainPage }) => {
+  test('should show validation error for invalid pair format', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to inventory and open options dialog
@@ -343,95 +337,89 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
   });
 
   // @scenario TS-013 (VAL-002)
-  test.fixme(
-    'should show validation error for multi-character punctuation',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should show validation error for multi-character punctuation', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      // Navigate to inventory and open options dialog
-      await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
-      await expect(
-        mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
-      ).toBeVisible({ timeout: 15_000 });
+    // Navigate to inventory and open options dialog
+    await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
+    await expect(
+      mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
+    ).toBeVisible({ timeout: 15_000 });
 
-      const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
-      await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
-      await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
+    const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
+    await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
+    await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
 
-      const dialog = inventoryFrame.getByTestId('cms-options-form');
+    const dialog = inventoryFrame.getByTestId('cms-options-form');
 
-      // Select PairedPunctuation
-      const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-      await optionList.getByText(/PairedPunctuation/i).click();
+    // Select PairedPunctuation
+    const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
+    await optionList.getByText(/PairedPunctuation/i).click();
 
-      // Enter multi-character punctuation (invalid)
-      const valueInput = dialog.getByTestId('option-value-input');
-      await valueInput.clear();
-      await valueInput.fill('(/) <</>'); // Multi-character "<<" is invalid
+    // Enter multi-character punctuation (invalid)
+    const valueInput = dialog.getByTestId('option-value-input');
+    await valueInput.clear();
+    await valueInput.fill('(/) <</>'); // Multi-character "<<" is invalid
 
-      // Try to save
-      await dialog.getByRole('button', { name: /OK/i }).click();
+    // Try to save
+    await dialog.getByRole('button', { name: /OK/i }).click();
 
-      // Verify validation error message (VAL-002)
-      await expect(
-        dialog.getByText(/Multiple character punctuation marks are not allowed/i),
-      ).toBeVisible();
+    // Verify validation error message (VAL-002)
+    await expect(
+      dialog.getByText(/Multiple character punctuation marks are not allowed/i),
+    ).toBeVisible();
 
-      // Dialog should remain open
-      await expect(dialog).toBeVisible();
-    },
-  );
+    // Dialog should remain open
+    await expect(dialog).toBeVisible();
+  });
 
   // @scenario TS-116 (VAL-005)
-  test.fixme(
-    'should silently close without saving on write-protected project',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should silently close without saving on write-protected project', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      // NOTE: This test assumes we can identify a write-protected project scenario.
-      // In practice, this may require a specific project setup or mock state.
-      // For now, we describe the expected behavior.
+    // NOTE: This test assumes we can identify a write-protected project scenario.
+    // In practice, this may require a specific project setup or mock state.
+    // For now, we describe the expected behavior.
 
-      // Navigate to inventory and open options dialog
-      await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
-      await expect(
-        mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
-      ).toBeVisible({ timeout: 15_000 });
+    // Navigate to inventory and open options dialog
+    await mainPage.getByRole('menuitem', { name: /Tools/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Checking inventories/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Unmatched pairs of punctuation/i }).click();
+    await expect(
+      mainPage.locator('.dock-tab', { hasText: /Matched Pairs inventory/i }),
+    ).toBeVisible({ timeout: 15_000 });
 
-      const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
-      await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
-      await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
+    const inventoryFrame = mainPage.frameLocator('iframe[title="Matched Pairs inventory"]');
+    await inventoryFrame.getByRole('button', { name: /Inventory/i }).click();
+    await inventoryFrame.getByRole('menuitem', { name: /Edit inventory options/i }).click();
 
-      const dialog = inventoryFrame.getByTestId('cms-options-form');
+    const dialog = inventoryFrame.getByTestId('cms-options-form');
 
-      // Make a change
-      const valueInput = dialog.getByTestId('option-value-input');
-      const originalValue = await valueInput.inputValue();
-      await valueInput.clear();
-      await valueInput.fill(`${originalValue} CHANGED`);
+    // Make a change
+    const valueInput = dialog.getByTestId('option-value-input');
+    const originalValue = await valueInput.inputValue();
+    await valueInput.clear();
+    await valueInput.fill(`${originalValue} CHANGED`);
 
-      // Click OK on a write-protected project
-      // Expected: Dialog closes silently without saving (VAL-005)
-      await dialog.getByRole('button', { name: /OK/i }).click();
+    // Click OK on a write-protected project
+    // Expected: Dialog closes silently without saving (VAL-005)
+    await dialog.getByRole('button', { name: /OK/i }).click();
 
-      // Verify dialog closed (no error message shown)
-      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    // Verify dialog closed (no error message shown)
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
 
-      // Verify no error toast/modal appeared
-      // (This assertion depends on how errors are displayed in the UI)
-    },
-  );
+    // Verify no error toast/modal appeared
+    // (This assertion depends on how errors are displayed in the UI)
+  });
 
   // ═══════════════════════════════════════════════
   // Category 6: Edge Cases
   // ═══════════════════════════════════════════════
 
   // @scenario TS-051 (BHV-119 — NullValue handling)
-  test.fixme('should handle NullValue sentinel string correctly', async ({ mainPage }) => {
+  test('should handle NullValue sentinel string correctly', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // This test verifies that when a stored option value is "NullValue",
@@ -461,7 +449,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
     expect(value).not.toBe('NullValue');
   });
 
-  test.fixme('should handle empty option values gracefully', async ({ mainPage }) => {
+  test('should handle empty option values gracefully', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Navigate to inventory and open options dialog
@@ -494,7 +482,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
     // For now, we just verify no crash occurred
   });
 
-  test.fixme('should populate dropdown suggestions from other projects', async ({ mainPage }) => {
+  test('should populate dropdown suggestions from other projects', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // This test verifies that editable combo inputs (for free text options like PoeticStyles)

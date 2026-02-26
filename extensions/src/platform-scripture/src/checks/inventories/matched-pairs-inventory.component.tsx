@@ -1,4 +1,5 @@
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
+import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ColumnDef,
@@ -10,8 +11,10 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
-import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import type { InventoryOptionValue } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { CMSOptionsDialog } from './cms-options-dialog.component';
 
 const MATCHED_PAIRS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
@@ -152,6 +155,7 @@ export function MatchedPairsInventory({
   onUnapprovedItemsChange,
   scope,
   onScopeChange,
+  projectId,
   areInventoryItemsLoading,
   onItemSelected,
 }: MatchedPairsInventoryProps) {
@@ -294,6 +298,53 @@ export function MatchedPairsInventory({
   // Menu state
   const [isInventoryMenuOpen, setIsInventoryMenuOpen] = useState(false);
 
+  // CMS Options Dialog state (BHV-314)
+  const [showOptionsDialog, setShowOptionsDialog] = useState(false);
+  const [optionValues, setOptionValues] = useState<InventoryOptionValue[]>([]);
+  const inventoryDataProvider = useDataProvider('platformScripture.inventoryDataProvider');
+
+  // Load option values when dialog opens
+  useEffect(() => {
+    if (!showOptionsDialog || !inventoryDataProvider || !projectId) return;
+
+    let cancelled = false;
+    const loadOptions = async () => {
+      try {
+        const values = await inventoryDataProvider.getInventoryOptionValues({
+          projectId,
+          inventoryId: 'MatchedPairs',
+        });
+        if (!cancelled && values) {
+          setOptionValues(values);
+        }
+      } catch (error) {
+        logger.error(`Error loading inventory option values: ${getErrorMessage(error)}`);
+      }
+    };
+    loadOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [showOptionsDialog, inventoryDataProvider, projectId]);
+
+  const handleOptionsSave = useCallback(
+    async (changedValues: InventoryOptionValue[]) => {
+      if (!inventoryDataProvider || !projectId || changedValues.length === 0) return;
+      try {
+        await inventoryDataProvider.setInventoryOptionValues(
+          {
+            projectId,
+            inventoryId: 'MatchedPairs',
+          },
+          changedValues,
+        );
+      } catch (error) {
+        logger.error(`Error saving inventory option values: ${getErrorMessage(error)}`);
+      }
+    },
+    [inventoryDataProvider, projectId],
+  );
+
   const columns = useMemo(() => {
     if (isSeparated) {
       // When separated, show verse text and non-verse text columns (BHV-314)
@@ -411,6 +462,7 @@ export function MatchedPairsInventory({
                 role="menuitem"
                 className="tw-w-full tw-text-left tw-px-3 tw-py-2 hover:tw-bg-muted tw-text-sm"
                 onClick={() => {
+                  setShowOptionsDialog(true);
                   setIsInventoryMenuOpen(false);
                 }}
               >
@@ -486,6 +538,14 @@ export function MatchedPairsInventory({
       >
         {itemCount} {itemCount === 1 ? itemLabel : itemsLabel}
       </div>
+
+      {/* CMS Options Dialog (BHV-314) */}
+      <CMSOptionsDialog
+        isOpen={showOptionsDialog}
+        onClose={() => setShowOptionsDialog(false)}
+        optionValues={optionValues}
+        onSave={handleOptionsSave}
+      />
     </div>
   );
 }
