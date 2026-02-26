@@ -21,13 +21,58 @@ internal static class InventoryStatusService
     /// - Regular separated: saves main + _NonText suffixed valid/invalid (4 params)
     /// - Regular unseparated: saves main valid/invalid only (2 params)
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:753-782
+    // Method: InventoryForm.SaveInventoryStatus()
+    // Maps to: EXT-003, BHV-110
     public static SaveOperationResult DetermineSaveOperations(
         InventoryStatusSnapshot snapshot,
         bool isSba,
         bool isSeparated
     )
     {
-        throw new NotImplementedException("CAP-004: DetermineSaveOperations not yet implemented");
+        var operations = new List<SaveOperation>();
+
+        if (isSba)
+        {
+            operations.Add(
+                new SaveOperation(
+                    "MatchedPairingCharacters_StudyBible",
+                    snapshot.StudyBibleValidItems
+                )
+            );
+            operations.Add(
+                new SaveOperation(
+                    "UnmatchedPairingCharacters_StudyBible",
+                    snapshot.StudyBibleInvalidItems
+                )
+            );
+        }
+        else if (isSeparated)
+        {
+            operations.Add(new SaveOperation("MatchedPairingCharacters", snapshot.VerseValidItems));
+            operations.Add(
+                new SaveOperation("UnmatchedPairingCharacters", snapshot.VerseInvalidItems)
+            );
+            operations.Add(
+                new SaveOperation("MatchedPairingCharacters_NonText", snapshot.NonVerseValidItems)
+            );
+            operations.Add(
+                new SaveOperation(
+                    "UnmatchedPairingCharacters_NonText",
+                    snapshot.NonVerseInvalidItems
+                )
+            );
+        }
+        else
+        {
+            operations.Add(new SaveOperation("MatchedPairingCharacters", snapshot.VerseValidItems));
+            operations.Add(
+                new SaveOperation("UnmatchedPairingCharacters", snapshot.VerseInvalidItems)
+            );
+        }
+
+        return new SaveOperationResult { Operations = operations };
     }
 
     /// <summary>
@@ -37,11 +82,17 @@ internal static class InventoryStatusService
     /// VAL-004: Only administrators or team members with editable projects can save.
     /// When permission is denied, returns false without calling saveAction or throwing.
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checking/InventoryForm.cs:753-756
+    // Method: InventoryForm.SaveInventoryStatus() (permission guard)
+    // Maps to: VAL-004
     public static bool SaveInventoryStatusIfPermitted(bool canMakeChanges, Action saveAction)
     {
-        throw new NotImplementedException(
-            "CAP-004: SaveInventoryStatusIfPermitted not yet implemented"
-        );
+        if (!canMakeChanges)
+            return false;
+
+        saveAction();
+        return true;
     }
 }
 
