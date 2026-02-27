@@ -199,7 +199,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
   beforeEach(() => {
     mockPdps = createMockPdps();
-    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine('test-project-id', mockPdps);
   });
 
   /** Flush all pending microtasks so lock acquisitions and async operations settle */
@@ -1878,7 +1878,7 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
 
   beforeEach(() => {
     mockPdps = createMockPdps();
-    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine('test-project-id', mockPdps);
   });
 
   /**
@@ -2026,7 +2026,7 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
 
   beforeEach(() => {
     mockPdps = createMockPdps();
-    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine('test-project-id', mockPdps);
   });
 
   it('should throw when retrieving update for an unknown job ID', async () => {
