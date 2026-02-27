@@ -325,7 +325,11 @@ internal static class InventoryBuildService
     {
         foreach (var tok in textTokens)
         {
-            if (tok.TextType == TextType.ChapterNumber || tok.TextType == TextType.VerseNumber)
+            if (
+                tok.Text == null
+                || tok.TextType == TextType.ChapterNumber
+                || tok.TextType == TextType.VerseNumber
+            )
                 continue;
 
             for (int i = 0; i < tok.Text.Length; i++)

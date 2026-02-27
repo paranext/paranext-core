@@ -15,11 +15,7 @@ import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-ut
 import type { InventoryOptionValue } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { CMSOptionsDialog } from './cms-options-dialog.component';
-import {
-  undoRedoReducer,
-  type StatusChangeRecord,
-  type UndoRedoState,
-} from './matched-pairs-inventory.utils';
+import { undoRedoReducer } from './matched-pairs-inventory.utils';
 
 const MATCHED_PAIRS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
