@@ -22,7 +22,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, FormatScrRefRangeOptions, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, FormatScrRefRangeOptions, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedBookNames, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, getLocalizedBookName } from 'platform-bible-utils';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, MouseEventHandler, PropsWithChildren, ReactNode } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
@@ -1676,9 +1676,6 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-export type LocalizedBookNames = Map<string, string | {
-	localizedId: string;
-}>;
 /** Props interface for the LinkedScrRefDisplay component */
 export type LinkedScrRefDisplayProps = {
 	/** Single reference or start reference of a range to display as part of the link */
@@ -1697,15 +1694,13 @@ export type LinkedScrRefDisplayProps = {
 	includeInLink?: "allText" | "onlyScrRef";
 };
 /**
- * A function to retrieve the localized book name from a map, e.g. returned by papi function
- * useLocalizedStrings
- *
- * @param scrRef A SerializedVerseRef
- * @param localizedBookNames A map of localization key to string | localization key to an object
- *   with localizedId holding the localized book name
- * @returns The book name localized if found or the pure book name from the ref
+ * LinkedScrRefDisplay is a component that renders a Scripture reference as formatted single
+ * reference or range, together with some part of Scripture text. Choices are to use only the
+ * Scripture reference or the whole display as a shadcn link button. Use cases include any rendering
+ * of a scripture reference or occurrence, so that the link can be used to navigate to that location
+ * in Scripture.
  */
-export declare function getLocalizedBookName(scrRef: SerializedVerseRef, localizedBookNames?: LocalizedBookNames): string | undefined;
+export declare function LinkedScrRefDisplay({ startRef, endRef, scriptureTextPart, className, onClick, scrRefFormattingOptions: scrRefFormattingProps, includeInLink, }: LinkedScrRefDisplayProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;
@@ -2696,7 +2691,9 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	LocalizedBookNames,
 	TabNavigationContentSearch as NavigationContentSearch,
+	getLocalizedBookName,
 	sonner,
 };
 

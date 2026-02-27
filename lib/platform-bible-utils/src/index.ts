@@ -60,12 +60,14 @@ export {
   getNthCaller,
   getFormatCallerFunction,
 } from './scripture/footnote-util';
-export type { FormatScrRefRangeOptions } from './scripture/scripture-util';
+export type { FormatScrRefRangeOptions, LocalizedBookNames } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
   formatScrRefRange,
+  formatScrRefWithOptionalParts,
+  getLocalizedBookName,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
   isSelectableInvisibleCharOrWhiteSpace,
