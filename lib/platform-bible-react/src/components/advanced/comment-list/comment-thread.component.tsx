@@ -17,12 +17,12 @@ import {
 } from 'lexical';
 import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
 import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
-import { getAssignedUserDisplayName } from './comment-list.utils';
+import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
   SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
@@ -88,12 +88,15 @@ export function CommentThread({
   autoReadDelay = 5,
   onVerseRefClick,
 }: CommentThreadProps) {
-  const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
+  const [pendingCommentEditorState, setPendingCommentEditorState] =
+    useState<SerializedEditorState>(initialValue);
+  const [pendingCommentAssignedUser, setPendingCommentAssignedUser] = useState<string | undefined>(
+    undefined,
+  );
   const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
-  const [pendingAssignedUser, setPendingAssignedUser] = useState<string | undefined>(undefined);
   const [canAssign, setCanAssign] = useState<boolean>(false);
   const [canResolve, setCanResolve] = useState<boolean>(false);
   const [isRead, setIsRead] = useState<boolean>(isReadProp);
@@ -190,7 +193,7 @@ export function CommentThread({
 
   const clearEditor = useCallback(() => {
     clearEditorRef.current?.();
-    setEditorState(initialValue);
+    setPendingCommentEditorState(initialValue);
   }, []);
 
   const toggleRead = useCallback(() => {
@@ -280,50 +283,76 @@ export function CommentThread({
     [hiddenReplyCount, localizedReplies],
   );
 
-  const handleSubmitComment = useCallback(async () => {
-    const contents = hasEditorContent(editorState) ? editorStateToHtml(editorState) : undefined;
+  // If the thread gets unselected and a comment other than the first is being edited, the comment
+  // being edited was removed from the screen, so note that no comment is being edited
+  // Note: this means we will lose some editor content. May need to be fixed with https://paratextstudio.atlassian.net/browse/PT-3725
+  useEffect(() => {
+    // If there are replies and a comment is being edited, the edited comment is not the first
+    // comment, so reset editing state when thread is unselected
+    if (!isSelected && isAnyCommentEditing && hasReplies) {
+      setIsAnyCommentEditing(false);
+    }
+  }, [isSelected, isAnyCommentEditing, hasReplies]);
 
-    // If there's a pending assignment, include it
-    if (pendingAssignedUser !== undefined) {
-      const success = await handleAddCommentToThread({
-        threadId,
-        contents,
-        assignedUser: pendingAssignedUser,
-      });
-      if (success) {
-        setPendingAssignedUser(undefined);
-        if (contents) {
+  const handleSubmitComment = useCallback(
+    async (e?: MouseEvent) => {
+      if (e) e.stopPropagation();
+
+      const contents = hasEditorContent(pendingCommentEditorState)
+        ? editorStateToHtml(pendingCommentEditorState)
+        : undefined;
+
+      // If there's a pending assignment, include it
+      if (pendingCommentAssignedUser !== undefined) {
+        const success = await handleAddCommentToThread({
+          threadId,
+          contents,
+          assignedUser: pendingCommentAssignedUser,
+        });
+        if (success) {
+          setPendingCommentAssignedUser(undefined);
+          if (contents) {
+            clearEditor();
+          }
+        }
+        return;
+      }
+      // Otherwise, just add a comment if there's content
+      if (contents) {
+        const newCommentId = await handleAddCommentToThread({ threadId, contents });
+        if (newCommentId) {
           clearEditor();
         }
       }
-      return;
-    }
-    // Otherwise, just add a comment if there's content
-    if (contents) {
-      const newCommentId = await handleAddCommentToThread({ threadId, contents });
-      if (newCommentId) {
-        clearEditor();
-      }
-    }
-  }, [clearEditor, editorState, handleAddCommentToThread, pendingAssignedUser, threadId]);
+    },
+    [
+      clearEditor,
+      pendingCommentEditorState,
+      handleAddCommentToThread,
+      pendingCommentAssignedUser,
+      threadId,
+    ],
+  );
 
   const handleAddCommentToThreadWithContents = useCallback(
     async (options: AddCommentToThreadOptions) => {
-      const contents = hasEditorContent(editorState) ? editorStateToHtml(editorState) : undefined;
+      const contents = hasEditorContent(pendingCommentEditorState)
+        ? editorStateToHtml(pendingCommentEditorState)
+        : undefined;
       const success = await handleAddCommentToThread({
         ...options,
         contents,
-        assignedUser: pendingAssignedUser ?? options.assignedUser,
+        assignedUser: pendingCommentAssignedUser ?? options.assignedUser,
       });
       if (success && contents) {
         clearEditor();
       }
-      if (success && pendingAssignedUser !== undefined) {
-        setPendingAssignedUser(undefined);
+      if (success && pendingCommentAssignedUser !== undefined) {
+        setPendingCommentAssignedUser(undefined);
       }
       return success;
     },
-    [clearEditor, editorState, handleAddCommentToThread, pendingAssignedUser],
+    [clearEditor, pendingCommentEditorState, handleAddCommentToThread, pendingCommentAssignedUser],
   );
 
   return (
@@ -433,7 +462,9 @@ export function CommentThread({
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             onEditingChange={setIsAnyCommentEditing}
-            canEditOrDelete={commentEditDeletePermissions.get(firstComment.id) ?? false}
+            canEditOrDelete={
+              (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
+            }
             canUserResolveThread={canResolve}
           />
         </div>
@@ -447,10 +478,10 @@ export function CommentThread({
             </div>
           )}
           {/* Show Editor on an unselected thread when it has drafted content */}
-          {!isSelected && hasEditorContent(editorState) && (
+          {!isSelected && hasEditorContent(pendingCommentEditorState) && (
             <Editor
-              editorSerializedState={editorState}
-              onSerializedChange={(value) => setEditorState(value)}
+              editorSerializedState={pendingCommentEditorState}
+              onSerializedChange={(value) => setPendingCommentEditorState(value)}
               placeholder={localizedStrings['%comment_replyOrAssign%']}
             />
           )}
@@ -493,24 +524,29 @@ export function CommentThread({
                     handleUpdateComment={handleUpdateComment}
                     handleDeleteComment={handleDeleteComment}
                     onEditingChange={setIsAnyCommentEditing}
-                    canEditOrDelete={commentEditDeletePermissions.get(reply.id) ?? false}
+                    canEditOrDelete={
+                      (!isAnyCommentEditing && commentEditDeletePermissions.get(reply.id)) ?? false
+                    }
                   />
                 </div>
               ))}
 
               {/* Only show main Editor if user can add comments, no comment is being edited, or if it has draft content */}
               {canUserAddCommentToThread !== false &&
-                (!isAnyCommentEditing || hasEditorContent(editorState)) && (
+                (!isAnyCommentEditing || hasEditorContent(pendingCommentEditorState)) && (
                   <div
                     role="textbox"
                     tabIndex={-1}
                     className="tw-w-full tw-space-y-2"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDownCapture={(e) => {
-                      if (e.key === 'Enter' && e.shiftKey) {
+                      if (didPressCtrlOrCmdEnter(e)) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (hasEditorContent(editorState) || pendingAssignedUser !== undefined) {
+                        if (
+                          hasEditorContent(pendingCommentEditorState) ||
+                          pendingCommentAssignedUser !== undefined
+                        ) {
                           handleSubmitComment();
                         }
                       }
@@ -523,8 +559,8 @@ export function CommentThread({
                     }}
                   >
                     <Editor
-                      editorSerializedState={editorState}
-                      onSerializedChange={(value) => setEditorState(value)}
+                      editorSerializedState={pendingCommentEditorState}
+                      onSerializedChange={(value) => setPendingCommentEditorState(value)}
                       placeholder={
                         threadStatus === 'Resolved'
                           ? localizedStrings['%comment_reopenResolved%']
@@ -536,14 +572,14 @@ export function CommentThread({
                       }}
                     />
                     <div className="tw-flex tw-flex-row tw-items-center tw-justify-end tw-gap-2">
-                      {pendingAssignedUser !== undefined && (
+                      {pendingCommentAssignedUser !== undefined && (
                         <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
                           {formatReplacementString(
                             localizedStrings['%comment_assigning_to%'] ??
                               'Assigning to: {assignedUser}',
                             {
                               assignedUser: getAssignedUserDisplayName(
-                                pendingAssignedUser,
+                                pendingCommentAssignedUser,
                                 localizedStrings,
                               ),
                             },
@@ -584,9 +620,9 @@ export function CommentThread({
                                   key={user || 'unassigned'}
                                   onSelect={() => {
                                     if (user !== assignedUser) {
-                                      setPendingAssignedUser(user);
+                                      setPendingCommentAssignedUser(user);
                                     } else {
-                                      setPendingAssignedUser(undefined);
+                                      setPendingCommentAssignedUser(undefined);
                                     }
                                     setIsAssignPopoverOpen(false);
                                   }}
@@ -604,7 +640,8 @@ export function CommentThread({
                         onClick={handleSubmitComment}
                         className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
                         disabled={
-                          !hasEditorContent(editorState) && pendingAssignedUser === undefined
+                          !hasEditorContent(pendingCommentEditorState) &&
+                          pendingCommentAssignedUser === undefined
                         }
                         aria-label="Submit comment"
                       >
