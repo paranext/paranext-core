@@ -11,7 +11,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { CheckRunResult } from 'platform-scripture';
-import { useMemo } from 'react';
+import { type ReactNode, useMemo } from 'react';
 
 /** Enum representing the possible states of a check */
 export enum CheckStates {
@@ -182,12 +182,16 @@ export function CheckCard({
     [checkName],
   );
 
-  const badges = () => [
+  const badges: ReactNode[] = [];
+  if (
     showBadge &&
-      (checkState === CheckStates.Fixed ||
-        checkState === CheckStates.Denied ||
-        checkState === CheckStates.Checking) && <CheckStateBadge state={checkState} />,
-    !isCheckSetup && (
+    (checkState === CheckStates.Fixed ||
+      checkState === CheckStates.Denied ||
+      checkState === CheckStates.Checking)
+  )
+    badges.push(<CheckStateBadge state={checkState} />);
+  if (!isCheckSetup)
+    badges.push(
       <TooltipProvider key={`${checkId}-requires-setup-badge`}>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -204,16 +208,15 @@ export function CheckCard({
             </p>
           </TooltipContent>
         </Tooltip>
-      </TooltipProvider>
-    ),
-  ];
+      </TooltipProvider>,
+    );
 
   return (
     <ResultsCard
       cardKey={checkId}
       isSelected={isSelected}
       linkedScrRef={{ startRef: scrRef, scriptureTextPart: checkResult.itemText }}
-      badges={badges() ?? undefined}
+      badges={badges}
       onSelect={() => handleSelectCheck(checkId)}
       onDoubleClick={() => handleDoubleClick(checkId)}
       isDenied={isFixedOrDenied}
