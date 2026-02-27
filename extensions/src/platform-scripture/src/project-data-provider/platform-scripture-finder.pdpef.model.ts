@@ -48,7 +48,7 @@ export class ScriptureFinderProjectDataProviderEngineFactory
       ),
     ) as ScriptureFinderOverlayPDPs;
 
-    return new ScriptureFinderProjectDataProviderEngine(pdpsToOverlay);
+    return new ScriptureFinderProjectDataProviderEngine(projectId, pdpsToOverlay);
   }
 }
 
