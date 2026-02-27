@@ -210,22 +210,24 @@ export async function sendPapiCommand<T = unknown>(
     });
 
     ws.on('message', (data) => {
+      let parsed: { id?: number; error?: unknown; result?: unknown };
       try {
-        const response = JSON.parse(data.toString());
-        // Ignore unsolicited messages (notifications, events) that don't
-        // match our request id — only resolve on the actual response.
-        if (response.id !== 1) return;
-        clearTimeout(timeout);
-        if (response.error) {
-          reject(new Error(`PAPI error: ${JSON.stringify(response.error)}`));
-        } else {
-          resolve(response.result as T);
-        }
+        parsed = JSON.parse(data.toString());
       } catch (err) {
         clearTimeout(timeout);
-        reject(err);
-      } finally {
         ws.close();
+        reject(err);
+        return;
+      }
+      // Ignore unsolicited messages (notifications, events) that don't
+      // match our request id — only resolve on the actual response.
+      if (parsed.id !== 1) return;
+      clearTimeout(timeout);
+      ws.close();
+      if (parsed.error) {
+        reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
+      } else {
+        resolve(parsed.result as T);
       }
     });
 

@@ -10,6 +10,11 @@ async function globalTeardown(config: FullConfig): Promise<void> {
   const pidFile = path.join(rootDir, 'e2e-tests/.dev-server.pid');
   if (fs.existsSync(pidFile)) {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
+    if (Number.isNaN(pid)) {
+      console.warn(`Invalid PID in ${pidFile}, skipping process kill`);
+      fs.unlinkSync(pidFile);
+      return;
+    }
     console.log(`Stopping renderer dev server (PID: ${pid})...`);
     try {
       // Kill the process group (negative PID kills the group)

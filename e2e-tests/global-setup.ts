@@ -11,7 +11,10 @@ const RENDERER_PORT = 1212;
 function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once('error', () => resolve(true));
+    server.once('error', () => {
+      server.close();
+      resolve(true);
+    });
     server.once('listening', () => {
       server.close();
       resolve(false);
