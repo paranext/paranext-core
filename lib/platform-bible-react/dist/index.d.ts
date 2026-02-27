@@ -1888,7 +1888,7 @@ interface ResultsCardProps {
 	/** Scripture reference as link */
 	linkedScrRef: LinkedScrRefDisplayProps;
 	/** Badges to display on the card */
-	badges?: React$1.ReactNode[];
+	badges?: React$1.ReactNode;
 	/** Main content to display on the card */
 	children?: React$1.ReactNode;
 	/** Content to show in the dropdown menu when selected */
