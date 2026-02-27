@@ -27,7 +27,7 @@ export const test = base.extend<CdpFixtures>({
     let browser;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        browser = await chromium.connectOverCDP(CDP_URL, { timeout: 10_000 });
+        browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30_000 });
         break;
       } catch (err) {
         if (attempt === 3) throw err;
@@ -56,6 +56,12 @@ export const test = base.extend<CdpFixtures>({
     if (!page) throw new Error('No renderer page found via CDP');
 
     await use(page);
-    // Do NOT close browser — we didn't start the app
+    // Disconnect the CDP session (not close — we didn't start the app).
+    // This frees the CDP connection slot so subsequent tests can connect.
+    try {
+      browser.close();
+    } catch {
+      // Ignore disconnect errors during cleanup
+    }
   },
 });
