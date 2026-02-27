@@ -8,6 +8,7 @@ import type { InventoryInputRange, ItemizedInventoryItem } from 'platform-script
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
 import { MarkerInventory } from './checks/inventories/marker-inventory.component';
+import { MatchedPairsInventory } from './checks/inventories/matched-pairs-inventory.component';
 import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
 import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
@@ -16,7 +17,7 @@ const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
 
 /** Subset of CheckType enum from Paratext.Data.Checking */
-type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation';
+type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation' | 'MatchedPairs';
 
 /** Represents an occurrence item for display in the occurrences table */
 type InventoryItemOccurrence = {
@@ -51,6 +52,12 @@ const INVENTORY_TYPE_CONFIG = {
     checkId: 'Punctuation' satisfies CheckType,
     validItemsSetting: 'platformScripture.validPunctuation',
     invalidItemsSetting: 'platformScripture.invalidPunctuation',
+  },
+  'platformScripture.matchedPairsInventory': {
+    component: MatchedPairsInventory,
+    checkId: 'MatchedPairs' satisfies CheckType,
+    validItemsSetting: 'platformScripture.validMatchedPairs',
+    invalidItemsSetting: 'platformScripture.invalidMatchedPairs',
   },
 } as const;
 

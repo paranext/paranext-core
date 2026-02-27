@@ -61,6 +61,18 @@
         "description": "%project_settings_platformScripture_invalidPunctuation_description%",
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.validMatchedPairs": {
+        "label": "%project_settings_platformScripture_validMatchedPairs_label%",
+        "description": "%project_settings_platformScripture_validMatchedPairs_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.invalidMatchedPairs": {
+        "label": "%project_settings_platformScripture_invalidMatchedPairs_label%",
+        "description": "%project_settings_platformScripture_invalidMatchedPairs_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

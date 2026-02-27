@@ -119,6 +119,12 @@
             "command": "platformScripture.openPunctuationInventory"
           },
           {
+            "label": "%webView_platformScriptureEditor_matchedPairsInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 5,
+            "command": "platformScripture.openMatchedPairsInventory"
+          },
+          {
             "label": "%webView_platformScriptureEditor_openChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 3,

@@ -31,6 +31,7 @@
     "platformScripture.characterInventory": {},
     "platformScripture.repeatedWordsInventory": {},
     "platformScripture.punctuationInventory": {},
-    "platformScripture.markersInventory": {}
+    "platformScripture.markersInventory": {},
+    "platformScripture.matchedPairsInventory": {}
   }
 }

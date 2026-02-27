@@ -108,12 +108,12 @@ internal sealed class InventoryDataProvider(
         );
 
         var allItemsStatus = new List<InventoryItemStatus>();
-        if (selector.TextType == InventoryTextType.NonVerseText)
+        if (selector.TextType == Paratext.Checks.InventoryTextType.NonVerseText)
         {
             AddItemStatus(inventory, inventory.NonVerseValidItems, true, allItemsStatus);
             AddItemStatus(inventory, inventory.NonVerseInvalidItems, false, allItemsStatus);
         }
-        else if (selector.TextType == InventoryTextType.StudyBibleContent)
+        else if (selector.TextType == Paratext.Checks.InventoryTextType.StudyBibleContent)
         {
             AddItemStatus(inventory, inventory.StudyBibleValidItems, true, allItemsStatus);
             AddItemStatus(inventory, inventory.StudyBibleInvalidItems, false, allItemsStatus);
@@ -183,12 +183,12 @@ internal sealed class InventoryDataProvider(
             var validItems = HashSetToString(validHashSet);
             var invalidItems = HashSetToString(invalidHashSet);
 
-            if (selector.TextType == InventoryTextType.NonVerseText)
+            if (selector.TextType == Paratext.Checks.InventoryTextType.NonVerseText)
             {
                 inventory.NonVerseValidItems = validItems;
                 inventory.NonVerseInvalidItems = invalidItems;
             }
-            else if (selector.TextType == InventoryTextType.StudyBibleContent)
+            else if (selector.TextType == Paratext.Checks.InventoryTextType.StudyBibleContent)
             {
                 inventory.StudyBibleValidItems = validItems;
                 inventory.StudyBibleInvalidItems = invalidItems;
@@ -212,7 +212,7 @@ internal sealed class InventoryDataProvider(
                     $"Status must be true, false, or null when a key is provided (key: {selector.Key}, projectId: {selector.ProjectId}, inventoryId: {selector.InventoryId})"
                 ),
             };
-            if (selector.TextType == InventoryTextType.NonVerseText)
+            if (selector.TextType == Paratext.Checks.InventoryTextType.NonVerseText)
             {
                 var validItems = inventory.NonVerseValidItems;
                 var invalidItems = inventory.NonVerseInvalidItems;
@@ -220,7 +220,7 @@ internal sealed class InventoryDataProvider(
                 inventory.NonVerseValidItems = validItems;
                 inventory.NonVerseInvalidItems = invalidItems;
             }
-            else if (selector.TextType == InventoryTextType.StudyBibleContent)
+            else if (selector.TextType == Paratext.Checks.InventoryTextType.StudyBibleContent)
             {
                 var validItems = inventory.StudyBibleValidItems;
                 var invalidItems = inventory.StudyBibleInvalidItems;

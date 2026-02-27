@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Unicode;
 using SIL.Extensions;
 using StreamJsonRpc;
@@ -28,6 +29,21 @@ internal static class SerializationOptions
         options.Converters.Add(new InternetSettingsMementoConverter());
         options.Converters.Add(new InventoryOptionValueConverter());
         options.Converters.Add(new InventoryTextTypeConverter());
+        options.Converters.Add(
+            new JsonStringEnumConverter<Paranext.DataProvider.Checks.ItemStatus>(
+                JsonNamingPolicy.CamelCase
+            )
+        );
+        options.Converters.Add(
+            new JsonStringEnumConverter<Paranext.DataProvider.Checks.OptionControlType>(
+                JsonNamingPolicy.CamelCase
+            )
+        );
+        options.Converters.Add(
+            new JsonStringEnumConverter<Paranext.DataProvider.Checks.InventoryTextType>(
+                JsonNamingPolicy.CamelCase
+            )
+        );
         options.Converters.Add(new RegistrationDataConverter());
         options.Converters.Add(new VerseRefConverter());
         return options;

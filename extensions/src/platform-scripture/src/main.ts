@@ -28,6 +28,7 @@ const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
 const markersInventoryWebViewType = 'platformScripture.markersInventory';
 const punctuationInventoryWebViewType = 'platformScripture.punctuationInventory';
+const matchedPairsInventoryWebViewType = 'platformScripture.matchedPairsInventory';
 
 // #region Project Setting Validators
 
@@ -68,6 +69,11 @@ const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
 > = async (newValue) => typeof newValue === 'string';
 
+// A matched pair item can be any string value
+const matchedPairsValidator: ProjectSettingValidator<
+  'platformScripture.validMatchedPairs' | 'platformScripture.invalidMatchedPairs'
+> = async (newValue) => typeof newValue === 'string';
+
 // #endregion
 
 async function openPlatformCharactersInventory(
@@ -92,6 +98,12 @@ async function openPlatformPunctuationInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
   return openInventory(webViewId, punctuationInventoryWebViewType);
+}
+
+async function openPlatformMatchedPairsInventory(
+  webViewId: string | undefined,
+): Promise<string | undefined> {
+  return openInventory(webViewId, matchedPairsInventoryWebViewType);
 }
 
 async function openInventory(
@@ -238,6 +250,10 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_punctuationInventory_title%',
     punctuationInventoryWebViewType,
   );
+  const matchedPairsInventoryWebViewProvider = new InventoryWebViewProvider(
+    '%webView_matchedPairsInventory_title%',
+    matchedPairsInventoryWebViewType,
+  );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
 
@@ -368,6 +384,40 @@ export async function activate(context: ExecutionActivationContext) {
     punctuationInventoryWebViewType,
     punctuationInventoryWebViewProvider,
   );
+  const validMatchedPairsPromise = papi.projectSettings.registerValidator(
+    'platformScripture.validMatchedPairs',
+    matchedPairsValidator,
+  );
+  const invalidMatchedPairsPromise = papi.projectSettings.registerValidator(
+    'platformScripture.invalidMatchedPairs',
+    matchedPairsValidator,
+  );
+  const openMatchedPairsInventoryPromise = papi.commands.registerCommand(
+    'platformScripture.openMatchedPairsInventory',
+    openPlatformMatchedPairsInventory,
+    {
+      method: {
+        summary: 'Open the matched pairs inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the inventory is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened matched pairs inventory web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const matchedPairsInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    matchedPairsInventoryWebViewType,
+    matchedPairsInventoryWebViewProvider,
+  );
   const showChecksSidePanelPromise = papi.commands.registerCommand(
     'platformScripture.openChecksSidePanel',
     openChecksSidePanel,
@@ -469,6 +519,10 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidPunctuationPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
+    await validMatchedPairsPromise,
+    await invalidMatchedPairsPromise,
+    await openMatchedPairsInventoryPromise,
+    await matchedPairsInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
     await openFindPromise,

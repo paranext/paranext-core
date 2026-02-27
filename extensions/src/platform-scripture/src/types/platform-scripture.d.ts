@@ -1619,6 +1619,10 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
+    'platformScripture.openMatchedPairsInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
@@ -1662,5 +1666,9 @@ declare module 'papi-shared-types' {
     'platformScripture.validPunctuation': string;
 
     'platformScripture.invalidPunctuation': string;
+
+    'platformScripture.validMatchedPairs': string;
+
+    'platformScripture.invalidMatchedPairs': string;
   }
 }

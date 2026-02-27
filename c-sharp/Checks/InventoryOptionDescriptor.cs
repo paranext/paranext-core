@@ -4,11 +4,12 @@ using Paratext.Checks.CMS;
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
-/// Details about an inventory option
+/// Describes an inventory option's metadata (name, localize key, value type).
 /// This class corresponds to the InventoryOption type defined in platform-scripture.d.ts.
 /// Keep their structures in sync for serialization compatibility.
+/// Renamed from InventoryOption to avoid conflict with the PAPI record type.
 /// </summary>
-internal sealed class InventoryOption
+internal sealed class InventoryOptionDescriptor
 {
     public const string TYPE_BOOLEAN = "boolean";
     public const string TYPE_STRING = "string";
