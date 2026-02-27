@@ -2,6 +2,7 @@ import remarkGfm from 'remark-gfm';
 
 import type { StorybookConfig } from '@storybook/react-vite';
 import { getCodeEditorStaticDirs } from 'storybook-addon-code-editor/getStaticDirs';
+import { mergeConfig } from 'vite';
 
 import { join, dirname } from 'path';
 
@@ -52,5 +53,16 @@ const config: StorybookConfig = {
     name: getAbsolutePath('@storybook/react-vite'),
     options: {},
   },
+  viteFinal: async (config) =>
+    mergeConfig(config, {
+      resolve: {
+        preserveSymlinks: true,
+      },
+      optimizeDeps: {
+        include: ['quill-delta', 'react-dom', 'react-dom/client'],
+        exclude: ['@eten-tech-foundation/platform-editor'],
+        needsInterop: ['quill-delta'],
+      },
+    }),
 };
 export default config;

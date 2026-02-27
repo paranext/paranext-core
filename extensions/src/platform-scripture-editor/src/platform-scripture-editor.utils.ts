@@ -283,7 +283,7 @@ export async function convertScriptureRangeToEditorRange(
  * placeholder and will be refactored significantly in
  * https://github.com/paranext/paranext-core/issues/788
  */
-export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
+export const availableScrollGroupIds = [undefined, ...new Array(5).keys()];
 
 export type BlockMarkerBlockNames = typeof blockMarkerToBlockNames;
 
