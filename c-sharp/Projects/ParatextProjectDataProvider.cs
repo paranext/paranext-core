@@ -1015,7 +1015,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             || paratextSettingName == ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX
         )
         {
-            var characterCategorizer = new CharacterCategorizer();
+            var characterCategorizer = scrText.CharacterCategorizer;
             return paratextSettingName switch
             {
                 ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX =>
@@ -1099,6 +1099,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
             throw new Exception(
                 "Cannot set BooksPresent this way. Must add or delete books in the project"
+            );
+
+        // Character categorizer settings are computed from CharacterCategorizer, not stored
+        if (
+            paratextSettingName == ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX
+            || paratextSettingName == ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX
+            || paratextSettingName == ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX
+        )
+            throw new Exception(
+                "Cannot set character categorizer regex settings. They are computed read-only values."
             );
 
         // Now actually write the setting
