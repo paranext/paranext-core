@@ -1,5 +1,4 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Check, Settings, X } from 'lucide-react';
 import {
   Badge,
@@ -77,8 +76,6 @@ export type CheckCardProps = {
   handleAllowCheck: (result: CheckRunResult) => Promise<boolean>;
   /** Callback function triggered when the check is denied */
   handleDenyCheck: (result: CheckRunResult) => Promise<boolean>;
-  /** Scripture reference of the check result */
-  scrRef: SerializedVerseRef;
   /** A brief description of the check result. Optional. */
   checkCardDescription?: string;
   /** Callback function triggered to open the configure checks webview */
@@ -109,7 +106,6 @@ export function CheckCard({
   showBadge = false,
   checkName,
   isCheckSetup = true,
-  scrRef,
 }: CheckCardProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
@@ -215,7 +211,7 @@ export function CheckCard({
     <ResultsCard
       cardKey={checkId}
       isSelected={isSelected}
-      linkedScrRef={{ startRef: scrRef, scriptureTextPart: checkResult.itemText }}
+      linkedScrRef={{ startRef: checkResult.verseRef, scriptureTextPart: checkResult.itemText }}
       badges={badges}
       onSelect={() => handleSelectCheck(checkId)}
       onDoubleClick={() => handleDoubleClick(checkId)}
