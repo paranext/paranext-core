@@ -121,7 +121,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
     await expect(optionList).toBeVisible();
 
     // Check for specific options (BHV-106)
-    await expect(dialog.getByText(/PairedPunctuation/i)).toBeVisible();
+    await expect(dialog.getByText(/Pairs/i)).toBeVisible();
     await expect(dialog.getByText(/ClosedByParagraph/i)).toBeVisible();
     await expect(dialog.getByText(/PoeticStyles/i)).toBeVisible();
     await expect(dialog.getByText(/IntroductionOutlineStyles/i)).toBeVisible();
@@ -155,10 +155,10 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
 
     const dialog = await openCMSOptionsDialog(inventoryFrame);
 
-    // Verify first option (PairedPunctuation) is auto-selected
+    // Verify first option (Pairs) is auto-selected
     const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
     const selectedOption = optionList.locator('[aria-selected="true"]');
-    await expect(selectedOption).toHaveText(/PairedPunctuation/i);
+    await expect(selectedOption).toHaveText(/Pairs/i);
 
     // Verify value field shows real data (not empty, not placeholder)
     const valueInput = dialog.getByTestId('option-value-input');
@@ -217,9 +217,9 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
 
     const dialog = await openCMSOptionsDialog(inventoryFrame);
 
-    // Ensure PairedPunctuation is selected
+    // Ensure Pairs is selected
     const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-    await optionList.getByText(/PairedPunctuation/i).click();
+    await optionList.getByText(/Pairs/i).click();
 
     // Edit the pairs value
     const valueInput = dialog.getByTestId('option-value-input');
@@ -251,7 +251,7 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
 
     // Make a change to Pairs value
     const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-    await optionList.getByText(/PairedPunctuation/i).click();
+    await optionList.getByText(/Pairs/i).click();
 
     const valueInput = dialog.getByTestId('option-value-input');
     const originalValue = await valueInput.inputValue();
@@ -315,9 +315,9 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
 
     const dialog = await openCMSOptionsDialog(inventoryFrame);
 
-    // Select PairedPunctuation
+    // Select Pairs
     const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-    await optionList.getByText(/PairedPunctuation/i).click();
+    await optionList.getByText(/Pairs/i).click();
 
     // Enter invalid format (missing separator)
     const valueInput = dialog.getByTestId('option-value-input');
@@ -343,9 +343,9 @@ test.describe('Matched Pairs Inventory - CMS Options Dialog Functional Tests (UI
 
     const dialog = await openCMSOptionsDialog(inventoryFrame);
 
-    // Select PairedPunctuation
+    // Select Pairs
     const optionList = dialog.getByRole('listbox', { name: /Option Name/i });
-    await optionList.getByText(/PairedPunctuation/i).click();
+    await optionList.getByText(/Pairs/i).click();
 
     // Enter multi-character punctuation (invalid)
     const valueInput = dialog.getByTestId('option-value-input');

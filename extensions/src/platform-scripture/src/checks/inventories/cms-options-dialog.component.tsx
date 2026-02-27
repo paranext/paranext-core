@@ -19,7 +19,7 @@ export type CMSOptionInfo = {
 /** Matched Pairs check options configuration (BHV-106) */
 const MATCHED_PAIRS_OPTIONS: CMSOptionInfo[] = [
   {
-    name: 'PairedPunctuation',
+    name: 'Pairs',
     description:
       'Define punctuation pairs that should be matched. Enter pairs as open/close characters separated by slash, e.g., (/) [/] {/}',
     isYesNo: false,
@@ -165,14 +165,14 @@ export function CMSOptionsDialog({
       return;
     }
 
-    // Validate PairedPunctuation format (VAL-001, VAL-002)
-    const pairsValue = editedValues.PairedPunctuation;
+    // Validate Pairs format (VAL-001, VAL-002)
+    const pairsValue = editedValues.Pairs;
     if (pairsValue !== undefined) {
       const validation = validatePairsString(pairsValue);
       if (!validation.valid) {
         setValidationError(validation.error ?? 'Invalid format');
-        // Ensure we're on the PairedPunctuation option to show the error
-        const pairsIdx = MATCHED_PAIRS_OPTIONS.findIndex((o) => o.name === 'PairedPunctuation');
+        // Ensure we're on the Pairs option to show the error
+        const pairsIdx = MATCHED_PAIRS_OPTIONS.findIndex((o) => o.name === 'Pairs');
         if (pairsIdx >= 0) setSelectedOptionIndex(pairsIdx);
         return;
       }

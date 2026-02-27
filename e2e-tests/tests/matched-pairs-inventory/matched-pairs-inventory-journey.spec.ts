@@ -201,7 +201,7 @@ test.describe('Matched Pairs Inventory Journey Tests', () => {
     await openCMSOptionsDialog(invFrame);
 
     // --- Step 3: Change an option value ---
-    // Select PairedPunctuation and modify
+    // Select Pairs and modify
     const valueInput = invFrame.getByTestId('option-value-input');
     await valueInput.clear();
     await valueInput.fill('(/) [/]');
@@ -280,10 +280,10 @@ test.describe('Matched Pairs Inventory Journey Tests', () => {
       const invFrame = getInventoryFrame(mainPage);
       await expect(invFrame.getByTestId('inventory-list')).toBeVisible({ timeout: 15_000 });
 
-      // --- Step 2: Open options dialog and change PairedPunctuation (UI-PKG-002) ---
+      // --- Step 2: Open options dialog and change Pairs (UI-PKG-002) ---
       await openCMSOptionsDialog(invFrame);
 
-      // Edit PairedPunctuation to a known value
+      // Edit Pairs to a known value
       const valueInput = invFrame.getByTestId('option-value-input');
       await valueInput.clear();
       await valueInput.fill('(/) [/]');
@@ -400,9 +400,7 @@ test.describe('Matched Pairs Inventory Journey Tests', () => {
   // @scenario TS-J-008
   // Spans: UI-PKG-001 (inventory form) + UI-PKG-002 (CMS options dialog)
   // Category: Cross-WP data flow (adaptive input)
-  test('should display editable text for PairedPunctuation in options dialog', async ({
-    mainPage,
-  }) => {
+  test('should display editable text for Pairs in options dialog', async ({ mainPage }) => {
     // --- Step 1: Open inventory (UI-PKG-001) ---
     await openMatchedPairsInventory(mainPage);
     const invFrame = getInventoryFrame(mainPage);
@@ -411,7 +409,7 @@ test.describe('Matched Pairs Inventory Journey Tests', () => {
     // --- Step 2: Open the CMS Options Dialog (UI-PKG-002) ---
     await openCMSOptionsDialog(invFrame);
 
-    // --- Step 3: Verify PairedPunctuation is editable text (EXT-008) ---
+    // --- Step 3: Verify Pairs is editable text (EXT-008) ---
     const valueInput = invFrame.getByTestId('option-value-input');
     await expect(valueInput).toBeEditable();
 
