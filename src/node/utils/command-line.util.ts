@@ -26,6 +26,8 @@ type CommandLineArgumentAliases = {
  *   on extension-host
  * - DidRestart - Command-line switch that specifies that the extension host was restarted and should
  *   act accordingly, e.g. it should announce that the extensions reloaded. Only on extension-host
+ * - Maximize - Command-line switch that specifies that the renderer should be maximized on launch.
+ *   Only on main process
  */
 export enum COMMAND_LINE_ARGS {
   Extensions = 'extensions',
@@ -35,6 +37,7 @@ export enum COMMAND_LINE_ARGS {
   Packaged = 'packaged',
   Portable = 'portable',
   DidRestart = 'didRestart',
+  Maximize = 'maximize',
 }
 
 /**
@@ -49,6 +52,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [COMMAND_LINE_ARGS.Packaged]: ['--packaged', '--isPackaged', '-p'],
   [COMMAND_LINE_ARGS.Portable]: ['--portable'],
   [COMMAND_LINE_ARGS.DidRestart]: ['--didRestart'],
+  [COMMAND_LINE_ARGS.Maximize]: ['--maximize'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */

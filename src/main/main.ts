@@ -27,6 +27,7 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { COMMAND_LINE_ARGS, getCommandLineSwitch } from '@node/utils/command-line.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
@@ -427,9 +428,14 @@ async function main() {
       logger.info('mainWindow is ready to show');
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
       if (process.env.START_MINIMIZED) {
+        logger.info('mainWindow is starting minimized due to START_MINIMIZED env variable');
         mainWindow.minimize();
       } else {
         mainWindow.show();
+        if (getCommandLineSwitch(COMMAND_LINE_ARGS.Maximize)) {
+          logger.info('mainWindow is starting maximized due to --maximize command-line switch');
+          mainWindow.maximize();
+        }
       }
 
       // Adjust the Window button colors based on the current theme
