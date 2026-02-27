@@ -23,6 +23,7 @@ import {
 import { AtSign, Check, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CommentEditorLocalizedStrings } from './comment-editor.types';
+import { didPressCtrlOrCmdEnter } from '../comment-list/comment-list.utils';
 
 const initialValue: SerializedEditorState<
   SerializedParagraphNode & SerializedElementNode<SerializedTextNode>
@@ -242,14 +243,11 @@ export default function CommentEditor({
             e.preventDefault();
             e.stopPropagation();
             onClose();
-          } else if (e.key === 'Enter') {
-            const isMac = /Macintosh/i.test(navigator.userAgent);
-            if ((isMac && e.metaKey) || (!isMac && e.ctrlKey)) {
-              e.preventDefault();
-              e.stopPropagation();
-              if (hasEditorContent(editorState)) {
-                handleSave();
-              }
+          } else if (didPressCtrlOrCmdEnter(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (hasEditorContent(editorState)) {
+              handleSave();
             }
           }
         }}
