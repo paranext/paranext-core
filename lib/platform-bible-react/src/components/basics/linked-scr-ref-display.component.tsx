@@ -81,6 +81,7 @@ export function LinkedScrRefDisplay({
         variant="link"
         aria-label="Submit reference change"
         onClick={onClick}
+        onDoubleClick={(e) => e.stopPropagation()}
         className={cn('tw-me-2 tw-inline tw-h-4 tw-p-0 tw-text-start', className)}
       >
         <span className={cn({ 'tw-me-2': includeInLink === 'allText' })}>
