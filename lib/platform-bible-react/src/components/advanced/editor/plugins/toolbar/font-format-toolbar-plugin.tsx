@@ -13,7 +13,7 @@
 import { useCallback, useState } from 'react';
 import { $isTableSelection } from '@lexical/table';
 import { $isRangeSelection, BaseSelection, FORMAT_TEXT_COMMAND } from 'lexical';
-import { BoldIcon, ItalicIcon, StrikethroughIcon, UnderlineIcon } from 'lucide-react';
+import { BoldIcon, ItalicIcon } from 'lucide-react';
 
 import { useToolbarContext } from '@/components/advanced/editor/context/toolbar-context';
 import { useUpdateToolbarHandler } from '@/components/advanced/editor/editor-hooks/use-update-toolbar';
@@ -22,8 +22,10 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-grou
 const FORMATS = [
   { format: 'bold', icon: BoldIcon, label: 'Bold' },
   { format: 'italic', icon: ItalicIcon, label: 'Italic' },
-  { format: 'underline', icon: UnderlineIcon, label: 'Underline' },
-  { format: 'strikethrough', icon: StrikethroughIcon, label: 'Strikethrough' },
+  // CUSTOM: TJ removed underline and strikethrough as they are not supported by the current comment
+  // data conversion and are not in P9 anyway. We can add these back if we ever get this supported.
+  /* { format: 'underline', icon: UnderlineIcon, label: 'Underline' },
+  { format: 'strikethrough', icon: StrikethroughIcon, label: 'Strikethrough' }, */
 ] as const;
 
 export function FontFormatToolbarPlugin() {

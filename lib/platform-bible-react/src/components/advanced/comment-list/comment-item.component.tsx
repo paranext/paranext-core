@@ -19,9 +19,9 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedEditorState } from 'lexical';
 import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
-import { getAssignedUserDisplayName } from './comment-list.utils';
+import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
 /**
  * A single comment item in the comment list.
@@ -70,24 +70,32 @@ export function CommentItem({
     };
   }, [isEditing]);
 
-  const handleCancelEdit = useCallback(() => {
-    setIsEditing(false);
-    setEditorState(undefined);
-    onEditingChange?.(false);
-  }, [onEditingChange]);
-
-  const handleSaveEdit = useCallback(async () => {
-    if (!editorState || !handleUpdateComment) return;
-    const isUpdateSuccessful = await handleUpdateComment(
-      comment.id,
-      editorStateToHtml(editorState),
-    );
-    if (isUpdateSuccessful) {
+  const handleCancelEdit = useCallback(
+    (e?: MouseEvent) => {
+      if (e) e.stopPropagation();
       setIsEditing(false);
       setEditorState(undefined);
       onEditingChange?.(false);
-    }
-  }, [editorState, handleUpdateComment, comment.id, onEditingChange]);
+    },
+    [onEditingChange],
+  );
+
+  const handleSaveEdit = useCallback(
+    async (e?: MouseEvent) => {
+      if (e) e.stopPropagation();
+      if (!editorState || !handleUpdateComment) return;
+      const isUpdateSuccessful = await handleUpdateComment(
+        comment.id,
+        editorStateToHtml(editorState),
+      );
+      if (isUpdateSuccessful) {
+        setIsEditing(false);
+        setEditorState(undefined);
+        onEditingChange?.(false);
+      }
+    },
+    [editorState, handleUpdateComment, comment.id, onEditingChange],
+  );
 
   const displayDate = useMemo(() => {
     const date = new Date(comment.date);
@@ -129,7 +137,8 @@ export function CommentItem({
     return (
       <>
         <DropdownMenuItem
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setIsEditing(true);
             setEditorState(htmlToEditorState(comment.contents));
             onEditingChange?.(true);
@@ -139,7 +148,8 @@ export function CommentItem({
           {localizedStrings['%comment_editComment%']}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={async () => {
+          onClick={async (e) => {
+            e.stopPropagation();
             if (handleDeleteComment) {
               await handleDeleteComment(comment.id);
             }
@@ -191,7 +201,7 @@ export function CommentItem({
                 e.preventDefault();
                 e.stopPropagation();
                 handleCancelEdit();
-              } else if (e.key === 'Enter' && e.shiftKey) {
+              } else if (didPressCtrlOrCmdEnter(e)) {
                 e.preventDefault();
                 e.stopPropagation();
                 if (hasEditorContent(editorState)) {
@@ -204,6 +214,11 @@ export function CommentItem({
               if (e.key === 'Enter' || e.key === ' ') {
                 e.stopPropagation();
               }
+            }}
+            onClick={(e) => {
+              // Prevent clicks inside the editor from bubbling up to the comment thread, which
+              // would cause the thread to collapse when trying to edit a comment
+              e.stopPropagation();
             }}
           >
             <Editor
