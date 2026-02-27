@@ -24,7 +24,7 @@ export interface ResultsCardProps {
   /** Scripture reference as link */
   linkedScrRef: LinkedScrRefDisplayProps;
   /** Badges to display on the card */
-  badges?: ReactNode[];
+  badges?: ReactNode;
   /** Main content to display on the card */
   children?: ReactNode;
   /** Content to show in the dropdown menu when selected */
