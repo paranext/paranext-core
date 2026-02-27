@@ -11,8 +11,9 @@ echo "Building..."
 npm run build
 
 echo "Starting with CDP enabled (headless via xvfb)..."
+# Maximize when running headless to fill the virtual display
 xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-    env MAIN_ARGS="--remote-debugging-port=9223" npm start &
+    env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
 APP_PID=$!
 
 # Kill the background process on failure/exit

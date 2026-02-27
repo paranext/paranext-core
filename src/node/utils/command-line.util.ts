@@ -28,6 +28,8 @@ type CommandLineArgumentAliases = {
  *   act accordingly, e.g. it should announce that the extensions reloaded. Only on extension-host
  * - WindowSize - Command-line argument that specifies the initial window size as WIDTHxHEIGHT (e.g.
  *   1920x1080). Overrides the saved window state dimensions.
+ * - Maximize - Command-line switch that specifies that the renderer should be maximized on launch.
+ *   Only on main process
  */
 export enum COMMAND_LINE_ARGS {
   Extensions = 'extensions',
@@ -38,6 +40,7 @@ export enum COMMAND_LINE_ARGS {
   Portable = 'portable',
   DidRestart = 'didRestart',
   WindowSize = 'window_size',
+  Maximize = 'maximize',
 }
 
 /**
@@ -53,6 +56,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [COMMAND_LINE_ARGS.Portable]: ['--portable'],
   [COMMAND_LINE_ARGS.DidRestart]: ['--didRestart'],
   [COMMAND_LINE_ARGS.WindowSize]: ['--windowSize', '--window-size'],
+  [COMMAND_LINE_ARGS.Maximize]: ['--maximize'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */
