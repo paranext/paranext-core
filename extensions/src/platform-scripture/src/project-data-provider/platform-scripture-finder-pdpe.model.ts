@@ -150,40 +150,40 @@ function buildSearchRegex(options: FindOptions): RegExp {
       const char = chars[i];
 
       // Skip combining marks in the search string when ignoreDiacritics is set.
-      if (ignoreDiacritics && isDiacritic.test(char)) continue;
+      if (!ignoreDiacritics || !isDiacritic.test(char)) {
+        // Determine whether this code point is whitespace / invisible.
+        // Tilde is treated as whitespace (C#: tildeIsWhitespace defaults to true).
+        const isWhiteSpace = WHITESPACE_CHAR.test(char) || char === '~';
 
-      // Determine whether this code point is whitespace / invisible.
-      // Tilde is treated as whitespace (C#: tildeIsWhitespace defaults to true).
-      const isWhiteSpace = WHITESPACE_CHAR.test(char) || char === '~';
+        // Skip consecutive whitespace code points when ignoreWhitespaceDifferences is set.
+        if (!(ignoreWhitespace && prevWasWhiteSpace && isWhiteSpace)) {
+          let charPattern: string;
+          if (ignoreWhitespace && isWhiteSpace) {
+            // Collapse any whitespace run to a single lazy multi-whitespace pattern (including tilde).
+            charPattern = `(${WHITESPACE_CLASS}|~)+?`;
+          } else {
+            charPattern = escapeStringRegexp(char);
+          }
 
-      // Skip consecutive whitespace code points when ignoreWhitespaceDifferences is set.
-      if (ignoreWhitespace && prevWasWhiteSpace && isWhiteSpace) continue;
+          regexStr += charPattern;
 
-      let charPattern: string;
-      if (ignoreWhitespace && isWhiteSpace) {
-        // Collapse any whitespace run to a single lazy multi-whitespace pattern (including tilde).
-        charPattern = `(${WHITESPACE_CLASS}|~)+?`;
-      } else {
-        charPattern = escapeStringRegexp(char);
+          // Allow 0–3 USFM markers between this character and the next.
+          // C# condition: not after a leading whitespace (!(isWhiteSpace && i == 0)),
+          //               not after the last code point (i < uStr.Length - 1).
+          if (!(isWhiteSpace && i === 0) && ignoreUsfmMarkers && i < chars.length - 1) {
+            regexStr += USFM_MARKER_BETWEEN;
+          }
+
+          // Allow diacritics after each base character when ignoreDiacritics is set.
+          // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
+          // is emitted — only a trailing [M]* after each processed code point.
+          if (ignoreDiacritics) {
+            regexStr += `[${diacriticClass}]*`;
+          }
+
+          prevWasWhiteSpace = isWhiteSpace;
+        }
       }
-
-      regexStr += charPattern;
-
-      // Allow 0–3 USFM markers between this character and the next.
-      // C# condition: not after a leading whitespace (!(isWhiteSpace && i == 0)),
-      //               not after the last code point (i < uStr.Length - 1).
-      if (!(isWhiteSpace && i === 0) && ignoreUsfmMarkers && i < chars.length - 1) {
-        regexStr += USFM_MARKER_BETWEEN;
-      }
-
-      // Allow diacritics after each base character when ignoreDiacritics is set.
-      // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
-      // is emitted — only a trailing [M]* after each processed code point.
-      if (ignoreDiacritics) {
-        regexStr += `[${diacriticClass}]*`;
-      }
-
-      prevWasWhiteSpace = isWhiteSpace;
     }
   }
 
