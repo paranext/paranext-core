@@ -1,5 +1,5 @@
 import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
-import { logger, ProjectDataProviderEngine } from '@papi/backend';
+import papi, { logger, ProjectDataProviderEngine } from '@papi/backend';
 import { IProjectDataProviderEngine } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
@@ -25,41 +25,181 @@ import {
   FindResult,
   FindScope,
   ScriptureRangeUsjChapterOrUsfmVerseLocation,
-  WordRestriction,
 } from 'platform-scripture';
 import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
 
 /**
- * Unicode character class for word-forming characters. Similar to P9 uses base characters (letters)
- * and diacritics (marks). Requires the `u` regex flag.
+ * Fallback character class matching base (word-forming) characters, used when the project's
+ * `CharacterCategorizer` settings cannot be loaded. Mirrors Paratext 9's
+ * `CharacterCategorizer.BaseCharacterRegex` (uppercase, lowercase, title-case, and other letters).
+ * `\p{Cn}` (unassigned) is intentionally excluded: it is part of P9's definition but is not a valid
+ * ECMAScript Unicode property escape and would throw at regex construction time. Extra per-language
+ * base characters from the project's `CharacterCategorizer` are not included here; they are fetched
+ * from the project settings and used when available. Requires the `u` flag.
  */
-const WORD_CHAR = '[\\p{L}\\p{M}]';
+const BASE_CHAR_CLASS = '\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}';
 
 /**
- * Wraps a regex pattern with Unicode-aware word boundary lookbehind/lookahead assertions based on
- * the given {@link WordRestriction}. Follows P9's behavior of treating Unicode letters (`\p{L}`) and
- * marks/diacritics (`\p{M}`) as word-forming characters.
- *
- * @param pattern The base regex pattern string to wrap
- * @param restriction The word boundary restriction to apply
- * @returns The pattern wrapped with the appropriate assertions, or unchanged if `'none'`
+ * Content of a character class matching diacritic (combining) characters. Mirrors Paratext 9's
+ * `CharacterCategorizer.DiacriticCharacterRegex`: non-spacing marks, spacing combining marks, and
+ * modifier letters. Extra per-language diacritics are not included. Requires the `u` flag.
  */
-function applyWordRestriction(pattern: string, restriction: WordRestriction | undefined): string {
-  if (!restriction || restriction === 'none') return pattern;
-  const notPreceded = `(?<!${WORD_CHAR})`;
-  const notFollowed = `(?!${WORD_CHAR})`;
-  const wrapped = `(?:${pattern})`;
-  switch (restriction) {
-    case 'wholeWord':
-      return `${notPreceded}${wrapped}${notFollowed}`;
-    case 'startOfWord':
-      return `${notPreceded}${wrapped}`;
-    case 'endOfWord':
-      return `${wrapped}${notFollowed}`;
-    default:
-      return pattern;
+const DIACRITIC_CLASS = '\\p{Mn}\\p{Mc}\\p{Lm}';
+
+/**
+ * Regex for detecting whitespace and invisible characters. Approximates Paratext 9's
+ * `CharacterCategorizer.WhitespaceAndInvisibleRegex`. Tilde (`~`) is handled separately as Paratext
+ * treats it as whitespace when `AllowInvisibleChars` is false (the default).
+ */
+const WHITESPACE_CHAR = /^[\s\u00A0\u00AD\u200B\uFEFF]$/;
+
+/**
+ * Whitespace/invisible character class string for use inside regex patterns. Paired with `~` to
+ * cover Paratext's tilde-as-whitespace behavior.
+ */
+const WHITESPACE_CLASS = '[\\s\\u00A0\\u00AD\\u200B\\uFEFF]';
+
+/**
+ * Pattern that matches 0–3 USFM markers (or attribute spans) between search characters, allowing a
+ * find to succeed across text that has inline markers embedded within it (e.g., Ruby markup).
+ * Limited to 3 repetitions to prevent catastrophic backtracking (PT-16898). Matches the pattern in
+ * Paratext 9's `CreateSearchRegex`.
+ */
+const USFM_MARKER_BETWEEN = String.raw`(?:\s*(\\[\+a-zA-Z0-9\-\\]+[* ])|(\|[^\\]*?\\[\+a-zA-Z0-9\-]+?\*)){0,3}`;
+
+/**
+ * Builds a JavaScript {@link RegExp} implementing Paratext 9's find/replace search semantics.
+ *
+ * Mirrors `CreateSearchRegex` in Paratext 9's `FindReplaceText.cs`. The exact Unicode category
+ * classes from `CharacterCategorizer` are used (see {@link BASE_CHAR_CLASS} and
+ * {@link DIACRITIC_CLASS}). The following simplifications apply vs. the full P9 implementation:
+ *
+ * - No `WordMedialRegex` (equivalent to `emptyWordMedialRegex === true`)
+ * - No surrogate-pair-specific lookbehind (the JS `u` flag handles surrogate pairs natively)
+ * - `IsSingleCharacterWord` always returns `false` (word boundaries always applied)
+ * - `DiacriticsFollowBaseCharacters` assumed `true` (standard Unicode encoding order)
+ *
+ * @param options The find options controlling search behavior
+ * @returns A compiled {@link RegExp} ready for use in {@link UsjReaderWriter.search}
+ */
+function buildSearchRegex(options: FindOptions): RegExp {
+  const {
+    searchString,
+    useRegex,
+    caseInsensitive,
+    wordRestriction,
+    ignoreDiacritics,
+    ignoreWhitespaceDifferences: ignoreWhitespace,
+    ignoreUsfmMarkers,
+    characterCategorizer,
+  } = options;
+
+  // Resolve character class strings: use project-specific values when provided, otherwise fall
+  // back to the built-in Unicode property approximations.
+  const baseClass = characterCategorizer?.baseCharacterClassRegex ?? BASE_CHAR_CLASS;
+  const diacriticClass = characterCategorizer?.diacriticCharacterClassRegex ?? DIACRITIC_CLASS;
+  const wordMedial = characterCategorizer?.wordMedialCharacterRegex ?? '';
+
+  // Build the word-char pattern used in lookbehind/lookahead.
+  // If WordMedialRegex is non-empty, add it as an alternation: (?<![base][diacritic]|wordMedial)
+  // (mirrors C#'s else branch when emptyWordMedialRegex is false).
+  const wordCharClass = `[${baseClass}${diacriticClass}]`;
+  const wordBoundaryNegLookbehind = wordMedial
+    ? `(?<!${wordCharClass}|${wordMedial})`
+    : `(?<!${wordCharClass})`;
+  const wordBoundaryNegLookahead = wordMedial
+    ? `(?!${wordCharClass}|${wordMedial})`
+    : `(?!${wordCharClass})`;
+
+  // Build a RegExp to test individual code points for diacritics (used in ignoreDiacritics loop).
+  const isDiacritic = new RegExp(`^[${diacriticClass}]$`, 'u');
+
+  let regexStr = '';
+
+  // MatchAtBeginningOfWord: negative lookbehind asserting we are not inside a word.
+  // C# path: emptyWordMedialRegex=true → (?<![BaseCharRegex][DiacriticRegex])
+  if (wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord') {
+    regexStr += wordBoundaryNegLookbehind;
   }
+
+  // IgnoreUsfmMarkers preamble: prevent matching text that is part of a USFM marker name
+  // (e.g. the 'v' in \v should not be a hit when searching for 'v').
+  if (ignoreUsfmMarkers) {
+    regexStr += String.raw`(?<!\\[a-zA-Z0-9\-\+])`;
+  }
+
+  regexStr += '(';
+
+  if (useRegex) {
+    // User-supplied regex: insert as-is (mirrors C#'s "regex:" prefix behavior).
+    // ignoreDiacritics / ignoreWhitespace / per-character ignoreUsfmMarkers do not apply,
+    // as the user's expression is assumed to handle those concerns itself.
+    regexStr += searchString;
+  } else {
+    // Normalize to NFD so accented characters (e.g. é → e + combining accent) decompose into
+    // base + combining mark, enabling per-character diacritic filtering. Matches C#'s searchFor.Normalize(FormD).
+    const normSearch = ignoreDiacritics ? searchString.normalize('NFD') : searchString;
+
+    // Spread to iterate over Unicode code points (handles surrogate pairs correctly in JS,
+    // equivalent to C#'s UString / UCodepoint iteration).
+    const chars = [...normSearch];
+    let prevWasWhiteSpace = false;
+
+    for (let i = 0; i < chars.length; i++) {
+      const char = chars[i];
+
+      // Skip combining marks in the search string when ignoreDiacritics is set.
+      if (ignoreDiacritics && isDiacritic.test(char)) continue;
+
+      // Determine whether this code point is whitespace / invisible.
+      // Tilde is treated as whitespace (C#: tildeIsWhitespace defaults to true).
+      const isWhiteSpace = WHITESPACE_CHAR.test(char) || char === '~';
+
+      // Skip consecutive whitespace code points when ignoreWhitespaceDifferences is set.
+      if (ignoreWhitespace && prevWasWhiteSpace && isWhiteSpace) continue;
+
+      let charPattern: string;
+      if (ignoreWhitespace && isWhiteSpace) {
+        // Collapse any whitespace run to a single lazy multi-whitespace pattern (including tilde).
+        charPattern = `(${WHITESPACE_CLASS}|~)+?`;
+      } else {
+        charPattern = escapeStringRegexp(char);
+      }
+
+      regexStr += charPattern;
+
+      // Allow 0–3 USFM markers between this character and the next.
+      // C# condition: not after a leading whitespace (!(isWhiteSpace && i == 0)),
+      //               not after the last code point (i < uStr.Length - 1).
+      if (!(isWhiteSpace && i === 0) && ignoreUsfmMarkers && i < chars.length - 1) {
+        regexStr += USFM_MARKER_BETWEEN;
+      }
+
+      // Allow diacritics after each base character when ignoreDiacritics is set.
+      // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
+      // is emitted — only a trailing [M]* after each processed code point.
+      if (ignoreDiacritics) {
+        regexStr += `[${diacriticClass}]*`;
+      }
+
+      prevWasWhiteSpace = isWhiteSpace;
+    }
+  }
+
+  regexStr += ')';
+
+  // MatchAtEndOfWord: negative lookahead asserting the match does not continue into a word.
+  if (wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord') {
+    regexStr += wordBoundaryNegLookahead;
+  }
+
+  // The `u` flag is required for \p{} Unicode property escapes used in word boundaries and
+  // the diacritic class.
+  const needsUnicodeFlag = !!(wordRestriction && wordRestriction !== 'none') || !!ignoreDiacritics;
+  const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
+
+  return new RegExp(regexStr, flags);
 }
 
 /**
@@ -138,6 +278,9 @@ export class ScriptureFinderProjectDataProviderEngine
   extends ProjectDataProviderEngine<typeof SCRIPTURE_FINDER_PROJECT_INTERFACES>
   implements IProjectDataProviderEngine<typeof SCRIPTURE_FINDER_PROJECT_INTERFACES>
 {
+  /** The ID of the project this engine serves, used to fetch project settings */
+  readonly #projectId: string;
+
   /** The PDPs this layering PDP needs to function */
   readonly #pdps: ScriptureFinderOverlayPDPs;
 
@@ -169,6 +312,15 @@ export class ScriptureFinderProjectDataProviderEngine
   #isDisposed = false;
 
   /**
+   * Promise that resolves to the project's character categorizer settings fetched from
+   * ProjectSettingTypes via the overlay PDP. Resolves to `undefined` if the settings cannot be
+   * fetched (error is logged), in which case buildSearchRegex falls back to the built-in Unicode
+   * property approximations. Kicked off in the constructor so the result is typically available by
+   * the time beginFindJob is first called.
+   */
+  #characterCategorizerPromise: Promise<FindOptions['characterCategorizer']>;
+
+  /**
    * Promise for the book USX subscription unsubscriber. Resolves to `undefined` if the subscription
    * failed (error is logged in the constructor).
    */
@@ -185,9 +337,14 @@ export class ScriptureFinderProjectDataProviderEngine
    *
    * @param pdpsToOverlay - Underlying project data providers that provide book and chapter data.
    */
-  constructor(pdpsToOverlay: ScriptureFinderOverlayPDPs) {
+  constructor(projectId: string, pdpsToOverlay: ScriptureFinderOverlayPDPs) {
     super();
+    this.#projectId = projectId;
     this.#pdps = pdpsToOverlay;
+
+    // Begin fetching character categorizer settings immediately so they're ready (or nearly so)
+    // by the time beginFindJob is first called.
+    this.#characterCategorizerPromise = this.#fetchCharacterCategorizer();
 
     // Subscribe to book-level USX changes for cache invalidation
     this.#bookUsxUnsubscriberPromise = this.#pdps['platformScripture.USX_Book'].subscribeBookUSX(
@@ -243,12 +400,20 @@ export class ScriptureFinderProjectDataProviderEngine
       if (!scope.bookId) throw new Error('Each scope must have a valid bookId');
       if (scope.chapter !== undefined && scope.chapter <= 0) throw new Error('Chapter must be > 0');
     });
+
+    // If the caller did not supply characterCategorizer, use the project's own settings so that
+    // word-boundary and diacritic handling use the project-specific character classes rather than
+    // the generic Unicode property approximations.
+    const resolvedOptions: FindOptions = findOptions.characterCategorizer
+      ? findOptions
+      : { ...findOptions, characterCategorizer: await this.#characterCategorizerPromise };
+
     const jobId = newGuid();
     const job: FindJob = {
       jobId,
       status: 'running',
       percentComplete: 0,
-      options: { ...findOptions },
+      options: { ...resolvedOptions },
       results: [],
       totalResultsCount: 0,
       startTime: performance.now(),
@@ -590,6 +755,48 @@ export class ScriptureFinderProjectDataProviderEngine
   }
 
   /**
+   * Fetches the project's character categorizer settings from the overlay PDP. Called once in the
+   * constructor; the result is cached in characterCategorizerPromise.
+   *
+   * Returns `undefined` (and logs a warning) if any setting is missing or the fetch fails, so
+   * buildSearchRegex falls back to the built-in Unicode property approximations.
+   *
+   * @returns The project's character categorizer settings, or `undefined` on failure
+   */
+  async #fetchCharacterCategorizer(): Promise<FindOptions['characterCategorizer']> {
+    try {
+      // Use the platform.base PDP so getSetting is available with proper TypeScript typing.
+      const pdp = await papi.projectDataProviders.get('platform.base', this.#projectId);
+      const [baseCharacterClassRegex, diacriticCharacterClassRegex, wordMedialCharacterRegex] =
+        await Promise.all([
+          pdp.getSetting('platformScripture.baseCharacterClassRegex'),
+          pdp.getSetting('platformScripture.diacriticCharacterClassRegex'),
+          pdp.getSetting('platformScripture.wordMedialCharacterRegex'),
+        ]);
+
+      if (
+        baseCharacterClassRegex === undefined ||
+        diacriticCharacterClassRegex === undefined ||
+        wordMedialCharacterRegex === undefined
+      ) {
+        logger.warn(
+          'Scripture Finder PDPE: one or more character categorizer settings were undefined; ' +
+            'word-boundary and diacritic handling will use Unicode property approximations.',
+        );
+        return undefined;
+      }
+
+      return { baseCharacterClassRegex, diacriticCharacterClassRegex, wordMedialCharacterRegex };
+    } catch (e) {
+      logger.warn(
+        `Scripture Finder PDPE failed to fetch character categorizer settings; word-boundary and ` +
+          `diacritic handling will use Unicode property approximations: ${getErrorMessage(e)}`,
+      );
+      return undefined;
+    }
+  }
+
+  /**
    * Converts a UsjChapterLocation or UsfmVerseLocation to a standardized UsfmVerseRefVerseLocation.
    *
    * For UsjChapterLocation, uses a chapter-level UsjReaderWriter to convert the document location
@@ -656,20 +863,11 @@ export class ScriptureFinderProjectDataProviderEngine
     // Get the cached reader writer for this scope
     const usj = await this.#getOrCreateCachedReaderWriter(scope.bookId, scope.chapter);
 
-    const basePattern = job.options.useRegex
-      ? job.options.searchString
-      : escapeStringRegexp(job.options.searchString);
-
-    const restriction = job.options.wordRestriction;
-    const regexString = applyWordRestriction(basePattern, restriction);
-    const needsUnicodeFlag = restriction && restriction !== 'none';
-    const flags = `${job.options.caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
-
     const markerStylesToInclude = job.options.verseTextOnly
       ? USFM_VERSE_TEXT_MARKERS_SET
       : undefined;
 
-    const matches = usj.search(new RegExp(regexString, flags), markerStylesToInclude);
+    const matches = usj.search(buildSearchRegex(job.options), markerStylesToInclude);
 
     return matches.map((match) => {
       return {
