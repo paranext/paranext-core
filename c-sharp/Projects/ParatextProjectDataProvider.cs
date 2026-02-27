@@ -1004,6 +1004,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
             return scrText.BooksPresentSet.Books;
 
+        // Character categorizer settings are computed from the project's CharacterCategorizer.
+        // \p{Cn} (unassigned) is excluded from BaseCharacterRegex because it is not a valid
+        // ECMAScript Unicode property escape. It works in C# regex but not in JavaScript regex.
+        // There is no clear equivalent in ECMA because the set of unassigned code points shifts
+        // with every Unicode version update and practically the regex works the same without it.
+        if (
+            paratextSettingName == ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX
+            || paratextSettingName == ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX
+            || paratextSettingName == ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX
+        )
+        {
+            var characterCategorizer = new CharacterCategorizer();
+            return paratextSettingName switch
+            {
+                ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX =>
+                    characterCategorizer.BaseCharacterRegex.Replace(@"\p{Cn}", ""),
+                ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX =>
+                    characterCategorizer.DiacriticCharacterRegex,
+                // \- is a valid identity escape in C# regex but is rejected by ECMAScript Unicode
+                // mode (only SyntaxCharacters may be identity-escaped with `u`). Replace it with
+                // the equivalent hex escape so the value is safe for JavaScript regex with `u`.
+                _ => characterCategorizer.WordMedialRegex.Replace(@"\-", @"\x2D"),
+            };
+        }
+
         if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
