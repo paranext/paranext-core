@@ -14,6 +14,8 @@ import { useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import ScripturePane from '../components/scripture-pane.component';
 import ERToolbar from '../components/er-toolbar.component';
+import WarningBannerStack from '../components/warning-banner.component';
+import type { WarningState } from '../components/warning-banner.component';
 
 /** Tracked project type */
 interface TrackedProject {
@@ -118,6 +120,17 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
 
   // Guide panel visibility (BHV-604)
   const [guideVisible, setGuideVisible] = useState(false);
+
+  // Warning banner state (BHV-411)
+  // Backend not yet registered -- use fallback state showing representative banners
+  const [warningState] = useState<WarningState>({
+    missingBook: false,
+    reviewStatus: true,
+    imageWarning: false,
+    copyrightWarning: true,
+    updateRequiredData: false,
+    updateAvailable: true,
+  });
 
   // Filter state for linked word clicks
   const [filterLemma, setFilterLemma] = useState<string | undefined>(undefined);
@@ -269,6 +282,9 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
           <p className="tw-text-muted-foreground">{guideContent}</p>
         </div>
       )}
+
+      {/* Warning banners (BHV-411) - conditional banners below toolbar */}
+      <WarningBannerStack warnings={warningState} />
 
       <ResizablePanelGroup direction="vertical" data-testid="er-split-pane" onLayout={handleResize}>
         {/* Scripture Pane (top) */}

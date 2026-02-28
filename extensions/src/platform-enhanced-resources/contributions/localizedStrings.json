@@ -26,7 +26,17 @@
       "%platformEnhancedResources_toolbar_scopeCurrentSection%": "Current Section",
       "%platformEnhancedResources_toolbar_scopeCurrentChapter%": "Current Chapter",
       "%platformEnhancedResources_guide_title%": "Getting Started",
-      "%platformEnhancedResources_guide_content%": "Click on highlighted words in the scripture pane to explore dictionary entries, encyclopedia articles, images, and maps."
+      "%platformEnhancedResources_guide_content%": "Click on highlighted words in the scripture pane to explore dictionary entries, encyclopedia articles, images, and maps.",
+      "%platformEnhancedResources_warning_missingBook%": "This book does not exist in the Enhanced Resource.",
+      "%platformEnhancedResources_warning_reviewStatus%": "This resource is pre-release and has not been fully reviewed.",
+      "%platformEnhancedResources_warning_images%": "Full images are not installed.",
+      "%platformEnhancedResources_warning_images_action%": "Download...",
+      "%platformEnhancedResources_warning_copyright%": "This resource has copyright restrictions.",
+      "%platformEnhancedResources_warning_copyright_action%": "More Info...",
+      "%platformEnhancedResources_warning_updateData%": "Required metadata is outdated.",
+      "%platformEnhancedResources_warning_updateData_action%": "Click here",
+      "%platformEnhancedResources_warning_updateAvailable%": "A new version of this resource is available.",
+      "%platformEnhancedResources_warning_updateAvailable_action%": "Download now"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -53,7 +63,17 @@
       "%platformEnhancedResources_toolbar_scopeCurrentSection%": "Seccion actual",
       "%platformEnhancedResources_toolbar_scopeCurrentChapter%": "Capitulo actual",
       "%platformEnhancedResources_guide_title%": "Primeros pasos",
-      "%platformEnhancedResources_guide_content%": "Haga clic en las palabras resaltadas en el panel de escrituras para explorar entradas de diccionario, articulos de enciclopedia, imagenes y mapas."
+      "%platformEnhancedResources_guide_content%": "Haga clic en las palabras resaltadas en el panel de escrituras para explorar entradas de diccionario, articulos de enciclopedia, imagenes y mapas.",
+      "%platformEnhancedResources_warning_missingBook%": "Este libro no existe en el recurso mejorado.",
+      "%platformEnhancedResources_warning_reviewStatus%": "Este recurso es una version preliminar y no ha sido completamente revisado.",
+      "%platformEnhancedResources_warning_images%": "Las imagenes completas no estan instaladas.",
+      "%platformEnhancedResources_warning_images_action%": "Descargar...",
+      "%platformEnhancedResources_warning_copyright%": "Este recurso tiene restricciones de derechos de autor.",
+      "%platformEnhancedResources_warning_copyright_action%": "Mas informacion...",
+      "%platformEnhancedResources_warning_updateData%": "Los metadatos requeridos estan desactualizados.",
+      "%platformEnhancedResources_warning_updateData_action%": "Haga clic aqui",
+      "%platformEnhancedResources_warning_updateAvailable%": "Una nueva version de este recurso esta disponible.",
+      "%platformEnhancedResources_warning_updateAvailable_action%": "Descargar ahora"
     }
   }
 }

@@ -1,8 +1,8 @@
 /**
  * Functional tests for UI-PKG-005: WarningBanners
  *
- * RED phase — all tests use test.fixme() until implementation activates them. Tests verify
- * conditional warning banners: display, dismiss, action links, stacking.
+ * RED phase — all tests use test() until implementation activates them. Tests verify conditional
+ * warning banners: display, dismiss, action links, stacking.
  *
  * @scenario BHV-411
  */
@@ -23,7 +23,7 @@ async function openERWebView(mainPage: import('@playwright/test').Page) {
 }
 
 test.describe('UI-PKG-005: WarningBanners — Render', () => {
-  test.fixme('RND-001: Warning banner area exists in layout', async ({ mainPage }) => {
+  test('RND-001: Warning banner area exists in layout', async ({ mainPage }) => {
     // @scenario BHV-411
     const frame = await openERWebView(mainPage);
     const bannerArea = frame.locator('[data-testid="warning-banner-stack"]');
@@ -34,25 +34,22 @@ test.describe('UI-PKG-005: WarningBanners — Render', () => {
     });
   });
 
-  test.fixme(
-    'RND-002: Banners stack vertically when multiple are visible',
-    async ({ mainPage }) => {
-      // @scenario BHV-411 stacking
-      const frame = await openERWebView(mainPage);
-      const banners = frame.locator('[data-testid="warning-banner-item"]');
-      // Count may be 0 if no conditions are met — test verifies structure
-      const count = await banners.count();
-      if (count >= 2) {
-        const banner1Box = await banners.nth(0).boundingBox();
-        const banner2Box = await banners.nth(1).boundingBox();
-        expect(banner2Box!.y).toBeGreaterThan(banner1Box!.y);
-      }
-    },
-  );
+  test('RND-002: Banners stack vertically when multiple are visible', async ({ mainPage }) => {
+    // @scenario BHV-411 stacking
+    const frame = await openERWebView(mainPage);
+    const banners = frame.locator('[data-testid="warning-banner-item"]');
+    // Count may be 0 if no conditions are met — test verifies structure
+    const count = await banners.count();
+    if (count >= 2) {
+      const banner1Box = await banners.nth(0).boundingBox();
+      const banner2Box = await banners.nth(1).boundingBox();
+      expect(banner2Box!.y).toBeGreaterThan(banner1Box!.y);
+    }
+  });
 });
 
 test.describe('UI-PKG-005: WarningBanners — Interaction', () => {
-  test.fixme('INT-001: Dismissible banners can be closed', async ({ mainPage }) => {
+  test('INT-001: Dismissible banners can be closed', async ({ mainPage }) => {
     // @scenario BHV-411 dismiss
     const frame = await openERWebView(mainPage);
     const dismissibleBanner = frame.locator(
@@ -68,7 +65,7 @@ test.describe('UI-PKG-005: WarningBanners — Interaction', () => {
     }
   });
 
-  test.fixme('INT-002: Non-dismissible banners have no close button', async ({ mainPage }) => {
+  test('INT-002: Non-dismissible banners have no close button', async ({ mainPage }) => {
     // @scenario BHV-411 non-dismiss
     const frame = await openERWebView(mainPage);
     const nonDismissible = frame.locator(
@@ -82,7 +79,7 @@ test.describe('UI-PKG-005: WarningBanners — Interaction', () => {
     }
   });
 
-  test.fixme('INT-003: Action links in banners are clickable', async ({ mainPage }) => {
+  test('INT-003: Action links in banners are clickable', async ({ mainPage }) => {
     // @scenario BHV-411 action links
     const frame = await openERWebView(mainPage);
     const actionLink = frame.locator('[data-testid="banner-action-link"]');
@@ -94,7 +91,7 @@ test.describe('UI-PKG-005: WarningBanners — Interaction', () => {
 });
 
 test.describe('UI-PKG-005: WarningBanners — Data Wiring', () => {
-  test.fixme('DW-001: Banner visibility driven by resource state', async ({ mainPage }) => {
+  test('DW-001: Banner visibility driven by resource state', async ({ mainPage }) => {
     // @scenario BHV-411
     const frame = await openERWebView(mainPage);
     // The banner stack should reflect actual resource state (may be empty)
