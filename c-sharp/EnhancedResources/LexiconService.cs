@@ -189,10 +189,19 @@ internal static class LexiconService
     public static Task<ParseLexicalLinksResult> ParseLexicalLinksAsync(
         LexicalLinkInput input,
         CancellationToken ct
-    )
+    ) => Task.FromResult(ParseLexicalLinks(input));
+
+    /// <summary>
+    /// Synchronous core of lexical link parsing. Used by <see cref="ParseLexicalLinksAsync"/>
+    /// and directly by callers in synchronous contexts (e.g., MarbleDataParser token processing).
+    /// </summary>
+    internal static ParseLexicalLinksResult ParseLexicalLinks(LexicalLinkInput input)
     {
         if (string.IsNullOrEmpty(input.LinkString))
-            return CreateErrorResult("INVALID_INPUT", "Link string must not be null or empty");
+            return new ParseLexicalLinksResult(
+                false,
+                Error: new ErrorInfo("INVALID_INPUT", "Link string must not be null or empty")
+            );
 
         string[] linkParts = input.LinkString.Split(';');
         var links = new List<LexicalLink>(linkParts.Length);
@@ -201,12 +210,12 @@ internal static class LexiconService
         {
             ParseLexicalLinksResult? error = ParseSingleLink(linkPart, out LexicalLink? link);
             if (error is not null)
-                return Task.FromResult(error);
+                return error;
 
             links.Add(link!);
         }
 
-        return Task.FromResult(new ParseLexicalLinksResult(true, links));
+        return new ParseLexicalLinksResult(true, links);
     }
 
     /// <summary>

@@ -85,7 +85,7 @@ public class ScriptureRenderingService
     /// Generates HTML tooltip text for a linked word, combining gloss, POS,
     /// transliteration, lemma, and rendering status information.
     /// </summary>
-    public Task<TooltipResult> GenerateTooltipAsync(
+    public async Task<TooltipResult> GenerateTooltipAsync(
         GenerateTooltipInput input,
         CancellationToken ct
     )
@@ -98,9 +98,7 @@ public class ScriptureRenderingService
             || !s_knownDictionaries.Contains(input.Link.Dictionary)
         )
         {
-            return Task.FromResult(
-                TooltipErrorResult("NOT_FOUND", "Cannot generate tooltip for unresolved link")
-            );
+            return TooltipErrorResult("NOT_FOUND", "Cannot generate tooltip for unresolved link");
         }
 
         // Build the tooltip combining all data sources
@@ -121,7 +119,7 @@ public class ScriptureRenderingService
         sb.Append($" [{EscapeHtml(input.Link.Lemma)}]");
 
         // 4. Gloss from dictionary (EXT-025, line 2720-2725)
-        string? gloss = GetGlossForTooltip(input);
+        string? gloss = await GetGlossForTooltipAsync(input);
         if (!string.IsNullOrEmpty(gloss))
         {
             sb.Append(": ");
@@ -136,7 +134,7 @@ public class ScriptureRenderingService
             sb.Append(EscapeHtml(renderingStatusText));
         }
 
-        return Task.FromResult(new TooltipResult(Success: true, TooltipHtml: sb.ToString()));
+        return new TooltipResult(Success: true, TooltipHtml: sb.ToString());
     }
 
     // === PORTED FROM PT9 ===
@@ -147,7 +145,7 @@ public class ScriptureRenderingService
     /// Generates the HTML body for the scripture pane, applying highlight toggles,
     /// display mode settings, and rendering status CSS classes.
     /// </summary>
-    public Task<ScripturePaneContent> GenerateScriptureHtmlAsync(
+    public async Task<ScripturePaneContent> GenerateScriptureHtmlAsync(
         GenerateScriptureHtmlInput input,
         CancellationToken ct
     )
@@ -159,18 +157,14 @@ public class ScriptureRenderingService
 
         if (!exists)
         {
-            return Task.FromResult(
-                ErrorResult("NOT_FOUND", $"Resource '{input.ResourceId}' not found")
-            );
+            return ErrorResult("NOT_FOUND", $"Resource '{input.ResourceId}' not found");
         }
 
         // Step 2: Check book availability
         int bookNum = input.VerseRef.BookNum;
         if (availableBooks != null && !availableBooks.Contains(bookNum))
         {
-            return Task.FromResult(
-                ErrorResult("NOT_FOUND", $"Book {bookNum} not available in resource")
-            );
+            return ErrorResult("NOT_FOUND", $"Book {bookNum} not available in resource");
         }
 
         // Step 3: Get USX content for the chapter
@@ -181,11 +175,9 @@ public class ScriptureRenderingService
 
         if (!usxSuccess)
         {
-            return Task.FromResult(
-                ErrorResult(
-                    errorCode ?? "PARSE_ERROR",
-                    errorMessage ?? "Failed to generate scripture content"
-                )
+            return ErrorResult(
+                errorCode ?? "PARSE_ERROR",
+                errorMessage ?? "Failed to generate scripture content"
             );
         }
 
@@ -193,30 +185,24 @@ public class ScriptureRenderingService
         ParseUsxTokensResult parseResult;
         try
         {
-            parseResult = MarbleDataParser
-                .ParseUsxTokensAsync(
-                    new TokenParsingInput(
-                        usxContent!,
-                        bookNum,
-                        IncludeSourceWords: true,
-                        ResourceId: input.ResourceId
-                    ),
-                    ct
-                )
-                .Result;
+            parseResult = await MarbleDataParser.ParseUsxTokensAsync(
+                new TokenParsingInput(
+                    usxContent!,
+                    bookNum,
+                    IncludeSourceWords: true,
+                    ResourceId: input.ResourceId
+                ),
+                ct
+            );
         }
         catch
         {
-            return Task.FromResult(
-                ErrorResult("PARSE_ERROR", "Failed to generate scripture content")
-            );
+            return ErrorResult("PARSE_ERROR", "Failed to generate scripture content");
         }
 
         if (!parseResult.Success || parseResult.Tokens == null)
         {
-            return Task.FromResult(
-                ErrorResult("PARSE_ERROR", "Failed to generate scripture content")
-            );
+            return ErrorResult("PARSE_ERROR", "Failed to generate scripture content");
         }
 
         // Step 5: Build highlight CSS classes (BHV-404, GM-025)
@@ -244,15 +230,13 @@ public class ScriptureRenderingService
             isLegacy
         );
 
-        return Task.FromResult(
-            new ScripturePaneContent(
-                Success: true,
-                ScriptureHtml: scriptureHtml,
-                FootnotesHtml: footnotesHtml,
-                HasFootnotes: hasFootnotes,
-                HighlightCssClasses: highlightCssClasses,
-                Error: null
-            )
+        return new ScripturePaneContent(
+            Success: true,
+            ScriptureHtml: scriptureHtml,
+            FootnotesHtml: footnotesHtml,
+            HasFootnotes: hasFootnotes,
+            HighlightCssClasses: highlightCssClasses,
+            Error: null
         );
     }
 
@@ -687,7 +671,7 @@ public class ScriptureRenderingService
     /// via LexiconService. Returns a descriptive gloss when dictionary data is
     /// unavailable (e.g., in test environments without ParatextData).
     /// </summary>
-    private static string? GetGlossForTooltip(GenerateTooltipInput input)
+    private static async Task<string?> GetGlossForTooltipAsync(GenerateTooltipInput input)
     {
         try
         {
@@ -700,9 +684,10 @@ public class ScriptureRenderingService
                 BookNumber: input.BookNumber
             );
 
-            var glossResult = LexiconService
-                .GetGlossAsync(lookupInput, CancellationToken.None)
-                .Result;
+            var glossResult = await LexiconService.GetGlossAsync(
+                lookupInput,
+                CancellationToken.None
+            );
             if (glossResult.Success && !string.IsNullOrEmpty(glossResult.Gloss))
                 return glossResult.Gloss;
         }

@@ -287,13 +287,11 @@ internal static partial class MarbleDataParser
 
     /// <summary>
     /// Parse a link-href attribute value into LexicalLink objects.
-    /// Delegates to LexiconService.ParseLexicalLinksAsync for format parsing.
+    /// Delegates to LexiconService.ParseLexicalLinks for synchronous format parsing.
     /// </summary>
     private static IReadOnlyList<LexicalLink>? ParseLinkHref(string linkHref)
     {
-        var result = LexiconService
-            .ParseLexicalLinksAsync(new LexicalLinkInput(linkHref), CancellationToken.None)
-            .Result;
+        var result = LexiconService.ParseLexicalLinks(new LexicalLinkInput(linkHref));
         return result.Success ? result.Links : null;
     }
 
