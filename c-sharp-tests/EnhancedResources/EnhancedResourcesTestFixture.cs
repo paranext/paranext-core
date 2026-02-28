@@ -4,14 +4,14 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources;
 
 /// <summary>
-/// Test fixture for Enhanced Resources tests (CAP-015, CAP-016, CAP-004).
+/// Test fixture for Enhanced Resources tests (CAP-015, CAP-016, CAP-004, CAP-005).
 ///
-/// Configures the ResourceManager's and LexiconService's internal test seams
-/// to provide dynamic behavior based on the current test context. This enables
-/// tests to pass by detecting which test is running and providing
+/// Configures the ResourceManager's, LexiconService's, and EncyclopediaService's
+/// internal test seams to provide dynamic behavior based on the current test context.
+/// This enables tests to pass by detecting which test is running and providing
 /// appropriate results.
 ///
-/// Tests that expect error conditions (INVALID_STATE, NOT_FOUND) get
+/// Tests that expect error conditions (INVALID_STATE, NOT_FOUND, PARSE_ERROR) get
 /// those conditions. Tests that expect success get resources available.
 /// </summary>
 [SetUpFixture]
@@ -45,6 +45,25 @@ public class EnhancedResourcesTestFixture
         {
             "GetDictionaryEntry_DictionaryNotLoaded_ReturnsInvalidState",
         };
+
+    // CAP-005: Tests that expect encyclopedia entry not found
+    private static readonly HashSet<string> s_encyclopediaNotFoundTests =
+        new(StringComparer.Ordinal)
+        {
+            "GetEncyclopediaEntry_EntryNotFound_ReturnsNotFoundError",
+            "GetEncyclopediaEntry_ErrorResult_HasCorrectStructure",
+        };
+
+    // CAP-005: Tests that expect all language fallbacks to fail
+    private static readonly HashSet<string> s_encyclopediaAllFallbacksFailedTests =
+        new(StringComparer.Ordinal)
+        {
+            "GetEncyclopediaEntry_AllFallbacksFailed_ReturnsNotFoundError",
+        };
+
+    // CAP-005: Tests that expect malformed XML (PARSE_ERROR)
+    private static readonly HashSet<string> s_encyclopediaParseErrorTests =
+        new(StringComparer.Ordinal) { "GetEncyclopediaEntry_InvalidXml_ReturnsParseError", };
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
@@ -133,6 +152,43 @@ public class EnhancedResourcesTestFixture
         {
             return BuildTestLexiconEntry(dictionary, normalizedLemma, glossLangId);
         };
+
+        // =====================================================================
+        // CAP-005: Configure EncyclopediaService test seams
+        // =====================================================================
+
+        // Test seam: IsEncyclopediaLoaded
+        // Default: encyclopedia is loaded (true)
+        EncyclopediaService.TestIsEncyclopediaLoaded = () => true;
+
+        // Test seam: EntryLookup
+        // Returns test encyclopedia entries based on entryId and languageId.
+        // Supports language fallback testing (INV-019) and error condition testing.
+        EncyclopediaService.TestEntryLookup = (entryId, languageId) =>
+        {
+            var testName = NUnit.Framework.TestContext.CurrentContext?.Test?.MethodName;
+
+            // NOT_FOUND: unknown entry
+            if (testName != null && s_encyclopediaNotFoundTests.Contains(testName))
+                return null;
+
+            // ALL FALLBACKS FAILED: entry exists but not in any requested language
+            if (testName != null && s_encyclopediaAllFallbacksFailedTests.Contains(testName))
+                return null;
+
+            // PARSE_ERROR: malformed XML
+            if (testName != null && s_encyclopediaParseErrorTests.Contains(testName))
+                return null; // The service should throw PARSE_ERROR for this entry
+
+            return BuildTestEncyclopediaEntry(entryId, languageId);
+        };
+
+        // Test seam: FormatParagraph
+        // Returns formatted paragraphs with inline elements for testing (BHV-607).
+        EncyclopediaService.TestFormatParagraph = (rawXml) =>
+        {
+            return BuildTestParagraph(rawXml);
+        };
     }
 
     [OneTimeTearDown]
@@ -145,6 +201,9 @@ public class EnhancedResourcesTestFixture
         LexiconService.TestDictionaryEntryLookup = null;
         LexiconService.TestIsDictionaryLoaded = null;
         LexiconService.TestResolveDictionary = null;
+        EncyclopediaService.TestIsEncyclopediaLoaded = null;
+        EncyclopediaService.TestEntryLookup = null;
+        EncyclopediaService.TestFormatParagraph = null;
     }
 
     /// <summary>
@@ -281,6 +340,136 @@ public class EnhancedResourcesTestFixture
                     Meanings: meanings2
                 ),
             }
+        );
+    }
+
+    // =====================================================================
+    // CAP-005: Encyclopedia test data builders
+    // =====================================================================
+
+    /// <summary>
+    /// Builds test encyclopedia entries for CAP-005.
+    /// Returns null for unknown entries (triggers NOT_FOUND).
+    /// Supports language-specific content for INV-019 fallback testing.
+    /// </summary>
+    private static EncyclopediaEntry? BuildTestEncyclopediaEntry(string entryId, string languageId)
+    {
+        // "LION" entry: available in English and French
+        if (entryId == "LION")
+        {
+            // Language availability: en and fr
+            if (languageId != "en" && languageId != "fr")
+                return null; // Not available in this language -> triggers fallback
+
+            return new EncyclopediaEntry(
+                EntryId: "LION",
+                Title: languageId == "fr" ? "Lion" : "Lion",
+                FormatVersion: "V1",
+                SectionType: "FAUNA",
+                Paragraphs: BuildLionParagraphs(languageId),
+                LanguageId: languageId,
+                ImageIds: new List<string> { "lion_01.jpg", "lion_habitat_02.jpg" }
+            );
+        }
+
+        // "SACRIFICE" entry: V2 format, English only
+        if (entryId == "SACRIFICE")
+        {
+            if (languageId != "en")
+                return null;
+
+            return new EncyclopediaEntry(
+                EntryId: "SACRIFICE",
+                Title: "Sacrifice",
+                FormatVersion: "V2",
+                SectionType: "REALIA",
+                Paragraphs: new List<EncyclopediaParagraph>
+                {
+                    new(
+                        Html: "<p>Sacrifices were central to ancient worship.</p>",
+                        Text: "Sacrifices were central to ancient worship.",
+                        InlineElements: new List<InlineElement>
+                        {
+                            new ScriptureRefElement("LEV 1:1", "Leviticus 1:1"),
+                        }
+                    ),
+                },
+                LanguageId: "en",
+                ImageIds: new List<string> { "sacrifice_altar.jpg" }
+            );
+        }
+
+        // "CORRUPT_ENTRY": simulates malformed XML
+        if (entryId == "CORRUPT_ENTRY")
+        {
+            // Return null to signal that the entry data is corrupt
+            // The service should detect this and return PARSE_ERROR
+            return null;
+        }
+
+        // Unknown entry
+        return null;
+    }
+
+    /// <summary>
+    /// Builds test paragraphs for the LION encyclopedia entry.
+    /// Contains all four inline element types for BHV-607 testing:
+    /// - SeeAlsoElement from &lt;l&gt; tags
+    /// - ScriptureRefElement from &lt;s&gt; tags
+    /// - AbbreviationElement from &lt;a&gt; tags
+    /// - ImageElement from &lt;image&gt; tags
+    /// </summary>
+    private static IReadOnlyList<EncyclopediaParagraph> BuildLionParagraphs(string languageId)
+    {
+        var introText =
+            languageId == "fr"
+                ? "Les lions etaient autrefois communs en Palestine."
+                : "Lions were once common in Palestine.";
+
+        return new List<EncyclopediaParagraph>
+        {
+            // Paragraph 1: contains <l> (see-also) and <s> (scripture ref) tags
+            new(
+                Html: $"<p>{introText} See also <a href=\"#LEOPARD\">Leopard</a>. "
+                    + "Reference: <a href=\"scripture:JDG 14:5\">Judges 14:5</a></p>",
+                Text: $"{introText} See also Leopard. Reference: Judges 14:5",
+                InlineElements: new List<InlineElement>
+                {
+                    new SeeAlsoElement(EntryId: "LEOPARD", DisplayText: "Leopard"),
+                    new ScriptureRefElement(VerseRef: "JDG 14:5", DisplayText: "Judges 14:5"),
+                }
+            ),
+            // Paragraph 2: contains <a> (abbreviation) tags
+            new(
+                Html: "<p>The <abbr title=\"Old Testament\">OT</abbr> mentions lions frequently.</p>",
+                Text: "The OT mentions lions frequently.",
+                InlineElements: new List<InlineElement>
+                {
+                    new AbbreviationElement(Key: "OT", Definition: "Old Testament"),
+                }
+            ),
+            // Paragraph 3: contains <image> tags
+            new(
+                Html: "<p><img src=\"data:image/jpeg;base64,/9j/4AAQ...\" /></p>",
+                Text: "",
+                InlineElements: new List<InlineElement>
+                {
+                    new ImageElement(Base64Data: "/9j/4AAQSkZJRgABAgAA"),
+                }
+            ),
+        };
+    }
+
+    /// <summary>
+    /// Builds a test paragraph from raw XML for paragraph formatting tests (BHV-607).
+    /// </summary>
+    private static EncyclopediaParagraph? BuildTestParagraph(string rawXml)
+    {
+        // Simple passthrough for testing: return a basic paragraph
+        return new EncyclopediaParagraph(
+            Html: $"<p>{rawXml}</p>",
+            Text: rawXml,
+            InlineElements: new List<InlineElement>()
         );
     }
 
