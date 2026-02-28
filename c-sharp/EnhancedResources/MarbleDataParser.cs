@@ -7,10 +7,11 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// <summary>
 /// Parses USX XML content into structured MarbleToken streams with section
 /// boundary detection. Optionally loads Greek/Hebrew source word data.
+/// Also provides scope-based filtering of lexical links (CAP-003).
 ///
-/// Contract: Section 4.2 ParseUsxTokens (data-contracts.md)
-/// Behavior: BHV-608 (Marble Data Parsing and Token Extraction)
-/// Extractions: EXT-006, EXT-013, EXT-014, EXT-015
+/// Contract: Section 4.2 ParseUsxTokens, Section 4.3 GetLinksInScope (data-contracts.md)
+/// Behavior: BHV-608 (Marble Data Parsing and Token Extraction), BHV-402 (Scope Filter)
+/// Extractions: EXT-006, EXT-007, EXT-013, EXT-014, EXT-015
 /// </summary>
 internal static partial class MarbleDataParser
 {
@@ -433,5 +434,31 @@ internal static partial class MarbleDataParser
                 tokens[idx] = tokens[idx] with { PhraseText = phraseText };
             }
         }
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI command pattern - static async API for scope-based link filtering
+    // Maps to: CAP-003
+    /// <summary>
+    /// Filter the token stream to return only lexical links within the specified scope
+    /// (verse, section, chapter, or sense).
+    /// </summary>
+    /// <remarks>
+    /// Ported from PT9 MarbleDataParser.cs (EXT-007).
+    /// Scope values: CurrentVerse, CurrentSection, CurrentChapter, CurrentSense.
+    /// Section boundaries from \s markers (INV-017).
+    /// Deduplication applied to returned links (BHV-402).
+    /// Text filter matching by surface form (TS-054).
+    /// </remarks>
+    public static Task<GetLinksInScopeResult> GetLinksInScopeAsync(
+        ScopeFilterInput input,
+        ParseUsxTokensResult parsedTokens,
+        CancellationToken ct
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-003: GetLinksInScopeAsync not yet implemented. "
+                + "This stub exists for TDD RED phase."
+        );
     }
 }
