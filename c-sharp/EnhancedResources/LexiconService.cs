@@ -695,93 +695,91 @@ internal static class LexiconService
     {
         bool isSdbg = dictionary == "SDBG";
 
-        // Build domain hierarchies for known domains
-        if (domainId == "001")
+        return domainId switch
         {
-            var children = new List<SemanticDomainNode>
-            {
-                new(
-                    Id: "001.001",
-                    Prefix: "1.1",
-                    DisplayName: "Universe, Creation",
-                    DomainRange: isSdbg ? "1-5" : null,
-                    HasSubDomains: false,
-                    HasEntries: true,
-                    Children: Array.Empty<SemanticDomainNode>()
-                ),
-                new(
-                    Id: "001.002",
-                    Prefix: "1.2",
-                    DisplayName: "World, Earth",
-                    DomainRange: isSdbg ? "6-10" : null,
-                    HasSubDomains: false,
-                    HasEntries: true,
-                    Children: Array.Empty<SemanticDomainNode>()
-                ),
-            };
-
-            var root = new SemanticDomainNode(
-                Id: "001",
-                Prefix: "1",
-                DisplayName: "Geographical Objects and Features",
-                DomainRange: isSdbg ? "1-10" : null,
-                HasSubDomains: true,
-                HasEntries: true,
-                Children: children
-            );
-
-            var breadcrumbs = new List<SemanticDomainBreadcrumb>
-            {
-                new("001", "Geographical Objects and Features"),
-            };
-
-            return (root, breadcrumbs);
-        }
-
-        if (domainId == "093")
-        {
-            var root = new SemanticDomainNode(
-                Id: "093",
-                Prefix: "93",
-                DisplayName: "Names of Persons and Places",
-                DomainRange: isSdbg ? "1-20" : null,
-                HasSubDomains: false,
-                HasEntries: true,
-                Children: Array.Empty<SemanticDomainNode>()
-            );
-
-            var breadcrumbs = new List<SemanticDomainBreadcrumb>
-            {
-                new("093", "Names of Persons and Places"),
-            };
-
-            return (root, breadcrumbs);
-        }
-
-        if (domainId == "001.001")
-        {
-            var root = new SemanticDomainNode(
-                Id: "001.001",
-                Prefix: "1.1",
-                DisplayName: "Universe, Creation",
-                DomainRange: isSdbg ? "1-5" : null,
-                HasSubDomains: false,
-                HasEntries: true,
-                Children: Array.Empty<SemanticDomainNode>()
-            );
-
-            var breadcrumbs = new List<SemanticDomainBreadcrumb>
-            {
-                new("001", "Geographical Objects and Features"),
-                new("001.001", "Universe, Creation"),
-            };
-
-            return (root, breadcrumbs);
-        }
-
-        // Domain not found
-        return null;
+            "001" => BuildDomain001(isSdbg),
+            "093" => BuildDomain093(isSdbg),
+            "001.001" => BuildDomain001001(isSdbg),
+            _ => null,
+        };
     }
+
+    /// <summary>
+    /// Builds test hierarchy for domain "001" (Geographical Objects and Features) with 2 children.
+    /// </summary>
+    private static (SemanticDomainNode, IReadOnlyList<SemanticDomainBreadcrumb>) BuildDomain001(
+        bool isSdbg
+    )
+    {
+        var children = new SemanticDomainNode[]
+        {
+            BuildLeafNode("001.001", "1.1", "Universe, Creation", isSdbg, "1-5"),
+            BuildLeafNode("001.002", "1.2", "World, Earth", isSdbg, "6-10"),
+        };
+
+        var root = new SemanticDomainNode(
+            Id: "001",
+            Prefix: "1",
+            DisplayName: "Geographical Objects and Features",
+            DomainRange: isSdbg ? "1-10" : null,
+            HasSubDomains: true,
+            HasEntries: true,
+            Children: children
+        );
+
+        return (root, new[] { new SemanticDomainBreadcrumb("001", root.DisplayName) });
+    }
+
+    /// <summary>
+    /// Builds test hierarchy for domain "093" (Names of Persons and Places), a leaf domain.
+    /// </summary>
+    private static (SemanticDomainNode, IReadOnlyList<SemanticDomainBreadcrumb>) BuildDomain093(
+        bool isSdbg
+    )
+    {
+        var root = BuildLeafNode("093", "93", "Names of Persons and Places", isSdbg, "1-20");
+        return (root, new[] { new SemanticDomainBreadcrumb("093", root.DisplayName) });
+    }
+
+    /// <summary>
+    /// Builds test hierarchy for domain "001.001" (Universe, Creation), a nested leaf domain
+    /// with breadcrumbs tracing back to parent "001".
+    /// </summary>
+    private static (SemanticDomainNode, IReadOnlyList<SemanticDomainBreadcrumb>) BuildDomain001001(
+        bool isSdbg
+    )
+    {
+        var root = BuildLeafNode("001.001", "1.1", "Universe, Creation", isSdbg, "1-5");
+
+        var breadcrumbs = new SemanticDomainBreadcrumb[]
+        {
+            new("001", "Geographical Objects and Features"),
+            new("001.001", root.DisplayName),
+        };
+
+        return (root, breadcrumbs);
+    }
+
+    /// <summary>
+    /// Creates a leaf domain node (no children). DomainRange is populated
+    /// for SDBG only (BHV-309).
+    /// </summary>
+    private static SemanticDomainNode BuildLeafNode(
+        string id,
+        string prefix,
+        string displayName,
+        bool isSdbg,
+        string sdbgRange
+    ) =>
+        new(
+            Id: id,
+            Prefix: prefix,
+            DisplayName: displayName,
+            DomainRange: isSdbg ? sdbgRange : null,
+            HasSubDomains: false,
+            HasEntries: true,
+            Children: Array.Empty<SemanticDomainNode>()
+        );
 
     private static Task<SemanticDomainResult> CreateSemanticDomainError(
         string code,
