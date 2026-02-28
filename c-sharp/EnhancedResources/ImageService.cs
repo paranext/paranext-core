@@ -123,6 +123,15 @@ internal static class ImageService
     }
 
     // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/MarbleDataAccess.cs (filename apostrophe handling)
+    // Maps to: VAL-011
+    /// <summary>
+    /// Normalizes an image ID by replacing apostrophes with underscores for path lookup.
+    /// PT9 behavior: apostrophes in image identifiers are substituted for path safety (VAL-011).
+    /// </summary>
+    private static string NormalizeImageId(string imageId) => imageId.Replace("'", "_");
+
+    // === PORTED FROM PT9 ===
     // Source: PT9/ParatextData/MarbleImageData.cs:15-130
     // Method: MarbleImageData (IsOnLine property)
     // Maps to: BHV-305
@@ -133,10 +142,7 @@ internal static class ImageService
     /// </summary>
     private static List<ImageMetadata> LookupById(string imageId)
     {
-        // Apply apostrophe substitution on the lookup ID (VAL-011)
-        string normalizedId = imageId.Replace("'", "_");
-
-        var image = TestImageLookupById?.Invoke(normalizedId);
+        var image = TestImageLookupById?.Invoke(NormalizeImageId(imageId));
         return image != null ? [image] : [];
     }
 
@@ -298,7 +304,7 @@ internal static class ImageService
         }
 
         // Step 2: Normalize apostrophes to underscores (VAL-011)
-        string normalizedId = input.ImageId.Replace("'", "_");
+        string normalizedId = NormalizeImageId(input.ImageId);
 
         // Step 3: Retrieve image data via test seam
         try
@@ -313,14 +319,14 @@ internal static class ImageService
             }
 
             // Step 4: Encode to base64 and return
-            string base64 = Convert.ToBase64String(imageData.Value.Bytes);
+            var (bytes, mimeType, width, height) = imageData.Value;
             return Task.FromResult(
                 new ImageDataResult(
                     Success: true,
-                    ImageBase64: base64,
-                    MimeType: imageData.Value.MimeType,
-                    Width: imageData.Value.Width,
-                    Height: imageData.Value.Height,
+                    ImageBase64: Convert.ToBase64String(bytes),
+                    MimeType: mimeType,
+                    Width: width,
+                    Height: height,
                     Error: null
                 )
             );
