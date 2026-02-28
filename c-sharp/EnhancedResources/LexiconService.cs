@@ -67,6 +67,20 @@ internal static class LexiconService
     >? TestGetLanguageCoverage { get; set; }
 
     /// <summary>
+    /// Test seam: checks whether marble data is loaded (HaveMarbleData).
+    /// When set, returns the function result.
+    /// When null, would check actual marble data state.
+    /// </summary>
+    internal static Func<bool>? TestHaveMarbleData { get; set; }
+
+    /// <summary>
+    /// Test seam: finds localized glosses for a term with reference matching.
+    /// When set, returns glosses for the (term, languageId) pair, or null if not found.
+    /// When null, would use actual dictionary data with reference overlap matching.
+    /// </summary>
+    internal static Func<string, string, IEnumerable<string>?>? TestFindGlossesForTerm { get; set; }
+
+    /// <summary>
     /// List available gloss languages for the loaded ER dictionaries,
     /// applying the 50% inclusion threshold (INV-014, INV-C11).
     /// </summary>
@@ -97,6 +111,31 @@ internal static class LexiconService
             .ToList();
 
         return Task.FromResult(new GlossLanguagesResult(Success: true, Languages: languages));
+    }
+
+    /// <summary>
+    /// Find localized glosses for a Biblical Term from ER data.
+    /// Implements the IMarbleDataAccess interface contract for BiblicalTerms
+    /// subsystem integration.
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.18 FindLocalizedGlossesForTerm (data-contracts.md).
+    /// Behavior: BHV-111 (IMarbleDataAccess.FindLocalizedGlossesForTerm).
+    /// Invariant: INV-015/INV-C12 (>25% reference overlap threshold).
+    /// Extraction: EXT-012 (Dictionary/Lexicon Access Layer).
+    ///
+    /// Ported from PT9 MarbleDataAccess.cs:417 (FindLocalizedGlossesForTerm).
+    /// </remarks>
+    public static Task<LocalizedGlossesResult> FindLocalizedGlossesForTermAsync(
+        string term,
+        string bestLanguageId,
+        CancellationToken ct
+    )
+    {
+        // TODO: Implement in GREEN phase (CAP-018)
+        throw new NotImplementedException(
+            "FindLocalizedGlossesForTermAsync not yet implemented (CAP-018 RED phase)"
+        );
     }
 
     /// <summary>
