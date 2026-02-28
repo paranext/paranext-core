@@ -525,6 +525,45 @@ internal static class LexiconService
         );
     }
 
+    /// <summary>
+    /// Look up the definition for an abbreviation key used in encyclopedia content.
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.19 GetAbbreviationDefinition (data-contracts.md).
+    /// Behavior: BHV-300 (Abbreviation Data Model Serialization).
+    /// Extraction: EXT-022 (Abbreviation Lookup).
+    /// Golden Master: GM-007 (abbreviation section).
+    ///
+    /// Ported from PT9 MarbleDataAccess.cs (GetDefinitionForAbbrev).
+    /// </remarks>
+    public static Task<AbbreviationResult> GetAbbreviationDefinitionAsync(
+        string key,
+        string resourceId,
+        CancellationToken ct
+    )
+    {
+        if (string.IsNullOrEmpty(key))
+            return CreateAbbreviationError(
+                "INVALID_INPUT",
+                "Abbreviation key must not be null or empty"
+            );
+
+        if (string.IsNullOrEmpty(resourceId))
+            return CreateAbbreviationError(
+                "INVALID_INPUT",
+                "Resource ID must not be null or empty"
+            );
+
+        string? definition = TestAbbreviationLookup?.Invoke(key, resourceId);
+
+        if (definition == null)
+            return CreateAbbreviationError("NOT_FOUND", $"Abbreviation '{key}' not found");
+
+        return Task.FromResult(
+            new AbbreviationResult(Success: true, Key: key, Definition: definition)
+        );
+    }
+
     // ---- Error factory methods ----
 
     private static Task<ParseLexicalLinksResult> CreateErrorResult(string code, string message) =>
@@ -554,46 +593,6 @@ internal static class LexiconService
         Task.FromResult(
             new LocalizedGlossesResult(Success: false, Error: new ErrorInfo(code, message))
         );
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/MarbleDataAccess.cs (GetDefinitionForAbbrev)
-    // Maps to: EXT-022, BHV-300, CAP-019
-    /// <summary>
-    /// Look up the definition for an abbreviation key used in encyclopedia content.
-    /// </summary>
-    /// <remarks>
-    /// Contract: Section 4.19 GetAbbreviationDefinition (data-contracts.md).
-    /// Behavior: BHV-300 (Abbreviation Data Model Serialization).
-    /// Extraction: EXT-022 (Abbreviation Lookup).
-    /// Golden Master: GM-007 (abbreviation section).
-    /// </remarks>
-    public static Task<AbbreviationResult> GetAbbreviationDefinitionAsync(
-        string key,
-        string resourceId,
-        CancellationToken ct
-    )
-    {
-        if (string.IsNullOrEmpty(key))
-            return CreateAbbreviationError(
-                "INVALID_INPUT",
-                "Abbreviation key must not be null or empty"
-            );
-
-        if (string.IsNullOrEmpty(resourceId))
-            return CreateAbbreviationError(
-                "INVALID_INPUT",
-                "Resource ID must not be null or empty"
-            );
-
-        string? definition = TestAbbreviationLookup?.Invoke(key, resourceId);
-
-        if (definition == null)
-            return CreateAbbreviationError("NOT_FOUND", $"Abbreviation '{key}' not found");
-
-        return Task.FromResult(
-            new AbbreviationResult(Success: true, Key: key, Definition: definition)
-        );
-    }
 
     private static Task<AbbreviationResult> CreateAbbreviationError(string code, string message) =>
         Task.FromResult(
