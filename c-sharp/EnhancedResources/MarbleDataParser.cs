@@ -456,9 +456,233 @@ internal static partial class MarbleDataParser
         CancellationToken ct
     )
     {
-        throw new NotImplementedException(
-            "CAP-003: GetLinksInScopeAsync not yet implemented. "
-                + "This stub exists for TDD RED phase."
+        // Validate: Chapter tokens must be available (INVALID_STATE)
+        if (!parsedTokens.Success || parsedTokens.Tokens == null)
+        {
+            return Task.FromResult(
+                new GetLinksInScopeResult(
+                    false,
+                    Error: new ErrorInfo("INVALID_STATE", "Chapter tokens not yet available")
+                )
+            );
+        }
+
+        // Validate: Scope must be a known value (INVALID_INPUT)
+        if (
+            input.Scope != "currentVerse"
+            && input.Scope != "currentSection"
+            && input.Scope != "currentChapter"
+            && input.Scope != "currentSense"
+        )
+        {
+            return Task.FromResult(
+                new GetLinksInScopeResult(
+                    false,
+                    Error: new ErrorInfo(
+                        "INVALID_INPUT",
+                        "Scope must be currentVerse, currentSection, currentChapter, or currentSense"
+                    )
+                )
+            );
+        }
+
+        // Validate: currentSense requires an active lemma filter (INVALID_INPUT)
+        if (input.Scope == "currentSense" && input.FilteredLemma == null)
+        {
+            return Task.FromResult(
+                new GetLinksInScopeResult(
+                    false,
+                    Error: new ErrorInfo(
+                        "INVALID_INPUT",
+                        "currentSense scope requires an active lemma filter"
+                    )
+                )
+            );
+        }
+
+        IReadOnlyList<MarbleToken> tokens = parsedTokens.Tokens;
+        IReadOnlyList<int>? sectionBoundaries = parsedTokens.SectionBoundaries;
+
+        // Determine the token index range based on scope
+        int rangeStart = 0;
+        int rangeEnd = tokens.Count;
+
+        switch (input.Scope)
+        {
+            case "currentVerse":
+                (rangeStart, rangeEnd) = FindVerseRange(tokens, input.VerseRef.VerseNum);
+                break;
+
+            case "currentSection":
+                (rangeStart, rangeEnd) = FindSectionRange(
+                    tokens,
+                    sectionBoundaries,
+                    input.VerseRef.VerseNum
+                );
+                break;
+
+            case "currentChapter":
+                // All tokens in the chapter
+                break;
+
+            case "currentSense":
+                // All tokens, but will filter by lemma below
+                break;
+        }
+
+        // Collect TextLink tokens in range
+        var links = new List<LexicalLink>();
+        var tokenIndices = new List<int>();
+
+        for (int i = rangeStart; i < rangeEnd; i++)
+        {
+            MarbleToken token = tokens[i];
+            if (token.Type != MarbleTokenType.TextLink || token.Links == null)
+                continue;
+
+            // Apply filteredSource text filter (TS-054)
+            if (
+                input.FilteredSource != null
+                && (
+                    token.SourceWord == null || token.SourceWord.SurfaceText != input.FilteredSource
+                )
+            )
+            {
+                continue;
+            }
+
+            // Apply currentSense lemma filter
+            if (input.Scope == "currentSense")
+            {
+                bool hasMatchingLemma = false;
+                foreach (LexicalLink link in token.Links)
+                {
+                    if (link.Lemma == input.FilteredLemma)
+                    {
+                        hasMatchingLemma = true;
+                        break;
+                    }
+                }
+                if (!hasMatchingLemma)
+                    continue;
+            }
+
+            // Add all links from this token
+            foreach (LexicalLink link in token.Links)
+            {
+                // For currentSense, only add matching lemma links
+                if (input.Scope == "currentSense" && link.Lemma != input.FilteredLemma)
+                    continue;
+
+                links.Add(link);
+                tokenIndices.Add(token.TokenIndex);
+            }
+        }
+
+        return Task.FromResult(
+            new GetLinksInScopeResult(
+                true,
+                Links: links,
+                TokenIndices: tokenIndices,
+                MatchCount: links.Count
+            )
         );
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/MarbleDataParser.cs:280-320 (EXT-007)
+    // Method: GetLinksInScope - verse range detection
+    // Maps to: EXT-007
+    private static (int Start, int End) FindVerseRange(
+        IReadOnlyList<MarbleToken> tokens,
+        int targetVerse
+    )
+    {
+        int start = -1;
+        int end = tokens.Count;
+
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            MarbleToken token = tokens[i];
+            if (token.Type == MarbleTokenType.Verse && token.VerseNumber.HasValue)
+            {
+                if (token.VerseNumber.Value == targetVerse)
+                {
+                    start = i;
+                }
+                else if (start >= 0)
+                {
+                    // Found the next verse after our target
+                    end = i;
+                    break;
+                }
+            }
+        }
+
+        // If target verse not found, return empty range
+        if (start < 0)
+            return (0, 0);
+
+        return (start, end);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/MarbleDataParser.cs:340-380 (EXT-007)
+    // Method: GetSectionBoundaries - section range from \s markers
+    // Maps to: EXT-007, INV-017
+    //
+    // EXPLANATION:
+    // Section boundaries are stored as token indices of ParagraphStart tokens
+    // with \s style. To find the section containing a verse:
+    // 1. Find which verse token index corresponds to the target verse
+    // 2. Find which section boundary range contains that verse token
+    // 3. If no section boundaries exist, the entire chapter is one section
+    private static (int Start, int End) FindSectionRange(
+        IReadOnlyList<MarbleToken> tokens,
+        IReadOnlyList<int>? sectionBoundaries,
+        int targetVerse
+    )
+    {
+        // If no section boundaries, entire chapter is one section
+        if (sectionBoundaries == null || sectionBoundaries.Count == 0)
+            return (0, tokens.Count);
+
+        // Find the token index of the target verse
+        int verseTokenIndex = -1;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (
+                tokens[i].Type == MarbleTokenType.Verse
+                && tokens[i].VerseNumber is int vn
+                && vn == targetVerse
+            )
+            {
+                verseTokenIndex = i;
+                break;
+            }
+        }
+
+        if (verseTokenIndex < 0)
+            return (0, 0);
+
+        // Find which section boundary range contains this verse
+        int sectionStart = 0;
+        int sectionEnd = tokens.Count;
+
+        for (int i = 0; i < sectionBoundaries.Count; i++)
+        {
+            if (sectionBoundaries[i] <= verseTokenIndex)
+            {
+                sectionStart = sectionBoundaries[i];
+                sectionEnd =
+                    i + 1 < sectionBoundaries.Count ? sectionBoundaries[i + 1] : tokens.Count;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return (sectionStart, sectionEnd);
     }
 }
