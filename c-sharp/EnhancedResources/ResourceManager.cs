@@ -368,9 +368,6 @@ internal sealed class ResourceManager
     /// <param name="input">Resource identity to check for updates.</param>
     /// <param name="ct">Cancellation token for cooperative cancellation.</param>
     /// <returns>Result indicating update availability, or failure with error code and message.</returns>
-    // === PORTED FROM PT9 ===
-    // Source: PT9 InstallableResource.IsNewerThanCurrentlyInstalled() + MarbleForm background check
-    // Maps to: CAP-020, EXT-020, EXT-035
     public Task<ResourceUpdateResult> CheckResourceUpdateAsync(
         ResourceIdentityInput input,
         CancellationToken ct
@@ -378,7 +375,6 @@ internal sealed class ResourceManager
     {
         ct.ThrowIfCancellationRequested();
 
-        // Step 1: Look up the resource
         var (exists, currentVersion) = LookupResource(input.ResourceId);
         if (!exists)
         {
@@ -390,10 +386,8 @@ internal sealed class ResourceManager
             );
         }
 
-        // Step 2: Check manifest cache validity (VAL-010, TS-086/TS-087)
         if (IsManifestCacheValid(input.ResourceId))
         {
-            // Cache is valid -- use cached data without re-fetching
             if (_manifestCache.TryGetValue(input.ResourceId, out var cached))
             {
                 var cachedUpdateAvailable = IsNewerVersion(currentVersion, cached.availableVersion);
@@ -408,7 +402,6 @@ internal sealed class ResourceManager
                 );
             }
 
-            // Cache timestamp says valid but no cached data -- return no-update
             return Task.FromResult(
                 new ResourceUpdateResult(
                     Success: true,
@@ -418,7 +411,6 @@ internal sealed class ResourceManager
             );
         }
 
-        // Step 3: Fetch manifest from server
         var (networkAvailable, availableVersion, isMajorUpdate, errorMessage) = FetchManifest(
             input.ResourceId
         );
@@ -449,11 +441,9 @@ internal sealed class ResourceManager
             );
         }
 
-        // Cache the fetched manifest data
         var now = GetUtcNow();
         _manifestCache[input.ResourceId] = (availableVersion, isMajorUpdate, now);
 
-        // Step 4: Compare versions (INV-005, INV-C05, BHV-106)
         var updateAvailable = IsNewerVersion(currentVersion, availableVersion);
 
         return Task.FromResult(
@@ -505,27 +495,14 @@ internal sealed class ResourceManager
     /// </remarks>
     private bool IsManifestCacheValid(string resourceId)
     {
-        DateTime? cacheTimestamp;
+        DateTime? cacheTimestamp = null;
 
         if (TestManifestCacheTimestamp != null)
-        {
             cacheTimestamp = TestManifestCacheTimestamp(resourceId);
-        }
         else if (_manifestCache.TryGetValue(resourceId, out var cached))
-        {
             cacheTimestamp = cached.fetchedAt;
-        }
-        else
-        {
-            return false;
-        }
 
-        if (cacheTimestamp == null)
-            return false;
-
-        var now = GetUtcNow();
-        var age = now - cacheTimestamp.Value;
-        return age.TotalHours <= 24;
+        return cacheTimestamp != null && (GetUtcNow() - cacheTimestamp.Value).TotalHours <= 24;
     }
 
     /// <summary>
@@ -559,11 +536,9 @@ internal sealed class ResourceManager
     /// </remarks>
     private static bool IsNewerVersion(string? currentVersion, string availableVersion)
     {
-        // BHV-106, TS-019: Not-installed always reports as newer
         if (currentVersion == null)
             return true;
 
-        // INV-005: Semantic version comparison
         if (
             Version.TryParse(currentVersion, out var current)
             && Version.TryParse(availableVersion, out var available)
@@ -572,7 +547,7 @@ internal sealed class ResourceManager
             return available > current;
         }
 
-        // Fallback: string comparison
+        // Fallback to string comparison when versions are not parseable
         return string.Compare(availableVersion, currentVersion, StringComparison.Ordinal) > 0;
     }
 
