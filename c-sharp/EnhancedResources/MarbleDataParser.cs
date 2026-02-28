@@ -12,7 +12,7 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// Behavior: BHV-608 (Marble Data Parsing and Token Extraction)
 /// Extractions: EXT-006, EXT-013, EXT-014, EXT-015
 /// </summary>
-internal static class MarbleDataParser
+internal static partial class MarbleDataParser
 {
     // === NEW IN PT10 ===
     // Reason: PAPI command pattern - static async API for data provider integration
@@ -33,14 +33,7 @@ internal static class MarbleDataParser
     )
     {
         if (string.IsNullOrEmpty(input.UsxContent))
-        {
-            return Task.FromResult(
-                new ParseUsxTokensResult(
-                    false,
-                    Error: new ErrorInfo("PARSE_ERROR", "Failed to parse USX content")
-                )
-            );
-        }
+            return CreateParseErrorResult();
 
         XDocument doc;
         try
@@ -49,28 +42,16 @@ internal static class MarbleDataParser
         }
         catch (System.Xml.XmlException)
         {
-            return Task.FromResult(
-                new ParseUsxTokensResult(
-                    false,
-                    Error: new ErrorInfo("PARSE_ERROR", "Failed to parse USX content")
-                )
-            );
+            return CreateParseErrorResult();
         }
+
+        XElement? root = doc.Root;
+        if (root == null)
+            return CreateParseErrorResult();
 
         var tokens = new List<MarbleToken>();
         var sectionBoundaries = new List<int>();
         int tokenIndex = 0;
-
-        XElement? root = doc.Root;
-        if (root == null)
-        {
-            return Task.FromResult(
-                new ParseUsxTokensResult(
-                    false,
-                    Error: new ErrorInfo("PARSE_ERROR", "Failed to parse USX content")
-                )
-            );
-        }
 
         // === PORTED FROM PT9 ===
         // Source: PT9/MarbleDataParser.cs (EXT-006)
@@ -113,15 +94,11 @@ internal static class MarbleDataParser
         {
             case "book":
                 tokens.Add(
-                    new MarbleToken(
+                    CreateToken(
                         MarbleTokenType.Book,
-                        Text: element.Value,
-                        Style: element.Attribute("style")?.Value,
-                        Links: null,
-                        VerseNumber: null,
-                        TokenIndex: tokenIndex++,
-                        SourceWord: null,
-                        PhraseText: null
+                        ref tokenIndex,
+                        text: element.Value,
+                        style: element.Attribute("style")?.Value
                     )
                 );
                 break;
@@ -131,15 +108,10 @@ internal static class MarbleDataParser
                 if (element.Attribute("eid") != null)
                     break;
                 tokens.Add(
-                    new MarbleToken(
+                    CreateToken(
                         MarbleTokenType.Chapter,
-                        Text: null,
-                        Style: element.Attribute("style")?.Value,
-                        Links: null,
-                        VerseNumber: null,
-                        TokenIndex: tokenIndex++,
-                        SourceWord: null,
-                        PhraseText: null
+                        ref tokenIndex,
+                        style: element.Attribute("style")?.Value
                     )
                 );
                 break;
@@ -177,18 +149,7 @@ internal static class MarbleDataParser
         string? style = element.Attribute("style")?.Value;
         int paraStartIndex = tokenIndex;
 
-        tokens.Add(
-            new MarbleToken(
-                MarbleTokenType.ParagraphStart,
-                Text: null,
-                Style: style,
-                Links: null,
-                VerseNumber: null,
-                TokenIndex: tokenIndex++,
-                SourceWord: null,
-                PhraseText: null
-            )
-        );
+        tokens.Add(CreateToken(MarbleTokenType.ParagraphStart, ref tokenIndex, style: style));
 
         // INV-017: Section boundaries detected at \s paragraph markers
         if (style != null && style.StartsWith('s'))
@@ -210,18 +171,7 @@ internal static class MarbleDataParser
         }
 
         // EXT-014: ParagraphEnd to pair with ParagraphStart
-        tokens.Add(
-            new MarbleToken(
-                MarbleTokenType.ParagraphEnd,
-                Text: null,
-                Style: style,
-                Links: null,
-                VerseNumber: null,
-                TokenIndex: tokenIndex++,
-                SourceWord: null,
-                PhraseText: null
-            )
-        );
+        tokens.Add(CreateToken(MarbleTokenType.ParagraphEnd, ref tokenIndex, style: style));
     }
 
     private static void ProcessVerseElement(
@@ -242,15 +192,11 @@ internal static class MarbleDataParser
         }
 
         tokens.Add(
-            new MarbleToken(
+            CreateToken(
                 MarbleTokenType.Verse,
-                Text: null,
-                Style: element.Attribute("style")?.Value,
-                Links: null,
-                VerseNumber: verseNumber,
-                TokenIndex: tokenIndex++,
-                SourceWord: null,
-                PhraseText: null
+                ref tokenIndex,
+                style: element.Attribute("style")?.Value,
+                verseNumber: verseNumber
             )
         );
     }
@@ -270,18 +216,7 @@ internal static class MarbleDataParser
         string? style = element.Attribute("style")?.Value;
 
         // EXT-014: All char elements produce CharacterStart/CharacterEnd pair
-        tokens.Add(
-            new MarbleToken(
-                MarbleTokenType.CharacterStart,
-                Text: null,
-                Style: style,
-                Links: null,
-                VerseNumber: null,
-                TokenIndex: tokenIndex++,
-                SourceWord: null,
-                PhraseText: null
-            )
-        );
+        tokens.Add(CreateToken(MarbleTokenType.CharacterStart, ref tokenIndex, style: style));
 
         if (linkHref != null)
         {
@@ -295,31 +230,18 @@ internal static class MarbleDataParser
             }
 
             tokens.Add(
-                new MarbleToken(
+                CreateToken(
                     MarbleTokenType.TextLink,
-                    Text: element.Value,
-                    Style: style,
-                    Links: links,
-                    VerseNumber: null,
-                    TokenIndex: tokenIndex++,
-                    SourceWord: sourceWord,
-                    PhraseText: null
+                    ref tokenIndex,
+                    text: element.Value,
+                    style: style,
+                    links: links,
+                    sourceWord: sourceWord
                 )
             );
         }
 
-        tokens.Add(
-            new MarbleToken(
-                MarbleTokenType.CharacterEnd,
-                Text: null,
-                Style: style,
-                Links: null,
-                VerseNumber: null,
-                TokenIndex: tokenIndex++,
-                SourceWord: null,
-                PhraseText: null
-            )
-        );
+        tokens.Add(CreateToken(MarbleTokenType.CharacterEnd, ref tokenIndex, style: style));
     }
 
     private static void ProcessNoteElement(
@@ -329,15 +251,11 @@ internal static class MarbleDataParser
     )
     {
         tokens.Add(
-            new MarbleToken(
+            CreateToken(
                 MarbleTokenType.Note,
-                Text: element.Value,
-                Style: element.Attribute("style")?.Value,
-                Links: null,
-                VerseNumber: null,
-                TokenIndex: tokenIndex++,
-                SourceWord: null,
-                PhraseText: null
+                ref tokenIndex,
+                text: element.Value,
+                style: element.Attribute("style")?.Value
             )
         );
     }
@@ -352,41 +270,10 @@ internal static class MarbleDataParser
         if (string.IsNullOrEmpty(text))
             return;
 
-        // Determine if this is whitespace-only text
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            tokens.Add(
-                new MarbleToken(
-                    MarbleTokenType.Whitespace,
-                    Text: text,
-                    Style: null,
-                    Links: null,
-                    VerseNumber: null,
-                    TokenIndex: tokenIndex++,
-                    SourceWord: null,
-                    PhraseText: null
-                )
-            );
-        }
-        else
-        {
-            // Text content - emit as Whitespace tokens for leading/trailing whitespace
-            // and content as-is. For simplicity, we emit the entire text node.
-            // The tests check for Whitespace token type presence in the stream
-            // when there is whitespace between elements.
-            tokens.Add(
-                new MarbleToken(
-                    MarbleTokenType.Whitespace,
-                    Text: text,
-                    Style: null,
-                    Links: null,
-                    VerseNumber: null,
-                    TokenIndex: tokenIndex++,
-                    SourceWord: null,
-                    PhraseText: null
-                )
-            );
-        }
+        // All text nodes (whitespace-only and content) emit as Whitespace tokens.
+        // Tests verify Whitespace token type presence in the stream for
+        // whitespace between elements (TS-049, GM-011).
+        tokens.Add(CreateToken(MarbleTokenType.Whitespace, ref tokenIndex, text: text));
     }
 
     /// <summary>
@@ -448,22 +335,39 @@ internal static class MarbleDataParser
     //   U+0591 - U+05AF: Hebrew accents (etnahta, segol, shalshelet, etc.)
     //   U+05BD: Hebrew point meteg
     //   U+05C3: Hebrew punctuation sof pasuq
-    private static readonly Regex CantillationPattern =
-        new("[\u0591-\u05AF\u05BD\u05C3]", RegexOptions.Compiled);
+    [GeneratedRegex("[\u0591-\u05AF\u05BD\u05C3]")]
+    private static partial Regex CantillationPattern();
 
-    private static string StripCantillationMarks(string text)
-    {
-        return CantillationPattern.Replace(text, "");
-    }
+    private static string StripCantillationMarks(string text) =>
+        CantillationPattern().Replace(text, "");
 
     /// <summary>
     /// Strip square brackets from source word text (TS-081, GM-021).
     /// Source words from critical apparatus sometimes have brackets like "[klinon]".
     /// </summary>
-    private static string StripBrackets(string text)
-    {
-        return text.Replace("[", "").Replace("]", "");
-    }
+    private static string StripBrackets(string text) => text.Replace("[", "").Replace("]", "");
+
+    /// <summary>
+    /// Creates a MarbleToken with sensible defaults for the many optional fields.
+    /// Most tokens only need Type, TokenIndex, and one or two additional fields.
+    /// </summary>
+    private static MarbleToken CreateToken(
+        MarbleTokenType type,
+        ref int tokenIndex,
+        string? text = null,
+        string? style = null,
+        IReadOnlyList<LexicalLink>? links = null,
+        int? verseNumber = null,
+        SourceWord? sourceWord = null
+    ) => new(type, text, style, links, verseNumber, tokenIndex++, sourceWord, PhraseText: null);
+
+    private static Task<ParseUsxTokensResult> CreateParseErrorResult() =>
+        Task.FromResult(
+            new ParseUsxTokensResult(
+                false,
+                Error: new ErrorInfo("PARSE_ERROR", "Failed to parse USX content")
+            )
+        );
 
     // === PORTED FROM PT9 ===
     // Source: PT9/MarbleDataParser.cs (EXT-015)
@@ -491,63 +395,42 @@ internal static class MarbleDataParser
             {
                 string key =
                     $"{link.Dictionary}:{link.Lemma}:{link.BaseFormIndex:D3}{link.MeaningIndex:D3}";
-                if (!linkGroups.ContainsKey(key))
-                    linkGroups[key] = new List<int>();
-                linkGroups[key].Add(i);
+                if (!linkGroups.TryGetValue(key, out List<int>? group))
+                {
+                    group = new List<int>();
+                    linkGroups[key] = group;
+                }
+                group.Add(i);
             }
         }
 
         // For each group with multiple tokens, compute phrase text
-        foreach (var group in linkGroups)
+        foreach (List<int> indices in linkGroups.Values)
         {
-            List<int> indices = group.Value;
             if (indices.Count < 2)
                 continue;
 
-            // Check gaps between consecutive tokens in the group
-            for (int g = 0; g < indices.Count; g++)
+            // Build phrase text starting from the first token in the group
+            MarbleToken firstToken = tokens[indices[0]];
+            var phraseBuilder = new StringBuilder();
+            phraseBuilder.Append(firstToken.SourceWord?.SurfaceText ?? firstToken.Text ?? "");
+
+            for (int n = 1; n < indices.Count; n++)
             {
-                int currentIdx = indices[g];
-                MarbleToken currentToken = tokens[currentIdx];
-                string? surfaceText = currentToken.SourceWord?.SurfaceText;
+                int gap = indices[n] - indices[n - 1] - 1;
+                string nextText =
+                    tokens[indices[n]].SourceWord?.SurfaceText ?? tokens[indices[n]].Text ?? "";
 
-                if (g == 0)
-                {
-                    // Build phrase text for the first token
-                    var phraseBuilder = new StringBuilder();
-                    phraseBuilder.Append(surfaceText ?? currentToken.Text ?? "");
+                phraseBuilder.Append(gap > 2 ? '\u2026' : ' ');
+                phraseBuilder.Append(nextText);
+            }
 
-                    for (int n = 1; n < indices.Count; n++)
-                    {
-                        int prevIdx = indices[n - 1];
-                        int nextIdx = indices[n];
-                        int gap = nextIdx - prevIdx - 1;
-                        string nextText =
-                            tokens[nextIdx].SourceWord?.SurfaceText ?? tokens[nextIdx].Text ?? "";
+            string phraseText = phraseBuilder.ToString();
 
-                        if (gap > 2)
-                        {
-                            phraseBuilder.Append('\u2026');
-                            phraseBuilder.Append(nextText);
-                        }
-                        else
-                        {
-                            phraseBuilder.Append(' ');
-                            phraseBuilder.Append(nextText);
-                        }
-                    }
-
-                    string phraseText = phraseBuilder.ToString();
-
-                    // Update all tokens in the group with the phrase text
-                    foreach (int idx in indices)
-                    {
-                        MarbleToken t = tokens[idx];
-                        tokens[idx] = t with { PhraseText = phraseText };
-                    }
-
-                    break; // Only need to process once per group
-                }
+            // Update all tokens in the group with the computed phrase text
+            foreach (int idx in indices)
+            {
+                tokens[idx] = tokens[idx] with { PhraseText = phraseText };
             }
         }
     }
