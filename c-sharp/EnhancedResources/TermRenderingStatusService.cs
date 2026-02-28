@@ -1,3 +1,6 @@
+using System.Text.RegularExpressions;
+using Paratext.Data;
+using Paratext.Data.Terms;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.EnhancedResources;
@@ -9,9 +12,6 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// Contract: Section 4.9 GetTermRenderingStatus (data-contracts.md)
 /// Behaviors: BHV-404, BHV-111 (IMarbleDataAccess), BHV-112 (IMarbleWindow)
 /// Extraction: EXT-023 (Term Rendering Status Determination)
-///
-/// STUB: This is a stub created by the TDD test writer. The implementer
-/// agent will fill in the actual logic.
 /// </summary>
 public class TermRenderingStatusService
 {
@@ -64,10 +64,23 @@ public class TermRenderingStatusService
     public static Func<string, string, IEnumerable<string>>? TestFindLocalizedGlossesForTerm;
 
     // =====================================================================
+    // Homonym suffix regex (compiled once for performance)
+    // =====================================================================
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3162
+    // Method: MarbleForm.GetTermRenderingStatus() homonym handling
+    // Maps to: EXT-023
+    private static readonly Regex s_homonymSuffixRegex = new(@"-\d+$", RegexOptions.Compiled);
+
+    // =====================================================================
     // State
     // =====================================================================
 
     private string? _trackedProjectId;
+    private ScrText? _trackedScrText;
+    private BiblicalTerms? _biblicalTerms;
+    private TermRenderings? _termRenderings;
 
     /// <summary>
     /// Whether a tracked project is currently set.
@@ -96,6 +109,26 @@ public class TermRenderingStatusService
     // Public API
     // =====================================================================
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3162
+    // Method: MarbleForm.GetTermRenderingStatus()
+    // Maps to: EXT-023
+    //
+    // EXPLANATION:
+    // This method implements the 12-code rendering status decision tree:
+    // 1. If no tracked project (trackedProjectId is null) -> NoTrackedProject
+    // 2. If tracked project not found in ScrTextCollection -> NOT_FOUND error
+    // 3. If Biblical Terms data not loaded for project -> INVALID_STATE error
+    // 4. Strip homonym suffix from lemma (e.g., "agapao-2" -> "agapao")
+    // 5. Look up term in project's Biblical Terms list
+    // 6. If term not in list -> TermNotInProject
+    // 7. Check rendering status via TermRenderings:
+    //    - Found/FoundInVerse/FoundElsewhere (rendering exists and found)
+    //    - Missing/MissingInVerse/MissingElsewhere (no rendering found)
+    //    - GuessFound/GuessMissing (guessed rendering)
+    //    - Denied (rendering explicitly denied)
+    //    - Unknown (status cannot be determined)
+    // 8. Apply CSS class: showfound for found-family, showmissing for missing-family
     /// <summary>
     /// Determines the rendering status of a linked term against a tracked
     /// project's Biblical Terms.
@@ -108,10 +141,6 @@ public class TermRenderingStatusService
     )
     {
         ct.ThrowIfCancellationRequested();
-
-        // TODO: Implement the 12-code decision tree (EXT-023)
-        // This stub delegates to the test seam if available,
-        // otherwise throws NotImplementedException.
 
         if (TestTermLookup != null)
         {
@@ -144,9 +173,11 @@ public class TermRenderingStatusService
             );
         }
 
-        throw new NotImplementedException(
-            "TermRenderingStatusService.GetTermRenderingStatusAsync not yet implemented"
-        );
+        // === PORTED FROM PT9 ===
+        // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3162
+        // Method: MarbleForm.GetTermRenderingStatus()
+        // Maps to: EXT-023
+        return Task.FromResult(DetermineRenderingStatus(input));
     }
 
     /// <summary>
@@ -156,6 +187,10 @@ public class TermRenderingStatusService
     ///
     /// Behavior: BHV-404, GM-025
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3162
+    // Method: MarbleForm CSS class assignment logic
+    // Maps to: EXT-023
     public static string? GetCssClassForStatus(TermRenderingStatusCode statusCode)
     {
         return statusCode switch
@@ -178,6 +213,10 @@ public class TermRenderingStatusService
     ///
     /// Behavior: BHV-404, GM-025
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs highlight toggle logic
+    // Method: MarbleForm toggle button CSS class assignment
+    // Maps to: BHV-404
     public static IReadOnlyList<string> GetHighlightCssClasses(HighlightFlags flags)
     {
         var classes = new List<string>();
@@ -195,14 +234,27 @@ public class TermRenderingStatusService
     ///
     /// Behavior: BHV-404, TS-131
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:2338-2391
+    // Method: MarbleForm.PopulateTrackedProjectDropDown()
+    // Maps to: EXT-026
     public (string Name, string Id, bool IsResource)[] GetTrackableProjects()
     {
         if (TestGetTrackableProjects != null)
             return TestGetTrackableProjects();
 
-        throw new NotImplementedException(
-            "TermRenderingStatusService.GetTrackableProjects not yet implemented"
-        );
+        try
+        {
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.ScriptureOnly)
+                .Where(st => !st.Settings.IsMarbleResource)
+                .Select(st => (Name: st.Name, Id: st.Name, IsResource: false))
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<(string Name, string Id, bool IsResource)>();
+        }
     }
 
     /// <summary>
@@ -210,6 +262,10 @@ public class TermRenderingStatusService
     ///
     /// Behavior: BHV-404, TS-132
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:2338-2391
+    // Method: MarbleForm.SetTrackedProject()
+    // Maps to: EXT-026
     public Task<TermRenderingStatusResult> SetTrackedProjectAsync(
         string projectId,
         CancellationToken ct
@@ -246,9 +302,7 @@ public class TermRenderingStatusService
             );
         }
 
-        throw new NotImplementedException(
-            "TermRenderingStatusService.SetTrackedProjectAsync not yet implemented"
-        );
+        return Task.FromResult(LoadTrackedProject(projectId));
     }
 
     /// <summary>
@@ -256,9 +310,16 @@ public class TermRenderingStatusService
     ///
     /// Behavior: BHV-404, TS-133
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:2338-2391
+    // Method: MarbleForm.ClearTrackedProject()
+    // Maps to: EXT-026
     public void ClearTrackedProject()
     {
         _trackedProjectId = null;
+        _trackedScrText = null;
+        _biblicalTerms = null;
+        _termRenderings = null;
     }
 
     /// <summary>
@@ -267,6 +328,10 @@ public class TermRenderingStatusService
     ///
     /// Behavior: BHV-404, TS-134
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs tracked project removal handling
+    // Method: MarbleForm change listener for ScrTextCollection
+    // Maps to: EXT-026
     public void OnTrackedProjectRemoved()
     {
         ClearTrackedProject();
@@ -275,19 +340,51 @@ public class TermRenderingStatusService
     /// <summary>
     /// BHV-111: IMarbleDataAccess.FindLocalizedGlossesForTerm.
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs
+    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm()
+    // Maps to: BHV-111
     public IEnumerable<string> FindLocalizedGlossesForTerm(string term, string bestLangId)
     {
         if (TestFindLocalizedGlossesForTerm != null)
             return TestFindLocalizedGlossesForTerm(term, bestLangId);
 
-        throw new NotImplementedException(
-            "TermRenderingStatusService.FindLocalizedGlossesForTerm not yet implemented"
-        );
+        // Production path: use BiblicalTermsLocalizations from ParatextData.
+        // The Term.Gloss and Term.LocalGloss properties contain gloss data.
+        // If BiblicalTerms is loaded, look up the term and return its glosses.
+        try
+        {
+            if (_biblicalTerms != null)
+            {
+                var matchingTerm = _biblicalTerms
+                    .Terms.Where(t => t.Lemma == term)
+                    .FirstOrDefault();
+                if (matchingTerm != null)
+                {
+                    var glosses = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(matchingTerm.LocalGloss))
+                        glosses.Add(matchingTerm.LocalGloss);
+                    else if (!string.IsNullOrWhiteSpace(matchingTerm.Gloss))
+                        glosses.Add(matchingTerm.Gloss);
+                    return glosses;
+                }
+            }
+        }
+        catch
+        {
+            // Graceful degradation
+        }
+
+        return Array.Empty<string>();
     }
 
     /// <summary>
     /// INV-015: Checks if the reference overlap meets the >25% threshold.
     /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/ErToBtMapping.cs reference overlap logic
+    // Method: Reference matching threshold check
+    // Maps to: INV-015
     public bool IsReferenceMatch(int totalReferences, int overlappingReferences)
     {
         if (totalReferences <= 0)
@@ -295,5 +392,328 @@ public class TermRenderingStatusService
 
         double ratio = (double)overlappingReferences / totalReferences;
         return ratio > 0.25;
+    }
+
+    /// <summary>
+    /// Strips the trailing "-N" homonym suffix from a lemma, where N is
+    /// one or more digits. E.g., "agapao-2" becomes "agapao".
+    /// Non-homonym terms are returned unchanged.
+    ///
+    /// Behavior: BHV-404, TS-093, GM-023
+    /// </summary>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3162
+    // Method: MarbleForm.GetTermRenderingStatus() homonym stripping
+    // Maps to: EXT-023
+    public static string StripHomonymSuffix(string lemma)
+    {
+        var match = s_homonymSuffixRegex.Match(lemma);
+        return match.Success ? lemma[..match.Index] : lemma;
+    }
+
+    // =====================================================================
+    // Private Implementation
+    // =====================================================================
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:3060-3162
+    // Method: MarbleForm.GetTermRenderingStatus()
+    // Maps to: EXT-023
+    //
+    // EXPLANATION:
+    // Production code path for the 12-code decision tree.
+    // Uses ParatextData BiblicalTerms and TermRenderings to determine
+    // the rendering status of a term in a tracked project.
+    // Steps:
+    // 1. No tracked project -> NoTrackedProject
+    // 2. Validate tracked project exists in ScrTextCollection
+    // 3. Validate Biblical Terms data is loaded
+    // 4. Strip homonym suffix from lemma
+    // 5. Look up term in Biblical Terms list using GetMatchingTerm
+    // 6. Check rendering status (found/missing/guessed/denied)
+    // 7. Return status code with CSS class
+    private TermRenderingStatusResult DetermineRenderingStatus(TermRenderingStatusInput input)
+    {
+        // Step 1: No tracked project
+        if (input.TrackedProjectId == null)
+        {
+            return new TermRenderingStatusResult(
+                Success: true,
+                StatusCode: TermRenderingStatusCode.NoTrackedProject,
+                FoundRendering: null,
+                HasRendering: false,
+                CssClass: null,
+                Error: null
+            );
+        }
+
+        // Step 2: Validate tracked project exists
+        if (_trackedScrText == null || _trackedProjectId != input.TrackedProjectId)
+        {
+            try
+            {
+                var scrText = ScrTextCollection
+                    .ScrTexts(IncludeProjects.ScriptureOnly)
+                    .FirstOrDefault(st => st.Name == input.TrackedProjectId);
+
+                if (scrText == null)
+                {
+                    return new TermRenderingStatusResult(
+                        Success: false,
+                        StatusCode: null,
+                        FoundRendering: null,
+                        HasRendering: null,
+                        CssClass: null,
+                        Error: new ErrorInfo(
+                            "NOT_FOUND",
+                            $"Tracked project '{input.TrackedProjectId}' not found"
+                        )
+                    );
+                }
+            }
+            catch
+            {
+                return new TermRenderingStatusResult(
+                    Success: false,
+                    StatusCode: null,
+                    FoundRendering: null,
+                    HasRendering: null,
+                    CssClass: null,
+                    Error: new ErrorInfo(
+                        "NOT_FOUND",
+                        $"Tracked project '{input.TrackedProjectId}' not found"
+                    )
+                );
+            }
+        }
+
+        // Step 3: Validate Biblical Terms data is loaded
+        if (_biblicalTerms == null || _termRenderings == null)
+        {
+            return new TermRenderingStatusResult(
+                Success: false,
+                StatusCode: null,
+                FoundRendering: null,
+                HasRendering: null,
+                CssClass: null,
+                Error: new ErrorInfo(
+                    "INVALID_STATE",
+                    "Biblical Terms data not available for project"
+                )
+            );
+        }
+
+        // Step 4: Strip homonym suffix
+        var baseLemma = StripHomonymSuffix(input.Link.Lemma);
+
+        // Step 5: Look up term in Biblical Terms list
+        try
+        {
+            var foundTerm = false;
+            var term = _biblicalTerms.GetMatchingTerm(
+                baseLemma,
+                input.VerseRef,
+                out foundTerm,
+                lemmaIsFromER: true
+            );
+
+            if (term == null || !foundTerm)
+            {
+                return new TermRenderingStatusResult(
+                    Success: true,
+                    StatusCode: TermRenderingStatusCode.TermNotInProject,
+                    FoundRendering: null,
+                    HasRendering: false,
+                    CssClass: null,
+                    Error: null
+                );
+            }
+
+            // Step 6: Check rendering status
+            var rendering = _termRenderings.GetRendering(term.Id);
+            if (rendering == null || !_termRenderings.HasEntry(term.Id))
+            {
+                var statusCode = TermRenderingStatusCode.Missing;
+                return new TermRenderingStatusResult(
+                    Success: true,
+                    StatusCode: statusCode,
+                    FoundRendering: null,
+                    HasRendering: false,
+                    CssClass: GetCssClassForStatus(statusCode),
+                    Error: null
+                );
+            }
+
+            var hasRendering = rendering.HasRenderingsDefined;
+
+            // Check for denied renderings
+            if (rendering.Denials != null && rendering.Denials.Count > 0)
+            {
+                return new TermRenderingStatusResult(
+                    Success: true,
+                    StatusCode: TermRenderingStatusCode.Denied,
+                    FoundRendering: null,
+                    HasRendering: hasRendering,
+                    CssClass: GetCssClassForStatus(TermRenderingStatusCode.Denied),
+                    Error: null
+                );
+            }
+
+            if (!hasRendering)
+            {
+                // Check if rendering is guessed
+                if (rendering.Guess)
+                {
+                    return new TermRenderingStatusResult(
+                        Success: true,
+                        StatusCode: TermRenderingStatusCode.GuessMissing,
+                        FoundRendering: null,
+                        HasRendering: false,
+                        CssClass: GetCssClassForStatus(TermRenderingStatusCode.GuessMissing),
+                        Error: null
+                    );
+                }
+
+                return new TermRenderingStatusResult(
+                    Success: true,
+                    StatusCode: TermRenderingStatusCode.Missing,
+                    FoundRendering: null,
+                    HasRendering: false,
+                    CssClass: GetCssClassForStatus(TermRenderingStatusCode.Missing),
+                    Error: null
+                );
+            }
+
+            // Has rendering - check if found in verse text
+            var foundInVerse = false;
+            string? renderingText = null;
+
+            try
+            {
+                // Get all rendering entries as text
+                var entries = rendering.RenderingsEntries?.ToList();
+                if (entries != null && entries.Count > 0)
+                {
+                    renderingText = entries.First();
+                }
+
+                if (!string.IsNullOrEmpty(renderingText) && _trackedScrText != null)
+                {
+                    var verseText = _trackedScrText.GetVerseText(input.VerseRef);
+                    if (!string.IsNullOrEmpty(verseText))
+                    {
+                        foundInVerse = verseText.Contains(
+                            renderingText,
+                            StringComparison.OrdinalIgnoreCase
+                        );
+                    }
+                }
+            }
+            catch
+            {
+                // If we can't read verse text, fall back to generic Found
+            }
+
+            if (rendering.Guess)
+            {
+                var guessStatus = foundInVerse
+                    ? TermRenderingStatusCode.GuessFound
+                    : TermRenderingStatusCode.GuessMissing;
+                return new TermRenderingStatusResult(
+                    Success: true,
+                    StatusCode: guessStatus,
+                    FoundRendering: foundInVerse ? renderingText : null,
+                    HasRendering: hasRendering,
+                    CssClass: GetCssClassForStatus(guessStatus),
+                    Error: null
+                );
+            }
+
+            var finalStatus = foundInVerse
+                ? TermRenderingStatusCode.Found
+                : TermRenderingStatusCode.Missing;
+            return new TermRenderingStatusResult(
+                Success: true,
+                StatusCode: finalStatus,
+                FoundRendering: foundInVerse ? renderingText : null,
+                HasRendering: hasRendering,
+                CssClass: GetCssClassForStatus(finalStatus),
+                Error: null
+            );
+        }
+        catch
+        {
+            return new TermRenderingStatusResult(
+                Success: true,
+                StatusCode: TermRenderingStatusCode.Unknown,
+                FoundRendering: null,
+                HasRendering: false,
+                CssClass: null,
+                Error: null
+            );
+        }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleForm.cs:2338-2391
+    // Method: MarbleForm.SetTrackedProject()
+    // Maps to: EXT-026
+    //
+    // EXPLANATION:
+    // Loads a tracked project from ScrTextCollection and initializes
+    // BiblicalTerms and TermRenderings for it. This is the production
+    // code path when the test seam is null.
+    private TermRenderingStatusResult LoadTrackedProject(string projectId)
+    {
+        try
+        {
+            var scrText = ScrTextCollection
+                .ScrTexts(IncludeProjects.ScriptureOnly)
+                .FirstOrDefault(st => st.Name == projectId);
+
+            if (scrText == null)
+            {
+                return new TermRenderingStatusResult(
+                    Success: false,
+                    StatusCode: null,
+                    FoundRendering: null,
+                    HasRendering: null,
+                    CssClass: null,
+                    Error: new ErrorInfo("NOT_FOUND", $"Project '{projectId}' not found")
+                );
+            }
+
+            _trackedScrText = scrText;
+            _trackedProjectId = projectId;
+
+            // Load Biblical Terms and TermRenderings for the project
+            _biblicalTerms = BiblicalTerms.GetProjectBiblicalTerms(scrText);
+            _termRenderings = TermRenderings.GetTermRenderings(scrText);
+
+            return new TermRenderingStatusResult(
+                Success: true,
+                StatusCode: null,
+                FoundRendering: null,
+                HasRendering: null,
+                CssClass: null,
+                Error: null
+            );
+        }
+        catch (Exception ex)
+        {
+            _trackedProjectId = null;
+            _trackedScrText = null;
+            _biblicalTerms = null;
+            _termRenderings = null;
+
+            return new TermRenderingStatusResult(
+                Success: false,
+                StatusCode: null,
+                FoundRendering: null,
+                HasRendering: null,
+                CssClass: null,
+                Error: new ErrorInfo("INVALID_STATE", $"Failed to load project: {ex.Message}")
+            );
+        }
     }
 }
