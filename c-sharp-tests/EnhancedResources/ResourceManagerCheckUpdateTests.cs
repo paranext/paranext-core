@@ -25,10 +25,20 @@ public class ResourceManagerCheckUpdateTests
 {
     private ResourceManager _resourceManager = null!;
 
+    // Save/restore fixture seams so CAP-015/CAP-016 tests are not disrupted
+    private Func<bool>? _savedIsResourcesDirectoryConfigured;
+    private Func<(int, bool)>? _savedResourceDiscovery;
+    private Func<IReadOnlyList<ResourceInfo>>? _savedGetAvailableResourceInfos;
+
     [SetUp]
     public async Task SetUp()
     {
-        // Reset test seams from any previous test to avoid cross-test contamination
+        // Save fixture seams before overriding for CAP-020 context
+        _savedIsResourcesDirectoryConfigured = ResourceManager.TestIsResourcesDirectoryConfigured;
+        _savedResourceDiscovery = ResourceManager.TestResourceDiscovery;
+        _savedGetAvailableResourceInfos = ResourceManager.TestGetAvailableResourceInfos;
+
+        // Set seams for CAP-020 initialization context
         ResourceManager.TestIsResourcesDirectoryConfigured = () => true;
         ResourceManager.TestResourceDiscovery = () => (2, true);
         ResourceManager.TestGetAvailableResourceInfos = null;
@@ -47,10 +57,12 @@ public class ResourceManagerCheckUpdateTests
     [TearDown]
     public void TearDown()
     {
-        // Clear all test seams
-        ResourceManager.TestIsResourcesDirectoryConfigured = null;
-        ResourceManager.TestResourceDiscovery = null;
-        ResourceManager.TestGetAvailableResourceInfos = null;
+        // Restore fixture seams so CAP-015/CAP-016 tests are not disrupted
+        ResourceManager.TestIsResourcesDirectoryConfigured = _savedIsResourcesDirectoryConfigured;
+        ResourceManager.TestResourceDiscovery = _savedResourceDiscovery;
+        ResourceManager.TestGetAvailableResourceInfos = _savedGetAvailableResourceInfos;
+
+        // Clear only CAP-020-specific test seams
         ResourceManager.TestResourceLookup = null;
         ResourceManager.TestManifestFetch = null;
         ResourceManager.TestUtcNow = null;
