@@ -63,6 +63,30 @@ public class ScriptureRenderingService
     // Public API
     // =====================================================================
 
+    // === STUB: AWAITING TDD IMPLEMENTATION ===
+    // Contract: Section 4.13 GenerateTooltip (data-contracts.md)
+    // Source: PT9/Marble/MarbleForm.cs:2692-2746
+    // Method: MarbleForm.GetTooltip()
+    // Maps to: EXT-025
+    /// <summary>
+    /// Generates HTML tooltip text for a linked word, combining gloss, POS,
+    /// transliteration, lemma, and rendering status information.
+    /// </summary>
+    /// <remarks>
+    /// STUB: This method is intentionally not implemented. It exists to
+    /// satisfy the TDD RED phase - tests compile but fail at runtime.
+    /// The TDD Implementer agent will provide the real implementation.
+    /// </remarks>
+    public Task<TooltipResult> GenerateTooltipAsync(
+        GenerateTooltipInput input,
+        CancellationToken ct
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-013 GenerateTooltipAsync: TDD stub - awaiting implementation"
+        );
+    }
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Marble/MarbleForm.cs:2416-2543
     // Method: MarbleForm.GetBody()
