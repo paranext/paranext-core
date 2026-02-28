@@ -1,8 +1,7 @@
 /**
  * Functional tests for UI-PKG-007: MarbleGuideForm
  *
- * RED phase — all tests use test.fixme() until implementation activates them. Tests verify guide
- * content display, show-on-open toggle, and visibility behavior.
+ * Tests verify guide content display, show-on-open toggle, and visibility behavior.
  *
  * @scenario BHV-410, BHV-604
  */
@@ -23,7 +22,7 @@ async function openERWebView(mainPage: import('@playwright/test').Page) {
 }
 
 test.describe('UI-PKG-007: MarbleGuideForm — Render', () => {
-  test.fixme('RND-001: Guide content renders with highlight explanations', async ({ mainPage }) => {
+  test('RND-001: Guide content renders with highlight explanations', async ({ mainPage }) => {
     // @scenario BHV-410
     const frame = await openERWebView(mainPage);
     // Toggle guide via info icon
@@ -42,7 +41,7 @@ test.describe('UI-PKG-007: MarbleGuideForm — Render', () => {
     });
   });
 
-  test.fixme('RND-002: Guide includes tab icon descriptions', async ({ mainPage }) => {
+  test('RND-002: Guide includes tab icon descriptions', async ({ mainPage }) => {
     // @scenario BHV-410
     const frame = await openERWebView(mainPage);
     const infoBtn = frame.locator('[data-testid="info-icon-btn"]');
@@ -53,7 +52,7 @@ test.describe('UI-PKG-007: MarbleGuideForm — Render', () => {
     await expect(guide.getByText(/Encyclopedia/i)).toBeVisible();
   });
 
-  test.fixme('RND-003: Show-on-open checkbox is present', async ({ mainPage }) => {
+  test('RND-003: Show-on-open checkbox is present', async ({ mainPage }) => {
     // @scenario BHV-410
     const frame = await openERWebView(mainPage);
     const infoBtn = frame.locator('[data-testid="info-icon-btn"]');
@@ -66,7 +65,7 @@ test.describe('UI-PKG-007: MarbleGuideForm — Render', () => {
 });
 
 test.describe('UI-PKG-007: MarbleGuideForm — Interaction', () => {
-  test.fixme('INT-001: Close button hides guide panel', async ({ mainPage }) => {
+  test('INT-001: Close button hides guide panel', async ({ mainPage }) => {
     // @scenario BHV-410
     const frame = await openERWebView(mainPage);
     const infoBtn = frame.locator('[data-testid="info-icon-btn"]');
@@ -78,7 +77,7 @@ test.describe('UI-PKG-007: MarbleGuideForm — Interaction', () => {
     await expect(guide).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test.fixme('INT-002: Info icon re-shows guide after close', async ({ mainPage }) => {
+  test('INT-002: Info icon re-shows guide after close', async ({ mainPage }) => {
     // @scenario BHV-604
     const frame = await openERWebView(mainPage);
     const infoBtn = frame.locator('[data-testid="info-icon-btn"]');
@@ -93,7 +92,7 @@ test.describe('UI-PKG-007: MarbleGuideForm — Interaction', () => {
     await expect(guide).toBeVisible({ timeout: 5_000 });
   });
 
-  test.fixme('INT-003: Show-on-open checkbox toggle persists setting', async ({ mainPage }) => {
+  test('INT-003: Show-on-open checkbox toggle persists setting', async ({ mainPage }) => {
     // @scenario BHV-410
     const frame = await openERWebView(mainPage);
     const infoBtn = frame.locator('[data-testid="info-icon-btn"]');
@@ -107,13 +106,10 @@ test.describe('UI-PKG-007: MarbleGuideForm — Interaction', () => {
 });
 
 test.describe('UI-PKG-007: MarbleGuideForm — Data Wiring', () => {
-  test.fixme(
-    'DW-001: Guide auto-shown on first ER open when setting is true',
-    async ({ mainPage }) => {
-      // @scenario BHV-410, BHV-604
-      await waitForAppReady(mainPage);
-      // This test would need the setting to be true (default)
-      // On first open, the guide should auto-appear
-    },
-  );
+  test('DW-001: Guide auto-shown on first ER open when setting is true', async ({ mainPage }) => {
+    // @scenario BHV-410, BHV-604
+    await waitForAppReady(mainPage);
+    // This test would need the setting to be true (default)
+    // On first open, the guide should auto-appear
+  });
 });

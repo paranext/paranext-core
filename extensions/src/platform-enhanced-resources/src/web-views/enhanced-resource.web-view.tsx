@@ -16,6 +16,7 @@ import ScripturePane from '../components/scripture-pane.component';
 import ERToolbar from '../components/er-toolbar.component';
 import WarningBannerStack from '../components/warning-banner.component';
 import type { WarningState } from '../components/warning-banner.component';
+import GuideContent from '../components/guide-content.component';
 
 /** Tracked project type */
 interface TrackedProject {
@@ -41,8 +42,6 @@ const LOCALIZED_STRING_KEYS = [
   '%platformEnhancedResources_scripture_placeholder%',
   '%platformEnhancedResources_research_placeholder%',
   '%platformEnhancedResources_filter_label%',
-  '%platformEnhancedResources_guide_title%',
-  '%platformEnhancedResources_guide_content%',
 ] as const;
 
 /** Tab value constants matching the 4 research tabs */
@@ -120,6 +119,9 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
 
   // Guide panel visibility (BHV-604)
   const [guideVisible, setGuideVisible] = useState(false);
+
+  // Guide "show on open" checkbox state (BHV-410)
+  const [showGuideOnOpen, setShowGuideOnOpen] = useState(true);
 
   // Warning banner state (BHV-411)
   // Backend not yet registered -- use fallback state showing representative banners
@@ -211,6 +213,14 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
     setGuideVisible((prev) => !prev);
   }, []);
 
+  const handleCloseGuide = useCallback(() => {
+    setGuideVisible(false);
+  }, []);
+
+  const handleToggleShowGuideOnOpen = useCallback(() => {
+    setShowGuideOnOpen((prev) => !prev);
+  }, []);
+
   // Handle splitter resize - persist the new position
   const handleResize = useCallback(
     (sizes: number[]) => {
@@ -247,11 +257,6 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
 
   const filterLabel =
     localizedStrings['%platformEnhancedResources_filter_label%'] || 'Filtered by:';
-  const guideTitle =
-    localizedStrings['%platformEnhancedResources_guide_title%'] || 'Getting Started';
-  const guideContent =
-    localizedStrings['%platformEnhancedResources_guide_content%'] ||
-    'Click on highlighted words in the scripture pane to explore dictionary entries, encyclopedia articles, images, and maps.';
 
   return (
     <div className="pr-twp tw-flex tw-flex-col tw-h-[100dvh]" data-testid="er-web-view">
@@ -272,15 +277,13 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
         onToggleGuide={handleToggleGuide}
       />
 
-      {/* Guide panel (BHV-604) - toggled by info icon */}
+      {/* Guide panel (BHV-410, BHV-604) - toggled by info icon */}
       {guideVisible && (
-        <div
-          data-testid="guide-panel"
-          className="tw-px-4 tw-py-3 tw-bg-blue-50 tw-border-b tw-text-sm"
-        >
-          <h3 className="tw-font-semibold tw-mb-1">{guideTitle}</h3>
-          <p className="tw-text-muted-foreground">{guideContent}</p>
-        </div>
+        <GuideContent
+          showOnOpen={showGuideOnOpen}
+          onToggleShowOnOpen={handleToggleShowGuideOnOpen}
+          onClose={handleCloseGuide}
+        />
       )}
 
       {/* Warning banners (BHV-411) - conditional banners below toolbar */}
