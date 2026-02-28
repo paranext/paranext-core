@@ -250,6 +250,109 @@ public class EnhancedResourcesTestFixture
         {
             return BuildTestImageData(imageId, quality);
         };
+
+        // =====================================================================
+        // CAP-009: Configure TermRenderingStatusService test seams
+        // =====================================================================
+
+        // Test seam: TermLookup
+        // Returns a TermRenderingStatusCode based on the lemma and tracked project.
+        // Different lemma names trigger different status codes for testing all 12.
+        TermRenderingStatusService.TestTermLookup = (trackedProjectId, lemma, verseRef) =>
+        {
+            var testName = NUnit.Framework.TestContext.CurrentContext?.Test?.MethodName;
+
+            // NOT_FOUND: project doesn't exist
+            if (
+                testName != null
+                && (
+                    testName.Contains("TrackedProjectNotFound")
+                    || testName.Contains("ErrorResult_HasCorrectStructure")
+                )
+            )
+                return (
+                    TermRenderingStatusCode.NoTrackedProject,
+                    null,
+                    false,
+                    "NOT_FOUND",
+                    $"Tracked project '{trackedProjectId}' not found"
+                );
+
+            // INVALID_STATE: terms data not loaded
+            if (testName != null && testName.Contains("TermsDataNotLoaded"))
+                return (
+                    TermRenderingStatusCode.NoTrackedProject,
+                    null,
+                    false,
+                    "INVALID_STATE",
+                    "Biblical Terms data not available for project"
+                );
+
+            // No tracked project
+            if (trackedProjectId == null)
+                return (TermRenderingStatusCode.NoTrackedProject, null, false, null, null);
+
+            // Status determined by lemma name (after homonym stripping)
+            var baseLemma = StripHomonymSuffix(lemma);
+
+            // Known terms -> specific statuses
+            return baseLemma switch
+            {
+                "agapao" => (TermRenderingStatusCode.Found, "love", true, null, null),
+                "missingterm" => (TermRenderingStatusCode.Missing, null, false, null, null),
+                "unknownterm"
+                    => (TermRenderingStatusCode.TermNotInProject, null, false, null, null),
+                "termmissinginverse"
+                    => (TermRenderingStatusCode.MissingInVerse, null, true, null, null),
+                "termfoundelsewhere"
+                    => (TermRenderingStatusCode.FoundElsewhere, "love", true, null, null),
+                "termmissingelsewhere"
+                    => (TermRenderingStatusCode.MissingElsewhere, null, true, null, null),
+                "termdenied" => (TermRenderingStatusCode.Denied, null, true, null, null),
+                "termguessfound" => (TermRenderingStatusCode.GuessFound, "love?", true, null, null),
+                "termguessmissing"
+                    => (TermRenderingStatusCode.GuessMissing, null, false, null, null),
+                "termunknown" => (TermRenderingStatusCode.Unknown, null, false, null, null),
+                // Hebrew terms
+                "ahab" => (TermRenderingStatusCode.Found, "love", true, null, null),
+                _ => (TermRenderingStatusCode.TermNotInProject, null, false, null, null),
+            };
+        };
+
+        // Test seam: GetTrackableProjects
+        // Returns a list of projects that can be tracked (non-resource projects).
+        TermRenderingStatusService.TestGetTrackableProjects = () =>
+        {
+            return new[]
+            {
+                (Name: "zzz5", Id: "zzz5", IsResource: false),
+                (Name: "MyProject", Id: "MyProject", IsResource: false),
+            };
+        };
+
+        // Test seam: SetTrackedProject
+        // Simulates loading BiblicalTerms data for a project.
+        TermRenderingStatusService.TestSetTrackedProject = (projectId) =>
+        {
+            // Simulate success for known projects
+            return projectId is "zzz5" or "MyProject";
+        };
+
+        // Test seam: HaveMarbleData
+        // Returns true when ER data is available.
+        TermRenderingStatusService.TestHaveMarbleData = () => true;
+
+        // Test seam: AvailableGlossLanguages
+        TermRenderingStatusService.TestAvailableGlossLanguages = () =>
+            new List<string> { "en", "fr", "es" };
+
+        // Test seam: FindLocalizedGlossesForTerm
+        TermRenderingStatusService.TestFindLocalizedGlossesForTerm = (term, langId) =>
+        {
+            if (term == "agapao")
+                return new[] { "to love", "to love deeply", "to cherish" };
+            return Array.Empty<string>();
+        };
     }
 
     [OneTimeTearDown]
@@ -269,6 +372,12 @@ public class EnhancedResourcesTestFixture
         ImageService.TestImageLookupByRef = null;
         ImageService.TestImageLookupById = null;
         ImageService.TestImageDataRetriever = null;
+        TermRenderingStatusService.TestTermLookup = null;
+        TermRenderingStatusService.TestGetTrackableProjects = null;
+        TermRenderingStatusService.TestSetTrackedProject = null;
+        TermRenderingStatusService.TestHaveMarbleData = null;
+        TermRenderingStatusService.TestAvailableGlossLanguages = null;
+        TermRenderingStatusService.TestFindLocalizedGlossesForTerm = null;
     }
 
     /// <summary>
@@ -862,6 +971,22 @@ public class EnhancedResourcesTestFixture
         }
 
         return bytes;
+    }
+
+    // =====================================================================
+    // CAP-009: Homonym suffix stripping helper (mirrors EXT-023 behavior)
+    // =====================================================================
+
+    /// <summary>
+    /// Strips the trailing "-N" homonym suffix from a lemma (where N is one
+    /// or more digits). This mirrors the regex behavior from EXT-023 / GM-023.
+    /// Examples: "word-2" -> "word", "agapao-12" -> "agapao", "agapao" -> "agapao"
+    /// </summary>
+    private static string StripHomonymSuffix(string lemma)
+    {
+        // Match trailing -N (one or more digits at end)
+        var match = System.Text.RegularExpressions.Regex.Match(lemma, @"-\d+$");
+        return match.Success ? lemma[..match.Index] : lemma;
     }
 
     /// <summary>
