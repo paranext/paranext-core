@@ -72,14 +72,36 @@ internal static class LexiconService
     ///
     /// Ported from PT9 MarbleDataAccess.cs:1142-1180 (GetAvailableGlossLanguageIds).
     /// </remarks>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1142-1180
+    // Method: MarbleDataAccess.GetAvailableGlossLanguageIds()
+    // Maps to: EXT-012, CAP-017
     public static Task<GlossLanguagesResult> GetAvailableGlossLanguagesAsync(
         string resourceId,
         CancellationToken ct
     )
     {
-        throw new NotImplementedException(
-            "CAP-017: GetAvailableGlossLanguagesAsync not yet implemented"
-        );
+        var coverageData = TestGetLanguageCoverage?.Invoke(resourceId);
+
+        if (coverageData == null)
+        {
+            return Task.FromResult(
+                new GlossLanguagesResult(
+                    Success: false,
+                    Error: new ErrorInfo("NOT_FOUND", $"Resource '{resourceId}' not found")
+                )
+            );
+        }
+
+        var languages = coverageData
+            .Where(kv => kv.Value.Coverage > 0.50)
+            .Select(kv => new GlossLanguageInfo(
+                Id: CorrectLanguageCode(kv.Key),
+                DisplayName: kv.Value.DisplayName
+            ))
+            .ToList();
+
+        return Task.FromResult(new GlossLanguagesResult(Success: true, Languages: languages));
     }
 
     /// <summary>
