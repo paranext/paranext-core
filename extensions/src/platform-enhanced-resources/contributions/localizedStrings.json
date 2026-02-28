@@ -16,7 +16,17 @@
       "%platformEnhancedResources_ctx_find_sense%": "Find this sense",
       "%platformEnhancedResources_ctx_copy_surface%": "Copy surface form",
       "%platformEnhancedResources_ctx_find_lemma%": "Find this lemma",
-      "%platformEnhancedResources_ctx_copy_lemma%": "Copy lemma"
+      "%platformEnhancedResources_ctx_copy_lemma%": "Copy lemma",
+      "%platformEnhancedResources_toolbar_researchTerms%": "All Research Terms",
+      "%platformEnhancedResources_toolbar_found%": "Found",
+      "%platformEnhancedResources_toolbar_missing%": "Missing",
+      "%platformEnhancedResources_toolbar_biblicalTerms%": "Biblical Terms:",
+      "%platformEnhancedResources_toolbar_noProject%": "No project",
+      "%platformEnhancedResources_toolbar_scopeCurrentVerse%": "Current Verse",
+      "%platformEnhancedResources_toolbar_scopeCurrentSection%": "Current Section",
+      "%platformEnhancedResources_toolbar_scopeCurrentChapter%": "Current Chapter",
+      "%platformEnhancedResources_guide_title%": "Getting Started",
+      "%platformEnhancedResources_guide_content%": "Click on highlighted words in the scripture pane to explore dictionary entries, encyclopedia articles, images, and maps."
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -33,7 +43,17 @@
       "%platformEnhancedResources_ctx_find_sense%": "Buscar este sentido",
       "%platformEnhancedResources_ctx_copy_surface%": "Copiar forma superficial",
       "%platformEnhancedResources_ctx_find_lemma%": "Buscar este lema",
-      "%platformEnhancedResources_ctx_copy_lemma%": "Copiar lema"
+      "%platformEnhancedResources_ctx_copy_lemma%": "Copiar lema",
+      "%platformEnhancedResources_toolbar_researchTerms%": "Todos los terminos de investigacion",
+      "%platformEnhancedResources_toolbar_found%": "Encontrado",
+      "%platformEnhancedResources_toolbar_missing%": "Faltante",
+      "%platformEnhancedResources_toolbar_biblicalTerms%": "Terminos biblicos:",
+      "%platformEnhancedResources_toolbar_noProject%": "Sin proyecto",
+      "%platformEnhancedResources_toolbar_scopeCurrentVerse%": "Versiculo actual",
+      "%platformEnhancedResources_toolbar_scopeCurrentSection%": "Seccion actual",
+      "%platformEnhancedResources_toolbar_scopeCurrentChapter%": "Capitulo actual",
+      "%platformEnhancedResources_guide_title%": "Primeros pasos",
+      "%platformEnhancedResources_guide_content%": "Haga clic en las palabras resaltadas en el panel de escrituras para explorar entradas de diccionario, articulos de enciclopedia, imagenes y mapas."
     }
   }
 }

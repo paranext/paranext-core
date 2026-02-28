@@ -7,10 +7,27 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  usePromise,
 } from 'platform-bible-react';
+import papi from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import ScripturePane from '../components/scripture-pane.component';
+import ERToolbar from '../components/er-toolbar.component';
+
+/** Tracked project type */
+interface TrackedProject {
+  id: string;
+  name: string;
+}
+
+/** Fallback projects shown when backend is unavailable */
+const FALLBACK_PROJECTS: TrackedProject[] = [{ id: 'project-sample', name: 'Sample Project' }];
+
+/** Enhanced resources service interface for available projects */
+interface ERServiceProjectList {
+  getAvailableProjects: () => Promise<TrackedProject[]>;
+}
 
 /** Localized string keys used by this web view */
 const LOCALIZED_STRING_KEYS = [
@@ -22,11 +39,16 @@ const LOCALIZED_STRING_KEYS = [
   '%platformEnhancedResources_scripture_placeholder%',
   '%platformEnhancedResources_research_placeholder%',
   '%platformEnhancedResources_filter_label%',
+  '%platformEnhancedResources_guide_title%',
+  '%platformEnhancedResources_guide_content%',
 ] as const;
 
 /** Tab value constants matching the 4 research tabs */
 const TAB_VALUES = ['dictionary', 'encyclopedia', 'media', 'maps'] as const;
 type TabValue = (typeof TAB_VALUES)[number];
+
+/** Scope filter type */
+type ScopeFilterValue = 'currentVerse' | 'currentSection' | 'currentChapter';
 
 /** Key for storing selected tab in localStorage for cross-session persistence */
 const STORAGE_KEY_SELECTED_TAB = 'platformEnhancedResources.selectedTab';
@@ -83,21 +105,97 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => [...LOCALIZED_STRING_KEYS], []));
 
+  // Highlight toggle state (BHV-404)
+  const [researchTermsOn, setResearchTermsOn] = useState(true);
+  const [foundOn, setFoundOn] = useState(false);
+  const [missingOn, setMissingOn] = useState(false);
+
+  // Tracked project state (BHV-404)
+  const [trackedProjectId, setTrackedProjectId] = useState<string | undefined>(undefined);
+
+  // Scope filter state (BHV-402)
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilterValue>('currentVerse');
+
+  // Guide panel visibility (BHV-604)
+  const [guideVisible, setGuideVisible] = useState(false);
+
   // Filter state for linked word clicks
   const [filterLemma, setFilterLemma] = useState<string | undefined>(undefined);
   const [filterDisplayText, setFilterDisplayText] = useState('');
+  const [filterHasResults, setFilterHasResults] = useState(true);
   const isFilterActive = filterLemma !== undefined;
+
+  // Fetch available projects from backend (BHV-404); fallback when backend unavailable
+  const [projectsFromBackend] = usePromise(
+    useCallback(async () => {
+      try {
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const erService = (await papi.networkObjects.get('enhancedResources')) as
+          | ERServiceProjectList
+          | undefined;
+        if (erService) {
+          return erService.getAvailableProjects();
+        }
+      } catch {
+        // Backend not available — use fallback
+      }
+      return FALLBACK_PROJECTS;
+    }, []),
+    FALLBACK_PROJECTS,
+  );
+
+  const availableProjects = projectsFromBackend ?? FALLBACK_PROJECTS;
+  const trackedProject =
+    trackedProjectId !== undefined
+      ? (availableProjects.find((p) => p.id === trackedProjectId) ?? {
+          id: trackedProjectId,
+          name: trackedProjectId,
+        })
+      : undefined;
 
   // Handle linked word click - activate filter
   const handleWordClick = useCallback((lemma: string, displayText: string) => {
     setFilterLemma(lemma);
     setFilterDisplayText(displayText);
+    // Default to having results; backend would determine this
+    setFilterHasResults(true);
   }, []);
 
   // Handle clear filter
   const handleClearFilter = useCallback(() => {
     setFilterLemma(undefined);
     setFilterDisplayText('');
+    setFilterHasResults(true);
+  }, []);
+
+  // Toolbar toggle handlers
+  const handleToggleResearchTerms = useCallback(() => {
+    setResearchTermsOn((prev) => !prev);
+  }, []);
+
+  const handleToggleFound = useCallback(() => {
+    setFoundOn((prev) => !prev);
+  }, []);
+
+  const handleToggleMissing = useCallback(() => {
+    setMissingOn((prev) => !prev);
+  }, []);
+
+  const handleTrackedProjectChange = useCallback((projectId: string | undefined) => {
+    setTrackedProjectId(projectId);
+    // When project is cleared, turn off Found and Missing (BHV-404)
+    if (projectId === undefined) {
+      setFoundOn(false);
+      setMissingOn(false);
+    }
+  }, []);
+
+  const handleScopeFilterChange = useCallback((scope: ScopeFilterValue) => {
+    setScopeFilter(scope);
+  }, []);
+
+  const handleToggleGuide = useCallback(() => {
+    setGuideVisible((prev) => !prev);
   }, []);
 
   // Handle splitter resize - persist the new position
@@ -136,9 +234,42 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
 
   const filterLabel =
     localizedStrings['%platformEnhancedResources_filter_label%'] || 'Filtered by:';
+  const guideTitle =
+    localizedStrings['%platformEnhancedResources_guide_title%'] || 'Getting Started';
+  const guideContent =
+    localizedStrings['%platformEnhancedResources_guide_content%'] ||
+    'Click on highlighted words in the scripture pane to explore dictionary entries, encyclopedia articles, images, and maps.';
 
   return (
     <div className="pr-twp tw-flex tw-flex-col tw-h-[100dvh]" data-testid="er-web-view">
+      {/* ERToolbar (BHV-402, BHV-404, BHV-412, BHV-414, BHV-604) */}
+      <ERToolbar
+        researchTermsOn={researchTermsOn}
+        onToggleResearchTerms={handleToggleResearchTerms}
+        foundOn={foundOn}
+        onToggleFound={handleToggleFound}
+        missingOn={missingOn}
+        onToggleMissing={handleToggleMissing}
+        trackedProject={trackedProject}
+        availableProjects={availableProjects}
+        onTrackedProjectChange={handleTrackedProjectChange}
+        scopeFilter={scopeFilter}
+        onScopeFilterChange={handleScopeFilterChange}
+        guideVisible={guideVisible}
+        onToggleGuide={handleToggleGuide}
+      />
+
+      {/* Guide panel (BHV-604) - toggled by info icon */}
+      {guideVisible && (
+        <div
+          data-testid="guide-panel"
+          className="tw-px-4 tw-py-3 tw-bg-blue-50 tw-border-b tw-text-sm"
+        >
+          <h3 className="tw-font-semibold tw-mb-1">{guideTitle}</h3>
+          <p className="tw-text-muted-foreground">{guideContent}</p>
+        </div>
+      )}
+
       <ResizablePanelGroup direction="vertical" data-testid="er-split-pane" onLayout={handleResize}>
         {/* Scripture Pane (top) */}
         <ResizablePanel defaultSize={splitterPosition} minSize={15}>
@@ -147,6 +278,9 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
             onWordClick={handleWordClick}
             onClearFilter={handleClearFilter}
             isFilterActive={isFilterActive}
+            researchTermsOn={researchTermsOn}
+            foundOn={foundOn}
+            missingOn={missingOn}
           />
         </ResizablePanel>
 
@@ -159,16 +293,20 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
             className="tw-h-full tw-flex tw-flex-col tw-overflow-hidden"
             data-testid="research-pane-container"
           >
-            {/* Filter box - visible when a word is clicked */}
+            {/* Filter box - visible when a word is clicked (BHV-403) */}
             {isFilterActive && (
               <div
                 data-testid="filter-box"
-                className="tw-flex tw-items-center tw-gap-2 tw-px-4 tw-py-2 tw-bg-green-100 tw-border-b tw-text-sm"
+                data-state={filterHasResults ? 'results' : 'empty'}
+                className={`tw-flex tw-items-center tw-gap-2 tw-px-4 tw-py-2 tw-border-b tw-text-sm tw-transition-colors tw-duration-400 ${
+                  filterHasResults ? 'tw-bg-green-100' : 'tw-bg-orange-100'
+                }`}
               >
                 <span className="tw-font-medium">{filterLabel}</span>
                 <span>{filterDisplayText}</span>
                 <button
                   type="button"
+                  data-testid="btn-clear-filter"
                   onClick={handleClearFilter}
                   className="tw-ml-auto tw-text-muted-foreground hover:tw-text-foreground"
                   aria-label="Clear filter"

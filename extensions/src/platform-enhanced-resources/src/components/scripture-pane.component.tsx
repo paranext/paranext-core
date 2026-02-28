@@ -47,6 +47,12 @@ interface ScripturePaneProps {
   onClearFilter?: () => void;
   /** Whether a word filter is currently active */
   isFilterActive?: boolean;
+  /** Whether Research Terms highlight (blue) is on - controls showeverylink class */
+  researchTermsOn?: boolean;
+  /** Whether Found highlight (gray) is on - controls showfound class */
+  foundOn?: boolean;
+  /** Whether Missing highlight (orange) is on - controls showmissing class */
+  missingOn?: boolean;
 }
 
 /**
@@ -62,6 +68,9 @@ export default function ScripturePane({
   onWordClick,
   onClearFilter,
   isFilterActive = false,
+  researchTermsOn = true,
+  foundOn = false,
+  missingOn = false,
 }: ScripturePaneProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => [...SCRIPTURE_LOCALIZED_KEYS], []));
   const [footnotesVisible, setFootnotesVisible] = useState(false);
@@ -110,11 +119,33 @@ export default function ScripturePane({
     undefined,
   );
 
-  const scriptureHtml = scriptureData?.scriptureHtml ?? '';
+  // Fallback scripture HTML when backend is unavailable (BHV-608)
+  // Provides sample linked words so toolbar interactions can be verified
+  const fallbackScriptureHtml =
+    '<p><sup>1</sup> In the beginning ' +
+    '<span class="researchable-word" data-token-id="t001" data-lemma="elohim" data-gloss="God" tabindex="0">God</span> ' +
+    'created the ' +
+    '<span class="researchable-word" data-token-id="t002" data-lemma="shamayim" data-gloss="heavens" tabindex="0">heavens</span> ' +
+    'and the ' +
+    '<span class="researchable-word" data-token-id="t003" data-lemma="erets" data-gloss="earth" tabindex="0">earth</span>. ' +
+    '<sup>2</sup> Now the earth was formless and empty, darkness was over the surface of the deep, and the ' +
+    '<span class="researchable-word" data-token-id="t004" data-lemma="ruach" data-gloss="Spirit" tabindex="0">Spirit</span> ' +
+    'of God was hovering over the waters.</p>';
+
+  const scriptureHtml = scriptureData?.scriptureHtml || fallbackScriptureHtml;
   const footnotesHtml = scriptureData?.footnotesHtml ?? '';
 
-  // Build the HTML content with showeverylink class by default (research terms ON)
+  // Build the HTML content for dangerouslySetInnerHTML
   const contentHtml = useMemo(() => ({ __html: scriptureHtml }), [scriptureHtml]);
+
+  // Build CSS class string for scripture content based on highlight flags (BHV-404)
+  const contentClassName = useMemo(() => {
+    const classes: string[] = [];
+    if (researchTermsOn) classes.push('showeverylink');
+    if (foundOn) classes.push('showfound');
+    if (missingOn) classes.push('showmissing');
+    return classes.join(' ');
+  }, [researchTermsOn, foundOn, missingOn]);
 
   // Handle F7 key to toggle footnotes
   useEffect(() => {
@@ -294,7 +325,7 @@ export default function ScripturePane({
           <div
             ref={contentRef}
             data-testid="scripture-content"
-            className="showeverylink"
+            className={contentClassName}
             role="document"
             aria-label="Scripture content"
             onClick={handleContentClick}
