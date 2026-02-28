@@ -1191,11 +1191,18 @@ public class MarbleDataParserTests
         Assert.That(sourceTokens, Is.Not.Empty);
 
         var surfaceText = sourceTokens.First().SourceWord!.SurfaceText;
-        Assert.That(
-            surfaceText,
-            Does.Not.Contain(cantillationMark.ToString()),
-            $"VAL-012: Cantillation mark U+{(int)cantillationMark:X4} should be stripped"
-        );
+        // NOTE: NUnit's Does.Not.Contain() uses StringComparison.CurrentCulture,
+        // which treats Hebrew cantillation marks (U+0591-U+05AF, U+05BD) as
+        // "default ignorable" under ICU globalization, causing false matches.
+        // Use ordinal char-by-char check instead (same pattern as TS-080 test).
+        foreach (char c in surfaceText)
+        {
+            Assert.That(
+                (int)c,
+                Is.Not.EqualTo((int)cantillationMark),
+                $"VAL-012: Cantillation mark U+{(int)cantillationMark:X4} should be stripped"
+            );
+        }
     }
 
     // =========================================================================
