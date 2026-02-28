@@ -15,6 +15,14 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static partial class MarbleDataParser
 {
+    private static readonly HashSet<string> ValidScopes =
+    [
+        "currentVerse",
+        "currentSection",
+        "currentChapter",
+        "currentSense",
+    ];
+
     // === NEW IN PT10 ===
     // Reason: PAPI command pattern - static async API for data provider integration
     // Maps to: CAP-002
@@ -370,6 +378,11 @@ internal static partial class MarbleDataParser
             )
         );
 
+    private static Task<GetLinksInScopeResult> CreateScopeErrorResult(
+        string code,
+        string message
+    ) => Task.FromResult(new GetLinksInScopeResult(false, Error: new ErrorInfo(code, message)));
+
     // === PORTED FROM PT9 ===
     // Source: PT9/MarbleDataParser.cs (EXT-015)
     // Method: ComputePhraseText
@@ -459,44 +472,24 @@ internal static partial class MarbleDataParser
         // Validate: Chapter tokens must be available (INVALID_STATE)
         if (!parsedTokens.Success || parsedTokens.Tokens == null)
         {
-            return Task.FromResult(
-                new GetLinksInScopeResult(
-                    false,
-                    Error: new ErrorInfo("INVALID_STATE", "Chapter tokens not yet available")
-                )
-            );
+            return CreateScopeErrorResult("INVALID_STATE", "Chapter tokens not yet available");
         }
 
         // Validate: Scope must be a known value (INVALID_INPUT)
-        if (
-            input.Scope != "currentVerse"
-            && input.Scope != "currentSection"
-            && input.Scope != "currentChapter"
-            && input.Scope != "currentSense"
-        )
+        if (!ValidScopes.Contains(input.Scope))
         {
-            return Task.FromResult(
-                new GetLinksInScopeResult(
-                    false,
-                    Error: new ErrorInfo(
-                        "INVALID_INPUT",
-                        "Scope must be currentVerse, currentSection, currentChapter, or currentSense"
-                    )
-                )
+            return CreateScopeErrorResult(
+                "INVALID_INPUT",
+                "Scope must be currentVerse, currentSection, currentChapter, or currentSense"
             );
         }
 
         // Validate: currentSense requires an active lemma filter (INVALID_INPUT)
         if (input.Scope == "currentSense" && input.FilteredLemma == null)
         {
-            return Task.FromResult(
-                new GetLinksInScopeResult(
-                    false,
-                    Error: new ErrorInfo(
-                        "INVALID_INPUT",
-                        "currentSense scope requires an active lemma filter"
-                    )
-                )
+            return CreateScopeErrorResult(
+                "INVALID_INPUT",
+                "currentSense scope requires an active lemma filter"
             );
         }
 
@@ -530,7 +523,38 @@ internal static partial class MarbleDataParser
                 break;
         }
 
-        // Collect TextLink tokens in range
+        // Collect TextLink tokens in range, applying filters
+        var (links, tokenIndices) = CollectLinksInRange(
+            tokens,
+            rangeStart,
+            rangeEnd,
+            input.Scope,
+            input.FilteredSource,
+            input.FilteredLemma
+        );
+
+        return Task.FromResult(
+            new GetLinksInScopeResult(
+                true,
+                Links: links,
+                TokenIndices: tokenIndices,
+                MatchCount: links.Count
+            )
+        );
+    }
+
+    /// <summary>
+    /// Collect TextLink tokens within a token range, applying optional text and lemma filters.
+    /// </summary>
+    private static (List<LexicalLink> Links, List<int> TokenIndices) CollectLinksInRange(
+        IReadOnlyList<MarbleToken> tokens,
+        int rangeStart,
+        int rangeEnd,
+        string scope,
+        string? filteredSource,
+        string? filteredLemma
+    )
+    {
         var links = new List<LexicalLink>();
         var tokenIndices = new List<int>();
 
@@ -542,36 +566,24 @@ internal static partial class MarbleDataParser
 
             // Apply filteredSource text filter (TS-054)
             if (
-                input.FilteredSource != null
-                && (
-                    token.SourceWord == null || token.SourceWord.SurfaceText != input.FilteredSource
-                )
+                filteredSource != null
+                && (token.SourceWord == null || token.SourceWord.SurfaceText != filteredSource)
             )
             {
                 continue;
             }
 
             // Apply currentSense lemma filter
-            if (input.Scope == "currentSense")
+            if (scope == "currentSense" && !token.Links.Any(link => link.Lemma == filteredLemma))
             {
-                bool hasMatchingLemma = false;
-                foreach (LexicalLink link in token.Links)
-                {
-                    if (link.Lemma == input.FilteredLemma)
-                    {
-                        hasMatchingLemma = true;
-                        break;
-                    }
-                }
-                if (!hasMatchingLemma)
-                    continue;
+                continue;
             }
 
             // Add all links from this token
             foreach (LexicalLink link in token.Links)
             {
                 // For currentSense, only add matching lemma links
-                if (input.Scope == "currentSense" && link.Lemma != input.FilteredLemma)
+                if (scope == "currentSense" && link.Lemma != filteredLemma)
                     continue;
 
                 links.Add(link);
@@ -579,14 +591,7 @@ internal static partial class MarbleDataParser
             }
         }
 
-        return Task.FromResult(
-            new GetLinksInScopeResult(
-                true,
-                Links: links,
-                TokenIndices: tokenIndices,
-                MatchCount: links.Count
-            )
-        );
+        return (links, tokenIndices);
     }
 
     // === PORTED FROM PT9 ===
@@ -604,9 +609,9 @@ internal static partial class MarbleDataParser
         for (int i = 0; i < tokens.Count; i++)
         {
             MarbleToken token = tokens[i];
-            if (token.Type == MarbleTokenType.Verse && token.VerseNumber.HasValue)
+            if (token.Type == MarbleTokenType.Verse && token.VerseNumber is int vn)
             {
-                if (token.VerseNumber.Value == targetVerse)
+                if (vn == targetVerse)
                 {
                     start = i;
                 }
