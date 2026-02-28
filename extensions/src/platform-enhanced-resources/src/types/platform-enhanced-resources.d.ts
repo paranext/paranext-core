@@ -1,4 +1,12 @@
 declare module 'platform-enhanced-resources' {
   // Add extension types exposed on the papi for other extensions to use here
-  // More instructions can be found in the README
+}
+
+declare module 'papi-shared-types' {
+  export interface CommandHandlers {
+    /** Open an Enhanced Resource web view */
+    'platformEnhancedResources.openEnhancedResource': (
+      resourceId?: string,
+    ) => Promise<string | undefined>;
+  }
 }

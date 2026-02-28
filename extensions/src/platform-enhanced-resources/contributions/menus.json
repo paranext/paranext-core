@@ -1,8 +1,26 @@
 {
   "mainMenu": {
-    "columns": {},
-    "groups": {},
-    "items": []
+    "columns": {
+      "platformEnhancedResources.open": {
+        "label": "%platformEnhancedResources_mainMenu_open%",
+        "order": 2
+      }
+    },
+    "groups": {
+      "platformEnhancedResources.openResources": {
+        "column": "platformEnhancedResources.open",
+        "order": 1
+      }
+    },
+    "items": [
+      {
+        "label": "%platformEnhancedResources_mainMenu_openEnhancedResource%",
+        "localizeNotes": "Application main menu > Open > Enhanced Resource",
+        "group": "platformEnhancedResources.openResources",
+        "order": 1,
+        "command": "platformEnhancedResources.openEnhancedResource"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},
@@ -13,5 +31,7 @@
     "groups": {},
     "items": []
   },
-  "webViewMenus": {}
+  "webViewMenus": {
+    "platformEnhancedResources.enhancedResource": {}
+  }
 }

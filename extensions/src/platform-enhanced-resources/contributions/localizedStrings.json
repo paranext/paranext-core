@@ -1,6 +1,15 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%platformEnhancedResources_title%": "Enhanced Resource",
+      "%platformEnhancedResources_mainMenu_open%": "Open",
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Enhanced Resource"
+    },
+    "es": {
+      "%platformEnhancedResources_title%": "Recurso mejorado",
+      "%platformEnhancedResources_mainMenu_open%": "Abrir",
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Recurso mejorado"
+    }
   }
 }

@@ -64,6 +64,28 @@ export const test = base.extend<CdpFixtures>({
     if (!page) throw new Error('No renderer page found via CDP');
 
     await use(page);
+
+    // Cleanup between tests: dismiss open menus and close opened web view tabs
+    // This prevents state leaking between tests when sharing a live CDP page.
+    try {
+      // Press Escape to close any open menu dropdowns or dialogs
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(200);
+
+      // Close all Enhanced Resource tabs by clicking their close buttons
+      // This prevents accumulation of ER tabs across sequential tests
+      const erCloseButtons = page.locator(
+        '.dock-tab:has-text("Enhanced Resource") .dock-tab-close-btn',
+      );
+      const count = await erCloseButtons.count();
+      for (let i = count - 1; i >= 0; i--) {
+        await erCloseButtons.nth(i).click();
+        await page.waitForTimeout(300);
+      }
+    } catch {
+      // Best-effort cleanup — do not fail tests on cleanup errors
+    }
+
     // Do NOT close browser — we didn't start the app
   },
 });
