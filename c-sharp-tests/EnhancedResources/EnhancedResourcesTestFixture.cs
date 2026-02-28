@@ -177,8 +177,10 @@ public class EnhancedResourcesTestFixture
                 return null;
 
             // PARSE_ERROR: malformed XML
+            // Throw an exception to simulate XML parsing failure. The service
+            // should catch this and return a PARSE_ERROR result.
             if (testName != null && s_encyclopediaParseErrorTests.Contains(testName))
-                return null; // The service should throw PARSE_ERROR for this entry
+                throw new System.Xml.XmlException("Simulated malformed XML for test");
 
             return BuildTestEncyclopediaEntry(entryId, languageId);
         };
