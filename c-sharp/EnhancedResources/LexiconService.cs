@@ -362,6 +362,10 @@ internal static class LexiconService
     private static Task<DictionaryResult> CreateDictionaryError(string code, string message) =>
         Task.FromResult(new DictionaryResult(Success: false, Error: new ErrorInfo(code, message)));
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Marble/MarbleForm.cs:2747-2792
+    // Method: MarbleForm.GetGloss() + FilterGlosses() + RemoveBraces()
+    // Maps to: EXT-038, BHV-303, GM-018
     /// <summary>
     /// Retrieve and format a gloss string for a lexical link, with brace-filtering applied.
     /// </summary>
@@ -377,7 +381,42 @@ internal static class LexiconService
     /// </remarks>
     public static Task<GlossResult> GetGlossAsync(DictionaryLookupInput input, CancellationToken ct)
     {
-        // TDD stub: Not yet implemented. Tests should FAIL.
-        throw new NotImplementedException("CAP-014: GetGlossAsync not yet implemented");
+        // Step 1: Resolve dictionary alias (VAL-009: "LN" -> "SDBG")
+        string resolvedDictionary = ResolveDictionaryName(input.Dictionary);
+
+        // Step 2: Correct legacy language codes (VAL-008: "sp" -> "es")
+        string glossLanguageId = CorrectLanguageCode(input.GlossLanguageId);
+
+        // Step 3: Check dictionary is loaded (INVALID_STATE)
+        if (!IsDictionaryLoadedCheck(resolvedDictionary))
+            return CreateGlossError(
+                "INVALID_STATE",
+                $"Dictionary '{resolvedDictionary}' data not available"
+            );
+
+        // Step 4: Normalize lemma to Unicode FormD (INV-016)
+        string normalizedLemma = input.Lemma.Normalize(NormalizationForm.FormD);
+
+        // Step 5: Look up entry via test seam / ParatextData
+        LexiconEntry? entry = LookupEntry(resolvedDictionary, normalizedLemma, glossLanguageId);
+
+        if (entry == null)
+            return CreateGlossError("NOT_FOUND", $"No gloss found for lemma '{normalizedLemma}'");
+
+        // Step 6: Extract gloss from the requested base form and meaning
+        var baseForm = entry.BaseForms[input.BaseFormIndex - 1];
+        var meaning = baseForm.Meanings[input.MeaningIndex - 1];
+        var sense = meaning.Senses[0];
+
+        // Step 7: Apply brace filtering (BHV-303, GM-018)
+        string filteredGloss = FilterBraces(sense.Gloss);
+
+        // Step 8: Return success with filtered gloss and language
+        return Task.FromResult(
+            new GlossResult(Success: true, Gloss: filteredGloss, LanguageId: sense.GlossLanguageId)
+        );
     }
+
+    private static Task<GlossResult> CreateGlossError(string code, string message) =>
+        Task.FromResult(new GlossResult(Success: false, Error: new ErrorInfo(code, message)));
 }
