@@ -12,111 +12,76 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class LexiconService
 {
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleLexicalLink.cs:30-57
-    // Method: MarbleLexicalLink.ParseLexicalLinks() + ParseOneLexicalLink() + ParseLexicalIndices()
-    // Maps to: EXT-001
-    //
-    // EXPLANATION:
-    // Parses semicolon-separated lexical link strings into structured LexicalLink objects.
-    // Each link has format "Dictionary:Lemma:BBBMMM" where BBB is the 3-digit zero-padded
-    // base form index and MMM is the 3-digit zero-padded meaning index.
-    // PT9 silently drops malformed links; PT10 returns explicit error results per contract.
     /// <summary>
     /// Parse semicolon-separated lexical link strings from USX character elements
     /// into structured <see cref="LexicalLink"/> objects.
-    ///
+    /// </summary>
+    /// <remarks>
     /// Format: "Dictionary:Lemma:BBBMMM" where BBB and MMM are 3-digit zero-padded indices.
     /// Multiple links separated by semicolons.
     ///
-    /// Contract: Section 4.1 (data-contracts.md)
-    /// Behavior: BHV-302
-    /// Extraction: EXT-001
-    /// </summary>
+    /// Ported from PT9 MarbleLexicalLink.cs:30-57 (EXT-001).
+    /// PT9 silently drops malformed links; PT10 returns explicit error results per contract.
+    /// </remarks>
     public static Task<ParseLexicalLinksResult> ParseLexicalLinksAsync(
         LexicalLinkInput input,
         CancellationToken ct
     )
     {
         if (string.IsNullOrEmpty(input.LinkString))
-        {
-            return Task.FromResult(
-                new ParseLexicalLinksResult(
-                    false,
-                    Error: new ErrorInfo("INVALID_INPUT", "Link string must not be null or empty")
-                )
-            );
-        }
+            return CreateErrorResult("INVALID_INPUT", "Link string must not be null or empty");
 
         string[] linkParts = input.LinkString.Split(';');
         var links = new List<LexicalLink>(linkParts.Length);
 
         foreach (string linkPart in linkParts)
         {
-            string[] parts = linkPart.Split(':');
-            if (parts.Length != 3)
-            {
-                return Task.FromResult(
-                    new ParseLexicalLinksResult(
-                        false,
-                        Error: new ErrorInfo(
-                            "PARSE_ERROR",
-                            "Invalid lexical link format: expected 'Dictionary:Lemma:BBBMMM'"
-                        )
-                    )
-                );
-            }
+            ParseLexicalLinksResult? error = ParseSingleLink(linkPart, out LexicalLink? link);
+            if (error is not null)
+                return Task.FromResult(error);
 
-            string indices = parts[2];
-            if (indices.Length < 6)
-            {
-                return Task.FromResult(
-                    new ParseLexicalLinksResult(
-                        false,
-                        Error: new ErrorInfo(
-                            "PARSE_ERROR",
-                            "Invalid base form or meaning index in link"
-                        )
-                    )
-                );
-            }
-
-            if (
-                !int.TryParse(indices.Substring(0, 3), out int baseFormIndex)
-                || !int.TryParse(indices.Substring(3, 3), out int meaningIndex)
-            )
-            {
-                return Task.FromResult(
-                    new ParseLexicalLinksResult(
-                        false,
-                        Error: new ErrorInfo(
-                            "PARSE_ERROR",
-                            "Invalid base form or meaning index in link"
-                        )
-                    )
-                );
-            }
-
-            links.Add(new LexicalLink(parts[0], parts[1], baseFormIndex, meaningIndex));
+            links.Add(link!);
         }
 
         return Task.FromResult(new ParseLexicalLinksResult(true, links));
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:373-376
-    // Method: MarbleDataAccess.GetDictionaryProject()
-    // Maps to: INV-013
+    /// <summary>
+    /// Parse a single "Dictionary:Lemma:BBBMMM" link string into a <see cref="LexicalLink"/>.
+    /// </summary>
+    /// <returns>
+    /// An error result if the link is malformed; <c>null</c> on success
+    /// (with <paramref name="link"/> populated).
+    /// </returns>
+    private static ParseLexicalLinksResult? ParseSingleLink(string linkPart, out LexicalLink? link)
+    {
+        link = null;
+
+        string[] parts = linkPart.Split(':');
+        if (parts.Length != 3)
+            return CreateParseError(
+                "Invalid lexical link format: expected 'Dictionary:Lemma:BBBMMM'"
+            );
+
+        string indices = parts[2];
+        if (
+            indices.Length < 6
+            || !int.TryParse(indices[..3], out int baseFormIndex)
+            || !int.TryParse(indices[3..6], out int meaningIndex)
+        )
+            return CreateParseError("Invalid base form or meaning index in link");
+
+        link = new LexicalLink(parts[0], parts[1], baseFormIndex, meaningIndex);
+        return null;
+    }
+
     /// <summary>
     /// Determines the dictionary name for a given book number based on testament.
-    ///
-    /// Invariant: INV-013 (Book-to-Dictionary Mapping)
-    /// - OT books -> SDBH (Hebrew dictionary)
-    /// - NT books -> SDBG (Greek dictionary)
-    /// - DC books -> DCLEX (Deuterocanon dictionary)
-    ///
-    /// Uses Canon.IsBookOT / Canon.IsBookNT for determination.
     /// </summary>
+    /// <remarks>
+    /// Invariant INV-013: OT -> SDBH, NT -> SDBG, DC -> DCLEX.
+    /// Ported from PT9 MarbleDataAccess.cs:373-376.
+    /// </remarks>
     public static string GetDictionaryForBook(int bookNumber)
     {
         if (Canon.IsBookOT(bookNumber))
@@ -125,4 +90,10 @@ internal static class LexiconService
             return "SDBG";
         return "DCLEX";
     }
+
+    private static Task<ParseLexicalLinksResult> CreateErrorResult(string code, string message) =>
+        Task.FromResult(new ParseLexicalLinksResult(false, Error: new ErrorInfo(code, message)));
+
+    private static ParseLexicalLinksResult CreateParseError(string message) =>
+        new(false, Error: new ErrorInfo("PARSE_ERROR", message));
 }
