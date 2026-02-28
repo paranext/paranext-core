@@ -24,24 +24,23 @@ async function openERWebView(mainPage: import('@playwright/test').Page) {
 }
 
 test.describe('UI-PKG-002: MarbleFormLayout — Render', () => {
-  test.fixme(
-    'RND-001: Main layout renders with split pane (scripture top, research bottom)',
-    async ({ mainPage }) => {
-      // @scenario BHV-400
-      const frame = await openERWebView(mainPage);
-      await expect(frame.locator('[data-testid="er-split-pane"]')).toBeVisible({
-        timeout: 10_000,
-      });
-      await expect(frame.locator('[data-testid="scripture-pane-container"]')).toBeVisible();
-      await expect(frame.locator('[data-testid="research-pane-container"]')).toBeVisible();
-      // EVD-002: Screenshot of default layout
-      await mainPage.screenshot({
-        path: 'e2e-tests/test-results/UI-PKG-002-RND-001-layout.png',
-      });
-    },
-  );
+  test('RND-001: Main layout renders with split pane (scripture top, research bottom)', async ({
+    mainPage,
+  }) => {
+    // @scenario BHV-400
+    const frame = await openERWebView(mainPage);
+    await expect(frame.locator('[data-testid="er-split-pane"]')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(frame.locator('[data-testid="scripture-pane-container"]')).toBeVisible();
+    await expect(frame.locator('[data-testid="research-pane-container"]')).toBeVisible();
+    // EVD-002: Screenshot of default layout
+    await mainPage.screenshot({
+      path: 'e2e-tests/test-results/UI-PKG-002-RND-001-layout.png',
+    });
+  });
 
-  test.fixme('RND-002: Tab container renders with 4 tab icons', async ({ mainPage }) => {
+  test('RND-002: Tab container renders with 4 tab icons', async ({ mainPage }) => {
     // @scenario BHV-401
     const frame = await openERWebView(mainPage);
     const tabContainer = frame.locator('[data-testid="research-tabs"]');
@@ -51,7 +50,7 @@ test.describe('UI-PKG-002: MarbleFormLayout — Render', () => {
     await expect(tabButtons).toHaveCount(4);
   });
 
-  test.fixme('RND-003: Resizable split pane has draggable divider', async ({ mainPage }) => {
+  test('RND-003: Resizable split pane has draggable divider', async ({ mainPage }) => {
     // @scenario BHV-400
     const frame = await openERWebView(mainPage);
     const splitter = frame.locator('[data-testid="main-splitter"]');
@@ -60,7 +59,7 @@ test.describe('UI-PKG-002: MarbleFormLayout — Render', () => {
 });
 
 test.describe('UI-PKG-002: MarbleFormLayout — Interaction', () => {
-  test.fixme('INT-001: Dragging splitter changes pane proportions', async ({ mainPage }) => {
+  test('INT-001: Dragging splitter changes pane proportions', async ({ mainPage }) => {
     // @scenario BHV-400
     const frame = await openERWebView(mainPage);
     const splitter = frame.locator('[data-testid="main-splitter"]');
@@ -76,7 +75,7 @@ test.describe('UI-PKG-002: MarbleFormLayout — Interaction', () => {
     expect(newBox!.y).toBeGreaterThan(box.y);
   });
 
-  test.fixme('INT-002: Zoom in/out works with Ctrl+Plus/Minus', async ({ mainPage }) => {
+  test('INT-002: Zoom in/out works with Ctrl+Plus/Minus', async ({ mainPage }) => {
     // @scenario BHV-405
     const frame = await openERWebView(mainPage);
     const scripturePaneEl = frame.locator('[data-testid="scripture-pane-container"]');
@@ -89,7 +88,7 @@ test.describe('UI-PKG-002: MarbleFormLayout — Interaction', () => {
     await mainPage.keyboard.press('Control+0');
   });
 
-  test.fixme('INT-003: Tab switching shows different tab content', async ({ mainPage }) => {
+  test('INT-003: Tab switching shows different tab content', async ({ mainPage }) => {
     // @scenario BHV-401
     const frame = await openERWebView(mainPage);
     const tabs = frame.locator('[data-testid="research-tabs"] [role="tab"]');
@@ -100,7 +99,7 @@ test.describe('UI-PKG-002: MarbleFormLayout — Interaction', () => {
 });
 
 test.describe('UI-PKG-002: MarbleFormLayout — Data Wiring', () => {
-  test.fixme('DW-001: Scripture content loads on open', async ({ mainPage }) => {
+  test('DW-001: Scripture content loads on open', async ({ mainPage }) => {
     // @scenario BHV-409
     const frame = await openERWebView(mainPage);
     // Scripture pane should have HTML content (not empty)
@@ -110,22 +109,29 @@ test.describe('UI-PKG-002: MarbleFormLayout — Data Wiring', () => {
     expect(text?.length).toBeGreaterThan(0);
   });
 
-  test.fixme('DW-002: State persisted across close/reopen via memento', async ({ mainPage }) => {
+  test('DW-002: State persisted across close/reopen via memento', async ({ mainPage }) => {
     // @scenario BHV-409 memento persistence
     const frame = await openERWebView(mainPage);
     // Click Encyclopedia tab
     const tabs = frame.locator('[data-testid="research-tabs"] [role="tab"]');
     await tabs.nth(1).click();
-    // Close ER
-    const closeBtn = mainPage.locator('.dock-tab >> text="×"').first();
+    // Close ER (use .dock-tab-close-btn as the close icon is CSS-rendered, not text)
+    const closeBtn = mainPage.locator(
+      '.dock-tab:has-text("Enhanced Resource") .dock-tab-close-btn',
+    );
     await closeBtn.click();
+    // Wait for ER tab to close
+    await mainPage.waitForTimeout(500);
     // Reopen ER
     const menuTrigger = mainPage.getByRole('menuitem', { name: /Open/i });
     await menuTrigger.click();
     await mainPage.getByRole('menuitem', { name: ER_MENU_LABEL }).click();
+    await expect(mainPage.locator('.dock-tab', { hasText: ER_MENU_LABEL })).toBeVisible({
+      timeout: 15_000,
+    });
     const frame2 = mainPage.frameLocator('iframe[title*="Enhanced Resource"]');
     // Encyclopedia tab should still be active
     const tabs2 = frame2.locator('[data-testid="research-tabs"] [role="tab"]');
-    await expect(tabs2.nth(1)).toHaveAttribute('data-state', 'active');
+    await expect(tabs2.nth(1)).toHaveAttribute('data-state', 'active', { timeout: 10_000 });
   });
 });

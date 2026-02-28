@@ -4,12 +4,24 @@
     "en": {
       "%platformEnhancedResources_title%": "Enhanced Resource",
       "%platformEnhancedResources_mainMenu_open%": "Open",
-      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Enhanced Resource"
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Enhanced Resource",
+      "%platformEnhancedResources_tab_dictionary%": "Dictionary",
+      "%platformEnhancedResources_tab_encyclopedia%": "Encyclopedia",
+      "%platformEnhancedResources_tab_media%": "Media",
+      "%platformEnhancedResources_tab_maps%": "Maps",
+      "%platformEnhancedResources_scripture_placeholder%": "Scripture content will load here",
+      "%platformEnhancedResources_research_placeholder%": "Research content will load here"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
       "%platformEnhancedResources_mainMenu_open%": "Abrir",
-      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Recurso mejorado"
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Recurso mejorado",
+      "%platformEnhancedResources_tab_dictionary%": "Diccionario",
+      "%platformEnhancedResources_tab_encyclopedia%": "Enciclopedia",
+      "%platformEnhancedResources_tab_media%": "Medios",
+      "%platformEnhancedResources_tab_maps%": "Mapas",
+      "%platformEnhancedResources_scripture_placeholder%": "El contenido de las escrituras se cargara aqui",
+      "%platformEnhancedResources_research_placeholder%": "El contenido de investigacion se cargara aqui"
     }
   }
 }
