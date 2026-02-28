@@ -59,6 +59,9 @@ public class ScriptureRenderingService
     private static readonly HashSet<string> s_legacyResources =
         new(StringComparer.Ordinal) { "LEGACY-ER" };
 
+    private static readonly HashSet<string> s_knownDictionaries =
+        new(StringComparer.Ordinal) { "SDBG", "SDBH", "DCLEX" };
+
     // =====================================================================
     // Public API
     // =====================================================================
@@ -92,11 +95,7 @@ public class ScriptureRenderingService
         // Validate input: unresolvable links return NOT_FOUND
         if (
             string.IsNullOrEmpty(input.Link.Lemma)
-            || (
-                input.Link.Dictionary != "SDBG"
-                && input.Link.Dictionary != "SDBH"
-                && input.Link.Dictionary != "DCLEX"
-            )
+            || !s_knownDictionaries.Contains(input.Link.Dictionary)
         )
         {
             return Task.FromResult(
@@ -108,8 +107,7 @@ public class ScriptureRenderingService
         var sb = new StringBuilder();
 
         // 1. Transliteration of the lemma (EXT-025, line 2694-2696)
-        string transliteration = input.Link.Lemma;
-        sb.Append(EscapeHtml(transliteration));
+        sb.Append(EscapeHtml(input.Link.Lemma));
 
         // 2. POS translation (short and long forms) (EXT-025, line 2698-2715)
         string posDescription = GetPosDescriptionForTooltip(input.Link.Dictionary);
@@ -120,9 +118,7 @@ public class ScriptureRenderingService
         }
 
         // 3. Lemma text
-        sb.Append(" [");
-        sb.Append(EscapeHtml(input.Link.Lemma));
-        sb.Append(']');
+        sb.Append($" [{EscapeHtml(input.Link.Lemma)}]");
 
         // 4. Gloss from dictionary (EXT-025, line 2720-2725)
         string? gloss = GetGlossForTooltip(input);
@@ -710,9 +706,11 @@ public class ScriptureRenderingService
             if (glossResult.Success && !string.IsNullOrEmpty(glossResult.Gloss))
                 return glossResult.Gloss;
         }
-        catch
+        catch (Exception)
         {
-            // Graceful fallback when dictionary data is unavailable
+            // LexiconService may throw when dictionary data is unavailable
+            // (e.g., ParatextData not initialized, entry index out of range).
+            // Graceful fallback to descriptive gloss below.
         }
 
         // Fallback: return a descriptive gloss based on the lemma
