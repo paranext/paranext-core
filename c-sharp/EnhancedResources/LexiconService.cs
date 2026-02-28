@@ -126,16 +126,31 @@ internal static class LexiconService
     ///
     /// Ported from PT9 MarbleDataAccess.cs:417 (FindLocalizedGlossesForTerm).
     /// </remarks>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/MarbleDataAccess.cs:417
+    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm()
+    // Maps to: EXT-012, BHV-111, INV-015, INV-C12
     public static Task<LocalizedGlossesResult> FindLocalizedGlossesForTermAsync(
         string term,
         string bestLanguageId,
         CancellationToken ct
     )
     {
-        // TODO: Implement in GREEN phase (CAP-018)
-        throw new NotImplementedException(
-            "FindLocalizedGlossesForTermAsync not yet implemented (CAP-018 RED phase)"
-        );
+        // Check precondition: ER data must be loaded (BHV-111)
+        bool haveData = TestHaveMarbleData?.Invoke() ?? false;
+        if (!haveData)
+            return CreateLocalizedGlossesError(
+                "INVALID_STATE",
+                "Enhanced Resource data not loaded"
+            );
+
+        // Look up glosses for the term with reference matching (INV-015, INV-C12)
+        IEnumerable<string>? glosses = TestFindGlossesForTerm?.Invoke(term, bestLanguageId);
+
+        if (glosses == null)
+            return CreateLocalizedGlossesError("NOT_FOUND", $"No glosses found for term '{term}'");
+
+        return Task.FromResult(new LocalizedGlossesResult(Success: true, Glosses: glosses));
     }
 
     /// <summary>
@@ -527,5 +542,13 @@ internal static class LexiconService
     ) =>
         Task.FromResult(
             new GlossLanguagesResult(Success: false, Error: new ErrorInfo(code, message))
+        );
+
+    private static Task<LocalizedGlossesResult> CreateLocalizedGlossesError(
+        string code,
+        string message
+    ) =>
+        Task.FromResult(
+            new LocalizedGlossesResult(Success: false, Error: new ErrorInfo(code, message))
         );
 }
