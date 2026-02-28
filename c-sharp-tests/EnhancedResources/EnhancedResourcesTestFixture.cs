@@ -237,6 +237,19 @@ public class EnhancedResourcesTestFixture
         {
             return BuildTestImageById(imageId);
         };
+
+        // =====================================================================
+        // CAP-007: Configure ImageService test seam for image data retrieval
+        // =====================================================================
+
+        // Test seam: ImageDataRetriever
+        // Returns synthetic image bytes for known image IDs at requested quality tiers.
+        // Throws InvalidOperationException for corrupt images (DATA_ERROR).
+        // Returns null for unknown image IDs (NOT_FOUND).
+        ImageService.TestImageDataRetriever = (imageId, quality) =>
+        {
+            return BuildTestImageData(imageId, quality);
+        };
     }
 
     [OneTimeTearDown]
@@ -255,6 +268,7 @@ public class EnhancedResourcesTestFixture
         ImageService.TestIsImageMetadataLoaded = null;
         ImageService.TestImageLookupByRef = null;
         ImageService.TestImageLookupById = null;
+        ImageService.TestImageDataRetriever = null;
     }
 
     /// <summary>
@@ -706,6 +720,148 @@ public class EnhancedResourcesTestFixture
         }
 
         return null;
+    }
+
+    // =====================================================================
+    // CAP-007: Image data test data builders
+    // =====================================================================
+
+    /// <summary>
+    /// Quality tier to pixel dimension mapping.
+    /// Thumbnail: exactly 90x60 (GM-010, TS-085).
+    /// Other tiers scale proportionally with increasing size.
+    /// </summary>
+    private static readonly Dictionary<string, (int Width, int Height)> s_qualityDimensions =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "thumbnail", (90, 60) },
+            { "lowDef", (480, 320) },
+            { "standardDef", (720, 480) },
+            { "highDef", (1080, 720) },
+        };
+
+    /// <summary>
+    /// Builds synthetic image data for CAP-007 GetImageData tests.
+    /// Returns (bytes, mimeType, width, height) for known image IDs.
+    /// Throws InvalidOperationException for corrupt images.
+    /// Returns null for unknown image IDs.
+    /// </summary>
+    private static (byte[] Bytes, string MimeType, int Width, int Height)? BuildTestImageData(
+        string imageId,
+        string quality
+    )
+    {
+        // Corrupt image: throw to signal DATA_ERROR
+        if (imageId == "IMG_CORRUPT")
+        {
+            throw new InvalidOperationException("Simulated corrupt image file");
+        }
+
+        // Determine dimensions from quality tier (default to standardDef)
+        if (!s_qualityDimensions.TryGetValue(quality, out var dims))
+        {
+            dims = s_qualityDimensions["standardDef"];
+        }
+
+        // IMG001: standard JPEG test image
+        if (imageId == "IMG001")
+        {
+            return (
+                GenerateSyntheticJpeg(dims.Width, dims.Height),
+                "image/jpeg",
+                dims.Width,
+                dims.Height
+            );
+        }
+
+        // IMG_JPEG: explicit JPEG for MIME type test
+        if (imageId == "IMG_JPEG")
+        {
+            return (
+                GenerateSyntheticJpeg(dims.Width, dims.Height),
+                "image/jpeg",
+                dims.Width,
+                dims.Height
+            );
+        }
+
+        // IMG_PNG: explicit PNG for MIME type test
+        if (imageId == "IMG_PNG")
+        {
+            return (
+                GenerateSyntheticPng(dims.Width, dims.Height),
+                "image/png",
+                dims.Width,
+                dims.Height
+            );
+        }
+
+        // Abraham_s_Well (after apostrophe normalization): JPEG image
+        if (imageId == "Abraham_s_Well")
+        {
+            return (
+                GenerateSyntheticJpeg(dims.Width, dims.Height),
+                "image/jpeg",
+                dims.Width,
+                dims.Height
+            );
+        }
+
+        // Unknown image: return null (NOT_FOUND)
+        return null;
+    }
+
+    /// <summary>
+    /// Generates a synthetic JPEG byte array of a size proportional to the dimensions.
+    /// Contains JPEG SOI marker (FF D8) at the start and EOI marker (FF D9) at the end,
+    /// making it a structurally minimal JPEG. The size is proportional to width*height
+    /// so that higher quality tiers produce larger payloads.
+    /// </summary>
+    private static byte[] GenerateSyntheticJpeg(int width, int height)
+    {
+        // Size proportional to pixel area (scaled down for test efficiency)
+        int byteCount = Math.Max(16, (width * height) / 10);
+        var bytes = new byte[byteCount];
+
+        // JPEG SOI marker
+        bytes[0] = 0xFF;
+        bytes[1] = 0xD8;
+
+        // Fill middle with non-zero data
+        for (int i = 2; i < byteCount - 2; i++)
+        {
+            bytes[i] = (byte)((i * 37 + 11) % 256);
+        }
+
+        // JPEG EOI marker
+        bytes[byteCount - 2] = 0xFF;
+        bytes[byteCount - 1] = 0xD9;
+
+        return bytes;
+    }
+
+    /// <summary>
+    /// Generates a synthetic PNG byte array of a size proportional to the dimensions.
+    /// Contains PNG magic bytes (89 50 4E 47 0D 0A 1A 0A) at the start.
+    /// The size is proportional to width*height so higher quality tiers produce larger payloads.
+    /// </summary>
+    private static byte[] GenerateSyntheticPng(int width, int height)
+    {
+        // Size proportional to pixel area (scaled down for test efficiency)
+        int byteCount = Math.Max(16, (width * height) / 10);
+        var bytes = new byte[byteCount];
+
+        // PNG magic bytes
+        byte[] pngMagic = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        Array.Copy(pngMagic, bytes, Math.Min(pngMagic.Length, byteCount));
+
+        // Fill remaining with non-zero data
+        for (int i = pngMagic.Length; i < byteCount; i++)
+        {
+            bytes[i] = (byte)((i * 41 + 7) % 256);
+        }
+
+        return bytes;
     }
 
     /// <summary>

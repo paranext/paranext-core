@@ -41,6 +41,18 @@ internal static class ImageService
     /// </summary>
     internal static Func<string, ImageMetadata?>? TestImageLookupById { get; set; }
 
+    /// <summary>
+    /// Test seam: retrieves image byte data for a given image ID and quality tier.
+    /// When set, returns (imageBytes, mimeType, width, height) or null if not found.
+    /// When the image is corrupt, throws InvalidOperationException.
+    /// Parameters: (imageId, quality) -> (byte[] bytes, string mimeType, int width, int height)?
+    /// </summary>
+    internal static Func<
+        string,
+        string,
+        (byte[] Bytes, string MimeType, int Width, int Height)?
+    >? TestImageDataRetriever { get; set; }
+
     // === NEW IN PT10 ===
     // Reason: PAPI command pattern - image metadata lookup via NetworkObject
     // Maps to: CAP-006
@@ -259,6 +271,15 @@ internal static class ImageService
     /// Postconditions: Returns image bytes at the requested quality tier.
     ///                 Thumbnail: 90x60px (BHV-305, TS-085).
     ///
+    /// EXPLANATION:
+    /// This method implements the following business rules:
+    /// 1. Validates input: imageId must be provided (unlike GetImageMetadata, verseRef alone is not sufficient)
+    /// 2. Normalizes apostrophes in imageId to underscores for path lookup (VAL-011)
+    /// 3. Retrieves image data at the requested quality tier via test seam or production API
+    /// 4. Returns base64-encoded image bytes with MIME type and actual dimensions
+    /// 5. Thumbnail quality tier produces exactly 90x60 pixel images (GM-010, TS-085)
+    /// 6. Corrupt images return DATA_ERROR; missing images return NOT_FOUND
+    ///
     /// Contract: Section 4.7 GetImageData
     /// Behaviors: BHV-305
     /// </summary>
@@ -267,12 +288,47 @@ internal static class ImageService
         CancellationToken ct
     )
     {
-        // RED PHASE STUB: Implementation will be provided by the TDD Implementer.
-        // This stub exists solely so that tests compile and fail (RED state).
-        throw new NotImplementedException(
-            "CAP-007 GetImageDataAsync not yet implemented. "
-                + "TDD RED phase: tests should compile and fail."
-        );
+        // Step 1: Validate imageId is provided
+        if (string.IsNullOrEmpty(input.ImageId))
+        {
+            return CreateImageDataError(
+                "INVALID_INPUT",
+                "imageId is required for image data retrieval"
+            );
+        }
+
+        // Step 2: Normalize apostrophes to underscores (VAL-011)
+        string normalizedId = input.ImageId.Replace("'", "_");
+
+        // Step 3: Retrieve image data via test seam
+        try
+        {
+            var imageData = TestImageDataRetriever?.Invoke(normalizedId, input.Quality);
+            if (imageData == null)
+            {
+                return CreateImageDataError(
+                    "NOT_FOUND",
+                    $"Image '{input.ImageId}' not found in resource"
+                );
+            }
+
+            // Step 4: Encode to base64 and return
+            string base64 = Convert.ToBase64String(imageData.Value.Bytes);
+            return Task.FromResult(
+                new ImageDataResult(
+                    Success: true,
+                    ImageBase64: base64,
+                    MimeType: imageData.Value.MimeType,
+                    Width: imageData.Value.Width,
+                    Height: imageData.Value.Height,
+                    Error: null
+                )
+            );
+        }
+        catch (InvalidOperationException)
+        {
+            return CreateImageDataError("DATA_ERROR", "Failed to read image data");
+        }
     }
 
     // ---- Error factory methods ----
@@ -282,6 +338,18 @@ internal static class ImageService
             new ImageMetadataResult(
                 Success: false,
                 Images: null,
+                Error: new ErrorInfo(code, message)
+            )
+        );
+
+    private static Task<ImageDataResult> CreateImageDataError(string code, string message) =>
+        Task.FromResult(
+            new ImageDataResult(
+                Success: false,
+                ImageBase64: null,
+                MimeType: null,
+                Width: 0,
+                Height: 0,
                 Error: new ErrorInfo(code, message)
             )
         );
