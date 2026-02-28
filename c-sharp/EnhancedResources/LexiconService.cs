@@ -598,4 +598,40 @@ internal static class LexiconService
         Task.FromResult(
             new AbbreviationResult(Success: false, Error: new ErrorInfo(code, message))
         );
+
+    // =========================================================================
+    // GetSemanticDomains (CAP-011)
+    // Contract: Section 4.11 (data-contracts.md)
+    // Behavior: BHV-309 (EntryCodeRange Tracking)
+    // Extraction: EXT-016 (Semantic Domain Hierarchy)
+    // =========================================================================
+
+    /// <summary>
+    /// Retrieve semantic domain hierarchy for tree rendering, including breadcrumbs
+    /// and child domains. EntryCodeRange tracking applies only to SDBG domains (BHV-309).
+    /// </summary>
+    /// <param name="input">Semantic domain lookup input.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Semantic domain hierarchy result.</returns>
+    internal static Task<SemanticDomainResult> GetSemanticDomainsAsync(
+        SemanticDomainInput input,
+        CancellationToken ct
+    )
+    {
+        // TODO: Implement in TDD GREEN phase (CAP-011)
+        throw new NotImplementedException("CAP-011: GetSemanticDomainsAsync not yet implemented");
+    }
+
+    private static Task<SemanticDomainResult> CreateSemanticDomainError(
+        string code,
+        string message
+    ) =>
+        Task.FromResult(
+            new SemanticDomainResult(
+                Success: false,
+                RootDomain: null,
+                Breadcrumbs: null,
+                Error: new ErrorInfo(code, message)
+            )
+        );
 }
