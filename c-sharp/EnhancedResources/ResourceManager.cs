@@ -4,12 +4,15 @@ using Paratext.Data;
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
-/// Manages initialization, discovery, and lifecycle of Enhanced Resource (Marble) projects.
+/// Manages initialization, discovery, lifecycle, and update checking of Enhanced Resource
+/// (Marble) projects.
 ///
-/// Implements CAP-015 InitializeResources (Section 4.15) and CAP-016 GetAvailableResources
-/// (Section 4.16). Discovers MarbleResource projects from ScrTextCollection, validates
-/// their integrity, loads dictionaries/encyclopedias/image metadata, tracks the
-/// haveMarbleData availability flag, and lists installed ER projects with metadata.
+/// Implements CAP-015 InitializeResources (Section 4.15), CAP-016 GetAvailableResources
+/// (Section 4.16), and CAP-020 CheckResourceUpdate (Section 4.20). Discovers MarbleResource
+/// projects from ScrTextCollection, validates their integrity, loads
+/// dictionaries/encyclopedias/image metadata, tracks the haveMarbleData availability flag,
+/// lists installed ER projects with metadata, and checks for available updates using
+/// Marble semantic version comparison.
 /// </summary>
 internal sealed class ResourceManager
 {
@@ -40,6 +43,38 @@ internal sealed class ResourceManager
     /// and maps each to a ResourceInfo.
     /// </summary>
     internal static Func<IReadOnlyList<ResourceInfo>>? TestGetAvailableResourceInfos { get; set; }
+
+    /// <summary>
+    /// Test seam: checks whether a resource with the given ID exists.
+    /// When null, looks up the resource from ScrTextCollection.
+    /// Returns (exists, currentVersion) or (false, null) if not found.
+    /// </summary>
+    internal static Func<
+        string,
+        (bool exists, string? currentVersion)
+    >? TestResourceLookup { get; set; }
+
+    /// <summary>
+    /// Test seam: checks network availability and fetches the manifest version for a resource.
+    /// When null, performs a real network check against the Marble resource server.
+    /// Returns (networkAvailable, availableVersion, isMajorUpdate) or error info.
+    /// </summary>
+    internal static Func<
+        string,
+        (bool networkAvailable, string? availableVersion, bool isMajorUpdate, string? errorMessage)
+    >? TestManifestFetch { get; set; }
+
+    /// <summary>
+    /// Test seam: returns the current UTC time for cache expiry calculations.
+    /// When null, uses <see cref="DateTime.UtcNow"/>.
+    /// </summary>
+    internal static Func<DateTime>? TestUtcNow { get; set; }
+
+    /// <summary>
+    /// Test seam: returns the timestamp when the manifest cache was last updated.
+    /// When null, reads from the internal cache state.
+    /// </summary>
+    internal static Func<string, DateTime?>? TestManifestCacheTimestamp { get; set; }
 
     /// <summary>
     /// Initializes the Enhanced Resources data access layer by discovering MarbleResource
@@ -308,4 +343,33 @@ internal sealed class ResourceManager
     /// <remarks>INV-008: Font resolved language-first, then settings fallback.</remarks>
     private static FontInfo ResolveFont(string? defaultFont, int defaultFontSize) =>
         new(defaultFont ?? "Charis SIL", defaultFontSize > 0 ? defaultFontSize : 12.0, null);
+
+    // =========================================================================
+    // CAP-020: CheckResourceUpdate (Section 4.20)
+    // =========================================================================
+
+    /// <summary>
+    /// Checks whether a newer version of an Enhanced Resource is available for download.
+    /// Uses Marble semantic version comparison (INV-005, INV-C05).
+    /// </summary>
+    /// <remarks>
+    /// Ported from PT9 InstallableResource.IsNewerThanCurrentlyInstalled() and
+    /// MarbleForm background version check (EXT-020, EXT-035).
+    /// Contract: Section 4.20.
+    /// BHV-106: Marble resources use ResourceVersion comparison; not-installed always newer.
+    /// INV-005: Marble uses semantic Version, not DBL revision/checksum.
+    /// INV-C05: isMarble(r) => updateAvailable(r) == (r.availableVersion > r.installedVersion).
+    /// Manifest cache expires after 24 hours (VAL-010, TS-086).
+    /// </remarks>
+    /// <param name="input">Resource identity to check for updates.</param>
+    /// <param name="ct">Cancellation token for cooperative cancellation.</param>
+    /// <returns>Result indicating update availability, or failure with error code and message.</returns>
+    public Task<ResourceUpdateResult> CheckResourceUpdateAsync(
+        ResourceIdentityInput input,
+        CancellationToken ct
+    )
+    {
+        // TODO: CAP-020 implementation -- stub for TDD RED phase
+        throw new NotImplementedException("CheckResourceUpdateAsync not yet implemented (CAP-020)");
+    }
 }
