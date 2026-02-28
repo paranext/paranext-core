@@ -62,29 +62,15 @@ internal static class EncyclopediaService
     /// If all three levels fail, returns NOT_FOUND error.
     /// XML parse failures from the test seam are caught and returned as PARSE_ERROR.
     /// </summary>
-    public static async Task<EncyclopediaResult> GetEncyclopediaEntryAsync(
+    public static Task<EncyclopediaResult> GetEncyclopediaEntryAsync(
         EncyclopediaLookupInput input,
         CancellationToken ct
     )
     {
-        await Task.CompletedTask;
-
-        // Build the ordered fallback chain (INV-019):
-        // resource language -> UI language -> English
-        // Deduplicate to avoid redundant lookups when languages overlap.
-        var fallbackLanguages = new List<string>(3);
-        fallbackLanguages.Add(input.ResourceLanguageId);
-        if (!string.Equals(input.UiLanguageId, input.ResourceLanguageId, StringComparison.Ordinal))
-        {
-            fallbackLanguages.Add(input.UiLanguageId);
-        }
-        if (
-            !string.Equals("en", input.ResourceLanguageId, StringComparison.Ordinal)
-            && !string.Equals("en", input.UiLanguageId, StringComparison.Ordinal)
-        )
-        {
-            fallbackLanguages.Add("en");
-        }
+        List<string> fallbackLanguages = BuildFallbackLanguages(
+            input.ResourceLanguageId,
+            input.UiLanguageId
+        );
 
         // Try each language in the fallback chain
         foreach (var languageId in fallbackLanguages)
@@ -94,47 +80,74 @@ internal static class EncyclopediaService
                 var entry = LookupEntry(input.EntryId, languageId);
                 if (entry != null)
                 {
-                    return new EncyclopediaResult(
-                        Success: true,
-                        Entries: new List<EncyclopediaEntry> { entry },
-                        Error: null
+                    return Task.FromResult(
+                        new EncyclopediaResult(
+                            Success: true,
+                            Entries: new List<EncyclopediaEntry> { entry },
+                            Error: null
+                        )
                     );
                 }
             }
             catch (XmlException)
             {
                 // XML parsing failure -> PARSE_ERROR
-                return new EncyclopediaResult(
-                    Success: false,
-                    Entries: null,
-                    Error: new ErrorInfo("PARSE_ERROR", "Failed to parse encyclopedia entry XML")
+                return CreateEncyclopediaError(
+                    "PARSE_ERROR",
+                    "Failed to parse encyclopedia entry XML"
                 );
             }
         }
 
         // All fallback languages exhausted -> NOT_FOUND
-        return new EncyclopediaResult(
-            Success: false,
-            Entries: null,
-            Error: new ErrorInfo(
-                "NOT_FOUND",
-                $"No localized content for entry '{input.EntryId}' in any available language"
-            )
+        return CreateEncyclopediaError(
+            "NOT_FOUND",
+            $"No localized content for entry '{input.EntryId}' in any available language"
         );
+    }
+
+    /// <summary>
+    /// Builds the ordered language fallback chain (INV-019):
+    /// resource language -> UI language -> English.
+    /// Deduplicates to avoid redundant lookups when languages overlap.
+    /// </summary>
+    private static List<string> BuildFallbackLanguages(
+        string resourceLanguageId,
+        string uiLanguageId
+    )
+    {
+        var languages = new List<string>(3) { resourceLanguageId };
+
+        if (!string.Equals(uiLanguageId, resourceLanguageId, StringComparison.Ordinal))
+            languages.Add(uiLanguageId);
+
+        if (
+            !string.Equals("en", resourceLanguageId, StringComparison.Ordinal)
+            && !string.Equals("en", uiLanguageId, StringComparison.Ordinal)
+        )
+            languages.Add("en");
+
+        return languages;
     }
 
     /// <summary>
     /// Looks up an encyclopedia entry by ID and language using the test seam or production API.
     /// Returns null if not found in the given language. May throw XmlException for corrupt data.
     /// </summary>
-    private static EncyclopediaEntry? LookupEntry(string entryId, string languageId)
-    {
-        if (TestEntryLookup != null)
-        {
-            return TestEntryLookup(entryId, languageId);
-        }
+    /// <remarks>
+    /// Production: when TestEntryLookup is null, would use ParatextData APIs.
+    /// </remarks>
+    private static EncyclopediaEntry? LookupEntry(string entryId, string languageId) =>
+        TestEntryLookup?.Invoke(entryId, languageId);
 
-        // Production path: would call ParatextData APIs here
-        return null;
-    }
+    // ---- Error factory method ----
+
+    private static Task<EncyclopediaResult> CreateEncyclopediaError(string code, string message) =>
+        Task.FromResult(
+            new EncyclopediaResult(
+                Success: false,
+                Entries: null,
+                Error: new ErrorInfo(code, message)
+            )
+        );
 }
