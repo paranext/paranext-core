@@ -378,6 +378,11 @@ public class EnhancedResourcesTestFixture
         TermRenderingStatusService.TestHaveMarbleData = null;
         TermRenderingStatusService.TestAvailableGlossLanguages = null;
         TermRenderingStatusService.TestFindLocalizedGlossesForTerm = null;
+        ErBtMappingEngine.TestAnalyzeMapping = null;
+        ErBtMappingEngine.TestIsProjectAvailable = null;
+        ErBtMappingEngine.TestIsResourceInitialized = null;
+        ErBtMappingEngine.TestHaveTermsData = null;
+        ErBtMappingEngine.TestComputeReferenceOverlap = null;
     }
 
     /// <summary>
