@@ -248,7 +248,34 @@ internal static class ImageService
             .ThenBy(img => img.ImageId, StringComparer.Ordinal)
             .ToList();
 
-    // ---- Error factory method ----
+    // === NEW IN PT10 ===
+    // Reason: PAPI command pattern - image data retrieval via NetworkObject
+    // Maps to: CAP-007
+    /// <summary>
+    /// Retrieves the actual image bytes for display, with quality tier selection.
+    /// Returns base64-encoded image data with MIME type and dimensions.
+    ///
+    /// Preconditions: imageId must be provided. Resource initialized.
+    /// Postconditions: Returns image bytes at the requested quality tier.
+    ///                 Thumbnail: 90x60px (BHV-305, TS-085).
+    ///
+    /// Contract: Section 4.7 GetImageData
+    /// Behaviors: BHV-305
+    /// </summary>
+    public static Task<ImageDataResult> GetImageDataAsync(
+        ImageRetrievalInput input,
+        CancellationToken ct
+    )
+    {
+        // RED PHASE STUB: Implementation will be provided by the TDD Implementer.
+        // This stub exists solely so that tests compile and fail (RED state).
+        throw new NotImplementedException(
+            "CAP-007 GetImageDataAsync not yet implemented. "
+                + "TDD RED phase: tests should compile and fail."
+        );
+    }
+
+    // ---- Error factory methods ----
 
     private static Task<ImageMetadataResult> CreateError(string code, string message) =>
         Task.FromResult(
