@@ -8,6 +8,11 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class ImageService
 {
+    /// <summary>
+    /// Collection name used to classify images into the Maps tab (INV-018, INV-C15).
+    /// </summary>
+    private const string SatelliteBibleAtlasCollection = "Satellite Bible Atlas";
+
     // =====================================================================
     // Test seams: When set, these functions override production behavior
     // to enable isolated testing without real image data files.
@@ -80,19 +85,9 @@ internal static class ImageService
             return CreateError("INVALID_STATE", "Image metadata not available");
         }
 
-        // Step 3: Retrieve images
-        List<ImageMetadata> images;
-
-        if (input.ImageId != null)
-        {
-            // Lookup by image ID
-            images = LookupById(input.ImageId);
-        }
-        else
-        {
-            // Lookup by verse reference
-            images = LookupByRef(input.VerseRef!);
-        }
+        // Step 3: Retrieve images by ID or verse reference
+        var images =
+            input.ImageId != null ? LookupById(input.ImageId) : LookupByRef(input.VerseRef!);
 
         // Step 4: Apply apostrophe substitution in filenames (VAL-011)
         images = ApplyApostropheSubstitution(images);
@@ -130,22 +125,15 @@ internal static class ImageService
         string normalizedId = imageId.Replace("'", "_");
 
         var image = TestImageLookupById?.Invoke(normalizedId);
-        if (image != null)
-        {
-            return new List<ImageMetadata> { image };
-        }
-
-        return new List<ImageMetadata>();
+        return image != null ? [image] : [];
     }
 
     /// <summary>
     /// Looks up image metadata by verse reference using the test seam or production API.
     /// Returns a list of matching images, or empty if none found.
     /// </summary>
-    private static List<ImageMetadata> LookupByRef(string verseRef)
-    {
-        return TestImageLookupByRef?.Invoke(verseRef) ?? new List<ImageMetadata>();
-    }
+    private static List<ImageMetadata> LookupByRef(string verseRef) =>
+        TestImageLookupByRef?.Invoke(verseRef) ?? [];
 
     // === PORTED FROM PT9 ===
     // Source: PT9/ParatextData/MarbleDataAccess.cs (GetImage filename resolution)
@@ -155,22 +143,8 @@ internal static class ImageService
     /// Replaces apostrophes with underscores in image filenames.
     /// PT9 behavior: apostrophes in filenames are substituted for path lookup safety.
     /// </summary>
-    private static List<ImageMetadata> ApplyApostropheSubstitution(List<ImageMetadata> images)
-    {
-        var result = new List<ImageMetadata>(images.Count);
-        foreach (var img in images)
-        {
-            if (img.FileName.Contains('\''))
-            {
-                result.Add(img with { FileName = img.FileName.Replace("'", "_") });
-            }
-            else
-            {
-                result.Add(img);
-            }
-        }
-        return result;
-    }
+    private static List<ImageMetadata> ApplyApostropheSubstitution(List<ImageMetadata> images) =>
+        images.Select(img => img with { FileName = img.FileName.Replace("'", "_") }).ToList();
 
     // === PORTED FROM PT9 ===
     // Source: PT9/ParatextData/MarbleImageData.cs (collection classification)
@@ -188,22 +162,26 @@ internal static class ImageService
 
         if (string.Equals(tabType, "maps", StringComparison.OrdinalIgnoreCase))
         {
-            // Maps tab: only "Satellite Bible Atlas" collection
+            // Maps tab: only Satellite Bible Atlas collection
             return images
                 .Where(img =>
-                    string.Equals(img.Collection, "Satellite Bible Atlas", StringComparison.Ordinal)
+                    string.Equals(
+                        img.Collection,
+                        SatelliteBibleAtlasCollection,
+                        StringComparison.Ordinal
+                    )
                 )
                 .ToList();
         }
 
         if (string.Equals(tabType, "images", StringComparison.OrdinalIgnoreCase))
         {
-            // Images tab: exclude "Satellite Bible Atlas" collection
+            // Images tab: exclude Satellite Bible Atlas collection
             return images
                 .Where(img =>
                     !string.Equals(
                         img.Collection,
-                        "Satellite Bible Atlas",
+                        SatelliteBibleAtlasCollection,
                         StringComparison.Ordinal
                     )
                 )
@@ -229,39 +207,32 @@ internal static class ImageService
     {
         string videoLang = MapVideoLanguage(languageId ?? "en");
 
-        var result = new List<ImageMetadata>(images.Count);
-        foreach (var img in images)
-        {
-            if (img.IsOnline)
+        return images
+            .Select(img =>
             {
-                // Online media: generate video URL with language code
+                if (!img.IsOnline)
+                    return img with { VideoUrl = null, VideoFormat = null };
+
                 string videoFormat = img.Format.Equals("MP4", StringComparison.OrdinalIgnoreCase)
                     ? "mp4"
                     : "m3u8";
                 string videoUrl = $"https://video.dbt.io/{videoLang}/{img.FileName}.{videoFormat}";
 
-                result.Add(img with { VideoUrl = videoUrl, VideoFormat = videoFormat });
-            }
-            else
-            {
-                // Offline images: null video fields
-                result.Add(img with { VideoUrl = null, VideoFormat = null });
-            }
-        }
-        return result;
+                return img with
+                {
+                    VideoUrl = videoUrl,
+                    VideoFormat = videoFormat,
+                };
+            })
+            .ToList();
     }
 
     /// <summary>
     /// Maps language codes for video URL generation.
     /// Chinese "zh" is mapped to "cmn" (Mandarin). All other codes pass through unchanged.
     /// </summary>
-    private static string MapVideoLanguage(string languageId)
-    {
-        if (string.Equals(languageId, "zh", StringComparison.OrdinalIgnoreCase))
-            return "cmn";
-
-        return languageId;
-    }
+    private static string MapVideoLanguage(string languageId) =>
+        string.Equals(languageId, "zh", StringComparison.OrdinalIgnoreCase) ? "cmn" : languageId;
 
     // === PORTED FROM PT9 ===
     // Source: PT9/ParatextData/MarbleDataAccess.cs:1024-1037
@@ -270,14 +241,12 @@ internal static class ImageService
     /// <summary>
     /// Groups images by (StartRef, EndRef) reference range, keeping grouped images consecutive.
     /// </summary>
-    private static List<ImageMetadata> GroupByReferenceRange(List<ImageMetadata> images)
-    {
-        return images
+    private static List<ImageMetadata> GroupByReferenceRange(List<ImageMetadata> images) =>
+        images
             .OrderBy(img => img.StartRef, StringComparer.Ordinal)
             .ThenBy(img => img.EndRef, StringComparer.Ordinal)
             .ThenBy(img => img.ImageId, StringComparer.Ordinal)
             .ToList();
-    }
 
     // ---- Error factory method ----
 
