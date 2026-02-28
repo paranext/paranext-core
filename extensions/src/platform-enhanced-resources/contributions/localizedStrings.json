@@ -10,7 +10,13 @@
       "%platformEnhancedResources_tab_media%": "Media",
       "%platformEnhancedResources_tab_maps%": "Maps",
       "%platformEnhancedResources_scripture_placeholder%": "Scripture content will load here",
-      "%platformEnhancedResources_research_placeholder%": "Research content will load here"
+      "%platformEnhancedResources_research_placeholder%": "Research content will load here",
+      "%platformEnhancedResources_scripture_loading%": "Loading scripture...",
+      "%platformEnhancedResources_filter_label%": "Filtered by:",
+      "%platformEnhancedResources_ctx_find_sense%": "Find this sense",
+      "%platformEnhancedResources_ctx_copy_surface%": "Copy surface form",
+      "%platformEnhancedResources_ctx_find_lemma%": "Find this lemma",
+      "%platformEnhancedResources_ctx_copy_lemma%": "Copy lemma"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -21,7 +27,13 @@
       "%platformEnhancedResources_tab_media%": "Medios",
       "%platformEnhancedResources_tab_maps%": "Mapas",
       "%platformEnhancedResources_scripture_placeholder%": "El contenido de las escrituras se cargara aqui",
-      "%platformEnhancedResources_research_placeholder%": "El contenido de investigacion se cargara aqui"
+      "%platformEnhancedResources_research_placeholder%": "El contenido de investigacion se cargara aqui",
+      "%platformEnhancedResources_scripture_loading%": "Cargando escritura...",
+      "%platformEnhancedResources_filter_label%": "Filtrado por:",
+      "%platformEnhancedResources_ctx_find_sense%": "Buscar este sentido",
+      "%platformEnhancedResources_ctx_copy_surface%": "Copiar forma superficial",
+      "%platformEnhancedResources_ctx_find_lemma%": "Buscar este lema",
+      "%platformEnhancedResources_ctx_copy_lemma%": "Copiar lema"
     }
   }
 }

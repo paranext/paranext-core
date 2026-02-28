@@ -7,6 +7,7 @@ import {
 } from '@papi/core';
 import enhancedResourceWebView from './enhanced-resource.web-view?inline';
 import tailwindCssStyles from '../tailwind.css?inline';
+import scripturePaneStyles from '../components/scripture-pane.css?inline';
 
 export const ER_WEB_VIEW_TYPE = 'platformEnhancedResources.enhancedResource';
 
@@ -31,7 +32,7 @@ const enhancedResourceWebViewProvider: IWebViewProvider = {
       ...savedWebView,
       title: '%platformEnhancedResources_title%',
       content: enhancedResourceWebView,
-      styles: tailwindCssStyles,
+      styles: `${tailwindCssStyles}\n${scripturePaneStyles}`,
       shouldShowToolbar: true,
       projectId: resourceId,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,

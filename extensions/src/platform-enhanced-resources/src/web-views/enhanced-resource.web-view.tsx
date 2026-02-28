@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -10,6 +10,7 @@ import {
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
+import ScripturePane from '../components/scripture-pane.component';
 
 /** Localized string keys used by this web view */
 const LOCALIZED_STRING_KEYS = [
@@ -20,6 +21,7 @@ const LOCALIZED_STRING_KEYS = [
   '%platformEnhancedResources_tab_maps%',
   '%platformEnhancedResources_scripture_placeholder%',
   '%platformEnhancedResources_research_placeholder%',
+  '%platformEnhancedResources_filter_label%',
 ] as const;
 
 /** Tab value constants matching the 4 research tabs */
@@ -81,6 +83,23 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => [...LOCALIZED_STRING_KEYS], []));
 
+  // Filter state for linked word clicks
+  const [filterLemma, setFilterLemma] = useState<string | undefined>(undefined);
+  const [filterDisplayText, setFilterDisplayText] = useState('');
+  const isFilterActive = filterLemma !== undefined;
+
+  // Handle linked word click - activate filter
+  const handleWordClick = useCallback((lemma: string, displayText: string) => {
+    setFilterLemma(lemma);
+    setFilterDisplayText(displayText);
+  }, []);
+
+  // Handle clear filter
+  const handleClearFilter = useCallback(() => {
+    setFilterLemma(undefined);
+    setFilterDisplayText('');
+  }, []);
+
   // Handle splitter resize - persist the new position
   const handleResize = useCallback(
     (sizes: number[]) => {
@@ -103,9 +122,6 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
     [setSelectedTab],
   );
 
-  // Format the current scripture reference for display
-  const referenceDisplay = scrRef ? `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}` : '';
-
   // Localized tab labels with fallbacks
   const tabLabels = useMemo(
     () => ({
@@ -118,24 +134,20 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
     [localizedStrings],
   );
 
+  const filterLabel =
+    localizedStrings['%platformEnhancedResources_filter_label%'] || 'Filtered by:';
+
   return (
     <div className="pr-twp tw-flex tw-flex-col tw-h-[100dvh]" data-testid="er-web-view">
       <ResizablePanelGroup direction="vertical" data-testid="er-split-pane" onLayout={handleResize}>
         {/* Scripture Pane (top) */}
         <ResizablePanel defaultSize={splitterPosition} minSize={15}>
-          <div
-            className="tw-h-full tw-flex tw-flex-col tw-overflow-hidden"
-            data-testid="scripture-pane-container"
-          >
-            <div className="tw-flex-1 tw-overflow-auto tw-p-4">
-              <div data-testid="scripture-content">
-                {referenceDisplay && (
-                  <p className="tw-text-sm tw-text-muted-foreground">{referenceDisplay}</p>
-                )}
-                {/* Placeholder for ScripturePane component (WP-003) */}
-              </div>
-            </div>
-          </div>
+          <ScripturePane
+            scrRef={scrRef}
+            onWordClick={handleWordClick}
+            onClearFilter={handleClearFilter}
+            isFilterActive={isFilterActive}
+          />
         </ResizablePanel>
 
         {/* Draggable splitter divider */}
@@ -147,6 +159,25 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
             className="tw-h-full tw-flex tw-flex-col tw-overflow-hidden"
             data-testid="research-pane-container"
           >
+            {/* Filter box - visible when a word is clicked */}
+            {isFilterActive && (
+              <div
+                data-testid="filter-box"
+                className="tw-flex tw-items-center tw-gap-2 tw-px-4 tw-py-2 tw-bg-green-100 tw-border-b tw-text-sm"
+              >
+                <span className="tw-font-medium">{filterLabel}</span>
+                <span>{filterDisplayText}</span>
+                <button
+                  type="button"
+                  onClick={handleClearFilter}
+                  className="tw-ml-auto tw-text-muted-foreground hover:tw-text-foreground"
+                  aria-label="Clear filter"
+                >
+                  X
+                </button>
+              </div>
+            )}
+
             {/* Research tabs */}
             <Tabs
               value={selectedTab}

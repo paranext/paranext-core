@@ -1,8 +1,8 @@
 /**
  * Functional tests for UI-PKG-003: ScripturePane
  *
- * RED phase — all tests use test.fixme() until implementation activates them. Tests verify
- * scripture HTML rendering, linked word clicks, context menu, and display modes.
+ * RED phase — all tests use test() until implementation activates them. Tests verify scripture HTML
+ * rendering, linked word clicks, context menu, and display modes.
  *
  * @scenario BHV-403, BHV-404, BHV-408, BHV-413, BHV-414, BHV-415, BHV-417, BHV-418,
  *           BHV-419, BHV-600, BHV-601, BHV-602, BHV-608, BHV-609
@@ -24,7 +24,7 @@ async function openERWebView(mainPage: import('@playwright/test').Page) {
 }
 
 test.describe('UI-PKG-003: ScripturePane — Render', () => {
-  test.fixme('RND-001: Scripture HTML content renders with linked words', async ({ mainPage }) => {
+  test('RND-001: Scripture HTML content renders with linked words', async ({ mainPage }) => {
     // @scenario BHV-404
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');
@@ -38,7 +38,7 @@ test.describe('UI-PKG-003: ScripturePane — Render', () => {
     });
   });
 
-  test.fixme('RND-002: Blue highlight class applied for research terms', async ({ mainPage }) => {
+  test('RND-002: Blue highlight class applied for research terms', async ({ mainPage }) => {
     // @scenario BHV-404, BHV-414
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');
@@ -49,22 +49,19 @@ test.describe('UI-PKG-003: ScripturePane — Render', () => {
 });
 
 test.describe('UI-PKG-003: ScripturePane — Interaction', () => {
-  test.fixme(
-    'INT-001: Clicking linked word triggers research pane filter',
-    async ({ mainPage }) => {
-      // @scenario BHV-403
-      const frame = await openERWebView(mainPage);
-      const content = frame.locator('[data-testid="scripture-content"]');
-      await expect(content).toBeVisible({ timeout: 15_000 });
-      const linkedWord = content.locator('.researchable-word').first();
-      await linkedWord.click();
-      // Filter bar should become visible with the clicked word's info
-      const filterBox = frame.locator('[data-testid="filter-box"]');
-      await expect(filterBox).toBeVisible({ timeout: 5_000 });
-    },
-  );
+  test('INT-001: Clicking linked word triggers research pane filter', async ({ mainPage }) => {
+    // @scenario BHV-403
+    const frame = await openERWebView(mainPage);
+    const content = frame.locator('[data-testid="scripture-content"]');
+    await expect(content).toBeVisible({ timeout: 15_000 });
+    const linkedWord = content.locator('.researchable-word').first();
+    await linkedWord.click();
+    // Filter bar should become visible with the clicked word's info
+    const filterBox = frame.locator('[data-testid="filter-box"]');
+    await expect(filterBox).toBeVisible({ timeout: 5_000 });
+  });
 
-  test.fixme('INT-002: Right-click on linked word shows context menu', async ({ mainPage }) => {
+  test('INT-002: Right-click on linked word shows context menu', async ({ mainPage }) => {
     // @scenario BHV-413
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');
@@ -78,7 +75,7 @@ test.describe('UI-PKG-003: ScripturePane — Interaction', () => {
     await expect(ctxMenu.getByText(/Copy surface form/i)).toBeVisible();
   });
 
-  test.fixme('INT-003: Footnotes pane toggles with F7', async ({ mainPage }) => {
+  test('INT-003: Footnotes pane toggles with F7', async ({ mainPage }) => {
     // @scenario BHV-408, BHV-600
     const frame = await openERWebView(mainPage);
     await expect(frame.locator('[data-testid="scripture-content"]')).toBeVisible({
@@ -95,7 +92,7 @@ test.describe('UI-PKG-003: ScripturePane — Interaction', () => {
     await expect(footnotes).not.toBeVisible();
   });
 
-  test.fixme('INT-004: Clicking empty area while filtered clears filter', async ({ mainPage }) => {
+  test('INT-004: Clicking empty area while filtered clears filter', async ({ mainPage }) => {
     // @scenario BHV-419
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');
@@ -110,7 +107,7 @@ test.describe('UI-PKG-003: ScripturePane — Interaction', () => {
     await expect(filterBox).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test.fixme('INT-005: Hebrew display mode changes via View menu', async ({ mainPage }) => {
+  test('INT-005: Hebrew display mode changes via View menu', async ({ mainPage }) => {
     // @scenario BHV-601
     const frame = await openERWebView(mainPage);
     await expect(frame.locator('[data-testid="scripture-content"]')).toBeVisible({
@@ -120,7 +117,7 @@ test.describe('UI-PKG-003: ScripturePane — Interaction', () => {
     // This is a menu at the web view level or dock level
   });
 
-  test.fixme('INT-006: Copy surface form from context menu', async ({ mainPage }) => {
+  test('INT-006: Copy surface form from context menu', async ({ mainPage }) => {
     // @scenario BHV-415
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');
@@ -134,7 +131,7 @@ test.describe('UI-PKG-003: ScripturePane — Interaction', () => {
 });
 
 test.describe('UI-PKG-003: ScripturePane — Data Wiring', () => {
-  test.fixme('DW-001: Scripture content updates on verse change', async ({ mainPage }) => {
+  test('DW-001: Scripture content updates on verse change', async ({ mainPage }) => {
     // @scenario BHV-417, BHV-608
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');
@@ -145,7 +142,7 @@ test.describe('UI-PKG-003: ScripturePane — Data Wiring', () => {
     expect(initialText?.length).toBeGreaterThan(0);
   });
 
-  test.fixme('DW-002: Tooltip appears on hover over linked word', async ({ mainPage }) => {
+  test('DW-002: Tooltip appears on hover over linked word', async ({ mainPage }) => {
     // @scenario BHV-418
     const frame = await openERWebView(mainPage);
     const content = frame.locator('[data-testid="scripture-content"]');

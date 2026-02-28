@@ -1,0 +1,49 @@
+/**
+ * Highlight CSS classes for scripture pane linked words.
+ * These classes control visibility of colored underlines on linked words.
+ * The HTML is generated server-side and uses these class names.
+ */
+
+/* Researchable (linked) words in scripture text */
+.researchable-word {
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.researchable-word:hover {
+  opacity: 0.8;
+}
+
+/* Blue highlight for all research terms (BHV-404) */
+.showeverylink .researchable-word {
+  color: hsl(217, 91%, 45%);
+  border-bottom-color: hsl(217, 91%, 45%);
+}
+
+/* Gray highlight for found renderings (BHV-404) */
+.showfound .researchable-word[data-rendering-status='found'] {
+  color: hsl(215, 14%, 50%);
+  border-bottom-color: hsl(215, 14%, 50%);
+}
+
+/* Orange highlight for missing/problem renderings (BHV-404) */
+.showmissing .researchable-word[data-rendering-status='missing'] {
+  color: hsl(25, 95%, 53%);
+  border-bottom-color: hsl(25, 95%, 53%);
+}
+
+/* Active word (currently filtered) */
+.researchable-word.active-word {
+  background-color: hsl(217, 91%, 90%);
+  border-radius: 2px;
+}
+
+/* Verse numbers in scripture text */
+.verse-number {
+  font-weight: 700;
+  font-size: 0.75em;
+  vertical-align: super;
+  margin-right: 0.25em;
+}
