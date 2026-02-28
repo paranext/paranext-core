@@ -147,24 +147,12 @@ internal static class LexiconService
         CancellationToken ct
     )
     {
-        // Step 1: Resolve dictionary alias (VAL-009: "LN" -> "SDBG")
-        string resolvedDictionary = ResolveDictionaryName(input.Dictionary);
+        // Steps 1-5: Shared lookup pipeline (VAL-009, VAL-008, INVALID_STATE, INV-016)
+        var (entry, resolvedDictionary, _, normalizedLemma, errorCode, errorMessage) =
+            ResolveAndLookupEntry(input);
 
-        // Step 2: Correct legacy language codes (VAL-008: "sp" -> "es")
-        string glossLanguageId = CorrectLanguageCode(input.GlossLanguageId);
-
-        // Step 3: Check dictionary is loaded (INVALID_STATE)
-        if (!IsDictionaryLoadedCheck(resolvedDictionary))
-            return CreateDictionaryError(
-                "INVALID_STATE",
-                $"Dictionary '{resolvedDictionary}' data not available"
-            );
-
-        // Step 4: Normalize lemma to Unicode FormD (INV-016)
-        string normalizedLemma = input.Lemma.Normalize(NormalizationForm.FormD);
-
-        // Step 5: Look up entry
-        LexiconEntry? entry = LookupEntry(resolvedDictionary, normalizedLemma, glossLanguageId);
+        if (errorCode is not null)
+            return CreateDictionaryError(errorCode, errorMessage!);
 
         if (entry == null)
             return CreateDictionaryError(
@@ -172,14 +160,14 @@ internal static class LexiconService
                 $"No entry found for lemma '{normalizedLemma}' in {resolvedDictionary}"
             );
 
-        // Step 6: Validate base form index (INVALID_INPUT)
+        // Validate base form index (INVALID_INPUT)
         if (input.BaseFormIndex < 1 || input.BaseFormIndex > entry.BaseForms.Count)
             return CreateDictionaryError(
                 "INVALID_INPUT",
                 $"Base form index {input.BaseFormIndex} out of range"
             );
 
-        // Step 7: Validate meaning index (INVALID_INPUT)
+        // Validate meaning index (INVALID_INPUT)
         var selectedBaseForm = entry.BaseForms[input.BaseFormIndex - 1];
         if (input.MeaningIndex < 1 || input.MeaningIndex > selectedBaseForm.Meanings.Count)
             return CreateDictionaryError(
@@ -187,8 +175,7 @@ internal static class LexiconService
                 $"Meaning index {input.MeaningIndex} out of range"
             );
 
-        // Step 8: Apply brace filtering to glosses (BHV-303, GM-018)
-        // Step 9: Format selectedSenseRef (BHV-308)
+        // Apply brace filtering (BHV-303, GM-018) and format selectedSenseRef (BHV-308)
         var processedEntry = ApplyGlossProcessing(entry);
 
         return Task.FromResult(new DictionaryResult(Success: true, Entry: processedEntry));
@@ -257,6 +244,44 @@ internal static class LexiconService
         string normalizedLemma,
         string glossLanguageId
     ) => TestDictionaryEntryLookup?.Invoke(dictionary, normalizedLemma, glossLanguageId);
+
+    /// <summary>
+    /// Shared lookup pipeline: resolves dictionary alias (VAL-009), corrects legacy
+    /// language codes (VAL-008), checks dictionary is loaded, normalizes lemma to
+    /// Unicode FormD (INV-016), and looks up the entry.
+    /// </summary>
+    /// <returns>
+    /// The resolved entry and lookup context, or <c>null</c> entry if not found.
+    /// <paramref name="errorCode"/> and <paramref name="errorMessage"/> are set
+    /// when an error occurs before lookup (e.g., dictionary not loaded).
+    /// </returns>
+    private static (
+        LexiconEntry? entry,
+        string resolvedDictionary,
+        string glossLanguageId,
+        string normalizedLemma,
+        string? errorCode,
+        string? errorMessage
+    ) ResolveAndLookupEntry(DictionaryLookupInput input)
+    {
+        string resolvedDictionary = ResolveDictionaryName(input.Dictionary);
+        string glossLanguageId = CorrectLanguageCode(input.GlossLanguageId);
+
+        if (!IsDictionaryLoadedCheck(resolvedDictionary))
+            return (
+                null,
+                resolvedDictionary,
+                glossLanguageId,
+                input.Lemma,
+                "INVALID_STATE",
+                $"Dictionary '{resolvedDictionary}' data not available"
+            );
+
+        string normalizedLemma = input.Lemma.Normalize(NormalizationForm.FormD);
+        LexiconEntry? entry = LookupEntry(resolvedDictionary, normalizedLemma, glossLanguageId);
+
+        return (entry, resolvedDictionary, glossLanguageId, normalizedLemma, null, null);
+    }
 
     /// <summary>
     /// Applies brace filtering to glosses and formats selectedSenseRef strings.
@@ -353,6 +378,49 @@ internal static class LexiconService
     /// </remarks>
     private static string FilterBraces(string gloss) => s_bracePattern.Replace(gloss, "").Trim();
 
+    /// <summary>
+    /// Retrieve and format a gloss string for a lexical link, with brace-filtering applied.
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.14 GetGloss (data-contracts.md).
+    /// Behavior: BHV-303 (brace filtering).
+    /// Golden Master: GM-018.
+    ///
+    /// Ported from PT9 MarbleForm.cs:2747-2792
+    /// (GetGloss + FilterGlosses + RemoveBraces).
+    /// Maps to: EXT-038, BHV-303, GM-018.
+    ///
+    /// Thin wrapper over dictionary entry retrieval. Looks up the entry,
+    /// extracts the best gloss for the requested language, applies brace filtering,
+    /// and returns a GlossResult.
+    /// </remarks>
+    public static Task<GlossResult> GetGlossAsync(DictionaryLookupInput input, CancellationToken ct)
+    {
+        // Steps 1-5: Shared lookup pipeline (VAL-009, VAL-008, INVALID_STATE, INV-016)
+        var (entry, _, _, normalizedLemma, errorCode, errorMessage) = ResolveAndLookupEntry(input);
+
+        if (errorCode is not null)
+            return CreateGlossError(errorCode, errorMessage!);
+
+        if (entry == null)
+            return CreateGlossError("NOT_FOUND", $"No gloss found for lemma '{normalizedLemma}'");
+
+        // Extract gloss from the requested base form and meaning
+        var sense = entry
+            .BaseForms[input.BaseFormIndex - 1]
+            .Meanings[input.MeaningIndex - 1]
+            .Senses[0];
+
+        // Apply brace filtering (BHV-303, GM-018)
+        string filteredGloss = FilterBraces(sense.Gloss);
+
+        return Task.FromResult(
+            new GlossResult(Success: true, Gloss: filteredGloss, LanguageId: sense.GlossLanguageId)
+        );
+    }
+
+    // ---- Error factory methods ----
+
     private static Task<ParseLexicalLinksResult> CreateErrorResult(string code, string message) =>
         Task.FromResult(new ParseLexicalLinksResult(false, Error: new ErrorInfo(code, message)));
 
@@ -361,61 +429,6 @@ internal static class LexiconService
 
     private static Task<DictionaryResult> CreateDictionaryError(string code, string message) =>
         Task.FromResult(new DictionaryResult(Success: false, Error: new ErrorInfo(code, message)));
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Marble/MarbleForm.cs:2747-2792
-    // Method: MarbleForm.GetGloss() + FilterGlosses() + RemoveBraces()
-    // Maps to: EXT-038, BHV-303, GM-018
-    /// <summary>
-    /// Retrieve and format a gloss string for a lexical link, with brace-filtering applied.
-    /// </summary>
-    /// <remarks>
-    /// Contract: Section 4.14 GetGloss (data-contracts.md).
-    /// Extraction: EXT-038 (Gloss Retrieval and Brace Filtering).
-    /// Behavior: BHV-303 (brace filtering).
-    /// Golden Master: GM-018.
-    ///
-    /// Thin wrapper over dictionary entry retrieval. Looks up the entry,
-    /// extracts the best gloss for the requested language, applies brace filtering,
-    /// and returns a GlossResult.
-    /// </remarks>
-    public static Task<GlossResult> GetGlossAsync(DictionaryLookupInput input, CancellationToken ct)
-    {
-        // Step 1: Resolve dictionary alias (VAL-009: "LN" -> "SDBG")
-        string resolvedDictionary = ResolveDictionaryName(input.Dictionary);
-
-        // Step 2: Correct legacy language codes (VAL-008: "sp" -> "es")
-        string glossLanguageId = CorrectLanguageCode(input.GlossLanguageId);
-
-        // Step 3: Check dictionary is loaded (INVALID_STATE)
-        if (!IsDictionaryLoadedCheck(resolvedDictionary))
-            return CreateGlossError(
-                "INVALID_STATE",
-                $"Dictionary '{resolvedDictionary}' data not available"
-            );
-
-        // Step 4: Normalize lemma to Unicode FormD (INV-016)
-        string normalizedLemma = input.Lemma.Normalize(NormalizationForm.FormD);
-
-        // Step 5: Look up entry via test seam / ParatextData
-        LexiconEntry? entry = LookupEntry(resolvedDictionary, normalizedLemma, glossLanguageId);
-
-        if (entry == null)
-            return CreateGlossError("NOT_FOUND", $"No gloss found for lemma '{normalizedLemma}'");
-
-        // Step 6: Extract gloss from the requested base form and meaning
-        var baseForm = entry.BaseForms[input.BaseFormIndex - 1];
-        var meaning = baseForm.Meanings[input.MeaningIndex - 1];
-        var sense = meaning.Senses[0];
-
-        // Step 7: Apply brace filtering (BHV-303, GM-018)
-        string filteredGloss = FilterBraces(sense.Gloss);
-
-        // Step 8: Return success with filtered gloss and language
-        return Task.FromResult(
-            new GlossResult(Success: true, Gloss: filteredGloss, LanguageId: sense.GlossLanguageId)
-        );
-    }
 
     private static Task<GlossResult> CreateGlossError(string code, string message) =>
         Task.FromResult(new GlossResult(Success: false, Error: new ErrorInfo(code, message)));
