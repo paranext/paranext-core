@@ -361,4 +361,23 @@ internal static class LexiconService
 
     private static Task<DictionaryResult> CreateDictionaryError(string code, string message) =>
         Task.FromResult(new DictionaryResult(Success: false, Error: new ErrorInfo(code, message)));
+
+    /// <summary>
+    /// Retrieve and format a gloss string for a lexical link, with brace-filtering applied.
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.14 GetGloss (data-contracts.md).
+    /// Extraction: EXT-038 (Gloss Retrieval and Brace Filtering).
+    /// Behavior: BHV-303 (brace filtering).
+    /// Golden Master: GM-018.
+    ///
+    /// Thin wrapper over dictionary entry retrieval. Looks up the entry,
+    /// extracts the best gloss for the requested language, applies brace filtering,
+    /// and returns a GlossResult.
+    /// </remarks>
+    public static Task<GlossResult> GetGlossAsync(DictionaryLookupInput input, CancellationToken ct)
+    {
+        // TDD stub: Not yet implemented. Tests should FAIL.
+        throw new NotImplementedException("CAP-014: GetGlossAsync not yet implemented");
+    }
 }
