@@ -4,12 +4,12 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources;
 
 /// <summary>
-/// Test fixture for Enhanced Resources tests (CAP-015, CAP-016, CAP-004, CAP-005).
+/// Test fixture for Enhanced Resources tests (CAP-015, CAP-016, CAP-004, CAP-005, CAP-006).
 ///
-/// Configures the ResourceManager's, LexiconService's, and EncyclopediaService's
-/// internal test seams to provide dynamic behavior based on the current test context.
-/// This enables tests to pass by detecting which test is running and providing
-/// appropriate results.
+/// Configures the ResourceManager's, LexiconService's, EncyclopediaService's, and
+/// ImageService's internal test seams to provide dynamic behavior based on the current
+/// test context. This enables tests to pass by detecting which test is running and
+/// providing appropriate results.
 ///
 /// Tests that expect error conditions (INVALID_STATE, NOT_FOUND, PARSE_ERROR) get
 /// those conditions. Tests that expect success get resources available.
@@ -64,6 +64,17 @@ public class EnhancedResourcesTestFixture
     // CAP-005: Tests that expect malformed XML (PARSE_ERROR)
     private static readonly HashSet<string> s_encyclopediaParseErrorTests =
         new(StringComparer.Ordinal) { "GetEncyclopediaEntry_InvalidXml_ReturnsParseError", };
+
+    // CAP-006: Tests that expect image metadata not loaded (INVALID_STATE)
+    private static readonly HashSet<string> s_imageNotLoadedTests =
+        new(StringComparer.Ordinal)
+        {
+            "GetImageMetadata_MetadataNotLoaded_ReturnsInvalidStateError",
+        };
+
+    // CAP-006: Tests that expect no media found (NOT_FOUND)
+    private static readonly HashSet<string> s_imageNotFoundTests =
+        new(StringComparer.Ordinal) { "GetImageMetadata_NoMediaFound_ReturnsNotFoundError", };
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
@@ -191,6 +202,41 @@ public class EnhancedResourcesTestFixture
         {
             return BuildTestParagraph(rawXml);
         };
+
+        // =====================================================================
+        // CAP-006: Configure ImageService test seams for image metadata lookup
+        // =====================================================================
+
+        // Test seam: IsImageMetadataLoaded
+        // Returns false for tests that expect INVALID_STATE error
+        ImageService.TestIsImageMetadataLoaded = () =>
+        {
+            var testName = NUnit.Framework.TestContext.CurrentContext?.Test?.MethodName;
+            if (testName != null && s_imageNotLoadedTests.Contains(testName))
+                return false;
+            return true;
+        };
+
+        // Test seam: ImageLookupByRef
+        // Returns test image metadata for known verse references.
+        // Returns empty list for 3JN 1:1 to trigger NOT_FOUND.
+        ImageService.TestImageLookupByRef = (verseRef) =>
+        {
+            var testName = NUnit.Framework.TestContext.CurrentContext?.Test?.MethodName;
+
+            // Tests expecting NOT_FOUND: return empty list
+            if (testName != null && s_imageNotFoundTests.Contains(testName))
+                return new List<ImageMetadata>();
+
+            return BuildTestImagesByRef(verseRef);
+        };
+
+        // Test seam: ImageLookupById
+        // Returns test image metadata for known image IDs.
+        ImageService.TestImageLookupById = (imageId) =>
+        {
+            return BuildTestImageById(imageId);
+        };
     }
 
     [OneTimeTearDown]
@@ -206,6 +252,9 @@ public class EnhancedResourcesTestFixture
         EncyclopediaService.TestIsEncyclopediaLoaded = null;
         EncyclopediaService.TestEntryLookup = null;
         EncyclopediaService.TestFormatParagraph = null;
+        ImageService.TestIsImageMetadataLoaded = null;
+        ImageService.TestImageLookupByRef = null;
+        ImageService.TestImageLookupById = null;
     }
 
     /// <summary>
@@ -473,6 +522,190 @@ public class EnhancedResourcesTestFixture
             Text: rawXml,
             InlineElements: new List<InlineElement>()
         );
+    }
+
+    // =====================================================================
+    // CAP-006: Image test data builders
+    // =====================================================================
+
+    /// <summary>
+    /// Builds test image metadata for verse reference lookups.
+    /// Returns a rich set of images for MAT (Matthew) to exercise all test scenarios:
+    /// - JPG images (IsOnline=false) from "Bible Photos" collection
+    /// - MP4 videos (IsOnline=true) from "Bible Videos" collection
+    /// - M3U8 streams (IsOnline=true) from "Bible Videos" collection
+    /// - SBA images from "Satellite Bible Atlas" for maps tab testing
+    /// - Multiple images with same reference range for grouping tests
+    /// - Book-spanning references with all-zero chapter/verse
+    /// </summary>
+    private static List<ImageMetadata> BuildTestImagesByRef(string verseRef)
+    {
+        // MAT references (book 41 = "041" in BBBCCCVVVSSSSS format)
+        if (
+            verseRef.StartsWith("MAT", StringComparison.OrdinalIgnoreCase)
+            && !verseRef.Contains("0:0")
+        )
+        {
+            return new List<ImageMetadata>
+            {
+                // JPG image from Bible Photos (Images tab)
+                new(
+                    ImageId: "IMG001",
+                    Collection: "Bible Photos",
+                    Path: "images/bible_photos",
+                    FileName: "nativity_scene.jpg",
+                    Format: "jpg",
+                    IsOnline: false,
+                    StartRef: "04100100100000",
+                    EndRef: "04100102500000",
+                    Title: "Nativity Scene",
+                    Copyright: "(c) Bible Photos Collection",
+                    VideoUrl: null,
+                    VideoFormat: null
+                ),
+                // Another JPG with same reference range (for grouping test, BHV-307)
+                new(
+                    ImageId: "IMG002",
+                    Collection: "Bible Photos",
+                    Path: "images/bible_photos",
+                    FileName: "bethlehem_star.jpg",
+                    Format: "jpg",
+                    IsOnline: false,
+                    StartRef: "04100100100000",
+                    EndRef: "04100102500000",
+                    Title: "Star of Bethlehem",
+                    Copyright: "(c) Bible Photos Collection",
+                    VideoUrl: null,
+                    VideoFormat: null
+                ),
+                // MP4 video from Bible Videos (Images tab, IsOnline=true)
+                new(
+                    ImageId: "VID001",
+                    Collection: "Bible Videos",
+                    Path: "videos/bible_videos",
+                    FileName: "matthew_intro",
+                    Format: "MP4",
+                    IsOnline: true,
+                    StartRef: "04100100100000",
+                    EndRef: "04100102800000",
+                    Title: "Introduction to Matthew",
+                    Copyright: "(c) Bible Videos",
+                    VideoUrl: null,
+                    VideoFormat: null
+                ),
+                // M3U8 stream (Images tab, IsOnline=true)
+                new(
+                    ImageId: "STR001",
+                    Collection: "Bible Videos",
+                    Path: "streams/bible_streams",
+                    FileName: "matthew_stream",
+                    Format: "M3U8",
+                    IsOnline: true,
+                    StartRef: "04100100100000",
+                    EndRef: "04100102800000",
+                    Title: "Matthew Stream",
+                    Copyright: "(c) Bible Streams",
+                    VideoUrl: null,
+                    VideoFormat: null
+                ),
+                // SBA image (Maps tab only, excluded from Images tab)
+                new(
+                    ImageId: "MAP001",
+                    Collection: "Satellite Bible Atlas",
+                    Path: "images/sba",
+                    FileName: "palestine_map.jpg",
+                    Format: "jpg",
+                    IsOnline: false,
+                    StartRef: "04100100100000",
+                    EndRef: "04100102800000",
+                    Title: "Palestine in the Time of Jesus",
+                    Copyright: "(c) Satellite Bible Atlas",
+                    VideoUrl: null,
+                    VideoFormat: null
+                ),
+            };
+        }
+
+        // MAT 0:0 - book-spanning reference (entire book)
+        if (
+            verseRef.StartsWith("MAT", StringComparison.OrdinalIgnoreCase)
+            && verseRef.Contains("0:0")
+        )
+        {
+            return new List<ImageMetadata>
+            {
+                new(
+                    ImageId: "BOOK_MAT_001",
+                    Collection: "Bible Photos",
+                    Path: "images/bible_photos",
+                    FileName: "matthew_overview.jpg",
+                    Format: "jpg",
+                    IsOnline: false,
+                    StartRef: "04100000000000",
+                    EndRef: "04102806600000",
+                    Title: "Overview of Matthew",
+                    Copyright: "(c) Bible Photos",
+                    VideoUrl: null,
+                    VideoFormat: null
+                ),
+            };
+        }
+
+        // 3JN (3 John) - no images available, returns empty list
+        if (verseRef.StartsWith("3JN", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<ImageMetadata>();
+        }
+
+        // Default: return empty list for unknown references
+        return new List<ImageMetadata>();
+    }
+
+    /// <summary>
+    /// Builds test image metadata for image ID lookups.
+    /// Supports "IMG001" for single-image retrieval and "Abraham_s_Well" for apostrophe tests.
+    /// Note: the imageId parameter has already been normalized (apostrophes -> underscores).
+    /// </summary>
+    private static ImageMetadata? BuildTestImageById(string imageId)
+    {
+        if (imageId == "IMG001")
+        {
+            return new ImageMetadata(
+                ImageId: "IMG001",
+                Collection: "Bible Photos",
+                Path: "images/bible_photos",
+                FileName: "nativity_scene.jpg",
+                Format: "jpg",
+                IsOnline: false,
+                StartRef: "04100100100000",
+                EndRef: "04100102500000",
+                Title: "Nativity Scene",
+                Copyright: "(c) Bible Photos Collection",
+                VideoUrl: null,
+                VideoFormat: null
+            );
+        }
+
+        // Abraham's_Well -> Abraham_s_Well (after apostrophe substitution)
+        if (imageId == "Abraham_s_Well")
+        {
+            return new ImageMetadata(
+                ImageId: "Abraham_s_Well",
+                Collection: "Bible Photos",
+                Path: "images/bible_photos",
+                FileName: "Abraham_s_Well.jpg",
+                Format: "jpg",
+                IsOnline: false,
+                StartRef: "01102100100000",
+                EndRef: "01102103400000",
+                Title: "Abraham's Well at Beer Sheba",
+                Copyright: "(c) Bible Photos",
+                VideoUrl: null,
+                VideoFormat: null
+            );
+        }
+
+        return null;
     }
 
     /// <summary>
