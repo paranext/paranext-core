@@ -1,3 +1,5 @@
+using SIL.Scripture;
+
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
@@ -10,6 +12,16 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class LexiconService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleLexicalLink.cs:30-57
+    // Method: MarbleLexicalLink.ParseLexicalLinks() + ParseOneLexicalLink() + ParseLexicalIndices()
+    // Maps to: EXT-001
+    //
+    // EXPLANATION:
+    // Parses semicolon-separated lexical link strings into structured LexicalLink objects.
+    // Each link has format "Dictionary:Lemma:BBBMMM" where BBB is the 3-digit zero-padded
+    // base form index and MMM is the 3-digit zero-padded meaning index.
+    // PT9 silently drops malformed links; PT10 returns explicit error results per contract.
     /// <summary>
     /// Parse semicolon-separated lexical link strings from USX character elements
     /// into structured <see cref="LexicalLink"/> objects.
@@ -26,12 +38,75 @@ internal static class LexiconService
         CancellationToken ct
     )
     {
-        throw new NotImplementedException(
-            "CAP-001: ParseLexicalLinks not yet implemented. "
-                + "This stub exists so TDD tests can compile in RED state."
-        );
+        if (string.IsNullOrEmpty(input.LinkString))
+        {
+            return Task.FromResult(
+                new ParseLexicalLinksResult(
+                    false,
+                    Error: new ErrorInfo("INVALID_INPUT", "Link string must not be null or empty")
+                )
+            );
+        }
+
+        string[] linkParts = input.LinkString.Split(';');
+        var links = new List<LexicalLink>(linkParts.Length);
+
+        foreach (string linkPart in linkParts)
+        {
+            string[] parts = linkPart.Split(':');
+            if (parts.Length != 3)
+            {
+                return Task.FromResult(
+                    new ParseLexicalLinksResult(
+                        false,
+                        Error: new ErrorInfo(
+                            "PARSE_ERROR",
+                            "Invalid lexical link format: expected 'Dictionary:Lemma:BBBMMM'"
+                        )
+                    )
+                );
+            }
+
+            string indices = parts[2];
+            if (indices.Length < 6)
+            {
+                return Task.FromResult(
+                    new ParseLexicalLinksResult(
+                        false,
+                        Error: new ErrorInfo(
+                            "PARSE_ERROR",
+                            "Invalid base form or meaning index in link"
+                        )
+                    )
+                );
+            }
+
+            if (
+                !int.TryParse(indices.Substring(0, 3), out int baseFormIndex)
+                || !int.TryParse(indices.Substring(3, 3), out int meaningIndex)
+            )
+            {
+                return Task.FromResult(
+                    new ParseLexicalLinksResult(
+                        false,
+                        Error: new ErrorInfo(
+                            "PARSE_ERROR",
+                            "Invalid base form or meaning index in link"
+                        )
+                    )
+                );
+            }
+
+            links.Add(new LexicalLink(parts[0], parts[1], baseFormIndex, meaningIndex));
+        }
+
+        return Task.FromResult(new ParseLexicalLinksResult(true, links));
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:373-376
+    // Method: MarbleDataAccess.GetDictionaryProject()
+    // Maps to: INV-013
     /// <summary>
     /// Determines the dictionary name for a given book number based on testament.
     ///
@@ -44,9 +119,10 @@ internal static class LexiconService
     /// </summary>
     public static string GetDictionaryForBook(int bookNumber)
     {
-        throw new NotImplementedException(
-            "CAP-001: GetDictionaryForBook not yet implemented. "
-                + "This stub exists so TDD tests can compile in RED state."
-        );
+        if (Canon.IsBookOT(bookNumber))
+            return "SDBH";
+        if (Canon.IsBookNT(bookNumber))
+            return "SDBG";
+        return "DCLEX";
     }
 }
