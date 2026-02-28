@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
@@ -546,48 +544,25 @@ internal static class PosTranslationService
     {
         // Validate dictionary
         if (input.Dictionary != "SDBH" && input.Dictionary != "SDBG")
-        {
-            return Task.FromResult(
-                new PosTranslationResult(
-                    Success: false,
-                    Translation: null,
-                    Components: null,
-                    Error: new ErrorInfo("INVALID_INPUT", "Dictionary must be 'SDBH' or 'SDBG'")
-                )
-            );
-        }
+            return CreateErrorResult("INVALID_INPUT", "Dictionary must be 'SDBH' or 'SDBG'");
 
         // Validate POS tag
         if (string.IsNullOrEmpty(input.PosTag))
         {
-            return Task.FromResult(
-                new PosTranslationResult(
-                    Success: false,
-                    Translation: null,
-                    Components: null,
-                    Error: new ErrorInfo(
-                        "PARSE_ERROR",
-                        $"Unknown POS tag '' for dictionary '{input.Dictionary}'"
-                    )
-                )
+            return CreateErrorResult(
+                "PARSE_ERROR",
+                $"Unknown POS tag '' for dictionary '{input.Dictionary}'"
             );
         }
 
         // Translate the POS tag
         List<string>? standardForm = TranslateToStandardForm(input.Dictionary, input.PosTag);
 
-        if (standardForm == null)
+        if (standardForm is null)
         {
-            return Task.FromResult(
-                new PosTranslationResult(
-                    Success: false,
-                    Translation: null,
-                    Components: null,
-                    Error: new ErrorInfo(
-                        "PARSE_ERROR",
-                        $"Unknown POS tag '{input.PosTag}' for dictionary '{input.Dictionary}'"
-                    )
-                )
+            return CreateErrorResult(
+                "PARSE_ERROR",
+                $"Unknown POS tag '{input.PosTag}' for dictionary '{input.Dictionary}'"
             );
         }
 
@@ -607,6 +582,16 @@ internal static class PosTranslationService
 
     #region Private helper methods
 
+    private static Task<PosTranslationResult> CreateErrorResult(string code, string message) =>
+        Task.FromResult(
+            new PosTranslationResult(
+                Success: false,
+                Translation: null,
+                Components: null,
+                Error: new ErrorInfo(code, message)
+            )
+        );
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:32-39
     // Method: PartOfSpeechTranslator.Translate()
@@ -624,10 +609,8 @@ internal static class PosTranslationService
                 s_hebrewLongTranslations
             );
         }
-        else
-        {
-            return ParseTag(posTag, s_greekTagOptions, s_greekTagSequence, s_greekLongTranslations);
-        }
+
+        return ParseTag(posTag, s_greekTagOptions, s_greekTagSequence, s_greekLongTranslations);
     }
 
     // === PORTED FROM PT9 ===
@@ -654,7 +637,7 @@ internal static class PosTranslationService
         string curValue = posTag;
 
         string? rootOption = FindOption(rootOptions, ref curValue);
-        if (rootOption == null)
+        if (rootOption is null)
             return null;
 
         List<string> result = new();
@@ -673,7 +656,7 @@ internal static class PosTranslationService
                 continue;
 
             string? matchedOption = FindOption(categoryOptions, ref curValue);
-            if (matchedOption != null)
+            if (matchedOption is not null)
             {
                 string tagId = category + "-" + matchedOption;
                 if (
@@ -701,7 +684,7 @@ internal static class PosTranslationService
         {
             if (curValue.StartsWith(option, StringComparison.Ordinal))
             {
-                curValue = curValue.Substring(option.Length);
+                curValue = curValue[option.Length..];
                 return option;
             }
         }
@@ -714,21 +697,11 @@ internal static class PosTranslationService
     // Maps to: EXT-008
     private static string BuildTranslationString(List<string> standardForm, bool shortFormat)
     {
-        StringBuilder result = new();
-        foreach (string word in standardForm)
-        {
-            string outputForm = word;
-            if (shortFormat)
-            {
-                outputForm = s_longToShort.TryGetValue(word, out string? shortForm)
-                    ? shortForm
-                    : word;
-            }
-            result.Append(outputForm);
-            result.Append(' ');
-        }
+        IEnumerable<string> words = shortFormat
+            ? standardForm.Select(w => s_longToShort.TryGetValue(w, out string? s) ? s : w)
+            : standardForm;
 
-        return result.ToString().Trim('-', ' ');
+        return string.Join(' ', words).Trim('-', ' ');
     }
 
     // === NEW IN PT10 ===
@@ -737,24 +710,19 @@ internal static class PosTranslationService
     private static List<PosComponent> BuildComponents(List<string> standardForm)
     {
         // Split each standard form entry by spaces to get individual words,
-        // since some entries like "masculine plural" contain multiple words
+        // since entries like "masculine plural" contain multiple words
         // but should be individual components
-        List<PosComponent> components = new();
-        foreach (string entry in standardForm)
-        {
-            string[] words = entry.Split(' ');
-            foreach (string word in words)
+        return standardForm
+            .SelectMany(entry => entry.Split(' '))
+            .Where(word => !string.IsNullOrEmpty(word))
+            .Select(word =>
             {
-                if (string.IsNullOrEmpty(word))
-                    continue;
-
                 string abbreviation = s_longToShort.TryGetValue(word, out string? shortForm)
                     ? shortForm
                     : word;
-                components.Add(new PosComponent(word, abbreviation, word));
-            }
-        }
-        return components;
+                return new PosComponent(word, abbreviation, word);
+            })
+            .ToList();
     }
 
     // === PORTED FROM PT9 ===
@@ -791,12 +759,7 @@ internal static class PosTranslationService
                 continue;
 
             string propertyName = kvp.Key;
-            // Skip category heading items (e.g., "case-": "Case")
-            string trimmedName = propertyName.Trim('-');
-            if (
-                propertyName.Substring(0, propertyName.Length - 1) == trimmedName
-                && !trimmedName.Contains('-')
-            )
+            if (IsCategoryHeading(propertyName))
                 continue;
 
             if (
@@ -807,6 +770,17 @@ internal static class PosTranslationService
                 result[longTranslation] = shortTranslation;
             }
         }
+    }
+
+    /// <summary>
+    /// Determines if a translation key is a category heading (e.g., "case-": "Case")
+    /// rather than a specific tag value (e.g., "case-a": "accusative").
+    /// Category headings have a single trailing dash and no internal dashes.
+    /// </summary>
+    private static bool IsCategoryHeading(string propertyName)
+    {
+        string trimmedName = propertyName.Trim('-');
+        return propertyName[..^1] == trimmedName && !trimmedName.Contains('-');
     }
 
     // Hebrew short translations
