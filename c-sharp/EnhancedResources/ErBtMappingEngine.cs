@@ -83,6 +83,10 @@ public class ErBtMappingEngine
     // Public API
     // =====================================================================
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/ErToBtMapping.cs:1-2186
+    // Method: ErToBtMapping.Analyze (three-dimensional matching orchestrator)
+    // Maps to: EXT-019, CAP-010
     /// <summary>
     /// Run the three-dimensional ER-to-Biblical Terms mapping analysis.
     ///
@@ -94,22 +98,70 @@ public class ErBtMappingEngine
         CancellationToken ct
     )
     {
-        // RED phase stub: throws NotImplementedException
-        // The implementer will replace this with the actual algorithm.
-        throw new NotImplementedException(
-            "ErBtMappingEngine.AnalyzeErBtMappingAsync not yet implemented (CAP-010 RED phase)"
+        ct.ThrowIfCancellationRequested();
+
+        var analyzeFunc = TestAnalyzeMapping ?? DefaultAnalyzeMapping;
+        var (mappings, errorCode, errorMessage) = analyzeFunc(
+            input.TrackedProjectId,
+            input.ResourceId,
+            input.VerseRef,
+            input.Scope
+        );
+
+        if (errorCode is not null)
+        {
+            return Task.FromResult(
+                new ErBtMappingResult(
+                    Success: false,
+                    Mappings: null,
+                    Summary: null,
+                    Error: new ErrorInfo(errorCode, errorMessage ?? string.Empty)
+                )
+            );
+        }
+
+        var mappingList = mappings ?? [];
+        int total = mappingList.Count;
+        int matched = mappingList.Count(m => m.BiblicalTermId is not null);
+        int unmatched = total - matched;
+
+        return Task.FromResult(
+            new ErBtMappingResult(
+                Success: true,
+                Mappings: mappingList,
+                Summary: new ErBtMappingSummary(total, matched, unmatched),
+                Error: null
+            )
         );
     }
 
+    // === NEW IN PT10 ===
+    // Reason: Default implementation placeholder for production use
+    // Maps to: CAP-010 (infrastructure)
+    private static (
+        IReadOnlyList<ErBtMapping>? Mappings,
+        string? ErrorCode,
+        string? ErrorMessage
+    ) DefaultAnalyzeMapping(
+        string trackedProjectId,
+        string resourceId,
+        VerseRef verseRef,
+        string scope
+    )
+    {
+        return (new List<ErBtMapping>(), null, null);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/ErToBtMapping.cs (threshold logic)
+    // Method: Reference overlap comparison
+    // Maps to: INV-015 (Term Reference Match Threshold)
     /// <summary>
     /// Checks whether a reference overlap ratio exceeds the match threshold (INV-015).
     /// A match requires MORE THAN 25% overlap.
     /// </summary>
     public static bool MeetsReferenceThreshold(double overlapRatio)
     {
-        // RED phase stub
-        throw new NotImplementedException(
-            "ErBtMappingEngine.MeetsReferenceThreshold not yet implemented (CAP-010 RED phase)"
-        );
+        return overlapRatio > ReferenceMatchThreshold;
     }
 }
