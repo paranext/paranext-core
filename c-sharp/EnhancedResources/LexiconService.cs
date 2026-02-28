@@ -81,6 +81,13 @@ internal static class LexiconService
     internal static Func<string, string, IEnumerable<string>?>? TestFindGlossesForTerm { get; set; }
 
     /// <summary>
+    /// Test seam: looks up an abbreviation definition by key and resource ID.
+    /// When set, returns the definition string or null if not found.
+    /// When null, would use ParatextData APIs for real abbreviation lookup.
+    /// </summary>
+    internal static Func<string, string, string?>? TestAbbreviationLookup { get; set; }
+
+    /// <summary>
     /// List available gloss languages for the loaded ER dictionaries,
     /// applying the 50% inclusion threshold (INV-014, INV-C11).
     /// </summary>
@@ -546,5 +553,32 @@ internal static class LexiconService
     ) =>
         Task.FromResult(
             new LocalizedGlossesResult(Success: false, Error: new ErrorInfo(code, message))
+        );
+
+    /// <summary>
+    /// Look up the definition for an abbreviation key used in encyclopedia content.
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.19 GetAbbreviationDefinition (data-contracts.md).
+    /// Behavior: BHV-300 (Abbreviation Data Model Serialization).
+    /// Extraction: EXT-022 (Abbreviation Lookup).
+    /// Golden Master: GM-007 (abbreviation section).
+    ///
+    /// NOT YET IMPLEMENTED - stub for TDD RED phase.
+    /// </remarks>
+    public static Task<AbbreviationResult> GetAbbreviationDefinitionAsync(
+        string key,
+        string resourceId,
+        CancellationToken ct
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-019: GetAbbreviationDefinitionAsync not yet implemented"
+        );
+    }
+
+    private static Task<AbbreviationResult> CreateAbbreviationError(string code, string message) =>
+        Task.FromResult(
+            new AbbreviationResult(Success: false, Error: new ErrorInfo(code, message))
         );
 }
