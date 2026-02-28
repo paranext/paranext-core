@@ -51,6 +51,38 @@ internal static class LexiconService
     internal static Func<string, string>? TestResolveDictionary { get; set; }
 
     /// <summary>
+    /// Test seam: provides language coverage data for a resource.
+    /// When set, returns a dictionary mapping language ID to (coverage ratio, display name).
+    /// When null, would compute coverage from actual dictionary data.
+    /// </summary>
+    internal static Func<
+        string,
+        Dictionary<string, (double Coverage, string DisplayName)>?
+    >? TestGetLanguageCoverage { get; set; }
+
+    /// <summary>
+    /// List available gloss languages for the loaded ER dictionaries,
+    /// applying the 50% inclusion threshold (INV-014, INV-C11).
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.17 GetAvailableGlossLanguages (data-contracts.md).
+    /// Behavior: BHV-111 (IMarbleDataAccess.AvailableGlossLanguages).
+    /// Invariant: INV-014/INV-C11 (50% threshold), INV-C18/VAL-008 (sp->es).
+    /// Extraction: EXT-012 (Dictionary/Lexicon Access Layer).
+    ///
+    /// Ported from PT9 MarbleDataAccess.cs:1142-1180 (GetAvailableGlossLanguageIds).
+    /// </remarks>
+    public static Task<GlossLanguagesResult> GetAvailableGlossLanguagesAsync(
+        string resourceId,
+        CancellationToken ct
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-017: GetAvailableGlossLanguagesAsync not yet implemented"
+        );
+    }
+
+    /// <summary>
     /// Parse semicolon-separated lexical link strings from USX character elements
     /// into structured <see cref="LexicalLink"/> objects.
     /// </summary>
