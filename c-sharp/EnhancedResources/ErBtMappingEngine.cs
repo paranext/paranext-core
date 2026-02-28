@@ -83,10 +83,6 @@ public class ErBtMappingEngine
     // Public API
     // =====================================================================
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/ErToBtMapping.cs:1-2186
-    // Method: ErToBtMapping.Analyze (three-dimensional matching orchestrator)
-    // Maps to: EXT-019, CAP-010
     /// <summary>
     /// Run the three-dimensional ER-to-Biblical Terms mapping analysis.
     ///
@@ -109,35 +105,29 @@ public class ErBtMappingEngine
         );
 
         if (errorCode is not null)
-        {
-            return Task.FromResult(
-                new ErBtMappingResult(
-                    Success: false,
-                    Mappings: null,
-                    Summary: null,
-                    Error: new ErrorInfo(errorCode, errorMessage ?? string.Empty)
-                )
-            );
-        }
+            return Task.FromResult(ErrorResult(errorCode, errorMessage ?? string.Empty));
 
         var mappingList = mappings ?? [];
-        int total = mappingList.Count;
-        int matched = mappingList.Count(m => m.BiblicalTermId is not null);
-        int unmatched = total - matched;
-
-        return Task.FromResult(
-            new ErBtMappingResult(
-                Success: true,
-                Mappings: mappingList,
-                Summary: new ErBtMappingSummary(total, matched, unmatched),
-                Error: null
-            )
-        );
+        return Task.FromResult(SuccessResult(mappingList, ComputeSummary(mappingList)));
     }
 
-    // === NEW IN PT10 ===
-    // Reason: Default implementation placeholder for production use
-    // Maps to: CAP-010 (infrastructure)
+    /// <summary>
+    /// Checks whether a reference overlap ratio exceeds the match threshold (INV-015).
+    /// A match requires MORE THAN 25% overlap.
+    ///
+    /// Ported from: PT9 ErToBtMapping.cs reference overlap logic (INV-015)
+    /// </summary>
+    public static bool MeetsReferenceThreshold(double overlapRatio) =>
+        overlapRatio > ReferenceMatchThreshold;
+
+    // =====================================================================
+    // Private Implementation
+    // =====================================================================
+
+    /// <summary>
+    /// Default analysis implementation placeholder for production use.
+    /// Returns an empty mapping list with no errors.
+    /// </summary>
     private static (
         IReadOnlyList<ErBtMapping>? Mappings,
         string? ErrorCode,
@@ -147,21 +137,39 @@ public class ErBtMappingEngine
         string resourceId,
         VerseRef verseRef,
         string scope
-    )
+    ) => (new List<ErBtMapping>(), null, null);
+
+    /// <summary>
+    /// Computes summary statistics from a mapping list.
+    /// A link is considered matched when its BiblicalTermId is non-null.
+    /// </summary>
+    private static ErBtMappingSummary ComputeSummary(IReadOnlyList<ErBtMapping> mappings)
     {
-        return (new List<ErBtMapping>(), null, null);
+        int total = mappings.Count;
+        int matched = mappings.Count(m => m.BiblicalTermId is not null);
+        return new ErBtMappingSummary(total, matched, total - matched);
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/ErToBtMapping.cs (threshold logic)
-    // Method: Reference overlap comparison
-    // Maps to: INV-015 (Term Reference Match Threshold)
+    // =====================================================================
+    // Result factory helpers
+    // =====================================================================
+
     /// <summary>
-    /// Checks whether a reference overlap ratio exceeds the match threshold (INV-015).
-    /// A match requires MORE THAN 25% overlap.
+    /// Creates a successful result with mappings and computed summary.
     /// </summary>
-    public static bool MeetsReferenceThreshold(double overlapRatio)
-    {
-        return overlapRatio > ReferenceMatchThreshold;
-    }
+    private static ErBtMappingResult SuccessResult(
+        IReadOnlyList<ErBtMapping> mappings,
+        ErBtMappingSummary summary
+    ) => new(Success: true, Mappings: mappings, Summary: summary, Error: null);
+
+    /// <summary>
+    /// Creates an error result with the given code and message.
+    /// </summary>
+    private static ErBtMappingResult ErrorResult(string errorCode, string errorMessage) =>
+        new(
+            Success: false,
+            Mappings: null,
+            Summary: null,
+            Error: new ErrorInfo(errorCode, errorMessage)
+        );
 }
