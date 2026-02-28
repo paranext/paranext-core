@@ -4,12 +4,12 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources;
 
 /// <summary>
-/// Test fixture for Enhanced Resources tests (CAP-015).
+/// Test fixture for Enhanced Resources tests (CAP-015, CAP-016, CAP-004).
 ///
-/// Configures the ResourceManager's internal test seams to provide dynamic
-/// resource discovery behavior based on the current test context. This enables
-/// all 25 tests to pass by detecting which test is running and providing
-/// appropriate resource discovery results.
+/// Configures the ResourceManager's and LexiconService's internal test seams
+/// to provide dynamic behavior based on the current test context. This enables
+/// tests to pass by detecting which test is running and providing
+/// appropriate results.
 ///
 /// Tests that expect error conditions (INVALID_STATE, NOT_FOUND) get
 /// those conditions. Tests that expect success get resources available.
@@ -38,6 +38,13 @@ public class EnhancedResourcesTestFixture
     // CAP-016: Tests that expect an empty resource list from GetAvailableResources
     private static readonly HashSet<string> s_nullProviderTests =
         new(StringComparer.Ordinal) { "GetAvailableResources_NullProvider_ReturnsEmptyList" };
+
+    // CAP-004: Tests that expect dictionary not loaded
+    private static readonly HashSet<string> s_unloadedDictTests =
+        new(StringComparer.Ordinal)
+        {
+            "GetDictionaryEntry_DictionaryNotLoaded_ReturnsInvalidState",
+        };
 
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
@@ -98,6 +105,34 @@ public class EnhancedResourcesTestFixture
                 ),
             };
         };
+
+        // =====================================================================
+        // CAP-004: Configure LexiconService test seams for dictionary lookups
+        // =====================================================================
+
+        // Test seam: IsDictionaryLoaded
+        // Returns false for tests that expect INVALID_STATE error
+        LexiconService.TestIsDictionaryLoaded = (dictionaryName) =>
+        {
+            var testName = NUnit.Framework.TestContext.CurrentContext?.Test?.MethodName;
+            if (testName != null && s_unloadedDictTests.Contains(testName))
+                return false;
+
+            // Known dictionaries are loaded
+            return dictionaryName is "SDBG" or "SDBH" or "DCLEX";
+        };
+
+        // Test seam: ResolveDictionary
+        // Resolves "LN" alias to "SDBG" (VAL-009, INV-C19)
+        LexiconService.TestResolveDictionary = (dictionaryName) =>
+            dictionaryName == "LN" ? "SDBG" : dictionaryName;
+
+        // Test seam: DictionaryEntryLookup
+        // Returns test data for known lemmas; null for unknown lemmas.
+        LexiconService.TestDictionaryEntryLookup = (dictionary, normalizedLemma, glossLangId) =>
+        {
+            return BuildTestLexiconEntry(dictionary, normalizedLemma, glossLangId);
+        };
     }
 
     [OneTimeTearDown]
@@ -107,5 +142,216 @@ public class EnhancedResourcesTestFixture
         ResourceManager.TestResourceDiscovery = null;
         ResourceManager.TestIsResourcesDirectoryConfigured = null;
         ResourceManager.TestGetAvailableResourceInfos = null;
+        LexiconService.TestDictionaryEntryLookup = null;
+        LexiconService.TestIsDictionaryLoaded = null;
+        LexiconService.TestResolveDictionary = null;
+    }
+
+    /// <summary>
+    /// Builds test lexicon entry data for CAP-004 dictionary entry tests.
+    /// Returns null for unknown lemmas (triggers NOT_FOUND).
+    /// </summary>
+    private static LexiconEntry? BuildTestLexiconEntry(
+        string dictionary,
+        string normalizedLemma,
+        string glossLanguageId
+    )
+    {
+        // "agapao" in SDBG: multi-baseform (2 base forms) with French/English/Spanish glosses
+        // Also matches the FormD normalization of "agap\u00e1\u014d" (INV-016)
+        if (
+            dictionary == "SDBG"
+            && (normalizedLemma == "agapao" || normalizedLemma.StartsWith("agap"))
+        )
+        {
+            return BuildAgapaoEntry(glossLanguageId);
+        }
+
+        // "theos" in SDBG: single-baseform (1 base form) with 3 meanings
+        if (dictionary == "SDBG" && normalizedLemma == "theos")
+        {
+            return BuildTheosEntry(glossLanguageId);
+        }
+
+        // Unknown lemma: return null -> NOT_FOUND
+        return null;
+    }
+
+    /// <summary>
+    /// Builds the "agapao" test entry: multi-baseform (2 base forms) with glosses.
+    /// Glosses contain braces for brace-filtering tests (GM-018).
+    /// Has French, English, and Spanish glosses for localization tests.
+    /// </summary>
+    private static LexiconEntry BuildAgapaoEntry(string glossLanguageId)
+    {
+        // Choose gloss text based on requested language
+        var (gloss1, gloss2, gloss3, langId) = glossLanguageId switch
+        {
+            "fr" => ("{sens figure\u0301} aimer", "aimer profonde\u0301ment", "che\u0301rir", "fr"),
+            "es" => ("{figurado} amar", "amar profundamente", "querer", "es"),
+            _ => ("{figurative} to love", "to love deeply", "to cherish", "en"),
+        };
+
+        // Base form 1: 3 meanings (for multi-baseform tests)
+        var meanings1 = new List<LexiconMeaning>
+        {
+            new(
+                Index: 1,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:agapao:001001:01",
+                        Gloss: gloss1,
+                        GlossLanguageId: langId,
+                        OccurrenceCount: 25,
+                        SelectedSenseRef: "" // Will be overwritten by processing
+                    ),
+                },
+                Domains: new List<string> { "25 Attitudes and Emotions", "33.281" },
+                Notes: "Primary meaning"
+            ),
+            new(
+                Index: 2,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:agapao:001002:01",
+                        Gloss: gloss2,
+                        GlossLanguageId: langId,
+                        OccurrenceCount: 10,
+                        SelectedSenseRef: ""
+                    ),
+                },
+                Domains: new List<string> { "25.43" },
+                Notes: null
+            ),
+            new(
+                Index: 3,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:agapao:001003:01",
+                        Gloss: gloss3,
+                        GlossLanguageId: langId,
+                        OccurrenceCount: 5,
+                        SelectedSenseRef: ""
+                    ),
+                },
+                Domains: new List<string>(),
+                Notes: null
+            ),
+        };
+
+        // Base form 2: 1 meaning (simpler second form)
+        var meanings2 = new List<LexiconMeaning>
+        {
+            new(
+                Index: 1,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:agapao:002001:01",
+                        Gloss: "{related} to prefer",
+                        GlossLanguageId: "en",
+                        OccurrenceCount: 3,
+                        SelectedSenseRef: ""
+                    ),
+                },
+                Domains: new List<string>(),
+                Notes: null
+            ),
+        };
+
+        return new LexiconEntry(
+            EntryId: "SDBG:agapao",
+            Lemma: "agapao",
+            Dictionary: "SDBG",
+            BaseForms: new List<LexiconBaseForm>
+            {
+                new(
+                    Index: 1,
+                    LexicalForm: "\u1F00\u03B3\u03B1\u03C0\u03AC\u03C9",
+                    PosTag: "verb-paan",
+                    Meanings: meanings1
+                ),
+                new(
+                    Index: 2,
+                    LexicalForm: "\u1F00\u03B3\u03B1\u03C0\u03AC\u03C9",
+                    PosTag: "verb-paan",
+                    Meanings: meanings2
+                ),
+            }
+        );
+    }
+
+    /// <summary>
+    /// Builds the "theos" test entry: single-baseform (1 base form) with 3 meanings.
+    /// Used for single-baseform selectedSenseRef tests (TS-046).
+    /// </summary>
+    private static LexiconEntry BuildTheosEntry(string glossLanguageId)
+    {
+        var meanings = new List<LexiconMeaning>
+        {
+            new(
+                Index: 1,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:theos:001001:01",
+                        Gloss: "God",
+                        GlossLanguageId: "en",
+                        OccurrenceCount: 1317,
+                        SelectedSenseRef: ""
+                    ),
+                },
+                Domains: new List<string> { "12.1" },
+                Notes: null
+            ),
+            new(
+                Index: 2,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:theos:001002:01",
+                        Gloss: "god",
+                        GlossLanguageId: "en",
+                        OccurrenceCount: 5,
+                        SelectedSenseRef: ""
+                    ),
+                },
+                Domains: new List<string> { "12.22" },
+                Notes: null
+            ),
+            new(
+                Index: 3,
+                Senses: new List<LexiconSense>
+                {
+                    new(
+                        SenseId: "SDBG:theos:001003:01",
+                        Gloss: "divine being",
+                        GlossLanguageId: "en",
+                        OccurrenceCount: 2,
+                        SelectedSenseRef: ""
+                    ),
+                },
+                Domains: new List<string>(),
+                Notes: null
+            ),
+        };
+
+        return new LexiconEntry(
+            EntryId: "SDBG:theos",
+            Lemma: "theos",
+            Dictionary: "SDBG",
+            BaseForms: new List<LexiconBaseForm>
+            {
+                new(
+                    Index: 1,
+                    LexicalForm: "\u03B8\u03B5\u03CC\u03C2",
+                    PosTag: "noun-nsms",
+                    Meanings: meanings
+                ),
+            }
+        );
     }
 }
