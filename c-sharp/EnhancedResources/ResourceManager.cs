@@ -17,6 +17,7 @@ internal sealed class ResourceManager
     private readonly ConcurrentDictionary<string, string> _dictionaryAliases = new();
     private bool _encyclopediaDataLoaded;
     private bool _imageMetadataLoaded;
+    private bool _isInitialized;
 
     /// <summary>
     /// Test seam: returns whether the resources directory is configured.
@@ -32,6 +33,13 @@ internal sealed class ResourceManager
         int resourceCount,
         bool haveMarbleData
     )>? TestResourceDiscovery { get; set; }
+
+    /// <summary>
+    /// Test seam: returns the list of ResourceInfo objects for GetAvailableResourcesAsync.
+    /// When null, enumerates <see cref="ScrTextCollection"/> for MarbleResource projects
+    /// and maps each to a ResourceInfo.
+    /// </summary>
+    internal static Func<IReadOnlyList<ResourceInfo>>? TestGetAvailableResourceInfos { get; set; }
 
     /// <summary>
     /// Initializes the Enhanced Resources data access layer by discovering MarbleResource
@@ -70,6 +78,7 @@ internal sealed class ResourceManager
         LoadDictionaries();
         _encyclopediaDataLoaded = true;
         _imageMetadataLoaded = true;
+        _isInitialized = true;
 
         return Task.FromResult(
             new InitializeResourcesResult(
@@ -193,13 +202,109 @@ internal sealed class ResourceManager
     /// </remarks>
     /// <param name="ct">Cancellation token for cooperative cancellation.</param>
     /// <returns>Result containing list of ResourceInfo, or error if not initialized.</returns>
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/Plugins/Host.cs (AllEnhancedResources property)
+    // Method: Host.AllEnhancedResources / IEnhancedResourceProvider.AvailableBibles
+    // Maps to: BHV-108, BHV-109, CAP-016
     public Task<GetAvailableResourcesResult> GetAvailableResourcesAsync(CancellationToken ct)
     {
-        // TDD RED stub: Implementation pending.
-        // The implementer will replace this with the actual logic.
-        throw new NotImplementedException(
-            "CAP-016 GetAvailableResources: not yet implemented. "
-                + "See data-contracts.md Section 4.16."
+        ct.ThrowIfCancellationRequested();
+
+        if (!_isInitialized)
+        {
+            return Task.FromResult(
+                new GetAvailableResourcesResult(
+                    Success: false,
+                    Error: new ErrorInfo("INVALID_STATE", "Resources must be initialized first")
+                )
+            );
+        }
+
+        var resources = EnumerateAvailableResources();
+
+        return Task.FromResult(
+            new GetAvailableResourcesResult(Success: true, Resources: resources)
+        );
+    }
+
+    /// <summary>
+    /// Enumerates all installed MarbleResource projects and maps them to ResourceInfo objects.
+    /// </summary>
+    /// <remarks>
+    /// Uses <see cref="TestGetAvailableResourceInfos"/> test seam when set;
+    /// otherwise enumerates ScrTextCollection for MarbleResource projects.
+    /// BHV-108: Returns ER ScrTexts as ResourceInfo objects.
+    /// INV-004: Only MarbleResource projects are returned (separate from AllResources).
+    /// INV-008: Font resolved language-first, then settings fallback.
+    /// INV-010: FullName from DBL metadata, fallback to settings.
+    /// </remarks>
+    private static IReadOnlyList<ResourceInfo> EnumerateAvailableResources()
+    {
+        if (TestGetAvailableResourceInfos != null)
+            return TestGetAvailableResourceInfos();
+
+        try
+        {
+            var marbleResources = ScrTextCollection
+                .ScrTexts(IncludeProjects.Everything)
+                .Where(st => st.Settings.IsMarbleResource)
+                .ToList();
+
+            return marbleResources.Select(MapScrTextToResourceInfo).ToList().AsReadOnly();
+        }
+        catch
+        {
+            return Array.Empty<ResourceInfo>();
+        }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/Plugins/Host.cs (resource metadata mapping)
+    // Method: Host.AllEnhancedResources enumeration with settings access
+    // Maps to: BHV-108, INV-008, INV-010
+    //
+    // EXPLANATION:
+    // Maps a ParatextData ScrText to a ResourceInfo DTO by reading:
+    // 1. ResourceId from ScrText.Name (project short name)
+    // 2. FullName from settings FullName with fallback to Name (INV-010)
+    // 3. Font from project settings DefaultFont (INV-008)
+    // 4. AvailableBooks from BooksPresentSet (string of 0/1 characters)
+    // 5. IsMarbleResource is always true (INV-001, INV-004)
+    private static ResourceInfo MapScrTextToResourceInfo(ScrText scrText)
+    {
+        var settings = scrText.Settings;
+        var name = scrText.Name;
+
+        // INV-010: FullName from settings, fallback to Name
+        var fullName = !string.IsNullOrEmpty(settings.FullName) ? settings.FullName : name;
+
+        // Available books: parse BooksPresentSet.Books string (chars '0'/'1' at index positions)
+        var booksString = scrText.BooksPresentSet.Books ?? "";
+        var availableBooks = new List<int>();
+        for (int i = 0; i < booksString.Length; i++)
+        {
+            if (booksString[i] == '1')
+                availableBooks.Add(i + 1);
+        }
+
+        // Language from settings
+        var languageId = settings.LanguageID?.Id ?? "";
+
+        return new ResourceInfo(
+            ResourceId: name,
+            Name: name,
+            FullName: fullName,
+            LanguageId: languageId,
+            Version: "",
+            IsMarbleResource: true,
+            Copyright: null,
+            AvailableBooks: availableBooks.AsReadOnly(),
+            Font: new FontInfo(
+                settings.DefaultFont ?? "Charis SIL",
+                settings.DefaultFontSize > 0 ? settings.DefaultFontSize : 12.0,
+                null
+            ),
+            HtmlLanguage: languageId
         );
     }
 }

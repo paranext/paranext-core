@@ -35,6 +35,10 @@ public class EnhancedResourcesTestFixture
     private static readonly HashSet<string> s_noMarbleDataTests =
         new(StringComparer.Ordinal) { "BHV105_NonMarbleResource_HaveMarbleDataIsFalse" };
 
+    // CAP-016: Tests that expect an empty resource list from GetAvailableResources
+    private static readonly HashSet<string> s_nullProviderTests =
+        new(StringComparer.Ordinal) { "GetAvailableResources_NullProvider_ReturnsEmptyList" };
+
     [OneTimeSetUp]
     public void RunBeforeAnyTests()
     {
@@ -64,6 +68,36 @@ public class EnhancedResourcesTestFixture
             // Default: simulate 1 MarbleResource project with Marble research data
             return (resourceCount: 1, haveMarbleData: true);
         };
+
+        // CAP-016: Configure test seam for GetAvailableResources resource enumeration.
+        // Returns a list of ResourceInfo objects that simulate installed ER projects.
+        ResourceManager.TestGetAvailableResourceInfos = () =>
+        {
+            var testName = NUnit.Framework.TestContext.CurrentContext?.Test?.MethodName;
+
+            // TS-024: Null provider returns empty list
+            if (testName != null && s_nullProviderTests.Contains(testName))
+                return Array.Empty<ResourceInfo>();
+
+            // Default: return one realistic MarbleResource project
+            // INV-010: FullName from DBL metadata (differs from short Name)
+            // INV-008: Font resolved (language-first pattern)
+            return new[]
+            {
+                new ResourceInfo(
+                    ResourceId: "ESV16",
+                    Name: "ESV",
+                    FullName: "English Standard Version 2016 UK",
+                    LanguageId: "en",
+                    Version: "1.0.0",
+                    IsMarbleResource: true,
+                    Copyright: "(c) 2016 Crossway",
+                    AvailableBooks: new[] { 1, 2, 3, 40, 41, 42 },
+                    Font: new FontInfo("Charis SIL", 12.0, null),
+                    HtmlLanguage: "en"
+                ),
+            };
+        };
     }
 
     [OneTimeTearDown]
@@ -72,5 +106,6 @@ public class EnhancedResourcesTestFixture
         // Clean up the test seams
         ResourceManager.TestResourceDiscovery = null;
         ResourceManager.TestIsResourcesDirectoryConfigured = null;
+        ResourceManager.TestGetAvailableResourceInfos = null;
     }
 }
