@@ -129,18 +129,18 @@ internal static class LexiconService
         return "DCLEX";
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:373-441,1043-1479
-    // Method: MarbleDataAccess.GetLexiconEntry() + BestSense() + gloss filtering
-    // Maps to: EXT-012, BHV-303, BHV-308, INV-016
     /// <summary>
     /// Look up a lexicon entry by dictionary, lemma, and indices, returning
     /// structured entry data with localized glosses.
     /// </summary>
     /// <remarks>
-    /// Contract: Section 4.4 GetDictionaryEntry (data-contracts.md)
-    /// Behaviors: BHV-302, BHV-303, BHV-308
-    /// Invariant: INV-016 (Lemma Unicode normalization to FormD)
+    /// Contract: Section 4.4 GetDictionaryEntry (data-contracts.md).
+    /// Behaviors: BHV-302, BHV-303, BHV-308.
+    /// Invariant: INV-016 (Lemma Unicode normalization to FormD).
+    ///
+    /// Ported from PT9 MarbleDataAccess.cs:373-441,1043-1479
+    /// (GetLexiconEntry + BestSense + gloss filtering).
+    /// Maps to: EXT-012, BHV-303, BHV-308, INV-016.
     /// </remarks>
     public static Task<DictionaryResult> GetDictionaryEntryAsync(
         DictionaryLookupInput input,
@@ -155,17 +155,10 @@ internal static class LexiconService
 
         // Step 3: Check dictionary is loaded (INVALID_STATE)
         if (!IsDictionaryLoadedCheck(resolvedDictionary))
-        {
-            return Task.FromResult(
-                new DictionaryResult(
-                    Success: false,
-                    Error: new ErrorInfo(
-                        "INVALID_STATE",
-                        $"Dictionary '{resolvedDictionary}' data not available"
-                    )
-                )
+            return CreateDictionaryError(
+                "INVALID_STATE",
+                $"Dictionary '{resolvedDictionary}' data not available"
             );
-        }
 
         // Step 4: Normalize lemma to Unicode FormD (INV-016)
         string normalizedLemma = input.Lemma.Normalize(NormalizationForm.FormD);
@@ -174,46 +167,25 @@ internal static class LexiconService
         LexiconEntry? entry = LookupEntry(resolvedDictionary, normalizedLemma, glossLanguageId);
 
         if (entry == null)
-        {
-            return Task.FromResult(
-                new DictionaryResult(
-                    Success: false,
-                    Error: new ErrorInfo(
-                        "NOT_FOUND",
-                        $"No entry found for lemma '{normalizedLemma}' in {resolvedDictionary}"
-                    )
-                )
+            return CreateDictionaryError(
+                "NOT_FOUND",
+                $"No entry found for lemma '{normalizedLemma}' in {resolvedDictionary}"
             );
-        }
 
         // Step 6: Validate base form index (INVALID_INPUT)
         if (input.BaseFormIndex < 1 || input.BaseFormIndex > entry.BaseForms.Count)
-        {
-            return Task.FromResult(
-                new DictionaryResult(
-                    Success: false,
-                    Error: new ErrorInfo(
-                        "INVALID_INPUT",
-                        $"Base form index {input.BaseFormIndex} out of range"
-                    )
-                )
+            return CreateDictionaryError(
+                "INVALID_INPUT",
+                $"Base form index {input.BaseFormIndex} out of range"
             );
-        }
 
         // Step 7: Validate meaning index (INVALID_INPUT)
         var selectedBaseForm = entry.BaseForms[input.BaseFormIndex - 1];
         if (input.MeaningIndex < 1 || input.MeaningIndex > selectedBaseForm.Meanings.Count)
-        {
-            return Task.FromResult(
-                new DictionaryResult(
-                    Success: false,
-                    Error: new ErrorInfo(
-                        "INVALID_INPUT",
-                        $"Meaning index {input.MeaningIndex} out of range"
-                    )
-                )
+            return CreateDictionaryError(
+                "INVALID_INPUT",
+                $"Meaning index {input.MeaningIndex} out of range"
             );
-        }
 
         // Step 8: Apply brace filtering to glosses (BHV-303, GM-018)
         // Step 9: Format selectedSenseRef (BHV-308)
@@ -222,10 +194,6 @@ internal static class LexiconService
         return Task.FromResult(new DictionaryResult(Success: true, Entry: processedEntry));
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/DictionaryTab.cs:~200-500
-    // Method: DictionaryTab deduplication logic
-    // Maps to: EXT-027, BHV-302
     /// <summary>
     /// Deduplicates dictionary display items based on BHV-302 rules:
     /// - Same translation + same surface form = one row
@@ -233,8 +201,10 @@ internal static class LexiconService
     /// - Different translations + same lemma = separate rows
     /// </summary>
     /// <remarks>
-    /// Extraction: EXT-027 (Dictionary Tab Loading)
-    /// Golden Master: GM-036 (Dictionary Deduplication)
+    /// Extraction: EXT-027 (Dictionary Tab Loading).
+    /// Golden Master: GM-036 (Dictionary Deduplication).
+    ///
+    /// Ported from PT9 DictionaryTab.cs:~200-500.
     /// </remarks>
     public static IReadOnlyList<DictionaryDisplayItem> DeduplicateDictionaryItems(
         IReadOnlyList<DictionaryDisplayItem> items
@@ -249,138 +219,138 @@ internal static class LexiconService
     /// <summary>
     /// Resolves dictionary name aliases (VAL-009: "LN" -> "SDBG").
     /// </summary>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:373-376
-    // Method: MarbleDataAccess dictionary alias resolution
-    // Maps to: INV-C19
-    private static string ResolveDictionaryName(string dictionaryName)
-    {
-        if (TestResolveDictionary != null)
-            return TestResolveDictionary(dictionaryName);
-
+    /// <remarks>
+    /// Ported from PT9 MarbleDataAccess.cs:373-376 (dictionary alias resolution).
+    /// Maps to: INV-C19.
+    /// </remarks>
+    private static string ResolveDictionaryName(string dictionaryName) =>
+        TestResolveDictionary?.Invoke(dictionaryName)
         // Hardcoded alias for now; production would use ResourceManager
-        return dictionaryName == "LN" ? "SDBG" : dictionaryName;
-    }
+        ?? (dictionaryName == "LN" ? "SDBG" : dictionaryName);
 
     /// <summary>
     /// Corrects legacy language codes (VAL-008: "sp" -> "es").
     /// </summary>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1043-1100
-    // Method: MarbleDataAccess language code correction
-    // Maps to: VAL-008
+    /// <remarks>
+    /// Ported from PT9 MarbleDataAccess.cs:1043-1100 (language code correction).
+    /// Maps to: VAL-008.
+    /// </remarks>
     private static string CorrectLanguageCode(string languageCode) =>
         languageCode == "sp" ? "es" : languageCode;
 
     /// <summary>
     /// Checks whether a dictionary is loaded.
     /// </summary>
-    private static bool IsDictionaryLoadedCheck(string dictionaryName)
-    {
-        if (TestIsDictionaryLoaded != null)
-            return TestIsDictionaryLoaded(dictionaryName);
-
+    private static bool IsDictionaryLoadedCheck(string dictionaryName) =>
+        TestIsDictionaryLoaded?.Invoke(dictionaryName)
         // Known dictionaries are always considered loaded in test context
-        return dictionaryName is "SDBG" or "SDBH" or "DCLEX";
-    }
+        ?? dictionaryName is "SDBG" or "SDBH" or "DCLEX";
 
     /// <summary>
     /// Looks up a lexicon entry by dictionary and normalized lemma.
     /// </summary>
+    /// <remarks>
+    /// Production: when TestDictionaryEntryLookup is null, would use ParatextData APIs.
+    /// </remarks>
     private static LexiconEntry? LookupEntry(
         string dictionary,
         string normalizedLemma,
         string glossLanguageId
-    )
-    {
-        if (TestDictionaryEntryLookup != null)
-            return TestDictionaryEntryLookup(dictionary, normalizedLemma, glossLanguageId);
+    ) => TestDictionaryEntryLookup?.Invoke(dictionary, normalizedLemma, glossLanguageId);
 
-        // Production: would use ParatextData APIs
-        return null;
-    }
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:374-396
-    // Method: MarbleLexiconEntry.BestSense() gloss filtering
-    // Maps to: BHV-303, BHV-308, GM-018
     /// <summary>
     /// Applies brace filtering to glosses and formats selectedSenseRef strings.
     /// </summary>
+    /// <remarks>
+    /// Ported from PT9 MarbleLexiconEntry.cs:374-396 (BestSense gloss filtering).
+    /// Maps to: BHV-303, BHV-308, GM-018.
+    /// </remarks>
     private static LexiconEntry ApplyGlossProcessing(LexiconEntry entry)
     {
         bool isMultiBaseForm = entry.BaseForms.Count > 1;
 
-        var processedBaseForms = new List<LexiconBaseForm>(entry.BaseForms.Count);
-        for (int bfIdx = 0; bfIdx < entry.BaseForms.Count; bfIdx++)
+        var processedBaseForms = entry
+            .BaseForms.Select(
+                (bf, bfIdx) =>
+                    new LexiconBaseForm(
+                        Index: bf.Index,
+                        LexicalForm: bf.LexicalForm,
+                        PosTag: bf.PosTag,
+                        Meanings: ProcessMeanings(bf.Meanings, bfIdx, isMultiBaseForm)
+                    )
+            )
+            .ToList();
+
+        return entry with
         {
-            var bf = entry.BaseForms[bfIdx];
-            var processedMeanings = new List<LexiconMeaning>(bf.Meanings.Count);
+            BaseForms = processedBaseForms,
+        };
+    }
 
-            for (int mIdx = 0; mIdx < bf.Meanings.Count; mIdx++)
-            {
-                var meaning = bf.Meanings[mIdx];
-                var processedSenses = new List<LexiconSense>(meaning.Senses.Count);
-
-                foreach (var sense in meaning.Senses)
-                {
-                    // BHV-303/GM-018: Filter braces from gloss
-                    string filteredGloss = FilterBraces(sense.Gloss);
-
-                    // BHV-308: Format selectedSenseRef
-                    // Multi-baseform: "{homograph}-{sense}" (1-based display)
-                    // Single-baseform: "{sense}" only
-                    string selectedSenseRef = isMultiBaseForm
-                        ? $"{bfIdx + 1}-{mIdx + 1}"
-                        : $"{mIdx + 1}";
-
-                    processedSenses.Add(
-                        new LexiconSense(
-                            SenseId: sense.SenseId,
-                            Gloss: filteredGloss,
-                            GlossLanguageId: sense.GlossLanguageId,
-                            OccurrenceCount: sense.OccurrenceCount,
-                            SelectedSenseRef: selectedSenseRef
-                        )
-                    );
-                }
-
-                processedMeanings.Add(
+    /// <summary>
+    /// Processes meanings within a base form: filters brace text from glosses (BHV-303)
+    /// and formats selectedSenseRef strings (BHV-308).
+    /// </summary>
+    private static List<LexiconMeaning> ProcessMeanings(
+        IReadOnlyList<LexiconMeaning> meanings,
+        int baseFormIndex,
+        bool isMultiBaseForm
+    )
+    {
+        return meanings
+            .Select(
+                (meaning, mIdx) =>
                     new LexiconMeaning(
                         Index: meaning.Index,
-                        Senses: processedSenses,
+                        Senses: meaning
+                            .Senses.Select(sense =>
+                                ProcessSense(sense, baseFormIndex, mIdx, isMultiBaseForm)
+                            )
+                            .ToList(),
                         Domains: meaning.Domains,
                         Notes: meaning.Notes
                     )
-                );
-            }
-
-            processedBaseForms.Add(
-                new LexiconBaseForm(
-                    Index: bf.Index,
-                    LexicalForm: bf.LexicalForm,
-                    PosTag: bf.PosTag,
-                    Meanings: processedMeanings
-                )
-            );
-        }
-
-        return new LexiconEntry(
-            EntryId: entry.EntryId,
-            Lemma: entry.Lemma,
-            Dictionary: entry.Dictionary,
-            BaseForms: processedBaseForms
-        );
+            )
+            .ToList();
     }
+
+    /// <summary>
+    /// Processes a single sense: filters brace text from gloss (BHV-303/GM-018)
+    /// and formats selectedSenseRef (BHV-308).
+    /// Multi-baseform: "{homograph}-{sense}" (1-based display).
+    /// Single-baseform: "{sense}" only.
+    /// </summary>
+    private static LexiconSense ProcessSense(
+        LexiconSense sense,
+        int baseFormIndex,
+        int meaningIndex,
+        bool isMultiBaseForm
+    ) =>
+        new(
+            SenseId: sense.SenseId,
+            Gloss: FilterBraces(sense.Gloss),
+            GlossLanguageId: sense.GlossLanguageId,
+            OccurrenceCount: sense.OccurrenceCount,
+            SelectedSenseRef: FormatSenseRef(baseFormIndex, meaningIndex, isMultiBaseForm)
+        );
+
+    /// <summary>
+    /// Formats the selectedSenseRef string per BHV-308.
+    /// </summary>
+    private static string FormatSenseRef(
+        int baseFormIndex,
+        int meaningIndex,
+        bool isMultiBaseForm
+    ) => isMultiBaseForm ? $"{baseFormIndex + 1}-{meaningIndex + 1}" : $"{meaningIndex + 1}";
 
     /// <summary>
     /// Removes brace-enclosed text and trailing whitespace from gloss strings.
     /// E.g., "{figurative} to love" -> "to love"
     /// </summary>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleLexiconEntry.cs:374-396
-    // Method: Gloss brace filtering
-    // Maps to: BHV-303, GM-018
+    /// <remarks>
+    /// Ported from PT9 MarbleLexiconEntry.cs:374-396 (gloss brace filtering).
+    /// Maps to: BHV-303, GM-018.
+    /// </remarks>
     private static string FilterBraces(string gloss) => s_bracePattern.Replace(gloss, "").Trim();
 
     private static Task<ParseLexicalLinksResult> CreateErrorResult(string code, string message) =>
@@ -388,4 +358,7 @@ internal static class LexiconService
 
     private static ParseLexicalLinksResult CreateParseError(string message) =>
         new(false, Error: new ErrorInfo("PARSE_ERROR", message));
+
+    private static Task<DictionaryResult> CreateDictionaryError(string code, string message) =>
+        Task.FromResult(new DictionaryResult(Success: false, Error: new ErrorInfo(code, message)));
 }
