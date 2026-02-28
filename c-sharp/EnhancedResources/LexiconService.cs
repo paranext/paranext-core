@@ -91,6 +91,48 @@ internal static class LexiconService
         return "DCLEX";
     }
 
+    /// <summary>
+    /// Look up a lexicon entry by dictionary, lemma, and indices, returning
+    /// structured entry data with localized glosses.
+    /// </summary>
+    /// <remarks>
+    /// Contract: Section 4.4 GetDictionaryEntry (data-contracts.md)
+    /// Behaviors: BHV-302, BHV-303, BHV-308
+    /// Invariant: INV-016 (Lemma Unicode normalization to FormD)
+    ///
+    /// RED phase stub: throws NotImplementedException until CAP-004 is implemented.
+    /// </remarks>
+    public static Task<DictionaryResult> GetDictionaryEntryAsync(
+        DictionaryLookupInput input,
+        CancellationToken ct
+    )
+    {
+        // RED phase: stub - will be implemented in GREEN phase
+        throw new NotImplementedException("CAP-004: GetDictionaryEntryAsync not yet implemented");
+    }
+
+    /// <summary>
+    /// Deduplicates dictionary display items based on BHV-302 rules:
+    /// - Same translation + same surface form = one row
+    /// - Same translation + different surface forms = separate rows
+    /// - Different translations + same lemma = separate rows
+    /// </summary>
+    /// <remarks>
+    /// Extraction: EXT-027 (Dictionary Tab Loading)
+    /// Golden Master: GM-036 (Dictionary Deduplication)
+    ///
+    /// RED phase stub: throws NotImplementedException until CAP-004 is implemented.
+    /// </remarks>
+    public static IReadOnlyList<DictionaryDisplayItem> DeduplicateDictionaryItems(
+        IReadOnlyList<DictionaryDisplayItem> items
+    )
+    {
+        // RED phase: stub - will be implemented in GREEN phase
+        throw new NotImplementedException(
+            "CAP-004: DeduplicateDictionaryItems not yet implemented"
+        );
+    }
+
     private static Task<ParseLexicalLinksResult> CreateErrorResult(string code, string message) =>
         Task.FromResult(new ParseLexicalLinksResult(false, Error: new ErrorInfo(code, message)));
 
