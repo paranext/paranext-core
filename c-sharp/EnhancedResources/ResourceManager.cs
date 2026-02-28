@@ -6,10 +6,10 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// <summary>
 /// Manages initialization, discovery, and lifecycle of Enhanced Resource (Marble) projects.
 ///
-/// This class implements the CAP-015 InitializeResources capability per data-contracts.md
-/// Section 4.15. It discovers MarbleResource projects from ScrTextCollection, validates
-/// their integrity, loads dictionaries/encyclopedias/image metadata, and tracks the
-/// haveMarbleData availability flag.
+/// Implements CAP-015 InitializeResources (Section 4.15) and CAP-016 GetAvailableResources
+/// (Section 4.16). Discovers MarbleResource projects from ScrTextCollection, validates
+/// their integrity, loads dictionaries/encyclopedias/image metadata, tracks the
+/// haveMarbleData availability flag, and lists installed ER projects with metadata.
 /// </summary>
 internal sealed class ResourceManager
 {
@@ -202,10 +202,6 @@ internal sealed class ResourceManager
     /// </remarks>
     /// <param name="ct">Cancellation token for cooperative cancellation.</param>
     /// <returns>Result containing list of ResourceInfo, or error if not initialized.</returns>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextData/Plugins/Host.cs (AllEnhancedResources property)
-    // Method: Host.AllEnhancedResources / IEnhancedResourceProvider.AvailableBibles
-    // Maps to: BHV-108, BHV-109, CAP-016
     public Task<GetAvailableResourcesResult> GetAvailableResourcesAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -233,10 +229,6 @@ internal sealed class ResourceManager
     /// <remarks>
     /// Uses <see cref="TestGetAvailableResourceInfos"/> test seam when set;
     /// otherwise enumerates ScrTextCollection for MarbleResource projects.
-    /// BHV-108: Returns ER ScrTexts as ResourceInfo objects.
-    /// INV-004: Only MarbleResource projects are returned (separate from AllResources).
-    /// INV-008: Font resolved language-first, then settings fallback.
-    /// INV-010: FullName from DBL metadata, fallback to settings.
     /// </remarks>
     private static IReadOnlyList<ResourceInfo> EnumerateAvailableResources()
     {
@@ -258,53 +250,62 @@ internal sealed class ResourceManager
         }
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextData/Plugins/Host.cs (resource metadata mapping)
-    // Method: Host.AllEnhancedResources enumeration with settings access
-    // Maps to: BHV-108, INV-008, INV-010
-    //
-    // EXPLANATION:
-    // Maps a ParatextData ScrText to a ResourceInfo DTO by reading:
-    // 1. ResourceId from ScrText.Name (project short name)
-    // 2. FullName from settings FullName with fallback to Name (INV-010)
-    // 3. Font from project settings DefaultFont (INV-008)
-    // 4. AvailableBooks from BooksPresentSet (string of 0/1 characters)
-    // 5. IsMarbleResource is always true (INV-001, INV-004)
+    /// <summary>
+    /// Maps a ParatextData ScrText to a ResourceInfo DTO.
+    /// </summary>
+    /// <remarks>
+    /// Ported from PT9 Host.AllEnhancedResources enumeration.
+    /// INV-001/INV-004: IsMarbleResource always true.
+    /// INV-008: Font from project settings.
+    /// INV-010: FullName from settings with fallback to Name.
+    /// </remarks>
     private static ResourceInfo MapScrTextToResourceInfo(ScrText scrText)
     {
         var settings = scrText.Settings;
         var name = scrText.Name;
-
-        // INV-010: FullName from settings, fallback to Name
-        var fullName = !string.IsNullOrEmpty(settings.FullName) ? settings.FullName : name;
-
-        // Available books: parse BooksPresentSet.Books string (chars '0'/'1' at index positions)
-        var booksString = scrText.BooksPresentSet.Books ?? "";
-        var availableBooks = new List<int>();
-        for (int i = 0; i < booksString.Length; i++)
-        {
-            if (booksString[i] == '1')
-                availableBooks.Add(i + 1);
-        }
-
-        // Language from settings
         var languageId = settings.LanguageID?.Id ?? "";
 
         return new ResourceInfo(
             ResourceId: name,
             Name: name,
-            FullName: fullName,
+            FullName: ResolveFullName(settings.FullName, name),
             LanguageId: languageId,
             Version: "",
             IsMarbleResource: true,
             Copyright: null,
-            AvailableBooks: availableBooks.AsReadOnly(),
-            Font: new FontInfo(
-                settings.DefaultFont ?? "Charis SIL",
-                settings.DefaultFontSize > 0 ? settings.DefaultFontSize : 12.0,
-                null
-            ),
+            AvailableBooks: ParseAvailableBooks(scrText.BooksPresentSet.Books),
+            Font: ResolveFont(settings.DefaultFont, settings.DefaultFontSize),
             HtmlLanguage: languageId
         );
     }
+
+    /// <summary>
+    /// Resolves the display name, falling back to the short name when empty.
+    /// </summary>
+    /// <remarks>INV-010: FullName from DBL metadata with settings fallback.</remarks>
+    private static string ResolveFullName(string? settingsFullName, string shortName) =>
+        !string.IsNullOrEmpty(settingsFullName) ? settingsFullName : shortName;
+
+    /// <summary>
+    /// Parses the BooksPresentSet.Books string (chars '0'/'1' at index positions)
+    /// into a list of canonical book numbers.
+    /// </summary>
+    private static IReadOnlyList<int> ParseAvailableBooks(string? booksString)
+    {
+        var books = booksString ?? "";
+        var availableBooks = new List<int>();
+        for (int i = 0; i < books.Length; i++)
+        {
+            if (books[i] == '1')
+                availableBooks.Add(i + 1);
+        }
+        return availableBooks.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Resolves font settings with sensible defaults.
+    /// </summary>
+    /// <remarks>INV-008: Font resolved language-first, then settings fallback.</remarks>
+    private static FontInfo ResolveFont(string? defaultFont, int defaultFontSize) =>
+        new(defaultFont ?? "Charis SIL", defaultFontSize > 0 ? defaultFontSize : 12.0, null);
 }
