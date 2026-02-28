@@ -14,8 +14,3 @@ public record InitializeResourcesResult(
     bool HaveMarbleData = false,
     ErrorInfo? Error = null
 );
-
-/// <summary>
-/// Error information for failed operations.
-/// </summary>
-public record ErrorInfo(string Code, string Message);

@@ -178,4 +178,28 @@ internal sealed class ResourceManager
     /// </summary>
     /// <returns>True if image metadata is loaded and available.</returns>
     public bool IsImageMetadataLoaded() => _imageMetadataLoaded;
+
+    /// <summary>
+    /// Lists all installed Enhanced Resource projects with their metadata.
+    /// Requires <see cref="InitializeResourcesAsync"/> to have been called first.
+    /// </summary>
+    /// <remarks>
+    /// Ported from PT9 Host.AllEnhancedResources / IEnhancedResourceProvider.AvailableBibles.
+    /// Contract: Section 4.16, Output: Section 3.11.
+    /// BHV-108: Returns ER ScrTexts as ResourceInfo objects.
+    /// BHV-109: ERs exposed separately from AllResources (INV-004).
+    /// INV-008: Font resolved language-first, then settings fallback.
+    /// INV-010: FullName from DBL metadata, fallback to settings.
+    /// </remarks>
+    /// <param name="ct">Cancellation token for cooperative cancellation.</param>
+    /// <returns>Result containing list of ResourceInfo, or error if not initialized.</returns>
+    public Task<GetAvailableResourcesResult> GetAvailableResourcesAsync(CancellationToken ct)
+    {
+        // TDD RED stub: Implementation pending.
+        // The implementer will replace this with the actual logic.
+        throw new NotImplementedException(
+            "CAP-016 GetAvailableResources: not yet implemented. "
+                + "See data-contracts.md Section 4.16."
+        );
+    }
 }
