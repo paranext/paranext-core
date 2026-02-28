@@ -555,6 +555,9 @@ internal static class LexiconService
             new LocalizedGlossesResult(Success: false, Error: new ErrorInfo(code, message))
         );
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/MarbleDataAccess.cs (GetDefinitionForAbbrev)
+    // Maps to: EXT-022, BHV-300, CAP-019
     /// <summary>
     /// Look up the definition for an abbreviation key used in encyclopedia content.
     /// </summary>
@@ -563,8 +566,6 @@ internal static class LexiconService
     /// Behavior: BHV-300 (Abbreviation Data Model Serialization).
     /// Extraction: EXT-022 (Abbreviation Lookup).
     /// Golden Master: GM-007 (abbreviation section).
-    ///
-    /// NOT YET IMPLEMENTED - stub for TDD RED phase.
     /// </remarks>
     public static Task<AbbreviationResult> GetAbbreviationDefinitionAsync(
         string key,
@@ -572,8 +573,25 @@ internal static class LexiconService
         CancellationToken ct
     )
     {
-        throw new NotImplementedException(
-            "CAP-019: GetAbbreviationDefinitionAsync not yet implemented"
+        if (string.IsNullOrEmpty(key))
+            return CreateAbbreviationError(
+                "INVALID_INPUT",
+                "Abbreviation key must not be null or empty"
+            );
+
+        if (string.IsNullOrEmpty(resourceId))
+            return CreateAbbreviationError(
+                "INVALID_INPUT",
+                "Resource ID must not be null or empty"
+            );
+
+        string? definition = TestAbbreviationLookup?.Invoke(key, resourceId);
+
+        if (definition == null)
+            return CreateAbbreviationError("NOT_FOUND", $"Abbreviation '{key}' not found");
+
+        return Task.FromResult(
+            new AbbreviationResult(Success: true, Key: key, Definition: definition)
         );
     }
 
