@@ -126,10 +126,6 @@ internal static class LexiconService
     ///
     /// Ported from PT9 MarbleDataAccess.cs:417 (FindLocalizedGlossesForTerm).
     /// </remarks>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextData/MarbleDataAccess.cs:417
-    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm()
-    // Maps to: EXT-012, BHV-111, INV-015, INV-C12
     public static Task<LocalizedGlossesResult> FindLocalizedGlossesForTermAsync(
         string term,
         string bestLanguageId,
