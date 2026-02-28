@@ -19,6 +19,12 @@ namespace Paranext.DataProvider.EnhancedResources;
 internal static class LexiconService
 {
     /// <summary>
+    /// Minimum coverage ratio for including a gloss language (INV-014, INV-C11).
+    /// Languages must have strictly more than this fraction of senses translated.
+    /// </summary>
+    private const double GlossLanguageCoverageThreshold = 0.50;
+
+    /// <summary>
     /// Regex for removing brace-enclosed text from glosses.
     /// E.g., "{figurative} to love" -> "to love"
     /// </summary>
@@ -72,10 +78,6 @@ internal static class LexiconService
     ///
     /// Ported from PT9 MarbleDataAccess.cs:1142-1180 (GetAvailableGlossLanguageIds).
     /// </remarks>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1142-1180
-    // Method: MarbleDataAccess.GetAvailableGlossLanguageIds()
-    // Maps to: EXT-012, CAP-017
     public static Task<GlossLanguagesResult> GetAvailableGlossLanguagesAsync(
         string resourceId,
         CancellationToken ct
@@ -84,17 +86,10 @@ internal static class LexiconService
         var coverageData = TestGetLanguageCoverage?.Invoke(resourceId);
 
         if (coverageData == null)
-        {
-            return Task.FromResult(
-                new GlossLanguagesResult(
-                    Success: false,
-                    Error: new ErrorInfo("NOT_FOUND", $"Resource '{resourceId}' not found")
-                )
-            );
-        }
+            return CreateGlossLanguagesError("NOT_FOUND", $"Resource '{resourceId}' not found");
 
         var languages = coverageData
-            .Where(kv => kv.Value.Coverage > 0.50)
+            .Where(kv => kv.Value.Coverage > GlossLanguageCoverageThreshold)
             .Select(kv => new GlossLanguageInfo(
                 Id: CorrectLanguageCode(kv.Key),
                 DisplayName: kv.Value.DisplayName
@@ -486,4 +481,12 @@ internal static class LexiconService
 
     private static Task<GlossResult> CreateGlossError(string code, string message) =>
         Task.FromResult(new GlossResult(Success: false, Error: new ErrorInfo(code, message)));
+
+    private static Task<GlossLanguagesResult> CreateGlossLanguagesError(
+        string code,
+        string message
+    ) =>
+        Task.FromResult(
+            new GlossLanguagesResult(Success: false, Error: new ErrorInfo(code, message))
+        );
 }
