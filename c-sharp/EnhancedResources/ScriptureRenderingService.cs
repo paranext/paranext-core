@@ -234,10 +234,7 @@ public class ScriptureRenderingService
     // Maps to: CAP-012
     private static IReadOnlyList<int> AllBooks()
     {
-        var books = new List<int>();
-        for (int i = 1; i <= 66; i++)
-            books.Add(i);
-        return books;
+        return Enumerable.Range(1, 66).ToList();
     }
 
     // =====================================================================
@@ -455,8 +452,8 @@ public class ScriptureRenderingService
         // Determine display text based on display mode (GM-034)
         string displayText = GetDisplayText(token, input);
 
-        // Build CSS classes for the word
-        var cssClasses = new List<string>();
+        // Build CSS classes for the word (HashSet for O(1) deduplication)
+        var cssClasses = new HashSet<string>(StringComparer.Ordinal);
 
         // Per-word rendering status CSS (BHV-404)
         if (input.TrackedProjectId != null && token.Links != null)
@@ -468,7 +465,7 @@ public class ScriptureRenderingService
                     link.Lemma,
                     input.VerseRef
                 );
-                if (statusCss != null && !cssClasses.Contains(statusCss))
+                if (statusCss != null)
                 {
                     cssClasses.Add(statusCss);
                 }
@@ -491,16 +488,16 @@ public class ScriptureRenderingService
 
         // Determine if this is OT (Hebrew) or NT (Greek) based on book number
         bool isOT = input.VerseRef.BookNum < 40;
-
         SourceWordDisplayMode mode = isOT ? input.HebrewDisplayMode : input.GreekDisplayMode;
+        var src = token.SourceWord;
 
-        if (mode == SourceWordDisplayMode.Original)
-            return token.SourceWord.SurfaceText;
-        if (mode == SourceWordDisplayMode.Transliteration)
-            return token.SourceWord.Transliteration;
-        if (mode == SourceWordDisplayMode.Both)
-            return $"{token.SourceWord.SurfaceText} ({token.SourceWord.Transliteration})";
-        return token.Text ?? "";
+        return mode switch
+        {
+            SourceWordDisplayMode.Original => src.SurfaceText,
+            SourceWordDisplayMode.Transliteration => src.Transliteration,
+            SourceWordDisplayMode.Both => $"{src.SurfaceText} ({src.Transliteration})",
+            _ => token.Text ?? "",
+        };
     }
 
     // === PORTED FROM PT9 ===
@@ -520,12 +517,7 @@ public class ScriptureRenderingService
         // TS-061: Filter out linkedReference content
         if (text.Contains("linkedReference", StringComparison.OrdinalIgnoreCase))
         {
-            text = System.Text.RegularExpressions.Regex.Replace(
-                text,
-                @"linkedReference",
-                "",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
+            text = text.Replace("linkedReference", "", StringComparison.OrdinalIgnoreCase);
         }
 
         footnotesSb.Append($"<span class=\"{EscapeHtml(cssClass)}\">{EscapeHtml(text)}</span>");
