@@ -1,7 +1,7 @@
 /**
  * Functional tests for UI-PKG-009: ArticleViewer
  *
- * RED phase — all tests use test.fixme() until implementation activates them. Tests verify article
+ * RED phase — all tests use test() until implementation activates them. Tests verify article
  * content display, cross-reference navigation, inline images, abbreviation tooltips, goto-verse
  * links, and close behavior.
  *
@@ -38,27 +38,24 @@ async function openArticleViewer(frame: import('@playwright/test').FrameLocator)
 }
 
 test.describe('UI-PKG-009: ArticleViewer — Render', () => {
-  test.fixme(
-    'RND-001: Article displays with H1 title and structured content',
-    async ({ mainPage }) => {
-      // @scenario BHV-304, BHV-607
-      const frame = await openERWebView(mainPage);
-      const viewer = await openArticleViewer(frame);
-      // Article content container
-      const content = viewer.locator('[data-testid="er-article-content"]');
-      await expect(content).toBeVisible({ timeout: 10_000 });
-      // H1 title
-      const title = content.locator('h1').first();
-      await expect(title).toBeVisible();
-      await expect(title).not.toBeEmpty();
-      // EVD-019: Screenshot of article viewer
-      await mainPage.screenshot({
-        path: 'e2e-tests/test-results/UI-PKG-009-RND-001-article-viewer.png',
-      });
-    },
-  );
+  test('RND-001: Article displays with H1 title and structured content', async ({ mainPage }) => {
+    // @scenario BHV-304, BHV-607
+    const frame = await openERWebView(mainPage);
+    const viewer = await openArticleViewer(frame);
+    // Article content container
+    const content = viewer.locator('[data-testid="er-article-content"]');
+    await expect(content).toBeVisible({ timeout: 10_000 });
+    // H1 title
+    const title = content.locator('h1').first();
+    await expect(title).toBeVisible();
+    await expect(title).not.toBeEmpty();
+    // EVD-019: Screenshot of article viewer
+    await mainPage.screenshot({
+      path: 'e2e-tests/test-results/UI-PKG-009-RND-001-article-viewer.png',
+    });
+  });
 
-  test.fixme('RND-002: Close button is visible', async ({ mainPage }) => {
+  test('RND-002: Close button is visible', async ({ mainPage }) => {
     // @scenario BHV-304
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);
@@ -66,7 +63,7 @@ test.describe('UI-PKG-009: ArticleViewer — Render', () => {
     await expect(closeBtn).toBeVisible();
   });
 
-  test.fixme('RND-003: Article contains section headings (H2)', async ({ mainPage }) => {
+  test('RND-003: Article contains section headings (H2)', async ({ mainPage }) => {
     // @scenario BHV-607
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);
@@ -80,7 +77,7 @@ test.describe('UI-PKG-009: ArticleViewer — Render', () => {
 });
 
 test.describe('UI-PKG-009: ArticleViewer — Interaction', () => {
-  test.fixme('INT-001: "See also" link loads new article in same viewer', async ({ mainPage }) => {
+  test('INT-001: "See also" link loads new article in same viewer', async ({ mainPage }) => {
     // @scenario BHV-607
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);
@@ -102,26 +99,23 @@ test.describe('UI-PKG-009: ArticleViewer — Interaction', () => {
     }
   });
 
-  test.fixme(
-    'INT-002: Close button returns to Encyclopedia tab list view',
-    async ({ mainPage }) => {
-      // @scenario BHV-304
-      const frame = await openERWebView(mainPage);
-      const viewer = await openArticleViewer(frame);
-      const closeBtn = viewer.getByRole('button', { name: /Close/i });
-      await closeBtn.click();
-      await expect(viewer).not.toBeVisible({ timeout: 5_000 });
-      // Encyclopedia list should be visible again
-      const encycContent = frame.locator('[data-testid="encyclopedia-tab-content"]');
-      await expect(encycContent).toBeVisible({ timeout: 5_000 });
-      // EVD-022: Screenshot after close
-      await mainPage.screenshot({
-        path: 'e2e-tests/test-results/UI-PKG-009-INT-002-closed.png',
-      });
-    },
-  );
+  test('INT-002: Close button returns to Encyclopedia tab list view', async ({ mainPage }) => {
+    // @scenario BHV-304
+    const frame = await openERWebView(mainPage);
+    const viewer = await openArticleViewer(frame);
+    const closeBtn = viewer.getByRole('button', { name: /Close/i });
+    await closeBtn.click();
+    await expect(viewer).not.toBeVisible({ timeout: 5_000 });
+    // Encyclopedia list should be visible again
+    const encycContent = frame.locator('[data-testid="encyclopedia-tab-content"]');
+    await expect(encycContent).toBeVisible({ timeout: 5_000 });
+    // EVD-022: Screenshot after close
+    await mainPage.screenshot({
+      path: 'e2e-tests/test-results/UI-PKG-009-INT-002-closed.png',
+    });
+  });
 
-  test.fixme('INT-003: Inline image click opens MediaViewer', async ({ mainPage }) => {
+  test('INT-003: Inline image click opens MediaViewer', async ({ mainPage }) => {
     // @scenario BHV-607
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);
@@ -139,7 +133,7 @@ test.describe('UI-PKG-009: ArticleViewer — Interaction', () => {
     }
   });
 
-  test.fixme('INT-004: "Goto verse" link changes parent verse reference', async ({ mainPage }) => {
+  test('INT-004: "Goto verse" link changes parent verse reference', async ({ mainPage }) => {
     // @scenario BHV-607
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);
@@ -155,7 +149,7 @@ test.describe('UI-PKG-009: ArticleViewer — Interaction', () => {
 });
 
 test.describe('UI-PKG-009: ArticleViewer — Data Wiring', () => {
-  test.fixme('DW-001: Abbreviation tooltips show expansion on hover', async ({ mainPage }) => {
+  test('DW-001: Abbreviation tooltips show expansion on hover', async ({ mainPage }) => {
     // @scenario BHV-607
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);
@@ -168,7 +162,7 @@ test.describe('UI-PKG-009: ArticleViewer — Data Wiring', () => {
     }
   });
 
-  test.fixme('DW-002: V1 and V2 format articles both render correctly', async ({ mainPage }) => {
+  test('DW-002: V1 and V2 format articles both render correctly', async ({ mainPage }) => {
     // @scenario BHV-606
     const frame = await openERWebView(mainPage);
     const viewer = await openArticleViewer(frame);

@@ -53,7 +53,10 @@
       "%platformEnhancedResources_mediaViewer_previous%": "Previous",
       "%platformEnhancedResources_mediaViewer_next%": "Next",
       "%platformEnhancedResources_mediaViewer_videoAvailable%": "Video available - click to play",
-      "%platformEnhancedResources_mediaViewer_play%": "Play"
+      "%platformEnhancedResources_mediaViewer_play%": "Play",
+      "%platformEnhancedResources_articleViewer_close%": "Close",
+      "%platformEnhancedResources_articleViewer_seeAlso%": "See also",
+      "%platformEnhancedResources_articleViewer_scripture%": "Scripture"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -107,7 +110,10 @@
       "%platformEnhancedResources_mediaViewer_previous%": "Anterior",
       "%platformEnhancedResources_mediaViewer_next%": "Siguiente",
       "%platformEnhancedResources_mediaViewer_videoAvailable%": "Video disponible - haga clic para reproducir",
-      "%platformEnhancedResources_mediaViewer_play%": "Reproducir"
+      "%platformEnhancedResources_mediaViewer_play%": "Reproducir",
+      "%platformEnhancedResources_articleViewer_close%": "Cerrar",
+      "%platformEnhancedResources_articleViewer_seeAlso%": "Ver tambien",
+      "%platformEnhancedResources_articleViewer_scripture%": "Escritura"
     }
   }
 }

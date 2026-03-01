@@ -22,6 +22,7 @@ import EncyclopediaTab from '../components/encyclopedia-tab.component';
 import MediaTab from '../components/media-tab.component';
 import MapsTab from '../components/maps-tab.component';
 import MediaViewer from '../components/media-viewer.component';
+import ArticleViewer from '../components/article-viewer.component';
 
 /** Tracked project type */
 interface TrackedProject {
@@ -398,22 +399,13 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
               </TabsContent>
               <TabsContent value="encyclopedia" className="tw-flex-1 tw-overflow-auto">
                 {activeOverlay?.type === 'article' ? (
-                  <div data-testid="article-viewer" className="tw-p-4">
-                    <div className="tw-flex tw-items-center tw-justify-between tw-mb-4">
-                      <h2 className="tw-text-lg tw-font-semibold">{activeOverlay.entryId}</h2>
-                      <button
-                        type="button"
-                        onClick={handleCloseOverlay}
-                        className="tw-text-muted-foreground hover:tw-text-foreground"
-                        aria-label="Close article viewer"
-                      >
-                        X
-                      </button>
-                    </div>
-                    <p className="tw-text-sm tw-text-muted-foreground">
-                      Article content loading...
-                    </p>
-                  </div>
+                  <ArticleViewer
+                    entryId={activeOverlay.entryId}
+                    onClose={handleCloseOverlay}
+                    onOpenMedia={handleOpenMedia}
+                  />
+                ) : activeOverlay?.type === 'media' ? (
+                  <MediaViewer imageId={activeOverlay.imageId} onClose={handleCloseOverlay} />
                 ) : (
                   <EncyclopediaTab
                     scopeFilter={scopeFilter}
