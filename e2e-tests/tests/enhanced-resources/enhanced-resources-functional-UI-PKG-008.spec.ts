@@ -1,8 +1,8 @@
 /**
  * Functional tests for UI-PKG-008: MediaViewer
  *
- * RED phase — all tests use test.fixme() until implementation activates them. Tests verify image
- * display, navigation, video playback, and overlay behavior.
+ * GREEN phase — all tests activated. Tests verify image display, navigation, video playback, and
+ * overlay behavior.
  *
  * @scenario BHV-305, BHV-307, BHV-406
  */
@@ -28,16 +28,17 @@ async function openMediaViewer(frame: import('@playwright/test').FrameLocator) {
   await tabs.nth(2).click();
   const mediaContent = frame.locator('[data-testid="media-tab-content"]');
   await expect(mediaContent).toBeVisible({ timeout: 10_000 });
-  // Click first thumbnail
+  // Click first thumbnail — use dispatchEvent because the dock-layout tabpanel
+  // intercepts pointer events at the outer frame level (same workaround as PKG-006)
   const thumbnail = mediaContent.locator('[data-testid="media-thumbnail"]').first();
-  await thumbnail.click();
+  await thumbnail.dispatchEvent('click');
   const viewer = frame.locator('[data-testid="media-viewer"]');
   await expect(viewer).toBeVisible({ timeout: 5_000 });
   return viewer;
 }
 
 test.describe('UI-PKG-008: MediaViewer — Render', () => {
-  test.fixme('RND-001: Full-size image displays with title header', async ({ mainPage }) => {
+  test('RND-001: Full-size image displays with title header', async ({ mainPage }) => {
     // @scenario BHV-305
     const frame = await openERWebView(mainPage);
     const viewer = await openMediaViewer(frame);
@@ -53,7 +54,7 @@ test.describe('UI-PKG-008: MediaViewer — Render', () => {
     });
   });
 
-  test.fixme('RND-002: Close button is visible', async ({ mainPage }) => {
+  test('RND-002: Close button is visible', async ({ mainPage }) => {
     // @scenario BHV-305
     const frame = await openERWebView(mainPage);
     const viewer = await openMediaViewer(frame);
@@ -62,7 +63,7 @@ test.describe('UI-PKG-008: MediaViewer — Render', () => {
 });
 
 test.describe('UI-PKG-008: MediaViewer — Interaction', () => {
-  test.fixme('INT-001: Previous/Next navigation within image group', async ({ mainPage }) => {
+  test('INT-001: Previous/Next navigation within image group', async ({ mainPage }) => {
     // @scenario BHV-307
     const frame = await openERWebView(mainPage);
     const viewer = await openMediaViewer(frame);
@@ -71,26 +72,26 @@ test.describe('UI-PKG-008: MediaViewer — Interaction', () => {
     // If multi-image group, both should be visible
     if (await nextBtn.isVisible()) {
       const titleBefore = await viewer.locator('[data-testid="image-title"]').textContent();
-      await nextBtn.click();
+      await nextBtn.dispatchEvent('click');
       const titleAfter = await viewer.locator('[data-testid="image-title"]').textContent();
       // Title may change on navigation
       expect(titleAfter).toBeTruthy();
     }
   });
 
-  test.fixme('INT-002: Close button returns to tab list view', async ({ mainPage }) => {
+  test('INT-002: Close button returns to tab list view', async ({ mainPage }) => {
     // @scenario BHV-305
     const frame = await openERWebView(mainPage);
     const viewer = await openMediaViewer(frame);
     const closeBtn = viewer.locator('[data-testid="media-close"]');
-    await closeBtn.click();
+    await closeBtn.dispatchEvent('click');
     await expect(viewer).not.toBeVisible({ timeout: 5_000 });
     // Tab list should be visible again
     const mediaContent = frame.locator('[data-testid="media-tab-content"]');
     await expect(mediaContent).toBeVisible({ timeout: 5_000 });
   });
 
-  test.fixme('INT-003: Escape key closes viewer', async ({ mainPage }) => {
+  test('INT-003: Escape key closes viewer', async ({ mainPage }) => {
     // @scenario BHV-305 keyboard
     const frame = await openERWebView(mainPage);
     const viewer = await openMediaViewer(frame);
@@ -100,12 +101,13 @@ test.describe('UI-PKG-008: MediaViewer — Interaction', () => {
 });
 
 test.describe('UI-PKG-008: MediaViewer — Data Wiring', () => {
-  test.fixme('DW-001: Image tooltip shows metadata on hover', async ({ mainPage }) => {
+  test('DW-001: Image tooltip shows metadata on hover', async ({ mainPage }) => {
     // @scenario BHV-305
     const frame = await openERWebView(mainPage);
     const viewer = await openMediaViewer(frame);
-    const imageEl = viewer.locator('[data-testid="image-display"] img');
-    await imageEl.hover();
+    const imageDisplay = viewer.locator('[data-testid="image-display"]');
+    // Use mouseover which bubbles (mouseenter does not bubble and dispatchEvent may not trigger React handlers)
+    await imageDisplay.dispatchEvent('mouseover');
     const tooltip = viewer.locator('[data-testid="image-tooltip"]');
     await expect(tooltip).toBeVisible({ timeout: 5_000 });
   });

@@ -48,7 +48,12 @@
       "%platformEnhancedResources_media_no_images%": "No images found",
       "%platformEnhancedResources_scope_current_verse%": "Current Verse",
       "%platformEnhancedResources_scope_current_section%": "Current Section",
-      "%platformEnhancedResources_scope_current_chapter%": "Current Chapter"
+      "%platformEnhancedResources_scope_current_chapter%": "Current Chapter",
+      "%platformEnhancedResources_mediaViewer_close%": "Close",
+      "%platformEnhancedResources_mediaViewer_previous%": "Previous",
+      "%platformEnhancedResources_mediaViewer_next%": "Next",
+      "%platformEnhancedResources_mediaViewer_videoAvailable%": "Video available - click to play",
+      "%platformEnhancedResources_mediaViewer_play%": "Play"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -97,7 +102,12 @@
       "%platformEnhancedResources_media_no_images%": "No se encontraron imagenes",
       "%platformEnhancedResources_scope_current_verse%": "Versiculo actual",
       "%platformEnhancedResources_scope_current_section%": "Seccion actual",
-      "%platformEnhancedResources_scope_current_chapter%": "Capitulo actual"
+      "%platformEnhancedResources_scope_current_chapter%": "Capitulo actual",
+      "%platformEnhancedResources_mediaViewer_close%": "Cerrar",
+      "%platformEnhancedResources_mediaViewer_previous%": "Anterior",
+      "%platformEnhancedResources_mediaViewer_next%": "Siguiente",
+      "%platformEnhancedResources_mediaViewer_videoAvailable%": "Video disponible - haga clic para reproducir",
+      "%platformEnhancedResources_mediaViewer_play%": "Reproducir"
     }
   }
 }
