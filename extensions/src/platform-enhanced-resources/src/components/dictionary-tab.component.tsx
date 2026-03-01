@@ -3,6 +3,8 @@ import papi from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { usePromise } from 'platform-bible-react';
 import TabListItem from './tab-list-item.component';
+import SemanticDomainViewer from './semantic-domain-viewer.component';
+import type { SemanticDomainViewerOutput } from './semantic-domain-viewer.component';
 
 /** Dictionary entry data shape from backend */
 interface DictionaryEntry {
@@ -101,6 +103,7 @@ export default function DictionaryTab({
 }: DictionaryTabProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => [...DICT_LOCALIZED_KEYS], []));
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [activeDomainId, setActiveDomainId] = useState<string | undefined>(undefined);
 
   // Connect to backend service
   const [erService] = usePromise(
@@ -161,6 +164,20 @@ export default function DictionaryTab({
     setExpandedIds(new Set());
   }, []);
 
+  const handleDomainLinkClick = useCallback((domainId: string) => {
+    setActiveDomainId(domainId);
+  }, []);
+
+  const handleDomainViewerAction = useCallback((output: SemanticDomainViewerOutput) => {
+    if (output.action === 'close') {
+      setActiveDomainId(undefined);
+    } else if (output.action === 'selectDomain') {
+      // Close viewer and filter dictionary to the selected domain
+      setActiveDomainId(undefined);
+      // Domain filtering would be applied here when backend is available
+    }
+  }, []);
+
   // Localized labels with fallbacks
   const glossesLabel = localizedStrings['%platformEnhancedResources_dict_glosses%'] || 'Glosses';
   const posLabel = localizedStrings['%platformEnhancedResources_dict_pos%'] || 'Part of speech';
@@ -171,6 +188,18 @@ export default function DictionaryTab({
     localizedStrings['%platformEnhancedResources_dict_expand_all%'] || 'Expand all';
   const collapseAllLabel =
     localizedStrings['%platformEnhancedResources_dict_collapse_all%'] || 'Collapse all';
+
+  // When domain viewer is active, show it as an overlay replacing the list
+  if (activeDomainId !== undefined) {
+    return (
+      <div data-testid="dictionary-tab-content">
+        <SemanticDomainViewer
+          initialDomainId={activeDomainId}
+          onAction={handleDomainViewerAction}
+        />
+      </div>
+    );
+  }
 
   return (
     <div data-testid="dictionary-tab-content">
@@ -198,56 +227,80 @@ export default function DictionaryTab({
       {/* Dictionary entries list */}
       <div role="list" aria-label="Dictionary entries">
         {entries.map((entry) => (
-          <TabListItem
-            key={entry.id}
-            id={entry.id}
-            testId="dict-entry"
-            label={entry.lemma}
-            subtitle={entry.partOfSpeech}
-            description={entry.glosses}
-            isExpanded={expandedIds.has(entry.id)}
-            onToggle={handleToggle}
-            detailTestId="dict-entry-detail"
-            expandedContent={
-              <div className="tw-space-y-2 tw-text-sm">
-                <div>
-                  <span className="tw-font-medium">{glossesLabel}: </span>
-                  <span>{entry.glosses}</span>
-                </div>
-                <div>
-                  <span className="tw-font-medium">{posLabel}: </span>
-                  <span>{entry.partOfSpeech}</span>
-                </div>
-                {entry.senses.length > 0 && (
+          <div key={entry.id}>
+            <TabListItem
+              id={entry.id}
+              testId="dict-entry"
+              label={entry.lemma}
+              subtitle={entry.partOfSpeech}
+              description={entry.glosses}
+              isExpanded={expandedIds.has(entry.id)}
+              onToggle={handleToggle}
+              detailTestId="dict-entry-detail"
+              expandedContent={
+                <div className="tw-space-y-2 tw-text-sm">
                   <div>
-                    <span className="tw-font-medium">{sensesLabel}:</span>
-                    <ol className="tw-list-decimal tw-ml-5 tw-mt-1">
-                      {entry.senses.map((sense) => (
-                        <li key={sense.label}>
-                          {sense.label} ({sense.occurrences} occ.)
-                        </li>
-                      ))}
-                    </ol>
+                    <span className="tw-font-medium">{glossesLabel}: </span>
+                    <span>{entry.glosses}</span>
                   </div>
-                )}
-                {entry.semanticDomains.length > 0 && (
                   <div>
-                    <span className="tw-font-medium">{domainsLabel}:</span>
-                    <ul className="tw-ml-5 tw-mt-1">
-                      {entry.semanticDomains.map((domain) => (
-                        <li
-                          key={domain.id}
-                          className="tw-text-primary tw-cursor-pointer hover:tw-underline"
-                        >
-                          {domain.name}
-                        </li>
-                      ))}
-                    </ul>
+                    <span className="tw-font-medium">{posLabel}: </span>
+                    <span>{entry.partOfSpeech}</span>
                   </div>
-                )}
+                  {entry.senses.length > 0 && (
+                    <div>
+                      <span className="tw-font-medium">{sensesLabel}:</span>
+                      <ol className="tw-list-decimal tw-ml-5 tw-mt-1">
+                        {entry.senses.map((sense) => (
+                          <li key={sense.label}>
+                            {sense.label} ({sense.occurrences} occ.)
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  {entry.semanticDomains.length > 0 && (
+                    <div>
+                      <span className="tw-font-medium">{domainsLabel}:</span>
+                      <ul className="tw-ml-5 tw-mt-1">
+                        {entry.semanticDomains.map((domain) => (
+                          <li key={domain.id}>
+                            <button
+                              type="button"
+                              data-testid="dict-domain-link"
+                              className="tw-text-primary tw-cursor-pointer hover:tw-underline tw-bg-transparent tw-border-none tw-p-0 tw-text-left"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDomainLinkClick(domain.id);
+                              }}
+                            >
+                              {domain.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              }
+            />
+            {/* Domain links visible in collapsed state for quick access */}
+            {entry.semanticDomains.length > 0 && !expandedIds.has(entry.id) && (
+              <div className="tw-flex tw-gap-2 tw-px-3 tw-pb-1 tw-text-xs tw-flex-wrap">
+                {entry.semanticDomains.map((domain) => (
+                  <button
+                    key={domain.id}
+                    type="button"
+                    data-testid="dict-domain-link"
+                    className="tw-text-primary tw-cursor-pointer hover:tw-underline tw-bg-transparent tw-border-none tw-p-0 tw-text-xs"
+                    onClick={() => handleDomainLinkClick(domain.id)}
+                  >
+                    {domain.name}
+                  </button>
+                ))}
               </div>
-            }
-          />
+            )}
+          </div>
         ))}
       </div>
     </div>

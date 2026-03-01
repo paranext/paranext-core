@@ -1,9 +1,9 @@
 /**
  * Functional tests for UI-PKG-010: SemanticDomainViewer
  *
- * RED phase — all tests use test.fixme() until implementation activates them. Tests verify domain
- * tree display, breadcrumb navigation, expand/collapse, leaf domain selection, ARIA tree semantics,
- * and close behavior.
+ * RED phase — all tests use test() until implementation activates them. Tests verify domain tree
+ * display, breadcrumb navigation, expand/collapse, leaf domain selection, ARIA tree semantics, and
+ * close behavior.
  *
  * @scenario BHV-309, BHV-402
  */
@@ -36,7 +36,7 @@ async function openSemanticDomainViewer(frame: import('@playwright/test').FrameL
 }
 
 test.describe('UI-PKG-010: SemanticDomainViewer — Render', () => {
-  test.fixme('RND-001: Domain tree renders with hierarchical nodes', async ({ mainPage }) => {
+  test('RND-001: Domain tree renders with hierarchical nodes', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -52,7 +52,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Render', () => {
     });
   });
 
-  test.fixme('RND-002: Breadcrumb trail is visible', async ({ mainPage }) => {
+  test('RND-002: Breadcrumb trail is visible', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -62,7 +62,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Render', () => {
     await expect(breadcrumb).toContainText(/Root/i);
   });
 
-  test.fixme('RND-003: Close button is visible', async ({ mainPage }) => {
+  test('RND-003: Close button is visible', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -70,7 +70,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Render', () => {
     await expect(closeBtn).toBeVisible();
   });
 
-  test.fixme('RND-004: Selected/initial domain is highlighted', async ({ mainPage }) => {
+  test('RND-004: Selected/initial domain is highlighted', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -78,7 +78,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Render', () => {
     await expect(selected).toBeVisible({ timeout: 5_000 });
   });
 
-  test.fixme('RND-005: SDBG domains show code range after name', async ({ mainPage }) => {
+  test('RND-005: SDBG domains show code range after name', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -95,55 +95,49 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Render', () => {
 });
 
 test.describe('UI-PKG-010: SemanticDomainViewer — Interaction', () => {
-  test.fixme(
-    'INT-001: Category expand/collapse toggles children visibility',
-    async ({ mainPage }) => {
-      // @scenario BHV-309
-      const frame = await openERWebView(mainPage);
-      const viewer = await openSemanticDomainViewer(frame);
-      const tree = viewer.locator('[data-testid="er-domain-tree"]');
-      // Find a collapsed category
-      const category = tree.locator('[data-testid^="er-domain-cat-"]').first();
-      await category.click();
-      // Children should appear
-      const children = tree.locator('[role="treeitem"]');
-      const countAfter = await children.count();
-      expect(countAfter).toBeGreaterThan(0);
-      // EVD-024: Screenshot after expanding category
+  test('INT-001: Category expand/collapse toggles children visibility', async ({ mainPage }) => {
+    // @scenario BHV-309
+    const frame = await openERWebView(mainPage);
+    const viewer = await openSemanticDomainViewer(frame);
+    const tree = viewer.locator('[data-testid="er-domain-tree"]');
+    // Find a collapsed category
+    const category = tree.locator('[data-testid^="er-domain-cat-"]').first();
+    await category.click();
+    // Children should appear
+    const children = tree.locator('[role="treeitem"]');
+    const countAfter = await children.count();
+    expect(countAfter).toBeGreaterThan(0);
+    // EVD-024: Screenshot after expanding category
+    await mainPage.screenshot({
+      path: 'e2e-tests/test-results/UI-PKG-010-INT-001-expanded.png',
+    });
+  });
+
+  test('INT-002: Leaf domain click closes viewer and filters dictionary', async ({ mainPage }) => {
+    // @scenario BHV-402
+    const frame = await openERWebView(mainPage);
+    const viewer = await openSemanticDomainViewer(frame);
+    const tree = viewer.locator('[data-testid="er-domain-tree"]');
+    // First expand a category to reveal leaf domains
+    const category = tree.locator('[data-testid^="er-domain-cat-"]').first();
+    await category.click();
+    // Click a leaf domain
+    const leaf = tree.locator('[data-testid^="er-domain-leaf-"]').first();
+    if (await leaf.isVisible()) {
+      await leaf.click();
+      // Viewer should close
+      await expect(viewer).not.toBeVisible({ timeout: 5_000 });
+      // Dictionary tab should show filtered results
+      const dictContent = frame.locator('[data-testid="dictionary-tab-content"]');
+      await expect(dictContent).toBeVisible({ timeout: 5_000 });
+      // EVD-025: Screenshot of filtered dictionary
       await mainPage.screenshot({
-        path: 'e2e-tests/test-results/UI-PKG-010-INT-001-expanded.png',
+        path: 'e2e-tests/test-results/UI-PKG-010-INT-002-domain-selected.png',
       });
-    },
-  );
+    }
+  });
 
-  test.fixme(
-    'INT-002: Leaf domain click closes viewer and filters dictionary',
-    async ({ mainPage }) => {
-      // @scenario BHV-402
-      const frame = await openERWebView(mainPage);
-      const viewer = await openSemanticDomainViewer(frame);
-      const tree = viewer.locator('[data-testid="er-domain-tree"]');
-      // First expand a category to reveal leaf domains
-      const category = tree.locator('[data-testid^="er-domain-cat-"]').first();
-      await category.click();
-      // Click a leaf domain
-      const leaf = tree.locator('[data-testid^="er-domain-leaf-"]').first();
-      if (await leaf.isVisible()) {
-        await leaf.click();
-        // Viewer should close
-        await expect(viewer).not.toBeVisible({ timeout: 5_000 });
-        // Dictionary tab should show filtered results
-        const dictContent = frame.locator('[data-testid="dictionary-tab-content"]');
-        await expect(dictContent).toBeVisible({ timeout: 5_000 });
-        // EVD-025: Screenshot of filtered dictionary
-        await mainPage.screenshot({
-          path: 'e2e-tests/test-results/UI-PKG-010-INT-002-domain-selected.png',
-        });
-      }
-    },
-  );
-
-  test.fixme('INT-003: Breadcrumb segment click recenters tree', async ({ mainPage }) => {
+  test('INT-003: Breadcrumb segment click recenters tree', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -158,7 +152,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Interaction', () => {
     }
   });
 
-  test.fixme('INT-004: Close button returns to Dictionary tab list view', async ({ mainPage }) => {
+  test('INT-004: Close button returns to Dictionary tab list view', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -174,7 +168,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Interaction', () => {
     });
   });
 
-  test.fixme('INT-005: Keyboard navigation within tree (arrow keys)', async ({ mainPage }) => {
+  test('INT-005: Keyboard navigation within tree (arrow keys)', async ({ mainPage }) => {
     // @scenario BHV-309 keyboard
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);
@@ -190,7 +184,7 @@ test.describe('UI-PKG-010: SemanticDomainViewer — Interaction', () => {
 });
 
 test.describe('UI-PKG-010: SemanticDomainViewer — Data Wiring', () => {
-  test.fixme('DW-001: ARIA tree semantics present', async ({ mainPage }) => {
+  test('DW-001: ARIA tree semantics present', async ({ mainPage }) => {
     // @scenario BHV-309
     const frame = await openERWebView(mainPage);
     const viewer = await openSemanticDomainViewer(frame);

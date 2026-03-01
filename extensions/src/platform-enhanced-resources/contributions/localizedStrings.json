@@ -56,7 +56,10 @@
       "%platformEnhancedResources_mediaViewer_play%": "Play",
       "%platformEnhancedResources_articleViewer_close%": "Close",
       "%platformEnhancedResources_articleViewer_seeAlso%": "See also",
-      "%platformEnhancedResources_articleViewer_scripture%": "Scripture"
+      "%platformEnhancedResources_articleViewer_scripture%": "Scripture",
+      "%platformEnhancedResources_domainViewer_close%": "Close",
+      "%platformEnhancedResources_domainViewer_root%": "Root",
+      "%platformEnhancedResources_domainViewer_breadcrumbNav%": "Domain breadcrumb navigation"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -113,7 +116,10 @@
       "%platformEnhancedResources_mediaViewer_play%": "Reproducir",
       "%platformEnhancedResources_articleViewer_close%": "Cerrar",
       "%platformEnhancedResources_articleViewer_seeAlso%": "Ver tambien",
-      "%platformEnhancedResources_articleViewer_scripture%": "Escritura"
+      "%platformEnhancedResources_articleViewer_scripture%": "Escritura",
+      "%platformEnhancedResources_domainViewer_close%": "Cerrar",
+      "%platformEnhancedResources_domainViewer_root%": "Raiz",
+      "%platformEnhancedResources_domainViewer_breadcrumbNav%": "Navegacion de ruta de dominio"
     }
   }
 }
