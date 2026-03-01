@@ -36,7 +36,19 @@
       "%platformEnhancedResources_warning_updateData%": "Required metadata is outdated.",
       "%platformEnhancedResources_warning_updateData_action%": "Click here",
       "%platformEnhancedResources_warning_updateAvailable%": "A new version of this resource is available.",
-      "%platformEnhancedResources_warning_updateAvailable_action%": "Download now"
+      "%platformEnhancedResources_warning_updateAvailable_action%": "Download now",
+      "%platformEnhancedResources_dict_glosses%": "Glosses",
+      "%platformEnhancedResources_dict_pos%": "Part of speech",
+      "%platformEnhancedResources_dict_senses%": "Senses",
+      "%platformEnhancedResources_dict_domains%": "Semantic domains",
+      "%platformEnhancedResources_dict_expand_all%": "Expand all",
+      "%platformEnhancedResources_dict_collapse_all%": "Collapse all",
+      "%platformEnhancedResources_encyc_no_entries%": "No encyclopedia entries found",
+      "%platformEnhancedResources_maps_no_maps%": "No maps found",
+      "%platformEnhancedResources_media_no_images%": "No images found",
+      "%platformEnhancedResources_scope_current_verse%": "Current Verse",
+      "%platformEnhancedResources_scope_current_section%": "Current Section",
+      "%platformEnhancedResources_scope_current_chapter%": "Current Chapter"
     },
     "es": {
       "%platformEnhancedResources_title%": "Recurso mejorado",
@@ -73,7 +85,19 @@
       "%platformEnhancedResources_warning_updateData%": "Los metadatos requeridos estan desactualizados.",
       "%platformEnhancedResources_warning_updateData_action%": "Haga clic aqui",
       "%platformEnhancedResources_warning_updateAvailable%": "Una nueva version de este recurso esta disponible.",
-      "%platformEnhancedResources_warning_updateAvailable_action%": "Descargar ahora"
+      "%platformEnhancedResources_warning_updateAvailable_action%": "Descargar ahora",
+      "%platformEnhancedResources_dict_glosses%": "Glosas",
+      "%platformEnhancedResources_dict_pos%": "Categoria gramatical",
+      "%platformEnhancedResources_dict_senses%": "Acepciones",
+      "%platformEnhancedResources_dict_domains%": "Dominios semanticos",
+      "%platformEnhancedResources_dict_expand_all%": "Expandir todo",
+      "%platformEnhancedResources_dict_collapse_all%": "Contraer todo",
+      "%platformEnhancedResources_encyc_no_entries%": "No se encontraron entradas de enciclopedia",
+      "%platformEnhancedResources_maps_no_maps%": "No se encontraron mapas",
+      "%platformEnhancedResources_media_no_images%": "No se encontraron imagenes",
+      "%platformEnhancedResources_scope_current_verse%": "Versiculo actual",
+      "%platformEnhancedResources_scope_current_section%": "Seccion actual",
+      "%platformEnhancedResources_scope_current_chapter%": "Capitulo actual"
     }
   }
 }
