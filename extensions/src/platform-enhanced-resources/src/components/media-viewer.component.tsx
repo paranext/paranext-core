@@ -293,6 +293,8 @@ export default function MediaViewer({ imageId, imageGroupIds, onClose }: MediaVi
             className="tw-relative tw-max-w-full tw-max-h-full tw-flex tw-items-center tw-justify-center"
             onMouseEnter={handleImageMouseEnter}
             onMouseLeave={handleImageMouseLeave}
+            onFocus={handleImageMouseEnter}
+            onBlur={handleImageMouseLeave}
             // mouseover/mouseout duplicate mouseenter/mouseleave for Playwright dispatchEvent
             // compatibility — dispatchEvent('mouseover') bubbles, 'mouseenter' does not
             onMouseOver={handleImageMouseEnter}

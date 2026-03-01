@@ -398,15 +398,17 @@ globalThis.webViewComponent = function EnhancedResourceWebView({
                 <DictionaryTab scopeFilter={scopeFilter} filteredLemma={filterLemma} />
               </TabsContent>
               <TabsContent value="encyclopedia" className="tw-flex-1 tw-overflow-auto">
-                {activeOverlay?.type === 'article' ? (
+                {activeOverlay?.type === 'article' && (
                   <ArticleViewer
                     entryId={activeOverlay.entryId}
                     onClose={handleCloseOverlay}
                     onOpenMedia={handleOpenMedia}
                   />
-                ) : activeOverlay?.type === 'media' ? (
+                )}
+                {activeOverlay?.type === 'media' && (
                   <MediaViewer imageId={activeOverlay.imageId} onClose={handleCloseOverlay} />
-                ) : (
+                )}
+                {!activeOverlay && (
                   <EncyclopediaTab
                     scopeFilter={scopeFilter}
                     filteredLemma={filterLemma}

@@ -324,15 +324,14 @@ export default function ArticleViewer({ entryId, onClose, onOpenMedia }: Article
         {article.abbreviations.length > 0 && (
           <div className="tw-mb-4 tw-text-sm">
             {article.abbreviations.map((abbrev) => (
-              <a
+              <span
                 key={abbrev.abbreviation}
                 title={abbrev.expansion}
                 className="tw-text-muted-foreground tw-mr-2 tw-cursor-help tw-no-underline"
-                href="#"
-                onClick={(e) => e.preventDefault()}
+                role="note"
               >
                 {abbrev.abbreviation}
-              </a>
+              </span>
             ))}
           </div>
         )}
@@ -342,18 +341,17 @@ export default function ArticleViewer({ entryId, onClose, onOpenMedia }: Article
           <div className="tw-mb-4">
             <span className="tw-text-sm tw-font-medium tw-mr-2">{`${scriptureLabel}:`}</span>
             {article.gotoVerseRefs.map((ref, refIdx) => (
-              <a
+              <button
+                type="button"
                 key={`goto-${ref.verseRef}`}
                 data-testid={`er-article-goto-${String(refIdx)}`}
-                href="#"
-                className="tw-text-sm tw-text-primary tw-underline tw-mr-2"
-                onClick={(e) => {
-                  e.preventDefault();
+                className="tw-text-sm tw-text-primary tw-underline tw-mr-2 tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+                onClick={() => {
                   // Goto verse action - article viewer stays open
                 }}
               >
                 {ref.label}
-              </a>
+              </button>
             ))}
           </div>
         )}
@@ -363,18 +361,17 @@ export default function ArticleViewer({ entryId, onClose, onOpenMedia }: Article
           <div className="tw-mb-4">
             <span className="tw-text-sm tw-font-medium tw-mr-2">{`${seeAlsoLabel}:`}</span>
             {article.seeAlso.map((link, linkIdx) => (
-              <a
+              <button
+                type="button"
                 key={`seealso-${link.entryId}`}
                 data-testid={`er-article-seealso-${String(linkIdx)}`}
-                href="#"
-                className="tw-text-sm tw-text-primary tw-underline tw-mr-2"
-                onClick={(e) => {
-                  e.preventDefault();
+                className="tw-text-sm tw-text-primary tw-underline tw-mr-2 tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+                onClick={() => {
                   handleSeeAlsoClick(link.entryId);
                 }}
               >
                 {link.label}
-              </a>
+              </button>
             ))}
           </div>
         )}
