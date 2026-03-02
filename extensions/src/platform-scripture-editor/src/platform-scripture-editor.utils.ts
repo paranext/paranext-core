@@ -355,6 +355,7 @@ export function generateParagraphMenuListItems(
 export function generateInlineMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
   closeMarkersMenu: () => void,
+  localizedStrings: LanguageStrings,
   parentMarker?: string,
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
@@ -368,7 +369,8 @@ export function generateInlineMarkerMenuListItems(
       ...item[1].map((marker) => {
         return {
           marker,
-          title: usfmMarkers[marker].description,
+          title:
+            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
           action: () => {
             editorRef.current?.insertMarker(marker);
             closeMarkersMenu();

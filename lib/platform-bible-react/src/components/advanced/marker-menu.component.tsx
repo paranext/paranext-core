@@ -91,6 +91,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
   return (
     <Command className="tw-p-1" shouldFilter={false} loop>
       <CommandInput
+        className="marker-menu-search"
         ref={searchRef}
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
@@ -106,7 +107,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
               onSelect={item.action}
               key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
             >
-              <div className="tw-w-8">
+              <div className="tw-w-8 tw-min-w-8">
                 {item.marker ? (
                   <span className="tw-text-xs">{item.marker}</span>
                 ) : (
