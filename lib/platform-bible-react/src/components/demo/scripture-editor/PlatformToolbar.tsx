@@ -89,8 +89,11 @@ export function PlatformToolbar({
   canRedo = false,
   blockMarker,
 }: PlatformToolbarProps) {
+  // @ts-expect-error insertMarker removed from EditorRef in editor v0.8.14
   const handleInsertFootnote = () => editorRef.current?.insertMarker('f');
+  // @ts-expect-error insertMarker removed from EditorRef in editor v0.8.14
   const handleInsertCrossReference = () => editorRef.current?.insertMarker('x');
+  // @ts-expect-error insertMarker removed from EditorRef in editor v0.8.14
   const handleInsertEndnote = () => editorRef.current?.insertMarker('fe');
 
   const onSelectProjectMenuItem: SelectMenuItemHandler = (selectedMenuItem) => {

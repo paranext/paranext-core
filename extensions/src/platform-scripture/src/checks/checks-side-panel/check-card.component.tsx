@@ -185,7 +185,7 @@ export function CheckCard({
       checkState === CheckStates.Denied ||
       checkState === CheckStates.Checking)
   )
-    badges.push(<CheckStateBadge state={checkState} />);
+    badges.push(<CheckStateBadge key={`${checkId}-state-badge`} state={checkState} />);
   if (!isCheckSetup)
     badges.push(
       <TooltipProvider key={`${checkId}-requires-setup-badge`}>
