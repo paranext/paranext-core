@@ -311,38 +311,61 @@ error_msg() {
 run_all_ai_checks() {
   local branch="$1"
 
+  # Audit logging (same file as pre-commit)
+  AUDIT_LOG="${AUDIT_LOG:-.context/audit-logs/pre-commit.log}"
+  _log() { echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ")|ai-hooks|$1" >> "$AUDIT_LOG"; }
+
   # 1. Branch naming (warning only)
   validate_branch_name "$branch"
 
   # 2. TypeScript typecheck (if TS files staged)
   if has_ts_changes; then
-    run_typecheck || exit $?
+    _log "typecheck|running"
+    run_typecheck || { local rc=$?; _log "typecheck|FAILED|exit=$rc"; exit $rc; }
+    _log "typecheck|passed"
   else
+    _log "typecheck|skipped|reason=no_ts_staged"
     echo "No TypeScript files staged, skipping typecheck"
   fi
 
   # 3. C# build check (if C# files staged)
   if has_csharp_changes; then
-    run_csharp_build_check || exit $?
+    _log "csharp_build|running"
+    run_csharp_build_check || { local rc=$?; _log "csharp_build|FAILED|exit=$rc"; exit $rc; }
+    _log "csharp_build|passed"
   else
+    _log "csharp_build|skipped|reason=no_cs_staged"
     echo "No C# files staged, skipping build check"
   fi
 
   # 4. Format checks (Prettier for TS/JS, CSharpier for C#)
-  run_ai_format_ts || exit $?
-  run_ai_format_csharp || exit $?
+  _log "format_ts|running"
+  run_ai_format_ts || { local rc=$?; _log "format_ts|FAILED|exit=$rc"; exit $rc; }
+  _log "format_ts|passed"
+
+  _log "format_csharp|running"
+  run_ai_format_csharp || { local rc=$?; _log "format_csharp|FAILED|exit=$rc"; exit $rc; }
+  _log "format_csharp|passed"
 
   # 5. AI-specific TypeScript lint (paranext plugin rules)
-  run_ai_lint_ts || exit $?
+  _log "lint_ts|running"
+  run_ai_lint_ts || { local rc=$?; _log "lint_ts|FAILED|exit=$rc"; exit $rc; }
+  _log "lint_ts|passed"
 
   # 6. AI-specific C# analyzer check (warnings as errors for staged files)
-  run_ai_lint_csharp || exit $?
+  _log "lint_csharp|running"
+  run_ai_lint_csharp || { local rc=$?; _log "lint_csharp|FAILED|exit=$rc"; exit $rc; }
+  _log "lint_csharp|passed"
 
   # 7. Localization key validation
-  run_localization_check || exit $?
+  _log "localization|running"
+  run_localization_check || { local rc=$?; _log "localization|FAILED|exit=$rc"; exit $rc; }
+  _log "localization|passed"
 
   # 8. Architecture boundary check
-  run_architecture_check || exit $?
+  _log "architecture|running"
+  run_architecture_check || { local rc=$?; _log "architecture|FAILED|exit=$rc"; exit $rc; }
+  _log "architecture|passed"
 
   echo ""
   echo "=========================================="
