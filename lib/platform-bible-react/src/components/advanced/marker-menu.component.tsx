@@ -95,7 +95,6 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
         placeholder={localizedStrings['%markerMenu_searchPlaceholder%']}
-        autoFocus
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>

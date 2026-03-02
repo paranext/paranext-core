@@ -360,13 +360,12 @@ export function generateInlineMarkerMenuListItems(
   if (!parentMarker) return [];
 
   const markerDetails = usfmMarkers[parentMarker];
-  if (!markerDetails || !markerDetails.children) return [];
+  if (!markerDetails?.children) return [];
 
   const markerMenuItems: MarkerMenuItem[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Object.entries(markerDetails.children).forEach(([_, markers]) => {
+  Object.entries(markerDetails.children).forEach((item) => {
     markerMenuItems.push(
-      ...markers.map((marker) => {
+      ...item[1].map((marker) => {
         return {
           marker,
           title: usfmMarkers[marker].description,
